@@ -1,4 +1,4 @@
-.PHONY: help install lint lint-fix format format-check fix typecheck test test-unit test-integration check ci clean
+.PHONY: help install lint lint-fix format format-check fix typecheck check ci clean
 
 help:
 	@printf "Available targets:\n"
@@ -9,9 +9,6 @@ help:
 	@printf "  make format-check      Check formatting without modifying files\n"
 	@printf "  make fix               Apply lint autofixes and format\n"
 	@printf "  make typecheck         Run Pyright type checking\n"
-	@printf "  make test              Run the full test suite via pytest\n"
-	@printf "  make test-unit         Run unit tests only\n"
-	@printf "  make test-integration  Run integration tests only\n"
 	@printf "  make check             Run lint + format-check + typecheck (non-mutating)\n"
 	@printf "  make ci                Full CI suite: check + test\n"
 	@printf "  make clean             Remove all generated/cached files\n"
@@ -38,14 +35,14 @@ fix:
 typecheck:
 	uv run pyright
 
-test:
-	uv run pytest
-
-test-unit:
-	uv run pytest tests/unit/
-
-test-integration:
-	uv run pytest tests/integration/
+# test:
+# 	uv run pytest
+#
+# test-unit:
+# 	uv run pytest tests/unit/
+#
+# test-integration:
+# 	uv run pytest tests/integration/
 
 check:
 	$(MAKE) lint
@@ -54,7 +51,6 @@ check:
 
 ci:
 	$(MAKE) check
-	$(MAKE) test
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

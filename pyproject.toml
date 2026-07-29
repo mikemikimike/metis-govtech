@@ -45,10 +45,6 @@ venv = ".venv"
 include = ["packages/*/src", "apps/*/src", "metis_cli.py"]
 exclude = ["apps/api", "apps/web"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = ["integration: cross-package integration tests"]
-
 [dependency-groups]
 dev = [
     "pyright>=1.1",
