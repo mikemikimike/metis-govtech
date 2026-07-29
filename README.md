@@ -8,6 +8,15 @@
 
 METIS is an extensible agentic evaluation suite for assessing AI safety, alignment, and operational reliability. It ingests agent execution traces (from platforms like Langfuse and OpenTelemetry), runs configurable evaluation metrics against them, and produces diagnostics and compliance analytics.
 
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Quickstart](#quickstart)
+- [Development](#development)
+- [Project Layout](#project-layout)
+- [Versioning](#versioning)
+- [Roadmap](#roadmap)
+
 ## Architecture
 
 ```
@@ -44,6 +53,8 @@ METIS is an extensible agentic evaluation suite for assessing AI safety, alignme
 | **metis-engine** | Dynamic multi-agent evaluation runtime; ingests traces and executes metrics |
 | **metis-wizard** | Automated spec and evaluation config generator (interactive CLI) |
 | **metis-insights** | Trajectory diagnostics and compliance analytics (Stage 2) |
+
+For the full specification (component contracts, dependency invariants, build interface), see [docs/architecture.md](docs/architecture.md).
 
 ## Quickstart
 
