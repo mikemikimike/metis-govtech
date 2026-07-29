@@ -414,6 +414,18 @@ If the need arises to version packages independently (e.g., publishing `metis-co
 3. Adopt a bump policy — either manual (developer bumps the version when the package's public contract changes) or automated via conventional-commit tooling (e.g., `python-semantic-release`, `commitizen`) that scopes commits to packages and computes SemVer bumps per package.
 4. All versions MUST remain SemVer-compliant. A breaking change in a dependency (e.g., `metis-core` major bump) requires downstream packages to update their constraint and cut their own release.
 
+**CLI Version Reporting:**
+
+No code changes are required in the CLI layer when migrating to independent versions. Each package already resolves its own version via `importlib.metadata.version("<package-name>")`, and per-package CLIs (e.g., `metis engine -V`) already report their specific version. Once independent versions are active, `metis --version` SHOULD print a breakdown of all installed component versions:
+
+```text
+metis 2.0.0
+  core    1.3.0
+  metrics 1.1.0
+  engine  2.0.0
+  wizard  1.2.0
+```
+
 ---
 
 ## 10. CLI Interface

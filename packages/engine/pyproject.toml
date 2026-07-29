@@ -9,6 +9,7 @@ description = "Evaluation engine and trace parser for METIS"
 requires-python = ">=3.11"
 dependencies = [
     "metis-core",
+    "metis-metrics",
     "typer>=0.9.0",
     "rich>=13.0.0",
 ]
@@ -22,6 +23,7 @@ raw-options.root = "../.."
 
 [tool.uv.sources]
 metis-core = { workspace = true }
+metis-metrics = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/metis"]
