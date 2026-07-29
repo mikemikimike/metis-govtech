@@ -54,8 +54,10 @@ metis/
 ├── apps/                       # Deployable application services
 │   ├── api/
 │   │   └── src/metis/api/
-│   └── worker/
-│       └── src/metis/worker/
+│   └── web/                    # TypeScript/React frontend (separate toolchain)
+│       ├── package.json
+│       ├── tsconfig.json
+│       └── src/
 │
 └── infra/                      # Docker Compose, Kubernetes, deployment assets
 ```
@@ -101,11 +103,15 @@ metis/
 |---|---|
 | **Import Path** | `from metis.metrics import DEFAULT_REGISTRY, TrajectoryCompleteness` |
 | **CLI Command** | None |
-| **Purpose** | Built-in library of default metric implementations. |
+| **Purpose** | Shared metric catalog consumed by both the execution path (`metis-engine`) and the configuration path (`metis-wizard`). |
+
+**Architectural Role:**
+
+`metis-metrics` is the convergence point between two otherwise independent subsystems: `metis-engine` (which executes metrics against traces) and `metis-wizard` (which presents metrics to users during configuration). Both need to enumerate, inspect, and reference the same set of metrics — but neither should depend on the other. `metis-metrics` provides that shared catalog as a lightweight, dependency-free layer that both can import independently.
 
 **Rationale for Separation:**
 
-`metis-metrics` exists as a standalone package rather than being bundled into `metis-engine` so that lightweight consumers (e.g., `metis-wizard`, custom metric authors, CI lint jobs) can enumerate and inspect available metrics without pulling in the engine's heavier runtime dependencies (`httpx`, `numpy`, trace ingestion machinery). Bundling metrics into engine would force every downstream consumer to inherit engine's full dependency tree — a classic transitive dependency problem that defeats the purpose of a modular workspace.
+This package exists as a standalone layer rather than being bundled into `metis-engine` so that lightweight consumers (e.g., `metis-wizard`, custom metric authors, CI lint jobs) can enumerate and inspect available metrics without pulling in the engine's heavier runtime dependencies (`httpx`, `numpy`, trace ingestion machinery). Bundling metrics into engine would force every downstream consumer to inherit engine's full dependency tree — a classic transitive dependency problem that defeats the purpose of a modular workspace.
 
 **Constraints:**
 
@@ -227,46 +233,63 @@ Third-party packages MAY provide additional trace ingesters by implementing `Bas
 
 ---
 
-### 5.8. `apps/worker` *(Deferred — Stage 5)*
+### 5.8. `apps/web` *(Deferred — Stage 3)*
 
 | | |
 |---|---|
-| **Purpose** | Asynchronous job processor for long-running evaluation workloads. |
+| **Purpose** | Web frontend providing a graphical interface for METIS capabilities. |
 
-**Rationale:**
+**Technology Stack:**
 
-Trace evaluation can be computationally expensive — parsing large traces, executing many metrics, calling out to LLM-as-judge endpoints. Running these inline within an API request would block the HTTP thread, degrade latency, and risk timeouts. The worker decouples submission from execution: the API enqueues an evaluation request, and the worker picks it up and runs `metis.engine` in the background. This separation allows independent scaling of API throughput and evaluation compute.
+| Concern | Requirement |
+|---------|-------------|
+| Language | TypeScript (strict mode) |
+| UI Framework | React 18+ |
+| Build Tooling | Vite |
+| Component Library | TBD. Under consideration: Radix UI + Tailwind CSS. |
+| State Management | TBD. Under consideration: TanStack Query for server state, Zustand for client state. |
+| Routing | TBD. Under consideration: TanStack Router or React Router. |
 
 **Constraints:**
 
-- MUST import and execute evaluations via `metis.engine`.
-- MUST consume jobs from a task queue.
-- MAY depend on all `packages/*` members.
+- MUST communicate exclusively with `apps/api` via its REST endpoints. MUST NOT import or depend on any Python package directly.
+- MUST be a standalone single-page application (SPA) deployable independently of the API backend.
+- MUST support configuration of API base URL via environment variable (e.g., `VITE_API_BASE_URL`).
+- SHOULD provide feature parity with CLI workflows for non-developer users (trace submission, report viewing, suite configuration).
 
-> Deferred to Stage 5. Only needed once evaluation workloads outgrow synchronous API handling.
+**Public Contract:**
+
+- Dashboard: overview of evaluation runs, pass/fail trends, metric distributions.
+- Trace submission: upload trace files or connect to trace sources for evaluation.
+- Report viewer: interactive exploration of `EvaluationReport` data (drill-down by metric, trace, step).
+- Suite configuration: visual editor for experiment YAML (wrapping wizard capabilities).
+
+> Deferred to Stage 3 alongside `apps/api`. The frontend is a consumer of the API — it does not exist without a running backend.
 
 ---
+
 
 ## 6. Dependency Invariants
 
 Dependencies MUST flow downward only. The following DAG is normative:
 
 ```text
-         [ apps/api ]       [ apps/worker ]
-              │                    │
-              └─────────┬──────────┘
-                        ▼
-              [ packages/engine ]
-                   │         │
-                   │         ▼
-                   │   [ packages/insights ]
-                   │
-                   ▼
-            [ packages/metrics ] ◄── [ packages/wizard ]
-                   │
-                   ▼
-            [ packages/core ]   (Base — zero local dependencies)
+[ apps/web ] ──HTTP──▶ [ apps/api ]
+                            │
+                            ▼
+                       [ packages/engine ]
+                            │         │
+                            │         ▼
+                            │   [ packages/insights ]
+                            │
+                            ▼
+                     [ packages/metrics ] ◄── [ packages/wizard ]
+                            │
+                            ▼
+                     [ packages/core ]   (Base — zero local dependencies)
 ```
+
+> `apps/web` has no compile-time dependency on any Python package. Its only runtime dependency is the HTTP API surface exposed by `apps/api`.
 
 **Invariant Rules:**
 
@@ -277,6 +300,7 @@ Dependencies MUST flow downward only. The following DAG is normative:
 5. `metis-engine` MUST NOT depend on `metis-wizard` or `metis-insights`.
 6. No circular dependencies SHALL exist between any workspace members.
 7. Upward dependencies (child depending on parent in the DAG) MUST NOT be introduced.
+8. `apps/web` MUST NOT import or depend on any Python workspace member at compile time. Its sole integration point is the HTTP API exposed by `apps/api`.
 
 ---
 
@@ -337,7 +361,62 @@ A root `Makefile` MUST provide the following targets as the public development a
 
 ---
 
-## 9. CLI Interface
+## 9. Versioning
+
+The workspace uses a **unified version** — all packages share a single version derived from git tags. Individual package versions are not maintained independently.
+
+### 9.1. Mechanism
+
+Version is derived at build time via `hatch-vcs`, which reads the most recent git tag matching `v*` (e.g., `v0.1.0`). Each package's `pyproject.toml` declares:
+
+```toml
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+
+[project]
+dynamic = ["version"]
+
+[tool.hatch.version]
+source = "vcs"
+raw-options.root = "../.."   # relative path to workspace root
+```
+
+The root `pyproject.toml` uses the same plugin without the `root` override:
+
+```toml
+[tool.hatch.version]
+source = "vcs"
+```
+
+### 9.2. Rules
+
+- All packages MUST use `hatch-vcs` as their version source. No package MAY declare a static `version` field.
+- Released versions MUST correspond to an annotated git tag (`git tag -a v0.1.0`).
+- Untagged builds produce a dev suffix (e.g., `0.1.0.dev3+gabcdef`), distinguishing development builds from releases automatically.
+- The `metis -V` / `metis --version` CLI output MUST reflect the VCS-derived version.
+
+### 9.3. Rationale
+
+Independent per-package versioning adds coordination overhead (which packages to bump, compatibility matrices between workspace members) without benefit while:
+
+- All packages are consumed together via the monorepo.
+- No package is published to PyPI independently.
+- The project is pre-1.0.
+
+This decision SHOULD be revisited if individual packages are published to an external registry for third-party consumption.
+
+### 9.4. Future: Independent Package Versioning
+
+If the need arises to version packages independently (e.g., publishing `metis-core` to PyPI for third-party metric authors), the migration path is:
+
+1. Replace `dynamic = ["version"]` + `hatch-vcs` with a static `version` field in the target package's `pyproject.toml`.
+2. Add explicit compatible-release constraints for intra-workspace dependencies (e.g., `metis-core >= 1.2.0`).
+3. Adopt a bump policy — either manual (developer bumps the version when the package's public contract changes) or automated via conventional-commit tooling (e.g., `python-semantic-release`, `commitizen`) that scopes commits to packages and computes SemVer bumps per package.
+4. All versions MUST remain SemVer-compliant. A breaking change in a dependency (e.g., `metis-core` major bump) requires downstream packages to update their constraint and cut their own release.
+
+---
+
+## 10. CLI Interface
 
 The primary user-facing CLI is the unified `metis` command, which composes sub-package CLIs:
 
@@ -352,7 +431,7 @@ Per-package standalone commands (`metis-engine`, `metis-wizard`, `metis-insights
 
 ---
 
-## 10. Stages
+## 11. Stages
 
 | Stage | Scope | Status |
 |-------|-------|--------|
@@ -360,4 +439,3 @@ Per-package standalone commands (`metis-engine`, `metis-wizard`, `metis-insights
 | **Stage 2 — Developer Experience** | `wizard`, `insights` (configuration generation, reporting) | Planned |
 | **Stage 3 — Web Platform** | `apps/api` (REST service exposing METIS capabilities) | Deferred |
 | **Stage 4 — Generalized METIS** | `testbed` (live sandbox, agent calibration) | Deferred |
-| **Stage 5 — Scale** | `apps/worker` (async job processing for heavy evaluation workloads) | Deferred |
