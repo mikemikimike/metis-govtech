@@ -1,182 +1,255 @@
-# METIS Product Suite - Software Architecture & Workspace Specification
+# METIS Product Suite — Architecture Specification
 
-## 1. Executive Overview
+## 1. Purpose & Scope
 
 METIS (Measurement and Evaluation of Trustworthy Intelligent Systems) is an extensible agentic evaluation suite designed for whole-of-government adoption. It enables agency teams to build fast while ensuring AI safety, alignment, and operational reliability by default.
 
-This document outlines the software architecture for the METIS suite. METIS is structured as a **Python Monorepo** managed via **`uv` workspaces**, separating pure domain logic into decoupled packages (`packages/`) and deployable runtimes into application services (`apps/`).
-
-All packages use clean folder paths on disk (`packages/core`, `packages/engine`), while sharing a unified **`metis` Python namespace** (`from metis.core import Trace`, `from metis.engine import Evaluator`). Executable components expose direct CLI commands via `[project.scripts]` entry points.
+This document is the normative architectural specification for the METIS suite. It defines system boundaries, component contracts, dependency invariants, and the build interface. All implementation artifacts (code, configuration, CI pipelines) MUST conform to this specification.
 
 ---
 
-## 2. Technical Stack
+## 2. Notation
 
-* **Workspace & Package Management:** `uv` (Fast Python package resolver and workspace manager)
-* **Data Modeling & Validation:** Pydantic v2
-* **Namespace Packaging Strategy:** Hatchling (PEP 420 Native Namespaces)
-* **CLI Framework:** Typer + Rich (used across `metis-engine`, `metis-wizard`, and `metis-insights`)
-* **Database / ORM (Web Backend):** PostgreSQL + SQLAlchemy v2 (Async) + Alembic
-* **Task Queue / Worker (Async Processing):** Celery or ARQ + Redis
-* **API Framework:** FastAPI
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
 ---
 
-## 3. Directory Layout (Clean Folders + Namespace Imports)
+## 3. Technology Constraints
 
-Directory names on disk are kept short (`packages/core`), while code inside uses the nested namespace layout (`src/metis/core`).
+| Concern | Requirement |
+|---------|-------------|
+| Workspace & Package Management | MUST use `uv` workspaces with a single root lockfile (`uv.lock`). |
+| Data Modeling & Validation | MUST use Pydantic v2 for all shared domain objects. |
+| Namespace Packaging | MUST use Hatchling with PEP 420 native namespace packages. |
+| CLI Framework | MUST use Typer + Rich for all CLI surfaces. |
+| Database / ORM (Web Backend) | TBD. Under consideration: PostgreSQL + SQLAlchemy v2 (async) + Alembic. *(Stage 4)* |
+| Task Queue (Async Processing) | TBD. Under consideration: Celery or ARQ backed by Redis. *(Stage 4)* |
+| API Framework | TBD. Under consideration: FastAPI. *(Stage 4)* |
+| Python Version | MUST target Python ≥ 3.11. |
+
+---
+
+## 4. Workspace Structure
+
+The workspace is a Python monorepo. Directory names on disk are kept short (`packages/core`); code within each package uses the nested namespace layout (`src/metis/core`). All packages share a unified `metis` Python namespace.
 
 ```text
 metis/
-├── pyproject.toml                  # Workspace definition and shared settings
-├── metis_cli.py                    # Unified CLI entry point (composes sub-package CLIs)
-├── uv.lock                         # Unified lockfile for all packages & apps
-├── README.md
+├── pyproject.toml              # Workspace root definition
+├── metis_cli.py                # Unified CLI entry point (composes sub-package CLIs)
+├── uv.lock                     # Single lockfile for the entire workspace
 │
-├── packages/                       # Reusable Python packages (Libraries)
-│   ├── core/                       # Pydantic models, interfaces, enums, exceptions
-│   │   ├── pyproject.toml
-│   │   └── src/
-│   │       └── metis/
-│   │           └── core/
-│   │
-│   ├── metrics/                    # Metric definitions, registry, built-in implementations
-│   │   ├── pyproject.toml
-│   │   └── src/
-│   │       └── metis/
-│   │           └── metrics/
-│   │
-│   ├── engine/                     # Trace parsers, evaluation runtime
-│   │   ├── pyproject.toml
-│   │   └── src/
-│   │       └── metis/
-│   │           └── engine/
-│   │               └── cli.py      # CLI entry point (metis-engine)
-│   │
-│   ├── wizard/                     # Test-suite generators, guardrail wizards, CLI helpers
-│   │   ├── pyproject.toml
-│   │   └── src/
-│   │       └── metis/
-│   │           └── wizard/
-│   │               └── cli.py      # CLI entry point (metis-wizard)
-│   │
-│   └── insights/                   # Data aggregation, reporting calculations, analytics
-│       ├── pyproject.toml
-│       └── src/
-│           └── metis/
-│               └── insights/
-│                   └── cli.py      # CLI entry point (metis-insights)
+├── packages/                   # Reusable library packages
+│   ├── core/
+│   │   └── src/metis/core/
+│   ├── metrics/
+│   │   └── src/metis/metrics/
+│   ├── engine/
+│   │   └── src/metis/engine/
+│   ├── wizard/
+│   │   └── src/metis/wizard/
+│   └── insights/
+│       └── src/metis/insights/
 │
-├── apps/                           # Runnable web services & execution runtimes
-│   ├── api/                        # FastAPI REST service
-│   │   ├── pyproject.toml
-│   │   └── src/
-│   │       └── metis/
-│   │           └── api/
-│   │               └── main.py
-│   │
-│   └── worker/                     # Asynchronous Celery task processing node
-│       ├── pyproject.toml
-│       └── src/
-│           └── metis/
-│               └── worker/
-│                   └── tasks.py
+├── apps/                       # Deployable application services
+│   ├── api/
+│   │   └── src/metis/api/
+│   └── worker/
+│       └── src/metis/worker/
 │
-└── infra/                          # Docker Compose, Kubernetes, and deployment assets
+└── infra/                      # Docker Compose, Kubernetes, deployment assets
 ```
 
----
+**Rules:**
 
-## 4. Architectural Boundaries & Component Roles
-
-### 4.1. `packages/core` (`metis-core`)
-* **Import Path:** `from metis.core import Trace, Score, BaseMetric, MetricRegistry, ExperimentConfig`
-* **Purpose:** Single source of truth for standard domain objects, contracts, and infrastructure.
-* **Dependencies:** Pure Python + Pydantic v2 only. **Zero external runtime dependencies**.
-* **Key Responsibilities:**
-  * Schema definitions: `Trace`, `Span`, `Step`, `ToolCall`, `Score`, `AssertionResult`, `EvaluationReport`.
-  * Configuration schema: `ExperimentConfig`, `MetricConfig`, `DataSourceConfig` — the contract between wizard (produces) and engine (consumes).
-  * Enums: `EvaluationCategory`, `StepType`, `Status`, `SeverityLevel`.
-  * Abstract base interfaces: `BaseMetric`, `BaseTraceIngester`, `BaseEvaluator`.
-  * Infrastructure: `MetricRegistry` — central lookup for metric implementations by name.
-  * Plugin discovery: `discover_ingesters()` / `ingest_trace()` — loads `BaseTraceIngester` implementations via the `metis.trace_ingesters` entry point group.
-  * Core exceptions: `TraceParsingError`, `MetricExecutionError`, `InvalidConfigError`.
-
-### 4.2. `packages/metrics` (`metis-metrics`)
-* **Import Path:** `from metis.metrics import DEFAULT_REGISTRY, TrajectoryCompleteness`
-* **Purpose:** METIS's built-in library of default metric implementations. Third-party teams can write their own metrics using `BaseMetric` from core without depending on this package.
-* **Dependencies:** `metis-core` only.
-* **Key Responsibilities:**
-  * `DEFAULT_REGISTRY`: a pre-populated `MetricRegistry` containing all built-in metrics.
-  * Built-in metric implementations (e.g., `TrajectoryCompleteness`, `ToolCallAccuracy`, guardrail pass-rate).
-  * Metric authoring utilities (decorators, base helpers) for teams writing custom metrics.
-
-### 4.3. `packages/engine` (`metis-engine`)
-* **Import Path:** `from metis.engine import Evaluator`
-* **CLI Command:** `uv run metis-engine`
-* **Purpose:** Standalone execution engine for running evaluations against traces. Can be imported as a library or executed directly in local terminals and CI/CD pipelines.
-* **Dependencies:** `metis-core`, `metis-metrics`, `typer`, `rich`, lightweight HTTP/math/parsing libraries (`httpx`, `numpy`).
-* **Key Responsibilities:**
-  * Ships built-in trace ingesters (Langfuse, OpenTelemetry) registered via `[project.entry-points."metis.trace_ingesters"]`.
-  * CLI commands to evaluate trace files directly (`metis-engine run --trace-file trace.json`).
-  * Loads metrics from the registry and executes them against normalized traces.
-* **Adding New Trace Formats:** Implement `BaseTraceIngester` from core, then register via entry point in your package's `pyproject.toml`:
-  ```toml
-  [project.entry-points."metis.trace_ingesters"]
-  my_format = "my_package.ingester:MyIngester"
-  ```
-
-### 4.4. `packages/wizard` (`metis-wizard`)
-* **Import Path:** `from metis.wizard import ConfigGenerator`
-* **CLI Command:** `uv run metis-wizard`
-* **Purpose:** Interactive wizard and configuration generator for creating evaluation suites and guardrails.
-* **Dependencies:** `metis-core`, `metis-metrics`, `typer`, `rich`.
-* **Key Responsibilities:**
-  * Interactive CLI terminal UI for generating valid suite configuration YAML files.
-  * CLI command: `metis-wizard init` to interactively generate evaluation configs.
-  * Template generation for custom metric authors.
-
-### 4.5. `packages/insights` (`metis-insights`)
-* **Import Path:** `from metis.insights import AnalyticsEngine`
-* **CLI Command:** `uv run metis-insights`
-* **Purpose:** Analytics computation and reporting engine for evaluation outputs.
-* **Dependencies:** `metis-core`, `typer`, `rich`, `pandas`, plotting/summary engines.
-* **Key Responsibilities:**
-  * Consumes `EvaluationReport` (from `metis.core`) — does NOT depend on engine.
-  * Terminal-based analytics rendering (ASCII tables, pass/fail summaries) for developer runs.
-  * CLI command: `metis-insights report --results-file results.json`.
-  * Programmatic reporting calculations for the API backend.
-
-### 4.6. `packages/testbed` (`metis-testbed`) *(Deferred — Phase 3)*
-* **Import Path:** `from metis.testbed import Sandbox`
-* **Purpose:** Evaluator calibration and sandbox environment for running agents against controlled scenarios.
-* **Dependencies:** `metis-core`, `metis-engine`.
-* **Key Responsibilities:**
-  * Provides controlled execution environments for agent calibration.
-  * Scenario definitions for known-good/known-bad agent trajectories.
-  * Calibration utilities for tuning metric thresholds.
-
-> **Note:** Testbed is deferred to Phase 3 (Generalized METIS). The MVP focuses on
-> evaluating pre-recorded traces from Langfuse; live sandbox execution comes later.
-
-### 4.7. `apps/api` & `apps/worker` *(Deferred — Phase 4)*
-* **Purpose:** The multi-tenant, hosted web platform backend.
-* **Dependencies:** All internal `packages/*`, `fastapi`, `sqlalchemy`, `alembic`, `celery`/`redis`.
-* **Key Responsibilities:**
-  * `apps/api`: Exposes REST endpoints for configuration, trace submission, and fetching insights reports.
-  * `apps/worker`: Imports `metis.engine` inside async Celery tasks to process deep trace evaluation jobs off the main HTTP thread.
-  * SQLAlchemy ORM: Persists historical runs, scores, and workspace metadata to PostgreSQL.
-
-> **Note:** The web platform is deferred to Phase 4 (Expansion). The MVP and Phase 3
-> deliverables are CLI-first: `metis-engine`, `metis-wizard`, and `metis-insights`
-> operate as standalone commands. The `apps/` directory structure is reserved but not
-> implemented until the product requires a hosted multi-tenant service.
+- Each package MUST contain a `pyproject.toml` at its root and source code under `src/metis/<pkg>/`.
+- The root project MUST explicitly list all workspace members as dependencies so that `uv sync` installs them into the virtualenv.
+- There MUST be exactly one lockfile (`uv.lock`) at the workspace root.
 
 ---
 
-## 5. Dependency Rules (DAG)
+## 5. Component Specification
 
-To prevent circular dependencies, dependencies must flow **downward only**:
+### 5.1. `metis-core`
+
+| | |
+|---|---|
+| **Import Path** | `from metis.core import Trace, Score, BaseMetric, MetricRegistry, ExperimentConfig` |
+| **CLI Command** | None |
+| **Purpose** | Single source of truth for domain objects, contracts, and shared infrastructure. |
+
+**Constraints:**
+
+- MUST have zero external runtime dependencies beyond Pydantic v2 and the Python standard library.
+- MUST NOT depend on any other workspace member.
+
+**Public Contract:**
+
+- Schema definitions: `Trace`, `Span`, `Step`, `ToolCall`, `Score`, `AssertionResult`, `EvaluationReport`.
+- Configuration schema: `ExperimentConfig`, `MetricConfig`, `DataSourceConfig`.
+- Enums: `EvaluationCategory`, `StepType`, `Status`, `SeverityLevel`.
+- Abstract base interfaces: `BaseMetric`, `BaseTraceIngester`, `BaseEvaluator`.
+- Registry: `MetricRegistry` — central lookup for metric implementations by name.
+- Plugin discovery: `discover_ingesters()` / `ingest_trace()` — loads `BaseTraceIngester` implementations via the `metis.trace_ingesters` entry point group.
+- Exceptions: `TraceParsingError`, `MetricExecutionError`, `InvalidConfigError`.
+
+---
+
+### 5.2. `metis-metrics`
+
+| | |
+|---|---|
+| **Import Path** | `from metis.metrics import DEFAULT_REGISTRY, TrajectoryCompleteness` |
+| **CLI Command** | None |
+| **Purpose** | Built-in library of default metric implementations. |
+
+**Rationale for Separation:**
+
+`metis-metrics` exists as a standalone package rather than being bundled into `metis-engine` so that lightweight consumers (e.g., `metis-wizard`, custom metric authors, CI lint jobs) can enumerate and inspect available metrics without pulling in the engine's heavier runtime dependencies (`httpx`, `numpy`, trace ingestion machinery). Bundling metrics into engine would force every downstream consumer to inherit engine's full dependency tree — a classic transitive dependency problem that defeats the purpose of a modular workspace.
+
+**Constraints:**
+
+- MUST depend only on `metis-core`.
+- MUST NOT introduce external runtime dependencies beyond those inherited from `metis-core`.
+
+**Public Contract:**
+
+- `DEFAULT_REGISTRY`: a pre-populated `MetricRegistry` containing all built-in metrics.
+- Built-in metric implementations (e.g., `TrajectoryCompleteness`, `ToolCallAccuracy`, guardrail pass-rate).
+- Metric authoring utilities (decorators, base helpers) for teams writing custom metrics.
+
+---
+
+### 5.3. `metis-engine`
+
+| | |
+|---|---|
+| **Import Path** | `from metis.engine import Evaluator` |
+| **CLI Command** | `metis-engine` |
+| **Purpose** | Standalone execution engine for running evaluations against traces. |
+
+**Constraints:**
+
+- MUST depend on `metis-core` and `metis-metrics`.
+- MAY depend on lightweight HTTP, math, and parsing libraries (e.g., `httpx`, `numpy`).
+- MUST be usable both as a library import and as a standalone CLI.
+
+**Public Contract:**
+
+- Ships built-in trace ingesters (Langfuse, OpenTelemetry) registered via `[project.entry-points."metis.trace_ingesters"]`.
+- CLI: `metis-engine run --trace-file <path>`.
+- Loads metrics from the registry and executes them against normalized traces.
+
+**Extension Point — Custom Trace Ingesters:**
+
+Third-party packages MAY provide additional trace ingesters by implementing `BaseTraceIngester` from core and registering via the `metis.trace_ingesters` entry point group.
+
+---
+
+### 5.4. `metis-wizard`
+
+| | |
+|---|---|
+| **Import Path** | `from metis.wizard import ConfigGenerator` |
+| **CLI Command** | `metis-wizard` |
+| **Purpose** | Interactive configuration generator for creating evaluation suites and guardrails. |
+
+**Constraints:**
+
+- MUST depend on `metis-core` and `metis-metrics`.
+- MUST NOT depend on `metis-engine`.
+
+**Public Contract:**
+
+- Interactive CLI terminal UI for generating valid suite configuration YAML files.
+- CLI: `metis-wizard init`.
+- Template generation for custom metric authors.
+
+---
+
+### 5.5. `metis-insights`
+
+| | |
+|---|---|
+| **Import Path** | `from metis.insights import AnalyticsEngine` |
+| **CLI Command** | `metis-insights` |
+| **Purpose** | Analytics computation and reporting engine for evaluation outputs. |
+
+**Constraints:**
+
+- MUST depend on `metis-core`.
+- MUST NOT depend on `metis-engine` or `metis-metrics`.
+- MAY depend on data analysis libraries (e.g., `pandas`).
+
+**Public Contract:**
+
+- Consumes `EvaluationReport` (from `metis.core`).
+- Terminal-based analytics rendering (ASCII tables, pass/fail summaries).
+- CLI: `metis-insights report --results-file <path>`.
+- Programmatic reporting calculations for the API backend.
+
+---
+
+### 5.6. `metis-testbed` *(Deferred — Stage 4)*
+
+| | |
+|---|---|
+| **Import Path** | `from metis.testbed import Sandbox` |
+| **CLI Command** | TBD |
+| **Purpose** | Evaluator calibration and sandbox environment for running agents against controlled scenarios. |
+
+**Constraints:**
+
+- MUST depend on `metis-core` and `metis-engine`.
+
+**Public Contract:**
+
+- Controlled execution environments for agent calibration.
+- Scenario definitions for known-good/known-bad agent trajectories.
+- Calibration utilities for tuning metric thresholds.
+
+> Deferred to Stage 4. The MVP evaluates pre-recorded traces; live sandbox execution comes later.
+
+---
+
+### 5.7. `apps/api` *(Deferred — Stage 3)*
+
+| | |
+|---|---|
+| **Purpose** | Web backend exposing METIS capabilities as a service. |
+
+**Constraints:**
+
+- MUST expose REST endpoints for configuration, trace submission, and fetching insights reports.
+- MAY depend on all `packages/*` members.
+
+> Deferred to Stage 3. The MVP is CLI-first.
+
+---
+
+### 5.8. `apps/worker` *(Deferred — Stage 5)*
+
+| | |
+|---|---|
+| **Purpose** | Asynchronous job processor for long-running evaluation workloads. |
+
+**Rationale:**
+
+Trace evaluation can be computationally expensive — parsing large traces, executing many metrics, calling out to LLM-as-judge endpoints. Running these inline within an API request would block the HTTP thread, degrade latency, and risk timeouts. The worker decouples submission from execution: the API enqueues an evaluation request, and the worker picks it up and runs `metis.engine` in the background. This separation allows independent scaling of API throughput and evaluation compute.
+
+**Constraints:**
+
+- MUST import and execute evaluations via `metis.engine`.
+- MUST consume jobs from a task queue.
+- MAY depend on all `packages/*` members.
+
+> Deferred to Stage 5. Only needed once evaluation workloads outgrow synchronous API handling.
+
+---
+
+## 6. Dependency Invariants
+
+Dependencies MUST flow downward only. The following DAG is normative:
 
 ```text
          [ apps/api ]       [ apps/worker ]
@@ -192,369 +265,99 @@ To prevent circular dependencies, dependencies must flow **downward only**:
             [ packages/metrics ] ◄── [ packages/wizard ]
                    │
                    ▼
-            [ packages/core ]   (Base - Zero local dependencies)
+            [ packages/core ]   (Base — zero local dependencies)
 ```
 
-> **Key rule:** `wizard` and `insights` do NOT depend on `engine`. Wizard depends on
-> `core` + `metrics` (to enumerate available metrics). Insights depends on `core`
-> (to read evaluation result types). Only `engine` pulls everything together at runtime.
+**Invariant Rules:**
+
+1. `metis-core` MUST NOT depend on any other workspace member.
+2. `metis-metrics` MUST depend only on `metis-core`.
+3. `metis-wizard` MUST NOT depend on `metis-engine` or `metis-insights`.
+4. `metis-insights` MUST NOT depend on `metis-engine`, `metis-metrics`, or `metis-wizard`.
+5. `metis-engine` MUST NOT depend on `metis-wizard` or `metis-insights`.
+6. No circular dependencies SHALL exist between any workspace members.
+7. Upward dependencies (child depending on parent in the DAG) MUST NOT be introduced.
 
 ---
 
-## 6. Implementation Blueprint for Coding Agent
-
-### Step 1: Root Workspace Initialization
-Root `pyproject.toml`:
-
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "metis"
-version = "0.1.0"
-description = "Measurement and Evaluation of Trustworthy Intelligent Systems"
-requires-python = ">=3.11"
-dependencies = [
-    "metis-core",
-    "metis-engine",
-    "metis-metrics",
-    "metis-wizard",
-    "metis-insights",
-]
-
-[project.scripts]
-metis = "metis_cli:app"
-
-[tool.hatch.build.targets.wheel]
-packages = ["."]
-only-include = ["metis_cli.py"]
-
-[tool.uv]
-package = true
-
-[tool.uv.sources]
-metis-core = { workspace = true }
-metis-engine = { workspace = true }
-metis-metrics = { workspace = true }
-metis-wizard = { workspace = true }
-metis-insights = { workspace = true }
-
-[tool.uv.workspace]
-members = [
-    "packages/*",
-    "apps/*",
-]
-```
-
-> **Note:** The root project must explicitly depend on workspace members for `uv sync` to install them into the virtualenv. Without these dependencies, workspace members are resolved but not installed.
->
-> The root also requires `build-system`, `tool.uv.package = true`, and `tool.hatch.build.targets.wheel` to install its own `[project.scripts]` entry point (the unified `metis` CLI).
-
-### Step 2: Core Package Configuration (`packages/core/pyproject.toml`)
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "metis-core"
-version = "0.1.0"
-description = "Core data models and abstractions for the METIS suite"
-readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
-    "pydantic>=2.0.0",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/metis"]
-```
-
-### Step 3: Engine Package Configuration (`packages/engine/pyproject.toml`)
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "metis-engine"
-version = "0.1.0"
-description = "Evaluation engine and trace parser for METIS"
-requires-python = ">=3.11"
-dependencies = [
-    "metis-core",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-    "httpx>=0.25.0",
-]
-
-[project.scripts]
-metis-engine = "metis.engine.cli:app"
-
-[tool.uv.sources]
-metis-core = { workspace = true }
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/metis"]
-```
-
-### Step 4: Wizard Package Configuration (`packages/wizard/pyproject.toml`)
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "metis-wizard"
-version = "0.1.0"
-description = "Interactive evaluation setup wizard and CLI generator"
-requires-python = ">=3.11"
-dependencies = [
-    "metis-core",
-    "metis-metrics",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-]
-
-[project.scripts]
-metis-wizard = "metis.wizard.cli:app"
-
-[tool.uv.sources]
-metis-core = { workspace = true }
-metis-metrics = { workspace = true }
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/metis"]
-```
-
-### Step 5: Insights Package Configuration (`packages/insights/pyproject.toml`)
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "metis-insights"
-version = "0.1.0"
-description = "Analytics and visualization engine for evaluation reports"
-requires-python = ">=3.11"
-dependencies = [
-    "metis-core",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-    "pandas>=2.0.0",
-]
-
-[project.scripts]
-metis-insights = "metis.insights.cli:app"
-
-[tool.uv.sources]
-metis-core = { workspace = true }
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/metis"]
-```
-
----
-
-## 7. Developer Execution Workflow
-
-### Initial Repository Bootstrap Script
-To initialize the workspace and set up all clean folder structures in one command:
-
-```bash
-uv init metis && cd metis && \
-for pkg in core engine wizard insights; do mkdir -p packages/$pkg/src/metis/$pkg && touch packages/$pkg/src/metis/$pkg/__init__.py; done && \
-for app in api worker; do mkdir -p apps/$app/src/metis/$app && touch apps/$app/src/metis/$app/__init__.py; done
-```
-
-### CLI Command Invocation
-
-The primary CLI is the unified `metis` command, which composes all sub-package CLIs:
-
-```bash
-# Unified CLI (preferred)
-uv run metis wizard init
-uv run metis engine run --trace-file ./tests/fixtures/langfuse_trace.json
-uv run metis insights report --results-file ./results.json
-
-# Version info
-uv run metis engine -V
-```
-
-Per-package standalone commands are also available (useful for CI or isolated installs):
-
-```bash
-uv run metis-wizard init
-uv run metis-engine run --trace-file ./tests/fixtures/langfuse_trace.json
-uv run metis-insights report --results-file ./results.json
-```
-
----
-
-## 8. Testing Strategy
+## 7. Testing Contract
 
 ### Directory Layout
+
 ```text
 tests/
-├── unit/                       # Per-package unit tests (mirror package structure)
+├── unit/                       # Per-package isolation tests
 │   ├── core/
 │   ├── metrics/
 │   ├── engine/
 │   ├── wizard/
 │   └── insights/
-├── integration/                # Cross-package integration tests
-└── fixtures/                   # Shared test data (trace files, configs)
+├── integration/                # Cross-package flow tests
+└── fixtures/                   # Shared test data
     ├── langfuse_trace.json
     └── experiment.yaml
 ```
 
-### Conventions
-* **Unit tests** (`tests/unit/<package>/`) test a single package in isolation. Mock external dependencies.
-* **Integration tests** (`tests/integration/`) verify cross-package flows (e.g., ingesting a trace file through the engine and producing a report).
-* **Fixtures** (`tests/fixtures/`) hold sample trace files and experiment configs shared across test suites.
-* Run all tests: `uv run pytest`
-* Run a single package's tests: `uv run pytest tests/unit/engine/`
+### Rules
+
+- Unit tests (`tests/unit/<package>/`) MUST test a single package in isolation. External dependencies SHOULD be mocked.
+- Integration tests (`tests/integration/`) MUST verify cross-package flows (e.g., ingesting a trace through the engine and producing a report).
+- Test fixtures (`tests/fixtures/`) MUST hold shared sample data. Tests MUST NOT embed fixture data inline when a shared fixture exists.
+- The full test suite MUST be runnable via `uv run pytest` from the workspace root.
+- Per-package test runs MUST be supported: `uv run pytest tests/unit/<package>/`.
 
 ---
 
-## 9. Makefile (Developer Task Runner)
+## 8. Build Interface Contract
 
-A root `Makefile` provides a uniform interface for common development tasks across the monorepo. Developers and CI pipelines use `make <target>` instead of remembering individual `uv run` incantations.
+A root `Makefile` MUST provide the following targets as the public development and CI interface:
 
-### Target Reference
+| Target | Behavior |
+|--------|----------|
+| `install` | Install all workspace dependencies (including dev group). |
+| `lint` | Run Ruff lint checks. MUST fail on violations. |
+| `lint-fix` | Apply Ruff lint autofixes. |
+| `format` | Format all Python files with Ruff. |
+| `format-check` | Check formatting without modifying files. MUST fail on violations. |
+| `fix` | Apply lint autofixes and format (convenience composition). |
+| `typecheck` | Run Pyright type checking. MUST fail on errors. |
+| `test` | Run the full test suite via pytest. |
+| `test-unit` | Run unit tests only. |
+| `test-integration` | Run integration tests only. |
+| `check` | Composition: `lint` + `format-check` + `typecheck`. |
+| `ci` | Composition: `check` + `test`. MUST mirror what CI pipelines execute. |
+| `clean` | Remove all generated/cached files across the monorepo. |
 
-```makefile
-.PHONY: help install clean lint lint-fix format format-check fix typecheck test check ci
+**Rules:**
 
-help:
-	@printf "Available targets:\n"
-	@printf "  make install             Install all workspace dependencies\n"
-	@printf "  make lint                Run Ruff lint checks\n"
-	@printf "  make lint-fix            Apply Ruff lint autofixes\n"
-	@printf "  make format              Format Python files with Ruff\n"
-	@printf "  make format-check        Check formatting without changes\n"
-	@printf "  make fix                 Apply lint autofixes and formatting\n"
-	@printf "  make typecheck           Run Pyright type checking\n"
-	@printf "  make test                Run full test suite with pytest\n"
-	@printf "  make test-unit           Run unit tests only\n"
-	@printf "  make test-integration    Run integration tests only\n"
-	@printf "  make check               Run lint, format, and type checks\n"
-	@printf "  make ci                  Run the full CI suite (check + test)\n"
-	@printf "  make clean               Remove generated/cached files\n"
+- All targets MUST operate from the workspace root. No per-package `cd` is required.
+- The `ci` target MUST be the single command that reproduces a CI pipeline run locally.
+- `check` MUST be non-mutating (read-only verification).
+- Additional targets MAY be added, but the above set is REQUIRED.
 
-install:
-	uv sync --group dev
+---
 
-lint:
-	uv run ruff check .
+## 9. CLI Interface
 
-lint-fix:
-	uv run ruff check . --fix
+The primary user-facing CLI is the unified `metis` command, which composes sub-package CLIs:
 
-format:
-	uv run ruff format .
-
-format-check:
-	uv run ruff format . --check
-
-fix:
-	$(MAKE) lint-fix
-	$(MAKE) format
-
-typecheck:
-	uv run pyright
-
-test:
-	uv run pytest
-
-test-unit:
-	uv run pytest tests/unit/
-
-test-integration:
-	uv run pytest tests/integration/
-
-check:
-	$(MAKE) lint
-	$(MAKE) format-check
-	$(MAKE) typecheck
-
-ci:
-	$(MAKE) check
-	$(MAKE) test
-
-clean:
-	rm -rf __pycache__ .pytest_cache .mypy_cache .ruff_cache .pyright
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	rm -rf .venv
+```text
+metis wizard init
+metis engine run --trace-file <path>
+metis insights report --results-file <path>
+metis engine -V
 ```
 
-### Design Principles
-
-* **Single entry point:** All targets operate from the workspace root. `uv` resolves workspace members automatically — no per-package `cd` required.
-* **Composable targets:** `check` = `lint` + `format-check` + `typecheck`. `ci` = `check` + `test`. Developers can run any subset.
-* **CI parity:** The `ci` target mirrors what CI pipelines execute. Running `make ci` locally catches failures before push.
-* **Recursive cleanup:** `clean` removes caches across the entire monorepo tree, not just the root.
-
-### Per-Package Testing
-
-For focused development on a single package, bypass the Makefile and run pytest directly:
-
-```bash
-uv run pytest tests/unit/core/
-uv run pytest tests/unit/engine/
-```
-
-The Makefile's `test` target always runs the full suite — this is intentional to prevent partial-test CI drift.
+Per-package standalone commands (`metis-engine`, `metis-wizard`, `metis-insights`) MUST also be available for CI or isolated installs.
 
 ---
 
-## 10. Next Steps for Coding Agent
+## 10. Stages
 
-1. Execute the initial workspace bootstrap shell command from Section 7.
-2. Populate `pyproject.toml` files for all sub-packages using the Hatchling configuration blueprints in Section 6.
-3. Wire package CLI entry points (`[project.scripts]`) using Typer in `src/metis/*/cli.py`.
-4. Implement `metis.core` Pydantic models (`Trace`, `Span`, `Score`, `AssertionResult`) and interfaces.
-5. Build `metis.engine` Langfuse trace parser and basic CLI evaluation execution logic (`uv run metis-engine`).
-6. Run `uv sync` and verify imports work cleanly via `from metis.core import Trace`.
-7. Create the root `Makefile` using the blueprint in Section 9. Verify `make ci` passes.
-
----
-
-## 11. Agent Instructions (`AGENTS.md`) Strategy
-
-Agent instruction files follow the directory hierarchy — agents pick up all `AGENTS.md` files from the repo root down to the directory they're working in.
-
-### Root (`AGENTS.md`)
-Repo-wide conventions shared across all packages and apps:
-
-- Python version requirement (>=3.11), uv workspace setup
-- How to run tests (`uv run pytest`, per-package: `uv run pytest tests/unit/<pkg>/`)
-- Linting/formatting rules, naming conventions
-- Dependency DAG rules (Section 5) — packages must not introduce upward dependencies
-- Namespace packaging convention (`src/metis/<pkg>/`)
-- PR/commit conventions, CI notes
-
-### Per-Package (`packages/<pkg>/AGENTS.md`)
-Context specific to a single library package:
-
-- Package purpose and key abstractions (e.g., `packages/core`: "Pure domain models, zero external deps beyond Pydantic")
-- Domain-specific terminology and invariants
-- Testing patterns unique to that package
-- Dependency constraints (what this package may and may not import)
-
-### Per-App (`apps/<app>/AGENTS.md`)
-Deployment and runtime context for runnable services:
-
-- How to run locally, required env vars and infrastructure (e.g., Redis, PostgreSQL)
-- API design conventions, auth patterns
-- Dockerfile / container notes
-
-### When to Add Per-Directory Files
-A single root `AGENTS.md` is sufficient while packages are small. Add per-package files when:
-
-- A package has domain-specific terminology an agent consistently misunderstands
-- Testing or running a package requires non-obvious setup (external services, fixtures)
-- Dependency constraints need reinforcing (e.g., "this package must remain pure Python")
+| Stage | Scope | Status |
+|-------|-------|--------|
+| **Stage 1 — MVP** | `core`, `metrics`, `engine` (CLI evaluation of pre-recorded traces) | Active |
+| **Stage 2 — Developer Experience** | `wizard`, `insights` (configuration generation, reporting) | Planned |
+| **Stage 3 — Web Platform** | `apps/api` (REST service exposing METIS capabilities) | Deferred |
+| **Stage 4 — Generalized METIS** | `testbed` (live sandbox, agent calibration) | Deferred |
+| **Stage 5 — Scale** | `apps/worker` (async job processing for heavy evaluation workloads) | Deferred |
