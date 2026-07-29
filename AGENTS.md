@@ -73,6 +73,10 @@ Key invariants:
 - **metis-engine:** Evaluation runtime — ingests traces (Langfuse, OTEL), executes metrics from registry. CLI: `metis engine run --trace-file <path>`.
 - **metis-wizard:** Interactive CLI for generating evaluation config YAML. CLI: `metis wizard init`.
 
+## Contributing
+
+All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](CONTRIBUTING.md). This includes branching conventions, commit message style, testing requirements, dependency DAG invariants, and PR expectations.
+
 ## Coding Conventions
 
 - Namespace imports: `from metis.core import ...`, `from metis.engine import ...`

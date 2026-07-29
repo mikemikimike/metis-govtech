@@ -88,6 +88,8 @@ Each sub-command is also available as a standalone CLI (`metis-engine`, `metis-w
 
 ## Development
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor guide — branching conventions, code standards, testing, and PR expectations.
+
 ```bash
 make check          # lint + format-check + typecheck (non-mutating)
 make fix            # auto-fix lint issues and format code
