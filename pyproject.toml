@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "metis"
+dynamic = ["version"]
+description = "Measurement and Evaluation of Trustworthy Intelligent Systems"
+requires-python = ">=3.11"
+dependencies = [
+    "metis-core",
+    "metis-engine",
+    "metis-metrics",
+    "metis-wizard",
+]
+
+[project.scripts]
+metis = "metis_cli:app"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+only-include = ["metis_cli.py"]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+metis-core = { workspace = true }
+metis-engine = { workspace = true }
+metis-metrics = { workspace = true }
+metis-wizard = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    "packages/*",
+    "apps/*",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+include = ["packages/*/src", "apps/*/src", "metis_cli.py"]
+exclude = ["apps/api", "apps/web"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: cross-package integration tests"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1",
+    "pytest>=9.1.1",
+    "ruff>=0.11",
+]
