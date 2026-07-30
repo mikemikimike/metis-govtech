@@ -33,17 +33,21 @@ METIS is an extensible agentic evaluation suite for assessing AI safety, alignme
 ┌──────▼──────┐   ┌───────────▼───────────┐   ┌──────▼──────┐
 │ METIS-wizard│   │     METIS-engine      │   │METIS-insights│
 │  Config Gen │   │  Evaluation Runtime   │   │  Analytics   │
-└──────┬──────┘   └───────────┬───────────┘   └──────┬──────┘
-       │                      │                       │
-       │              ┌───────▼───────┐               │
-       └─────────────►│ METIS-metrics │◄──────────────┘
-                      │   Catalog     │
-                      └───────┬───────┘
-                              │
-                      ┌───────▼───────┐
-                      │  METIS-core   │
-                      │Domain Schemas │
-                      └───────────────┘
+└──────┬──────┘   └───────┬───────────────┘   └──────┬──────┘
+       │                  │         │                 │
+       │                  │  ┌──────▼──────┐          │
+       │                  │  │METIS-testbed│  (Stage 4)│
+       │                  │  │  Live Sandbox│          │
+       │                  │  └─────────────┘          │
+       │          ┌───────▼───────┐                   │
+       └─────────►│ METIS-metrics │◄──────────────────┘
+                  │   Catalog     │
+                  └───────┬───────┘
+                          │
+                  ┌───────▼───────┐
+                  │  METIS-core   │
+                  │Domain Schemas │
+                  └───────────────┘
 ```
 
 | Package | Description |
