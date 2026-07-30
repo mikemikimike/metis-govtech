@@ -417,13 +417,15 @@ Tags are markers, not sources of truth. The `version` field in `pyproject.toml` 
 
 ### 9.5. Tag-on-Merge Rule
 
-Every merge to `main` MUST be tagged with a scoped version bump for the affected package(s). This is a hard rule:
+Every merge to `main` that modifies source code under `packages/` or `apps/` MUST be tagged with a scoped version bump for the affected package(s). This is a hard rule:
 
-- Untagged commits on `main` create ambiguous version state and break the 1:1 mapping between changes and versions.
+- Untagged package commits on `main` create ambiguous version state and break the 1:1 mapping between changes and versions.
 - Multi-package PRs MUST receive one tag per affected package.
-- CI SHOULD enforce that merge commits on `main` have at least one scoped tag.
+- CI SHOULD enforce that merge commits touching `packages/` or `apps/` have at least one scoped tag.
 
 **Why this is necessary:** Without mandatory tagging, selective tagging decays into forgotten tags, leaving commits on `main` with no clear package or version identity. The version reported by `pyproject.toml` would not match any git tag, and the history becomes unqueryable by package.
+
+**Exemption — cross-cutting changes:** Merges that only touch root-level files (docs, CI config, `Makefile`, `.github/`, `infra/`) do NOT require a tag. These changes do not produce a versioned artifact. They MUST still use a commit scope prefix (`docs:`, `ci:`, `infra:`) for traceability.
 
 ### 9.6. Release Workflow
 
@@ -436,13 +438,18 @@ For multi-package changes, repeat step 3 for each affected package.
 
 ### 9.7. Commit Message Convention
 
-All commits on `main` MUST be prefixed with the affected package scope:
+All commits on `main` MUST be prefixed with the affected scope:
 
 ```text
 engine: fix trace parsing for nested spans
 core: add Span.duration computed field
 wizard: update prompt templates for v2 schema
+docs: update architecture spec versioning section
+ci: add tag enforcement check
+infra: update Docker base image
 ```
+
+Package scopes (`core`, `metrics`, `engine`, `wizard`, `insights`, `api`, `web`, `testbed`) correspond to versioned artifacts and require a tag. Cross-cutting scopes (`docs`, `ci`, `infra`) do not require a tag.
 
 This allows per-package filtering: `git log --grep="^engine:"`.
 
