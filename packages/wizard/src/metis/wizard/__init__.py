@@ -4,7 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from metis.core import Status
 from metis.core import __version__ as core_version
-from metis.metrics import DemoMetric
+from metis.library import DemoMetric
 
 try:
     __version__ = version("metis-wizard")

@@ -8,7 +8,7 @@ members = [
     "metis-api",
     "metis-core",
     "metis-engine",
-    "metis-metrics",
+    "metis-library",
     "metis-wizard",
 ]
 
@@ -76,7 +76,7 @@ source = { editable = "." }
 dependencies = [
     { name = "metis-core" },
     { name = "metis-engine" },
-    { name = "metis-metrics" },
+    { name = "metis-library" },
     { name = "metis-wizard" },
 ]
 
@@ -91,7 +91,7 @@ dev = [
 requires-dist = [
     { name = "metis-core", editable = "packages/core" },
     { name = "metis-engine", editable = "packages/engine" },
-    { name = "metis-metrics", editable = "packages/metrics" },
+    { name = "metis-library", editable = "packages/library" },
     { name = "metis-wizard", editable = "packages/wizard" },
 ]
 
@@ -109,14 +109,14 @@ source = { editable = "apps/api" }
 dependencies = [
     { name = "metis-core" },
     { name = "metis-engine" },
-    { name = "metis-metrics" },
+    { name = "metis-library" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "metis-core", editable = "packages/core" },
     { name = "metis-engine", editable = "packages/engine" },
-    { name = "metis-metrics", editable = "packages/metrics" },
+    { name = "metis-library", editable = "packages/library" },
 ]
 
 [[package]]
@@ -136,7 +136,7 @@ version = "0.1.0"
 source = { editable = "packages/engine" }
 dependencies = [
     { name = "metis-core" },
-    { name = "metis-metrics" },
+    { name = "metis-library" },
     { name = "rich" },
     { name = "typer" },
 ]
@@ -144,15 +144,15 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "metis-core", editable = "packages/core" },
-    { name = "metis-metrics", editable = "packages/metrics" },
+    { name = "metis-library", editable = "packages/library" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.9.0" },
 ]
 
 [[package]]
-name = "metis-metrics"
+name = "metis-library"
 version = "0.1.0"
-source = { editable = "packages/metrics" }
+source = { editable = "packages/library" }
 dependencies = [
     { name = "metis-core" },
 ]
@@ -166,7 +166,7 @@ version = "0.1.0"
 source = { editable = "packages/wizard" }
 dependencies = [
     { name = "metis-core" },
-    { name = "metis-metrics" },
+    { name = "metis-library" },
     { name = "rich" },
     { name = "typer" },
 ]
@@ -174,7 +174,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "metis-core", editable = "packages/core" },
-    { name = "metis-metrics", editable = "packages/metrics" },
+    { name = "metis-library", editable = "packages/library" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.9.0" },
 ]

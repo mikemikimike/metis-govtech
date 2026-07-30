@@ -1,4 +1,4 @@
-"""Demo metric — proves the metrics package wiring works. Replace with real metrics."""
+"""Demo metric — proves the library package wiring works. Replace with real metrics."""
 
 from pydantic import BaseModel
 

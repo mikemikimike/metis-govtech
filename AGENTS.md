@@ -40,7 +40,7 @@ metis/
 ├── Makefile                # Dev/CI interface
 ├── packages/
 │   ├── core/               # metis-core — domain schemas, interfaces, registry
-│   ├── metrics/            # metis-metrics — shared metric catalog
+│   ├── library/            # metis-library — shared catalog (metrics, skills, etc.)
 │   ├── engine/             # metis-engine — evaluation runtime + trace ingesters
 │   └── wizard/             # metis-wizard — interactive config generator
 ├── apps/
@@ -55,21 +55,21 @@ Each package lives under `packages/<name>/src/metis/<name>/` using PEP 420 names
 ## Dependency DAG (downward only)
 
 ```
-engine ──► metrics ──► core
-wizard ──► metrics ──► core
-insights ──────────────► core
+engine ──► library ──► core
+wizard ──► library ──► core
+insights ───────────────► core
 ```
 
 Key invariants:
 - `core` has zero workspace dependencies (only Pydantic + stdlib)
-- `metrics` depends only on `core`
-- `wizard` and `engine` depend on `core` + `metrics` but NOT on each other
+- `library` depends only on `core`
+- `wizard` and `engine` depend on `core` + `library` but NOT on each other
 - `insights` depends only on `core`
 
 ## Architecture
 
 - **metis-core:** Domain schemas (Trace, Span, Score, etc.), abstract interfaces (BaseMetric, BaseTraceIngester), MetricRegistry, plugin discovery via entry points.
-- **metis-metrics:** Pre-populated DEFAULT_REGISTRY with built-in evaluators; metric authoring utilities.
+- **metis-library:** Shared catalog of metrics, skills, and reusable components; referenced by FQN from wizard configs and executed by the engine.
 - **metis-engine:** Evaluation runtime — ingests traces (Langfuse, OTEL), executes metrics from registry. CLI: `metis engine run --trace-file <path>`.
 - **metis-wizard:** Interactive CLI for generating evaluation config YAML. CLI: `metis wizard init`.
 
@@ -91,13 +91,13 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 When working on a specific package, read its local `AGENTS.md` for package-specific instructions:
 
 - [`packages/core/AGENTS.md`](packages/core/AGENTS.md) — metis-core
-- [`packages/metrics/AGENTS.md`](packages/metrics/AGENTS.md) — metis-metrics
+- [`packages/library/AGENTS.md`](packages/library/AGENTS.md) — metis-library
 - [`packages/engine/AGENTS.md`](packages/engine/AGENTS.md) — metis-engine
 - [`packages/wizard/AGENTS.md`](packages/wizard/AGENTS.md) — metis-wizard
 - [`apps/api/AGENTS.md`](apps/api/AGENTS.md) — REST backend
 
 ## Current Stage
 
-**Stage 1 (MVP):** `core`, `metrics`, `engine` — CLI evaluation of pre-recorded traces. Active development.
+**Stage 1 (MVP):** `core`, `library`, `engine` — CLI evaluation of pre-recorded traces. Active development.
 
 See `docs/architecture.md` for the full normative specification.

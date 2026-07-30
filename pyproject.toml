@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "metis-core",
     "metis-engine",
-    "metis-metrics",
+    "metis-library",
     "metis-wizard",
 ]
 
@@ -27,7 +27,7 @@ package = true
 [tool.uv.sources]
 metis-core = { workspace = true }
 metis-engine = { workspace = true }
-metis-metrics = { workspace = true }
+metis-library = { workspace = true }
 metis-wizard = { workspace = true }
 
 [tool.uv.workspace]

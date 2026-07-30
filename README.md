@@ -35,7 +35,7 @@ METIS is an extensible agentic evaluation suite for assessing AI safety, alignme
 └──────┬──────┘   └───────────────────────┘   └──────┬──────┘
        │                       │                     │
        │               ┌──────▼──────┐               │
-       └──────────────►│ METIS-metrics│◄─────────────┘
+       └──────────────►│METIS-library │◄─────────────┘
                        │   Catalog    │
                        └──────┬──────┘
                               │
@@ -48,7 +48,7 @@ METIS is an extensible agentic evaluation suite for assessing AI safety, alignme
 | Package | Description |
 |---------|-------------|
 | [**metis-core**](packages/core/) | Domain schemas and standard interfaces |
-| [**metis-metrics**](packages/metrics/) | Shared metric catalog — built-in evaluators and authoring utilities |
+| [**metis-library**](packages/library/) | Shared catalog — metrics, skills, and reusable components |
 | [**metis-engine**](packages/engine/) | Evaluation runtime; ingests traces and executes metrics |
 | [**metis-wizard**](packages/wizard/) | Interactive evaluation config generator |
 | [**metis-insights**](packages/insights/) | Trajectory diagnostics and compliance analytics |
@@ -98,7 +98,7 @@ metis/
 ├── uv.lock                 # Single lockfile
 ├── packages/
 │   ├── core/               # metis-core
-│   ├── metrics/            # metis-metrics
+│   ├── library/            # metis-library
 │   ├── engine/             # metis-engine
 │   └── wizard/             # metis-wizard
 ├── apps/

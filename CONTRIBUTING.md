@@ -25,7 +25,7 @@ If you use direnv, the `.envrc` will activate the virtualenv automatically. Othe
 metis/
 ├── packages/           # Reusable library packages
 │   ├── core/           # Domain schemas, interfaces, registry
-│   ├── metrics/        # Shared metric catalog
+│   ├── library/        # Shared catalog (metrics, skills, etc.)
 │   ├── engine/         # Evaluation runtime + trace ingesters
 │   └── wizard/         # Interactive config generator
 ├── apps/               # Deployable services (Stage 3+)
@@ -37,9 +37,9 @@ metis/
 Dependencies flow **downward only**:
 
 ```
-engine ──► metrics ──► core
-wizard ──► metrics ──► core
-insights ──────────────► core
+engine ──► library ──► core
+wizard ──► library ──► core
+insights ───────────────► core
 ```
 
 For the full specification (component contracts, dependency invariants, versioning), see [docs/architecture.md](docs/architecture.md).
@@ -159,8 +159,8 @@ PRs require at least one approval. CI must pass. Squash-merge is preferred for s
 These invariants are **non-negotiable** — CI will enforce them:
 
 1. `metis-core` has zero workspace dependencies
-2. `metis-metrics` depends only on `metis-core`
-3. `metis-engine` and `metis-wizard` depend on `core` + `metrics` but NOT on each other
+2. `metis-library` depends only on `metis-core`
+3. `metis-engine` and `metis-wizard` depend on `core` + `library` but NOT on each other
 4. `metis-insights` depends only on `metis-core`
 5. No circular dependencies, ever
 

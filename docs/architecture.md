@@ -54,8 +54,8 @@ metis/
 ├── packages/                   # Reusable library packages
 │   ├── core/
 │   │   └── src/metis/core/
-│   ├── metrics/
-│   │   └── src/metis/metrics/
+│   ├── library/
+│   │   └── src/metis/library/
 │   ├── engine/
 │   │   └── src/metis/engine/
 │   ├── wizard/
@@ -97,12 +97,12 @@ MUST NOT depend on any other workspace member.
 
 ---
 
-### 5.2. `metis-metrics`
+### 5.2. `metis-library`
 
 | | |
 |---|---|
-| **Import Path** | `from metis.metrics import ...` |
-| **Purpose** | Shared metric catalog consumed by both the execution path (engine) and the configuration path (wizard). Lightweight layer so consumers can enumerate metrics without pulling in engine's heavier dependencies. |
+| **Import Path** | `from metis.library import ...` |
+| **Purpose** | Shared catalog of metrics, skills, and reusable components consumed by both the execution path (engine) and the configuration path (wizard). The wizard references items by FQN; the engine resolves and executes them. Lightweight layer so consumers can enumerate catalog items without pulling in engine's heavier dependencies. |
 
 MUST depend only on `metis-core`. MUST NOT introduce external runtime dependencies beyond those inherited from core.
 
@@ -115,7 +115,7 @@ MUST depend only on `metis-core`. MUST NOT introduce external runtime dependenci
 | **Import Path** | `from metis.engine import ...` |
 | **Purpose** | Evaluation runtime — ingests traces, executes metrics, produces evaluation reports. |
 
-MUST depend on `metis-core` and `metis-metrics`. MAY depend on HTTP, math, parsing, browser automation, and LLM client libraries. MUST be usable both as a library import and as a standalone CLI.
+MUST depend on `metis-core` and `metis-library`. MAY depend on HTTP, math, parsing, browser automation, and LLM client libraries. MUST be usable both as a library import and as a standalone CLI.
 
 ---
 
@@ -126,7 +126,7 @@ MUST depend on `metis-core` and `metis-metrics`. MAY depend on HTTP, math, parsi
 | **Import Path** | `from metis.wizard import ...` |
 | **Purpose** | Interactive configuration generator for creating evaluation suites and guardrails. |
 
-MUST depend on `metis-core` and `metis-metrics`. MUST NOT depend on `metis-engine`.
+MUST depend on `metis-core` and `metis-library`. MUST NOT depend on `metis-engine`.
 
 ---
 
@@ -137,7 +137,7 @@ MUST depend on `metis-core` and `metis-metrics`. MUST NOT depend on `metis-engin
 | **Import Path** | `from metis.insights import ...` |
 | **Purpose** | Analytics computation and reporting engine for evaluation outputs. |
 
-MUST depend on `metis-core`. MUST NOT depend on `metis-engine` or `metis-metrics`.
+MUST depend on `metis-core`. MUST NOT depend on `metis-engine` or `metis-library`.
 
 ---
 
@@ -186,7 +186,7 @@ Dependencies MUST flow downward only. The following DAG is normative:
                             │   [ packages/insights ]
                             │
                             ▼
-                     [ packages/metrics ] ◄── [ packages/wizard ]
+                     [ packages/library ] ◄── [ packages/wizard ]
                             │
                             ▼
                      [ packages/core ]   (Base — zero local dependencies)
@@ -197,9 +197,9 @@ Dependencies MUST flow downward only. The following DAG is normative:
 **Invariant Rules:**
 
 1. `metis-core` MUST NOT depend on any other workspace member.
-2. `metis-metrics` MUST depend only on `metis-core`.
+2. `metis-library` MUST depend only on `metis-core`.
 3. `metis-wizard` MUST NOT depend on `metis-engine` or `metis-insights`.
-4. `metis-insights` MUST NOT depend on `metis-engine`, `metis-metrics`, or `metis-wizard`.
+4. `metis-insights` MUST NOT depend on `metis-engine`, `metis-library`, or `metis-wizard`.
 5. `metis-engine` MUST NOT depend on `metis-wizard` or `metis-insights`.
 6. No circular dependencies SHALL exist between any workspace members.
 7. Upward dependencies (child depending on parent in the DAG) MUST NOT be introduced.
@@ -215,7 +215,7 @@ Dependencies MUST flow downward only. The following DAG is normative:
 tests/
 ├── unit/                       # Per-package isolation tests
 │   ├── core/
-│   ├── metrics/
+│   ├── library/
 │   ├── engine/
 │   ├── wizard/
 │   └── insights/
@@ -337,7 +337,7 @@ ci: add tag enforcement check
 infra: update Docker base image
 ```
 
-Package scopes (`core`, `metrics`, `engine`, `wizard`, `insights`, `api`, `web`) correspond to versioned artifacts and require a tag. Cross-cutting scopes (`docs`, `ci`, `infra`) do not.
+Package scopes (`core`, `library`, `engine`, `wizard`, `insights`, `api`, `web`) correspond to versioned artifacts and require a tag. Cross-cutting scopes (`docs`, `ci`, `infra`) do not.
 
 ### 9.8. CLI Version Reporting
 
@@ -346,7 +346,7 @@ The unified `metis --version` SHOULD print a breakdown of all installed componen
 ```text
 metis 0.1.0
   core    0.1.0
-  metrics 0.1.0
+  library 0.1.0
   engine  0.2.0
   wizard  0.1.0
 ```
