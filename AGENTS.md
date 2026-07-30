@@ -85,6 +85,16 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 - Versioning: unified across all packages via `hatch-vcs` (git tags `v*`)
 - No static `version` fields — always `dynamic = ["version"]`
 
+## Per-Package Guides
+
+When working on a specific package, read its local `AGENTS.md` for package-specific instructions:
+
+- [`packages/core/AGENTS.md`](packages/core/AGENTS.md) — metis-core
+- [`packages/metrics/AGENTS.md`](packages/metrics/AGENTS.md) — metis-metrics
+- [`packages/engine/AGENTS.md`](packages/engine/AGENTS.md) — metis-engine
+- [`packages/wizard/AGENTS.md`](packages/wizard/AGENTS.md) — metis-wizard
+- [`apps/api/AGENTS.md`](apps/api/AGENTS.md) — REST backend
+
 ## Current Stage
 
 **Stage 1 (MVP):** `core`, `metrics`, `engine` — CLI evaluation of pre-recorded traces. Active development.

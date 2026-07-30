@@ -48,12 +48,12 @@ METIS is an extensible agentic evaluation suite for assessing AI safety, alignme
 
 | Package | Description |
 |---------|-------------|
-| **metis-core** | Domain schemas (Trace, Span, Score, AssertionResult) and standard interfaces |
-| **metis-metrics** | Shared metric catalog — built-in evaluators and authoring utilities |
-| **metis-engine** | Dynamic multi-agent evaluation runtime; ingests traces and executes metrics |
-| **metis-wizard** | Automated spec and evaluation config generator (interactive CLI) |
-| **metis-insights** | Trajectory diagnostics and compliance analytics (Stage 2) |
-| **metis-testbed** | Live sandbox for agent execution and evaluator calibration (Stage 4) |
+| [**metis-core**](packages/core/) | Domain schemas (Trace, Span, Score, AssertionResult) and standard interfaces |
+| [**metis-metrics**](packages/metrics/) | Shared metric catalog — built-in evaluators and authoring utilities |
+| [**metis-engine**](packages/engine/) | Dynamic multi-agent evaluation runtime; ingests traces and executes metrics |
+| [**metis-wizard**](packages/wizard/) | Automated spec and evaluation config generator (interactive CLI) |
+| [**metis-insights**](packages/insights/) | Trajectory diagnostics and compliance analytics (Stage 2) |
+| [**metis-testbed**](apps/testbed/) | Live sandbox for agent execution and evaluator calibration (Stage 4) |
 
 For the full specification (component contracts, dependency invariants, build interface), see [docs/architecture.md](docs/architecture.md).
 
