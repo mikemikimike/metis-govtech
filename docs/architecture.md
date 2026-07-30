@@ -54,10 +54,12 @@ metis/
 ├── apps/                       # Deployable application services
 │   ├── api/
 │   │   └── src/metis/api/
-│   └── web/                    # TypeScript/React frontend (separate toolchain)
-│       ├── package.json
-│       ├── tsconfig.json
-│       └── src/
+│   ├── web/                    # TypeScript/React frontend (separate toolchain)
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── src/
+│   └── testbed/                # Live sandbox — Stage 4
+│       └── src/metis/testbed/
 │
 └── infra/                      # Docker Compose, Kubernetes, deployment assets
 ```
@@ -277,7 +279,7 @@ Dependencies MUST flow downward only. The following DAG is normative:
 [ apps/web ] ──HTTP──▶ [ apps/api ]
                             │
                             ▼
-                       [ packages/engine ]
+                       [ packages/engine ] ◄── [ apps/testbed ]
                             │         │
                             │         ▼
                             │   [ packages/insights ]
@@ -298,9 +300,10 @@ Dependencies MUST flow downward only. The following DAG is normative:
 3. `metis-wizard` MUST NOT depend on `metis-engine` or `metis-insights`.
 4. `metis-insights` MUST NOT depend on `metis-engine`, `metis-metrics`, or `metis-wizard`.
 5. `metis-engine` MUST NOT depend on `metis-wizard` or `metis-insights`.
-6. No circular dependencies SHALL exist between any workspace members.
-7. Upward dependencies (child depending on parent in the DAG) MUST NOT be introduced.
-8. `apps/web` MUST NOT import or depend on any Python workspace member at compile time. Its sole integration point is the HTTP API exposed by `apps/api`.
+6. `metis-testbed` MUST depend on `metis-core` and `metis-engine`. MUST NOT depend on `metis-wizard` or `metis-insights`.
+7. No circular dependencies SHALL exist between any workspace members.
+8. Upward dependencies (child depending on parent in the DAG) MUST NOT be introduced.
+9. `apps/web` MUST NOT import or depend on any Python workspace member at compile time. Its sole integration point is the HTTP API exposed by `apps/api`.
 
 ---
 
@@ -315,7 +318,8 @@ tests/
 │   ├── metrics/
 │   ├── engine/
 │   ├── wizard/
-│   └── insights/
+│   ├── insights/
+│   └── testbed/
 ├── integration/                # Cross-package flow tests
 └── fixtures/                   # Shared test data
     ├── langfuse_trace.json
@@ -436,10 +440,11 @@ The primary user-facing CLI is the unified `metis` command, which composes sub-p
 metis wizard init
 metis engine run --trace-file <path>
 metis insights report --results-file <path>
+metis testbed run --scenario <name>   # Stage 4 — TBD
 metis engine -V
 ```
 
-Per-package standalone commands (`metis-engine`, `metis-wizard`, `metis-insights`) MUST also be available for CI or isolated installs.
+Per-package standalone commands (`metis-engine`, `metis-wizard`, `metis-insights`, `metis-testbed`) MUST also be available for CI or isolated installs.
 
 ---
 
