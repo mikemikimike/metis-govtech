@@ -41,10 +41,34 @@ venvPath = "."
 venv = ".venv"
 include = ["packages/*/src", "apps/*/src", "metis_cli.py"]
 exclude = ["apps/api", "apps/web"]
+reportIncompatibleMethodOverride = false
+
+[tool.ruff]
+src = ["packages/*/src", "apps/*/src"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # Pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "B008",   # function-call-in-default-argument (Typer pattern)
+    "E501",   # line-too-long (formatter enforces line-length)
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [dependency-groups]
 dev = [
     "pyright>=1.1",
     "pytest>=9.1.1",
     "ruff>=0.11",
+    "jsonschema>=4.20.0",
 ]

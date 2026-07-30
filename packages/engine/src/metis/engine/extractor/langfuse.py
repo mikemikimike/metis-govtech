@@ -1,0 +1,626 @@
+"""
+Langfuse trace fetching and DeepEval adapter.
+
+Merges trace-fetching (``langfuse_fetch``) and the Langfuse→DeepEval adapter
+(``langfuse_adapter``) into a single module.
+
+High-level entry point:
+
+- :func:`fetch_by_session_id` — fetch all traces for a specific session
+
+Lower-level extraction helpers are also re-exported for use by metrics.
+"""
+
+import time
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
+
+from deepeval.test_case import LLMTestCase
+from deepeval.test_case.conversational_test_case import (
+    ConversationalTestCase,
+    Turn,
+)
+from deepeval.test_case.llm_test_case import ToolCall
+from langfuse import Langfuse
+from langfuse.api import TraceWithDetails
+
+from metis.engine.extractor.types import (
+    ClarificationRequest,
+    OrcaChatMetadata,
+    SessionContext,
+    TraceMetadata,
+)
+from metis.engine.simulation.types import CollectedArtifact, ExperimentTask, Persona
+
+# ---------------------------------------------------------------------------
+# Span classification helpers
+# ---------------------------------------------------------------------------
+
+# Span name prefixes that signal a direct workflow delegation
+# (no delegate_task_to_member tool call).
+# Maps span name prefix → canonical agent target string.
+_WORKFLOW_SPAN_TO_AGENT = {
+    "orca-data-analysis": "data-analyst",
+    "orca-slide": "slide-maker",
+    "orca-text-analysis": "text-analyst",
+}
+
+# AGENT span name fragments that are utility/infrastructure, not the real subagent work.
+# Sorted longest-first so more specific patterns are checked before shorter ones.
+_UTILITY_AGENT_FRAGMENTS = sorted(
+    [
+        "workflow_notify_summary",
+        "workflow_notify",
+        "notify_summary",
+        "workflow_summary",
+    ],
+    key=len,
+    reverse=True,
+)
+
+# Known real-subagent name fragments, used to prefer them over anything else.
+_SUBAGENT_FRAGMENTS = [
+    "data_analysis_agent",
+    "data_analyst",
+    "slide_maker",
+    "slide_reviewer",
+    "text_analyst",
+]
+
+
+def _is_utility_agent(name: str) -> bool:
+    n = name.lower()
+    return any(frag in n for frag in _UTILITY_AGENT_FRAGMENTS)
+
+
+def _is_known_subagent(name: str) -> bool:
+    n = name.lower()
+    return any(frag in n for frag in _SUBAGENT_FRAGMENTS)
+
+
+# ---------------------------------------------------------------------------
+# Client
+# ---------------------------------------------------------------------------
+
+
+def get_langfuse_client() -> Langfuse:
+    """Return a configured Langfuse client (never None)."""
+    import os
+
+    if os.environ.get("LANGFUSE_BASE_URL") and not os.environ.get("LANGFUSE_HOST"):
+        os.environ["LANGFUSE_HOST"] = os.environ["LANGFUSE_BASE_URL"]
+    return Langfuse()
+
+
+# ---------------------------------------------------------------------------
+# Observation extractors
+# ---------------------------------------------------------------------------
+
+
+def _extract_tool_calls(observations: list) -> list:
+    """Extract tool/function calls from observations.
+
+    :param observations: List of Langfuse observation objects.
+    :returns: Observations whose ``type`` is ``"TOOL"``.
+    """
+    return [obs for obs in observations if obs.type == "TOOL"]
+
+
+def _extract_delegation(observations: list) -> dict | None:
+    """Find the subagent delegation from observations.
+
+    Returns a dict with:
+
+    - ``target``: subagent name (e.g. ``"data-analyst"``, ``"slide-maker"``)
+    - ``task``: the delegation message/instruction
+    - ``response``: the subagent's output (before Orca synthesis)
+
+    Or ``None`` if no delegation occurred (direct handle).
+
+    :param observations: List of Langfuse observation objects.
+    :returns: Delegation dict, or ``None`` if the trace was handled directly.
+    """
+    # Primary: delegate_task_to_member TOOL observation (explicit tool-call delegation)
+    for obs in observations:
+        if obs.name == "delegate_task_to_member" and obs.type == "TOOL":
+            inp = obs.input or {}
+            return {
+                "target": inp.get("member_id", "") if isinstance(inp, dict) else "",
+                "task": inp.get("task", "") if isinstance(inp, dict) else "",
+                "response": obs.output or "",
+            }
+
+    # Fallback 1: orca-chat span metadata (older routing pattern)
+    for obs in observations:
+        if obs.name == "orca-chat":
+            meta = obs.metadata or {}
+            routed = meta.get("routed_to_agents", []) if isinstance(meta, dict) else []
+            if routed:
+                target = routed[0] if isinstance(routed, list) else str(routed)
+                return {
+                    "target": target,
+                    "task": "",
+                    "response": "",
+                }
+
+    # Fallback 2: orca-data-analysis / orca-slide SPAN (direct workflow delegation).
+    # These spans wrap the entire subagent invocation; their output IS
+    # the subagent response.
+    for obs in observations:
+        span_name = obs.name or ""
+        for prefix, agent_target in _WORKFLOW_SPAN_TO_AGENT.items():
+            if span_name.startswith(prefix) and obs.type == "SPAN":
+                raw = obs.output or ""
+                response = raw if isinstance(raw, str) else str(raw)
+                return {
+                    "target": agent_target,
+                    "task": "",
+                    "response": response,
+                }
+
+    return None
+
+
+def _extract_spoke_context(observations: list) -> dict | None:
+    """Extract spoke_context from the trace (cached parameters from prior turns).
+
+    Looks for save_spoke_context tool calls or session_state in agent input.
+
+    :param observations: List of Langfuse observation objects.
+    :returns: The spoke context dict, or ``None`` if not found.
+    """
+    for obs in observations:
+        if obs.name == "save_spoke_context" and obs.input:
+            return obs.input
+
+    # Parse from subagent input which includes <session_state>
+    for obs in observations:
+        if obs.type == "AGENT" and (obs.name or "").endswith(".arun"):
+            inp = obs.input or ""
+            if isinstance(inp, str) and "spoke_context" in inp:
+                import re
+
+                match = re.search(r"'spoke_context':\s*(\{[^}]*\})", inp)
+                if match:
+                    try:
+                        import ast
+
+                        return ast.literal_eval(match.group(1))
+                    except (ValueError, SyntaxError):
+                        pass
+
+    return None
+
+
+def _extract_assistant_messages(observations: list) -> list:
+    """Extract assistant GENERATION outputs from the trace (LLM responses).
+
+    :param observations: List of Langfuse observation objects.
+    :returns: List of message dicts with ``role`` and ``content`` keys.
+    """
+    messages = []
+    for obs in sorted(observations, key=lambda o: o.start_time or datetime.min):
+        if obs.type == "GENERATION" and obs.output:
+            output = obs.output
+            if isinstance(output, dict):
+                out_messages = output.get("messages", [])
+                for msg in out_messages:
+                    if msg.get("role") == "assistant":
+                        messages.append(msg)
+            elif isinstance(output, str):
+                messages.append({"role": "assistant", "content": output})
+    return messages
+
+
+def _extract_subagent_output(observations: list) -> str | None:
+    """Extract the subagent's response (before Orca synthesis).
+
+    Priority order:
+
+    1. delegate_task_to_member TOOL output (explicit delegation tool call)
+    2. orca-data-analysis / orca-slide SPAN output (direct workflow delegation)
+    3. Known subagent AGENT spans (e.g. Data_Analysis_Agent.arun)
+    4. Any non-Orca, non-utility AGENT span — pick the one with the longest output
+
+    :param observations: List of Langfuse observation objects.
+    :returns: Subagent response text, or ``None`` if not found.
+    """
+    # 1. Explicit delegation tool call
+    for obs in observations:
+        if obs.name == "delegate_task_to_member" and obs.output:
+            return obs.output if isinstance(obs.output, str) else str(obs.output)
+
+    # 2. Workflow delegation spans (orca-data-analysis, orca-slide, etc.)
+    for obs in observations:
+        span_name = obs.name or ""
+        for prefix in _WORKFLOW_SPAN_TO_AGENT:
+            if span_name.startswith(prefix) and obs.type == "SPAN" and obs.output:
+                return obs.output if isinstance(obs.output, str) else str(obs.output)
+
+    # 3. Known subagent AGENT spans — prefer these over generic .arun spans
+    known_candidates = []
+    for obs in observations:
+        if obs.type == "AGENT" and obs.output and _is_known_subagent(obs.name or ""):
+            text = obs.output if isinstance(obs.output, str) else str(obs.output)
+            known_candidates.append(text)
+    if known_candidates:
+        return max(known_candidates, key=len)
+
+    # 4. Any non-Orca, non-utility AGENT span ending in .arun
+    generic_candidates = []
+    for obs in observations:
+        name = obs.name or ""
+        if (
+            obs.type == "AGENT"
+            and name.endswith(".arun")
+            and name.lower() != "orca.arun"
+            and not _is_utility_agent(name)
+            and obs.output
+        ):
+            text = obs.output if isinstance(obs.output, str) else str(obs.output)
+            generic_candidates.append(text)
+    if generic_candidates:
+        return max(generic_candidates, key=len)
+
+    return None
+
+
+def _extract_retry_counts(observations: list) -> dict:
+    """Count how many times each tool was called (retries = count > 1).
+
+    Only counts TOOL-type observations (actual tool executions).
+
+    :param observations: List of Langfuse observation objects.
+    :returns: Dict mapping tool name → call count, only for tools called more than once.
+    """
+    call_counts: dict = {}
+    for obs in observations:
+        if obs.type == "TOOL":
+            name = obs.name or ""
+            call_counts[name] = call_counts.get(name, 0) + 1
+    return {name: count for name, count in call_counts.items() if count > 1}
+
+
+def _extract_clarification_requests(observations: list) -> list:
+    """Extract request_user_input tool calls (clarification questions).
+
+    :param observations: List of Langfuse observation objects.
+    :returns: List of :class:`ClarificationRequest` objects.
+    """
+    return [
+        ClarificationRequest(
+            name=obs.name, type=obs.type, input=obs.input, output=obs.output
+        )
+        for obs in observations
+        if obs.name == "request_user_input" and obs.type == "TOOL"
+    ]
+
+
+def _extract_orca_chat_metadata(observations: list) -> OrcaChatMetadata:
+    """Extract metadata from the ``orca-chat`` observation span.
+
+    Looks for the first observation named ``"orca-chat"`` and reads its
+    ``metadata`` dict (populated by the Orca orchestrator backend).
+    Returns a default-valued :class:`OrcaChatMetadata` when no such span
+    exists or the metadata is malformed.
+
+    :param observations: List of Langfuse observation objects.
+    :returns: Populated :class:`OrcaChatMetadata` instance.
+    """
+    for obs in observations:
+        if obs.name == "orca-chat":
+            meta = obs.metadata or {}
+            if not isinstance(meta, dict):
+                return OrcaChatMetadata()
+
+            def unwrap(v: object) -> int:
+                if isinstance(v, dict) and "intValue" in v:
+                    return int(v["intValue"])
+                return int(v)  # type: ignore[arg-type]
+
+            return OrcaChatMetadata(
+                routed_to_agents=meta.get("routed_to_agents", []),
+                num_agents_used=unwrap(meta.get("num_agents_used", 0)),
+                num_tool_calls=unwrap(meta.get("num_tool_calls", 0)),
+                num_history_messages=unwrap(meta.get("num_history_messages", 0)),
+                mode=meta.get("mode", ""),
+                had_error=meta.get("had_error", False),
+                was_cancelled=meta.get("was_cancelled", False),
+                prompt_version=meta.get("prompt_version", ""),
+            )
+    return OrcaChatMetadata()
+
+
+# ---------------------------------------------------------------------------
+# Test case construction
+# ---------------------------------------------------------------------------
+
+
+def _trace_to_test_case(
+    trace: Any,
+    observations: list,
+    session_context: SessionContext,
+) -> LLMTestCase:
+    """Convert a Langfuse trace + observations into a DeepEval LLMTestCase.
+
+    :param trace: Langfuse trace object.
+    :param observations: Observation objects for this trace.
+    :param session_context: Session-level positioning info.
+    :returns: A :class:`~deepeval.test_case.LLMTestCase` ready for metric evaluation.
+    """
+    trace_input = trace.input if isinstance(trace.input, str) else str(trace.input)
+    trace_output = trace.output if isinstance(trace.output, str) else str(trace.output)
+
+    delegation = _extract_delegation(observations)
+    subagent_output = _extract_subagent_output(observations)
+    context = [subagent_output] if subagent_output else None
+
+    meta = TraceMetadata(
+        trace_id=trace.id,
+        session_id=session_context.session_id,
+        turn_index=session_context.turn_index,
+        total_turns=session_context.total_turns,
+        prior_turns=session_context.prior_turns,
+        observations=[
+            {
+                "id": obs.id,
+                "name": obs.name,
+                "type": obs.type,
+                "input": obs.input,
+                "output": obs.output,
+                "metadata": obs.metadata,
+                "start_time": obs.start_time,
+                "end_time": obs.end_time,
+                "parent_observation_id": obs.parent_observation_id,
+            }
+            for obs in observations
+        ],
+        tool_calls=[
+            {
+                "name": obs.name,
+                "type": obs.type,
+                "input": obs.input,
+                "output": obs.output,
+            }
+            for obs in _extract_tool_calls(observations)
+        ],
+        delegation=delegation,
+        spoke_context=_extract_spoke_context(observations),
+        assistant_messages=_extract_assistant_messages(observations),
+        retry_counts=_extract_retry_counts(observations),
+        clarification_requests=_extract_clarification_requests(observations),
+        chat_metadata=_extract_orca_chat_metadata(observations),
+    )
+
+    return LLMTestCase(
+        input=trace_input,
+        actual_output=trace_output,
+        context=context,
+        metadata=meta,  # type: ignore[reportArgumentType]
+    )
+
+
+def _session_to_conversational_test_case(
+    session_traces: list[TraceWithDetails],
+    *,
+    langfuse: Langfuse,
+) -> ConversationalTestCase | None:
+    """Convert a session (ordered list of traces) into a ConversationalTestCase.
+
+    Each trace becomes a user turn + assistant turn pair.
+    The assistant turn carries all tool calls from that trace's observations.
+
+    Returns ``None`` if the session has no traces with output.
+
+    :param session_traces: Ordered list of :class:`TraceWithDetails` objects.
+    :param langfuse: Initialized Langfuse client.
+    :returns: A :class:`~deepeval.test_case.conversational_test_case\
+        .ConversationalTestCase`, or ``None`` if no evaluable traces
+        exist.
+    """
+    turns = []
+    session_metadata: dict = {
+        "session_id": session_traces[0].session_id if session_traces else "",
+        "trace_ids": [],
+    }
+
+    for trace in session_traces:
+        if not trace.output:
+            continue
+
+        observations = langfuse.api.observations.get_many(trace_id=trace.id).data
+        tool_obs = _extract_tool_calls(observations)
+        chat_meta = _extract_orca_chat_metadata(observations)
+        delegation = _extract_delegation(observations)
+
+        # Extract the user's message from the trace input
+        trace_input = trace.input if isinstance(trace.input, str) else str(trace.input)
+        trace_output = (
+            trace.output if isinstance(trace.output, str) else str(trace.output)
+        )
+
+        # Build ToolCall objects from observations
+        tool_calls = []
+        for obs in tool_obs:
+            inp = obs.input
+            if isinstance(inp, dict):
+                params = inp
+            elif inp:
+                params = {"raw": str(inp)[:500]}
+            else:
+                params = None
+            tool_calls.append(
+                ToolCall(
+                    name=obs.name or "",
+                    input_parameters=params,
+                    output=str(obs.output)[:1000] if obs.output else None,
+                )
+            )
+
+        # User turn
+        turns.append(
+            Turn(
+                role="user",
+                content=trace_input,
+                metadata={"trace_id": trace.id},
+            )
+        )
+
+        # Assistant turn with tool calls
+        routed_to = delegation.get("target", "") if delegation else ""
+        if not routed_to and chat_meta.routed_to_agents:
+            routed_to = chat_meta.routed_to_agents[0]
+
+        turns.append(
+            Turn(
+                role="assistant",
+                content=trace_output,
+                tools_called=tool_calls if tool_calls else None,
+                metadata={
+                    "trace_id": trace.id,
+                    "routed_to": routed_to,
+                    "num_tool_calls": len(tool_calls),
+                },
+            )
+        )
+
+        session_metadata["trace_ids"].append(trace.id)
+
+    if not turns:
+        return None
+
+    return ConversationalTestCase(
+        turns=turns,
+        metadata=session_metadata,
+    )
+
+
+# ---------------------------------------------------------------------------
+# High-level fetch entry points (from langfuse_fetch)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class FetchLangfuseResult:
+    """Result of a Langfuse fetch operation, ready for evaluation.
+
+    :param test_cases: Per-trace LLMTestCase objects (one per evaluable trace).
+    :param session_test_cases: Per-session ConversationalTestCase objects.
+    :param sessions: Raw traces grouped by session ID.
+    :param skipped: Number of traces skipped (no output).
+    """
+
+    test_cases: list = field(default_factory=list)
+    session_test_cases: list = field(default_factory=list)
+    sessions: dict = field(default_factory=dict)
+    skipped: int = 0
+
+
+def fetch_by_session_id(
+    session_id: str,
+    langfuse: Langfuse,
+    *,
+    limit: int = 50,
+    retry_timeout: int = 0,
+    artifacts: list[CollectedArtifact] | None = None,
+    task: ExperimentTask | None = None,
+    persona: Persona | None = None,
+) -> FetchLangfuseResult:
+    """Fetch traces for a specific session and build test cases.
+
+    :param session_id: Langfuse session ID.
+    :param langfuse: Initialized Langfuse client.
+    :param limit: Max traces to fetch.
+    :param retry_timeout: Seconds to poll if no traces found (0 = no retry).
+    :param artifacts: Collected artifacts from the session record, injected into
+        each test case's metadata.
+    :param task: ExperimentTask object from experiment.yaml (passed through to
+        metric metadata).
+    :param persona: Persona object from experiment.yaml (passed through to
+        metric metadata).
+    :returns: :class:`FetchLangfuseResult` with test cases ready for evaluation.
+    """
+    deadline = time.time() + retry_timeout
+    traces: list = []
+
+    while True:
+        traces = langfuse.api.trace.list(session_id=session_id, limit=limit).data
+        if traces or time.time() >= deadline:
+            break
+        time.sleep(10)
+
+    if not traces:
+        return FetchLangfuseResult()
+
+    # Sort traces chronologically within the session
+    traces.sort(key=lambda t: t.timestamp or "")
+
+    session_artifacts: list[CollectedArtifact] = artifacts or []
+    test_cases: list = []
+    skipped: int = 0
+    prior_turns: list = []
+
+    for turn_idx, trace in enumerate(traces):
+        if not trace.output:
+            skipped += 1
+            continue
+
+        observations: list = langfuse.api.observations.get_many(trace_id=trace.id).data
+
+        session_ctx = SessionContext(
+            session_id=session_id,
+            turn_index=turn_idx,
+            total_turns=len(traces),
+            prior_turns=list(prior_turns),
+        )
+
+        tc: LLMTestCase = _trace_to_test_case(trace, observations, session_ctx)
+
+        if session_artifacts and tc.metadata is not None:
+            tc.metadata["artifacts"] = session_artifacts
+        if task is not None and tc.metadata is not None:
+            tc.metadata["task"] = task
+            tc.metadata["task_id"] = task.id
+        if persona is not None and tc.metadata is not None:
+            tc.metadata["persona"] = persona
+
+        test_cases.append(tc)
+
+        obs_meta: OrcaChatMetadata = _extract_orca_chat_metadata(observations)
+        delegation: dict | None = _extract_delegation(observations)
+        routed_to: str = delegation.get("target", "") if delegation else ""
+        prior_turns.append(
+            {
+                "input": (
+                    trace.input
+                    if isinstance(trace.input, str)
+                    else str(trace.input or "")
+                )[:500],
+                "output": (
+                    trace.output
+                    if isinstance(trace.output, str)
+                    else str(trace.output or "")
+                )[:500],
+                "routed_to": routed_to
+                or (obs_meta.routed_to_agents[0] if obs_meta.routed_to_agents else ""),
+            }
+        )
+
+    session_test_cases: list = []
+    ctc: ConversationalTestCase | None = _session_to_conversational_test_case(
+        traces, langfuse=langfuse
+    )
+    if ctc:
+        if task is not None and ctc.metadata is not None:
+            ctc.metadata["task"] = task
+        if persona is not None and ctc.metadata is not None:
+            ctc.metadata["persona"] = persona
+        session_test_cases.append(ctc)
+
+    return FetchLangfuseResult(
+        test_cases=test_cases,
+        session_test_cases=session_test_cases,
+        sessions={session_id: traces},
+        skipped=skipped,
+    )

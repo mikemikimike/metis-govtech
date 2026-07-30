@@ -4,12 +4,19 @@ build-backend = "hatchling.build"
 
 [project]
 name = "metis-engine"
-version = "0.1.0"
-description = "Evaluation engine and trace parser for METIS"
+version = "0.2.0"
+description = "Evaluation engine — simulation, metrics, and reporting for METIS"
 requires-python = ">=3.11"
 dependencies = [
     "metis-core",
     "metis-library",
+    "openai>=1.0.0",
+    "deepeval>=2.0.0",
+    "langfuse>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2",
+    "playwright>=1.50.0",
+    "pyyaml>=6.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
 ]

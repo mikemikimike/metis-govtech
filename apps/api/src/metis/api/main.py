@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+
 from metis.api import __version__, core_version
 
 app = FastAPI(title="METIS API", version=__version__)
