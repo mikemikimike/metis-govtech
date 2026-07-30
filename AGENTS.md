@@ -44,8 +44,12 @@ metis/
 │   ├── engine/             # metis-engine — evaluation runtime + trace ingesters
 │   └── wizard/             # metis-wizard — interactive config generator
 ├── apps/
-│   ├── api/                # REST backend (Stage 3 — deferred)
-│   └── web/                # React frontend (Stage 3 — deferred)
+│   ├── api/                # REST backend
+│   └── web/                # React frontend
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── fixtures/
 └── docs/
     └── architecture.md     # Normative architectural specification
 ```
@@ -72,6 +76,7 @@ Key invariants:
 - **metis-library:** Shared catalog of metrics, skills, and reusable components; referenced by FQN from wizard configs and executed by the engine.
 - **metis-engine:** Evaluation runtime — ingests traces (Langfuse, OTEL), executes metrics from registry. CLI: `metis engine run --trace-file <path>`.
 - **metis-wizard:** Interactive CLI for generating evaluation config YAML. CLI: `metis wizard init`.
+- **metis-insights:** Trajectory diagnostics and compliance analytics. CLI: `metis insights report --results-file <path>`.
 
 ## Contributing
 
@@ -94,10 +99,6 @@ When working on a specific package, read its local `AGENTS.md` for package-speci
 - [`packages/library/AGENTS.md`](packages/library/AGENTS.md) — metis-library
 - [`packages/engine/AGENTS.md`](packages/engine/AGENTS.md) — metis-engine
 - [`packages/wizard/AGENTS.md`](packages/wizard/AGENTS.md) — metis-wizard
-- [`apps/api/AGENTS.md`](apps/api/AGENTS.md) — REST backend
-
-## Current Stage
-
-**Stage 1 (MVP):** `core`, `library`, `engine` — CLI evaluation of pre-recorded traces. Active development.
+- [`apps/api/AGENTS.md`](apps/api/AGENTS.md) — metis-api
 
 See `docs/architecture.md` for the full normative specification.
