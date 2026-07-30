@@ -15,6 +15,7 @@ help:
 
 install:
 	uv sync --group dev
+	$(MAKE) -C packages/engine install-playwright
 
 lint:
 	uv run ruff check .
@@ -51,6 +52,7 @@ check:
 
 ci:
 	$(MAKE) check
+	$(MAKE) -C packages/engine check-schema
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

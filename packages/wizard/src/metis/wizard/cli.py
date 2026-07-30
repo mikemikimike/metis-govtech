@@ -1,4 +1,5 @@
 import typer
+
 from metis.wizard import __version__, core_version
 
 app = typer.Typer(help="Generate METIS evaluation configurations.")

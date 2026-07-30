@@ -1,6 +1,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 import typer
+
 from metis.engine.cli import app as engine_app
 from metis.wizard.cli import app as wizard_app
 

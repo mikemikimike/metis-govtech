@@ -70,13 +70,10 @@ make install
 
 ### Usage
 
-```bash
-metis wizard init                            # generate an evaluation config
-metis engine run --trace-file trace.json     # run evaluations
-metis insights report --results-file out.json # view results
-```
+See individual package READMEs for usage instructions:
 
-Each sub-command is also available as a standalone CLI (`metis-engine`, `metis-wizard`, `metis-insights`).
+- [`packages/engine/README.md`](packages/engine/README.md) — evaluation engine
+- [`packages/wizard/README.md`](packages/wizard/README.md) — config generator
 
 ## Development
 
