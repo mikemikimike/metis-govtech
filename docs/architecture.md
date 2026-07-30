@@ -130,25 +130,25 @@ This package exists as a standalone layer rather than being bundled into `metis-
 
 | | |
 |---|---|
-| **Import Path** | `from metis.engine import Evaluator` |
+| **Import Path** | `from metis.engine import ...` |
 | **CLI Command** | `metis-engine` |
-| **Purpose** | Standalone execution engine for running evaluations against traces. |
+| **Purpose** | Evaluation runtime for METIS. |
 
 **Constraints:**
 
 - MUST depend on `metis-core` and `metis-metrics`.
-- MAY depend on lightweight HTTP, math, and parsing libraries (e.g., `httpx`, `numpy`).
+- MAY depend on HTTP, math, parsing, browser automation, and LLM client libraries.
 - MUST be usable both as a library import and as a standalone CLI.
-
-**Public Contract:**
-
-- Ships built-in trace ingesters (Langfuse, OpenTelemetry) registered via `[project.entry-points."metis.trace_ingesters"]`.
-- CLI: `metis-engine run --trace-file <path>`.
-- Loads metrics from the registry and executes them against normalized traces.
 
 **Extension Point — Custom Trace Ingesters:**
 
 Third-party packages MAY provide additional trace ingesters by implementing `BaseTraceIngester` from core and registering via the `metis.trace_ingesters` entry point group.
+
+**Future Decomposition:**
+
+The simulation harness and built-in metrics currently live within engine for pragmatic reasons (migrated from a standalone repo). As the system matures:
+- Metrics SHOULD be extracted to `metis-metrics` and ported to the `BaseMetric` interface.
+- The simulation harness MAY be extracted to `metis-testbed` (Stage 4).
 
 ---
 
@@ -363,68 +363,62 @@ A root `Makefile` MUST provide the following targets as the public development a
 
 ## 9. Versioning
 
-The workspace uses a **unified version** — all packages share a single version derived from git tags. Individual package versions are not maintained independently.
+The workspace uses **independent semantic versioning** — each package maintains its own version, and releases are tracked with scoped git tags.
 
 ### 9.1. Mechanism
 
-Version is derived at build time via `hatch-vcs`, which reads the most recent git tag matching `v*` (e.g., `v0.1.0`). Each package's `pyproject.toml` declares:
+Each package declares a static `version` field in its `pyproject.toml`:
 
 ```toml
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 
 [project]
-dynamic = ["version"]
-
-[tool.hatch.version]
-source = "vcs"
-raw-options.root = "../.."   # relative path to workspace root
+name = "metis-engine"
+version = "0.2.0"
 ```
 
-The root `pyproject.toml` uses the same plugin without the `root` override:
-
-```toml
-[tool.hatch.version]
-source = "vcs"
-```
+The `pyproject.toml` is the single source of truth for each package's version. No dynamic version derivation is used.
 
 ### 9.2. Rules
 
-- All packages MUST use `hatch-vcs` as their version source. No package MAY declare a static `version` field.
-- Released versions MUST correspond to an annotated git tag (`git tag -a v0.1.0`).
-- Untagged builds produce a dev suffix (e.g., `0.1.0.dev3+gabcdef`), distinguishing development builds from releases automatically.
-- The `metis -V` / `metis --version` CLI output MUST reflect the VCS-derived version.
+- All packages MUST declare a static `version` field in `pyproject.toml`. No package MAY use dynamic version derivation.
+- All versions MUST be SemVer-compliant (`MAJOR.MINOR.PATCH`).
+- The `metis -V` / `metis --version` CLI output SHOULD print a breakdown of all installed component versions.
 
-### 9.3. Rationale
+### 9.3. Git Tag Convention
 
-Independent per-package versioning adds coordination overhead (which packages to bump, compatibility matrices between workspace members) without benefit while:
+Released versions are marked with scoped annotated git tags:
 
-- All packages are consumed together via the monorepo.
-- No package is published to PyPI independently.
-- The project is pre-1.0.
+- **Format:** `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`, `metis-core/v0.1.0`)
+- **Creation:** `git tag -a metis-engine/v0.2.0 -m "metis-engine v0.2.0"`
+- **Per-package listing:** `git tag -l "metis-engine/*"`
+- **No monorepo-wide release tags.** Individual packages are the unit of release.
 
-This decision SHOULD be revisited if individual packages are published to an external registry for third-party consumption.
+Tags are markers, not sources of truth. The `version` field in `pyproject.toml` is authoritative.
 
-### 9.4. Future: Independent Package Versioning
+### 9.4. Release Workflow
 
-If the need arises to version packages independently (e.g., publishing `metis-core` to PyPI for third-party metric authors), the migration path is:
+1. Bump `version` in the package's `pyproject.toml`.
+2. Commit the version bump.
+3. Tag the commit: `git tag -a <package-name>/v<version> -m "<package-name> v<version>"`.
+4. Push with `--tags`.
 
-1. Replace `dynamic = ["version"]` + `hatch-vcs` with a static `version` field in the target package's `pyproject.toml`.
-2. Add explicit compatible-release constraints for intra-workspace dependencies (e.g., `metis-core >= 1.2.0`).
-3. Adopt a bump policy — either manual (developer bumps the version when the package's public contract changes) or automated via conventional-commit tooling (e.g., `python-semantic-release`, `commitizen`) that scopes commits to packages and computes SemVer bumps per package.
-4. All versions MUST remain SemVer-compliant. A breaking change in a dependency (e.g., `metis-core` major bump) requires downstream packages to update their constraint and cut their own release.
+### 9.5. CLI Version Reporting
 
-**CLI Version Reporting:**
-
-No code changes are required in the CLI layer when migrating to independent versions. Each package already resolves its own version via `importlib.metadata.version("<package-name>")`, and per-package CLIs (e.g., `metis engine -V`) already report their specific version. Once independent versions are active, `metis --version` SHOULD print a breakdown of all installed component versions:
+Each package resolves its own version via `importlib.metadata.version("<package-name>")`. The unified `metis --version` SHOULD print a breakdown:
 
 ```text
-metis 2.0.0
-  core    1.3.0
-  metrics 1.1.0
-  engine  2.0.0
-  wizard  1.2.0
+metis 0.1.0
+  core    0.1.0
+  metrics 0.1.0
+  engine  0.2.0
+  wizard  0.1.0
 ```
+
+### 9.6. Schema Versioning
+
+Schema versions (for data formats like `experiment.yaml` and `session-record.json`) are independent integers maintained in source code constants, not tied to package versions. See `packages/engine/schemas/README.md` for schema version bump rules.
 
 ---
 
@@ -434,7 +428,7 @@ The primary user-facing CLI is the unified `metis` command, which composes sub-p
 
 ```text
 metis wizard init
-metis engine run --trace-file <path>
+metis engine simulate --input-dir <path>
 metis insights report --results-file <path>
 metis engine -V
 ```
