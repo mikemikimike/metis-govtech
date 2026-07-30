@@ -300,10 +300,9 @@ Dependencies MUST flow downward only. The following DAG is normative:
 3. `metis-wizard` MUST NOT depend on `metis-engine` or `metis-insights`.
 4. `metis-insights` MUST NOT depend on `metis-engine`, `metis-metrics`, or `metis-wizard`.
 5. `metis-engine` MUST NOT depend on `metis-wizard` or `metis-insights`.
-6. `metis-testbed` MUST depend on `metis-core` and `metis-engine`. MUST NOT depend on `metis-wizard` or `metis-insights`.
-7. No circular dependencies SHALL exist between any workspace members.
-8. Upward dependencies (child depending on parent in the DAG) MUST NOT be introduced.
-9. `apps/web` MUST NOT import or depend on any Python workspace member at compile time. Its sole integration point is the HTTP API exposed by `apps/api`.
+6. No circular dependencies SHALL exist between any workspace members.
+7. Upward dependencies (child depending on parent in the DAG) MUST NOT be introduced.
+8. `apps/web` MUST NOT import or depend on any Python workspace member at compile time. Its sole integration point is the HTTP API exposed by `apps/api`.
 
 ---
 
