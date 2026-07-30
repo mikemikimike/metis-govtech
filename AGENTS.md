@@ -8,7 +8,7 @@ METIS (Measurement and Evaluation of Trustworthy Intelligent Systems) is a Pytho
 
 - **Language:** Python ≥ 3.11
 - **Workspace/Package Manager:** uv (single lockfile at root)
-- **Build Backend:** Hatchling + hatch-vcs (version from git tags)
+- **Build Backend:** Hatchling (static version in each package's `pyproject.toml`)
 - **Data Modeling:** Pydantic v2
 - **CLI Framework:** Typer + Rich
 - **Linting/Formatting:** Ruff
@@ -82,8 +82,9 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 - Namespace imports: `from metis.core import ...`, `from metis.engine import ...`
 - All shared domain objects use Pydantic v2 models
 - CLIs use Typer with sub-app composition (see `metis_cli.py`)
-- Versioning: unified across all packages via `hatch-vcs` (git tags `v*`)
-- No static `version` fields — always `dynamic = ["version"]`
+- Versioning: independent per package via static `version` in `pyproject.toml`; scoped git tags `<package-name>/v<semver>`
+- Every merge to `main` MUST be tagged with a version bump for the affected package(s)
+- Commit messages on `main` MUST be prefixed with package scope (e.g., `engine: fix trace parsing`)
 
 ## Per-Package Guides
 

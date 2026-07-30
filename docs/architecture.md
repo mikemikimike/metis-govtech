@@ -368,7 +368,22 @@ A root `Makefile` MUST provide the following targets as the public development a
 
 The workspace uses **independent semantic versioning** — each package maintains its own version, and releases are tracked with scoped git tags.
 
-### 9.1. Mechanism
+### 9.1. Design Rationale
+
+Independent versioning is chosen over a unified "METIS version" for the following reasons:
+
+- Each package is owned by a separate engineer. Per-package versions serve as a coordination and project management signal per team.
+- Lightweight consumers (e.g., `metis-wizard`, CI lint jobs) can pin and track just the packages they depend on.
+
+**Tradeoffs:**
+
+- There is no single unified "METIS version" — the product identity is a tuple of package versions, not a single number.
+- Git tags form a flat interleaved stream across packages — there is no single linear release history for the repo as a whole.
+- "What's deployed / what's current" is a query across multiple version numbers, not a single tag.
+
+A **compatibility manifest** (`COMPATIBILITY.md` at the workspace root) SHOULD be maintained to record which package versions have been validated together as a working set.
+
+### 9.2. Mechanism
 
 Each package declares a static `version` field in its `pyproject.toml`:
 
@@ -383,13 +398,13 @@ version = "0.2.0"
 
 The `pyproject.toml` is the single source of truth for each package's version. No dynamic version derivation is used.
 
-### 9.2. Rules
+### 9.3. Rules
 
 - All packages MUST declare a static `version` field in `pyproject.toml`. No package MAY use dynamic version derivation.
 - All versions MUST be SemVer-compliant (`MAJOR.MINOR.PATCH`).
 - The `metis -V` / `metis --version` CLI output SHOULD print a breakdown of all installed component versions.
 
-### 9.3. Git Tag Convention
+### 9.4. Git Tag Convention
 
 Released versions are marked with scoped annotated git tags:
 
@@ -400,14 +415,38 @@ Released versions are marked with scoped annotated git tags:
 
 Tags are markers, not sources of truth. The `version` field in `pyproject.toml` is authoritative.
 
-### 9.4. Release Workflow
+### 9.5. Tag-on-Merge Rule
 
-1. Bump `version` in the package's `pyproject.toml`.
-2. Commit the version bump.
-3. Tag the commit: `git tag -a <package-name>/v<version> -m "<package-name> v<version>"`.
+Every merge to `main` MUST be tagged with a scoped version bump for the affected package(s). This is a hard rule:
+
+- Untagged commits on `main` create ambiguous version state and break the 1:1 mapping between changes and versions.
+- Multi-package PRs MUST receive one tag per affected package.
+- CI SHOULD enforce that merge commits on `main` have at least one scoped tag.
+
+**Why this is necessary:** Without mandatory tagging, selective tagging decays into forgotten tags, leaving commits on `main` with no clear package or version identity. The version reported by `pyproject.toml` would not match any git tag, and the history becomes unqueryable by package.
+
+### 9.6. Release Workflow
+
+1. Bump `version` in the affected package's `pyproject.toml`.
+2. Commit the version bump as part of the PR (or as the merge commit).
+3. Tag the merge commit: `git tag -a <package-name>/v<version> -m "<package-name> v<version>"`.
 4. Push with `--tags`.
 
-### 9.5. CLI Version Reporting
+For multi-package changes, repeat step 3 for each affected package.
+
+### 9.7. Commit Message Convention
+
+All commits on `main` MUST be prefixed with the affected package scope:
+
+```text
+engine: fix trace parsing for nested spans
+core: add Span.duration computed field
+wizard: update prompt templates for v2 schema
+```
+
+This allows per-package filtering: `git log --grep="^engine:"`.
+
+### 9.8. CLI Version Reporting
 
 Each package resolves its own version via `importlib.metadata.version("<package-name>")`. The unified `metis --version` SHOULD print a breakdown:
 
@@ -419,7 +458,7 @@ metis 0.1.0
   wizard  0.1.0
 ```
 
-### 9.6. Schema Versioning
+### 9.9. Schema Versioning
 
 Schema versions (for data formats like `experiment.yaml` and `session-record.json`) are independent integers maintained in source code constants, not tied to package versions. See `packages/engine/schemas/README.md` for schema version bump rules.
 

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
 name = "metis-api"
-dynamic = ["version"]
+version = "0.1.0"
 description = "METIS REST API service"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,10 +12,6 @@ dependencies = [
     "metis-engine",
     "metis-metrics",
 ]
-
-[tool.hatch.version]
-source = "vcs"
-raw-options.root = "../.."
 
 [tool.uv.sources]
 metis-core = { workspace = true }

@@ -140,10 +140,13 @@ metis/
 
 ## Versioning
 
-All packages share a unified version derived from git tags via `hatch-vcs`. Untagged builds produce dev suffixes (e.g., `0.1.0.dev3+gabcdef`).
+Each package maintains its own **independent semantic version**. Releases are tracked with scoped git tags (`<package-name>/v<semver>`). There is no single unified "METIS version" — each package has its own version sequence owned by its maintainer.
+
+Every merge to `main` MUST be tagged with a version bump for the affected package(s). See [docs/architecture.md §9](docs/architecture.md) for the full versioning specification.
 
 ```bash
-metis --version
+metis --version          # prints breakdown of all component versions
+git tag -l "metis-engine/*"   # list engine releases
 ```
 
 ## Roadmap

@@ -71,6 +71,7 @@ wheels = [
 
 [[package]]
 name = "metis"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "metis-core" },
@@ -103,6 +104,7 @@ dev = [
 
 [[package]]
 name = "metis-api"
+version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "metis-core" },
@@ -119,6 +121,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-core"
+version = "0.1.0"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "pydantic" },
@@ -129,6 +132,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2" }]
 
 [[package]]
 name = "metis-engine"
+version = "0.1.0"
 source = { editable = "packages/engine" }
 dependencies = [
     { name = "metis-core" },
@@ -147,6 +151,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-metrics"
+version = "0.1.0"
 source = { editable = "packages/metrics" }
 dependencies = [
     { name = "metis-core" },
@@ -157,6 +162,7 @@ requires-dist = [{ name = "metis-core", editable = "packages/core" }]
 
 [[package]]
 name = "metis-wizard"
+version = "0.1.0"
 source = { editable = "packages/wizard" }
 dependencies = [
     { name = "metis-core" },

@@ -1,19 +1,15 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
 name = "metis-core"
-dynamic = ["version"]
+version = "0.1.0"
 description = "Core data models and abstractions for the METIS suite"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2",
 ]
-
-[tool.hatch.version]
-source = "vcs"
-raw-options.root = "../.."
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/metis"]

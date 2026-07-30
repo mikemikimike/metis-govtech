@@ -1,19 +1,15 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
 name = "metis-metrics"
-dynamic = ["version"]
+version = "0.1.0"
 description = "Metric definitions and registry for the METIS evaluation suite"
 requires-python = ">=3.11"
 dependencies = [
     "metis-core",
 ]
-
-[tool.hatch.version]
-source = "vcs"
-raw-options.root = "../.."
 
 [tool.uv.sources]
 metis-core = { workspace = true }

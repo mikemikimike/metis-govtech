@@ -94,7 +94,7 @@ Avoid generic messages like "fix bug" or "update code".
 ### Conventions
 
 - **Namespace imports:** `from metis.core import ...`, `from metis.engine import ...`
-- **No static version fields:** All packages use `dynamic = ["version"]` via `hatch-vcs`
+- **Static version fields:** Each package declares `version = "X.Y.Z"` in its `pyproject.toml` (no dynamic derivation)
 - **Package source layout:** `packages/<name>/src/metis/<name>/`
 
 ## Testing
@@ -131,7 +131,7 @@ For details on contracts and constraints, see the [Architecture Specification](d
 When adding a new workspace package:
 
 1. Create the directory under `packages/<name>/src/metis/<name>/`
-2. Add a `pyproject.toml` following the existing pattern (hatchling + hatch-vcs)
+2. Add a `pyproject.toml` following the existing pattern (hatchling with static `version`)
 3. Respect the dependency DAG — no upward or circular dependencies
 4. Register it in the root `pyproject.toml` workspace members
 
