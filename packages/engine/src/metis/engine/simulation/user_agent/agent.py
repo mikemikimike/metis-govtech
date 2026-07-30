@@ -138,7 +138,8 @@ class UserAgent:
             lines = [
                 "\n## Files to Upload",
                 "The following files are staged and ready to upload. Include them "
-                "as file_upload actions in ui_actions of your **first message**:",
+                "as file_upload actions in ui_actions of your **first message**. "
+                "Do NOT upload any file not in this list:",
             ]
             for f in self.task.fixtures:
                 lines.append(f"- {f}")
