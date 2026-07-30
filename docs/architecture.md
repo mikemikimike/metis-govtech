@@ -1,5 +1,20 @@
 # METIS Product Suite — Architecture Specification
 
+## Table of Contents
+
+- [1. Purpose & Scope](#1-purpose--scope)
+- [2. Notation](#2-notation)
+- [3. Technology Constraints](#3-technology-constraints)
+- [4. Workspace Structure](#4-workspace-structure)
+- [5. Component Specification](#5-component-specification)
+- [6. Dependency Invariants](#6-dependency-invariants)
+- [7. Testing Contract](#7-testing-contract)
+- [8. Build Interface Contract](#8-build-interface-contract)
+- [9. Versioning](#9-versioning)
+- [10. CLI Interface](#10-cli-interface)
+
+---
+
 ## 1. Purpose & Scope
 
 METIS (Measurement and Evaluation of Trustworthy Intelligent Systems) is an extensible agentic evaluation suite designed for whole-of-government adoption. It enables agency teams to build fast while ensuring AI safety, alignment, and operational reliability by default.
@@ -22,9 +37,6 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 | Data Modeling & Validation | MUST use Pydantic v2 for all shared domain objects. |
 | Namespace Packaging | MUST use Hatchling with PEP 420 native namespace packages. |
 | CLI Framework | MUST use Typer + Rich for all CLI surfaces. |
-| Database / ORM (Web Backend) | TBD. Under consideration: PostgreSQL + SQLAlchemy v2 (async) + Alembic. *(Stage 4)* |
-| Task Queue (Async Processing) | TBD. Under consideration: Celery or ARQ backed by Redis. *(Stage 4)* |
-| API Framework | TBD. Under consideration: FastAPI. *(Stage 4)* |
 | Python Version | MUST target Python ≥ 3.11. |
 
 ---
@@ -58,7 +70,7 @@ metis/
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   └── src/
-│   └── testbed/                # Live sandbox — Stage 4
+│   └── testbed/
 │       └── src/metis/testbed/
 │
 └── infra/                      # Docker Compose, Kubernetes, deployment assets
@@ -78,24 +90,10 @@ metis/
 
 | | |
 |---|---|
-| **Import Path** | `from metis.core import Trace, Score, BaseMetric, MetricRegistry, ExperimentConfig` |
-| **CLI Command** | None |
-| **Purpose** | Single source of truth for domain objects, contracts, and shared infrastructure. |
+| **Import Path** | `from metis.core import ...` |
+| **Purpose** | Domain schemas, abstract interfaces, registry, and shared infrastructure. Zero external runtime dependencies beyond Pydantic v2. |
 
-**Constraints:**
-
-- MUST have zero external runtime dependencies beyond Pydantic v2 and the Python standard library.
-- MUST NOT depend on any other workspace member.
-
-**Public Contract:**
-
-- Schema definitions: `Trace`, `Span`, `Step`, `ToolCall`, `Score`, `AssertionResult`, `EvaluationReport`.
-- Configuration schema: `ExperimentConfig`, `MetricConfig`, `DataSourceConfig`.
-- Enums: `EvaluationCategory`, `StepType`, `Status`, `SeverityLevel`.
-- Abstract base interfaces: `BaseMetric`, `BaseTraceIngester`, `BaseEvaluator`.
-- Registry: `MetricRegistry` — central lookup for metric implementations by name.
-- Plugin discovery: `discover_ingesters()` / `ingest_trace()` — loads `BaseTraceIngester` implementations via the `metis.trace_ingesters` entry point group.
-- Exceptions: `TraceParsingError`, `MetricExecutionError`, `InvalidConfigError`.
+MUST NOT depend on any other workspace member.
 
 ---
 
@@ -103,28 +101,10 @@ metis/
 
 | | |
 |---|---|
-| **Import Path** | `from metis.metrics import DEFAULT_REGISTRY, TrajectoryCompleteness` |
-| **CLI Command** | None |
-| **Purpose** | Shared metric catalog consumed by both the execution path (`metis-engine`) and the configuration path (`metis-wizard`). |
+| **Import Path** | `from metis.metrics import ...` |
+| **Purpose** | Shared metric catalog consumed by both the execution path (engine) and the configuration path (wizard). Lightweight layer so consumers can enumerate metrics without pulling in engine's heavier dependencies. |
 
-**Architectural Role:**
-
-`metis-metrics` is the convergence point between two otherwise independent subsystems: `metis-engine` (which executes metrics against traces) and `metis-wizard` (which presents metrics to users during configuration). Both need to enumerate, inspect, and reference the same set of metrics — but neither should depend on the other. `metis-metrics` provides that shared catalog as a lightweight, dependency-free layer that both can import independently.
-
-**Rationale for Separation:**
-
-This package exists as a standalone layer rather than being bundled into `metis-engine` so that lightweight consumers (e.g., `metis-wizard`, custom metric authors, CI lint jobs) can enumerate and inspect available metrics without pulling in the engine's heavier runtime dependencies (`httpx`, `numpy`, trace ingestion machinery). Bundling metrics into engine would force every downstream consumer to inherit engine's full dependency tree — a classic transitive dependency problem that defeats the purpose of a modular workspace.
-
-**Constraints:**
-
-- MUST depend only on `metis-core`.
-- MUST NOT introduce external runtime dependencies beyond those inherited from `metis-core`.
-
-**Public Contract:**
-
-- `DEFAULT_REGISTRY`: a pre-populated `MetricRegistry` containing all built-in metrics.
-- Built-in metric implementations (e.g., `TrajectoryCompleteness`, `ToolCallAccuracy`, guardrail pass-rate).
-- Metric authoring utilities (decorators, base helpers) for teams writing custom metrics.
+MUST depend only on `metis-core`. MUST NOT introduce external runtime dependencies beyond those inherited from core.
 
 ---
 
@@ -133,24 +113,9 @@ This package exists as a standalone layer rather than being bundled into `metis-
 | | |
 |---|---|
 | **Import Path** | `from metis.engine import ...` |
-| **CLI Command** | `metis-engine` |
-| **Purpose** | Evaluation runtime for METIS. |
+| **Purpose** | Evaluation runtime — ingests traces, executes metrics, produces evaluation reports. |
 
-**Constraints:**
-
-- MUST depend on `metis-core` and `metis-metrics`.
-- MAY depend on HTTP, math, parsing, browser automation, and LLM client libraries.
-- MUST be usable both as a library import and as a standalone CLI.
-
-**Extension Point — Custom Trace Ingesters:**
-
-Third-party packages MAY provide additional trace ingesters by implementing `BaseTraceIngester` from core and registering via the `metis.trace_ingesters` entry point group.
-
-**Future Decomposition:**
-
-The simulation harness and built-in metrics currently live within engine for pragmatic reasons (migrated from a standalone repo). As the system matures:
-- Metrics SHOULD be extracted to `metis-metrics` and ported to the `BaseMetric` interface.
-- The simulation harness MAY be extracted to `metis-testbed` (Stage 4).
+MUST depend on `metis-core` and `metis-metrics`. MAY depend on HTTP, math, parsing, browser automation, and LLM client libraries. MUST be usable both as a library import and as a standalone CLI.
 
 ---
 
@@ -158,20 +123,10 @@ The simulation harness and built-in metrics currently live within engine for pra
 
 | | |
 |---|---|
-| **Import Path** | `from metis.wizard import ConfigGenerator` |
-| **CLI Command** | `metis-wizard` |
+| **Import Path** | `from metis.wizard import ...` |
 | **Purpose** | Interactive configuration generator for creating evaluation suites and guardrails. |
 
-**Constraints:**
-
-- MUST depend on `metis-core` and `metis-metrics`.
-- MUST NOT depend on `metis-engine`.
-
-**Public Contract:**
-
-- Interactive CLI terminal UI for generating valid suite configuration YAML files.
-- CLI: `metis-wizard init`.
-- Template generation for custom metric authors.
+MUST depend on `metis-core` and `metis-metrics`. MUST NOT depend on `metis-engine`.
 
 ---
 
@@ -179,97 +134,43 @@ The simulation harness and built-in metrics currently live within engine for pra
 
 | | |
 |---|---|
-| **Import Path** | `from metis.insights import AnalyticsEngine` |
-| **CLI Command** | `metis-insights` |
+| **Import Path** | `from metis.insights import ...` |
 | **Purpose** | Analytics computation and reporting engine for evaluation outputs. |
 
-**Constraints:**
-
-- MUST depend on `metis-core`.
-- MUST NOT depend on `metis-engine` or `metis-metrics`.
-- MAY depend on data analysis libraries (e.g., `pandas`).
-
-**Public Contract:**
-
-- Consumes `EvaluationReport` (from `metis.core`).
-- Terminal-based analytics rendering (ASCII tables, pass/fail summaries).
-- CLI: `metis-insights report --results-file <path>`.
-- Programmatic reporting calculations for the API backend.
+MUST depend on `metis-core`. MUST NOT depend on `metis-engine` or `metis-metrics`.
 
 ---
 
-### 5.6. `metis-testbed` *(Deferred — Stage 4)*
+### 5.6. `metis-testbed`
 
 | | |
 |---|---|
-| **Import Path** | `from metis.testbed import Sandbox` |
-| **CLI Command** | TBD |
+| **Import Path** | `from metis.testbed import ...` |
 | **Purpose** | Evaluator calibration and sandbox environment for running agents against controlled scenarios. |
 
-**Constraints:**
-
-- MUST depend on `metis-core` and `metis-engine`.
-
-**Public Contract:**
-
-- Controlled execution environments for agent calibration.
-- Scenario definitions for known-good/known-bad agent trajectories.
-- Calibration utilities for tuning metric thresholds.
-
-> Deferred to Stage 4. The MVP evaluates pre-recorded traces; live sandbox execution comes later.
+MUST depend on `metis-core` and `metis-engine`.
 
 ---
 
-### 5.7. `apps/api` *(Deferred — Stage 3)*
+### 5.8. `apps/api`
 
 | | |
 |---|---|
-| **Purpose** | Web backend exposing METIS capabilities as a service. |
+| **Purpose** | Web backend exposing METIS capabilities as a REST service. |
 
-**Constraints:**
-
-- MUST expose REST endpoints for configuration, trace submission, and fetching insights reports.
-- MAY depend on all `packages/*` members.
-
-> Deferred to Stage 3. The MVP is CLI-first.
+MAY depend on all `packages/*` members.
 
 ---
 
-### 5.8. `apps/web` *(Deferred — Stage 3)*
+### 5.9. `apps/web`
 
 | | |
 |---|---|
 | **Purpose** | Web frontend providing a graphical interface for METIS capabilities. |
 
-**Technology Stack:**
-
-| Concern | Requirement |
-|---------|-------------|
-| Language | TypeScript (strict mode) |
-| UI Framework | React 18+ |
-| Build Tooling | Vite |
-| Component Library | TBD. Under consideration: Radix UI + Tailwind CSS. |
-| State Management | TBD. Under consideration: TanStack Query for server state, Zustand for client state. |
-| Routing | TBD. Under consideration: TanStack Router or React Router. |
-
-**Constraints:**
-
-- MUST communicate exclusively with `apps/api` via its REST endpoints. MUST NOT import or depend on any Python package directly.
-- MUST be a standalone single-page application (SPA) deployable independently of the API backend.
-- MUST support configuration of API base URL via environment variable (e.g., `VITE_API_BASE_URL`).
-- SHOULD provide feature parity with CLI workflows for non-developer users (trace submission, report viewing, suite configuration).
-
-**Public Contract:**
-
-- Dashboard: overview of evaluation runs, pass/fail trends, metric distributions.
-- Trace submission: upload trace files or connect to trace sources for evaluation.
-- Report viewer: interactive exploration of `EvaluationReport` data (drill-down by metric, trace, step).
-- Suite configuration: visual editor for experiment YAML (wrapping wizard capabilities).
-
-> Deferred to Stage 3 alongside `apps/api`. The frontend is a consumer of the API — it does not exist without a running backend.
+MUST communicate exclusively with `apps/api` via REST. MUST NOT import or depend on any Python package directly.
 
 ---
-
 
 ## 6. Dependency Invariants
 
@@ -302,7 +203,7 @@ Dependencies MUST flow downward only. The following DAG is normative:
 5. `metis-engine` MUST NOT depend on `metis-wizard` or `metis-insights`.
 6. No circular dependencies SHALL exist between any workspace members.
 7. Upward dependencies (child depending on parent in the DAG) MUST NOT be introduced.
-8. `apps/web` MUST NOT import or depend on any Python workspace member at compile time. Its sole integration point is the HTTP API exposed by `apps/api`.
+8. `apps/web` MUST NOT import or depend on any Python workspace member at compile time.
 
 ---
 
@@ -317,8 +218,7 @@ tests/
 │   ├── metrics/
 │   ├── engine/
 │   ├── wizard/
-│   ├── insights/
-│   └── testbed/
+│   └── insights/
 ├── integration/                # Cross-package flow tests
 └── fixtures/                   # Shared test data
     ├── langfuse_trace.json
@@ -328,7 +228,7 @@ tests/
 ### Rules
 
 - Unit tests (`tests/unit/<package>/`) MUST test a single package in isolation. External dependencies SHOULD be mocked.
-- Integration tests (`tests/integration/`) MUST verify cross-package flows (e.g., ingesting a trace through the engine and producing a report).
+- Integration tests (`tests/integration/`) MUST verify cross-package flows.
 - Test fixtures (`tests/fixtures/`) MUST hold shared sample data. Tests MUST NOT embed fixture data inline when a shared fixture exists.
 - The full test suite MUST be runnable via `uv run pytest` from the workspace root.
 - Per-package test runs MUST be supported: `uv run pytest tests/unit/<package>/`.
@@ -357,10 +257,9 @@ A root `Makefile` MUST provide the following targets as the public development a
 
 **Rules:**
 
-- All targets MUST operate from the workspace root. No per-package `cd` is required.
+- All targets MUST operate from the workspace root.
 - The `ci` target MUST be the single command that reproduces a CI pipeline run locally.
 - `check` MUST be non-mutating (read-only verification).
-- Additional targets MAY be added, but the above set is REQUIRED.
 
 ---
 
@@ -373,15 +272,13 @@ The workspace uses **independent semantic versioning** — each package maintain
 Independent versioning is chosen over a unified "METIS version" for the following reasons:
 
 - Each package is owned by a separate engineer. Per-package versions serve as a coordination and project management signal per team.
-- Lightweight consumers (e.g., `metis-wizard`, CI lint jobs) can pin and track just the packages they depend on.
+- Lightweight consumers can pin and track just the packages they depend on.
 
 **Tradeoffs:**
 
-- There is no single unified "METIS version" — the product identity is a tuple of package versions, not a single number.
-- Git tags form a flat interleaved stream across packages — there is no single linear release history for the repo as a whole.
-- "What's deployed / what's current" is a query across multiple version numbers, not a single tag.
-
-A **compatibility manifest** (`COMPATIBILITY.md` at the workspace root) SHOULD be maintained to record which package versions have been validated together as a working set.
+- There is no single unified "METIS version" — the product identity is a tuple of package versions.
+- Git tags form a flat interleaved stream across packages.
+- A **compatibility manifest** (`COMPATIBILITY.md` at the workspace root) SHOULD be maintained to record which package versions have been validated together as a working set.
 
 ### 9.2. Mechanism
 
@@ -396,13 +293,12 @@ name = "metis-engine"
 version = "0.2.0"
 ```
 
-The `pyproject.toml` is the single source of truth for each package's version. No dynamic version derivation is used.
+The `pyproject.toml` is the single source of truth for each package's version.
 
 ### 9.3. Rules
 
 - All packages MUST declare a static `version` field in `pyproject.toml`. No package MAY use dynamic version derivation.
 - All versions MUST be SemVer-compliant (`MAJOR.MINOR.PATCH`).
-- The `metis -V` / `metis --version` CLI output SHOULD print a breakdown of all installed component versions.
 
 ### 9.4. Git Tag Convention
 
@@ -411,21 +307,15 @@ Released versions are marked with scoped annotated git tags:
 - **Format:** `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`, `metis-core/v0.1.0`)
 - **Creation:** `git tag -a metis-engine/v0.2.0 -m "metis-engine v0.2.0"`
 - **Per-package listing:** `git tag -l "metis-engine/*"`
-- **No monorepo-wide release tags.** Individual packages are the unit of release.
 
 Tags are markers, not sources of truth. The `version` field in `pyproject.toml` is authoritative.
 
 ### 9.5. Tag-on-Merge Rule
 
-Every merge to `main` that modifies source code under `packages/` or `apps/` MUST be tagged with a scoped version bump for the affected package(s). This is a hard rule:
+Every merge to `main` that modifies source code under `packages/` or `apps/` MUST be tagged with a scoped version bump for the affected package(s).
 
-- Untagged package commits on `main` create ambiguous version state and break the 1:1 mapping between changes and versions.
 - Multi-package PRs MUST receive one tag per affected package.
-- CI SHOULD enforce that merge commits touching `packages/` or `apps/` have at least one scoped tag.
-
-**Why this is necessary:** Without mandatory tagging, selective tagging decays into forgotten tags, leaving commits on `main` with no clear package or version identity. The version reported by `pyproject.toml` would not match any git tag, and the history becomes unqueryable by package.
-
-**Exemption — cross-cutting changes:** Merges that only touch root-level files (docs, CI config, `Makefile`, `.github/`, `infra/`) do NOT require a tag. These changes do not produce a versioned artifact. They MUST still use a commit scope prefix (`docs:`, `ci:`, `infra:`) for traceability.
+- **Exemption:** Merges that only touch root-level files (docs, CI config, `Makefile`, `.github/`, `infra/`) do NOT require a tag.
 
 ### 9.6. Release Workflow
 
@@ -433,8 +323,6 @@ Every merge to `main` that modifies source code under `packages/` or `apps/` MUS
 2. Commit the version bump as part of the PR (or as the merge commit).
 3. Tag the merge commit: `git tag -a <package-name>/v<version> -m "<package-name> v<version>"`.
 4. Push with `--tags`.
-
-For multi-package changes, repeat step 3 for each affected package.
 
 ### 9.7. Commit Message Convention
 
@@ -449,13 +337,11 @@ ci: add tag enforcement check
 infra: update Docker base image
 ```
 
-Package scopes (`core`, `metrics`, `engine`, `wizard`, `insights`, `api`, `web`, `testbed`) correspond to versioned artifacts and require a tag. Cross-cutting scopes (`docs`, `ci`, `infra`) do not require a tag.
-
-This allows per-package filtering: `git log --grep="^engine:"`.
+Package scopes (`core`, `metrics`, `engine`, `wizard`, `insights`, `api`, `web`) correspond to versioned artifacts and require a tag. Cross-cutting scopes (`docs`, `ci`, `infra`) do not.
 
 ### 9.8. CLI Version Reporting
 
-Each package resolves its own version via `importlib.metadata.version("<package-name>")`. The unified `metis --version` SHOULD print a breakdown:
+The unified `metis --version` SHOULD print a breakdown of all installed component versions:
 
 ```text
 metis 0.1.0
@@ -467,31 +353,12 @@ metis 0.1.0
 
 ### 9.9. Schema Versioning
 
-Schema versions (for data formats like `experiment.yaml` and `session-record.json`) are independent integers maintained in source code constants, not tied to package versions. See `packages/engine/schemas/README.md` for schema version bump rules.
+Schema versions (for data formats like `experiment.yaml` and `session-record.json`) are independent integers maintained in source code constants, not tied to package versions.
 
 ---
 
 ## 10. CLI Interface
 
-The primary user-facing CLI is the unified `metis` command, which composes sub-package CLIs:
+The primary user-facing CLI is the unified `metis` command, which composes sub-package CLIs under `metis <package> <subcommand>`.
 
-```text
-metis wizard init
-metis engine simulate --input-dir <path>
-metis insights report --results-file <path>
-metis testbed run --scenario <name>   # Stage 4 — TBD
-metis engine -V
-```
-
-Per-package standalone commands (`metis-engine`, `metis-wizard`, `metis-insights`, `metis-testbed`) MUST also be available for CI or isolated installs.
-
----
-
-## 11. Stages
-
-| Stage | Scope | Status |
-|-------|-------|--------|
-| **Stage 1 — MVP** | `core`, `metrics`, `engine` (CLI evaluation of pre-recorded traces) | Active |
-| **Stage 2 — Developer Experience** | `wizard`, `insights` (configuration generation, reporting) | Planned |
-| **Stage 3 — Web Platform** | `apps/api` (REST service exposing METIS capabilities) | Deferred |
-| **Stage 4 — Generalized METIS** | `testbed` (live sandbox, agent calibration) | Deferred |
+Per-package standalone commands (e.g., `metis-engine`, `metis-wizard`) MUST also be available for CI or isolated installs.
