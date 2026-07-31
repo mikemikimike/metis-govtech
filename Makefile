@@ -73,14 +73,17 @@ ifdef PKG
   COMPONENT := $(PKG)
   COMPONENT_DIR := packages/$(PKG)
   FULL_NAME := metis-$(PKG)
+  COMPONENT_TYPE := package
 else ifdef APP
   COMPONENT := $(APP)
   COMPONENT_DIR := apps/$(APP)
   FULL_NAME := metis-$(APP)
+  COMPONENT_TYPE := app
 else
   COMPONENT :=
   COMPONENT_DIR :=
   FULL_NAME :=
+  COMPONENT_TYPE :=
 endif
 
 # Platform detection (override with PLATFORM=github|gitlab)
@@ -135,9 +138,9 @@ release-issue:
 		-e 's|{{dir}}|$(COMPONENT_DIR)|g' \
 		"$(TEMPLATE)" | sed '1,/^---$$/d'); \
 	if [ "$(PLATFORM)" = "github" ] && command -v gh >/dev/null 2>&1; then \
-		printf "%s\n" "$$BODY" | gh issue create --title "$$TITLE" --label release --body-file -; \
+		printf "%s\n" "$$BODY" | gh issue create --title "$$TITLE" --label release --label "$(FULL_NAME)" --label "$(COMPONENT_TYPE)" --body-file -; \
 	elif [ "$(PLATFORM)" = "gitlab" ] && command -v glab >/dev/null 2>&1; then \
-		printf "%s\n" "$$BODY" | glab issue create --title "$$TITLE" --label release --description "$$BODY"; \
+		printf "%s\n" "$$BODY" | glab issue create --title "$$TITLE" --label release --label "$(FULL_NAME)" --label "$(COMPONENT_TYPE)" --description "$$BODY"; \
 	else \
 		printf "=== Issue Title ===\n%s\n\n=== Issue Body ===\n%s\n" "$$TITLE" "$$BODY"; \
 		printf "\n---\nNo platform CLI detected. Paste the above into your issue tracker manually.\n"; \
