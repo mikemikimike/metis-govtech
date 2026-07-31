@@ -88,7 +88,7 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 - All shared domain objects use Pydantic v2 models
 - CLIs use Typer with sub-app composition (see `metis_cli.py`)
 - Versioning: independent per package via static `version` in `pyproject.toml`; scoped git tags `<package-name>/v<semver>`
-- Release workflow: develop on `<package>/v<semver>` branch → merge to `main` → tag the merge commit
+- Release workflow: develop on `release/<package>/v<semver>` branch → merge to `main` → tag the merge commit (`<package>/v<semver>`)
 - Every merge to `main` MUST be tagged with a version bump for the affected package(s)
 - Each package maintains a `CHANGELOG.md` — write entries during development, not at merge time
 - Commit messages on `main` MUST be prefixed with package scope (e.g., `engine: fix trace parsing`)
