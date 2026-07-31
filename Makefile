@@ -128,7 +128,7 @@ release-branch:
 
 release-issue:
 	$(check_release_args)
-	@TITLE="Release: $(FULL_NAME) v$(VER)"; \
+	@TITLE="$(FULL_NAME)/v$(VER)"; \
 	BODY=$$(sed \
 		-e 's|{{package}}|$(FULL_NAME)|g' \
 		-e 's|{{version}}|$(VER)|g' \
