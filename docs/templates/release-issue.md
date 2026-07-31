@@ -2,7 +2,7 @@
 name: Release
 about: Track a new package release
 labels: release
-title: "Release: {{package}} v{{version}}"
+title: "{{package}}/v{{version}}"
 ---
 
 <!-- Canonical release issue template.
