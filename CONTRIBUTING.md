@@ -216,10 +216,29 @@ Platform detection is automatic (GitHub/GitLab via remote URL). Override with `P
 
 > **GitLab users:** Symlink `docs/templates/release-issue.md` to `.gitlab/issue_templates/release-issue.md` for UI integration.
 
-> **First-time setup:** Create the `release` label on your repo before first use:
+> **First-time setup:** Create the required labels on your repo before first use:
 > ```bash
-> gh label create release --description "Release tracking" --color 0E8A16   # GitHub
-> glab label create release --description "Release tracking" --color 0E8A16  # GitLab
+> # GitHub
+> gh label create release --description "Release tracking" --color 0E8A16
+> gh label create package --description "Workspace package" --color BFD4F2
+> gh label create app --description "Deployable app" --color D4C5F9
+> gh label create metis-core --description "" --color C5DEF5
+> gh label create metis-library --description "" --color C5DEF5
+> gh label create metis-engine --description "" --color C5DEF5
+> gh label create metis-wizard --description "" --color C5DEF5
+> gh label create metis-insights --description "" --color C5DEF5
+> gh label create metis-api --description "" --color C5DEF5
+>
+> # GitLab
+> glab label create release --description "Release tracking" --color 0E8A16
+> glab label create package --color BFD4F2
+> glab label create app --color D4C5F9
+> glab label create metis-core --color C5DEF5
+> glab label create metis-library --color C5DEF5
+> glab label create metis-engine --color C5DEF5
+> glab label create metis-wizard --color C5DEF5
+> glab label create metis-insights --color C5DEF5
+> glab label create metis-api --color C5DEF5
 > ```
 
 ## Getting Help
