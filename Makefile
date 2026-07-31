@@ -119,7 +119,7 @@ release-init: release-branch release-issue
 
 release-branch:
 	$(check_release_args)
-	@if [ -n "$$(git status --porcelain)" ]; then \
+	@if [ -n "$$(git status --porcelain --untracked-files=no)" ]; then \
 		printf "Error: Working tree is not clean. Commit or stash changes first.\n"; \
 		exit 1; \
 	fi
