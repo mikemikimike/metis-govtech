@@ -2,6 +2,20 @@
 
 Thank you for contributing to METIS. This guide covers expectations and best practices for the monorepo — whether you're on the core team or contributing externally.
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Getting Started](#getting-started)
+- [Monorepo Orientation](#monorepo-orientation)
+- [Development Workflow](#development-workflow)
+- [Code Standards](#code-standards)
+- [Testing](#testing)
+- [Adding New Packages or Extensions](#adding-new-packages-or-extensions)
+- [Pull Requests](#pull-requests)
+- [Dependency Rules](#dependency-rules)
+- [Versioning & Release](#versioning--release)
+- [Getting Help](#getting-help)
+
 ## Prerequisites
 
 - Python >= 3.11
@@ -48,94 +62,17 @@ For the full specification (component contracts, dependency invariants, versioni
 
 ### Branching
 
-All package work goes on a **release branch** named `<package>/v<semver>` (e.g., `engine/v0.2.0`). See [Versioning & Release](#versioning--release) below for the full flow.
+Branch off `main` with a descriptive prefix:
 
-For cross-cutting changes that don't belong to a single package (CI, root docs, contributing guide), use a short-lived descriptively-named branch (e.g., `update-ci-config`).
+| Prefix | Use |
+|--------|-----|
+| `feat/` | New functionality |
+| `fix/` | Bug fixes |
+| `docs/` | Documentation only |
+| `refactor/` | Code restructuring (no behavior change) |
+| `test/` | Adding or improving tests |
 
-### Versioning & Release
-
-Each package is versioned independently via a static `version` field in its `pyproject.toml`. Releases follow this flow:
-
-1. **Create a release branch** named `<package>/<target-version>` off `main` (e.g., `engine/v0.2.0`). The version is decided upfront and the branch accumulates all commits destined for that release.
-2. **Develop on the release branch** — add features, fixes, and tests scoped to this release. Intermediate commits follow normal commit message conventions.
-3. **Merge to `main` when ready** — use a merge commit (not squash) to preserve the branch history.
-4. **Tag the merge commit on `main`** with `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`). Always tag the merge commit itself, not the last commit on the feature branch.
-5. **Open a release tracking issue** — early in development, open an issue using the `Release` template (or `make release-issue`). This gives the team and external contributors visibility into what's in flight.
-
-PRs targeting the release branch should reference the tracking issue (e.g., "Part of #12") so progress is visible from the issue page.
-
-Key rules:
-- The tag MUST live on `main` — never on a feature/release branch.
-- One tag per package per release.
-- Bump the `version` field in the package's `pyproject.toml` as part of the release branch work (not at merge time).
-- Always use **annotated tags** (`git tag -a`), never lightweight tags. Annotated tags record the tagger, date, and message — lightweight tags are just pointers with no metadata.
-
-### Release Make Targets
-
-The following targets automate release setup:
-
-```bash
-make release-init   PKG=engine VER=0.2.1   # Create branch + tracking issue
-make release-branch PKG=engine VER=0.2.1   # Create branch only
-make release-issue  APP=api    VER=1.0.0   # Create issue only
-```
-
-Use `PKG=<name>` for workspace packages (`packages/`) or `APP=<name>` for apps (`apps/`).
-
-Platform detection is automatic (GitHub/GitLab via remote URL). Override with `PLATFORM=github|gitlab` for self-hosted instances. If no CLI is available, the formatted issue is printed to stdout for manual pasting.
-
-> **GitLab users:** Symlink `docs/templates/release-issue.md` to `.gitlab/issue_templates/release-issue.md` for UI integration.
-
-### Tag Messages
-
-Write a short summary line, optionally followed by a blank line and bullet points for detail:
-
-```bash
-git tag -a "metis-engine/v0.2.0" -m "Migrate orca-agentic-evals v0.2.0 into metis-engine
-
-- Simulation harness (Playwright + LLM user agent)
-- YAML experiment validation with JSON schema versioning
-- Namespace rewrite: orca_agentic_evals → metis.engine"
-```
-
-Guidelines:
-- First line: imperative mood, summarizes the release (≤72 chars).
-- Body (optional): key additions, migrations, or breaking changes as bullet points.
-- Write for someone scanning `git tag -n` output — be informative, not verbose.
-
-For single-commit fixes that don't warrant a release branch, commit directly to a short-lived branch, merge, and tag as usual.
-
-### Release Notes
-
-Each package maintains a `CHANGELOG.md` at `packages/<name>/CHANGELOG.md`. Write entries as you develop on the release branch — not retroactively at merge time.
-
-Format follows [Keep a Changelog](https://keepachangelog.com/):
-
-```markdown
-# Changelog
-
-## [0.2.0] — 2026-07-30
-
-### Added
-- Langfuse trace ingester for production observability
-
-### Changed
-- Score aggregation now handles missing span timestamps gracefully
-
-### Fixed
-- Crash when trace file contains empty spans
-
-## [0.1.0] — 2026-06-15
-
-Initial release.
-```
-
-Guidelines:
-- Write for **consumers** of the package — focus on user-facing impact, not implementation details.
-- Use the categories: Added, Changed, Deprecated, Removed, Fixed, Security.
-- Each bullet should be a single sentence explaining what changed and why it matters.
-- Include the release date (ISO 8601) when the version is merged and tagged.
-- An `## [Unreleased]` section at the top is acceptable during development but must be replaced with the version number before merging.
+Example: `feat/langfuse-ingester`, `fix/score-validation`
 
 ### Running Checks
 
@@ -242,6 +179,48 @@ These invariants are **non-negotiable** — CI will enforce them:
 5. No circular dependencies, ever
 
 When in doubt, check the DAG in [docs/architecture.md](docs/architecture.md).
+
+## Versioning & Release
+
+Each package is versioned independently via a static `version` field in its `pyproject.toml`. Releases follow this flow:
+
+1. **Create a release branch** named `<package-name>/v<semver>` off `main` (e.g., `metis-engine/v0.2.0`). The version is decided upfront and the branch accumulates all commits destined for that release.
+2. **Develop on the release branch** — add features, fixes, and tests scoped to this release. Intermediate commits follow normal commit message conventions.
+3. **Merge to `main` when ready** — use a merge commit (not squash) to preserve the branch history.
+4. **Tag the merge commit on `main`** with the same `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`). Always tag the merge commit itself, not the last commit on the feature branch.
+5. **Open a release tracking issue** — early in development, open an issue using the `Release` template (or `make release-issue`). This gives the team and external contributors visibility into what's in flight.
+
+PRs targeting the release branch should reference the tracking issue (e.g., "Part of #12") so progress is visible from the issue page.
+
+The naming convention `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`) is used consistently for the branch, tag, and issue title.
+
+Key rules:
+- The tag MUST live on `main` — never on a feature/release branch.
+- One tag per package per release.
+- Bump the `version` field in the package's `pyproject.toml` as part of the release branch work (not at merge time).
+- Always use **annotated tags** (`git tag -a`), never lightweight tags. Annotated tags record the tagger, date, and message — lightweight tags are just pointers with no metadata.
+
+### Release Make Targets
+
+The following targets automate release setup:
+
+```bash
+make release-init   PKG=engine VER=0.2.1   # Create branch + tracking issue
+make release-branch PKG=engine VER=0.2.1   # Create branch only
+make release-issue  APP=api    VER=1.0.0   # Create issue only
+```
+
+Use `PKG=<name>` for workspace packages (`packages/`) or `APP=<name>` for apps (`apps/`).
+
+Platform detection is automatic (GitHub/GitLab via remote URL). Override with `PLATFORM=github|gitlab` for self-hosted instances. If no CLI is available, the formatted issue is printed to stdout for manual pasting.
+
+> **GitLab users:** Symlink `docs/templates/release-issue.md` to `.gitlab/issue_templates/release-issue.md` for UI integration.
+
+> **First-time setup:** Create the `release` label on your repo before first use:
+> ```bash
+> gh label create release --description "Release tracking" --color 0E8A16   # GitHub
+> glab label create release --description "Release tracking" --color 0E8A16  # GitLab
+> ```
 
 ## Getting Help
 

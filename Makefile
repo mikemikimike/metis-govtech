@@ -78,7 +78,6 @@ else ifdef APP
   COMPONENT_DIR := apps/$(APP)
   FULL_NAME := metis-$(APP)
 else
-  # Allow targets that don't need these variables to still work
   COMPONENT :=
   COMPONENT_DIR :=
   FULL_NAME :=
@@ -112,7 +111,7 @@ define check_release_args
 	fi
 endef
 
-RELEASE_BRANCH := $(COMPONENT)/v$(VER)
+RELEASE_BRANCH := $(FULL_NAME)/v$(VER)
 TEMPLATE := docs/templates/release-issue.md
 
 release-init: release-branch release-issue
