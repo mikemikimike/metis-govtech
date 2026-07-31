@@ -4,6 +4,12 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] — 2026-07-31
+
+- **Simulation file-existence check** — harness now verifies files exist before attempting upload, preventing runtime errors from missing fixtures
+- **DeepEval class name resolution** — corrected metric class lookup in `metrics.universal` so dynamically referenced DeepEval metrics resolve correctly
+- **User-agent upload guard** — added prompt instruction reminding the LLM user-agent not to reference non-existent files
+
 ## [0.2.0] — 2026-07-30
 
 Full-fidelity migration of `orca-agentic-evals` v0.2.0 into the metis monorepo. All source modules land under `metis.engine` with namespace rewrites but no logic changes.
@@ -39,6 +45,23 @@ Full-fidelity migration of `orca-agentic-evals` v0.2.0 into the metis monorepo. 
 
 - Placeholder `DemoMetric` and direct `metis-core` re-exports from the public API
 
-## [0.1.0] — 2026-06-15
+## [0.1.0] — 2026-07-23
 
-Initial release — scaffold with CLI skeleton and basic trace-file ingestion.
+Initial release. Corresponds to `orca-agentic-evals` v0.1.0 — evaluation framework hardcoded for ORCA (MOM).
+
+### Added
+
+- **Simulation harness** — Playwright-based browser automation driving multi-turn conversations against a target UI
+- **LLM-powered user agent** — OpenAI-backed persona that generates realistic user messages during simulation
+- **Langfuse trace adapter** — `fetch_traces`, `session_to_conversational_test_case` for building DeepEval test cases from Langfuse session traces; typed with `SessionContext`, `ClarificationRequest`, `OrcaChatMetadata`, `TraceMetadata`
+- **Evaluation metrics** — initial metric set using DeepEval, covering orchestration, analysis, and universal dimensions
+- **CLI** — argparse-based `simulate` and `evaluate` subcommands
+- **Makefile** — `lint`, `format`, `typecheck` targets via Ruff
+- **Documentation** — architecture diagram, evaluation framework reference, `.env.example`
+
+### Changed
+
+- Adopted `uv` + `direnv` for dependency and environment management (replaced raw pip)
+- Langfuse client refactored: top-level import, required keyword-only arg, typed return values
+- Removed legacy TypeScript runner (`runner.ts`, `chat.ts`, `test-cases/`)
+- Removed dead code: `check_routing_passed`, `--dedup` flag, `deduplicate_traces`, `build_test_cases_from_langfuse`, `artifact_registry` references
