@@ -279,6 +279,16 @@ def run_simulation(
                     )
                     continue
                 file_path = (fixtures_dir or _DEFAULT_FIXTURES_DIR) / action.file
+                if not file_path.exists():
+                    logger.warning(
+                        "[turn %d]   Action %d/%d: SKIP upload '%s' — file not found at %s",
+                        turn_count,
+                        action_idx,
+                        len(current_ui_actions),
+                        action.file,
+                        file_path,
+                    )
+                    continue
                 logger.info(
                     "[turn %d]   Action %d/%d: FILE_UPLOAD '%s'",
                     turn_count,
