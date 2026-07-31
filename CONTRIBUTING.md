@@ -60,12 +60,31 @@ Each package is versioned independently via a static `version` field in its `pyp
 2. **Develop on the release branch** — add features, fixes, and tests scoped to this release. Intermediate commits follow normal commit message conventions.
 3. **Merge to `main` when ready** — use a merge commit (not squash) to preserve the branch history.
 4. **Tag the merge commit on `main`** with `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`). Always tag the merge commit itself, not the last commit on the feature branch.
+5. **Open a release tracking issue** — early in development, open an issue using the `Release` template (or `make release-issue`). This gives the team and external contributors visibility into what's in flight.
+
+PRs targeting the release branch should reference the tracking issue (e.g., "Part of #12") so progress is visible from the issue page.
 
 Key rules:
 - The tag MUST live on `main` — never on a feature/release branch.
 - One tag per package per release.
 - Bump the `version` field in the package's `pyproject.toml` as part of the release branch work (not at merge time).
 - Always use **annotated tags** (`git tag -a`), never lightweight tags. Annotated tags record the tagger, date, and message — lightweight tags are just pointers with no metadata.
+
+### Release Make Targets
+
+The following targets automate release setup:
+
+```bash
+make release-init   PKG=engine VER=0.2.1   # Create branch + tracking issue
+make release-branch PKG=engine VER=0.2.1   # Create branch only
+make release-issue  APP=api    VER=1.0.0   # Create issue only
+```
+
+Use `PKG=<name>` for workspace packages (`packages/`) or `APP=<name>` for apps (`apps/`).
+
+Platform detection is automatic (GitHub/GitLab via remote URL). Override with `PLATFORM=github|gitlab` for self-hosted instances. If no CLI is available, the formatted issue is printed to stdout for manual pasting.
+
+> **GitLab users:** Symlink `docs/templates/release-issue.md` to `.gitlab/issue_templates/release-issue.md` for UI integration.
 
 ### Tag Messages
 
