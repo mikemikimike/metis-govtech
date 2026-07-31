@@ -365,6 +365,10 @@ def _with_eval_context(test_case: LLMTestCase) -> LLMTestCase:
 class _ContextAwareGEval(GEval):
     """GEval subclass that injects eval context into criteria at measure time."""
 
+    def _get_prompt(self, method, **kwargs):
+        kwargs.setdefault("template_class", "GEval")
+        return super()._get_prompt(method, **kwargs)
+
     def measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         context_block = _build_context_block(test_case.metadata or {})
         if not context_block:
@@ -390,6 +394,10 @@ class _ContextAwareGEval(GEval):
 
 class _ContextAwareConversationalGEval(ConversationalGEval):
     """ConversationalGEval subclass that injects eval context into criteria."""
+
+    def _get_prompt(self, method, **kwargs):
+        kwargs.setdefault("template_class", "ConversationalGEval")
+        return super()._get_prompt(method, **kwargs)
 
     def measure(self, test_case: ConversationalTestCase, *args, **kwargs) -> float:
         context_block = _build_context_block(test_case.metadata or {})
