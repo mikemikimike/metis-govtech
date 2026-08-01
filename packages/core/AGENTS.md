@@ -8,4 +8,6 @@ Core data models and abstractions for the METIS suite. Zero workspace dependenci
 
 ## Package-Specific Notes
 
-(none yet)
+- Dependencies: Pydantic v2, structlog, Rich (plus stdlib). Zero workspace dependencies.
+- Public logging API: `from metis.core.logging import get_logger, configure_logging`
+- Public console API: `from metis.core.console import console`

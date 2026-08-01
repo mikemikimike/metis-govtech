@@ -86,6 +86,30 @@ make ci             # full CI suite
 make clean          # remove generated/cached files
 ```
 
+## Logging & Console Output
+
+All packages use centralized logging and console output from `metis-core`:
+
+```python
+from metis.core.logging import get_logger
+from metis.core.console import console
+
+# Operational logging (stderr) — for developers and CI
+log = get_logger()
+log.info("evaluation_started", trace_id="abc-123", metrics_count=5)
+
+# User-facing output (stdout) — for end users
+console.print("[bold]Results:[/bold] 4 passed, 1 failed")
+```
+
+Verbosity is controlled via CLI flags:
+
+```bash
+metis engine simulate --input-dir ./exp    # default: only warnings/errors
+metis -v engine simulate --input-dir ./exp  # INFO: operational progress
+metis -vv engine simulate --input-dir ./exp # DEBUG: full diagnostics
+```
+
 ## Project Layout
 
 ```
