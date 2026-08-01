@@ -184,15 +184,20 @@ When in doubt, check the DAG in [docs/architecture.md](docs/architecture.md).
 
 Each package is versioned independently via a static `version` field in its `pyproject.toml`. Releases follow this flow:
 
-1. **Create a release branch** named `<package-name>/v<semver>` off `main` (e.g., `metis-engine/v0.2.0`). The version is decided upfront and the branch accumulates all commits destined for that release.
+1. **Create a release branch** named `release/<package-name>/v<semver>` off `main` (e.g., `release/metis-engine/v0.2.0`). The version is decided upfront and the branch accumulates all commits destined for that release.
 2. **Develop on the release branch** — add features, fixes, and tests scoped to this release. Intermediate commits follow normal commit message conventions.
 3. **Merge to `main` when ready** — use a merge commit (not squash) to preserve the branch history.
-4. **Tag the merge commit on `main`** with the same `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`). Always tag the merge commit itself, not the last commit on the feature branch.
+4. **Tag the merge commit on `main`** with `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`). Always tag the merge commit itself, not the last commit on the feature branch.
 5. **Open a release tracking issue** — early in development, open an issue using the `Release` template (or `make release-issue`). This gives the team and external contributors visibility into what's in flight.
 
 PRs targeting the release branch should reference the tracking issue (e.g., "Part of #12") so progress is visible from the issue page.
 
-The naming convention `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`) is used consistently for the branch, tag, and issue title.
+The naming conventions are:
+- **Branch:** `release/<package-name>/v<semver>` (e.g., `release/metis-engine/v0.2.0`)
+- **Tag:** `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`)
+- **Issue title:** `<package-name>/v<semver>`
+
+The `release/` prefix on branches prevents ambiguity with identically-named tags.
 
 Key rules:
 - The tag MUST live on `main` — never on a feature/release branch.
@@ -205,7 +210,7 @@ Key rules:
 The following targets automate release setup:
 
 ```bash
-make release-init   PKG=engine VER=0.2.1   # Create branch + tracking issue
+make release-init   PKG=engine VER=0.2.1   # Create branch (release/metis-engine/v0.2.1) + tracking issue
 make release-branch PKG=engine VER=0.2.1   # Create branch only
 make release-issue  APP=api    VER=1.0.0   # Create issue only
 ```

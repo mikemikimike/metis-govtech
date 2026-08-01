@@ -114,7 +114,7 @@ define check_release_args
 	fi
 endef
 
-RELEASE_BRANCH := $(FULL_NAME)/v$(VER)
+RELEASE_BRANCH := release/$(FULL_NAME)/v$(VER)
 TEMPLATE := docs/templates/release-issue.md
 
 release-init: release-branch release-issue
