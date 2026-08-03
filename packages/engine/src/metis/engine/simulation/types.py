@@ -307,7 +307,7 @@ class RunRecord(BaseModel, extra="ignore"):
         if v is not None and v != _RUN_RECORD_VERSION:
             raise ValueError(
                 f"Unsupported schema_version {v!r} (expected {_RUN_RECORD_VERSION}). "
-                f"This record was produced by a different version of orca-agentic-evals."
+                f"This record was produced by a different version of metis-engine."
             )
         return data
 

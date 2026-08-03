@@ -175,7 +175,7 @@ def run_experiment(
                 if record.artifacts_collected:
                     manifest = _save_artifacts(record, run_dir)
                     logger.info(
-                        "[experiment] Artifacts: %d saved (session: %s)",
+                        "[experiment] Artifacts: %d saved (target_session: %s)",
                         len(manifest["artifacts"]),
                         manifest["session_id"],
                     )
