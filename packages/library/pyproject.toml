@@ -9,6 +9,9 @@ description = "Shared catalog of metrics, skills, and reusable components for th
 requires-python = ">=3.11"
 dependencies = [
     "metis-core",
+    "deepeval>=2.0.0",
+    "openai>=1.0.0",
+    "typing-extensions",
 ]
 
 [tool.uv.sources]

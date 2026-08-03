@@ -104,7 +104,7 @@ MUST NOT depend on any other workspace member.
 | **Import Path** | `from metis.library import ...` |
 | **Purpose** | Shared catalog of metrics, skills, and reusable components consumed by both the execution path (engine) and the configuration path (wizard). The wizard references items by FQN; the engine resolves and executes them. Lightweight layer so consumers can enumerate catalog items without pulling in engine's heavier dependencies. |
 
-MUST depend only on `metis-core`. MUST NOT introduce external runtime dependencies beyond those inherited from core.
+MUST depend only on `metis-core`. MAY depend on evaluation framework libraries (DeepEval) required by the shared metric catalog.
 
 ---
 
