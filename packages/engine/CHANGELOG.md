@@ -4,6 +4,18 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-08-03
+
+### Changed
+
+- **Test layout** — relocated unit tests from co-located `*_test.py` files in the source tree (`cli_test.py`, `simulation/schema_test.py`) to `tests/unit/engine/` per the monorepo architecture spec (§7)
+- **Test naming** — renamed to `test_*.py` convention consistent with the rest of the monorepo
+- **pytest config** — removed `packages/*/src/metis/*/` and `apps/*/src/metis/*/` workarounds from root `testpaths`; tests are now discoverable via `make test-unit` as intended
+
+### Fixed
+
+- **CLI test assertions** — corrected 9 tests that asserted error messages on stderr when `_validate_inputs` writes to stdout via `metis.core.console`; these tests were silently never running under `make test-unit`
+
 ## [0.3.0] — 2026-08-03
 
 ### Removed
