@@ -12,7 +12,6 @@ from metis.wizard.adapters.cli import render as cli
 from metis.wizard.application import Session
 from metis.wizard.application.compile import write_experiment, write_review
 from metis.wizard.application.driver import StepDriver
-from metis.wizard.application.universals import with_universals
 from metis.wizard.contracts import (
     ChatRequest,
     ChoiceRequest,
@@ -27,14 +26,12 @@ from metis.wizard.domain.permissions import SessionStep
 
 def a_session(path: Path | None = None, interviewer=None) -> tuple[Session, StepDriver]:
     driver = StepDriver(interviewer=interviewer or ScriptedInterviewer())
-    profile = with_universals(
-        ProductProfile(
-            product=Product(
-                name="Research assistant",
-                summary="Answers research questions over an internal library.",
-                users="Policy analysts.",
-                architecture="A router with a search tool that can time out.",
-            )
+    profile = ProductProfile(
+        product=Product(
+            name="Research assistant",
+            summary="Answers research questions over an internal library.",
+            users="Policy analysts.",
+            architecture="A router with a search tool that can time out.",
         )
     )
     return Session.start(profile, path=path, driver=driver), driver
@@ -192,13 +189,3 @@ def test_a_rejected_patch_reaches_the_user_as_a_runtime_warning(tmp_path: Path) 
     assert runtime, "the refusal should have been shown, not swallowed"
     assert "your call" in runtime[0].text
     assert not runtime[0].blocking
-
-
-def test_the_universal_epic_never_becomes_a_task(tmp_path: Path) -> None:
-    session, _ = a_session(tmp_path / "session.json")
-
-    walk(session)
-
-    task_covers = {ref for t in session.profile().tasks for ref in t.behaviour_refs}
-    assert not any(ref.startswith("EB-U") for ref in task_covers)
-    assert session.profile().universal_behaviours()  # but it is still there

@@ -39,16 +39,16 @@ already there; it cannot create). One epic with its behaviours is a single patch
 
   op: add
   path: epics
-  value: {"id": "EP-1", "name": "…", "scope": "product",
+  value: {"id": "EP-1", "name": "…",
           "behaviours": [{"id": "EB-1", "statement": "…"},
                           {"id": "EB-2", "statement": "…"}]}
 
-Mirror the shape of the objects already in the document — the universal epic shows you a
-real epic and its behaviours. `scope` is exactly "product" for anything you add.
+Mirror that shape, and the shape of anything already in the document. Ids are sequential per
+container: epics are `EP-1`, `EP-2`; behaviours are `EB-1`, `EB-2` across the whole document,
+not restarted inside each epic.
 
-Three things you may never write, at any step:
+Two things you may never write, at any step:
   - a behaviour's `priority` — that is the user's decision alone
-  - anything under the epic EP-UNI — those checks are fixed
   - a criterion's `metric_fqn` — a separate matcher chooses it from the criterion's own
     wording. You can see which metric each criterion is bound to, but you cannot set it. If
     the user wants a different metric, do not touch `metric_fqn`; instead reword that

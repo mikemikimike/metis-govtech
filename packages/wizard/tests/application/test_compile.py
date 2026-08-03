@@ -7,7 +7,7 @@ import yaml
 from fixtures.profiles import (
     BOUNDED_TROUBLESHOOTING,
     CITATION_METRIC,
-    UNIVERSAL_TURN_BUDGET,
+    TURN_BUDGET,
     research_assistant,
 )
 
@@ -89,31 +89,19 @@ def test_a_shared_metric_appears_once() -> None:
     assert task["metric_refs"].count(CITATION_METRIC) == 1
 
 
-def test_universal_metrics_ride_along_on_every_task() -> None:
-    """Universals are appended to each task rather than becoming tasks of their own."""
+def test_a_task_is_measured_only_on_what_it_covers() -> None:
+    """Nothing rides along. A task's metrics come from its own ticked behaviours, full stop.
+
+    T-1 covers EB-1 (ticked, citation) and EB-2 (unticked, turn budget); T-2 covers EB-3
+    (ticked, bounded troubleshooting). So the turn budget metric — bound only to an unticked
+    behaviour — reaches no task at all.
+    """
     document = compiled()
+    by_id = {t["id"]: t["metric_refs"] for t in document["tasks"]}
 
-    for task in document["tasks"]:
-        assert UNIVERSAL_TURN_BUDGET in task["metric_refs"]
-    assert "EB-U1" not in [t["id"] for t in document["tasks"]]
-
-
-def test_unticked_behaviours_contribute_nothing() -> None:
-    """T-1 covers EB-2, which is unticked — neither its ref nor its metrics should appear."""
-    profile = research_assistant()
-    unticked = profile.behaviour("EB-2")
-    assert unticked is not None and not unticked.priority
-
-    task = next(
-        t
-        for t in compile_experiment(profile, EXPERIMENT_ID)["tasks"]
-        if t["id"] == "T-1"
-    )
-
-    # EB-2's only criterion uses the turn budget metric, which the universal epic also
-    # supplies — so assert on the reference list, which is where the drop is observable.
-    assert BOUNDED_TROUBLESHOOTING not in task["metric_refs"]
-    assert task["metric_refs"] == [CITATION_METRIC, UNIVERSAL_TURN_BUDGET]
+    assert by_id["T-1"] == [CITATION_METRIC]
+    assert by_id["T-2"] == [BOUNDED_TROUBLESHOOTING]
+    assert not any(TURN_BUDGET in refs for refs in by_id.values())
 
 
 def test_a_deleted_persona_is_not_referenced() -> None:
@@ -163,7 +151,6 @@ def test_review_marks_why_each_behaviour_is_there() -> None:
 
     assert "_(measured)_" in review
     assert "_(considered, not measured)_" in review
-    assert "_(always on)_" in review
 
 
 def test_review_session_count_matches_the_profile() -> None:

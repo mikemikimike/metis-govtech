@@ -158,15 +158,15 @@ def test_regenerating_clears_what_the_model_wrote() -> None:
     assert behaviour.criteria == []  # both were CHAT-authored
 
 
-def test_the_universal_epic_survives_a_product_edit() -> None:
-    """It was never derived from the product description."""
+def test_a_product_edit_clears_everything_derived_from_it() -> None:
+    """Epics and tasks were all derived from the product description."""
     profile = research_assistant()
 
     cascade.clear_for_regeneration(
         profile, cascade.Question(text="", subject="product.summary", kind="tree")
     )
 
-    assert [e.id for e in profile.epics] == ["EP-UNI"]
+    assert profile.epics == []
     assert profile.tasks == []
 
 

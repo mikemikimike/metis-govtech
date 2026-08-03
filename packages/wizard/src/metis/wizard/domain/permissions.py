@@ -9,10 +9,8 @@ step owns behaviour statements, so the patch is applied where you stand and your
 never changes. Being told to press Back first would be the wizard enforcing its own structure
 over a clearly stated intent. It stays bounded — an address no step owns is writable nowhere.
 
-**Two addresses are unwritable by the model at any step.** `priority` is the user's only real
-decision and must not be inferable from a chat message, so it appears in no entry. And nothing
-under a universal epic is writable — enforced in the applier rather than by omission here, so
-a new step cannot accidentally gain access to it.
+**One address is unwritable by the model at any step.** `priority` is the user's only real
+decision and must not be inferable from a chat message, so it appears in no entry.
 """
 
 from __future__ import annotations

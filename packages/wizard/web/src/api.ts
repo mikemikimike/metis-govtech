@@ -167,7 +167,6 @@ export interface Behaviour {
 export interface Epic {
   id: string;
   name: string;
-  scope: "product" | "universal";
   behaviours: Behaviour[];
 }
 

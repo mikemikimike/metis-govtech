@@ -15,7 +15,7 @@ a compiled file is invisible until something tries to import it.
 from pathlib import Path
 
 import pytest
-from fixtures.profiles import research_assistant
+from fixtures.profiles import CITATION_METRIC, research_assistant
 
 from metis.wizard.application.compile import write_experiment, write_review
 
@@ -63,14 +63,15 @@ def test_the_gate_would_catch_an_unimportable_metric(tmp_path: Path) -> None:
 
     input_dir = _input_dir(tmp_path)
     experiment = input_dir / "experiment.yaml"
-    experiment.write_text(
-        # The metrics' old home, deleted when they moved to metis-library. Deliberately dead —
-        # an experiment compiled before the move names this and must fail loudly.
-        experiment.read_text().replace(
-            "metis.library.metrics.universal.TurnBudgetMetric",
-            "metis.engine.metrics.universal.TurnBudgetMetric",
-        )
+    original = experiment.read_text()
+    # The metrics' old home, deleted when they moved to metis-library. Deliberately dead —
+    # an experiment compiled before the move names this and must fail loudly. Sourced from
+    # the fixture so this cannot quietly become a no-op if the compiled metrics change.
+    dead_fqn = CITATION_METRIC.replace("metis.library.", "metis.engine.")
+    assert CITATION_METRIC in original, (
+        "the corrupted metric must actually be compiled in"
     )
+    experiment.write_text(original.replace(CITATION_METRIC, dead_fqn))
 
     with pytest.raises(SystemExit) as exit_info:
         _validate_inputs(input_dir)

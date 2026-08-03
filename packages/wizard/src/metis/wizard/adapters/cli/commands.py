@@ -142,8 +142,8 @@ def _driver(interviewer):
 
     The matcher is not optional in a real run. Without it every criterion keeps
     `metric_fqn=None`, the compiler drops it from the task's metric list, and the experiment
-    comes out carrying only the universal metrics — it validates, it loads, and it measures
-    almost nothing the user chose. `test_cli.py` guards this.
+    comes out with empty `metric_refs` — it validates, it loads, and it measures nothing at
+    all. `test_cli.py` guards this.
 
     One gateway serves both chat and embeddings, so the interviewer *is* the embedder.
     """
@@ -170,7 +170,6 @@ def init(
 ) -> None:
     """Start a new interview."""
     from metis.wizard.application import Session
-    from metis.wizard.application.universals import with_universals
     from metis.wizard.contracts import Product, ProductProfile
 
     # Refuse before anything else — the filesystem check costs no model call and needs no
@@ -200,9 +199,7 @@ def init(
 
     # The product name is not asked for here — the opening question collects it. Seeding a
     # placeholder keeps the profile valid until the clarify step fills it in.
-    profile = with_universals(
-        ProductProfile(product=Product(name="your product", summary="", users=""))
-    )
+    profile = ProductProfile(product=Product(name="your product", summary="", users=""))
     session = Session.start(
         profile, path=_session_path(out_dir), driver=_driver(interviewer)
     )

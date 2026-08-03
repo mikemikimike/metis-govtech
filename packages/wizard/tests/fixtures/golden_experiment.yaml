@@ -19,7 +19,6 @@ tasks:
   - impatient-executive
   metric_refs:
   - metis.library.metrics.orchestration.SynthesisFaithfulnessMetric
-  - metis.library.metrics.universal.TurnBudgetMetric
 - id: T-2
   description: Ask a question whose documents live behind a search that will time out, forcing
     the retry path.
@@ -28,6 +27,5 @@ tasks:
   - cooperative-delegator
   metric_refs:
   - metis.library.metrics.universal.BoundedTroubleshootingMetric
-  - metis.library.metrics.universal.TurnBudgetMetric
   fixtures:
   - policy.pdf

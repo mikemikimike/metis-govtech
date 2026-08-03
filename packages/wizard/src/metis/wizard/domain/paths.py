@@ -102,17 +102,3 @@ def resolve_parent(profile: ProductProfile, path: str) -> tuple[Any, Segment]:
     for segment in segments[:-1]:
         node = _step_into(node, segment, path)
     return node, segments[-1]
-
-
-def owning_epic_scope(profile: ProductProfile, path: str) -> str | None:
-    """The scope of the epic a path falls under, if it falls under one at all.
-
-    This is how the universal-epic rule is enforced without every caller having to parse the
-    path itself: `epics[EP-UNI].…` resolves to the universal scope no matter how deep the
-    rest of the path goes.
-    """
-    segments = parse(path)
-    if not segments or segments[0].field != "epics" or segments[0].key is None:
-        return None
-    epic = next((e for e in profile.epics if e.id == segments[0].key), None)
-    return epic.scope.value if epic else None

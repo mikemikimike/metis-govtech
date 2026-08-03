@@ -103,70 +103,6 @@ def test_an_unowned_address_is_refused_without_leaking_its_path() -> None:
     assert "isn't mine to write" in message
 
 
-# ── the universal epic ─────────────────────────────────────────────────────
-
-
-def test_universal_content_is_rejected() -> None:
-    profile = research_assistant()
-
-    result = apply(
-        profile,
-        [patch("epics[EP-UNI].behaviours[EB-U1].statement", "rewritten")],
-    )
-
-    assert result.applied == []
-    assert profile.behaviour("EB-U1").statement != "rewritten"  # type: ignore[union-attr]
-
-
-def test_universal_is_rejected_even_when_a_glob_would_cover_it(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A new step with a broad glob must not accidentally gain access.
-
-    This is why the check lives in the applier rather than being expressed as an omission
-    from StepPermissions.
-    """
-    import metis.wizard.domain.permissions as perms
-
-    monkeypatch.setitem(
-        perms._COMPILED,
-        SessionStep.BEHAVIOURS,
-        [perms._glob_to_regex("epics[*].behaviours[*].statement")],
-    )
-    assert (
-        owner_of("epics[EP-UNI].behaviours[EB-U1].statement") is SessionStep.BEHAVIOURS
-    )
-
-    profile = research_assistant()
-    result = apply(
-        profile, [patch("epics[EP-UNI].behaviours[EB-U1].statement", "rewritten")]
-    )
-
-    assert result.applied == []
-    assert "always run" in result.rejected[0].message
-
-
-def test_universal_rejection_applies_to_wizard_origin_too() -> None:
-    """Read-only to everyone means everyone."""
-    profile = research_assistant()
-
-    result = apply(
-        profile,
-        [
-            patch(
-                "epics[EP-UNI].behaviours[EB-U1].statement",
-                "rewritten",
-                origin=PatchOrigin.WIZARD,
-            )
-        ],
-    )
-
-    # WIZARD origin is trusted for ordinary addresses, but the package never composes a
-    # patch under EP-UNI — so trusting it here would only ever wave through a bug.
-    assert result.applied == []
-    assert profile.behaviour("EB-U1").statement != "rewritten"  # type: ignore[union-attr]
-
-
 # ── permission follows the address, not the step ───────────────────────────
 
 
@@ -246,7 +182,7 @@ def test_a_malformed_value_is_reported_not_raised() -> None:
         [
             patch(
                 "epics",
-                {"id": "EP-9", "scope": "feature", "behaviours": ["EB-1", "EB-2"]},
+                {"id": "EP-9", "behaviours": ["EB-1", "EB-2"]},
                 op=PatchOp.ADD,
                 origin=PatchOrigin.WIZARD,  # even a trusted patch must not crash on a bad value
             )

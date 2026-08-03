@@ -24,12 +24,7 @@ export function Profile({
   const { product } = profile;
   const named = product.name.trim() || "Untitled product";
 
-  // The universal epic ("always on") is always-checked scaffolding, not something the user
-  // shaped — so it reads last, after the epics the interview actually produced. A stable sort
-  // that only sinks universals keeps the package's order among the product epics untouched.
-  const epics = [...profile.epics].sort(
-    (a, b) => Number(a.scope === "universal") - Number(b.scope === "universal"),
-  );
+  const { epics } = profile;
 
   return (
     <div className="flex h-full flex-col gap-6 overflow-y-auto p-5 text-sm">
@@ -121,14 +116,11 @@ function Section({
 }
 
 // Each epic is a disclosure: the header toggles its behaviours open and closed, so a long
-// document collapses to a scannable list of epic names. Universal ("always on") epics start
-// closed — they are scaffolding you rarely need to inspect; the epics the interview produced
-// start open. Note this toggle is *view* state only: it opens and closes a section, it never
-// edits the profile, so the document view stays read-only in the sense that matters — nothing
-// here changes what the package built.
+// document collapses to a scannable list of epic names. Note this toggle is *view* state
+// only: it opens and closes a section, it never edits the profile, so the document view stays
+// read-only in the sense that matters — nothing here changes what the package built.
 function EpicView({ epic }: { epic: Epic }) {
-  const universal = epic.scope === "universal";
-  const [open, setOpen] = useState(!universal);
+  const [open, setOpen] = useState(true);
   return (
     <div className="flex flex-col">
       <button
@@ -139,11 +131,6 @@ function EpicView({ epic }: { epic: Epic }) {
       >
         <Chevron dir={open ? "down" : "right"} className="text-muted-foreground transition-transform" />
         <span className="font-medium text-foreground">{epic.name}</span>
-        {universal && (
-          <span className="rounded border border-border px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            always on
-          </span>
-        )}
         <span className="text-xs text-muted-foreground">
           {epic.behaviours.length}
         </span>
@@ -151,7 +138,7 @@ function EpicView({ epic }: { epic: Epic }) {
       {open && (
         <ul className="flex flex-col gap-1.5 border-l border-border pb-1 pl-3 ml-1.5">
           {epic.behaviours.map((b) => (
-            <BehaviourView key={b.id} behaviour={b} universal={universal} />
+            <BehaviourView key={b.id} behaviour={b} />
           ))}
         </ul>
       )}
@@ -159,16 +146,10 @@ function EpicView({ epic }: { epic: Epic }) {
   );
 }
 
-function BehaviourView({
-  behaviour,
-  universal,
-}: {
-  behaviour: Behaviour;
-  universal: boolean;
-}) {
-  // A product behaviour the user hasn't ticked is dormant: its criteria are kept but won't be
-  // measured, so it reads de-emphasised. Universal behaviours are always on and never dim.
-  const dormant = !universal && !behaviour.priority;
+function BehaviourView({ behaviour }: { behaviour: Behaviour }) {
+  // A behaviour the user hasn't ticked is dormant: its criteria are kept but won't be
+  // measured, so it reads de-emphasised.
+  const dormant = !behaviour.priority;
   return (
     <li className={cn("flex flex-col gap-0.5", dormant && "opacity-45")}>
       <div className="flex items-center gap-2">

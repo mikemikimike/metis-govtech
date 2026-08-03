@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fixtures.profiles import research_assistant
 
-from metis.wizard.contracts import EpicScope, InteractionType, ProductProfile
+from metis.wizard.contracts import InteractionType, ProductProfile
 
 
 def test_round_trips_through_json_unchanged() -> None:
@@ -14,8 +14,6 @@ def test_round_trips_through_json_unchanged() -> None:
 
     assert parsed == original
     # spot-check the things a loose serialiser would quietly flatten
-    assert parsed.universal_epic() is not None
-    assert parsed.universal_epic().scope is EpicScope.UNIVERSAL  # type: ignore[union-attr]
     assert parsed.behaviour("EB-3").interaction_type is InteractionType.FORM  # type: ignore[union-attr]
     assert parsed.task("T-1").behaviour_refs == ["EB-1", "EB-2"]  # type: ignore[union-attr]
 
@@ -54,31 +52,22 @@ def test_dormant_criteria_survive_on_unticked_behaviours() -> None:
     assert len(behaviour.criteria) == 1
 
 
-def test_ticked_excludes_universal_behaviours() -> None:
-    """Universals are always on and ride along on every task — never the user's decision."""
-    profile = research_assistant()
-    ticked = {b.id for b in profile.ticked()}
-
-    assert ticked == {"EB-1", "EB-3"}
-    assert "EB-U1" not in ticked
-    # but they are still reachable, and still in the one epics list
-    assert [b.id for b in profile.universal_behaviours()] == ["EB-U1"]
-
-
-def test_universal_epic_appears_in_a_plain_iteration() -> None:
-    """Renderers and the compiler walk one list — no special-casing to find universals."""
+def test_ticked_is_the_behaviours_the_user_chose() -> None:
+    """The tick is the user's only real decision — nothing rides along beside it."""
     profile = research_assistant()
 
-    assert "EP-UNI" in [e.id for e in profile.epics]
-    assert "EB-U1" in [b.id for b in profile.behaviours()]
+    assert {b.id for b in profile.ticked()} == {"EB-1", "EB-3"}
+    # EB-2 is unticked: still in the document, still carrying criteria, just not measured
+    assert "EB-2" in {b.id for b in profile.behaviours()}
 
 
-def test_scope_is_derived_from_the_parent_epic() -> None:
-    """`Behaviour` carries no scope field — it would be redundant with position."""
+def test_a_behaviour_resolves_to_its_owning_epic() -> None:
+    """`Behaviour` carries no epic id — position in the tree is the only link."""
     profile = research_assistant()
 
-    assert profile.epic_of("EB-U1").is_universal  # type: ignore[union-attr]
-    assert not profile.epic_of("EB-1").is_universal  # type: ignore[union-attr]
+    assert profile.epic_of("EB-1").id == "EP-1"  # type: ignore[union-attr]
+    assert profile.epic_of("EB-3").id == "EP-2"  # type: ignore[union-attr]
+    assert profile.epic_of("EB-nope") is None
 
 
 def test_criterion_ids_are_scoped_to_their_behaviour() -> None:

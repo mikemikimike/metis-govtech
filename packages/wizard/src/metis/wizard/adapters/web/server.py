@@ -117,13 +117,10 @@ def create_app(
 
     @app.post("/api/sessions")
     def create_session() -> dict[str, Any]:
-        from metis.wizard.application.universals import with_universals
         from metis.wizard.contracts import Product, ProductProfile
 
         session_id = f"wizard-{uuid.uuid4().hex[:8]}"
-        profile = with_universals(
-            ProductProfile(product=Product(name="", summary="", users=""))
-        )
+        profile = ProductProfile(product=Product(name="", summary="", users=""))
         session = Session.start(
             profile,
             path=store.new_path(session_id),

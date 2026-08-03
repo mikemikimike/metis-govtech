@@ -3,8 +3,7 @@
 The order of the checks is the whole design:
 
     1. origin      — did the package compose this? then it is trusted
-    2. universal    — is it under EP-UNI? then no, from anyone, at any step
-    3. ownership    — does *any* step own this address?
+    2. ownership   — does *any* step own this address?
 
 Origin comes first because an address check alone cannot tell the user's tick from the
 model's attempt at one — the two patches are byte-identical. See `PatchOrigin`.
@@ -71,27 +70,13 @@ class ApplyResult:
         return bool(self.rejected)
 
 
-def _check(profile: ProductProfile, patch: Patch) -> str | None:
+def _check(patch: Patch) -> str | None:
     """Return a rejection reason, or None if the patch may be applied."""
-    # 1. Universals are read-only to *everyone*, at every step, whoever composed the patch.
-    #    This is checked before origin rather than after: the package never composes a patch
-    #    under EP-UNI, so trusting WIZARD origin here would only ever wave through a bug.
-    #    Enforced here rather than by omission from StepPermissions so that a new step
-    #    cannot accidentally gain access to it.
-    try:
-        if paths.owning_epic_scope(profile, patch.path) == "universal":
-            return (
-                "Those are the checks that always run, so they're not mine to change — "
-                "or yours. Everything else on this screen is still up for discussion."
-            )
-    except paths.PathError:
-        pass  # a malformed path is caught by the ownership check below
-
-    # 2. The package composed it, and knows it did, at the moment it drew the option.
+    # 1. The package composed it, and knows it did, at the moment it drew the option.
     if patch.origin is PatchOrigin.WIZARD:
         return None
 
-    # 3. Not "does my current step allow this?" but "does any step own it?".
+    # 2. Not "does my current step allow this?" but "does any step own it?".
     if owner_of(patch.path) is None:
         if patch.path.endswith(".priority"):
             return (
@@ -172,7 +157,7 @@ def apply(profile: ProductProfile, patches: list[Patch]) -> ApplyResult:
     result = ApplyResult()
 
     for patch in patches:
-        reason = _check(profile, patch)
+        reason = _check(patch)
         if reason is not None:
             result.rejected.append(Rejection(patch, reason))
             continue
@@ -219,7 +204,7 @@ def validate_model_patches(profile: ProductProfile, patches: Sequence[Patch]) ->
     previous_persona_counts = _persona_description_counts(profile)
 
     for patch in sanitise(patches):
-        if _check(candidate, patch) is not None:
+        if _check(patch) is not None:
             continue
         try:
             _apply_one(candidate, patch)

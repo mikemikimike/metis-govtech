@@ -266,8 +266,8 @@ def test_a_task_with_no_persona_blocks() -> None:
     ],
 )
 def test_a_task_must_cover_a_selected_behaviour(refs: list[str], blocks: bool) -> None:
-    """A task covers nothing measurable unless a currently selected, non-universal behaviour is
-    among its refs. Empty, unknown and unticked refs all fail the gate; one good ref clears it."""
+    """A task covers nothing measurable unless a currently selected behaviour is among its
+    refs. Empty, unknown and unticked refs all fail the gate; one good ref clears it."""
     profile = research_assistant()
     profile.task("T-1").behaviour_refs = refs  # type: ignore[union-attr]
 

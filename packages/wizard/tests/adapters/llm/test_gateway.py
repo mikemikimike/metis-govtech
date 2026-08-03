@@ -385,8 +385,8 @@ def test_every_step_prompt_hands_over_the_profile() -> None:
     assert all(f"`{field}`" in persona_prompt for field in ("id", "description"))
 
 
-def test_the_patch_rules_forbid_the_two_protected_addresses() -> None:
+def test_the_patch_rules_forbid_the_protected_addresses() -> None:
     system = prompts.system_prompt()
 
     assert "priority" in system
-    assert "EP-UNI" in system
+    assert "metric_fqn" in system

@@ -20,7 +20,7 @@ from metis.wizard.contracts.conversation import AnyRequest, WizardRequestState
 from metis.wizard.domain.permissions import SessionStep
 from metis.wizard.domain.profile import ProductProfile
 
-SESSION_FORMAT_VERSION = 2
+SESSION_FORMAT_VERSION = 3
 
 
 class SessionVersionError(Exception):

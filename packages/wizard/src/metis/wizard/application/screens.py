@@ -124,7 +124,7 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     `None` selected (the CLI's `_checkbox` returns "", the web door renders the plain row).
     """
     cards = []
-    for epic in [e for e in profile.epics if not e.is_universal]:
+    for epic in profile.epics:
         for behaviour in epic.behaviours:
             cards.append(
                 BehaviourCard(
@@ -155,7 +155,7 @@ def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
     """
     cards: list[BehaviourCard] = []
 
-    for epic in [e for e in profile.epics if not e.is_universal]:
+    for epic in profile.epics:
         for behaviour in epic.behaviours:
             cards.append(
                 BehaviourCard(
@@ -225,7 +225,7 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     """
     cards: list[BehaviourCard] = []
 
-    for epic in [e for e in profile.epics if not e.is_universal]:
+    for epic in profile.epics:
         for behaviour in epic.behaviours:
             if behaviour.priority:
                 cards.append(
@@ -352,11 +352,11 @@ def _persona_group(profile: ProductProfile, task_id: str) -> CardOptionGroup:
 
 
 def _covers_a_selection(profile: ProductProfile, task: Task) -> bool:
-    """Does the task reference at least one currently selected, non-universal behaviour?
+    """Does the task reference at least one currently selected behaviour?
 
-    `ticked()` is exactly that set — priority behaviours outside the universal epic. A task whose
-    refs are all empty, unknown, unticked or universal covers nothing the experiment will measure,
-    so it fails this test and the gate below stops the step.
+    `ticked()` is exactly that set. A task whose refs are all empty, unknown or unticked
+    covers nothing the experiment will measure — nothing rides along to make up the
+    difference — so it fails this test and the gate below stops the step.
     """
     return bool(set(task.behaviour_refs) & {b.id for b in profile.ticked()})
 

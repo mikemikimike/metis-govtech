@@ -24,13 +24,8 @@ def _criterion_lines(criterion: Criterion) -> list[str]:
     ]
 
 
-def _behaviour_lines(behaviour: Behaviour, *, universal: bool) -> list[str]:
-    if universal:
-        mark = "always on"
-    elif behaviour.priority:
-        mark = "measured"
-    else:
-        mark = "considered, not measured"
+def _behaviour_lines(behaviour: Behaviour) -> list[str]:
+    mark = "measured" if behaviour.priority else "considered, not measured"
 
     lines = [f"- **{behaviour.id}** — {behaviour.statement}  _({mark})_"]
     for criterion in behaviour.criteria:
@@ -62,10 +57,9 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
 
     out += ["## What should be true", ""]
     for epic in profile.epics:
-        suffix = " _(always checked)_" if epic.is_universal else ""
-        out += [f"### {epic.id} · {epic.name}{suffix}", ""]
+        out += [f"### {epic.id} · {epic.name}", ""]
         for behaviour in epic.behaviours:
-            out += _behaviour_lines(behaviour, universal=epic.is_universal)
+            out += _behaviour_lines(behaviour)
         out += [""]
 
     out += ["## Who we simulate", ""]
@@ -104,11 +98,7 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
     ]
 
     not_measured = [
-        b
-        for epic in profile.epics
-        if not epic.is_universal
-        for b in epic.behaviours
-        if not b.priority
+        b for epic in profile.epics for b in epic.behaviours if not b.priority
     ]
     if not_measured:
         out += [

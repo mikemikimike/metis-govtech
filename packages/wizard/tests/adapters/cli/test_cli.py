@@ -87,8 +87,8 @@ def test_the_matcher_uses_the_same_gateway() -> None:
 def test_an_unmatched_profile_loses_the_users_metrics() -> None:
     """The failure the wiring prevents, stated as a fact rather than a warning.
 
-    This is what a real run produced before `_driver` existed: a file that validates, loads,
-    and carries only the universal metrics.
+    This is what a real run produced before `_driver` existed: a file that validates and
+    loads, and measures nothing at all.
     """
     profile = research_assistant()
     for behaviour in profile.ticked():
@@ -97,12 +97,11 @@ def test_an_unmatched_profile_loses_the_users_metrics() -> None:
 
     document = compile_experiment(profile, "unmatched")
 
-    universal_only = {"metis.library.metrics.universal.TurnBudgetMetric"}
-    assert all(set(t["metric_refs"]) == universal_only for t in document["tasks"])
+    assert all(t["metric_refs"] == [] for t in document["tasks"])
 
 
 def test_a_matched_profile_keeps_them() -> None:
-    """The same profile, matched — every task carries more than the universals."""
+    """The same profile, matched — every task carries the metrics its behaviours earned."""
     from metis.wizard.application.matching import match_profile
 
     profile = research_assistant()
@@ -113,10 +112,11 @@ def test_a_matched_profile_keeps_them() -> None:
     match_profile(profile, cli._driver(StubInterviewer()).matcher)  # type: ignore[arg-type]
     document = compile_experiment(profile, "matched")
 
-    for task in document["tasks"]:
-        assert len(task["metric_refs"]) > 1
     # the stub embeds everything identically, so matches land on the fallback or a real
-    # metric — either way the criterion is measured by something
+    # metric — either way every task ends up measured by something, which is the whole
+    # difference from the unmatched case above.
+    for task in document["tasks"]:
+        assert task["metric_refs"]
     assert all(ref for task in document["tasks"] for ref in task["metric_refs"])
 
 

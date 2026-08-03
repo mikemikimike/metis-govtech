@@ -34,9 +34,7 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
         path = patch.path
 
         if path in PRODUCT_WIDE:
-            has_derived_work = any(
-                not epic.is_universal for epic in profile.epics
-            ) or bool(profile.tasks)
+            has_derived_work = bool(profile.epics) or bool(profile.tasks)
             if not has_derived_work:
                 continue
             key = ("tree", "product")
@@ -81,8 +79,7 @@ def clear_for_regeneration(profile: ProductProfile, impact: Impact) -> None:
             profile.tasks = [t for t in profile.tasks if t.id != impact.subject]
 
     elif impact.kind == "tree":
-        # The universal epic survives — it was never derived from the product description.
-        profile.epics = [e for e in profile.epics if e.is_universal]
+        profile.epics = []
         profile.tasks = []
 
 

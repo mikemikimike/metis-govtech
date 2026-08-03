@@ -175,7 +175,7 @@ def test_a_degraded_run_still_produces_a_loadable_experiment(tmp_path) -> None:
 
 
 def test_only_criteria_without_a_metric_are_matched() -> None:
-    """Re-matching everything would be wasted calls, and the universal epic is hand-bound."""
+    """Re-matching a criterion that already has a metric would be a wasted call."""
     profile = research_assistant()
     embedder = FakeEmbedder(["source"])
     matcher = EmbeddingMatcher(embedder=embedder, specs=[CITATION], threshold=0.5)
@@ -183,23 +183,6 @@ def test_only_criteria_without_a_metric_are_matched() -> None:
     matched = match_profile(profile, matcher)
 
     assert matched == 0  # the fixture already has metrics on everything
-
-
-def test_the_universal_epic_is_never_matched() -> None:
-    """Its bindings are hand-chosen — that is the point of them being universal."""
-    profile = research_assistant()
-    for behaviour in profile.universal_behaviours():
-        for criterion in behaviour.criteria:
-            criterion.metric_fqn = None
-    matcher = EmbeddingMatcher(
-        embedder=FakeEmbedder(["source"]), specs=[CITATION], threshold=0.5
-    )
-
-    match_profile(profile, matcher)
-
-    for behaviour in profile.universal_behaviours():
-        for criterion in behaviour.criteria:
-            assert criterion.metric_fqn is None  # left alone, not filled in
 
 
 def test_unticked_behaviours_are_not_matched() -> None:

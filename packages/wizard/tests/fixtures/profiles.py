@@ -9,7 +9,6 @@ from metis.wizard.contracts import (
     Behaviour,
     Criterion,
     Epic,
-    EpicScope,
     InteractionType,
     Persona,
     Product,
@@ -17,7 +16,7 @@ from metis.wizard.contracts import (
     Task,
 )
 
-UNIVERSAL_TURN_BUDGET = "metis.library.metrics.universal.TurnBudgetMetric"
+TURN_BUDGET = "metis.library.metrics.universal.TurnBudgetMetric"
 CITATION_METRIC = "metis.library.metrics.orchestration.SynthesisFaithfulnessMetric"
 BOUNDED_TROUBLESHOOTING = "metis.library.metrics.universal.BoundedTroubleshootingMetric"
 
@@ -27,7 +26,7 @@ def research_assistant() -> ProductProfile:
 
     Deliberately contains: a ticked behaviour with several criteria, an unticked behaviour
     that still has criteria (dormant, not deleted), a criterion the user typed by hand, one
-    task covering two behaviours, a task with two personas, and the universal epic.
+    task covering two behaviours, and a task with two personas.
     """
     return ProductProfile(
         product=Product(
@@ -81,7 +80,7 @@ def research_assistant() -> ProductProfile:
                                 given="a question with no length instruction",
                                 when="the answer is returned",
                                 then="it is under 500 words",
-                                metric_fqn=UNIVERSAL_TURN_BUDGET,
+                                metric_fqn=TURN_BUDGET,
                             ),
                         ],
                     ),
@@ -105,27 +104,6 @@ def research_assistant() -> ProductProfile:
                                 then="it stops and reports what it attempted",
                                 metric_fqn=BOUNDED_TROUBLESHOOTING,
                                 interaction_type=InteractionType.FORM,
-                            ),
-                        ],
-                    ),
-                ],
-            ),
-            Epic(
-                id="EP-UNI",
-                name="Always checked",
-                scope=EpicScope.UNIVERSAL,
-                behaviours=[
-                    Behaviour(
-                        id="EB-U1",
-                        statement="Stays within a sensible number of turns",
-                        priority=True,
-                        criteria=[
-                            Criterion(
-                                id="AC-U1-1",
-                                given="any session",
-                                when="the task completes",
-                                then="it took no more turns than the budget allows",
-                                metric_fqn=UNIVERSAL_TURN_BUDGET,
                             ),
                         ],
                     ),

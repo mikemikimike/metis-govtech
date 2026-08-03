@@ -63,11 +63,11 @@ def _schema() -> dict[str, Any]:
     return json.loads(_schema_path().read_text())
 
 
-def _metric_refs(profile: ProductProfile, behaviours: list[Behaviour]) -> list[str]:
+def _metric_refs(behaviours: list[Behaviour]) -> list[str]:
     """Every metric that will judge this task.
 
-    The union of the criteria metrics of the behaviours it covers, plus the universal epic's
-    — which ride along on every task rather than becoming tasks of their own.
+    The criteria metrics of the behaviours it covers, and nothing else — a task is measured
+    on what it was written to exercise.
 
     De-duplicated in document order rather than sorted: two behaviours often share a metric,
     and document order is the one a reader of `review.md` already has in their head. Order
@@ -75,7 +75,7 @@ def _metric_refs(profile: ProductProfile, behaviours: list[Behaviour]) -> list[s
     """
     fqns = [
         criterion.metric_fqn
-        for behaviour in [*behaviours, *profile.universal_behaviours()]
+        for behaviour in behaviours
         for criterion in behaviour.criteria
         if criterion.metric_fqn
     ]
@@ -98,7 +98,7 @@ def _compile_task(profile: ProductProfile, task: Task) -> dict[str, Any]:
         "description": task.description,
         "num_trials": task.num_trials,
         "persona_refs": persona_refs,
-        "metric_refs": _metric_refs(profile, covered),
+        "metric_refs": _metric_refs(covered),
     }
     if task.fixtures:
         compiled["fixtures"] = list(task.fixtures)

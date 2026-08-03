@@ -129,7 +129,7 @@ class StepDriver:
             step = SessionStep.BEHAVIOURS
 
         if step is SessionStep.BEHAVIOURS:
-            if not [e for e in profile.epics if not e.is_universal]:
+            if not profile.epics:
                 self._try(
                     lambda: self.interviewer.draft_behaviours(profile, state.history),
                     state,
@@ -422,7 +422,7 @@ class StepDriver:
         Three fields rather than one ambiguous description: manual entry is one structured
         criterion, and `_handle_form` uses each clause verbatim. Refused with no mutation when
         the behaviour cannot be resolved, so a stale or malformed target cannot land a criterion
-        on the wrong behaviour or a universal one.
+        on the wrong behaviour.
         """
         if self._targeted_behaviour(state, target) is None:
             return self._refuse_unresolved_target()
@@ -441,19 +441,12 @@ class StepDriver:
     def _targeted_behaviour(self, state: SessionState, target: str | None):
         """The behaviour a criteria action names, or None if it names nothing writable.
 
-        A missing id, an id no behaviour has, or a universal behaviour (read-only by
-        construction) all resolve to None — the three ways a criteria action could otherwise
-        widen past the one card it was raised on.
+        A missing id, or an id no behaviour has, resolves to None — the two ways a criteria
+        action could otherwise widen past the one card it was raised on.
         """
         if not target:
             return None
-        behaviour = state.profile.behaviour(target)
-        if behaviour is None:
-            return None
-        epic = state.profile.epic_of(target)
-        if epic is not None and epic.is_universal:
-            return None
-        return behaviour
+        return state.profile.behaviour(target)
 
     def _refuse_unresolved_target(self) -> None:
         """Change nothing and say so, when a criteria action names no writable behaviour."""

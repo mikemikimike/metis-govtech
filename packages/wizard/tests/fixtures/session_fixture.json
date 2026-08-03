@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "id": "compat-v1",
   "profile": {
     "product": {
@@ -12,7 +12,6 @@
       {
         "id": "EP-1",
         "name": "Answer quality",
-        "scope": "product",
         "behaviours": [
           {
             "interaction_type": "chat",
@@ -62,7 +61,6 @@
       {
         "id": "EP-2",
         "name": "Recovery",
-        "scope": "product",
         "behaviours": [
           {
             "interaction_type": "form",
@@ -77,30 +75,6 @@
                 "when": "the agent has retried three times",
                 "then": "it stops and reports what it attempted",
                 "metric_fqn": "metis.library.metrics.universal.BoundedTroubleshootingMetric",
-                "metric_args": {}
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "id": "EP-UNI",
-        "name": "Always checked",
-        "scope": "universal",
-        "behaviours": [
-          {
-            "interaction_type": "chat",
-            "id": "EB-U1",
-            "statement": "Stays within a sensible number of turns",
-            "priority": true,
-            "criteria": [
-              {
-                "interaction_type": "chat",
-                "id": "AC-U1-1",
-                "given": "any session",
-                "when": "the task completes",
-                "then": "it took no more turns than the budget allows",
-                "metric_fqn": "metis.library.metrics.universal.TurnBudgetMetric",
                 "metric_args": {}
               }
             ]

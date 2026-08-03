@@ -1034,7 +1034,6 @@ dependencies = [
     { name = "deepeval" },
     { name = "metis-core" },
     { name = "openai" },
-    { name = "pyyaml" },
     { name = "typing-extensions" },
 ]
 
@@ -1043,7 +1042,6 @@ requires-dist = [
     { name = "deepeval", specifier = ">=2.0.0" },
     { name = "metis-core", editable = "packages/core" },
     { name = "openai", specifier = ">=1.0.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
     { name = "typing-extensions" },
 ]
 

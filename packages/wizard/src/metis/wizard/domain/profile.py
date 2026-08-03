@@ -13,19 +13,11 @@ having happened. Where the interview got to is `SessionState.step`, deliberately
 from __future__ import annotations
 
 import json
-from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 from metis.wizard.domain.types import InteractionType
-
-UNIVERSAL_EPIC_ID = "EP-UNI"
-
-
-class EpicScope(StrEnum):
-    PRODUCT = "product"  # discovered from the interview
-    UNIVERSAL = "universal"  # arrives from the metric library, read-only
 
 
 class Authored(BaseModel):
@@ -81,12 +73,7 @@ class Behaviour(Authored):
 class Epic(BaseModel):
     id: str
     name: str
-    scope: EpicScope = EpicScope.PRODUCT
     behaviours: list[Behaviour] = Field(default_factory=list)
-
-    @property
-    def is_universal(self) -> bool:
-        return self.scope is EpicScope.UNIVERSAL
 
 
 class Persona(Authored):
@@ -106,44 +93,22 @@ class Task(Authored):
 
 
 class ProductProfile(BaseModel):
-    """The whole document. Includes the universal epic in `epics`, not as a second list.
-
-    Keeping universals in `epics` means every renderer, review.md and the compiler walk one
-    list instead of special-casing a second, and `Behaviour` needs no scope of its own — it
-    is derivable from the parent epic.
-    """
+    """The whole document. Every epic in it was discovered from the interview."""
 
     product: Product
-    epics: list[Epic] = Field(default_factory=list)  # includes EP-UNI
+    epics: list[Epic] = Field(default_factory=list)
     personas: list[Persona] = Field(default_factory=list)
     tasks: list[Task] = Field(default_factory=list)
 
     # ── walking the tree ───────────────────────────────────────────────────
 
     def behaviours(self) -> list[Behaviour]:
-        """Every behaviour, universal ones included, in document order."""
+        """Every behaviour, in document order."""
         return [b for epic in self.epics for b in epic.behaviours]
 
     def ticked(self) -> list[Behaviour]:
-        """Product behaviours the user chose to measure.
-
-        Universal behaviours are excluded: they are always on, ride along on every task, and
-        are never the user's decision — so they are not what "ticked" means anywhere else.
-        """
-        return [
-            b
-            for epic in self.epics
-            if not epic.is_universal
-            for b in epic.behaviours
-            if b.priority
-        ]
-
-    def universal_epic(self) -> Epic | None:
-        return next((e for e in self.epics if e.is_universal), None)
-
-    def universal_behaviours(self) -> list[Behaviour]:
-        epic = self.universal_epic()
-        return list(epic.behaviours) if epic else []
+        """The behaviours the user chose to measure."""
+        return [b for epic in self.epics for b in epic.behaviours if b.priority]
 
     def behaviour(self, behaviour_id: str) -> Behaviour | None:
         return next((b for b in self.behaviours() if b.id == behaviour_id), None)
@@ -153,7 +118,7 @@ class ProductProfile(BaseModel):
         return next((e for e in self.epics if e.id == epic_id), None)
 
     def epic_of(self, behaviour_id: str) -> Epic | None:
-        """Which epic owns a behaviour — how scope is derived without a field for it."""
+        """Which epic owns a behaviour — symmetric with `epic` and `behaviour`."""
         return next(
             (e for e in self.epics if any(b.id == behaviour_id for b in e.behaviours)),
             None,

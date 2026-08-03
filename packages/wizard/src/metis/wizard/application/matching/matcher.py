@@ -84,9 +84,9 @@ class EmbeddingMatcher:
 def match_profile(profile: ProductProfile, matcher: EmbeddingMatcher) -> int:
     """Resolve every criterion that needs it. Returns how many were matched.
 
-    Skips three things deliberately: criteria that already have a metric (re-matching would
-    be a wasted call), the universal epic (hand-bound by construction), and unticked
-    behaviours (nothing is generated for behaviours nobody picked, matching included).
+    Skips two things deliberately: criteria that already have a metric (re-matching would be
+    a wasted call), and unticked behaviours (nothing is generated for behaviours nobody
+    picked, matching included).
     """
     matched = 0
     for behaviour in profile.ticked():

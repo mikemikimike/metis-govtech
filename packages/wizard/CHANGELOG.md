@@ -13,8 +13,7 @@ Initial release: an interview that turns a prose product description into a runn
 
 - **The interview.** Six steps that build a `ProductProfile` — the document the interview
   writes — covering the product, its architecture, personas, epics and behaviours, tasks, and
-  a final review. The always-on universal epic is held in the same `epics` list rather than a
-  second one, so nothing downstream has to know it is special.
+  a final review.
 - **A headless door contract.** `render(request) -> response`, with the package composing
   every string a door displays. Two doors ship against it: a Typer/Rich CLI (`metis wizard
   init`, `metis wizard resume`, `--restart`) and a React web door (`metis wizard serve`) whose
@@ -22,8 +21,8 @@ Initial release: an interview that turns a prose product description into a runn
   (`title`, `step`, `steps`) rides on the request so either door can show where the interview
   is without learning what a behaviour or a persona is.
 - **Patch-based editing.** What the model may write is checked against the step that *owns*
-  the address, so an edit works from wherever the user is standing. Two addresses are
-  unwritable by anyone — a behaviour's `priority`, and anything under `EP-UNI`. Edits that
+  the address, so an edit works from wherever the user is standing. One address is unwritable
+  by the model at any step — a behaviour's `priority`, the user's own decision. Edits that
   invalidate derived work ask in the same turn and leave no staleness flag.
 - **Metric matching by embedding similarity.** Each acceptance criterion is matched against
   the metric catalogue by cosine similarity, with `CriterionGEvalMetric` as the fallback when
@@ -43,8 +42,6 @@ Initial release: an interview that turns a prose product description into a runn
 
 ### Also lands in other packages
 
-- `metis-library` — `universal_behaviours.yaml` and its loader: the always-on epic,
-  hand-authored, with every criterion already bound to a metric.
 - `metis-library` — `metrics/default.py`, the parameterised judge the matcher falls back to.
   Without it a degraded experiment would reference an FQN that does not import.
 
@@ -56,6 +53,6 @@ Initial release: an interview that turns a prose product description into a runn
   engine. It closes when the schema moves to a package both sides may depend on.
 
   **Consequence while it stands:** metric FQNs are resolved by `importlib` at run time, so any
-  `experiment.yaml` compiled before the metrics move stops loading after it, as does the
-  universal behaviours YAML. Not silent — the engine raises on an unimportable FQN — but every
-  file produced in the interim needs a find-and-replace.
+  `experiment.yaml` compiled before the metrics move stops loading after it. Not silent — the
+  engine raises on an unimportable FQN — but every file produced in the interim needs a
+  find-and-replace.
