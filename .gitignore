@@ -31,6 +31,11 @@ htmlcov/
 
 # Generated session artifacts
 docs/superpowers/
+.claude/.cc-writes/
+.claude/settings.local.json
+
+# OpenSpec (personal tooling — not team-adopted yet; may add back later)
+openspec/
 
 # Simulation output (generated at runtime)
 experiments/
