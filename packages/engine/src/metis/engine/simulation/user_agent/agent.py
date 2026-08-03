@@ -1,11 +1,12 @@
 """Core user agent logic for simulating persona-driven interactions."""
 
-import logging
 from enum import StrEnum
 
 from openai import APIError, OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
+
+from metis.core.logging import get_logger
 
 from ..types import (
     ExperimentTask,
@@ -26,7 +27,7 @@ from .prompts import (
     SYSTEM_PROMPT_TEMPLATE,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 MAX_HISTORY_TURNS = 20
 

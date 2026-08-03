@@ -5,10 +5,12 @@ coupled to Orca (the default target).
 """
 
 import json
-import logging
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+
+from metis.core.console import console
+from metis.core.logging import get_logger
 
 from ..types import Experiment, ExperimentTask, Persona, SessionConfig, SessionRecord
 from ._artifact_store import _save_artifacts
@@ -18,7 +20,7 @@ from ._environment import run_simulation
 
 __all__ = ["HarnessConfig", "run_experiment", "run_simulation"]
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def run_experiment(
@@ -144,9 +146,8 @@ def run_experiment(
                 )
                 session_dir.mkdir(parents=True, exist_ok=True)
 
-                print(
-                    f"  [{run_index}/{total_runs}] {task.id} × {persona.id} ...",
-                    flush=True,
+                console.print(
+                    f"  [{run_index}/{total_runs}] {task.id} × {persona.id} ..."
                 )
 
                 record = run_simulation(
@@ -171,11 +172,10 @@ def run_experiment(
                     timing_parts.append(f"t{t.turn_number}={t.duration_ms / 1000:.0f}s")
                 timing_str = f" [{', '.join(timing_parts)}]" if timing_parts else ""
 
-                print(
+                console.print(
                     f"  [{run_index}/{total_runs}] {task.id} × {persona.id} — "
                     f"{record.outcome.stop_reason}, {record.outcome.total_turns} turns, "
-                    f"{record.outcome.duration_seconds:.0f}s{timing_str}",
-                    flush=True,
+                    f"{record.outcome.duration_seconds:.0f}s{timing_str}"
                 )
                 logger.info(
                     "[experiment] Result: stop_reason=%s, turns=%d, duration=%.1fs",
@@ -197,19 +197,18 @@ def run_experiment(
             logger.info("[experiment] Closing browser...")
             browser.close()
 
-    # Print summary
-    print("\n\n========== SIMULATION SUMMARY ==========\n")
+    console.print("\n\n========== SIMULATION SUMMARY ==========\n")
     for r in results:
         status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
-        print(f"  [{status}] {r.config.persona} x {r.config.task}")
-        print(
+        console.print(f"  [{status}] {r.config.persona} x {r.config.task}")
+        console.print(
             f"         Turns: {r.outcome.total_turns}, "
             f"Duration: {r.outcome.duration_seconds}s, "
             f"Reason: {r.outcome.stop_reason}"
         )
-    print()
+    console.print()
     achieved = sum(1 for r in results if r.outcome.stop_reason == "goal_achieved")
-    print(f"Goals achieved: {achieved}/{len(results)}")
+    console.print(f"Goals achieved: {achieved}/{len(results)}")
 
 
 def _save_session_record(record: SessionRecord, session_dir: Path) -> None:

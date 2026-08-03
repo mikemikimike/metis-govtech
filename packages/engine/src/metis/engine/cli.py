@@ -8,6 +8,7 @@ from pathlib import Path
 import typer
 from dotenv import load_dotenv
 
+from metis.core.console import console
 from metis.engine import __version__
 
 app = typer.Typer(help="Run METIS evaluations against traces.")
@@ -51,14 +52,16 @@ def _validate_inputs(input_dir: Path) -> None:
     from metis.engine.simulation.types import Experiment
 
     if not input_dir.is_dir():
-        print(f"Error: input directory '{input_dir}' does not exist", file=sys.stderr)
+        console.print(
+            f"Error: input directory '{input_dir}' does not exist", style="bold red"
+        )
         sys.exit(1)
 
     experiment_path = input_dir / "experiment.yaml"
     if not experiment_path.exists():
-        print(
+        console.print(
             f"Error: missing required file 'experiment.yaml' in {input_dir}",
-            file=sys.stderr,
+            style="bold red",
         )
         sys.exit(1)
 
@@ -67,21 +70,21 @@ def _validate_inputs(input_dir: Path) -> None:
     except ValidationError as e:
         first = e.errors()[0]
         loc = " → ".join(str(part) for part in first["loc"]) if first["loc"] else "root"
-        print(
+        console.print(
             f"Error: experiment.yaml validation failed: {loc} — {first['msg']}",
-            file=sys.stderr,
+            style="bold red",
         )
         sys.exit(1)
     except Exception as e:
-        print(f"Error: failed to parse experiment.yaml: {e}", file=sys.stderr)
+        console.print(f"Error: failed to parse experiment.yaml: {e}", style="bold red")
         sys.exit(1)
 
     seen_personas: set[str] = set()
     for persona in experiment.personas:
         if persona.id in seen_personas:
-            print(
+            console.print(
                 f"Error: duplicate persona id '{persona.id}' in experiment.yaml",
-                file=sys.stderr,
+                style="bold red",
             )
             sys.exit(1)
         seen_personas.add(persona.id)
@@ -89,9 +92,9 @@ def _validate_inputs(input_dir: Path) -> None:
     seen_tasks: set[str] = set()
     for task in experiment.tasks:
         if task.id in seen_tasks:
-            print(
+            console.print(
                 f"Error: duplicate task id '{task.id}' in experiment.yaml",
-                file=sys.stderr,
+                style="bold red",
             )
             sys.exit(1)
         seen_tasks.add(task.id)
@@ -101,9 +104,9 @@ def _validate_inputs(input_dir: Path) -> None:
         for ref in task.persona_refs:
             if ref not in defined_personas:
                 available = ", ".join(sorted(defined_personas))
-                print(
+                console.print(
                     f"Error: task '{task.id}' references unknown persona '{ref}' (available: {available})",
-                    file=sys.stderr,
+                    style="bold red",
                 )
                 sys.exit(1)
 
@@ -111,9 +114,9 @@ def _validate_inputs(input_dir: Path) -> None:
     for task in experiment.tasks:
         for fixture in task.fixtures:
             if not (fixtures_dir / fixture).exists():
-                print(
+                console.print(
                     f"Error: task '{task.id}' references fixture '{fixture}' which does not exist in {fixtures_dir}",
-                    file=sys.stderr,
+                    style="bold red",
                 )
                 sys.exit(1)
 
@@ -122,26 +125,26 @@ def _validate_inputs(input_dir: Path) -> None:
             fqn = metric_ref.fqn
             parts = fqn.rsplit(".", 1)
             if len(parts) != 2:
-                print(
+                console.print(
                     f"Error: metric '{fqn}' is not a valid fully-qualified name",
-                    file=sys.stderr,
+                    style="bold red",
                 )
                 sys.exit(1)
             module_path, class_name = parts
             try:
                 module = importlib.import_module(module_path)
             except Exception as e:
-                print(
+                console.print(
                     f"Error: metric '{fqn}' could not be imported: {type(e).__name__}: {e}",
-                    file=sys.stderr,
+                    style="bold red",
                 )
                 sys.exit(1)
             cls = getattr(module, class_name, None)
             if cls is None:
-                print(
+                console.print(
                     f"Error: metric '{fqn}' could not be imported: "
                     f"module '{module_path}' has no attribute '{class_name}'",
-                    file=sys.stderr,
+                    style="bold red",
                 )
                 sys.exit(1)
             if not (
@@ -151,11 +154,11 @@ def _validate_inputs(input_dir: Path) -> None:
                     or issubclass(cls, BaseConversationalMetric)
                 )
             ):
-                print(
+                console.print(
                     f"Error: metric '{fqn}' is not a subclass of "
                     f"deepeval.metrics.BaseMetric or "
                     f"BaseConversationalMetric",
-                    file=sys.stderr,
+                    style="bold red",
                 )
                 sys.exit(1)
 
@@ -173,9 +176,9 @@ def simulate(
     ),
 ) -> None:
     """Run end-to-end simulation, evaluation, and report."""
-    import logging
     import os
 
+    from metis.core.logging import configure_logging
     from metis.engine.evaluation import evaluate
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
     from metis.engine.reporting import generate_report
@@ -185,17 +188,13 @@ def simulate(
     load_dotenv()
 
     if verbose >= 2:
-        log_level = logging.DEBUG
+        log_level = "DEBUG"
     elif verbose >= 1:
-        log_level = logging.INFO
+        log_level = "INFO"
     else:
-        log_level = logging.WARNING
+        log_level = "WARNING"
 
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    configure_logging(level=log_level)
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
         os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
@@ -220,12 +219,12 @@ def simulate(
     config = HarnessConfig.load()
     headed = os.environ.get("HEADED", "").lower() == "true"
 
-    print(f"\n{'=' * 60}")
-    print("  SIMULATION")
-    print(f"{'=' * 60}")
-    print(f"  Experiment: {experiment_dir}")
-    print(f"  Input: {resolved_input_dir}")
-    print(f"  Mode: {'headed' if headed else 'headless'}\n")
+    console.print(f"\n{'=' * 60}")
+    console.print("  SIMULATION")
+    console.print(f"{'=' * 60}")
+    console.print(f"  Experiment: {experiment_dir}")
+    console.print(f"  Input: {resolved_input_dir}")
+    console.print(f"  Mode: {'headed' if headed else 'headless'}\n")
 
     run_experiment(
         config=config,
@@ -242,10 +241,10 @@ def simulate(
     records: list[SessionRecord] = [SessionRecord.load_file(f) for f in files]
 
     if not records:
-        print("No session records found.")
+        console.print("No session records found.")
         sys.exit(1)
 
-    print(f"  Loaded {len(records)} session record(s)")
+    console.print(f"  Loaded {len(records)} session record(s)")
 
     langfuse = get_langfuse_client()
     eval_results = []
@@ -257,17 +256,22 @@ def simulate(
         task = record.config.task
         metric_refs = record.config.metric_refs
 
-        print(f"\n\n{'#' * 60}")
-        print(f"  SESSION {i + 1}/{len(records)}: {persona} x {task}")
-        print(f"{'#' * 60}")
+        console.print(f"\n\n{'#' * 60}")
+        console.print(f"  SESSION {i + 1}/{len(records)}: {persona} x {task}")
+        console.print(f"{'#' * 60}")
 
         if not session_id:
-            print("  WARNING: No target_session_id — cannot evaluate")
+            console.print(
+                "  WARNING: No target_session_id — cannot evaluate", style="yellow"
+            )
             failed += 1
             continue
 
         if not metric_refs:
-            print("  WARNING: No metric_refs in session config — skipping evaluation")
+            console.print(
+                "  WARNING: No metric_refs in session config — skipping evaluation",
+                style="yellow",
+            )
             failed += 1
             continue
 
@@ -285,7 +289,7 @@ def simulate(
             )
 
             if not fetch_result.test_cases:
-                print("  WARNING: No evaluable test cases")
+                console.print("  WARNING: No evaluable test cases", style="yellow")
                 failed += 1
                 continue
 
@@ -293,7 +297,7 @@ def simulate(
             eval_results.append(eval_result)
 
         except Exception as e:
-            print(f"  WARNING: Evaluation failed: {e}")
+            console.print(f"  WARNING: Evaluation failed: {e}", style="yellow")
             failed += 1
 
     if eval_results:
@@ -309,7 +313,7 @@ def simulate(
             experiment_description=experiment.description,
         )
 
-    print(f"\n\n{'=' * 60}")
-    print(f"  PIPELINE COMPLETE — {len(records)} session(s), {failed} failed")
-    print(f"  Experiment: {experiment_dir}")
-    print(f"{'=' * 60}")
+    console.print(f"\n\n{'=' * 60}")
+    console.print(f"  PIPELINE COMPLETE — {len(records)} session(s), {failed} failed")
+    console.print(f"  Experiment: {experiment_dir}")
+    console.print(f"{'=' * 60}")
