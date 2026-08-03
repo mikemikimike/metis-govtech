@@ -1,6 +1,6 @@
 """Pydantic models for simulation types.
 
-Covers both inputs (personas, experiments) and outputs (session records).
+Covers both inputs (personas, experiments) and outputs (run records).
 These are the source of truth for the JSON Schemas in schemas/. After any
 change here, run `make generate-schema` and commit the updated schema files.
 """
@@ -14,7 +14,7 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
 _EXPERIMENT_VERSION = 1
-_SESSION_RECORD_VERSION = 1
+_RUN_RECORD_VERSION = 1
 
 
 # ---------------------------------------------------------------------------
@@ -104,8 +104,8 @@ class UIState(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class SessionMeta(BaseModel):
-    """Metadata about the current session state."""
+class RunMeta(BaseModel):
+    """Metadata about the current run state."""
 
     turn_number: int
     elapsed_seconds: int
@@ -115,7 +115,7 @@ class UserAgentInput(BaseModel):
     """Input to :pymeth:`UserAgent.generate_response`."""
 
     ui_state: UIState = Field(default_factory=UIState)
-    session_meta: SessionMeta | None = None
+    run_meta: RunMeta | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -252,12 +252,12 @@ class Experiment(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Session Record (simulation output)
+# Run Record (simulation output)
 # ---------------------------------------------------------------------------
 
 
-class SessionConfig(BaseModel, extra="ignore"):
-    """Environment spec for a simulation session — defines which persona/scenario pair to run and the resource limits (turn cap, timeout) that bound execution."""
+class RunConfig(BaseModel, extra="ignore"):
+    """Environment spec for a simulation run — defines which persona/task pair to run and the resource limits (turn cap, timeout) that bound execution."""
 
     persona: str
     task: str
@@ -267,7 +267,7 @@ class SessionConfig(BaseModel, extra="ignore"):
     response_wait_ms: int = 300000
 
 
-class SessionOutcome(BaseModel, extra="ignore"):
+class RunOutcome(BaseModel, extra="ignore"):
     stop_reason: str
     total_turns: int
     duration_seconds: float
@@ -288,12 +288,12 @@ class ConversationTurn(BaseModel, extra="ignore"):
     user_ui_actions: list[dict] = []
 
 
-class SessionRecord(BaseModel, extra="ignore"):
-    """A complete simulation session record loaded from a JSON result file."""
+class RunRecord(BaseModel, extra="ignore"):
+    """A complete simulation run record loaded from a JSON result file."""
 
-    schema_version: Literal[1] = _SESSION_RECORD_VERSION
-    config: SessionConfig
-    outcome: SessionOutcome
+    schema_version: Literal[1] = _RUN_RECORD_VERSION
+    config: RunConfig
+    outcome: RunOutcome
     conversation: list[ConversationTurn] = []
     artifacts_collected: list[CollectedArtifact] = []
     target_session_id: str | None = None
@@ -304,14 +304,14 @@ class SessionRecord(BaseModel, extra="ignore"):
         if not isinstance(data, dict):
             return data
         v = data.get("schema_version")
-        if v is not None and v != _SESSION_RECORD_VERSION:
+        if v is not None and v != _RUN_RECORD_VERSION:
             raise ValueError(
-                f"Unsupported schema_version {v!r} (expected {_SESSION_RECORD_VERSION}). "
+                f"Unsupported schema_version {v!r} (expected {_RUN_RECORD_VERSION}). "
                 f"This record was produced by a different version of orca-agentic-evals."
             )
         return data
 
     @classmethod
-    def load_file(cls, path: Path) -> "SessionRecord":
+    def load_file(cls, path: Path) -> "RunRecord":
         with open(path) as fh:
             return cls.model_validate(json.load(fh))

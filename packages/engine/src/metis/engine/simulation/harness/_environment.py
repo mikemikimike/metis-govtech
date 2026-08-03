@@ -1,8 +1,8 @@
-"""Turn loop orchestration — drives a simulation session to completion.
+"""Turn loop orchestration — drives a simulation run to completion.
 
 Instantiates the UserAgent directly (no subprocess), sends messages through
 the Playwright page, enforces stopping conditions, and assembles the final
-SessionRecord.
+RunRecord.
 """
 
 import re
@@ -22,10 +22,10 @@ from ..types import (
     FileUploadAction,
     FormFillAction,
     Persona,
-    SessionConfig,
-    SessionMeta,
-    SessionOutcome,
-    SessionRecord,
+    RunConfig,
+    RunMeta,
+    RunOutcome,
+    RunRecord,
     UIAction,
     UserAgentInput,
 )
@@ -45,24 +45,29 @@ logger = get_logger()
 def run_simulation(
     page: Page,
     config: HarnessConfig,
-    session_config: SessionConfig,
     persona: Persona,
     task: ExperimentTask,
-    session_dir: Path,
+    run_dir: Path,
     fixtures_dir: Path,
-) -> SessionRecord:
-    """Run a full simulation session: drive the turn loop and produce a SessionRecord.
+) -> RunRecord:
+    """Run a full simulation run: drive the turn loop and produce a RunRecord.
 
     :param page: Playwright page already logged-in and on the chat screen.
     :param config: Harness config with timeouts and auth settings.
-    :param session_config: Session-level config (max_turns, timeout_minutes).
     :param persona: The persona driving the simulated user.
     :param task: The experiment task defining the goal.
-    :param session_dir: Pre-created session folder (``sessions/<task>-<persona>-<uuid>/``).
-        Artifacts are written to ``session_dir/artifacts/`` during the turn loop.
+    :param run_dir: Pre-created run folder (``runs/<task>-<persona>-<trial>/``).
+        Artifacts are written to ``run_dir/artifacts/`` during the turn loop.
     :param fixtures_dir: Directory containing fixture files for upload.
-    :returns: A complete SessionRecord with conversation, outcome, and artifacts.
+    :returns: A complete RunRecord with conversation, outcome, and artifacts.
     """
+    run_config = RunConfig(
+        persona=persona.id,
+        task=task.id,
+        metric_refs=task.metric_refs,
+        response_wait_ms=task.response_wait_ms,
+    )
+
     start_time = time.time()
     conversation: list[ConversationTurn] = []
     artifacts_collected: list[CollectedArtifact] = []
@@ -72,9 +77,9 @@ def run_simulation(
     logger.info("[sim] START: %s x %s", persona.id, task.id)
     logger.info(
         "[sim] Config: max_turns=%d, timeout=%d min, response_wait=%dms",
-        session_config.max_turns,
-        session_config.timeout_minutes,
-        session_config.response_wait_ms or config.timeouts.response_wait_ms,
+        run_config.max_turns,
+        run_config.timeout_minutes,
+        run_config.response_wait_ms or config.timeouts.response_wait_ms,
     )
     logger.info("[sim] Task goal: %s", task.description[:120])
     logger.info("=" * 60)
@@ -124,19 +129,19 @@ def run_simulation(
             "[turn %d] Starting (elapsed: %.1fs / %ds max)",
             turn_count,
             elapsed_s,
-            session_config.timeout_minutes * 60,
+            run_config.timeout_minutes * 60,
         )
 
         # --- Stopping rule 1: max turns ---
-        if turn_count > session_config.max_turns:
+        if turn_count > run_config.max_turns:
             logger.info(
                 "[turn %d] STOP: max_turns reached (%d)",
                 turn_count,
-                session_config.max_turns,
+                run_config.max_turns,
             )
             return _build_record(
                 "max_turns",
-                session_config,
+                run_config,
                 conversation,
                 artifacts_collected,
                 start_time,
@@ -144,16 +149,16 @@ def run_simulation(
             )
 
         # --- Stopping rule 2: timeout ---
-        if elapsed_s >= session_config.timeout_minutes * 60:
+        if elapsed_s >= run_config.timeout_minutes * 60:
             logger.info(
                 "[turn %d] STOP: timeout (%.1fs >= %ds)",
                 turn_count,
                 elapsed_s,
-                session_config.timeout_minutes * 60,
+                run_config.timeout_minutes * 60,
             )
             return _build_record(
                 "timeout",
-                session_config,
+                run_config,
                 conversation,
                 artifacts_collected,
                 start_time,
@@ -165,7 +170,7 @@ def run_simulation(
             logger.info("[turn %d] STOP: user_abandoned (agent gave up)", turn_count)
             return _build_record(
                 "user_abandoned",
-                session_config,
+                run_config,
                 conversation,
                 artifacts_collected,
                 start_time,
@@ -201,7 +206,7 @@ def run_simulation(
                             {"name": a.name, "type": a.type, "url": a.url}
                             for a in panel_artifacts
                         ],
-                        session_dir / "artifacts",
+                        run_dir / "artifacts",
                     )
                     for dl in downloaded:
                         artifacts_collected.append(
@@ -230,7 +235,7 @@ def run_simulation(
 
             return _build_record(
                 "goal_achieved",
-                session_config,
+                run_config,
                 conversation,
                 artifacts_collected,
                 start_time,
@@ -492,7 +497,7 @@ def run_simulation(
             logger.info("[turn %d] STOP: system_error (%s)", turn_count, exc)
             return _build_record(
                 "system_error",
-                session_config,
+                run_config,
                 conversation,
                 artifacts_collected,
                 start_time,
@@ -528,7 +533,7 @@ def run_simulation(
                 )
                 return _build_record(
                     "system_error",
-                    session_config,
+                    run_config,
                     conversation,
                     artifacts_collected,
                     start_time,
@@ -541,7 +546,7 @@ def run_simulation(
             )
             return _build_record(
                 "system_error",
-                session_config,
+                run_config,
                 conversation,
                 artifacts_collected,
                 start_time,
@@ -574,7 +579,7 @@ def run_simulation(
                     {"name": a.name, "type": a.type, "url": a.url}
                     for a in ui_state.artifacts
                 ],
-                session_dir / "artifacts",
+                run_dir / "artifacts",
             )
             downloaded_names: set[str] = set()
             for dl in downloaded_files:
@@ -604,7 +609,7 @@ def run_simulation(
 
         # Capture inline charts as artifacts
         try:
-            chart_dir = session_dir / "artifacts" / "charts"
+            chart_dir = run_dir / "artifacts" / "charts"
             charts = capture_inline_charts(page, chart_dir)
             for chart in charts:
                 artifacts_collected.append(
@@ -649,15 +654,15 @@ def run_simulation(
         )
 
         # Re-check stopping conditions before next agent call
-        if turn_count >= session_config.max_turns:
+        if turn_count >= run_config.max_turns:
             logger.info(
                 "[turn %d] STOP: max_turns reached (%d)",
                 turn_count,
-                session_config.max_turns,
+                run_config.max_turns,
             )
             return _build_record(
                 "max_turns",
-                session_config,
+                run_config,
                 conversation,
                 artifacts_collected,
                 start_time,
@@ -665,16 +670,16 @@ def run_simulation(
             )
 
         elapsed_after_turn = time.time() - start_time
-        if elapsed_after_turn >= session_config.timeout_minutes * 60:
+        if elapsed_after_turn >= run_config.timeout_minutes * 60:
             logger.info(
                 "[turn %d] STOP: timeout (%.1fs >= %ds)",
                 turn_count,
                 elapsed_after_turn,
-                session_config.timeout_minutes * 60,
+                run_config.timeout_minutes * 60,
             )
             return _build_record(
                 "timeout",
-                session_config,
+                run_config,
                 conversation,
                 artifacts_collected,
                 start_time,
@@ -718,7 +723,7 @@ def run_simulation(
 
         turn_payload = UserAgentInput(
             ui_state=ui_state,
-            session_meta=SessionMeta(
+            run_meta=RunMeta(
                 turn_number=turn_count,
                 elapsed_seconds=int(time.time() - start_time),
             ),
@@ -735,7 +740,7 @@ def run_simulation(
             )
             return _build_record(
                 "system_error",
-                session_config,
+                run_config,
                 conversation,
                 artifacts_collected,
                 start_time,
@@ -766,27 +771,27 @@ def run_simulation(
 
 def _build_record(
     stop_reason: str,
-    session_config: SessionConfig,
+    run_config: RunConfig,
     conversation: list[ConversationTurn],
     artifacts_collected: list[CollectedArtifact],
     start_time: float,
     target_session_id: str | None,
-) -> SessionRecord:
-    """Assemble the final SessionRecord from accumulated state.
+) -> RunRecord:
+    """Assemble the final RunRecord from accumulated state.
 
     :param stop_reason: Why the simulation stopped (max_turns, timeout, etc.).
-    :param session_config: The session configuration.
+    :param run_config: The run configuration.
     :param conversation: List of recorded conversation turns.
     :param artifacts_collected: List of collected artifacts.
     :param start_time: Epoch timestamp when the simulation started.
     :param target_session_id: The target system's session ID extracted from URL, if found.
-    :returns: A complete SessionRecord.
+    :returns: A complete RunRecord.
     """
     duration_seconds = time.time() - start_time
-    return SessionRecord(
-        config=session_config,
+    return RunRecord(
+        config=run_config,
         target_session_id=target_session_id,
-        outcome=SessionOutcome(
+        outcome=RunOutcome(
             stop_reason=stop_reason,
             total_turns=len(conversation),
             duration_seconds=round(duration_seconds, 1),
@@ -799,22 +804,22 @@ def _build_record(
 def _download_artifacts(
     page: Page,
     artifacts: list[dict],
-    session_dir: Path,
+    run_dir: Path,
 ) -> list[dict]:
     """Download detected artifacts to disk using Playwright's download handling.
 
     :param page: The active Playwright page.
     :param artifacts: List of dicts with keys: name, type, url (optional).
-    :param session_dir: Directory to save downloaded files.
+    :param run_dir: Directory to save downloaded files.
     :returns: List of dicts with keys: filename, local_path.
     """
-    session_dir.mkdir(parents=True, exist_ok=True)
+    run_dir.mkdir(parents=True, exist_ok=True)
     downloaded: list[dict] = []
     download_count = sum(1 for a in artifacts if a.get("type") == "download")
     logger.info(
         "[download] Attempting to download %d artifact(s) to %s",
         download_count,
-        session_dir,
+        run_dir,
     )
 
     for idx, artifact in enumerate(artifacts, 1):
@@ -851,7 +856,7 @@ def _download_artifacts(
                         link.click()
                     download = download_info.value
                     filename = Path(download.suggested_filename or name).name
-                    dest_path = session_dir / filename
+                    dest_path = run_dir / filename
                     download.save_as(str(dest_path))
                     downloaded.append(
                         {"filename": filename, "local_path": str(dest_path)}
@@ -877,7 +882,7 @@ def _download_artifacts(
                         )
                     download = download_info.value
                     filename = Path(download.suggested_filename or name).name
-                    dest_path = session_dir / filename
+                    dest_path = run_dir / filename
                     download.save_as(str(dest_path))
                     downloaded.append(
                         {"filename": filename, "local_path": str(dest_path)}
@@ -907,7 +912,7 @@ def _download_artifacts(
                         btn.click()
                     download = download_info.value
                     filename = Path(download.suggested_filename or name).name
-                    dest_path = session_dir / filename
+                    dest_path = run_dir / filename
                     download.save_as(str(dest_path))
                     downloaded.append(
                         {"filename": filename, "local_path": str(dest_path)}

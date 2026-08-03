@@ -1,1 +1,1 @@
-"""User agent module for simulating human users in evaluation scenarios."""
+"""User agent module for simulating human users in evaluation tasks."""

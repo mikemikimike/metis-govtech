@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 from metis.core.console import console
 from metis.core.logging import get_logger
 
-from ..types import Experiment, ExperimentTask, Persona, SessionConfig, SessionRecord
+from ..types import Experiment, ExperimentTask, Persona, RunRecord
 from ._artifact_store import _save_artifacts
 from ._auth import login
 from ._config import HarnessConfig
@@ -34,7 +34,7 @@ def run_experiment(
     """Run a full experiment (all task x persona pairs).
 
     Manages: browser launch -> login -> iterate pairs -> save records -> close.
-    Records are saved as sessions/<task>-<persona>-<uuid>/record.json inside output_dir.
+    Records are saved as runs/<task>-<persona>-<trial>/record.json inside output_dir.
     """
     # Expand tasks into individual runs
     runs: list[tuple[ExperimentTask, Persona, int]] = []
@@ -60,7 +60,7 @@ def run_experiment(
     logger.info("[experiment]   Personas: %s", ", ".join(personas_by_id.keys()))
     logger.info("=" * 60)
 
-    results: list[SessionRecord] = []
+    results: list[RunRecord] = []
     run_index = 0
 
     with sync_playwright() as pw:
@@ -100,15 +100,6 @@ def run_experiment(
                 )
                 logger.info("=" * 60)
 
-                session_config = SessionConfig(
-                    persona=persona.id,
-                    task=task.id,
-                    metric_refs=task.metric_refs,
-                    max_turns=20,
-                    timeout_minutes=15,
-                    response_wait_ms=task.response_wait_ms,
-                )
-
                 # Start a fresh chat (except first run — login already did it)
                 if run_index > 1:
                     logger.info("[experiment] Starting fresh chat...")
@@ -138,13 +129,13 @@ def run_experiment(
 
                 trial_index = trial + 1
                 pad = len(str(task.num_trials))
-                session_folder_name = f"{task.id}-{persona.id}-{trial_index:0{pad}}"
-                session_dir = (
-                    (output_dir / "sessions" / session_folder_name)
+                run_folder_name = f"{task.id}-{persona.id}-{trial_index:0{pad}}"
+                run_dir = (
+                    (output_dir / "runs" / run_folder_name)
                     if output_dir
-                    else Path("results") / "sessions" / session_folder_name
+                    else Path("results") / "runs" / run_folder_name
                 )
-                session_dir.mkdir(parents=True, exist_ok=True)
+                run_dir.mkdir(parents=True, exist_ok=True)
 
                 console.print(
                     f"  [{run_index}/{total_runs}] {task.id} × {persona.id} ..."
@@ -153,18 +144,15 @@ def run_experiment(
                 record = run_simulation(
                     page,
                     config,
-                    session_config,
                     persona,
                     task,
-                    session_dir,
+                    run_dir,
                     fixtures_dir,
                 )
 
-                # Save session record to disk
-                _save_session_record(record, session_dir)
-                logger.info(
-                    "[experiment] Saved record: %s", session_dir / "record.json"
-                )
+                # Save run record to disk
+                _save_run_record(record, run_dir)
+                logger.info("[experiment] Saved record: %s", run_dir / "record.json")
 
                 # Build per-turn timing breakdown
                 timing_parts: list[str] = []
@@ -185,7 +173,7 @@ def run_experiment(
                 )
 
                 if record.artifacts_collected:
-                    manifest = _save_artifacts(record, session_dir)
+                    manifest = _save_artifacts(record, run_dir)
                     logger.info(
                         "[experiment] Artifacts: %d saved (session: %s)",
                         len(manifest["artifacts"]),
@@ -211,7 +199,7 @@ def run_experiment(
     console.print(f"Goals achieved: {achieved}/{len(results)}")
 
 
-def _save_session_record(record: SessionRecord, session_dir: Path) -> None:
-    """Save a session record as record.json inside the session folder."""
-    filepath = session_dir / "record.json"
+def _save_run_record(record: RunRecord, run_dir: Path) -> None:
+    """Save a run record as record.json inside the run folder."""
+    filepath = run_dir / "record.json"
     filepath.write_text(json.dumps(record.model_dump(), indent=2))
