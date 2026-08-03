@@ -1,12 +1,12 @@
-"""The fallback judge for a criterion nothing in the catalogue measures.
+"""The fallback judge for a criterion nothing in the library measures.
 
 One parameterised class, not codegen. The wizard's matcher embeds each acceptance criterion
-against the catalogue and picks the best match above a threshold; below it, the criterion is
+against the library and picks the best match above a threshold; below it, the criterion is
 bound to this class with its own text as an argument. So a criterion nobody wrote a metric for
 still gets judged, and no file is generated that would then need keeping in sync.
 
 An experiment that leans on this heavily is telling you something worth knowing: those are
-behaviours the product owner cared about that nothing in the catalogue covers.
+behaviours the product owner cared about that nothing in the library covers.
 """
 
 from typing import cast
