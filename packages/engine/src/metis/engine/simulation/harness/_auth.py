@@ -1,12 +1,12 @@
 """Authentication and modal dismissal for the target web UI."""
 
-import logging
-
 from playwright.sync_api import Page
+
+from metis.core.logging import get_logger
 
 from ._config import HarnessConfig
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def dismiss_modals(page: Page) -> None:

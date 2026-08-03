@@ -1,13 +1,14 @@
 """UI state extraction — captures response text, artifacts, forms, errors."""
 
-import logging
 from pathlib import Path
 
 from playwright.sync_api import Page
 
+from metis.core.logging import get_logger
+
 from ._types import Artifact, UIState
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 _CAPTURE_UI_STATE_JS = """() => {
     const main = document.querySelector("main") || document.body;
