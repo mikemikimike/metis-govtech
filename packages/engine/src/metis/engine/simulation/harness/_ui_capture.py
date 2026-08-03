@@ -6,7 +6,7 @@ from playwright.sync_api import Page
 
 from metis.core.logging import get_logger
 
-from ._types import Artifact, UIState
+from ..types import Artifact, UIState
 
 logger = get_logger()
 

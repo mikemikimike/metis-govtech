@@ -10,9 +10,9 @@ from playwright.sync_api import Page
 
 from metis.core.logging import get_logger
 
+from ..types import UIState
 from ._auth import dismiss_modals
 from ._config import HarnessConfig
-from ._types import UIState
 from ._ui_capture import capture_ui_state
 
 logger = get_logger()

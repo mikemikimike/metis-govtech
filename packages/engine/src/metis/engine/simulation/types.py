@@ -47,7 +47,7 @@ class FormFillAction(BaseModel):
 UIAction = FileUploadAction | ButtonClickAction | FormFillAction
 
 
-class UserAgentResponse(BaseModel):
+class UserAgentOutput(BaseModel):
     """Output of a single user-agent turn (opening or follow-up)."""
 
     reasoning: str = Field(
@@ -111,7 +111,7 @@ class SessionMeta(BaseModel):
     elapsed_seconds: int
 
 
-class TurnPayload(BaseModel):
+class UserAgentInput(BaseModel):
     """Input to :pymeth:`UserAgent.generate_response`."""
 
     ui_state: UIState = Field(default_factory=UIState)

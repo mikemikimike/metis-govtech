@@ -26,8 +26,8 @@ from ..types import (
     SessionMeta,
     SessionOutcome,
     SessionRecord,
-    TurnPayload,
     UIAction,
+    UserAgentInput,
 )
 from ..user_agent.agent import UserAgent
 from ._auth import dismiss_modals
@@ -718,7 +718,7 @@ def run_simulation(
                 ui_state.errors,
             )
 
-        turn_payload = TurnPayload(
+        turn_payload = UserAgentInput(
             ui_state=ui_state,
             session_meta=SessionMeta(
                 turn_number=turn_count,
