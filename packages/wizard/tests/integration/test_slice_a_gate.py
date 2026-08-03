@@ -56,18 +56,19 @@ def test_the_engine_loads_the_compiled_experiment(tmp_path: Path) -> None:
 def test_the_gate_would_catch_an_unimportable_metric(tmp_path: Path) -> None:
     """Proves the gate is actually checking, rather than passing vacuously.
 
-    This is the failure mode the metrics move will cause: FQNs are resolved by importlib at
-    run time, so an experiment compiled before the move stops loading after it. Not silent —
-    which is what this asserts.
+    FQNs are resolved by importlib at run time, so an experiment naming a metric that has
+    moved stops loading. Not silent — which is what this asserts.
     """
     from metis.engine.cli import _validate_inputs
 
     input_dir = _input_dir(tmp_path)
     experiment = input_dir / "experiment.yaml"
     experiment.write_text(
+        # The metrics' old home, deleted when they moved to metis-library. Deliberately dead —
+        # an experiment compiled before the move names this and must fail loudly.
         experiment.read_text().replace(
-            "metis.engine.metrics.universal.TurnBudgetMetric",
             "metis.library.metrics.universal.TurnBudgetMetric",
+            "metis.engine.metrics.universal.TurnBudgetMetric",
         )
     )
 

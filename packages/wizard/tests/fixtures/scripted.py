@@ -22,8 +22,8 @@ from metis.wizard.contracts import (
     StepResult,
 )
 
-CITATION_METRIC = "metis.engine.metrics.orchestration.SynthesisFaithfulnessMetric"
-BOUNDED = "metis.engine.metrics.universal.BoundedTroubleshootingMetric"
+CITATION_METRIC = "metis.library.metrics.orchestration.SynthesisFaithfulnessMetric"
+BOUNDED = "metis.library.metrics.universal.BoundedTroubleshootingMetric"
 
 
 @dataclass

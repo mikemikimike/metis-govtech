@@ -45,19 +45,15 @@ Initial release: an interview that turns a prose product description into a runn
 
 - `metis-library` — `universal_behaviours.yaml` and its loader: the always-on epic,
   hand-authored, with every criterion already bound to a metric.
-- `metis-engine` — `metrics.generated.CriterionGEvalMetric`, the parameterised judge the
-  matcher falls back to. Without it a degraded experiment would reference an FQN that does not
-  import.
+- `metis-library` — `metrics/default.py`, the parameterised judge the matcher falls back to.
+  Without it a degraded experiment would reference an FQN that does not import.
 
 ### Known debt
 
 - **Dependency on `metis-engine`.** A deliberate break of the `wizard ↛ engine` invariant in
-  the root `CLAUDE.md`, for two reasons: the metric catalogue currently lives at
-  `metis.engine.metrics.*`, and the compiler locates the engine's `experiment.schema.json`
-  relative to the installed module. The first is contained entirely inside
-  `metis.wizard.application.matching.catalogue`, so moving the metrics to `metis-library` is a
-  one-line change there. The second outlives it, and closes only if the schema moves to a
-  package both sides may depend on.
+  the root `CLAUDE.md`, for one reason: the compiler locates the engine's
+  `experiment.schema.json` relative to the installed module. Nothing is imported from the
+  engine. It closes when the schema moves to a package both sides may depend on.
 
   **Consequence while it stands:** metric FQNs are resolved by `importlib` at run time, so any
   `experiment.yaml` compiled before the metrics move stops loading after it, as does the

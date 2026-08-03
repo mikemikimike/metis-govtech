@@ -21,7 +21,7 @@ from metis.wizard.domain.profile import Criterion, ProductProfile
 
 # One parameterised class that builds a judge from the criterion text. Not codegen: the
 # criterion travels as an argument, so there is no generated file to keep in sync.
-GENERATED_JUDGE_FQN = "metis.engine.metrics.generated.CriterionGEvalMetric"
+GENERATED_JUDGE_FQN = "metis.library.metrics.default.CriterionGEvalMetric"
 
 DEFAULT_THRESHOLD = 0.62
 

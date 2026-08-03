@@ -17,9 +17,9 @@ from metis.wizard.contracts import (
     Task,
 )
 
-UNIVERSAL_TURN_BUDGET = "metis.engine.metrics.universal.TurnBudgetMetric"
-CITATION_METRIC = "metis.engine.metrics.orchestration.SynthesisFaithfulnessMetric"
-BOUNDED_TROUBLESHOOTING = "metis.engine.metrics.universal.BoundedTroubleshootingMetric"
+UNIVERSAL_TURN_BUDGET = "metis.library.metrics.universal.TurnBudgetMetric"
+CITATION_METRIC = "metis.library.metrics.orchestration.SynthesisFaithfulnessMetric"
+BOUNDED_TROUBLESHOOTING = "metis.library.metrics.universal.BoundedTroubleshootingMetric"
 
 
 def research_assistant() -> ProductProfile:

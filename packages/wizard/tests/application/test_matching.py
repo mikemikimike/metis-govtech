@@ -36,12 +36,12 @@ class FakeEmbedder:
 
 
 CITATION = MetricSpec(
-    fqn="metis.engine.metrics.orchestration.SynthesisFaithfulnessMetric",
+    fqn="metis.library.metrics.orchestration.SynthesisFaithfulnessMetric",
     name="Synthesis faithfulness",
     description="Whether claims are supported by the source they cite.",
 )
 TURNS = MetricSpec(
-    fqn="metis.engine.metrics.universal.TurnBudgetMetric",
+    fqn="metis.library.metrics.universal.TurnBudgetMetric",
     name="Turn budget",
     description="Session completed within the allowed turn budget.",
 )
@@ -68,7 +68,7 @@ def test_the_catalogue_never_instantiates_a_metric(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Many metrics take constructor arguments; reading a display name must not build one."""
-    from metis.engine.metrics import universal
+    from metis.library.metrics import universal
 
     def explode(*_a, **_kw):
         raise AssertionError("the catalogue instantiated a metric")

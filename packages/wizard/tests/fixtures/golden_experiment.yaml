@@ -18,8 +18,8 @@ tasks:
   - cooperative-delegator
   - impatient-executive
   metric_refs:
-  - metis.engine.metrics.orchestration.SynthesisFaithfulnessMetric
-  - metis.engine.metrics.universal.TurnBudgetMetric
+  - metis.library.metrics.orchestration.SynthesisFaithfulnessMetric
+  - metis.library.metrics.universal.TurnBudgetMetric
 - id: T-2
   description: Ask a question whose documents live behind a search that will time out, forcing
     the retry path.
@@ -27,7 +27,7 @@ tasks:
   persona_refs:
   - cooperative-delegator
   metric_refs:
-  - metis.engine.metrics.universal.BoundedTroubleshootingMetric
-  - metis.engine.metrics.universal.TurnBudgetMetric
+  - metis.library.metrics.universal.BoundedTroubleshootingMetric
+  - metis.library.metrics.universal.TurnBudgetMetric
   fixtures:
   - policy.pdf

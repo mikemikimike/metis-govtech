@@ -510,7 +510,7 @@ class RecordingMatcher:
 
     def match(self, criterion) -> str:
         self.matched.append(criterion.id)
-        return "metis.engine.metrics.routing.RoutingAccuracyMetric"
+        return "metis.library.metrics.routing.RoutingAccuracyMetric"
 
 
 def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
@@ -529,7 +529,7 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
     assert matcher.matched == ["AC-1-1"]  # only the reworded criterion
     assert (
         profile.behaviour("EB-1").criteria[0].metric_fqn  # type: ignore[union-attr]
-        == "metis.engine.metrics.routing.RoutingAccuracyMetric"
+        == "metis.library.metrics.routing.RoutingAccuracyMetric"
     )
 
 

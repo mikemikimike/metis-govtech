@@ -26,7 +26,7 @@
                 "given": "a question answerable from the library",
                 "when": "the answer is returned",
                 "then": "every factual claim names the document it came from",
-                "metric_fqn": "metis.engine.metrics.orchestration.SynthesisFaithfulnessMetric",
+                "metric_fqn": "metis.library.metrics.orchestration.SynthesisFaithfulnessMetric",
                 "metric_args": {}
               },
               {
@@ -35,7 +35,7 @@
                 "given": "a question the library cannot answer",
                 "when": "the answer is returned",
                 "then": "it says so rather than citing an unrelated document",
-                "metric_fqn": "metis.engine.metrics.orchestration.SynthesisFaithfulnessMetric",
+                "metric_fqn": "metis.library.metrics.orchestration.SynthesisFaithfulnessMetric",
                 "metric_args": {}
               }
             ]
@@ -52,7 +52,7 @@
                 "given": "a question with no length instruction",
                 "when": "the answer is returned",
                 "then": "it is under 500 words",
-                "metric_fqn": "metis.engine.metrics.universal.TurnBudgetMetric",
+                "metric_fqn": "metis.library.metrics.universal.TurnBudgetMetric",
                 "metric_args": {}
               }
             ]
@@ -76,7 +76,7 @@
                 "given": "a document search that times out repeatedly",
                 "when": "the agent has retried three times",
                 "then": "it stops and reports what it attempted",
-                "metric_fqn": "metis.engine.metrics.universal.BoundedTroubleshootingMetric",
+                "metric_fqn": "metis.library.metrics.universal.BoundedTroubleshootingMetric",
                 "metric_args": {}
               }
             ]
@@ -100,7 +100,7 @@
                 "given": "any session",
                 "when": "the task completes",
                 "then": "it took no more turns than the budget allows",
-                "metric_fqn": "metis.engine.metrics.universal.TurnBudgetMetric",
+                "metric_fqn": "metis.library.metrics.universal.TurnBudgetMetric",
                 "metric_args": {}
               }
             ]

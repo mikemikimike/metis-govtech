@@ -1,10 +1,9 @@
 """Reading the metric library.
 
-**This is the one function that knows where the metrics live.** The engine import below is a
-deliberate, temporary break of the `wizard ↛ engine` invariant in the root CLAUDE.md: the
-metrics are still at `metis.engine.metrics.*` and metis-library is nearly empty. It is
-isolated here so that the move is a one-line change and nothing else in the package is
-affected. See the wizard CHANGELOG.
+**This is the one function that knows where the metrics live.** They live in metis-library,
+which the wizard is allowed to depend on, so nothing here breaks the `wizard ↛ engine`
+invariant in the root CLAUDE.md. Keeping the location in one string is what made moving them
+out of the engine a one-line change here.
 
 Design-time metadata only. The wizard never instantiates a metric and never runs one — which
 is why specs are built from class names and docstrings rather than from instances. Many
@@ -22,8 +21,8 @@ from importlib import import_module
 
 from metis.wizard.contracts.catalogue import MetricParam, MetricSpec
 
-# The one string that changes when the metrics land in metis-library.
-METRICS_PACKAGE = "metis.engine.metrics"
+# The one string that says where the metrics live.
+METRICS_PACKAGE = "metis.library.metrics"
 
 
 def _human_name(class_name: str) -> str:

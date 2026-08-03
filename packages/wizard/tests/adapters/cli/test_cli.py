@@ -97,7 +97,7 @@ def test_an_unmatched_profile_loses_the_users_metrics() -> None:
 
     document = compile_experiment(profile, "unmatched")
 
-    universal_only = {"metis.engine.metrics.universal.TurnBudgetMetric"}
+    universal_only = {"metis.library.metrics.universal.TurnBudgetMetric"}
     assert all(set(t["metric_refs"]) == universal_only for t in document["tasks"])
 
 
