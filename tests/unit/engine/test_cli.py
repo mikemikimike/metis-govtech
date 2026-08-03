@@ -35,7 +35,7 @@ def test_missing_directory(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(missing)
     assert exc_info.value.code == 1
-    assert "does not exist" in capsys.readouterr().err
+    assert "does not exist" in capsys.readouterr().out
 
 
 # --- Check 2: experiment.yaml exists ---
@@ -45,7 +45,7 @@ def test_missing_experiment_yaml(tmp_path: Path, capsys: pytest.CaptureFixture[s
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
-    assert "experiment.yaml" in capsys.readouterr().err
+    assert "experiment.yaml" in capsys.readouterr().out
 
 
 # --- Check 3: pydantic parse failure ---
@@ -56,8 +56,8 @@ def test_malformed_experiment_yaml(tmp_path: Path, capsys: pytest.CaptureFixture
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
-    err = capsys.readouterr().err
-    assert "validation failed" in err
+    out = capsys.readouterr().out
+    assert "validation failed" in out
 
 
 # --- Check 4: duplicate persona IDs ---
@@ -82,9 +82,9 @@ def test_duplicate_persona_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
-    err = capsys.readouterr().err
-    assert "duplicate persona id" in err
-    assert "alice" in err
+    out = capsys.readouterr().out
+    assert "duplicate persona id" in out
+    assert "alice" in out
 
 
 # --- Check 5: duplicate task IDs ---
@@ -110,9 +110,9 @@ def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
-    err = capsys.readouterr().err
-    assert "duplicate task id" in err
-    assert "task-1" in err
+    out = capsys.readouterr().out
+    assert "duplicate task id" in out
+    assert "task-1" in out
 
 
 # --- Check 6: unknown persona_ref ---
@@ -135,9 +135,8 @@ def test_unknown_persona_ref(tmp_path: Path, capsys: pytest.CaptureFixture[str])
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
-    err = capsys.readouterr().err
-    # This is caught by pydantic validation (step 3), so check appropriate message
-    assert "bob" in err or "persona" in err.lower()
+    out = capsys.readouterr().out
+    assert "bob" in out or "persona" in out.lower()
 
 
 # --- Check 7: missing fixture file ---
@@ -161,9 +160,9 @@ def test_missing_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
-    err = capsys.readouterr().err
-    assert "missing.csv" in err
-    assert "does not exist" in err
+    out = capsys.readouterr().out
+    assert "missing.csv" in out
+    assert "does not exist" in out
 
 
 # --- Check 8: non-importable metric FQN ---
@@ -188,8 +187,8 @@ def test_bad_metric_fqn(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
-    err = capsys.readouterr().err
-    assert "could not be imported" in err
+    out = capsys.readouterr().out
+    assert "could not be imported" in out
 
 
 def test_metric_not_basemetric_subclass(
@@ -213,8 +212,8 @@ def test_metric_not_basemetric_subclass(
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
-    err = capsys.readouterr().err
-    assert "not a subclass" in err or "could not be imported" in err
+    out = capsys.readouterr().out
+    assert "not a subclass" in out or "could not be imported" in out
 
 
 # --- Happy path ---
