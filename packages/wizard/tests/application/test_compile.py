@@ -14,6 +14,7 @@ from fixtures.profiles import (
 from metis.wizard.application.compile import (
     SCHEMA_VERSION,
     CompilationError,
+    build_experiment_document,
     compile_experiment,
     render_review,
     to_yaml,
@@ -77,6 +78,54 @@ def test_the_engine_model_accepts_the_compiled_document() -> None:
 
     assert experiment.schema_version == SCHEMA_VERSION
     assert len(experiment.tasks) == 2
+
+
+# ── the hand-authored door ───────────────────────────────────────────────────
+
+
+def test_a_hand_authored_document_matches_an_interviewed_one() -> None:
+    """The form and the interview serialise identically from the same content.
+
+    `build_experiment_document` is what the web door's stateless compile route calls: it
+    takes the fields a form submits and produces the same validated document the interview's
+    compiler does — so the two doors emit byte-identical yaml. Here we feed it the pieces the
+    golden profile compiles to and assert the serialisation matches.
+    """
+    interviewed = compiled()
+
+    hand = build_experiment_document(
+        experiment_id=interviewed["id"],
+        description=interviewed["description"],
+        personas=interviewed["personas"],
+        tasks=interviewed["tasks"],
+    )
+
+    assert to_yaml(hand) == to_yaml(interviewed)
+
+
+def test_a_hand_authored_document_is_validated() -> None:
+    """The stateless route must refuse a document the engine would reject."""
+    with pytest.raises(CompilationError):
+        build_experiment_document(
+            experiment_id="x",
+            description="a task with no persona reference",
+            personas=[{"id": "p", "description": "someone"}],
+            tasks=[{"id": "T-1", "description": "do a thing", "persona_refs": []}],
+        )
+
+
+def test_a_hand_authored_document_stamps_the_schema_version() -> None:
+    """The version is the compiler's to stamp — a form never supplies it."""
+    document = build_experiment_document(
+        experiment_id="x",
+        description="d",
+        personas=[{"id": "p", "description": "someone"}],
+        tasks=[
+            {"id": "T-1", "description": "do a thing", "persona_refs": ["p"]},
+        ],
+    )
+
+    assert document["schema_version"] == SCHEMA_VERSION
 
 
 # ── metric references ──────────────────────────────────────────────────────

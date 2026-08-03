@@ -105,23 +105,34 @@ def _compile_task(profile: ProductProfile, task: Task) -> dict[str, Any]:
     return compiled
 
 
-def compile_experiment(profile: ProductProfile, experiment_id: str) -> dict[str, Any]:
-    """Compile a profile into an experiment document, validated against the schema.
+def build_experiment_document(
+    *,
+    experiment_id: str,
+    description: str,
+    personas: list[dict[str, Any]],
+    tasks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Assemble and validate an experiment document from its parts.
+
+    The one place the document's shape and field order are decided, so every door that
+    produces one — the interview's compiler and the web door's stateless compile route —
+    emits the same bytes from the same content. The schema version is stamped here rather
+    than supplied by a caller: a form never asks the user for it.
+
+    `personas` and `tasks` arrive already in document shape (the dicts the schema expects),
+    so this function neither knows nor cares whether they came from a `ProductProfile` or a
+    submitted form.
 
     Raises `CompilationError` if the result does not satisfy the schema — the caller writes
-    nothing in that case, so a malformed experiment never reaches disk.
+    nothing in that case, so a malformed experiment never reaches disk or a browser.
     """
-    tasks = [_compile_task(profile, task) for task in profile.tasks]
-
     document: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "id": experiment_id,
-        "description": profile.product.summary,
+        "description": description,
         # Personas are inline: one output file, one schema. The input directory the engine
         # reads is experiment.yaml plus a fixtures/ folder — there is no personas file.
-        "personas": [
-            {"id": p.id, "description": p.description} for p in profile.personas
-        ],
+        "personas": personas,
         "tasks": tasks,
     }
 
@@ -135,6 +146,20 @@ def compile_experiment(profile: ProductProfile, experiment_id: str) -> dict[str,
         ) from exc
 
     return document
+
+
+def compile_experiment(profile: ProductProfile, experiment_id: str) -> dict[str, Any]:
+    """Compile a profile into an experiment document, validated against the schema.
+
+    Raises `CompilationError` if the result does not satisfy the schema — the caller writes
+    nothing in that case, so a malformed experiment never reaches disk.
+    """
+    return build_experiment_document(
+        experiment_id=experiment_id,
+        description=profile.product.summary,
+        personas=[{"id": p.id, "description": p.description} for p in profile.personas],
+        tasks=[_compile_task(profile, task) for task in profile.tasks],
+    )
 
 
 def to_yaml(document: dict[str, Any]) -> str:

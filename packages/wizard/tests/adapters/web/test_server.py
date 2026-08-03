@@ -278,3 +278,122 @@ def test_the_experiment_can_be_downloaded(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert "tasks:" in response.text
+
+
+# ── the metric catalogue ─────────────────────────────────────────────────────
+
+
+def test_the_catalogue_route_serves_every_metric(tmp_path: Path) -> None:
+    """The picker offers exactly what the catalogue reader knows, each with a group."""
+    from metis.wizard.application.matching.catalogue import catalogue
+
+    rows = client(tmp_path).get("/api/metrics").json()
+
+    assert {r["fqn"] for r in rows} == {s.fqn for s in catalogue()}
+    first = rows[0]
+    assert set(first) >= {"fqn", "name", "description", "group"}
+    # The group is the module the metric lives in — the segment before the class name.
+    assert all(r["fqn"].rsplit(".", 2)[-2] == r["group"] for r in rows)
+
+
+# ── authoring an experiment without an interview ─────────────────────────────
+
+VALID_DOC = {
+    "id": "hand-authored",
+    "description": "An experiment typed in directly.",
+    "personas": [{"id": "analyst", "description": "A policy analyst."}],
+    "tasks": [
+        {
+            "id": "T-1",
+            "description": "Ask a question the library covers.",
+            "num_trials": 3,
+            "persona_refs": ["analyst"],
+            "metric_refs": [],
+        }
+    ],
+}
+
+
+def test_a_submitted_document_compiles_to_a_downloadable_file(tmp_path: Path) -> None:
+    import yaml
+
+    response = client(tmp_path).post("/api/experiment.yaml", json=VALID_DOC)
+
+    assert response.status_code == 200
+    parsed = yaml.safe_load(response.text)
+    assert parsed["id"] == "hand-authored"
+    assert parsed["schema_version"] == 1  # stamped by the server, not supplied
+    assert [t["id"] for t in parsed["tasks"]] == ["T-1"]
+
+
+def test_a_submitted_document_serialises_like_an_interviewed_one(
+    tmp_path: Path,
+) -> None:
+    """Both doors route through the same serialiser, so identical content is byte-identical."""
+    from metis.wizard.application.compile import compile_experiment, to_yaml
+    from metis.wizard.contracts import Persona, Product, ProductProfile, Task
+
+    profile = ProductProfile(
+        product=Product(name="X", summary="the same description", users=""),
+        personas=[Persona(id="analyst", description="A policy analyst.")],
+        tasks=[
+            Task(
+                id="T-1",
+                description="Ask a question.",
+                persona_refs=["analyst"],
+                num_trials=3,
+            )
+        ],
+    )
+    interviewed = to_yaml(compile_experiment(profile, "same-id"))
+
+    body = {
+        "id": "same-id",
+        "description": "the same description",
+        "personas": [{"id": "analyst", "description": "A policy analyst."}],
+        "tasks": [
+            {
+                "id": "T-1",
+                "description": "Ask a question.",
+                "num_trials": 3,
+                "persona_refs": ["analyst"],
+                "metric_refs": [],
+            }
+        ],
+    }
+    response = client(tmp_path).post("/api/experiment.yaml", json=body)
+
+    assert response.text == interviewed
+
+
+@pytest.mark.parametrize(
+    ("mutate", "why"),
+    [
+        (lambda d: d.update(id=""), "a blank id"),
+        (lambda d: d.update(description=""), "a blank description"),
+        (lambda d: d.update(personas=[]), "no personas"),
+        (lambda d: d.update(tasks=[]), "no tasks"),
+        (lambda d: d["tasks"][0].update(persona_refs=[]), "a task with no persona"),
+    ],
+)
+def test_an_invalid_document_is_refused_with_no_file(
+    tmp_path: Path, mutate, why: str
+) -> None:
+    """Each mandatory rule the schema enforces produces a rejection, not a file."""
+    import copy
+
+    doc = copy.deepcopy(VALID_DOC)
+    mutate(doc)
+
+    response = client(tmp_path).post("/api/experiment.yaml", json=doc)
+
+    assert response.status_code == 422, why
+    assert "schema_version" not in response.text  # no document leaked in the error
+
+
+def test_authoring_writes_nothing_to_the_store(tmp_path: Path) -> None:
+    """The route is stateless — a round trip leaves the session directory empty."""
+    client(tmp_path).post("/api/experiment.yaml", json=VALID_DOC)
+
+    assert client(tmp_path).get("/api/sessions").json() == []
+    assert not any(tmp_path.iterdir())

@@ -39,6 +39,20 @@ Initial release: an interview that turns a prose product description into a runn
   prompt so the interview asks about tools, delegation, memory and recovery.
 - **Package-owned copy** in `statuses.yaml`, shared by both doors through the session facade,
   so activity wording changes without editing an adapter.
+- **A hand-authoring door in the web UI.** A form that writes `experiment.yaml` directly — id,
+  description, personas, and tasks — for people who already know what to evaluate. It creates
+  no session and stores nothing: the document is compiled and downloaded in one shot, and
+  leaving the form discards it. Serialised through the interview's own `to_yaml`, so a
+  hand-authored file and an interviewed one of the same content are byte-identical; a stateless
+  `POST /api/experiment.yaml` validates against the engine schema, and `GET /api/metrics` serves
+  the catalogue for the metric picker. Its field names are hardcoded in `ManualForm.tsx` — a
+  deliberate, contained exception to the web door's shape-only discipline, since the labels name
+  the experiment schema's own fields.
+- **A "connect a repo" screen in the web UI — a facade.** A screen depicting what connecting a
+  repository would require, with a locked submission. The omissions are specified, not incidental:
+  the chosen archive's contents never leave the browser, the address is never validated or
+  contacted, nothing is retained on leaving, and no result is shown. Frontend-only — no server
+  route is added.
 
 ### Also lands in other packages
 

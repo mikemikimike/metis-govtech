@@ -15,7 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import TypeAdapter
@@ -154,6 +154,76 @@ def create_app(
         target = path.parent / "experiment.yaml"
         write_experiment(session.profile(), session.state.id, target)
         return FileResponse(target, filename="experiment.yaml")
+
+    # ── the hand-authoring door ──────────────────────────────────────────────
+    #
+    # The second way in: a form that authors the experiment document directly, with no
+    # interview and no session. These two routes carry no state — the catalogue is read-only,
+    # and the compile route holds the document only for the duration of its response. Neither
+    # touches the store.
+
+    @app.get("/api/metrics")
+    def metrics() -> list[dict[str, Any]]:
+        """The catalogue the form's metric picker offers.
+
+        The group is the module a metric lives in — the FQN segment before the class name —
+        so the browser groups without parsing identifiers itself.
+        """
+        from metis.wizard.application.matching.catalogue import catalogue
+
+        return [
+            {
+                "fqn": spec.fqn,
+                "name": spec.name,
+                "description": spec.description,
+                "group": spec.fqn.rsplit(".", 2)[-2],
+            }
+            for spec in catalogue()
+        ]
+
+    @app.post("/api/experiment.yaml")
+    def compile_submitted(payload: dict[str, Any]) -> Response:
+        """Compile a form submission into a downloadable document, storing nothing.
+
+        The document arrives in schema shape; the compiler stamps the version, validates it,
+        and serialises it through the same routine the interview's output uses. A submission
+        the schema rejects returns a 422 with the offending location and no file — the browser
+        gates on the same rules, so a rejection here is a safety net rather than the norm.
+        """
+        from metis.wizard.application.compile import (
+            CompilationError,
+            build_experiment_document,
+            to_yaml,
+        )
+
+        # The schema requires id and description be present, but not that they carry text — an
+        # experiment with a blank id or description is one no reader can act on, so the form
+        # gates on both and this route holds the same line as its safety net. The interview's
+        # own compiler is left untouched: this presence rule is the hand-authoring door's, not
+        # a change to what the schema means.
+        experiment_id = str(payload.get("id", "")).strip()
+        description = str(payload.get("description", "")).strip()
+        for field, value in (("id", experiment_id), ("description", description)):
+            if not value:
+                raise HTTPException(
+                    422, f"The experiment needs a {field}; it cannot be blank."
+                )
+
+        try:
+            document = build_experiment_document(
+                experiment_id=experiment_id,
+                description=description,
+                personas=payload.get("personas", []),
+                tasks=payload.get("tasks", []),
+            )
+        except CompilationError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+        return Response(
+            content=to_yaml(document),
+            media_type="application/x-yaml",
+            headers={"content-disposition": 'attachment; filename="experiment.yaml"'},
+        )
 
     # ── the app itself ─────────────────────────────────────────────────────
 

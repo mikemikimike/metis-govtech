@@ -1,10 +1,15 @@
-// The document view. This is the *one* component in the door that reads `ProductProfile` and
-// knows its shape — epics hold behaviours hold criteria; personas and tasks are flat lists.
-// Everything domain-aware in the UI is quarantined here, on purpose, so the conversation can
-// stay shape-only. It is read-only where it counts: no control here changes the profile — every
-// edit still originates in the conversation. The only controls are presentation: disclosures that
-// fold an epic open or closed, and a control to collapse the whole pane — both view state, not
-// document state.
+// The document view. This is the component in the door that reads `ProductProfile` and knows
+// its shape — epics hold behaviours hold criteria; personas and tasks are flat lists. The
+// conversation stays shape-only so this can hold all of the interview's domain knowledge in one
+// place. There is one other domain-aware component, deliberately: the hand-authoring form
+// (`ManualForm.tsx`), which names the experiment schema's own fields; its header comment
+// explains why that exception is allowed. Neither of those names leaks into the shape-only
+// conversation renderer, which remains the rule.
+//
+// It is read-only where it counts: no control here changes the profile — every edit still
+// originates in the conversation. The only controls are presentation: disclosures that fold an
+// epic open or closed, and a control to collapse the whole pane — both view state, not document
+// state.
 //
 // It is a live mirror of the profile the package built, drawn fresh each time the payload
 // arrives — no change-highlighting, no diffing. The pane simply reflects the current state.

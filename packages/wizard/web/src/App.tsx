@@ -10,8 +10,10 @@ import { useCallback, useEffect, useState } from "react";
 import type { SessionSummary, SessionView, UserResponse } from "./api";
 import { api, TransportError } from "./api";
 import { Composer, Transcript } from "./Conversation";
+import { ConnectRepo } from "./ConnectRepo";
 import { Done } from "./Done";
 import { Intro } from "./Landing";
+import { ManualForm } from "./ManualForm";
 import { Profile } from "./Profile";
 import { SessionRail } from "./SessionRail";
 import { PanelLeft, PanelRight } from "lucide-react";
@@ -28,6 +30,14 @@ export function App() {
   // both-open, which is the right default rather than a lost setting.
   const [railOpen, setRailOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(true);
+  // The hand-authoring door: a form that writes an experiment file directly, with no session.
+  // It is a second front door alongside the interview, not a step within one — so it is view
+  // state on the shell, and leaving it discards any unsaved form work, by design.
+  const [authoring, setAuthoring] = useState(false);
+  // The repository facade: a screen depicting "connect a repo", with a gated submission. Like
+  // the authoring form it is a front door held in shell view state; leaving it discards its
+  // inputs and creates no session, which is the whole point of the depiction.
+  const [connectingRepo, setConnectingRepo] = useState(false);
 
   const refreshList = useCallback(async () => {
     try {
@@ -45,6 +55,8 @@ export function App() {
   const open = useCallback(async (id: string) => {
     setBusy(true);
     setError(null);
+    setAuthoring(false);
+    setConnectingRepo(false);
     try {
       setView(await api.readSession(id));
     } catch (e) {
@@ -60,6 +72,8 @@ export function App() {
   const startNew = useCallback(() => {
     setError(null);
     setView(null);
+    setAuthoring(false);
+    setConnectingRepo(false);
   }, []);
 
   // Typing the first message from the intro: create the session, then send that text as the
@@ -119,7 +133,11 @@ export function App() {
 
   if (!loaded) return null; // one frame, avoids flashing the intro before the list lands
 
-  const showDocument = view !== null && view.step !== "clarify";
+  const showDocument =
+    !authoring &&
+    !connectingRepo &&
+    view !== null &&
+    view.step !== "clarify";
   const pending = view?.requests.find((r) => r.state === "pending");
 
   return (
@@ -145,7 +163,15 @@ export function App() {
       <main className="flex min-w-0 flex-1 flex-col">
         {error && <Banner message={error} onDismiss={() => setError(null)} />}
 
-        {view === null ? (
+        {authoring ? (
+          // The hand-authoring door, occupying the middle region alone — no document pane, no
+          // composer. Leaving it returns to the intro and drops the form's contents.
+          <ManualForm onBack={() => setAuthoring(false)} />
+        ) : connectingRepo ? (
+          // The repository facade, in the same region on the same terms — leaving it returns to
+          // the intro and drops its inputs.
+          <ConnectRepo onBack={() => setConnectingRepo(false)} />
+        ) : view === null ? (
           // No session open: the intro, with a type-first composer that begins the interview.
           <Intro
             composer={
@@ -157,6 +183,8 @@ export function App() {
                 onSend={beginWithMessage}
               />
             }
+            onAuthor={() => setAuthoring(true)}
+            onConnectRepo={() => setConnectingRepo(true)}
           />
         ) : (
           <>

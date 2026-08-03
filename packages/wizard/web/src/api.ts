@@ -216,6 +216,17 @@ export interface SessionSummary {
   updated: number;
 }
 
+// ── the metric catalogue (the hand-authoring door's picker) ───────────────────
+
+// One row of the catalogue the manual form's metric picker offers. `group` is the module the
+// metric lives in, computed by the package so the browser groups without parsing identifiers.
+export interface MetricSpec {
+  fqn: string;
+  name: string;
+  description: string;
+  group: string;
+}
+
 // ── transport ─────────────────────────────────────────────────────────────────
 
 // Errors the package never composed — an outage, a dropped connection, a 5xx. The banner
@@ -268,4 +279,34 @@ export const api = {
 
   experimentUrl: (id: string) =>
     `/api/sessions/${encodeURIComponent(id)}/experiment.yaml`,
+
+  // ── the hand-authoring door ────────────────────────────────────────────────
+
+  metrics: () => call<MetricSpec[]>("/api/metrics"),
+
+  // Compile a hand-authored document and return the serialised file text. The browser gates
+  // on the same rules the server enforces, so a rejection here is a safety net; when it does
+  // fire, the server's message is surfaced through the same TransportError path as any 4xx.
+  compileExperiment: async (document: unknown): Promise<string> => {
+    let res: Response;
+    try {
+      res = await fetch("/api/experiment.yaml", {
+        ...POST,
+        body: JSON.stringify(document),
+      });
+    } catch (cause) {
+      throw new TransportError("Couldn't reach the wizard.", { cause });
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const body = await res.json();
+        if (typeof body?.detail === "string") detail = body.detail;
+      } catch {
+        // a non-JSON error body is not worth surfacing over the status text
+      }
+      throw new TransportError(detail);
+    }
+    return res.text();
+  },
 };
