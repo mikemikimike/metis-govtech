@@ -19,20 +19,6 @@ import yaml
 
 from metis.engine.simulation.types import _EXPERIMENT_VERSION, Experiment
 
-ENGINE_PKG = Path(__file__).resolve().parents[3] / "packages" / "engine"
-SCHEMA_DIR = ENGINE_PKG / "schemas"
-EXAMPLES_DIR = ENGINE_PKG / "example-experiment"
-
-# (model, schema_file, fixture_path, version)
-_CASES = [
-    (
-        Experiment,
-        "experiment.schema.json",
-        EXAMPLES_DIR / "experiment.yaml",
-        _EXPERIMENT_VERSION,
-    ),
-]
-
 
 def _load_fixture(path: Path) -> dict:
     text = path.read_text()
@@ -40,45 +26,55 @@ def _load_fixture(path: Path) -> dict:
     return data
 
 
-@pytest.mark.parametrize("model,schema_file,fixture_path,version", _CASES)
-def test_schema_is_fresh(model, schema_file, fixture_path, version):
-    """Committed schema must match what generate_schema.py produces now."""
-    schema_path = SCHEMA_DIR / schema_file
-    if not schema_path.exists():
-        pytest.fail(
-            f"Schema file not found: {schema_path}. Run `make generate-schema`."
+@pytest.fixture
+def engine_pkg(repo_root: Path) -> Path:
+    return repo_root / "packages" / "engine"
+
+
+@pytest.fixture
+def schema_dir(engine_pkg: Path) -> Path:
+    return engine_pkg / "schemas"
+
+
+@pytest.fixture
+def examples_dir(engine_pkg: Path) -> Path:
+    return engine_pkg / "example-experiment"
+
+
+class TestSchemaSync:
+    """Verify JSON Schema artifacts stay in sync with Pydantic models."""
+
+    def test_schema_is_fresh(self, schema_dir: Path):
+        """Committed schema must match what generate_schema.py produces now."""
+        schema_path = schema_dir / "experiment.schema.json"
+        if not schema_path.exists():
+            pytest.fail(
+                f"Schema file not found: {schema_path}. Run `make generate-schema`."
+            )
+        committed = json.loads(schema_path.read_text())
+        current = Experiment.model_json_schema()
+        current["title"] = f"Experiment v{_EXPERIMENT_VERSION}"
+        assert committed == current, (
+            "experiment.schema.json is stale. Run `make generate-schema` to regenerate."
         )
-    committed = json.loads(schema_path.read_text())
-    current = model.model_json_schema()
-    current["title"] = f"{model.__name__} v{version}"
-    assert committed == current, (
-        f"{schema_file} is stale. Run `make generate-schema` to regenerate."
-    )
 
+    def test_fixture_validates_against_schema(
+        self, schema_dir: Path, examples_dir: Path
+    ):
+        """Test fixture must conform to the JSON Schema."""
+        schema_path = schema_dir / "experiment.schema.json"
+        fixture_path = examples_dir / "experiment.yaml"
+        if not fixture_path.exists():
+            pytest.fail(f"Fixture not found: {fixture_path}")
+        schema = json.loads(schema_path.read_text())
+        data = _load_fixture(fixture_path)
+        jsonschema.validate(instance=data, schema=schema)
 
-@pytest.mark.parametrize("model,schema_file,fixture_path,version", _CASES)
-def test_fixture_validates_against_schema(model, schema_file, fixture_path, version):
-    """Test fixture must conform to the JSON Schema."""
-    schema_path = SCHEMA_DIR / schema_file
-    if not fixture_path.exists():
-        pytest.fail(f"Fixture not found: {fixture_path}")
-    schema = json.loads(schema_path.read_text())
-    data = _load_fixture(fixture_path)
-    jsonschema.validate(instance=data, schema=schema)
-
-
-@pytest.mark.parametrize("model,schema_file,fixture_path,version", _CASES)
-def test_fixture_parses_with_pydantic(model, schema_file, fixture_path, version):
-    """Test fixture must parse successfully with the Pydantic model."""
-    if not fixture_path.exists():
-        pytest.fail(f"Fixture not found: {fixture_path}")
-    data = _load_fixture(fixture_path)
-    obj = model.model_validate(data)
-    if hasattr(obj, "id"):
+    def test_fixture_parses_with_pydantic(self, examples_dir: Path):
+        """Test fixture must parse successfully with the Pydantic model."""
+        fixture_path = examples_dir / "experiment.yaml"
+        if not fixture_path.exists():
+            pytest.fail(f"Fixture not found: {fixture_path}")
+        data = _load_fixture(fixture_path)
+        obj = Experiment.model_validate(data)
         assert obj.id
-    elif hasattr(obj, "tasks"):
-        assert len(obj.tasks) > 0
-    elif hasattr(obj, "schema_version"):
-        assert obj.schema_version
-    else:
-        assert obj.config.persona
