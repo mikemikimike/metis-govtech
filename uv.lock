@@ -1009,11 +1009,19 @@ name = "metis-library"
 version = "0.1.0"
 source = { editable = "packages/library" }
 dependencies = [
+    { name = "deepeval" },
     { name = "metis-core" },
+    { name = "openai" },
+    { name = "typing-extensions" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "metis-core", editable = "packages/core" }]
+requires-dist = [
+    { name = "deepeval", specifier = ">=2.0.0" },
+    { name = "metis-core", editable = "packages/core" },
+    { name = "openai", specifier = ">=1.0.0" },
+    { name = "typing-extensions" },
+]
 
 [[package]]
 name = "metis-wizard"
