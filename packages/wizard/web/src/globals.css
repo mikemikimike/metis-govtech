@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+@import "@fontsource/lato/300.css";
+@import "@fontsource/lato/400.css";
+@import "@fontsource/lato/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+
+/* ============================================================
+   METIS design tokens. This file IS the palette — change a colour
+   here, never inline.
+
+   `--primary` is bound to the near-black foreground, not the accent:
+   primary buttons are near-black on purpose, which is what keeps the
+   teal scarce enough to still mean something.
+   ============================================================ */
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 0 0% 4%;
+
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 40%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 4%;
+
+  --primary: 0 0% 9%;
+  --primary-foreground: 0 0% 98%;
+
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 9%;
+
+  /* Teal. State only — selection, focus, live status. Never a button fill. */
+  --accent: 187 71% 19%;
+  --accent-foreground: 0 0% 98%;
+
+  --gold: 41 39% 54%;
+
+  --destructive: 0 72% 42%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  --ring: 187 71% 19%;
+
+  --radius: 3px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 96%;
+
+    --muted: 0 0% 11%;
+    --muted-foreground: 0 0% 64%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 96%;
+
+    /* On a black canvas the strong neutral action becomes near-white. */
+    --primary: 0 0% 96%;
+    --primary-foreground: 0 0% 9%;
+
+    --secondary: 0 0% 13%;
+    --secondary-foreground: 0 0% 96%;
+
+    --accent: 187 46% 45%;
+    --accent-foreground: 0 0% 4%;
+
+    --gold: 42 45% 61%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 187 46% 45%;
+  }
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-gold: hsl(var(--gold));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+
+  --font-sans: "Lato", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans);
+    /* 16px, not 14. The conversation is read for minutes at a stretch, and the reference
+       chat apps all sit at 16 for the body; the smaller size read as cramped. `text-sm`
+       and `text-xs` on secondary chrome scale up in proportion, so the hierarchy holds. */
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* One focus treatment everywhere, and it is the accent's main job. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
+  }
+
+  ::selection {
+    background: hsl(var(--accent) / 0.22);
+  }
+
+  /* Motion marks a state change and nothing else. Anyone who has asked for less
+     gets none. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* The one scripted transition in the product: arriving at the conversation. When the opening
+   screen gives way to the chat — the first message sent, or a session opened — the pane rises
+   and fades in rather than cutting, so the message the user just typed visibly becomes the
+   first turn. It marks a state change, which is the only motion the style allows. */
+@keyframes enter-conversation {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-enter-conversation {
+  animation: enter-conversation 0.28s ease-out both;
+}

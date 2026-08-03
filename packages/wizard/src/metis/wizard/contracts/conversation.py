@@ -1,0 +1,346 @@
+"""The contract between this package and whatever is driving it.
+
+A CLI, an HTTP server and a pytest fixture are all the same two lines:
+
+    while (request := session.next()) is not None:
+        session.respond(render(request))
+
+`render` is the only thing a door implements, and a door never learns the domain. It does not
+know what a behaviour, a criterion or a persona is — it draws rows, checkboxes, buttons and
+text, and sends back what was clicked. Everything it renders arrives as *finished text*: the
+package composes every sentence, including notes, warnings and totals. Two doors therefore
+cannot drift, because neither knows enough to disagree.
+
+The cost, named: the package owns wording. A door wanting different phrasing — or another
+language — changes the package, not itself. One place to change beats two doors quietly
+saying different things.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, Field
+
+from metis.wizard.domain.patch import Patch
+from metis.wizard.domain.types import InteractionType
+
+# ── what the user clicked ──────────────────────────────────────────────────
+
+
+class OptionId(BaseModel):
+    """What the user clicked, as an action and what it applies to.
+
+    Opaque to the door, which sends back whatever it was handed. The package dispatches on
+    `action` and is passed `target` — so a per-card action arrives as ("chat", "EB-1")
+    rather than a string the package has to parse its own convention out of. `via` is the
+    second reference the chip toggles need: ("cover", "T-1", via="EB-4") is "T-1 covers EB-4".
+    """
+
+    action: str  # "chat" · "tick" · "cover" · "continue"
+    target: str | None = None  # "EB-1" · "T-1"
+    via: str | None = None  # "EB-4" · "P-2"
+
+    def __str__(self) -> str:  # doors key on this; it is stable and unique
+        return ":".join(p for p in (self.action, self.target, self.via) if p)
+
+    def __hash__(self) -> int:
+        return hash((self.action, self.target, self.via))
+
+
+class Option(BaseModel):
+    """Shared — deliberately unprefixed.
+
+    `Option` appears on `ChoiceRequest`, on `Card` and on `Warning`, so tying its name to any
+    one of them would be misleading.
+    """
+
+    id: OptionId
+    label: str
+    patch: Patch | None = None  # chips and ticks carry their own patch — no model call
+    selected: bool | None = None  # a toggleable chip when set, a plain button when None
+    primary: bool = False  # a hint — the door decides what emphasis means
+    enabled: bool = True  # a disabled Continue is still shown, marked unavailable
+
+
+class FormField(BaseModel):
+    """Only ever text — form input is used exactly as the user wrote it."""
+
+    id: str
+    label: str
+    placeholder: str = ""
+    multiline: bool = True  # a hint, not an instruction
+
+
+# ── what a card is made of ─────────────────────────────────────────────────
+
+
+class CardComponentType(StrEnum):
+    TEXT = "text"
+    OPTIONS = "options"
+    NUMBER = "number"
+    UPLOAD = "upload"
+
+
+class CardComponent(BaseModel):
+    """Everything inside a card is one ordered list, so the package controls what sits above
+    what — "text, then chips, then more text" is expressible.
+
+    The subclasses are discriminated by **shape, never by domain**: the door tells a stepper
+    from a chip row, and cannot tell a behaviour from a persona. That distinction lives in
+    `label`, which is finished text.
+    """
+
+    label: str | None = None  # "Covers" · "Run as" · "Trials" · "Files"
+
+
+class CardText(CardComponent):
+    type: Literal[CardComponentType.TEXT] = CardComponentType.TEXT
+    text: str
+    note: str | None = None  # an annotation — "measured by: Citation Resolution"
+
+
+class CardOptionGroup(CardComponent):
+    type: Literal[CardComponentType.OPTIONS] = CardComponentType.OPTIONS
+    options: list[Option] = Field(default_factory=list)  # each with `selected` set
+
+
+class CardNumberField(CardComponent):
+    type: Literal[CardComponentType.NUMBER] = CardComponentType.NUMBER
+    id: OptionId
+    value: int
+    min: int = 1  # validation is the package's business, enforced door-side too
+    max: int = 20
+
+
+class CardUploadField(CardComponent):
+    type: Literal[CardComponentType.UPLOAD] = CardComponentType.UPLOAD
+    id: OptionId
+    value: str = ""  # "policy.pdf, faq.md"
+
+
+AnyCardComponent = Annotated[
+    CardText | CardOptionGroup | CardNumberField | CardUploadField,
+    Field(discriminator="type"),
+]
+
+
+# ── cards ──────────────────────────────────────────────────────────────────
+
+
+class Card(BaseModel):
+    """`Card` holds one hundred percent of the data.
+
+    The two subclasses add no fields and exist to pin `selected` and to write down the two
+    layouts. They carry **no** discriminator, unlike `CardComponent`'s — the door never needs
+    to tell a behaviour card from a task card. The day one does is the day the door has
+    started learning the domain.
+    """
+
+    id: str  # package bookkeeping — never comes back in a response
+    title: str
+    section: str | None = None  # "Epic 1 · Answer quality" — a heading above this card
+    selected: bool | None = None  # a checkbox when set; none when None
+    components: list[AnyCardComponent] = Field(default_factory=list)
+    options: list[Option] = Field(default_factory=list)  # actions scoped to this card
+    note: str | None = None  # an empty-state message — "not selected, no actions"
+    blocking: bool = False  # this card is why Continue is disabled
+
+
+class BehaviourCard(Card):
+    """The behaviours, prioritise and criteria steps. On behaviours it is a plain row (no tick —
+    the review comes before the "which do we measure" ask); at prioritise it is a bare tick; at
+    criteria its components are its criteria and its options are scoped to its behaviour.
+
+    `selected` keeps the base's `bool | None`: `None` on behaviours (no checkbox drawn), a bool
+    on prioritise and criteria (a checkbox reflecting priority). A door draws no box for `None`,
+    which is what keeps the review screen from implying a decision the user has not been asked to
+    make yet."""
+
+
+class TaskCard(Card):
+    """The tasks step. components = [Covers, Run as, Trials, Files], in that order."""
+
+    # Narrowed deliberately: a task never has a tick. See BehaviourCard for why the ignore.
+    selected: None = None  # pyright: ignore[reportIncompatibleVariableOverride]
+
+
+# ── warnings ───────────────────────────────────────────────────────────────
+
+
+class WarningSource(StrEnum):
+    DOCUMENT = "document"  # a failed check over the ProductProfile
+    RUNTIME = "runtime"  # something the wizard or a service did
+
+
+class Warning(BaseModel):
+    """Something the user is told.
+
+    DOCUMENT warnings are recomputed every time a screen is composed, so they clear
+    themselves and nothing carries a stale flag. RUNTIME warnings are events — attached once,
+    by whatever handled the event.
+
+    `source` is what lets a door say "your document needs this" differently from "we had a
+    problem", which matters: rendering an outage identically to a gate reads as blaming the
+    user for it.
+    """
+
+    text: str  # finished text
+    source: WarningSource = WarningSource.DOCUMENT
+    blocking: bool = False  # stop, versus advisory note
+    options: list[Option] = Field(default_factory=list)  # actionable fixes, if any
+
+
+# ── outgoing ───────────────────────────────────────────────────────────────
+
+
+class WizardRequestState(StrEnum):
+    """Live, or already answered.
+
+    A terminal never needed this: it draws a screen, the screen scrolls away, and what is on
+    top is what you answer. A door that keeps the conversation on screen does need it — a
+    resolved request is still visible, and must not be answerable twice.
+
+    It is deliberately not a door concern. Both doors read the same flag, so neither can
+    decide on its own that an answered screen is still live.
+    """
+
+    PENDING = "pending"
+    RESOLVED = "resolved"
+
+
+class WizardRequest(BaseModel):
+    """Base — what every request shares.
+
+    `title`, `step` and `steps` are a one-directional projection of `SessionState.step`: the
+    package stamps where the interview is so a door can show it, and they never come back in a
+    response. They live on the base, not on `ChoiceRequest`, so a chat question and an
+    add-your-own form carry a header too. Optional with `None` defaults — additive, so an
+    older persisted request validates and a door that ignores them renders exactly as before.
+
+    A door reads these; it does not derive them. Reading `SessionState.step` door-side would
+    mean the door learning that `BEHAVIOURS` exists and what to call it — the one thing the
+    contract keeps it from knowing.
+    """
+
+    prompt: str
+    title: str | None = None  # "Behaviours" — finished text, for a header
+    step: int | None = None  # 1-based position of this step in the interview
+    steps: int | None = None  # how many steps the interview has
+    state: WizardRequestState = WizardRequestState.PENDING
+
+
+class ChatRequest(WizardRequest):
+    type: Literal[InteractionType.CHAT] = InteractionType.CHAT
+    multiline: bool = False
+    # Which node this exchange is scoped to, when a per-card action raised it — a behaviour id
+    # such as "EB-1". Application context, not a door concern: both doors transport it opaquely
+    # and still branch only on request shape. The package reads it back to keep a targeted edit
+    # scoped after an HTTP round trip or a resume, so a persisted follow-up cannot silently
+    # widen. Optional with an empty default, so a screen-level chat carries nothing and an
+    # older version-2 session validates without a format bump.
+    target: str | None = None
+    # What the user typed, stamped on when the request resolves. A choice records what was
+    # picked by marking the chosen `Option.selected`; a chat has no option to mark, so the
+    # reply is recorded here instead — the same principle that the request answers for itself,
+    # rather than a door reading a parallel transcript. Empty while pending; additive with a
+    # default so an older persisted request validates and a door that ignores it is unchanged.
+    answer: str = ""
+
+
+class ChoiceRequest(WizardRequest):
+    type: Literal[InteractionType.CHOICE] = InteractionType.CHOICE
+    options: list[Option] = Field(default_factory=list)  # replies, Continue, Back
+    multi: bool = False  # may several be sent together?
+    cards: list[Card] = Field(
+        default_factory=list
+    )  # when set, options grouped into rows
+    warnings: list[Warning] = Field(default_factory=list)
+    footer: str | None = None  # finished text — "… = 9 sessions"
+    instruction: str | None = None  # finished text explaining how to answer this screen
+
+
+class FormRequest(WizardRequest):
+    type: Literal[InteractionType.FORM] = InteractionType.FORM
+    fields: list[FormField]
+    # Which node this form writes into, when a per-card action raised it — a behaviour id such
+    # as "EB-1". Same role as `ChatRequest.target`: application context carried opaquely by both
+    # doors, read back by the package so a manual criterion lands under the behaviour whose card
+    # was clicked even across a reload. Optional with an empty default.
+    target: str | None = None
+    # The values the user submitted, stamped on at resolve — the form's analogue of a chat's
+    # `answer`, keyed by field id. Empty while pending; additive with a default.
+    answer: dict[str, str] = Field(default_factory=dict)
+
+
+# `Literal[InteractionType.CHAT]` rather than the bare enum is Pydantic machinery: for it to
+# rebuild the right subclass when loading a session file, each subclass's `type` must be a
+# *distinct* type. Annotating all three as `InteractionType` makes them indistinguishable.
+AnyRequest = Annotated[
+    ChatRequest | ChoiceRequest | FormRequest,
+    Field(discriminator="type"),
+]
+
+
+def options_of(request: AnyRequest) -> dict[str, Option]:
+    """Every option a screen offered, keyed the way a door sends it back.
+
+    Options hide in four places — the screen, its warnings, each card, and the chip groups
+    inside a card — and anything reasoning about what was clicked needs all four. Keeping the
+    walk next to the models means it cannot fall behind them when a fifth place appears.
+    """
+    found: dict[str, Option] = {}
+    if not isinstance(request, ChoiceRequest):
+        return found
+
+    def add(option: Option) -> None:
+        found[str(option.id)] = option
+
+    for option in request.options:
+        add(option)
+    for warning in request.warnings:
+        for option in warning.options:
+            add(option)
+    for card in request.cards:
+        for option in card.options:
+            add(option)
+        for component in card.components:
+            if isinstance(component, CardOptionGroup):
+                for option in component.options:
+                    add(option)
+    return found
+
+
+# ── incoming ───────────────────────────────────────────────────────────────
+
+
+class UserResponse(BaseModel):
+    """Base. Named after who sends it — `UserRequest` would read as a request *from* the
+    user, which is backwards."""
+
+
+class ChatResponse(UserResponse):
+    type: Literal[InteractionType.CHAT] = InteractionType.CHAT
+    text: str
+
+
+class ChoiceResponse(UserResponse):
+    type: Literal[InteractionType.CHOICE] = InteractionType.CHOICE
+    selected: list[str] = Field(default_factory=list)  # option ids, whatever they were
+
+
+class FormResponse(UserResponse):
+    type: Literal[InteractionType.FORM] = InteractionType.FORM
+    values: dict[str, str] = Field(default_factory=dict)  # field id → what was typed
+
+
+AnyResponse = Annotated[
+    ChatResponse | ChoiceResponse | FormResponse,
+    Field(discriminator="type"),
+]
+
+# Requests and responses pair by name and by value: ChatRequest ↔ ChatResponse,
+# ChoiceRequest ↔ ChoiceResponse, FormRequest ↔ FormResponse. One enum value each, nothing
+# left over — and nothing carries both `selected` and `text`, which is what forces a screen
+# to offer either cards or a text box, never both.

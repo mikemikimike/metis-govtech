@@ -1,0 +1,481 @@
+"""Composing the screen for each step.
+
+This is the package's answer to *"draw this screen"*, not *"here is my document"*. Every
+function here walks the profile, decides each card's state, composes its components and
+notes, runs the completeness check, and emits a finished request.
+
+Nothing here calls a model. Screens are composed from the profile as it stands, which is why
+document warnings clear themselves: they are recomputed every time a screen is built, so
+there is never a stale flag to track.
+
+All user-facing wording lives here. That is the accepted cost of the door contract — a door
+wanting different phrasing changes this file, rather than two doors quietly disagreeing.
+"""
+
+from __future__ import annotations
+
+from metis.wizard.contracts.conversation import (
+    BehaviourCard,
+    CardNumberField,
+    CardOptionGroup,
+    CardText,
+    CardUploadField,
+    ChoiceRequest,
+    Option,
+    OptionId,
+    TaskCard,
+    Warning,
+    WarningSource,
+    WizardRequest,
+)
+from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
+from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.profile import Behaviour, Epic, ProductProfile, Task
+
+TRIALS_MIN = 1
+TRIALS_MAX = 20
+FEEDBACK_INSTRUCTION = (
+    'To leave comments, choose "Chat about it" first; the next prompt accepts text.'
+)
+
+
+# ── step headers ─────────────────────────────────────────────────────────────
+
+# The interview's steps, in order, each with the header title it shows. Position and total
+# are *derived* from this list, so no screen builder ever writes a number — the one drift the
+# design names out loud. CLARIFY is step one even though the model, not a screen builder,
+# composes its chat; DONE is terminal and carries no header.
+_STEP_TITLES: dict[SessionStep, str] = {
+    SessionStep.CLARIFY: "Understanding your product",
+    SessionStep.BEHAVIOURS: "Behaviours",
+    SessionStep.PRIORITISE: "What to measure",
+    SessionStep.CRITERIA: "Acceptance criteria",
+    SessionStep.PERSONAS: "Personas",
+    SessionStep.TASKS: "Tasks",
+}
+_INTERVIEW_STEPS: list[SessionStep] = list(_STEP_TITLES)
+
+
+def stamp_step(request: WizardRequest, step: SessionStep) -> None:
+    """Write the step's header onto a request: title, one-based position and total.
+
+    One place turns a step into a position, so the six screens cannot drift into disagreeing
+    about which of six they are. A step off the list — only DONE — leaves the fields at their
+    `None` defaults, so a door draws no header rather than a wrong one.
+
+    A mid-step form or chat is stamped with whatever step the interview is on when it is
+    raised, which is the parent step — so "I'll add one" keeps the header anchored rather than
+    looking like the interview jumped.
+    """
+    if step not in _STEP_TITLES:
+        return
+    request.title = _STEP_TITLES[step]
+    request.step = _INTERVIEW_STEPS.index(step) + 1
+    request.steps = len(_INTERVIEW_STEPS)
+
+
+def _wizard_patch(path: str, value: object, op: PatchOp = PatchOp.SET) -> Patch:
+    """A patch the package composed, and knows it composed.
+
+    Everything on a tick, a chip or a stepper goes through here — which is what lets the
+    applier trust it without an address check.
+    """
+    return Patch(op=op, path=path, value=value, origin=PatchOrigin.WIZARD)
+
+
+def _behaviour_path(profile: ProductProfile, behaviour_id: str, field: str) -> str:
+    epic = profile.epic_of(behaviour_id)
+    epic_id = epic.id if epic else "?"
+    return f"epics[{epic_id}].behaviours[{behaviour_id}].{field}"
+
+
+def _section(epic: Epic) -> str:
+    # The name alone. "Epic 1 ·" was ordinal noise — the grouping is already visible, and the
+    # number matched nothing the user could refer to.
+    return epic.name
+
+
+# ── the three replies ──────────────────────────────────────────────────────
+
+
+def _three_replies(accept_label: str, add_label: str) -> list[Option]:
+    """Screen-level replies, for a flat list reviewed as a whole.
+
+    Single-select: each carries a model-composed patch or triggers a model call, and two of
+    those can contradict each other.
+    """
+    return [
+        Option(id=OptionId(action="accept"), label=accept_label, primary=True),
+        Option(id=OptionId(action="chat"), label="Chat about it"),
+        Option(id=OptionId(action="add"), label=add_label),
+    ]
+
+
+# ── step 1 · behaviours ────────────────────────────────────────────────────
+
+
+def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+    """A flat list reviewed whole — so the replies belong to the screen, not to each card.
+
+    No card carries a `selected` here (`selected=None`): this screen only shows the drafted
+    behaviours and asks for a nod to continue. The tick — the "which of these do we measure"
+    decision — is made one screen later, on prioritise. A checkbox drawn here would imply the
+    user must choose something before they have been asked to; both doors draw no box for a
+    `None` selected (the CLI's `_checkbox` returns "", the web door renders the plain row).
+    """
+    cards = []
+    for epic in [e for e in profile.epics if not e.is_universal]:
+        for behaviour in epic.behaviours:
+            cards.append(
+                BehaviourCard(
+                    id=behaviour.id,
+                    section=_section(epic),
+                    title=behaviour.statement,
+                    selected=None,
+                )
+            )
+
+    return ChoiceRequest(
+        prompt=message,
+        cards=cards,
+        multi=False,
+        options=_three_replies("Looks right", "I'll add one"),
+        instruction=FEEDBACK_INSTRUCTION,
+    )
+
+
+# ── step 2 · prioritise ────────────────────────────────────────────────────
+
+
+def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
+    """One question, on its own screen. The tick is the user's only real decision.
+
+    `multi=True`: every option here was composed by the package and writes one independent
+    flag on a different behaviour, so nothing can invalidate anything else.
+    """
+    cards: list[BehaviourCard] = []
+
+    for epic in [e for e in profile.epics if not e.is_universal]:
+        for behaviour in epic.behaviours:
+            cards.append(
+                BehaviourCard(
+                    id=behaviour.id,
+                    section=_section(epic),
+                    title=behaviour.statement,
+                    selected=behaviour.priority,
+                    options=[
+                        Option(
+                            id=OptionId(action="tick", target=behaviour.id),
+                            label="Measure this",
+                            selected=behaviour.priority,
+                            patch=_wizard_patch(
+                                _behaviour_path(profile, behaviour.id, "priority"),
+                                not behaviour.priority,
+                            ),
+                        )
+                    ],
+                )
+            )
+
+    # No empty-epic warning: leaving an epic unticked is a legitimate choice, not a mistake to
+    # flag. "Continue" is what generates criteria for whatever is ticked, so ticked-but-empty
+    # cannot arise, and there is nothing here that needs blocking either.
+    return ChoiceRequest(
+        prompt=(
+            "Which of these should we actually measure? "
+            "I'll write acceptance criteria for the ones you pick."
+        ),
+        cards=cards,
+        multi=True,
+        options=[
+            Option(id=OptionId(action="back"), label="← Back"),
+            Option(id=OptionId(action="continue"), label="Continue", primary=True),
+        ],
+    )
+
+
+# ── step 3 · criteria ──────────────────────────────────────────────────────
+
+
+def _criterion_components(behaviour: Behaviour) -> list[CardText]:
+    components = []
+    for criterion in behaviour.criteria:
+        measured = (
+            f"measured by: {criterion.metric_fqn.rsplit('.', 1)[-1]}"
+            if criterion.metric_fqn
+            else "measured by: a custom judge"
+        )
+        components.append(
+            CardText(
+                text=(
+                    f"Given {criterion.given}, when {criterion.when}, "
+                    f"then {criterion.then}"
+                ),
+                note=measured,
+            )
+        )
+    return components
+
+
+def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+    """The only per-card screen, and it earns it.
+
+    Criteria are the one thing scoped to a single behaviour, so "chat about it" has to say
+    *which* it. Everywhere else the model drafts a list and the user reviews it whole.
+    """
+    cards: list[BehaviourCard] = []
+
+    for epic in [e for e in profile.epics if not e.is_universal]:
+        for behaviour in epic.behaviours:
+            if behaviour.priority:
+                cards.append(
+                    BehaviourCard(
+                        id=behaviour.id,
+                        section=_section(epic),
+                        title=behaviour.statement,
+                        selected=True,
+                        components=_criterion_components(behaviour),
+                        # Three distinct, behaviour-scoped operations, each carrying this
+                        # card's id. Their labels name the authorship they perform: a
+                        # model-assisted discussion of these criteria, one model-authored
+                        # suggestion, or one criterion the user writes verbatim. The driver
+                        # splits on the action and passes the target through, so "these
+                        # criteria" is enforced, not merely prompted.
+                        options=[
+                            Option(
+                                id=OptionId(action="chat", target=behaviour.id),
+                                label="Chat about these criteria",
+                            ),
+                            Option(
+                                id=OptionId(action="another", target=behaviour.id),
+                                label="Suggest one for me",
+                            ),
+                            Option(
+                                id=OptionId(action="type", target=behaviour.id),
+                                label="Write one myself",
+                            ),
+                        ],
+                    )
+                )
+            else:
+                # Drawn greyed, with no actions — visible so you can see what you left out,
+                # dormant so it costs nothing.
+                cards.append(
+                    BehaviourCard(
+                        id=behaviour.id,
+                        section=_section(epic),
+                        title=behaviour.statement,
+                        selected=False,
+                        note="not selected — no criteria will be written",
+                    )
+                )
+
+    return ChoiceRequest(
+        prompt=message,
+        cards=cards,
+        multi=False,
+        instruction=(
+            'To leave comments, choose "Chat about it" under the relevant item first; '
+            "the next prompt accepts text."
+        ),
+        options=[
+            Option(id=OptionId(action="back"), label="← Back"),
+            Option(id=OptionId(action="continue"), label="Continue", primary=True),
+        ],
+    )
+
+
+# ── step 4 · personas ──────────────────────────────────────────────────────
+
+
+def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+    cards = [
+        BehaviourCard(
+            id=persona.id,
+            title=persona.id,
+            selected=True,
+            components=[CardText(text=persona.description)],
+        )
+        for persona in profile.personas
+    ]
+
+    return ChoiceRequest(
+        prompt=message,
+        cards=cards,
+        multi=False,
+        options=_three_replies("Looks right", "Add one"),
+        instruction=FEEDBACK_INSTRUCTION,
+    )
+
+
+# ── step 5 · tasks ─────────────────────────────────────────────────────────
+
+
+def _coverage_group(profile: ProductProfile, task_id: str) -> CardOptionGroup:
+    task = profile.task(task_id)
+    covered = set(task.behaviour_refs) if task else set()
+    return CardOptionGroup(
+        label="Covers",
+        options=[
+            Option(
+                id=OptionId(action="cover", target=task_id, via=behaviour.id),
+                label=behaviour.statement,
+                selected=behaviour.id in covered,
+                patch=_wizard_patch(
+                    f"tasks[{task_id}].behaviour_refs",
+                    sorted(covered ^ {behaviour.id}),
+                ),
+            )
+            for behaviour in profile.ticked()
+        ],
+    )
+
+
+def _persona_group(profile: ProductProfile, task_id: str) -> CardOptionGroup:
+    task = profile.task(task_id)
+    running = set(task.persona_refs) if task else set()
+    return CardOptionGroup(
+        label="Run as",
+        options=[
+            Option(
+                id=OptionId(action="run", target=task_id, via=persona.id),
+                label=persona.id,
+                selected=persona.id in running,
+                patch=_wizard_patch(
+                    f"tasks[{task_id}].persona_refs",
+                    sorted(running ^ {persona.id}),
+                ),
+            )
+            for persona in profile.personas
+        ],
+    )
+
+
+def _covers_a_selection(profile: ProductProfile, task: Task) -> bool:
+    """Does the task reference at least one currently selected, non-universal behaviour?
+
+    `ticked()` is exactly that set — priority behaviours outside the universal epic. A task whose
+    refs are all empty, unknown, unticked or universal covers nothing the experiment will measure,
+    so it fails this test and the gate below stops the step.
+    """
+    return bool(set(task.behaviour_refs) & {b.id for b in profile.ticked()})
+
+
+def _task_warnings(profile: ProductProfile) -> list[Warning]:
+    """The blocking gates. Each carries its own fixes where it can."""
+    warnings: list[Warning] = []
+
+    for behaviour in profile.uncovered():
+        fixes = [
+            Option(
+                id=OptionId(action="generate-task", via=behaviour.id),
+                label="Generate one",
+            )
+        ]
+        fixes += [
+            Option(
+                id=OptionId(action="cover", target=task.id, via=behaviour.id),
+                label=f"add to {task.id}",
+                patch=_wizard_patch(
+                    f"tasks[{task.id}].behaviour_refs",
+                    sorted({*task.behaviour_refs, behaviour.id}),
+                ),
+            )
+            for task in profile.tasks
+        ]
+        warnings.append(
+            Warning(
+                text=f"{behaviour.id} is covered by no task.",
+                source=WarningSource.DOCUMENT,
+                blocking=True,
+                options=fixes,
+            )
+        )
+
+    for task in profile.tasks:
+        if not _covers_a_selection(profile, task):
+            # A task that measures no selected behaviour is a session spent proving nothing. The
+            # fix is a click on the card's own "Covers" group already on screen, so no options.
+            warnings.append(
+                Warning(
+                    text=f"{task.id} covers no selected behaviour.",
+                    source=WarningSource.DOCUMENT,
+                    blocking=True,
+                )
+            )
+
+        if not task.persona_refs:
+            # The experiment schema declares persona_refs with minItems 1, so a task with
+            # every chip off produces a file the engine refuses to load.
+            warnings.append(
+                Warning(
+                    text=f"{task.id} has nobody to run it.",
+                    source=WarningSource.DOCUMENT,
+                    blocking=True,
+                )
+            )
+
+    return warnings
+
+
+def tasks_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+    warnings = _task_warnings(profile)
+    blocked = any(w.blocking for w in warnings)
+    blocking_ids = (
+        {t.id for t in profile.tasks if not t.persona_refs}
+        | {t.id for t in profile.tasks if not _covers_a_selection(profile, t)}
+        | {t.id for b in profile.uncovered() for t in profile.tasks_covering(b.id)}
+    )
+
+    cards = [
+        TaskCard(
+            id=task.id,
+            title=task.description,
+            blocking=task.id in blocking_ids,
+            components=[
+                _coverage_group(profile, task.id),
+                _persona_group(profile, task.id),
+                CardNumberField(
+                    label="Trials",
+                    id=OptionId(action="trials", target=task.id),
+                    value=task.num_trials,
+                    min=TRIALS_MIN,
+                    max=TRIALS_MAX,
+                ),
+                CardUploadField(
+                    label="Files",
+                    id=OptionId(action="files", target=task.id),
+                    value=", ".join(task.fixtures),
+                ),
+            ],
+        )
+        for task in profile.tasks
+    ]
+
+    pairs = sum(len(t.persona_refs) for t in profile.tasks)
+    footer = (
+        f"{len(profile.tasks)} tasks · {pairs} task–persona pairs "
+        f"= {profile.session_count()} sessions"
+    )
+
+    return ChoiceRequest(
+        prompt=message,
+        cards=cards,
+        multi=True,
+        warnings=warnings,
+        footer=footer,
+        instruction=FEEDBACK_INSTRUCTION,
+        options=[
+            Option(id=OptionId(action="back"), label="← Back"),
+            Option(id=OptionId(action="chat"), label="Chat about it"),
+            Option(id=OptionId(action="add"), label="I'll add one"),
+            Option(
+                id=OptionId(action="continue"),
+                label="Continue",
+                primary=True,
+                # A disabled Continue is still shown. `enabled` carries the distinction that
+                # a blocking warning alone could not: which control the gate is holding.
+                enabled=not blocked,
+            ),
+        ],
+    )

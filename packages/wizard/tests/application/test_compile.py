@@ -1,0 +1,194 @@
+"""The output end: compilation, reference dropping, and the review document."""
+
+from pathlib import Path
+
+import pytest
+import yaml
+from fixtures.profiles import (
+    BOUNDED_TROUBLESHOOTING,
+    CITATION_METRIC,
+    UNIVERSAL_TURN_BUDGET,
+    research_assistant,
+)
+
+from metis.wizard.application.compile import (
+    SCHEMA_VERSION,
+    CompilationError,
+    compile_experiment,
+    render_review,
+    to_yaml,
+    write_experiment,
+)
+
+EXPERIMENT_ID = "research-assistant"
+GOLDEN = Path(__file__).parents[1] / "fixtures" / "golden_experiment.yaml"
+
+
+def compiled() -> dict:
+    return compile_experiment(research_assistant(), EXPERIMENT_ID)
+
+
+# ── the golden file ────────────────────────────────────────────────────────
+
+
+def test_compiles_byte_identically_across_runs() -> None:
+    """Determinism is what makes the golden file meaningful."""
+    assert to_yaml(compiled()) == to_yaml(compiled())
+
+
+def test_matches_the_golden_file() -> None:
+    """If this fails, either the compiler changed or the fixture did — check which.
+
+    Regenerate with:
+        uv run python -m tests.regenerate_golden
+    """
+    assert to_yaml(compiled()) == GOLDEN.read_text()
+
+
+# ── the schema contract ────────────────────────────────────────────────────
+
+
+def test_emits_schema_version_explicitly() -> None:
+    """The engine declares it Literal[1] with no default and requires it."""
+    assert compiled()["schema_version"] == SCHEMA_VERSION
+
+
+def test_nothing_is_written_when_validation_fails(tmp_path: Path) -> None:
+    """A malformed experiment must never reach disk."""
+    profile = research_assistant()
+    profile.personas = []  # the schema requires at least one persona
+    path = tmp_path / "experiment.yaml"
+
+    with pytest.raises(CompilationError):
+        write_experiment(profile, EXPERIMENT_ID, path)
+
+    assert not path.exists()
+
+
+def test_the_engine_model_accepts_the_compiled_document() -> None:
+    """The schema is the stated contract; the engine's own model is the arbiter.
+
+    This catches anything the JSON schema permits but the loader rejects — notably the
+    cross-field check that every persona_ref resolves.
+    """
+    from metis.engine.simulation.types import Experiment
+
+    experiment = Experiment.model_validate(compiled())
+
+    assert experiment.schema_version == SCHEMA_VERSION
+    assert len(experiment.tasks) == 2
+
+
+# ── metric references ──────────────────────────────────────────────────────
+
+
+def test_a_shared_metric_appears_once() -> None:
+    """EB-1's two criteria resolve to the same metric; the task should carry it once."""
+    task = next(t for t in compiled()["tasks"] if t["id"] == "T-1")
+
+    assert task["metric_refs"].count(CITATION_METRIC) == 1
+
+
+def test_universal_metrics_ride_along_on_every_task() -> None:
+    """Universals are appended to each task rather than becoming tasks of their own."""
+    document = compiled()
+
+    for task in document["tasks"]:
+        assert UNIVERSAL_TURN_BUDGET in task["metric_refs"]
+    assert "EB-U1" not in [t["id"] for t in document["tasks"]]
+
+
+def test_unticked_behaviours_contribute_nothing() -> None:
+    """T-1 covers EB-2, which is unticked — neither its ref nor its metrics should appear."""
+    profile = research_assistant()
+    unticked = profile.behaviour("EB-2")
+    assert unticked is not None and not unticked.priority
+
+    task = next(
+        t
+        for t in compile_experiment(profile, EXPERIMENT_ID)["tasks"]
+        if t["id"] == "T-1"
+    )
+
+    # EB-2's only criterion uses the turn budget metric, which the universal epic also
+    # supplies — so assert on the reference list, which is where the drop is observable.
+    assert BOUNDED_TROUBLESHOOTING not in task["metric_refs"]
+    assert task["metric_refs"] == [CITATION_METRIC, UNIVERSAL_TURN_BUDGET]
+
+
+def test_a_deleted_persona_is_not_referenced() -> None:
+    """The harness raises on an unknown persona_ref rather than skipping it."""
+    profile = research_assistant()
+    profile.personas = [p for p in profile.personas if p.id != "impatient-executive"]
+
+    task = next(
+        t
+        for t in compile_experiment(profile, EXPERIMENT_ID)["tasks"]
+        if t["id"] == "T-1"
+    )
+
+    assert task["persona_refs"] == ["cooperative-delegator"]
+
+
+def test_personas_are_inline() -> None:
+    """One output file, one schema — there is no separate personas file."""
+    document = compiled()
+
+    assert [p["id"] for p in document["personas"]] == [
+        "cooperative-delegator",
+        "impatient-executive",
+    ]
+
+
+def test_the_yaml_parses_back_to_the_same_document() -> None:
+    document = compiled()
+
+    assert yaml.safe_load(to_yaml(document)) == document
+
+
+# ── the review document ────────────────────────────────────────────────────
+
+
+def test_review_keeps_behaviours_that_were_never_ticked() -> None:
+    """The record of what was considered and deliberately not measured."""
+    review = render_review(research_assistant(), EXPERIMENT_ID)
+
+    assert "Considered, not measured" in review
+    assert "EB-2" in review
+    assert "Keeps answers under a page" in review
+
+
+def test_review_marks_why_each_behaviour_is_there() -> None:
+    review = render_review(research_assistant(), EXPERIMENT_ID)
+
+    assert "_(measured)_" in review
+    assert "_(considered, not measured)_" in review
+    assert "_(always on)_" in review
+
+
+def test_review_session_count_matches_the_profile() -> None:
+    """The document and the interview footer read from the same calculation."""
+    profile = research_assistant()
+
+    assert f"{profile.session_count()} sessions" in render_review(
+        profile, EXPERIMENT_ID
+    )
+
+
+def test_review_needs_no_session() -> None:
+    """A hand-written profile renders — no step, no history, no session id."""
+    assert render_review(research_assistant(), EXPERIMENT_ID).startswith(
+        "# Research assistant"
+    )
+
+
+def test_review_and_experiment_use_the_same_persona_ids() -> None:
+    """The readable id is both the human label and the compiled reference key."""
+    review = render_review(research_assistant(), EXPERIMENT_ID)
+
+    assert "**cooperative-delegator**" in review
+    assert "**impatient-executive**" in review
+    assert [p["id"] for p in compiled()["personas"]] == [
+        "cooperative-delegator",
+        "impatient-executive",
+    ]

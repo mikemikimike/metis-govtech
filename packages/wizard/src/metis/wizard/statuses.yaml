@@ -1,0 +1,8 @@
+statuses:
+  clarify: "Understanding your agent…"
+  behaviours: "Shaping expected behaviours…"
+  prioritise: "Writing testable criteria…"
+  criteria: "Designing evaluator personas…"
+  personas: "Building coverage tasks…"
+  tasks: "Finalising your evaluation…"
+  done: "Finishing up…"

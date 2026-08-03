@@ -1,0 +1,208 @@
+{
+  "version": 2,
+  "id": "compat-v1",
+  "profile": {
+    "product": {
+      "name": "Research assistant",
+      "summary": "An agent that answers research questions over an internal document library, citing what it used.",
+      "users": "Policy analysts and their managers. Some know exactly what they want; others are exploring and do not.",
+      "architecture": "A router agent with a document search tool and a summariser subagent. Search can time out. Nothing is carried between sessions."
+    },
+    "epics": [
+      {
+        "id": "EP-1",
+        "name": "Answer quality",
+        "scope": "product",
+        "behaviours": [
+          {
+            "interaction_type": "chat",
+            "id": "EB-1",
+            "statement": "Cites a source for every factual claim",
+            "priority": true,
+            "criteria": [
+              {
+                "interaction_type": "chat",
+                "id": "AC-1-1",
+                "given": "a question answerable from the library",
+                "when": "the answer is returned",
+                "then": "every factual claim names the document it came from",
+                "metric_fqn": "metis.engine.metrics.orchestration.SynthesisFaithfulnessMetric",
+                "metric_args": {}
+              },
+              {
+                "interaction_type": "chat",
+                "id": "AC-1-2",
+                "given": "a question the library cannot answer",
+                "when": "the answer is returned",
+                "then": "it says so rather than citing an unrelated document",
+                "metric_fqn": "metis.engine.metrics.orchestration.SynthesisFaithfulnessMetric",
+                "metric_args": {}
+              }
+            ]
+          },
+          {
+            "interaction_type": "chat",
+            "id": "EB-2",
+            "statement": "Keeps answers under a page unless asked otherwise",
+            "priority": false,
+            "criteria": [
+              {
+                "interaction_type": "chat",
+                "id": "AC-2-1",
+                "given": "a question with no length instruction",
+                "when": "the answer is returned",
+                "then": "it is under 500 words",
+                "metric_fqn": "metis.engine.metrics.universal.TurnBudgetMetric",
+                "metric_args": {}
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "EP-2",
+        "name": "Recovery",
+        "scope": "product",
+        "behaviours": [
+          {
+            "interaction_type": "form",
+            "id": "EB-3",
+            "statement": "Stops after repeated search failures and says what it tried",
+            "priority": true,
+            "criteria": [
+              {
+                "interaction_type": "form",
+                "id": "AC-3-1",
+                "given": "a document search that times out repeatedly",
+                "when": "the agent has retried three times",
+                "then": "it stops and reports what it attempted",
+                "metric_fqn": "metis.engine.metrics.universal.BoundedTroubleshootingMetric",
+                "metric_args": {}
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "EP-UNI",
+        "name": "Always checked",
+        "scope": "universal",
+        "behaviours": [
+          {
+            "interaction_type": "chat",
+            "id": "EB-U1",
+            "statement": "Stays within a sensible number of turns",
+            "priority": true,
+            "criteria": [
+              {
+                "interaction_type": "chat",
+                "id": "AC-U1-1",
+                "given": "any session",
+                "when": "the task completes",
+                "then": "it took no more turns than the budget allows",
+                "metric_fqn": "metis.engine.metrics.universal.TurnBudgetMetric",
+                "metric_args": {}
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "personas": [
+      {
+        "interaction_type": "chat",
+        "id": "cooperative-delegator",
+        "description": "A policy analyst comfortable with AI tools who engages fully, answers questions willingly, and redirects gently if things stall."
+      },
+      {
+        "interaction_type": "chat",
+        "id": "impatient-executive",
+        "description": "A time-poor director who writes in curt imperatives, will not answer clarifying questions, and abandons the task quickly."
+      }
+    ],
+    "tasks": [
+      {
+        "interaction_type": "chat",
+        "id": "T-1",
+        "description": "Ask for a literature review on a topic the library covers well, then ask a follow-up that needs a second document.",
+        "behaviour_refs": [
+          "EB-1",
+          "EB-2"
+        ],
+        "persona_refs": [
+          "cooperative-delegator",
+          "impatient-executive"
+        ],
+        "fixtures": [],
+        "num_trials": 3
+      },
+      {
+        "interaction_type": "chat",
+        "id": "T-2",
+        "description": "Ask a question whose documents live behind a search that will time out, forcing the retry path.",
+        "behaviour_refs": [
+          "EB-3"
+        ],
+        "persona_refs": [
+          "cooperative-delegator"
+        ],
+        "fixtures": [
+          "policy.pdf"
+        ],
+        "num_trials": 3
+      }
+    ]
+  },
+  "step": "personas",
+  "history": [
+    {
+      "role": "user",
+      "text": "Build a research assistant"
+    },
+    {
+      "role": "assistant",
+      "text": "Here are the personas I suggest."
+    }
+  ],
+  "requests": [
+    {
+      "prompt": "Do these personas look right?",
+      "title": null,
+      "step": null,
+      "steps": null,
+      "state": "pending",
+      "type": "choice",
+      "options": [
+        {
+          "id": {
+            "action": "accept",
+            "target": null,
+            "via": null
+          },
+          "label": "Looks right",
+          "patch": null,
+          "selected": null,
+          "primary": false,
+          "enabled": true
+        },
+        {
+          "id": {
+            "action": "chat",
+            "target": null,
+            "via": null
+          },
+          "label": "Chat about it",
+          "patch": null,
+          "selected": null,
+          "primary": false,
+          "enabled": true
+        }
+      ],
+      "multi": false,
+      "cards": [],
+      "warnings": [],
+      "footer": null,
+      "instruction": null
+    }
+  ]
+}

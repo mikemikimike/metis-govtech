@@ -12,6 +12,10 @@ dist/
 build/
 *.egg-info/
 
+# JavaScript
+node_modules/
+*.tsbuildinfo
+
 # Testing
 .pytest_cache/
 .coverage
@@ -42,3 +46,6 @@ openspec/
 
 # Simulation output (generated at runtime)
 experiments/
+
+# Wizard session output (generated at runtime)
+evaluation/
