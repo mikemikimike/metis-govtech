@@ -25,13 +25,13 @@ from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
 from langfuse.api import TraceWithDetails
 
-from metis.engine.extractor.types import (
+from metis.engine.extractor.types import SessionContext
+from metis.engine.simulation.types import CollectedArtifact, ExperimentTask, Persona
+from metis.library.metrics._types import (
     ClarificationRequest,
     OrcaChatMetadata,
-    SessionContext,
     TraceMetadata,
 )
-from metis.engine.simulation.types import CollectedArtifact, ExperimentTask, Persona
 
 # ---------------------------------------------------------------------------
 # Span classification helpers

@@ -4,6 +4,17 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-08-03
+
+### Removed
+
+- **BREAKING:** Metrics module removed from engine. All 53 metric classes now live in `metis.library.metrics`. Import paths change from `metis.engine.metrics.<module>.<Class>` to `metis.library.metrics.<module>.<Class>`.
+
+### Changed
+
+- `extractor/types.py` — `TraceMetadata`, `OrcaChatMetadata`, and `ClarificationRequest` are now re-exported from `metis.library.metrics._types` (backwards-compatible for engine consumers importing from `metis.engine.extractor`).
+- FQN references in `experiment.yaml` and `simulation/types.py` updated to `metis.library.metrics.*`.
+
 ## [0.2.1] — 2026-07-31
 
 - **Simulation file-existence check** — harness now verifies files exist before attempting upload, preventing runtime errors from missing fixtures
