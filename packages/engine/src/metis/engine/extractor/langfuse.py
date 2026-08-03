@@ -113,9 +113,11 @@ def _extract_delegation(observations: list) -> dict | None:
 
     - ``target``: subagent name (e.g. ``"data-analyst"``, ``"slide-maker"``)
     - ``task``: the delegation message/instruction
-    - ``response``: the subagent's output (before Orca synthesis)
 
     Or ``None`` if no delegation occurred (direct handle).
+
+    The subagent's response is available separately via
+    ``_extract_subagent_output`` / ``LLMTestCase.context``.
 
     :param observations: List of Langfuse observation objects.
     :returns: Delegation dict, or ``None`` if the trace was handled directly.
@@ -127,7 +129,6 @@ def _extract_delegation(observations: list) -> dict | None:
             return {
                 "target": inp.get("member_id", "") if isinstance(inp, dict) else "",
                 "task": inp.get("task", "") if isinstance(inp, dict) else "",
-                "response": obs.output or "",
             }
 
     # Fallback 1: orca-chat span metadata (older routing pattern)
@@ -140,22 +141,16 @@ def _extract_delegation(observations: list) -> dict | None:
                 return {
                     "target": target,
                     "task": "",
-                    "response": "",
                 }
 
     # Fallback 2: orca-data-analysis / orca-slide SPAN (direct workflow delegation).
-    # These spans wrap the entire subagent invocation; their output IS
-    # the subagent response.
     for obs in observations:
         span_name = obs.name or ""
         for prefix, agent_target in _WORKFLOW_SPAN_TO_AGENT.items():
             if span_name.startswith(prefix) and obs.type == "SPAN":
-                raw = obs.output or ""
-                response = raw if isinstance(raw, str) else str(raw)
                 return {
                     "target": agent_target,
                     "task": "",
-                    "response": response,
                 }
 
     return None
@@ -265,22 +260,6 @@ def _extract_subagent_output(observations: list) -> str | None:
     return None
 
 
-def _extract_retry_counts(observations: list) -> dict:
-    """Count how many times each tool was called (retries = count > 1).
-
-    Only counts TOOL-type observations (actual tool executions).
-
-    :param observations: List of Langfuse observation objects.
-    :returns: Dict mapping tool name → call count, only for tools called more than once.
-    """
-    call_counts: dict = {}
-    for obs in observations:
-        if obs.type == "TOOL":
-            name = obs.name or ""
-            call_counts[name] = call_counts.get(name, 0) + 1
-    return {name: count for name, count in call_counts.items() if count > 1}
-
-
 def _extract_clarification_requests(observations: list) -> list:
     """Extract request_user_input tool calls (clarification questions).
 
@@ -352,7 +331,6 @@ class _TraceExtraction:
     subagent_output: str | None
     spoke_context: dict | None
     assistant_messages: list
-    retry_counts: dict
     clarification_requests: list
     chat_metadata: OrcaChatMetadata
 
@@ -367,7 +345,6 @@ def _extract_all(trace: Any, observations: list) -> _TraceExtraction:
         subagent_output=_extract_subagent_output(observations),
         spoke_context=_extract_spoke_context(observations),
         assistant_messages=_extract_assistant_messages(observations),
-        retry_counts=_extract_retry_counts(observations),
         clarification_requests=_extract_clarification_requests(observations),
         chat_metadata=_extract_orca_chat_metadata(observations),
     )
@@ -426,7 +403,6 @@ def _trace_to_test_case(
         delegation=ext.delegation,
         spoke_context=ext.spoke_context,
         assistant_messages=ext.assistant_messages,
-        retry_counts=ext.retry_counts,
         clarification_requests=ext.clarification_requests,
         chat_metadata=ext.chat_metadata,
     )
