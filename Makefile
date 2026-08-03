@@ -10,6 +10,8 @@ help:
 	@printf "  make fix               Apply lint autofixes and format\n"
 	@printf "  make typecheck         Run Pyright type checking\n"
 	@printf "  make check             Run lint + format-check + typecheck (non-mutating)\n"
+	@printf "  make test              Run all tests\n"
+	@printf "  make test-unit         Run unit tests only\n"
 	@printf "  make ci                Full CI suite: check + test\n"
 	@printf "  make clean             Remove all generated/cached files\n"
 	@printf "  make release-init      Create release branch + tracking issue (PKG=<name>|APP=<name> VER=<semver>)\n"
@@ -39,14 +41,11 @@ fix:
 typecheck:
 	uv run pyright
 
-# test:
-# 	uv run pytest
-#
-# test-unit:
-# 	uv run pytest tests/unit/
-#
-# test-integration:
-# 	uv run pytest tests/integration/
+test:
+	uv run pytest
+
+test-unit:
+	uv run pytest tests/unit/
 
 check:
 	$(MAKE) lint
@@ -55,6 +54,7 @@ check:
 
 ci:
 	$(MAKE) check
+	$(MAKE) test
 	$(MAKE) -C packages/engine check-schema
 
 clean:

@@ -1,0 +1,89 @@
+"""Tests for metis.core.logging module."""
+
+import json
+import logging
+import os
+from unittest.mock import patch
+
+import structlog
+
+from metis.core.logging import configure_logging, get_logger
+
+
+class TestGetLogger:
+    def test_returns_bound_logger(self):
+        log = get_logger("test.module")
+        assert hasattr(log, "info")
+        assert hasattr(log, "warning")
+        assert hasattr(log, "error")
+        assert hasattr(log, "debug")
+        assert hasattr(log, "bind")
+
+    def test_infers_name_when_none(self):
+        log = get_logger()
+        assert log is not None
+
+
+class TestConfigureLogging:
+    def setup_method(self):
+        structlog.reset_defaults()
+        root = logging.getLogger()
+        root.handlers.clear()
+
+    def test_sets_log_level(self):
+        configure_logging(level="DEBUG")
+        root = logging.getLogger()
+        assert root.level == logging.DEBUG
+
+    def test_level_from_env_var(self):
+        with patch.dict(os.environ, {"METIS_LOG_LEVEL": "WARNING"}):
+            configure_logging()
+            root = logging.getLogger()
+            assert root.level == logging.WARNING
+
+    def test_explicit_level_overrides_env_var(self):
+        with patch.dict(os.environ, {"METIS_LOG_LEVEL": "WARNING"}):
+            configure_logging(level="DEBUG")
+            root = logging.getLogger()
+            assert root.level == logging.DEBUG
+
+    def test_json_output(self, capsys):
+        configure_logging(level="INFO", json=True)
+        log = get_logger("test.json")
+        log.info("hello", key="value")
+
+        captured = capsys.readouterr()
+        line = captured.err.strip().split("\n")[-1]
+        parsed = json.loads(line)
+        assert parsed["event"] == "hello"
+        assert parsed["key"] == "value"
+        assert parsed["level"] == "info"
+
+    def test_pretty_output_to_stderr(self, capsys):
+        configure_logging(level="INFO", pretty=True)
+        log = get_logger("test.pretty")
+        log.info("hello_event", key="value")
+
+        captured = capsys.readouterr()
+        assert "hello_event" in captured.err
+        assert captured.out == ""
+
+    def test_default_level_is_warning(self):
+        configure_logging()
+        root = logging.getLogger()
+        assert root.level == logging.WARNING
+
+
+class TestPublicExports:
+    def test_logging_importable_from_metis_core(self):
+        from metis.core import configure_logging, get_logger
+
+        assert callable(get_logger)
+        assert callable(configure_logging)
+
+    def test_console_importable_from_metis_core(self):
+        from rich.console import Console
+
+        from metis.core import console
+
+        assert isinstance(console, Console)

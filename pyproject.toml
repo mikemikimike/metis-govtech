@@ -65,6 +65,13 @@ ignore = [
 quote-style = "double"
 indent-style = "space"
 
+[tool.pytest.ini_options]
+addopts = "-p no:rerunfailures"
+testpaths = ["tests", "packages/*/src/metis/*/", "apps/*/src/metis/*/"]
+python_files = ["*_test.py", "test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
 [dependency-groups]
 dev = [
     "pyright>=1.1",

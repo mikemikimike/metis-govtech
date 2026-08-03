@@ -28,7 +28,7 @@ make clean          # remove generated/cached files
 
 Individual targets: `lint`, `lint-fix`, `format`, `format-check`, `typecheck`.
 
-Test targets are scaffolded but currently commented out: `test`, `test-unit`, `test-integration`.
+Test targets: `test`, `test-unit`. Integration tests are scaffolded but not yet active.
 
 ## Project Layout
 
@@ -65,7 +65,7 @@ insights ───────────────► core
 ```
 
 Key invariants:
-- `core` has zero workspace dependencies (only Pydantic + stdlib)
+- `core` has zero workspace dependencies (Pydantic + structlog + Rich + stdlib)
 - `library` depends only on `core`
 - `wizard` and `engine` depend on `core` + `library` but NOT on each other
 - `insights` depends only on `core`
@@ -85,6 +85,9 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 ## Coding Conventions
 
 - Namespace imports: `from metis.core import ...`, `from metis.engine import ...`
+- Operational logging: `from metis.core.logging import get_logger` — structured events to stderr (debug, diagnostics, audit)
+- User-facing output: `from metis.core.console import console` — Rich-formatted output to stdout (tables, progress, results)
+- Never use `print()` or `logging.getLogger()` directly — use the core module APIs above
 - All shared domain objects use Pydantic v2 models
 - CLIs use Typer with sub-app composition (see `metis_cli.py`)
 - Versioning: independent per package via static `version` in `pyproject.toml`; scoped git tags `<package-name>/v<semver>`
