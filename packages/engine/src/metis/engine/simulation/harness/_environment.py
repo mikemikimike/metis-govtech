@@ -113,7 +113,7 @@ def run_simulation(
     # Initial state from opening
     current_message: str = opening.message
     current_ui_actions: list[UIAction] = opening.ui_actions
-    current_action: str = opening.action
+    current_decision: str = opening.decision
 
     # Turn loop
     while True:
@@ -163,7 +163,7 @@ def run_simulation(
             )
 
         # --- Stopping rule: user abandoned ---
-        if current_action == "giving_up":
+        if current_decision == "giving_up":
             logger.info("[turn %d] STOP: user_abandoned (agent gave up)", turn_count)
             return _build_record(
                 "user_abandoned",
@@ -175,7 +175,7 @@ def run_simulation(
             )
 
         # --- Stopping rule: goal achieved (with artifact capture window) ---
-        if current_action == "goal_achieved":
+        if current_decision == "goal_achieved":
             logger.info(
                 "[turn %d] STOP: goal_achieved — entering 2-min artifact capture phase...",
                 turn_count,
@@ -240,9 +240,9 @@ def run_simulation(
             )
 
         logger.info(
-            "[turn %d] Action: %r | Message: %r",
+            "[turn %d] Decision: %r | Message: %r",
             turn_count,
-            current_action,
+            current_decision,
             current_message[:80],
         )
 
@@ -556,7 +556,7 @@ def run_simulation(
         turn = ConversationTurn(
             turn_number=turn_count,
             user_message=current_message,
-            system_response=ui_state.model_dump(),
+            target_response=ui_state.model_dump(),
             duration_ms=turn_duration_ms,
             timestamp=datetime.now(tz=UTC).isoformat(),
             user_ui_actions=[a.model_dump() for a in current_ui_actions],
@@ -638,11 +638,11 @@ def run_simulation(
                 turn_count,
                 len(ui_state.form_elements),
             )
-        if ui_state.agent_labels:
+        if ui_state.target_status_labels:
             logger.info(
                 "[turn %d]   Agent labels: %s",
                 turn_count,
-                ", ".join(ui_state.agent_labels[:5]),
+                ", ".join(ui_state.target_status_labels[:5]),
             )
         logger.info(
             "[turn %d]   Total artifacts collected so far: %d",
@@ -749,12 +749,12 @@ def run_simulation(
         # Update for next iteration
         current_message = response.message
         current_ui_actions = response.ui_actions
-        current_action = response.action
+        current_decision = response.decision
         logger.info(
-            "[turn %d -> %d] DECISION: action=%s | message=%r",
+            "[turn %d -> %d] DECISION: decision=%s | message=%r",
             turn_count,
             turn_count + 1,
-            current_action,
+            current_decision,
             current_message[:120],
         )
         if response.reasoning:

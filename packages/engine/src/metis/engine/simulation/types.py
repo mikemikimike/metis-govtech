@@ -18,7 +18,7 @@ _SESSION_RECORD_VERSION = 1
 
 
 # ---------------------------------------------------------------------------
-# User Agent Response
+# User Agent Output
 # ---------------------------------------------------------------------------
 
 
@@ -53,13 +53,13 @@ class UserAgentOutput(BaseModel):
     reasoning: str = Field(
         default="",
         description=(
-            "Internal thought process: why this action/message was"
-            " chosen given the persona, task progress, and system"
+            "Internal thought process: why this decision/message was"
+            " chosen given the persona, task progress, and target"
             " response."
         ),
     )
     message: str
-    action: Literal["continue", "goal_achieved", "giving_up"] = "continue"
+    decision: Literal["continue", "goal_achieved", "giving_up"] = "continue"
     ui_actions: list[UIAction] = Field(default_factory=list)
 
 
@@ -93,14 +93,14 @@ class UIState(BaseModel):
 
     text: str = ""
     artifacts: list[Artifact] = Field(default_factory=list)
-    agent_labels: list[str] = Field(default_factory=list)
+    target_status_labels: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     interactive_elements: list[str] = Field(default_factory=list)
     form_elements: list[FormElement] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
-# Turn Payload (input to UserAgent.generate_response)
+# User Agent Input
 # ---------------------------------------------------------------------------
 
 
@@ -282,7 +282,7 @@ class CollectedArtifact(BaseModel, extra="ignore"):
 class ConversationTurn(BaseModel, extra="ignore"):
     turn_number: int
     user_message: str
-    system_response: dict
+    target_response: dict
     duration_ms: int
     timestamp: str
     user_ui_actions: list[dict] = []

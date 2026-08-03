@@ -77,7 +77,7 @@ class UserAgent:
         logger.info("[user_agent] === OPENING TURN ===")
         if response.reasoning:
             logger.info("[user_agent]   Reasoning: %s", response.reasoning)
-        logger.info("[user_agent]   Action: %s", response.action)
+        logger.info("[user_agent]   Decision: %s", response.decision)
         logger.info("[user_agent]   Message: %s", response.message[:200])
         if response.ui_actions:
             logger.info(
@@ -124,7 +124,7 @@ class UserAgent:
         logger.info("[user_agent] === TURN %d DECISION ===", self.turn_count)
         if response.reasoning:
             logger.info("[user_agent]   Reasoning: %s", response.reasoning)
-        logger.info("[user_agent]   Action: %s", response.action)
+        logger.info("[user_agent]   Decision: %s", response.decision)
         logger.info("[user_agent]   Message: %s", response.message[:200])
         if response.ui_actions:
             logger.info(

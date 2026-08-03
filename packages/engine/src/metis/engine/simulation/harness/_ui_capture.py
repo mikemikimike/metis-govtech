@@ -212,7 +212,7 @@ _CAPTURE_UI_STATE_JS = """() => {
     return {
       text: responseText,
       artifacts,
-      agent_labels: uniqueLabels,
+      target_status_labels: uniqueLabels,
       errors,
       interactive_elements: [...new Set(interactiveElements)],
       form_elements: formElements,
@@ -231,7 +231,7 @@ def capture_ui_state(page: Page) -> UIState:
         len(state.artifacts) if state.artifacts else 0,
         len(state.form_elements) if state.form_elements else 0,
         len(state.errors) if state.errors else 0,
-        len(state.agent_labels) if state.agent_labels else 0,
+        len(state.target_status_labels) if state.target_status_labels else 0,
     )
     return state
 
