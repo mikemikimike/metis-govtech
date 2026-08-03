@@ -29,5 +29,8 @@ htmlcov/
 # OS
 .DS_Store
 
+# Generated session artifacts
+docs/superpowers/
+
 # Simulation output (generated at runtime)
 experiments/
