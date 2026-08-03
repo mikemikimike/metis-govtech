@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **Structured logging** — replaced all raw `print()` and `logging` calls with `metis.core.console` (Rich-formatted stdout) and `metis.core.logging.get_logger` (structured diagnostics to stderr) across CLI, simulation harness, user agent, and report generator
 - `extractor/types.py` — `TraceMetadata`, `OrcaChatMetadata`, and `ClarificationRequest` are now re-exported from `metis.library.metrics._types` (backwards-compatible for engine consumers importing from `metis.engine.extractor`).
 - FQN references in `experiment.yaml` and `simulation/types.py` updated to `metis.library.metrics.*`.
 
