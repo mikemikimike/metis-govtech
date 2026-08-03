@@ -6,14 +6,13 @@ from metis.engine.extractor.langfuse import (
     get_langfuse_client,
 )
 from metis.engine.extractor.types import (
-    OrcaChatMetadata,
     RoutingSummary,
     SessionMetricResult,
     SessionMetricsEntry,
     SessionToolCallData,
     SessionTurnData,
-    TraceMetadata,
 )
+from metis.library.metrics._types import OrcaChatMetadata, TraceMetadata
 
 __all__ = [
     "FetchLangfuseResult",
