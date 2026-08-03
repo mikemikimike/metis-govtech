@@ -27,8 +27,8 @@ def run_experiment(
     config: HarnessConfig,
     experiment: Experiment,
     personas_by_id: dict[str, Persona],
+    fixtures_dir: Path,
     output_dir: Path | None = None,
-    fixtures_dir: Path | None = None,
     headed: bool = False,
 ) -> None:
     """Run a full experiment (all task x persona pairs).

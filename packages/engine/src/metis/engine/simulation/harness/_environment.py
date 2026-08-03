@@ -41,8 +41,6 @@ from ._ui_capture import (
 
 logger = get_logger()
 
-_DEFAULT_FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
-
 
 def run_simulation(
     page: Page,
@@ -51,7 +49,7 @@ def run_simulation(
     persona: Persona,
     task: ExperimentTask,
     session_dir: Path,
-    fixtures_dir: Path | None = None,
+    fixtures_dir: Path,
 ) -> SessionRecord:
     """Run a full simulation session: drive the turn loop and produce a SessionRecord.
 
@@ -279,7 +277,7 @@ def run_simulation(
                         action.file,
                     )
                     continue
-                file_path = (fixtures_dir or _DEFAULT_FIXTURES_DIR) / action.file
+                file_path = fixtures_dir / action.file
                 if not file_path.exists():
                     logger.warning(
                         "[turn %d]   Action %d/%d: SKIP upload '%s' — file not found at %s",
