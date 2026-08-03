@@ -1,6 +1,5 @@
 """Browser interactions — send messages, upload files, fill forms."""
 
-import logging
 import re
 import shutil
 import tempfile
@@ -9,12 +8,14 @@ from pathlib import Path
 
 from playwright.sync_api import Page
 
+from metis.core.logging import get_logger
+
 from ._auth import dismiss_modals
 from ._config import HarnessConfig
 from ._types import UIState
 from ._ui_capture import capture_ui_state
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def send_message(

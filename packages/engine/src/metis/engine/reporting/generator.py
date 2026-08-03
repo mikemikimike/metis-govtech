@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from metis.core.console import console
 from metis.engine.evaluation.types import EvalResult
 from metis.engine.extractor.types import (
     RoutingSummary,
@@ -253,6 +254,7 @@ def generate_report(
 
     Example::
 
+        from metis.core.console import console
         from metis.engine import evaluate, generate_report
         from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
 
@@ -260,7 +262,7 @@ def generate_report(
         fetch_result = fetch_by_session_id(session_id, lf)
         eval_result = evaluate(fetch_result, metric_refs)
         report_result = generate_report(eval_result, run_id="my-run-001")
-        print(report_result.html_path)
+        console.print(report_result.html_path)
     """
 
     if run_id is None:
@@ -313,7 +315,7 @@ def generate_report(
         eval_result.routing_summary,
         eval_result.session_metrics,
     )
-    print(terminal_summary)
+    console.print(terminal_summary)
 
     json_path = save_json_results(
         test_results,
@@ -323,7 +325,7 @@ def generate_report(
         eval_result.timings,
         output_dir=output_dir,
     )
-    print(f"  JSON results: {json_path}")
+    console.print(f"  JSON results: {json_path}")
 
     html_path = save_html_report(
         test_results,
@@ -334,8 +336,8 @@ def generate_report(
         output_dir=output_dir,
         experiment_description=experiment_description,
     )
-    print(f"  HTML report:  {html_path}")
-    print(f"  Open with:    open {html_path}\n")
+    console.print(f"  HTML report:  {html_path}")
+    console.print(f"  Open with:    open {html_path}\n")
 
     return ReportResult(
         json_path=json_path,

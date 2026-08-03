@@ -65,11 +65,11 @@ experiments/orca-eval-20260730-143022/
 
 | Module | Covers |
 |--------|--------|
-| `metis.engine.metrics.orchestration` | Routing, clarification, decomposition, delegation, synthesis |
-| `metis.engine.metrics.analysis` | Analytical correctness, scope, charts, reports |
-| `metis.engine.metrics.presentation` | Slide spec compliance, logical flow, source faithfulness |
-| `metis.engine.metrics.universal` | Constraint adherence, turn budget, clarification efficiency |
-| `metis.engine.metrics.session` | Session-level conversational metrics (full multi-turn) |
+| `metis.library.metrics.orchestration` | Routing, clarification, decomposition, delegation, synthesis |
+| `metis.library.metrics.analysis` | Analytical correctness, scope, charts, reports |
+| `metis.library.metrics.presentation` | Slide spec compliance, logical flow, source faithfulness |
+| `metis.library.metrics.universal` | Constraint adherence, turn budget, clarification efficiency |
+| `metis.library.metrics.session` | Session-level conversational metrics (full multi-turn) |
 
 ## Programmatic usage
 

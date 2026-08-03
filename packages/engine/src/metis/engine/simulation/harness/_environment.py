@@ -5,13 +5,14 @@ the Playwright page, enforces stopping conditions, and assembles the final
 SessionRecord.
 """
 
-import logging
 import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 
 from playwright.sync_api import Page
+
+from metis.core.logging import get_logger
 
 from ..types import (
     ButtonClickAction,
@@ -38,7 +39,7 @@ from ._ui_capture import (
     capture_ui_state,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 _DEFAULT_FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 
