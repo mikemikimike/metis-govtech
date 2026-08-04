@@ -6,7 +6,7 @@
 //   session open       → the conversation
 //   step past clarify  → the document pane joins on the right
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionSummary, SessionView, UserResponse } from "./api";
 import { api, TransportError } from "./api";
 import { Composer, Transcript } from "./Conversation";
@@ -38,6 +38,38 @@ export function App() {
   // the authoring form it is a front door held in shell view state; leaving it discards its
   // inputs and creates no session, which is the whole point of the depiction.
   const [connectingRepo, setConnectingRepo] = useState(false);
+
+  // The conversation's scroll viewport, and a record of the last `busy` value, so the effect
+  // below can act on the busy→ready edge — the moment the model finished the next screen — and
+  // not on every render while it is composing.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const wasBusy = useRef(false);
+  const turns = view?.requests.length ?? 0;
+
+  // When the model finishes composing the next screen, glide the start of that new step into
+  // view — but only for a user already reading near the foot, so someone who has scrolled up to
+  // re-read is left where they are. The first turn is exempt: its arrival is the entrance
+  // animation's job, not a scroll. Smooth here degrades to instant under `prefers-reduced-motion`
+  // via the global rule in globals.css, so no extra guard is needed.
+  useEffect(() => {
+    const finished = wasBusy.current && !busy;
+    wasBusy.current = busy;
+    if (!finished) return;
+    const container = scrollRef.current;
+    if (!container || turns <= 1) return;
+
+    const distanceFromFoot =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distanceFromFoot > container.clientHeight) return; // reading scrollback — leave it
+
+    const marks = container.querySelectorAll<HTMLElement>("[data-step-start]");
+    const target = marks[marks.length - 1];
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    }
+  }, [busy, turns]);
 
   const refreshList = useCallback(async () => {
     try {
@@ -179,7 +211,9 @@ export function App() {
                 request={undefined}
                 busy={busy}
                 alwaysEnabled
-                placeholder="Describe your agent — what does it do, and for whom?"
+                leadingIcon
+                bare
+                placeholder="Describe your agent — what it does and for whom — and the wizard turns it into behaviours, criteria and tasks you can run."
                 onSend={beginWithMessage}
               />
             }
@@ -192,6 +226,7 @@ export function App() {
                 different conversation is opened, not only on first mount. */}
             <div
               key={view.id}
+              ref={scrollRef}
               className="animate-enter-conversation flex-1 overflow-y-auto px-10 py-10"
             >
               <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
@@ -212,7 +247,7 @@ export function App() {
       {showDocument &&
         view &&
         (profileOpen ? (
-          <aside className="w-[30%] min-w-[20rem] shrink-0 border-l border-border">
+          <aside className="w-[30%] min-w-[20rem] shrink-0 border-l border-border bg-muted">
             <Profile profile={view.profile} onCollapse={() => setProfileOpen(false)} />
           </aside>
         ) : (
@@ -262,7 +297,10 @@ function ThinkingLine({ message }: { message: string }) {
   return (
     <div
       aria-live="polite"
-      className="flex items-center gap-2 text-sm text-muted-foreground"
+      // The whole line takes the accent, not just the dot: the wizard working is a live state,
+      // and teal is what the palette reserves for live state. It is the strongest single "the
+      // model is doing something" signal in the conversation, so it earns the colour.
+      className="flex items-center gap-2 text-sm font-medium text-accent"
     >
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
       {message}

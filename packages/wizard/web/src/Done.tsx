@@ -8,16 +8,15 @@ import { Button, cn, Panel } from "./ui";
 
 export function Done({ sessionId }: { sessionId: string }) {
   return (
+    // Reaching the end is a state worth marking, but not with a coloured left-rule — that reads
+    // as generated chrome and breaks the borders-not-accents rule. The panel stays a plain
+    // bordered card; the accent lands only on the heading, where "ready" is the state being
+    // signalled. The download stays a near-black primary — the accent marks the state, it does
+    // not fill the action.
     <Panel className="flex flex-col gap-4 p-5">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold text-foreground">
-          Your evaluation is ready
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          The document on the right compiles to an experiment definition. Download it to run
-          later, or hand it to the engine once that's wired up.
-        </p>
-      </div>
+      <h2 className="text-base font-semibold text-accent">
+        Your evaluation is ready
+      </h2>
 
       <div className="flex flex-wrap items-center gap-2">
         <a

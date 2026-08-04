@@ -91,7 +91,19 @@ export interface Warning {
 
 export type RequestState = "pending" | "resolved";
 
-export interface ChatRequest {
+// Fields every request shares, a one-directional projection of the interview's position that
+// the package stamps on so a door can show a header and mark step boundaries. They never come
+// back in a response. `step` here is the per-request 1-based step position — distinct from the
+// `step` on `SessionView`/`SessionSummary`, which is the session's *current* step as a string.
+// Optional because they are additive: an older persisted request omits them and renders as
+// before.
+interface RequestHeader {
+  title?: string | null;
+  step?: number | null;
+  steps?: number | null;
+}
+
+export interface ChatRequest extends RequestHeader {
   type: "chat";
   prompt: string;
   state: RequestState;
@@ -105,7 +117,7 @@ export interface ChatRequest {
   answer: string;
 }
 
-export interface ChoiceRequest {
+export interface ChoiceRequest extends RequestHeader {
   type: "choice";
   prompt: string;
   state: RequestState;
@@ -124,7 +136,7 @@ export interface FormField {
   multiline: boolean;
 }
 
-export interface FormRequest {
+export interface FormRequest extends RequestHeader {
   type: "form";
   prompt: string;
   state: RequestState;

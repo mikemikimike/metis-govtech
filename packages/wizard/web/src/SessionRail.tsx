@@ -23,18 +23,11 @@ export function SessionRail({
 }) {
   return (
     <nav className="flex h-full w-[15%] min-w-[13rem] flex-col border-r border-border bg-muted/30">
-      <div className="flex items-center gap-2 border-b border-border p-3">
-        <Button
-          variant="primary"
-          // Left-aligned rather than centred: the rail is a list of conversations, and its lead
-          // control should read as the first row of that list, not as a centred toolbar button.
-          className="flex-1 justify-start"
-          disabled={busy}
-          onClick={onNew}
-        >
-          <CirclePlus size={15} strokeWidth={1.75} aria-hidden />
-          New evaluation
-        </Button>
+      {/* The wordmark sits at the top-left, then a margin, then the new-evaluation control below
+          it — the shape a chat app's rail takes, so the product name anchors the shell and the
+          action reads as the first row of the list beneath it rather than a toolbar button. */}
+      <div className="flex items-center justify-between gap-2 px-3 pt-3">
+        <span className="text-sm font-semibold text-foreground">METIS-Wizard</span>
         {onCollapse && (
           <button
             type="button"
@@ -47,12 +40,25 @@ export function SessionRail({
           </button>
         )}
       </div>
-      <ul className="flex-1 overflow-y-auto p-2">
+      <div className="border-b border-border p-3">
+        <Button
+          variant="primary"
+          // Left-aligned rather than centred: the rail is a list of conversations, and its lead
+          // control should read as the first row of that list, not as a centred toolbar button.
+          className="w-full justify-start"
+          disabled={busy}
+          onClick={onNew}
+        >
+          <CirclePlus size={15} strokeWidth={1.75} aria-hidden />
+          New evaluation
+        </Button>
+      </div>
+      <ul className="flex-1 overflow-y-auto p-3">
         {sessions.map((s) => (
           <li key={s.id}>
             <button
               className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors",
+                "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors",
                 s.id === currentId
                   ? "border border-accent bg-accent/10"
                   : "border border-transparent hover:bg-muted",
@@ -65,13 +71,14 @@ export function SessionRail({
                 aria-hidden
                 className="shrink-0 text-muted-foreground"
               />
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate font-medium text-foreground">
-                  {s.title}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {s.step} · {relativeTime(s.updated)}
-                </span>
+              {/* One line per session: the title runs at the start and truncates, the timestamp
+                  sits at the end and never shrinks. The step is shown in the conversation header,
+                  not repeated here, so the rail stays scannable as a plain list. */}
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                {s.title}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">
+                {relativeTime(s.updated)}
               </span>
             </button>
           </li>

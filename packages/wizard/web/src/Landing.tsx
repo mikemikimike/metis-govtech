@@ -6,7 +6,8 @@
 // The composer itself is rendered by the shell beneath this, so this component owns only the
 // heading and the two alternatives — the input is one consistent control across every screen.
 
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
+import { FilePen, FolderGit2 } from "lucide-react";
 import { Chevron, Panel } from "./ui";
 
 export function Intro({
@@ -28,25 +29,27 @@ export function Intro({
             <h1 className="text-2xl font-semibold text-foreground">
               What are we evaluating?
             </h1>
-            <p className="text-sm text-muted-foreground">
-              Describe your agent and the wizard turns it into behaviours, criteria and tasks
-              you can run.
-            </p>
           </header>
 
-          {composer}
+          {/* Composer and the two entries read as one group: same width, stacked close, so the
+              cards sit just beneath the input rather than floating off on their own. */}
+          <div className="flex flex-col gap-3">
+            {composer}
 
-          <div className="flex flex-col gap-2">
-            <LiveEntry
-              title="Connect a repo"
-              detail="Point the wizard at your codebase and let it read the product for you."
-              onClick={onConnectRepo}
-            />
-            <LiveEntry
-              title="Write the experiment yourself"
-              detail="Skip the interview and fill in the tasks, personas and metrics directly."
-              onClick={onAuthor}
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <LiveEntry
+                icon={FolderGit2}
+                title="Connect a repo"
+                detail="Point the wizard at your codebase and let it read the product for you."
+                onClick={onConnectRepo}
+              />
+              <LiveEntry
+                icon={FilePen}
+                title="Write the experiment yourself"
+                detail="Skip the interview and fill in the tasks, personas and metrics directly."
+                onClick={onAuthor}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -55,18 +58,26 @@ export function Intro({
 }
 
 function LiveEntry({
+  icon: Icon,
   title,
   detail,
   onClick,
 }: {
+  icon: ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
   title: string;
   detail: string;
   onClick: () => void;
 }) {
   return (
     <button type="button" onClick={onClick} className="text-left">
-      <Panel className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-muted">
-        <div className="flex flex-col">
+      <Panel className="flex items-center gap-3 p-4 transition-colors hover:bg-muted">
+        {/* A leading icon in a fixed-width gutter, so the two cards' titles line up down a
+            common left edge however wide each icon draws. Neutral, in currentColor — no accent,
+            since these are entries, not state. */}
+        <span className="flex w-6 shrink-0 justify-center text-muted-foreground">
+          <Icon size={18} strokeWidth={1.75} />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col">
           <span className="text-sm font-medium text-foreground">{title}</span>
           <span className="text-xs text-muted-foreground">{detail}</span>
         </div>

@@ -8,8 +8,9 @@
 // chat request, or a choice screen carrying a `chat` action. Prioritise and criteria carry
 // no such action, so the box greys itself with no step name written down anywhere here.
 
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, PencilSparkles } from "lucide-react";
 import { useState } from "react";
+import type { ReactNode } from "react";
 import type {
   Card,
   CardComponent,
@@ -53,14 +54,28 @@ export function Transcript({
 }) {
   return (
     <div className="flex flex-col gap-8">
-      {requests.map((request, i) => (
-        <RequestBlock
-          key={i}
-          request={request}
-          busy={busy}
-          onRespond={onRespond}
-        />
-      ))}
+      {requests.map((request, i) => {
+        // A light rule ahead of the first block of each new step, so consecutive steps do not
+        // read as one unbroken scroll. The boundary is the per-request `step` changing between
+        // adjacent blocks — the package stamps it; the door only notices when it moves. Not the
+        // session's current step, which cannot mark the joins between already-resolved blocks in
+        // the scrollback. The first block starts no divider (nothing precedes it), and a request
+        // with no `step` never introduces one, so the rule degrades to nothing on older sessions.
+        const prevStep = requests[i - 1]?.step ?? null;
+        const startsStep =
+          request.step != null && i > 0 && request.step !== prevStep;
+        return (
+          <div
+            key={i}
+            // The shell scrolls to the newest step's first block by finding the last one of
+            // these markers; the divider and the marker are the same element.
+            data-step-start={startsStep ? "" : undefined}
+            className={cn(startsStep && "border-t border-border pt-8")}
+          >
+            <RequestBlock request={request} busy={busy} onRespond={onRespond} />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -165,7 +180,12 @@ function ChoiceBlock({
       ))}
 
       {request.cards.length > 0 && (
-        <div className="flex flex-col gap-3">
+        // A muted backing sits behind the whole run of cards — the grey the Jira columns and
+        // the document sheet share — so a card-bearing screen reads as its own grouped surface,
+        // set apart from the plain chat turns above and below it. It is drawn from the cards
+        // alone, not the resolved flag, so it persists once the block becomes a receipt; the
+        // receipt's dimming rides on top from the enclosing section.
+        <div className="flex flex-col gap-3 rounded-md bg-muted p-3">
           {request.cards.map((card, i) => {
             // The heading is emitted once per group, ahead of that group's cards — a header
             // is drawn only when this card's section differs from the one before it. The door
@@ -175,7 +195,7 @@ function ChoiceBlock({
             return (
               <div key={card.id} className="flex flex-col gap-1.5">
                 {startsGroup && (
-                  <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="pt-1 text-xs font-semibold text-muted-foreground">
                     {sectionLabel(card.section)}
                   </p>
                 )}
@@ -283,9 +303,11 @@ function CardBlock({
             />
           )}
           <div className="flex flex-1 flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-3">
               <span className="font-medium text-foreground">{card.title}</span>
-              <Mono>{card.id}</Mono>
+              {/* The id keeps its own gutter: it never shrinks and never wraps, so a short
+                  identifier like EB-1 or T-1 reads on one line however long the title runs. */}
+              <Mono className="shrink-0 whitespace-nowrap">{card.id}</Mono>
             </div>
 
             {card.components.map((component, i) => (
@@ -330,32 +352,27 @@ function ComponentBlock({
   disabled: boolean;
   onPick: (key: string) => void;
 }) {
-  switch (component.type) {
-    case "text":
-      return (
-        <div className="flex flex-col">
-          {component.label && (
-            <span className="text-xs font-medium text-muted-foreground">
-              {component.label}
-            </span>
-          )}
-          <p className="whitespace-pre-wrap text-sm text-foreground">
-            {component.text}
-          </p>
-          {component.note && <Mono>{component.note}</Mono>}
-        </div>
-      );
+  // The value alone, unlabelled. `FormRow` decides where the label goes: a labelled component
+  // reads as a form field (label in a left column, value at the right), an unlabelled one runs
+  // full-width. This is a *shape* choice — "does this component carry a label" — not a domain
+  // one; only the task card composes labelled components, so this is what gives it its form look
+  // without the door ever learning it is a task.
+  const value = (() => {
+    switch (component.type) {
+      case "text":
+        return (
+          <div className="flex flex-col">
+            <p className="whitespace-pre-wrap text-sm text-foreground">
+              {component.text}
+            </p>
+            {component.note && <Mono>{component.note}</Mono>}
+          </div>
+        );
 
-    case "options":
-      // A chip row. Each chip carries its own `selected`, so it toggles in place and posts
-      // its action on click — a "T-1 covers EB-4" reference is one such chip.
-      return (
-        <div className="flex flex-col gap-1">
-          {component.label && (
-            <span className="text-xs font-medium text-muted-foreground">
-              {component.label}
-            </span>
-          )}
+      case "options":
+        // A chip row. Each chip carries its own `selected`, so it toggles in place and posts
+        // its action on click — a "T-1 covers EB-4" reference is one such chip.
+        return (
           <div className="flex flex-wrap gap-1.5">
             {component.options.map((o) => (
               <Button
@@ -370,44 +387,59 @@ function ComponentBlock({
               </Button>
             ))}
           </div>
-        </div>
-      );
+        );
 
-    case "number":
-      // Display-only in the MVP. The package composes the field but registers no action for
-      // it — the CLI draws the same value as static text, and a door that grew its own
-      // stepper would be inventing a response the package does not read. Its bounds ride
-      // along so a later change can make it operable without a wire change.
-      return (
-        <div className="flex items-center gap-2">
-          {component.label && (
-            <span className="text-xs font-medium text-muted-foreground">
-              {component.label}
+      case "number":
+        // Display-only in the MVP. The package composes the field but registers no action for
+        // it — the CLI draws the same value as static text, and a door that grew its own
+        // stepper would be inventing a response the package does not read. Its bounds ride
+        // along so a later change can make it operable without a wire change.
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm text-foreground">
+              {component.value}
             </span>
-          )}
-          <span className="font-mono text-sm text-foreground">
-            {component.value}
-          </span>
-          <Mono>
-            [{component.min}–{component.max}]
-          </Mono>
-        </div>
-      );
+            <Mono>
+              [{component.min}–{component.max}]
+            </Mono>
+          </div>
+        );
 
-    case "upload":
-      // Filenames only in the MVP — no upload, and no action registered for it either. A
-      // labelled read-back of the finished text the package built, nothing operable.
-      return (
-        <div className="flex flex-col gap-1">
-          {component.label && (
-            <span className="text-xs font-medium text-muted-foreground">
-              {component.label}
-            </span>
-          )}
-          <Mono>{component.value || "—"}</Mono>
-        </div>
-      );
-  }
+      case "upload":
+        // Filenames only in the MVP — no upload, and no action registered for it either. A
+        // labelled read-back of the finished text the package built, nothing operable.
+        return <Mono>{component.value || "—"}</Mono>;
+    }
+  })();
+
+  return <FormRow label={component.label}>{value}</FormRow>;
+}
+
+// One component's row. With a label it reads as a form field — the label in a fixed left column,
+// the value aligned to the right of the row — which is what turns the task card's stack of
+// labelled components into a two-column form. Without a label it runs full-width, so the
+// behaviours', criteria' and personas' unlabelled text is untouched.
+function FormRow({
+  label,
+  children,
+}: {
+  label?: string | null;
+  children: ReactNode;
+}) {
+  if (!label) return <>{children}</>;
+  return (
+    <div className="flex items-baseline gap-4">
+      <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">
+        {label}
+      </span>
+      {/* The value column: content left-aligned to a common edge just right of the label, so a
+          list of chips forms a clean left rule and a scalar sits at the same start. "Fields on
+          the right side" means this column, not text pushed to the far margin. */}
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        {children}
+      </div>
+    </div>
+  );
 }
 
 // ── warnings ─────────────────────────────────────────────────────────────────
@@ -571,6 +603,8 @@ export function Composer({
   onSend,
   alwaysEnabled = false,
   placeholder,
+  leadingIcon = false,
+  bare = false,
 }: {
   request: WizardRequest | undefined;
   busy: boolean;
@@ -579,6 +613,14 @@ export function Composer({
   // way in, always open. Everywhere else the greying rule stands.
   alwaysEnabled?: boolean;
   placeholder?: string;
+  // A pencil-sparkles mark inside the input, left of the text. Only the opening screen's hero
+  // composer asks for it; the in-conversation composer leaves it off, so the mark reads as "this
+  // is where you begin" rather than decoration on every turn.
+  leadingIcon?: boolean;
+  // Drop the bottom-dock chrome — the outer padding and the composer's own max-width. The
+  // opening screen already lays the composer inside a sized column alongside the entry cards, so
+  // it should fill that column and match their width rather than re-centre itself narrower.
+  bare?: boolean;
 }) {
   const [text, setText] = useState("");
   const enabled = (alwaysEnabled || acceptsChat(request)) && !busy;
@@ -593,18 +635,26 @@ export function Composer({
 
   const canSend = enabled && text.trim().length > 0;
 
-  return (
-    // Not glued to the bottom edge: the composer floats clear of it, with room on every side,
-    // so it is comfortable to reach and click the way a modern chat input is.
-    <div className="px-6 pb-6 pt-2">
-      <div className="mx-auto w-full max-w-3xl">
-        <div
-          className={cn(
-            "flex items-end gap-2 rounded-2xl border border-input bg-card p-2 pl-4",
-            "transition-colors focus-within:border-accent",
-            !enabled && "opacity-70",
+  const pill = (
+    <div
+      className={cn(
+        "flex items-end gap-2 rounded-2xl border border-input bg-card p-2 pl-4",
+        "transition-colors focus-within:border-accent",
+        !enabled && "opacity-70",
+      )}
+    >
+          {leadingIcon && (
+            <PencilSparkles
+              size={18}
+              strokeWidth={1.75}
+              aria-hidden
+              // Top-left, centred on the first line of text. That line sits in a 1.6 line-height
+              // box beginning after the textarea's py-2.5, so its optical centre is a little below
+              // the box top — the icon takes a slightly larger top offset to land level with it
+              // rather than riding above the caps.
+              className="mt-[0.9rem] shrink-0 self-start text-muted-foreground"
+            />
           )}
-        >
           <textarea
             className={cn(
               // Taller by default and a higher cap: the box showed barely a line, so a
@@ -642,8 +692,15 @@ export function Composer({
           >
             <ArrowUp size={16} strokeWidth={1.75} aria-hidden />
           </button>
-        </div>
-      </div>
+    </div>
+  );
+
+  // Bare: the caller owns width and spacing. Docked: float clear of the bottom edge with room
+  // on every side, centred in its own max-width the way a modern chat input sits.
+  if (bare) return pill;
+  return (
+    <div className="px-6 pb-6 pt-2">
+      <div className="mx-auto w-full max-w-3xl">{pill}</div>
     </div>
   );
 }

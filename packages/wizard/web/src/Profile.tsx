@@ -32,25 +32,31 @@ export function Profile({
   const { epics } = profile;
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-y-auto p-5 text-sm">
-      <header className="flex items-start gap-2">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h2 className="text-base font-semibold text-foreground">{named}</h2>
-          {product.summary && (
-            <p className="text-muted-foreground">{product.summary}</p>
-          )}
-        </div>
+    // The document is a produced artifact, not an editable field, and it reads that way: a white
+    // sheet floating on the grey pane, carrying a single soft shadow. That shadow is the one
+    // exception the house style grants — depth is a border everywhere else — because "this is a
+    // finished page" is exactly what a sheet-with-shadow says and a border cannot. Nothing here
+    // is an input; the shadow's job is to say so.
+    <div className="h-full overflow-y-auto p-4">
+      <div className="relative flex flex-col gap-6 rounded-[12px] bg-card p-5 text-sm text-card-foreground shadow-sm">
+        {/* Pinned to the sheet's top-right corner rather than laid out beside the header, so its
+            position stays put when the summary reflows to fewer lines at a wider pane. */}
         {onCollapse && (
           <button
             type="button"
             aria-label="Hide document"
             title="Hide document"
             onClick={onCollapse}
-            className="-mr-1 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="absolute right-3 top-3 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <PanelRight size={16} strokeWidth={1.75} aria-hidden />
           </button>
         )}
+        <header className="flex min-w-0 flex-col gap-1 pr-8">
+          <h2 className="text-base font-semibold text-foreground">{named}</h2>
+          {product.summary && (
+            <p className="text-muted-foreground">{product.summary}</p>
+          )}
       </header>
 
       {epics.length > 0 && (
@@ -64,7 +70,7 @@ export function Profile({
       )}
 
       {profile.personas.length > 0 && (
-        <Section title="Who runs it">
+        <Section title="Personas">
           <ul className="flex flex-col gap-2">
             {profile.personas.map((p) => (
               <li key={p.id} className="flex flex-col">
@@ -77,13 +83,13 @@ export function Profile({
       )}
 
       {profile.tasks.length > 0 && (
-        <Section title="How we'll check it">
+        <Section title="Task descriptions">
           <ul className="flex flex-col gap-3">
             {profile.tasks.map((t) => (
               <li key={t.id} className="flex flex-col gap-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-foreground">{t.description}</span>
-                  <Mono>{t.id}</Mono>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 flex-1 text-foreground">{t.description}</span>
+                  <Mono className="shrink-0 whitespace-nowrap">{t.id}</Mono>
                 </div>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                   {t.behaviour_refs.map((ref) => (
@@ -99,6 +105,7 @@ export function Profile({
           </ul>
         </Section>
       )}
+      </div>
     </div>
   );
 }
@@ -112,7 +119,7 @@ function Section({
 }) {
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h3 className="text-xs font-semibold text-muted-foreground">
         {title}
       </h3>
       {children}
@@ -157,22 +164,25 @@ function BehaviourView({ behaviour }: { behaviour: Behaviour }) {
   const dormant = !behaviour.priority;
   return (
     <li className={cn("flex flex-col gap-0.5", dormant && "opacity-45")}>
-      <div className="flex items-center gap-2">
-        <span className="text-foreground">{behaviour.statement}</span>
-        <Mono>{behaviour.id}</Mono>
+      <div className="flex items-baseline gap-2">
+        <span className="min-w-0 flex-1 text-foreground">{behaviour.statement}</span>
+        <Mono className="shrink-0 whitespace-nowrap">{behaviour.id}</Mono>
       </div>
       {behaviour.criteria.length > 0 && (
         <ul className="flex flex-col gap-0.5 pl-3">
           {behaviour.criteria.map((c) => (
-            <li key={c.id} className="text-xs text-muted-foreground">
-              <span className="text-foreground">Given</span> {c.given},{" "}
-              <span className="text-foreground">when</span> {c.when},{" "}
-              <span className="text-foreground">then</span> {c.then}
+            <li key={c.id} className="flex flex-col gap-1 text-xs text-muted-foreground">
+              <span>
+                <span className="text-foreground">Given</span> {c.given},{" "}
+                <span className="text-foreground">when</span> {c.when},{" "}
+                <span className="text-foreground">then</span> {c.then}
+              </span>
               {c.metric_fqn && (
-                <>
-                  {" "}
-                  <Mono>{c.metric_fqn}</Mono>
-                </>
+                // The metric is machine-named, so it reads as a line of code: mono on a light
+                // editor backing, set apart from the plain-language criterion above it.
+                <Mono className="block break-all rounded border border-border bg-muted px-2 py-1 leading-relaxed">
+                  {c.metric_fqn}
+                </Mono>
               )}
             </li>
           ))}
