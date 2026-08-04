@@ -5,6 +5,7 @@ Code-graded: M-UNI-1, 2, 3, 4, 6
 Model-graded (GEval): M-UNI-5, 7, 8, 9, 10, 11
 """
 
+from collections import Counter
 from typing import cast
 
 from deepeval.metrics import BaseMetric, ConversationalGEval, GEval
