@@ -5,6 +5,7 @@ Code-graded: M-UNI-1, 2, 3, 4, 6
 Model-graded (GEval): M-UNI-5, 7, 8, 9, 10, 11
 """
 
+from collections import Counter
 from typing import cast
 
 from deepeval.metrics import BaseMetric, ConversationalGEval, GEval
@@ -275,8 +276,6 @@ class BoundedTroubleshootingMetric(SyncBaseMetric):
 
         # Also count from raw tool calls for completeness
         if not retry_counts and tool_calls:
-            from collections import Counter
-
             counts = Counter(tc.get("name", "") for tc in tool_calls)
             retry_counts = {name: c for name, c in counts.items() if c > 1}
 

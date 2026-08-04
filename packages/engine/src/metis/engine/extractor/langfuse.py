@@ -23,7 +23,6 @@ from deepeval.test_case.conversational_test_case import (
 )
 from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
-from langfuse.api import TraceWithDetails
 
 from metis.engine.extractor.types import SessionContext
 from metis.engine.simulation.types import CollectedArtifact, ExperimentTask, Persona
@@ -333,28 +332,67 @@ def _extract_orca_chat_metadata(observations: list) -> OrcaChatMetadata:
 
 
 # ---------------------------------------------------------------------------
+# Bundled extraction intermediate
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _TraceExtraction:
+    """Pre-extracted data from a single trace's observations.
+
+    Built once per trace in fetch_by_session_id, then reused by both
+    _trace_to_test_case and _session_to_conversational_test_case to
+    avoid redundant extraction and API calls.
+    """
+
+    trace: Any
+    observations: list
+    tool_calls: list
+    delegation: dict | None
+    subagent_output: str | None
+    spoke_context: dict | None
+    assistant_messages: list
+    retry_counts: dict
+    clarification_requests: list
+    chat_metadata: OrcaChatMetadata
+
+
+def _extract_all(trace: Any, observations: list) -> _TraceExtraction:
+    """Run all extraction helpers once and return a bundled result."""
+    return _TraceExtraction(
+        trace=trace,
+        observations=observations,
+        tool_calls=_extract_tool_calls(observations),
+        delegation=_extract_delegation(observations),
+        subagent_output=_extract_subagent_output(observations),
+        spoke_context=_extract_spoke_context(observations),
+        assistant_messages=_extract_assistant_messages(observations),
+        retry_counts=_extract_retry_counts(observations),
+        clarification_requests=_extract_clarification_requests(observations),
+        chat_metadata=_extract_orca_chat_metadata(observations),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Test case construction
 # ---------------------------------------------------------------------------
 
 
 def _trace_to_test_case(
-    trace: Any,
-    observations: list,
+    ext: _TraceExtraction,
     session_context: SessionContext,
 ) -> LLMTestCase:
-    """Convert a Langfuse trace + observations into a DeepEval LLMTestCase.
+    """Convert pre-extracted trace data into a DeepEval LLMTestCase.
 
-    :param trace: Langfuse trace object.
-    :param observations: Observation objects for this trace.
+    :param ext: Pre-extracted data bundle for this trace.
     :param session_context: Session-level positioning info.
     :returns: A :class:`~deepeval.test_case.LLMTestCase` ready for metric evaluation.
     """
+    trace = ext.trace
     trace_input = trace.input if isinstance(trace.input, str) else str(trace.input)
     trace_output = trace.output if isinstance(trace.output, str) else str(trace.output)
 
-    delegation = _extract_delegation(observations)
-    subagent_output = _extract_subagent_output(observations)
-    context = [subagent_output] if subagent_output else None
+    context = [ext.subagent_output] if ext.subagent_output else None
 
     meta = TraceMetadata(
         trace_id=trace.id,
@@ -374,7 +412,7 @@ def _trace_to_test_case(
                 "end_time": obs.end_time,
                 "parent_observation_id": obs.parent_observation_id,
             }
-            for obs in observations
+            for obs in ext.observations
         ],
         tool_calls=[
             {
@@ -383,14 +421,14 @@ def _trace_to_test_case(
                 "input": obs.input,
                 "output": obs.output,
             }
-            for obs in _extract_tool_calls(observations)
+            for obs in ext.tool_calls
         ],
-        delegation=delegation,
-        spoke_context=_extract_spoke_context(observations),
-        assistant_messages=_extract_assistant_messages(observations),
-        retry_counts=_extract_retry_counts(observations),
-        clarification_requests=_extract_clarification_requests(observations),
-        chat_metadata=_extract_orca_chat_metadata(observations),
+        delegation=ext.delegation,
+        spoke_context=ext.spoke_context,
+        assistant_messages=ext.assistant_messages,
+        retry_counts=ext.retry_counts,
+        clarification_requests=ext.clarification_requests,
+        chat_metadata=ext.chat_metadata,
     )
 
     return LLMTestCase(
@@ -402,47 +440,38 @@ def _trace_to_test_case(
 
 
 def _session_to_conversational_test_case(
-    session_traces: list[TraceWithDetails],
-    *,
-    langfuse: Langfuse,
+    extractions: list[_TraceExtraction],
 ) -> ConversationalTestCase | None:
-    """Convert a session (ordered list of traces) into a ConversationalTestCase.
+    """Convert pre-extracted trace data into a ConversationalTestCase.
 
     Each trace becomes a user turn + assistant turn pair.
     The assistant turn carries all tool calls from that trace's observations.
 
-    Returns ``None`` if the session has no traces with output.
+    Returns ``None`` if no extractions are provided.
 
-    :param session_traces: Ordered list of :class:`TraceWithDetails` objects.
-    :param langfuse: Initialized Langfuse client.
+    :param extractions: Pre-extracted data bundles (chronological, output-bearing only).
     :returns: A :class:`~deepeval.test_case.conversational_test_case\
-        .ConversationalTestCase`, or ``None`` if no evaluable traces
-        exist.
+        .ConversationalTestCase`, or ``None`` if no evaluable traces exist.
     """
+    if not extractions:
+        return None
+
     turns = []
     session_metadata: dict = {
-        "session_id": session_traces[0].session_id if session_traces else "",
+        "session_id": extractions[0].trace.session_id,
         "trace_ids": [],
     }
 
-    for trace in session_traces:
-        if not trace.output:
-            continue
-
-        observations = langfuse.api.observations.get_many(trace_id=trace.id).data
-        tool_obs = _extract_tool_calls(observations)
-        chat_meta = _extract_orca_chat_metadata(observations)
-        delegation = _extract_delegation(observations)
-
-        # Extract the user's message from the trace input
+    for ext in extractions:
+        trace = ext.trace
         trace_input = trace.input if isinstance(trace.input, str) else str(trace.input)
         trace_output = (
             trace.output if isinstance(trace.output, str) else str(trace.output)
         )
 
-        # Build ToolCall objects from observations
+        # Build ToolCall objects from pre-extracted tool observations
         tool_calls = []
-        for obs in tool_obs:
+        for obs in ext.tool_calls:
             inp = obs.input
             if isinstance(inp, dict):
                 params = inp
@@ -468,9 +497,9 @@ def _session_to_conversational_test_case(
         )
 
         # Assistant turn with tool calls
-        routed_to = delegation.get("target", "") if delegation else ""
-        if not routed_to and chat_meta.routed_to_agents:
-            routed_to = chat_meta.routed_to_agents[0]
+        routed_to = ext.delegation.get("target", "") if ext.delegation else ""
+        if not routed_to and ext.chat_metadata.routed_to_agents:
+            routed_to = ext.chat_metadata.routed_to_agents[0]
 
         turns.append(
             Turn(
@@ -560,6 +589,7 @@ def fetch_by_session_id(
     test_cases: list = []
     skipped: int = 0
     prior_turns: list = []
+    extractions: list[_TraceExtraction] = []
 
     for turn_idx, trace in enumerate(traces):
         if not trace.output:
@@ -567,6 +597,8 @@ def fetch_by_session_id(
             continue
 
         observations: list = langfuse.api.observations.get_many(trace_id=trace.id).data
+        ext = _extract_all(trace, observations)
+        extractions.append(ext)
 
         session_ctx = SessionContext(
             session_id=session_id,
@@ -575,7 +607,7 @@ def fetch_by_session_id(
             prior_turns=list(prior_turns),
         )
 
-        tc: LLMTestCase = _trace_to_test_case(trace, observations, session_ctx)
+        tc: LLMTestCase = _trace_to_test_case(ext, session_ctx)
 
         if session_artifacts and tc.metadata is not None:
             tc.metadata["artifacts"] = session_artifacts
@@ -587,9 +619,10 @@ def fetch_by_session_id(
 
         test_cases.append(tc)
 
-        obs_meta: OrcaChatMetadata = _extract_orca_chat_metadata(observations)
-        delegation: dict | None = _extract_delegation(observations)
-        routed_to: str = delegation.get("target", "") if delegation else ""
+        routed_to: str = ext.delegation.get("target", "") if ext.delegation else ""
+        if not routed_to and ext.chat_metadata.routed_to_agents:
+            routed_to = ext.chat_metadata.routed_to_agents[0]
+
         prior_turns.append(
             {
                 "input": (
@@ -602,14 +635,13 @@ def fetch_by_session_id(
                     if isinstance(trace.output, str)
                     else str(trace.output or "")
                 )[:500],
-                "routed_to": routed_to
-                or (obs_meta.routed_to_agents[0] if obs_meta.routed_to_agents else ""),
+                "routed_to": routed_to,
             }
         )
 
     session_test_cases: list = []
     ctc: ConversationalTestCase | None = _session_to_conversational_test_case(
-        traces, langfuse=langfuse
+        extractions
     )
     if ctc:
         if task is not None and ctc.metadata is not None:
