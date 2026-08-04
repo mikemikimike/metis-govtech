@@ -4,9 +4,15 @@ The order of the checks is the whole design:
 
     1. origin      — did the package compose this? then it is trusted
     2. ownership   — does *any* step own this address?
+    3. fields      — of what the value carries, which parts does the model fill?
 
 Origin comes first because an address check alone cannot tell the user's tick from the
 model's attempt at one — the two patches are byte-identical. See `PatchOrigin`.
+
+Two and three are the same rule read against the two shapes a patch comes in. A targeted
+write names its field in the path, so ownership catches it. A bundled one addresses a
+container and carries the whole object inside, where the path never names the fields within
+— so the value is filtered against `ModelWritableFields` on the way in.
 
 A rejected patch is never silent. The user asked for something and part of it did not happen,
 so the applier says which part and why, and the caller attaches that as a RUNTIME warning.
@@ -24,7 +30,7 @@ from pydantic import ValidationError
 
 from metis.wizard.domain import paths
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
-from metis.wizard.domain.permissions import owner_of
+from metis.wizard.domain.permissions import ModelWritableFields, owner_of
 from metis.wizard.domain.profile import (
     Behaviour,
     Criterion,
@@ -98,8 +104,37 @@ def _check(patch: Patch) -> str | None:
     return None
 
 
-def _coerce(field_name: str, value: Any) -> Any:
-    """Turn a dict from model output into the object its list holds."""
+def _only_writable(field_name: str, value: Any) -> Any:
+    """Drop the fields the model does not fill, wherever they sit in the value.
+
+    The address check reads `patch.path`, and every step asks the model to draft its output in
+    one go — so its patches address a container and carry the finished object inside, where the
+    path never names the fields within. `ModelWritableFields` is that second half.
+
+    Recursive because Pydantic builds nested behaviours and criteria from raw dicts without
+    coming back through here, so filtering only the top level would leave the nesting open.
+    """
+    allowed = ModelWritableFields.get(field_name)
+    if allowed is None or not isinstance(value, dict):
+        return value
+    return {
+        key: [_only_writable(key, item) for item in inner]
+        if isinstance(inner := value[key], list)
+        else _only_writable(key, inner)
+        for key in value
+        if key in allowed
+    }
+
+
+def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
+    """Turn a dict from model output into the object its list holds.
+
+    A WIZARD patch passes through unfiltered, for the same reason `_check` reads origin first:
+    the package composed it and knows it did. That is what leaves room for the user's own
+    trials and fixtures edits to land on addresses the model can never write.
+    """
+    if origin is PatchOrigin.MODEL:
+        value = _only_writable(field_name, value)
     model = _LIST_TYPES.get(field_name)
     if model is not None and isinstance(value, dict):
         return model.model_validate(value)
@@ -111,11 +146,13 @@ def _apply_one(profile: ProductProfile, patch: Patch) -> None:
 
     if patch.op is PatchOp.SET:
         if segment.key is None:
-            setattr(parent, segment.field, _coerce(segment.field, patch.value))
+            setattr(
+                parent, segment.field, _coerce(segment.field, patch.value, patch.origin)
+            )
         else:
             # Replacing a whole element by id, e.g. SET epics[EP-1].behaviours[EB-4].
             items = getattr(parent, segment.field)
-            replacement = _coerce(segment.field, patch.value)
+            replacement = _coerce(segment.field, patch.value, patch.origin)
             for i, item in enumerate(items):
                 if getattr(item, "id", None) == segment.key:
                     items[i] = replacement
@@ -126,7 +163,7 @@ def _apply_one(profile: ProductProfile, patch: Patch) -> None:
         items = getattr(parent, segment.field)
         if not isinstance(items, list):
             raise paths.PathError(f"{patch.path!r}: cannot ADD to a non-list.")
-        items.append(_coerce(segment.field, patch.value))
+        items.append(_coerce(segment.field, patch.value, patch.origin))
 
     elif patch.op is PatchOp.REMOVE:
         items = getattr(parent, segment.field)

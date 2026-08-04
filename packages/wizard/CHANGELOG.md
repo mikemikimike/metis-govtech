@@ -20,10 +20,14 @@ Initial release: an interview that turns a prose product description into a runn
   built bundle is committed so the server runs without a Node toolchain. Step metadata
   (`title`, `step`, `steps`) rides on the request so either door can show where the interview
   is without learning what a behaviour or a persona is.
-- **Patch-based editing.** What the model may write is checked against the step that *owns*
-  the address, so an edit works from wherever the user is standing. One address is unwritable
-  by the model at any step — a behaviour's `priority`, the user's own decision. Edits that
-  invalidate derived work ask in the same turn and leave no staleness flag.
+- **Patch-based editing.** The model edits by patch, and what it may write is checked twice:
+  the address, against the step that *owns* it — so an edit works from wherever the user is
+  standing — and the value, against a list of the fields the model fills in each kind of
+  object. Both are needed, because the model drafts a whole step at a time: `add tasks` carries
+  the finished task, and the path never names what is inside it. A few things are the user's
+  alone and pass neither check — a behaviour's `priority`, a task's `num_trials` and
+  `fixtures`. Edits that invalidate derived work ask in the same turn and leave no staleness
+  flag.
 - **Metric matching by embedding similarity.** Each acceptance criterion is matched against
   the metric catalogue by cosine similarity, with `CriterionGEvalMetric` as the fallback when
   nothing scores above the threshold or the embedding provider is unreachable — so a dead
@@ -60,6 +64,14 @@ Initial release: an interview that turns a prose product description into a runn
   Without it a degraded experiment would reference an FQN that does not import.
 
 ### Known debt
+
+- **Trials and files are display-only.** Neither is the model's to write, and neither is
+  settable by the user yet: `ChoiceResponse` carries selected option ids and has no channel for
+  a submitted value, so the task card's number and upload fields are a read-back. The addresses
+  are in place (`OptionId(action="trials"/"files", target=task.id)`), and a user's edit will
+  arrive `WIZARD`-origin, which both halves of the permission rule already pass through
+  untouched. Until then every task runs 3 trials with no fixtures. There is no upload storage
+  and no `fixtures/` folder emitted at compile.
 
 - **Dependency on `metis-engine`.** A deliberate break of the `wizard ↛ engine` invariant in
   the root `CLAUDE.md`, for one reason: the compiler locates the engine's

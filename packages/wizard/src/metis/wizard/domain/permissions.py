@@ -1,7 +1,10 @@
 """What the model may write, and where.
 
-`StepPermissions` is **config, not a model** — a mapping from step to the path globs that
-step owns. Two rules make it work, and both are structural rather than prompt instructions:
+Two pieces of **config, not models**, because a patch can reach a field two different ways and
+an address check only sees one of them.
+
+`StepPermissions` maps a step to the path globs it owns. Two rules make it work, and both are
+structural rather than prompt instructions:
 
 **The check is against the step that owns the address, not the step you are standing in.**
 Asking to reword EB-4 while sitting at the criteria step should simply work: the behaviours
@@ -9,8 +12,18 @@ step owns behaviour statements, so the patch is applied where you stand and your
 never changes. Being told to press Back first would be the wizard enforcing its own structure
 over a clearly stated intent. It stays bounded — an address no step owns is writable nowhere.
 
-**One address is unwritable by the model at any step.** `priority` is the user's only real
-decision and must not be inferable from a chat message, so it appears in no entry.
+**Some addresses are unwritable by the model at any step.** `priority` is the user's only real
+decision, and `num_trials` and `fixtures` are the user's to set, so none of them appears in any
+entry.
+
+`ModelWritableFields` closes the other route. Every step asks the model to draft its whole
+output in one go, so its patches address a *container* — `tasks`, `epics` — and carry the
+finished object inside the value. The path never names the fields within, so the address rule
+above cannot see them, and a user-owned field would arrive as a passenger. This lists what the
+model fills in each kind of object; the applier drops the rest before building anything.
+
+It is an allowlist so a field added to `Task` later is model-proof from the day it is added,
+and opens up only by a deliberate edit here.
 """
 
 from __future__ import annotations
@@ -66,9 +79,26 @@ StepPermissions: dict[SessionStep, list[str]] = {
         "tasks[*].description",
         "tasks[*].behaviour_refs",
         "tasks[*].persona_refs",
-        "tasks[*].fixtures",
-        "tasks[*].num_trials",
     ],
+}
+
+
+# Keyed by the container field name a patch addresses, matching the applier's `_LIST_TYPES` —
+# `tasks` holds Tasks, `epics[EP-1].behaviours` holds Behaviours. A key appearing as a *field*
+# of another entry (`behaviours` inside an epic, `criteria` inside a behaviour) is how the
+# filter knows to recurse: Pydantic builds those nested objects from raw dicts, so an
+# unfiltered nested list is the whole smuggling route.
+#
+# What is absent is the point. Trials and fixtures are the user's to set; `priority` is the
+# user's tick; `metric_fqn` and `metric_args` are the matcher's, resolved from the criterion's
+# wording; `interaction_type` marks text the *user* typed, which the wizard asks before
+# discarding — a model able to stamp its own suggestions FORM would make them stick.
+ModelWritableFields: dict[str, frozenset[str]] = {
+    "epics": frozenset({"id", "name", "behaviours"}),
+    "behaviours": frozenset({"id", "statement", "criteria"}),
+    "criteria": frozenset({"id", "given", "when", "then"}),
+    "personas": frozenset({"id", "description"}),
+    "tasks": frozenset({"id", "description", "behaviour_refs", "persona_refs"}),
 }
 
 

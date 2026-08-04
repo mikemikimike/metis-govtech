@@ -181,7 +181,9 @@ Draft the whole set of tasks in one go. A task is one simulated situation. It ca
 several behaviours at once, and one behaviour can be probed by several tasks.
 
 Every behaviour with priority=true must be covered by at least one task. Set behaviour_refs
-to what each task covers and persona_refs to who runs it (at least one). num_trials 3.
+to what each task covers and persona_refs to who runs it (at least one). Those, and the
+description, are the whole of a task you write — how many trials it runs and which files it
+uses are the user's to set, and are dropped if you send them.
 
 A behaviour about recovery is untestable unless a task actually makes something fail. Build
 the situation that forces the path you need to see.

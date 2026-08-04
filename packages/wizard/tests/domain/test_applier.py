@@ -3,7 +3,7 @@
 import pytest
 from fixtures.profiles import research_assistant
 
-from metis.wizard.contracts import Patch, PatchOp, PatchOrigin
+from metis.wizard.contracts import InteractionType, Patch, PatchOp, PatchOrigin
 from metis.wizard.domain import paths
 from metis.wizard.domain.applier import apply, sanitise
 from metis.wizard.domain.permissions import SessionStep, StepPermissions, owner_of
@@ -92,6 +92,156 @@ def test_rejecting_a_metric_write_points_at_rewording() -> None:
     assert "metric_fqn" not in message  # the raw field name never surfaces
     assert AC1_METRIC not in message  # nor the raw path
     assert profile.behaviour("EB-1").criteria[0].metric_fqn != "some.other.Metric"  # type: ignore[union-attr]
+
+
+# ── the fields inside a bundled value ──────────────────────────────────────
+#
+# The address check reads `patch.path` alone, and the model is told to draft a whole step in
+# one go — so its patches address a *container* (`tasks`, `epics`) and carry the finished
+# object inside. Every user-owned field below is reachable that way without the path ever
+# naming it. These are the same three rules as above, tested at the shape the model actually
+# sends rather than the targeted SET it rarely does.
+
+
+def test_a_bundled_task_cannot_carry_trials_or_files() -> None:
+    """`add tasks` is the shape `tasks_user` asks for. The task lands; the two fields don't."""
+    profile = research_assistant()
+
+    result = apply(
+        profile,
+        [
+            patch(
+                "tasks",
+                {
+                    "id": "T-9",
+                    "description": "Ask for an analysis of an uploaded spreadsheet",
+                    "behaviour_refs": ["EB-1"],
+                    "persona_refs": ["impatient-executive"],
+                    "fixtures": ["malformed_dataset.csv"],
+                    "num_trials": 10,
+                },
+                op=PatchOp.ADD,
+            )
+        ],
+    )
+
+    assert len(result.applied) == 1  # the task itself is the model's to draft
+    task = profile.task("T-9")
+    assert task is not None
+    assert task.description.startswith("Ask for an analysis")
+    assert task.behaviour_refs == ["EB-1"]  # what the model does decide, untouched
+    assert task.fixtures == []  # no file the user never uploaded
+    assert task.num_trials == 3  # the schema default, not the model's number
+
+
+def test_a_bundled_epic_cannot_carry_a_tick_or_a_metric() -> None:
+    """The recursion case. `Epic.model_validate` builds nested behaviours and criteria from
+    raw dicts without re-entering the coercion, so the nesting is the whole smuggling route."""
+    profile = research_assistant()
+
+    result = apply(
+        profile,
+        [
+            patch(
+                "epics",
+                {
+                    "id": "EP-9",
+                    "name": "Data handling",
+                    "behaviours": [
+                        {
+                            "id": "EB-9",
+                            "statement": "Validates uploaded data before analysing it",
+                            "priority": True,
+                            "criteria": [
+                                {
+                                    "id": "AC-9-1",
+                                    "given": "a spreadsheet with missing values",
+                                    "when": "analysis is requested",
+                                    "then": "the gaps are flagged before any figure is quoted",
+                                    "metric_fqn": "some.other.Metric",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                op=PatchOp.ADD,
+            )
+        ],
+    )
+
+    assert len(result.applied) == 1
+    behaviour = profile.behaviour("EB-9")
+    assert behaviour is not None
+    assert behaviour.statement.startswith("Validates uploaded data")
+    # arrives at the prioritise step waiting for a tick, not already ticked
+    assert behaviour.priority is False
+    assert behaviour.criteria[0].then.startswith("the gaps are flagged")
+    assert behaviour.criteria[0].metric_fqn is None  # still the matcher's to resolve
+
+
+def test_a_bundled_item_cannot_claim_the_user_typed_it() -> None:
+    """FORM means the user typed it, and `chat_user` protects FORM items from replacement.
+    A model that could stamp its own suggestions FORM would make them stick."""
+    profile = research_assistant()
+
+    apply(
+        profile,
+        [
+            patch(
+                "personas",
+                {
+                    "id": "fragmented-sender",
+                    "description": "Sends one fact per message and changes their mind",
+                    "interaction_type": "form",
+                },
+                op=PatchOp.ADD,
+            )
+        ],
+    )
+
+    persona = profile.persona("fragmented-sender")
+    assert persona is not None
+    assert persona.interaction_type is InteractionType.CHAT
+    assert persona.is_user_typed is False
+
+
+def test_the_filter_never_touches_what_the_wizard_composed() -> None:
+    """The future seam: a user's trials edit or upload arrives WIZARD-origin and must land.
+    Origin is read first here for the same reason `_check` reads it first."""
+    profile = research_assistant()
+
+    result = apply(
+        profile,
+        [
+            patch(
+                "tasks",
+                {
+                    "id": "T-9",
+                    "description": "Typed by the user in the manual form",
+                    "fixtures": ["uploaded_by_the_user.csv"],
+                    "num_trials": 10,
+                    "interaction_type": "form",
+                },
+                op=PatchOp.ADD,
+                origin=PatchOrigin.WIZARD,
+            )
+        ],
+    )
+
+    assert len(result.applied) == 1
+    task = profile.task("T-9")
+    assert task is not None
+    assert task.fixtures == ["uploaded_by_the_user.csv"]
+    assert task.num_trials == 10
+    assert task.interaction_type is InteractionType.FORM
+
+
+def test_trials_and_files_are_owned_by_no_step() -> None:
+    """The other half, mirroring priority: the targeted SET the field filter cannot see."""
+    assert owner_of("tasks[T-1].num_trials") is None
+    assert owner_of("tasks[T-1].fixtures") is None
+    for globs in StepPermissions.values():
+        assert not any("num_trials" in g or "fixtures" in g for g in globs)
 
 
 def test_an_unowned_address_is_refused_without_leaking_its_path() -> None:
