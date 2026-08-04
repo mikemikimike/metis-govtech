@@ -68,6 +68,8 @@ class TraceMetadata(TypedDict):
     # Reserved for future ground-truth annotation source:
     annotations: NotRequired[dict]
     # Injected from experiment configuration at fetch time:
-    task: NotRequired[object]
     persona: NotRequired[object]
-    task_id: NotRequired[str]
+    scenario: NotRequired[object]
+    scenario_id: NotRequired[str]
+    task: NotRequired[object]  # deprecated alias for scenario
+    task_id: NotRequired[str]  # deprecated alias for scenario_id
