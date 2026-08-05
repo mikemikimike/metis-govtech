@@ -43,7 +43,6 @@ class DeckSourceFaithfulnessMetric(SyncBaseMetric):
         "presentation",
         "per-turn",
         "judge-graded",
-        "condition-gated",
     )
     async_mode = False
 

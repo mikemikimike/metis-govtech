@@ -74,7 +74,6 @@ class FindingDeduplicationMetric(SyncBaseMetric):
         "orchestration",
         "per-turn",
         "judge-graded",
-        "condition-gated",
     )
 
     MIN_OUTPUT_LENGTH = 400

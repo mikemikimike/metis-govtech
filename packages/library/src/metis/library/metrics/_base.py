@@ -16,18 +16,18 @@ EVIDENCE_INSTRUCTION = (
 
 def _build_context_block(metadata: dict) -> str:
     """Build an [EVALUATION CONTEXT] block from metadata, or return empty string."""
-    task = metadata.get("task")
+    task = metadata.get("scenario") or metadata.get("task")
     persona = metadata.get("persona")
 
-    task_desc = getattr(task, "description", "") or ""
+    scenario_desc = getattr(task, "description", "") or ""
     persona_desc = getattr(persona, "description", "") or ""
 
-    if not task_desc and not persona_desc:
+    if not scenario_desc and not persona_desc:
         return ""
 
     parts = ["[EVALUATION CONTEXT]"]
-    if task_desc:
-        parts.append(f"Scenario: {task_desc.strip()}")
+    if scenario_desc:
+        parts.append(f"Scenario: {scenario_desc.strip()}")
     if persona_desc:
         parts.append(f"User persona: {persona_desc.strip()}")
     parts.append("[END CONTEXT]")
@@ -35,7 +35,7 @@ def _build_context_block(metadata: dict) -> str:
 
 
 def _with_eval_context(test_case: LLMTestCase) -> LLMTestCase:
-    """Return a copy of test_case with task/persona context prepended to input.
+    """Return a copy of test_case with scenario/persona context prepended to input.
 
     Used for non-GEval metrics (e.g. FaithfulnessMetric) that don't have
     criteria we can inject into. GEval metrics use _ContextAwareGEval instead.

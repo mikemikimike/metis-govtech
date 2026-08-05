@@ -20,7 +20,6 @@ class DelegationQualityMetric(SyncBaseMetric):
         "orchestration",
         "per-turn",
         "judge-graded",
-        "condition-gated",
     )
 
     async_mode = False

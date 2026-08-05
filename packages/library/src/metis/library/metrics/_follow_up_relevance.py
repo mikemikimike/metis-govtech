@@ -20,7 +20,6 @@ class FollowUpRelevanceMetric(SyncBaseMetric):
         "orchestration",
         "per-turn",
         "judge-graded",
-        "condition-gated",
     )
 
     MIDFLOW_SIGNALS = [

@@ -37,7 +37,6 @@ class ChartPurposefulnessMetric(SyncBaseMetric):
         "analysis",
         "per-turn",
         "judge-graded",
-        "condition-gated",
     )
 
     def __init__(self, threshold: float = 0.6):

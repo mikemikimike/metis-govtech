@@ -20,7 +20,6 @@ class FindingConsistencyMetric(SyncBaseMetric):
         "orchestration",
         "per-turn",
         "judge-graded",
-        "condition-gated",
     )
 
     def __init__(self, threshold: float = 0.6):

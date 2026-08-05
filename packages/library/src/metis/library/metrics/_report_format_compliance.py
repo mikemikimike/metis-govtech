@@ -19,7 +19,6 @@ class ReportFormatComplianceMetric(SyncBaseMetric):
         "analysis",
         "per-turn",
         "code-graded",
-        "annotation-dependent",
     )
 
     def __init__(self, threshold: float = 1.0):

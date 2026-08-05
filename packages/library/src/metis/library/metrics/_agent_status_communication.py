@@ -19,7 +19,6 @@ class AgentStatusCommunicationMetric(SyncBaseMetric):
         "orchestration",
         "per-turn",
         "code-graded",
-        "condition-gated",
     )
 
     def __init__(self, threshold: float = 1.0):

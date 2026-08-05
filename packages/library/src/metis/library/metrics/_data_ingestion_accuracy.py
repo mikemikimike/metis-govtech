@@ -19,7 +19,6 @@ class DataIngestionAccuracyMetric(SyncBaseMetric):
         "analysis",
         "per-turn",
         "code-graded",
-        "annotation-dependent",
     )
     async_mode = False
 

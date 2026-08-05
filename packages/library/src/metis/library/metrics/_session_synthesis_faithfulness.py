@@ -35,7 +35,6 @@ class SessionSynthesisFaithfulnessMetric(BaseConversationalMetric):
         "orchestration",
         "session-level",
         "judge-graded",
-        "condition-gated",
     )
 
     def __init__(self, threshold: float = 0.6):

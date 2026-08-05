@@ -19,7 +19,6 @@ class SessionStepEfficiencyMetric(BaseConversationalMetric):
         "universal",
         "session-level",
         "code-graded",
-        "annotation-dependent",
     )
 
     def __init__(self, threshold: float = 1.0, max_ratio: float = 1.3):

@@ -18,7 +18,6 @@ class ChartGranularityMetric(SyncBaseMetric):
         "analysis",
         "per-turn",
         "code-graded",
-        "condition-gated",
     )
     async_mode = False
 

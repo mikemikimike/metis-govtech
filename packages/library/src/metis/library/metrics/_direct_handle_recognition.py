@@ -20,7 +20,6 @@ class DirectHandleRecognitionMetric(SyncBaseMetric):
         "orchestration",
         "per-turn",
         "code-graded",
-        "annotation-dependent",
     )
 
     async_mode = False

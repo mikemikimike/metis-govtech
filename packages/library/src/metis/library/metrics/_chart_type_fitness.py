@@ -19,7 +19,6 @@ class ChartTypeFitnessMetric(SyncBaseMetric):
         "analysis",
         "per-turn",
         "code-graded",
-        "annotation-dependent",
     )
 
     PATTERN_ACCEPTABLE_TYPES = {
