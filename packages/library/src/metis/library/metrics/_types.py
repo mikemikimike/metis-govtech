@@ -60,7 +60,6 @@ class TraceMetadata(TypedDict):
     delegation: dict | None
     spoke_context: dict | None
     assistant_messages: list
-    retry_counts: dict
     clarification_requests: list
     chat_metadata: OrcaChatMetadata
     # Added at runtime when available:
