@@ -137,8 +137,8 @@ class MetricRef(BaseModel):
     """A metric reference from experiment.yaml.
 
     Accepts either:
-      - a plain string: "metis.library.metrics.orchestration.RoutingAccuracyMetric"
-      - a single-key mapping: {"metis.library.metrics.universal.TurnBudgetMetric": {"max_turns": 8}}
+      - a plain string: "metis.library.metrics.RoutingAccuracyMetric"
+      - a single-key mapping: {"metis.library.metrics.TurnBudgetMetric": {"max_turns": 8}}
     """
 
     fqn: str
