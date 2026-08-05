@@ -44,8 +44,8 @@ def evaluate(
     - All other metrics run against :attr:`FetchLangfuseResult.test_cases`
       (one per trace/turn).
 
-    This means session metrics and per-turn metrics can be listed together
-    in ``experiment.yaml`` — no annotation needed.
+    This means session metrics (e.g. from ``metrics.session``) and per-turn
+    metrics can be listed together in ``experiment.yaml`` — no annotation needed.
 
     :param fetch_result: Output of :func:`metis.engine.extractor.langfuse.fetch_by_session_id`.
     :param metric_refs: List of :class:`~metis.engine.simulation.types.MetricRef` objects.
