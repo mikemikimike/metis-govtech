@@ -128,6 +128,12 @@ release-branch:
 	git fetch origin main
 	git checkout -b "$(RELEASE_BRANCH)" origin/main
 	@printf "Created and switched to branch: $(RELEASE_BRANCH)\n"
+	@printf "\n"
+	@printf "Next steps:\n"
+	@printf "  1. Update $(COMPONENT_DIR)/CHANGELOG.md — add a section for v$(VER)\n"
+	@printf "  2. Update $(COMPONENT_DIR)/pyproject.toml — bump version to \"$(VER)\"\n"
+	@printf "  3. Run: uv lock\n"
+	@printf "  4. Push the branch: git push -u origin $(RELEASE_BRANCH)\n"
 
 release-issue:
 	$(check_release_args)
