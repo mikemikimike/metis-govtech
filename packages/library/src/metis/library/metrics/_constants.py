@@ -1,0 +1,36 @@
+"""Domain constants for orchestrator metrics."""
+
+SYSTEM_PROMPT_SUMMARY = (
+    "Orca is a multi-agent orchestrator that routes user "
+    "requests to specialised subagents. "
+    "It can also handle simple requests directly without "
+    "delegation. "
+    "It manages conversation context across turns and "
+    "synthesises subagent outputs for the user."
+)
+
+TOOL_MANIFEST = (
+    "AVAILABLE SUBAGENTS:\n"
+    "- Data Analyst (data-analyst): Analyses data files "
+    "(CSV, XLSX, etc.), produces charts, "
+    "runs Python code, generates reports. "
+    "Tools: execute_python, analyze_data, "
+    "create_file, view.\n"
+    "- Slide Maker (slide-maker): Creates PowerPoint "
+    "presentations from source documents. "
+    "Tools: make_ppt, list_ppt_themes.\n"
+    "- Slide Reviewer (slide-reviewer): Reviews and "
+    "critiques existing slide decks.\n"
+    "- Text Analyst (text-analyst): Performs text "
+    "clustering, topic modelling, NLP tasks.\n"
+    "\n"
+    "ORCA'S OWN TOOLS:\n"
+    "- delegate_task_to_member: Routes a task to a "
+    "subagent\n"
+    "- request_user_input: Asks the user a clarifying "
+    "question (via form)\n"
+    "- read_source_file: Reads uploaded files\n"
+    "- save_spoke_context: Persists context between "
+    "turns\n"
+    "- web_search: Searches the web for information\n"
+)

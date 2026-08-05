@@ -63,13 +63,15 @@ experiments/orca-eval-20260730-143022/
 
 ## Available metrics
 
-| Module | Covers |
-|--------|--------|
-| `metis.library.metrics.orchestration` | Routing, clarification, decomposition, delegation, synthesis |
-| `metis.library.metrics.analysis` | Analytical correctness, scope, charts, reports |
-| `metis.library.metrics.presentation` | Slide spec compliance, logical flow, source faithfulness |
-| `metis.library.metrics.universal` | Constraint adherence, turn budget, clarification efficiency |
-| `metis.library.metrics.session` | Session-level conversational metrics (full multi-turn) |
+All metrics are imported from `metis.library.metrics` (e.g. `metis.library.metrics.RoutingAccuracyMetric`).
+
+Each metric class carries a `tags` ClassVar for classification:
+
+| Tag dimension | Values |
+|---------------|--------|
+| Component | `orchestration`, `analysis`, `presentation`, `universal` |
+| Granularity | `per-turn`, `session-level` |
+| Grading | `code-graded`, `judge-graded` |
 
 ## Programmatic usage
 
