@@ -4,10 +4,11 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.5.0] — 2026-08-05
 
 ### Changed
 
+- **BREAKING: `ExperimentTask` renamed to `Scenario`** — the experiment schema field `tasks` is now `scenarios`; `RunConfig.task` is now `RunConfig.scenario`; all CLI error messages, prompts, and log lines updated to use "scenario" terminology
 - Updated metric FQNs in `experiment.yaml`, README, and orchestrator docstring to use package-level paths (`metis.library.metrics.X` instead of `metis.library.metrics.<module>.X`)
 ## [0.4.0] — 2026-08-04
 
