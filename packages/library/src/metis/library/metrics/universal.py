@@ -270,14 +270,13 @@ class BoundedTroubleshootingMetric(SyncBaseMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
+        from collections import Counter
+
         metadata = cast(TraceMetadata, test_case.metadata)
-        retry_counts = metadata.get("retry_counts", {})
         tool_calls = metadata.get("tool_calls", [])
 
-        # Also count from raw tool calls for completeness
-        if not retry_counts and tool_calls:
-            counts = Counter(tc.get("name", "") for tc in tool_calls)
-            retry_counts = {name: c for name, c in counts.items() if c > 1}
+        counts = Counter(tc.get("name", "") for tc in tool_calls)
+        retry_counts = {name: c for name, c in counts.items() if c > 1}
 
         violations = {
             name: count

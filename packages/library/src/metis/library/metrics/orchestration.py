@@ -341,8 +341,8 @@ class SynthesisFaithfulnessMetric(SyncBaseMetric):
     """Synthesis faithfulness — AC-ORCA-6.
 
     Does the orchestrator's response faithfully represent what the subagent
-    returned? Extracts subagent output from delegation.response and passes it
-    as retrieval_context to DeepEval's built-in FaithfulnessMetric.
+    returned? Uses test_case.context (subagent output) as retrieval_context
+    for DeepEval's built-in FaithfulnessMetric.
     Skips if no subagent output is available.
     """
 
@@ -365,12 +365,7 @@ class SynthesisFaithfulnessMetric(SyncBaseMetric):
         return self._metric
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        delegation = metadata.get("delegation")
-
-        subagent_output = delegation.get("response", "") if delegation else ""
-        if not subagent_output and test_case.context:
-            subagent_output = test_case.context[0]
+        subagent_output = test_case.context[0] if test_case.context else ""
 
         if not subagent_output:
             self.score = 1.0
@@ -551,12 +546,7 @@ class RedelegationOnFailureMetric(SyncBaseMetric):
         return self._geval
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        delegation = metadata.get("delegation")
-
-        subagent_output = delegation.get("response", "") if delegation else ""
-        if not subagent_output and test_case.context:
-            subagent_output = test_case.context[0]
+        subagent_output = test_case.context[0] if test_case.context else ""
 
         if not subagent_output:
             self.score = 1.0
@@ -581,12 +571,7 @@ class RedelegationOnFailureMetric(SyncBaseMetric):
         return self.score or 0.0
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        delegation = metadata.get("delegation")
-
-        subagent_output = delegation.get("response", "") if delegation else ""
-        if not subagent_output and test_case.context:
-            subagent_output = test_case.context[0]
+        subagent_output = test_case.context[0] if test_case.context else ""
 
         if not subagent_output:
             self.score = 1.0
@@ -678,12 +663,7 @@ class GapAcknowledgementMetric(SyncBaseMetric):
         return self._geval
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        delegation = metadata.get("delegation")
-
-        subagent_output = delegation.get("response", "") if delegation else ""
-        if not subagent_output and test_case.context:
-            subagent_output = test_case.context[0]
+        subagent_output = test_case.context[0] if test_case.context else ""
 
         if not subagent_output:
             self.score = 1.0
@@ -708,12 +688,7 @@ class GapAcknowledgementMetric(SyncBaseMetric):
         return self.score or 0.0
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        delegation = metadata.get("delegation")
-
-        subagent_output = delegation.get("response", "") if delegation else ""
-        if not subagent_output and test_case.context:
-            subagent_output = test_case.context[0]
+        subagent_output = test_case.context[0] if test_case.context else ""
 
         if not subagent_output:
             self.score = 1.0
