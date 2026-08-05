@@ -161,3 +161,51 @@
 .animate-enter-conversation {
   animation: enter-conversation 0.28s ease-out both;
 }
+
+/* Content landing in the document. A row that has just been written rises the last few pixels
+   into place instead of appearing cut — the arrival of content is a state change, and this is
+   what marks it. It runs on mount and never again: nothing carries a "recently changed" mark
+   once the animation has finished, so the pane still holds no change history. */
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-arrive {
+  animation: arrive 0.2s ease-out both;
+}
+
+/* A section of the document being written into. The blank rules standing in for the content
+   take a slow teal crest travelling along them, so the one section the model is filling is
+   visibly the live one while every other section's blanks stay flat grey.
+
+   This is the only looping animation in the pane, and it runs strictly while a model call is in
+   flight — it reports the busy state rather than decorating the page. The reduced-motion rule
+   above freezes it, leaving the flat grey rules. */
+@keyframes writing {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+.is-writing .placeholder-rule {
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--border)) 0%,
+    hsl(var(--border)) 35%,
+    hsl(var(--accent) / 0.55) 50%,
+    hsl(var(--border)) 65%,
+    hsl(var(--border)) 100%
+  );
+  background-size: 200% 100%;
+  animation: writing 1.6s ease-in-out infinite;
+}

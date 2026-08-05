@@ -1,10 +1,15 @@
 // The shell. The session rail is always on the left. The middle is either the opening screen
-// (when no session is open) or the conversation (when one is). The document pane appears on
-// the right once the interview is past clarify.
+// (when no session is open) or the conversation (when one is). The document pane sits on the
+// right for the whole of an open session.
 //
 //   no session open    → the intro: a chat input and the ways in
-//   session open       → the conversation
-//   step past clarify  → the document pane joins on the right
+//   session open       → the conversation, and the document pane alongside it
+//
+// The document appears from the first turn, as scaffold: every section it will hold, drawn as an
+// outline, filling in as the interview produces content. It used to wait until the interview was
+// past clarify, on the grounds that an empty pane asserts something the wizard has not decided —
+// but an outline asserts nothing, and holding it back left the user with no sight of what the
+// interview would produce during the one step where they are being asked the most.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionSummary, SessionView, UserResponse } from "./api";
@@ -14,7 +19,7 @@ import { ConnectRepo } from "./ConnectRepo";
 import { Done } from "./Done";
 import { Intro } from "./Landing";
 import { ManualForm } from "./ManualForm";
-import { Profile } from "./Profile";
+import { Profile, stepPosition } from "./Profile";
 import { SessionRail } from "./SessionRail";
 import { PanelLeft, PanelRight } from "lucide-react";
 import { cn } from "./ui";
@@ -165,11 +170,9 @@ export function App() {
 
   if (!loaded) return null; // one frame, avoids flashing the intro before the list lands
 
-  const showDocument =
-    !authoring &&
-    !connectingRepo &&
-    view !== null &&
-    view.step !== "clarify";
+  // The document belongs to a session, so it shows whenever one is open — and only then. The two
+  // other front doors write no profile at all, and the opening screen has no session behind it.
+  const showDocument = !authoring && !connectingRepo && view !== null;
   const pending = view?.requests.find((r) => r.state === "pending");
 
   return (
@@ -248,7 +251,17 @@ export function App() {
         view &&
         (profileOpen ? (
           <aside className="w-[30%] min-w-[20rem] shrink-0 border-l border-border bg-muted">
-            <Profile profile={view.profile} onCollapse={() => setProfileOpen(false)} />
+            <Profile
+              profile={view.profile}
+              // Where the interview has got to, and what it is doing right now. Both are read
+              // straight off the payload: the position from the step metadata the package stamps
+              // on requests, the step name as the package's own string. The shell carries them
+              // across; `Profile` is the one component that maps them onto sections.
+              position={stepPosition(view.requests)}
+              sessionStep={view.step}
+              busy={busy}
+              onCollapse={() => setProfileOpen(false)}
+            />
           </aside>
         ) : (
           <EdgeStrip
