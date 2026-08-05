@@ -655,6 +655,7 @@ export function Composer({
   placeholder,
   leadingIcon = false,
   bare = false,
+  sourceControl,
 }: {
   request: WizardRequest | undefined;
   busy: boolean;
@@ -671,6 +672,9 @@ export function Composer({
   // opening screen already lays the composer inside a sized column alongside the entry cards, so
   // it should fill that column and match their width rather than re-centre itself narrower.
   bare?: boolean;
+  // Only the opening screen supplies this slot. It adds the source-menu control and changes the
+  // opening composer to a textarea-over-foot-row layout; the in-conversation composer omits it.
+  sourceControl?: ReactNode;
 }) {
   const [text, setText] = useState("");
   const enabled = (alwaysEnabled || acceptsChat(request)) && !busy;
@@ -685,7 +689,79 @@ export function Composer({
 
   const canSend = enabled && text.trim().length > 0;
 
-  const pill = (
+  const sendButton = (
+    <button
+      type="button"
+      aria-label="Send"
+      disabled={!canSend}
+      onClick={submit}
+      className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+        !sourceControl && "mb-0.5",
+        "transition-colors",
+        canSend
+          ? "bg-primary text-primary-foreground hover:opacity-90"
+          : "bg-muted text-muted-foreground",
+      )}
+    >
+      <ArrowUp size={16} strokeWidth={1.75} aria-hidden />
+    </button>
+  );
+
+  const textarea = (
+    <textarea
+      className={cn(
+        // Taller by default and a higher cap: the box showed barely a line, so a
+        // paragraph scrolled out of sight while being written. Three lines to start,
+        // grows to a comfortable draft before it scrolls.
+        "max-h-64 min-h-[4.5rem] flex-1 resize-none bg-transparent py-2.5",
+        "placeholder:text-muted-foreground focus:outline-none",
+        "disabled:cursor-not-allowed",
+      )}
+      placeholder={hint}
+      value={text}
+      disabled={!enabled}
+      rows={3}
+      onChange={(e) => setText(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          submit();
+        }
+      }}
+    />
+  );
+
+  const leading = leadingIcon && (
+    <PencilSparkles
+      size={18}
+      strokeWidth={1.75}
+      aria-hidden
+      // Top-left, centred on the first line of text. That line sits in a 1.6 line-height
+      // box beginning after the textarea's py-2.5, so the icon takes a slightly larger top
+      // offset to land level with it rather than riding above the caps.
+      className="mt-[0.9rem] shrink-0 self-start text-muted-foreground"
+    />
+  );
+
+  const pill = sourceControl ? (
+    <div
+      className={cn(
+        "flex flex-col gap-1 rounded-2xl border border-input bg-card p-2",
+        "transition-colors focus-within:border-accent",
+        !enabled && "opacity-70",
+      )}
+    >
+      <div className="flex items-start gap-2 pl-2">
+        {leading}
+        {textarea}
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="relative">{sourceControl}</div>
+        {sendButton}
+      </div>
+    </div>
+  ) : (
     <div
       className={cn(
         "flex items-end gap-2 rounded-2xl border border-input bg-card p-2 pl-4",
@@ -693,55 +769,9 @@ export function Composer({
         !enabled && "opacity-70",
       )}
     >
-          {leadingIcon && (
-            <PencilSparkles
-              size={18}
-              strokeWidth={1.75}
-              aria-hidden
-              // Top-left, centred on the first line of text. That line sits in a 1.6 line-height
-              // box beginning after the textarea's py-2.5, so its optical centre is a little below
-              // the box top — the icon takes a slightly larger top offset to land level with it
-              // rather than riding above the caps.
-              className="mt-[0.9rem] shrink-0 self-start text-muted-foreground"
-            />
-          )}
-          <textarea
-            className={cn(
-              // Taller by default and a higher cap: the box showed barely a line, so a
-              // paragraph scrolled out of sight while being written. Three lines to start,
-              // grows to a comfortable draft before it scrolls.
-              "max-h-64 min-h-[4.5rem] flex-1 resize-none bg-transparent py-2.5",
-              "placeholder:text-muted-foreground focus:outline-none",
-              "disabled:cursor-not-allowed",
-            )}
-            placeholder={hint}
-            value={text}
-            disabled={!enabled}
-            rows={3}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-          />
-          {/* A round send affordance inside the pill, the shape people expect. */}
-          <button
-            type="button"
-            aria-label="Send"
-            disabled={!canSend}
-            onClick={submit}
-            className={cn(
-              "mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-              "transition-colors",
-              canSend
-                ? "bg-primary text-primary-foreground hover:opacity-90"
-                : "bg-muted text-muted-foreground",
-            )}
-          >
-            <ArrowUp size={16} strokeWidth={1.75} aria-hidden />
-          </button>
+      {leading}
+      {textarea}
+      {sendButton}
     </div>
   );
 

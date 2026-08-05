@@ -20,14 +20,23 @@ import type {
 } from "./api";
 import { api, TransportError } from "./api";
 import { Composer, Transcript } from "./Conversation";
-import { ConnectRepo } from "./ConnectRepo";
 import { Done } from "./Done";
 import { Intro } from "./Landing";
 import { ManualForm } from "./ManualForm";
 import { Profile, stepPosition } from "./Profile";
 import { SessionRail } from "./SessionRail";
+import type { SourceTrayKind } from "./SourceTray";
 import { PanelLeft, PanelRight } from "lucide-react";
 import { cn } from "./ui";
+
+const DEFAULT_OPENING_PROMPT =
+  "Describe your agent — what it does and for whom — and the wizard turns it into behaviours, criteria and tasks you can run.";
+
+function sourcePlaceholder(source: SourceTrayKind | null): string {
+  if (source === "codebase") return "Analyse my source code…";
+  if (source === "traces") return "Analyse my traces…";
+  return DEFAULT_OPENING_PROMPT;
+}
 
 export function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -53,10 +62,9 @@ export function App() {
   // It is a second front door alongside the interview, not a step within one — so it is view
   // state on the shell, and leaving it discards any unsaved form work, by design.
   const [authoring, setAuthoring] = useState(false);
-  // The repository facade: a screen depicting "connect a repo", with a gated submission. Like
-  // the authoring form it is a front door held in shell view state; leaving it discards its
-  // inputs and creates no session, which is the whole point of the depiction.
-  const [connectingRepo, setConnectingRepo] = useState(false);
+  // Source depictions peek beneath the opening composer. They hold presentation state only;
+  // closing or changing the tray retains no source data.
+  const [sourceTray, setSourceTray] = useState<SourceTrayKind | null>(null);
 
   const activeSessionId = view?.id ?? null;
 
@@ -138,7 +146,7 @@ export function App() {
     setBusy(true);
     setError(null);
     setAuthoring(false);
-    setConnectingRepo(false);
+    setSourceTray(null);
     try {
       setView(await api.readSession(id));
     } catch (e) {
@@ -155,7 +163,7 @@ export function App() {
     setError(null);
     setView(null);
     setAuthoring(false);
-    setConnectingRepo(false);
+    setSourceTray(null);
   }, []);
 
   // Typing the first message from the intro: create the session, then send that text as the
@@ -167,6 +175,9 @@ export function App() {
       setError(null);
       try {
         const created = await api.createSession();
+        // The source tray is a depiction only. Starting chat discards it before the live session
+        // appears; no source selection or value enters the request.
+        setSourceTray(null);
         // Draw the new session before its first answer returns so its package-authored
         // activity message is visible during that initial model call too.
         setView(created);
@@ -217,7 +228,7 @@ export function App() {
 
   // The document belongs to a session, so it shows whenever one is open — and only then. The two
   // other front doors write no profile at all, and the opening screen has no session behind it.
-  const showDocument = !authoring && !connectingRepo && view !== null;
+  const showDocument = !authoring && view !== null;
   const pending = view?.requests.find((r) => r.state === "pending");
 
   return (
@@ -247,26 +258,31 @@ export function App() {
           // The hand-authoring door, occupying the middle region alone — no document pane, no
           // composer. Leaving it returns to the intro and drops the form's contents.
           <ManualForm onBack={() => setAuthoring(false)} />
-        ) : connectingRepo ? (
-          // The repository facade, in the same region on the same terms — leaving it returns to
-          // the intro and drops its inputs.
-          <ConnectRepo onBack={() => setConnectingRepo(false)} />
         ) : view === null ? (
           // No session open: the intro, with a type-first composer that begins the interview.
           <Intro
-            composer={
+            composer={(sourceControl) => (
               <Composer
                 request={undefined}
                 busy={busy}
                 alwaysEnabled
                 leadingIcon
                 bare
-                placeholder="Describe your agent — what it does and for whom — and the wizard turns it into behaviours, criteria and tasks you can run."
+                placeholder={sourcePlaceholder(sourceTray)}
                 onSend={beginWithMessage}
+                sourceControl={sourceControl}
               />
-            }
-            onAuthor={() => setAuthoring(true)}
-            onConnectRepo={() => setConnectingRepo(true)}
+            )}
+            selectedSource={sourceTray}
+            onAuthor={() => {
+              setSourceTray(null);
+              setAuthoring(true);
+            }}
+            onSource={(source) => {
+              setError(null);
+              setSourceTray(source);
+            }}
+            onCloseSource={() => setSourceTray(null)}
           />
         ) : (
           <>
