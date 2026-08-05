@@ -196,7 +196,7 @@ class MetricRef(BaseModel):
         return data
 
 
-class ExperimentTask(BaseModel):
+class Scenario(BaseModel):
     id: str
     description: str
     num_trials: int = 1
@@ -213,7 +213,7 @@ class Experiment(BaseModel):
     id: str
     description: str
     personas: list[Persona] = Field(min_length=1)
-    tasks: list[ExperimentTask] = Field(min_length=1)
+    scenarios: list[Scenario] = Field(min_length=1)
 
     @model_validator(mode="before")
     @classmethod
@@ -236,11 +236,11 @@ class Experiment(BaseModel):
     @model_validator(mode="after")
     def _check_persona_refs(self) -> "Experiment":
         defined = {p.id for p in self.personas}
-        for task in self.tasks:
-            missing = [ref for ref in task.persona_refs if ref not in defined]
+        for scenario in self.scenarios:
+            missing = [ref for ref in scenario.persona_refs if ref not in defined]
             if missing:
                 raise ValueError(
-                    f"Task '{task.id}' references undefined persona(s): {missing}"
+                    f"Scenario '{scenario.id}' references undefined persona(s): {missing}"
                 )
         return self
 
@@ -257,10 +257,10 @@ class Experiment(BaseModel):
 
 
 class RunConfig(BaseModel, extra="ignore"):
-    """Environment spec for a simulation run — defines which persona/task pair to run and the resource limits (turn cap, timeout) that bound execution."""
+    """Environment spec for a simulation run — defines which persona/scenario pair to run and the resource limits (turn cap, timeout) that bound execution."""
 
     persona: str
-    task: str
+    scenario: str
     metric_refs: list[MetricRef] = Field(default_factory=list)
     max_turns: int = 20
     timeout_minutes: int = 15

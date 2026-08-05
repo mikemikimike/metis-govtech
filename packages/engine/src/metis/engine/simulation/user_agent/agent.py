@@ -9,9 +9,9 @@ from pydantic import BaseModel
 from metis.core.logging import get_logger
 
 from ..types import (
-    ExperimentTask,
     FormElement,
     Persona,
+    Scenario,
     UIState,
     UserAgentInput,
     UserAgentOutput,
@@ -49,14 +49,14 @@ class HistoryEntry(BaseModel, frozen=True):
 class UserAgent:
     """Simulates a user persona interacting with an AI assistant."""
 
-    def __init__(self, persona: Persona, task: ExperimentTask):
-        """Initialize with persona definition and task description.
+    def __init__(self, persona: Persona, scenario: Scenario):
+        """Initialize with persona definition and scenario description.
 
         :param persona: The persona driving the simulated user.
-        :param task: The experiment task defining the goal.
+        :param scenario: The experiment scenario defining the goal.
         """
         self.persona = persona
-        self.task = task
+        self.scenario = scenario
         self.conversation_history: list[HistoryEntry] = []
         self.turn_count = 0
         self.client = OpenAI()
@@ -135,21 +135,21 @@ class UserAgent:
 
     def _build_system_prompt(self) -> str:
         """Build the system prompt that instructs the LLM to act as this persona."""
-        if self.task.fixtures:
+        if self.scenario.fixtures:
             lines = [
                 "\n## Files to Upload",
                 "The following files are staged and ready to upload. Include them "
                 "as file_upload actions in ui_actions of your **first message**. "
                 "Do NOT upload any file not in this list:",
             ]
-            for f in self.task.fixtures:
+            for f in self.scenario.fixtures:
                 lines.append(f"- {f}")
             fixtures_section = "\n".join(lines) + "\n"
         else:
             fixtures_section = ""
         return SYSTEM_PROMPT_TEMPLATE.format(
             persona_description=self.persona.description,
-            task_description=self.task.description,
+            scenario_description=self.scenario.description,
             fixtures_section=fixtures_section,
         )
 

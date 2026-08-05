@@ -14,7 +14,7 @@ MINIMAL_EXPERIMENT = dedent("""\
     personas:
       - id: alice
         description: a persona
-    tasks:
+    scenarios:
       - id: task-1
         description: a task
         persona_refs: [alice]
@@ -73,7 +73,7 @@ def test_duplicate_persona_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]
             description: first
           - id: alice
             description: duplicate
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [alice]
@@ -98,7 +98,7 @@ def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         personas:
           - id: alice
             description: a persona
-        tasks:
+        scenarios:
           - id: task-1
             description: first
             persona_refs: [alice]
@@ -111,7 +111,7 @@ def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
     out = capsys.readouterr().out
-    assert "duplicate task id" in out
+    assert "duplicate scenario id" in out
     assert "task-1" in out
 
 
@@ -126,7 +126,7 @@ def test_unknown_persona_ref(tmp_path: Path, capsys: pytest.CaptureFixture[str])
         personas:
           - id: alice
             description: a persona
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [bob]
@@ -150,7 +150,7 @@ def test_missing_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         personas:
           - id: alice
             description: a persona
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [alice]
@@ -176,7 +176,7 @@ def test_bad_metric_fqn(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         personas:
           - id: alice
             description: a persona
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [alice]
@@ -201,7 +201,7 @@ def test_metric_not_basemetric_subclass(
         personas:
           - id: alice
             description: a persona
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [alice]
@@ -233,7 +233,7 @@ def test_valid_input_with_fixtures(tmp_path: Path):
         personas:
           - id: alice
             description: a persona
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [alice]
@@ -258,7 +258,7 @@ def test_metric_ref_all_formats(tmp_path: Path):
         personas:
           - id: alice
             description: a persona
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [alice]
@@ -282,7 +282,7 @@ def test_metric_ref_legacy_class_format(tmp_path: Path):
         personas:
           - id: alice
             description: a persona
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [alice]
@@ -292,8 +292,10 @@ def test_metric_ref_legacy_class_format(tmp_path: Path):
     """)
     (tmp_path / "experiment.yaml").write_text(content)
     exp = Experiment.load_file(tmp_path / "experiment.yaml")
-    assert exp.tasks[0].metric_refs[0].fqn == "deepeval.metrics.AnswerRelevancyMetric"
-    assert exp.tasks[0].metric_refs[0].args == {"threshold": 0.5}
+    assert (
+        exp.scenarios[0].metric_refs[0].fqn == "deepeval.metrics.AnswerRelevancyMetric"
+    )
+    assert exp.scenarios[0].metric_refs[0].args == {"threshold": 0.5}
 
 
 def test_metric_ref_null_args(tmp_path: Path):
@@ -307,7 +309,7 @@ def test_metric_ref_null_args(tmp_path: Path):
         personas:
           - id: alice
             description: a persona
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [alice]
@@ -316,8 +318,10 @@ def test_metric_ref_null_args(tmp_path: Path):
     """)
     (tmp_path / "experiment.yaml").write_text(content)
     exp = Experiment.load_file(tmp_path / "experiment.yaml")
-    assert exp.tasks[0].metric_refs[0].fqn == "deepeval.metrics.AnswerRelevancyMetric"
-    assert exp.tasks[0].metric_refs[0].args == {}
+    assert (
+        exp.scenarios[0].metric_refs[0].fqn == "deepeval.metrics.AnswerRelevancyMetric"
+    )
+    assert exp.scenarios[0].metric_refs[0].args == {}
 
 
 # --- extra="ignore" on Persona ---
@@ -334,7 +338,7 @@ def test_extra_persona_fields_ignored(tmp_path: Path):
             description: a persona
             tone: formal
             mood: cheerful
-        tasks:
+        scenarios:
           - id: task-1
             description: a task
             persona_refs: [alice]

@@ -18,7 +18,6 @@ from ..types import (
     ButtonClickAction,
     CollectedArtifact,
     ConversationTurn,
-    ExperimentTask,
     FileUploadAction,
     FormFillAction,
     Persona,
@@ -26,6 +25,7 @@ from ..types import (
     RunMeta,
     RunOutcome,
     RunRecord,
+    Scenario,
     UIAction,
     UserAgentInput,
 )
@@ -46,7 +46,7 @@ def run_simulation(
     page: Page,
     config: HarnessConfig,
     persona: Persona,
-    task: ExperimentTask,
+    scenario: Scenario,
     run_dir: Path,
     fixtures_dir: Path,
 ) -> RunRecord:
@@ -55,17 +55,17 @@ def run_simulation(
     :param page: Playwright page already logged-in and on the chat screen.
     :param config: Harness config with timeouts and auth settings.
     :param persona: The persona driving the simulated user.
-    :param task: The experiment task defining the goal.
-    :param run_dir: Pre-created run folder (``runs/<task>-<persona>-<trial>/``).
+    :param scenario: The experiment scenario defining the goal.
+    :param run_dir: Pre-created run folder (``runs/<scenario>-<persona>-<trial>/``).
         Artifacts are written to ``run_dir/artifacts/`` during the turn loop.
     :param fixtures_dir: Directory containing fixture files for upload.
     :returns: A complete RunRecord with conversation, outcome, and artifacts.
     """
     run_config = RunConfig(
         persona=persona.id,
-        task=task.id,
-        metric_refs=task.metric_refs,
-        response_wait_ms=task.response_wait_ms,
+        scenario=scenario.id,
+        metric_refs=scenario.metric_refs,
+        response_wait_ms=scenario.response_wait_ms,
     )
 
     start_time = time.time()
@@ -74,19 +74,19 @@ def run_simulation(
     turn_count = 0
 
     logger.info("=" * 60)
-    logger.info("[sim] START: %s x %s", persona.id, task.id)
+    logger.info("[sim] START: %s x %s", persona.id, scenario.id)
     logger.info(
         "[sim] Config: max_turns=%d, timeout=%d min, response_wait=%dms",
         run_config.max_turns,
         run_config.timeout_minutes,
         run_config.response_wait_ms or config.timeouts.response_wait_ms,
     )
-    logger.info("[sim] Task goal: %s", task.description[:120])
+    logger.info("[sim] Scenario goal: %s", scenario.description[:120])
     logger.info("=" * 60)
 
     # Instantiate user agent directly (no subprocess)
     logger.info("[sim] Initializing UserAgent (persona=%s)...", persona.id)
-    agent = UserAgent(persona=persona, task=task)
+    agent = UserAgent(persona=persona, scenario=scenario)
 
     # Generate opening message
     logger.info("[sim] Generating opening message via LLM...")
