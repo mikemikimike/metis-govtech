@@ -25,7 +25,7 @@ from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
 
 from metis.engine.extractor.types import SessionContext
-from metis.engine.simulation.types import CollectedArtifact, ExperimentTask, Persona
+from metis.engine.simulation.types import CollectedArtifact, Persona, Scenario
 from metis.library.metrics._types import (
     ClarificationRequest,
     OrcaChatMetadata,
@@ -529,7 +529,7 @@ def fetch_by_session_id(
     limit: int = 50,
     retry_timeout: int = 0,
     artifacts: list[CollectedArtifact] | None = None,
-    task: ExperimentTask | None = None,
+    task: Scenario | None = None,
     persona: Persona | None = None,
 ) -> FetchLangfuseResult:
     """Fetch traces for a specific session and build test cases.
@@ -540,7 +540,7 @@ def fetch_by_session_id(
     :param retry_timeout: Seconds to poll if no traces found (0 = no retry).
     :param artifacts: Collected artifacts from the session record, injected into
         each test case's metadata.
-    :param task: ExperimentTask object from experiment.yaml (passed through to
+    :param task: Scenario object from experiment.yaml (passed through to
         metric metadata).
     :param persona: Persona object from experiment.yaml (passed through to
         metric metadata).

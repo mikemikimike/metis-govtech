@@ -89,39 +89,39 @@ def _validate_inputs(input_dir: Path) -> None:
             sys.exit(1)
         seen_personas.add(persona.id)
 
-    seen_tasks: set[str] = set()
-    for task in experiment.tasks:
-        if task.id in seen_tasks:
+    seen_scenarios: set[str] = set()
+    for scenario in experiment.scenarios:
+        if scenario.id in seen_scenarios:
             console.print(
-                f"Error: duplicate task id '{task.id}' in experiment.yaml",
+                f"Error: duplicate scenario id '{scenario.id}' in experiment.yaml",
                 style="bold red",
             )
             sys.exit(1)
-        seen_tasks.add(task.id)
+        seen_scenarios.add(scenario.id)
 
     defined_personas = {p.id for p in experiment.personas}
-    for task in experiment.tasks:
-        for ref in task.persona_refs:
+    for scenario in experiment.scenarios:
+        for ref in scenario.persona_refs:
             if ref not in defined_personas:
                 available = ", ".join(sorted(defined_personas))
                 console.print(
-                    f"Error: task '{task.id}' references unknown persona '{ref}' (available: {available})",
+                    f"Error: scenario '{scenario.id}' references unknown persona '{ref}' (available: {available})",
                     style="bold red",
                 )
                 sys.exit(1)
 
     fixtures_dir = input_dir / "fixtures"
-    for task in experiment.tasks:
-        for fixture in task.fixtures:
+    for scenario in experiment.scenarios:
+        for fixture in scenario.fixtures:
             if not (fixtures_dir / fixture).exists():
                 console.print(
-                    f"Error: task '{task.id}' references fixture '{fixture}' which does not exist in {fixtures_dir}",
+                    f"Error: scenario '{scenario.id}' references fixture '{fixture}' which does not exist in {fixtures_dir}",
                     style="bold red",
                 )
                 sys.exit(1)
 
-    for task in experiment.tasks:
-        for metric_ref in task.metric_refs:
+    for scenario in experiment.scenarios:
+        for metric_ref in scenario.metric_refs:
             fqn = metric_ref.fqn
             parts = fqn.rsplit(".", 1)
             if len(parts) != 2:
@@ -253,7 +253,7 @@ def simulate(
     for i, record in enumerate(records):
         session_id = record.target_session_id
         persona = record.config.persona
-        task = record.config.task
+        task = record.config.scenario
         metric_refs = record.config.metric_refs
 
         console.print(f"\n\n{'#' * 60}")
@@ -276,15 +276,15 @@ def simulate(
             continue
 
         try:
-            tasks_by_id = {t.id: t for t in experiment.tasks}
-            task_obj = tasks_by_id.get(task)
+            scenarios_by_id = {s.id: s for s in experiment.scenarios}
+            scenario_obj = scenarios_by_id.get(task)
             persona_obj = personas_by_id.get(persona)
             fetch_result = fetch_by_session_id(
                 session_id,
                 langfuse,
                 retry_timeout=langfuse_timeout,
                 artifacts=record.artifacts_collected,
-                task=task_obj,
+                task=scenario_obj,
                 persona=persona_obj,
             )
 

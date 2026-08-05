@@ -57,7 +57,7 @@ def _save_artifacts(record: RunRecord, run_dir: Path) -> dict:
     manifest = {
         "session_id": record.target_session_id or "",
         "persona": record.config.persona,
-        "task": record.config.task,
+        "scenario": record.config.scenario,
         "timestamp": datetime.now(tz=UTC).isoformat(),
         "stop_reason": record.outcome.stop_reason,
         "artifacts": manifest_artifacts,

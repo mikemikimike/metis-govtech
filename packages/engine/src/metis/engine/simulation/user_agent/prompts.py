@@ -7,8 +7,8 @@ You are NOT the AI assistant — you are the USER.
 ## Your Persona
 {persona_description}
 
-## Your Task
-{task_description}
+## Your Goal
+{scenario_description}
 {fixtures_section}
 ## Rules
 1. Stay in character at all times. Your messages should match your persona.
@@ -18,7 +18,7 @@ decision to "giving_up".
 3. When the system has clearly achieved your goal (you received what you asked for), \
 set decision to "goal_achieved".
 4. Otherwise, set decision to "continue" and write your next message.
-5. If your task requires file uploads, include them in ui_actions on your first message.
+5. If your scenario requires file uploads, include them in ui_actions on your first message.
 6. Do NOT break character. Do NOT explain that you are a simulation. Do NOT be \
 unrealistically helpful to the system.
 7. ALWAYS fill in the "reasoning" field with your internal thought process: \
@@ -39,13 +39,13 @@ asking the system to do it.
 
 IMPORTANT: When you see an "AI Model" dropdown, ALWAYS select \
 "Fast (Claude Haiku)" for faster inference. Do NOT pick \
-"Detailed (Claude Sonnet)" unless the task explicitly requires it.
+"Detailed (Claude Sonnet)" unless the scenario explicitly requires it.
 """
 
 OPENING_TURN_PROMPT = """This is the start of the conversation. \
 You are initiating contact with the target AI assistant for the first time.
 
-Generate your opening message based on your persona and task. \
+Generate your opening message based on your persona and scenario. \
 Introduce your request in a way that matches your persona."""
 
 RESPONSE_TURN_PROMPT = """The target AI assistant just sent you the following message:
@@ -56,5 +56,5 @@ RESPONSE_TURN_PROMPT = """The target AI assistant just sent you the following me
 {form_elements_section}
 Current turn number: {turn_number}
 
-Based on your persona, task, and the conversation so far, \
+Based on your persona, scenario, and the conversation so far, \
 generate your next response."""

@@ -1,56 +1,5 @@
 {
   "$defs": {
-    "ExperimentTask": {
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "description": {
-          "title": "Description",
-          "type": "string"
-        },
-        "num_trials": {
-          "default": 1,
-          "title": "Num Trials",
-          "type": "integer"
-        },
-        "fixtures": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Fixtures",
-          "type": "array"
-        },
-        "persona_refs": {
-          "items": {
-            "type": "string"
-          },
-          "minItems": 1,
-          "title": "Persona Refs",
-          "type": "array"
-        },
-        "metric_refs": {
-          "items": {
-            "$ref": "#/$defs/MetricRef"
-          },
-          "title": "Metric Refs",
-          "type": "array"
-        },
-        "response_wait_ms": {
-          "default": 300000,
-          "title": "Response Wait Ms",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "description",
-        "persona_refs"
-      ],
-      "title": "ExperimentTask",
-      "type": "object"
-    },
     "MetricRef": {
       "anyOf": [
         {
@@ -98,6 +47,57 @@
       ],
       "title": "Persona",
       "type": "object"
+    },
+    "Scenario": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "num_trials": {
+          "default": 1,
+          "title": "Num Trials",
+          "type": "integer"
+        },
+        "fixtures": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fixtures",
+          "type": "array"
+        },
+        "persona_refs": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Persona Refs",
+          "type": "array"
+        },
+        "metric_refs": {
+          "items": {
+            "$ref": "#/$defs/MetricRef"
+          },
+          "title": "Metric Refs",
+          "type": "array"
+        },
+        "response_wait_ms": {
+          "default": 300000,
+          "title": "Response Wait Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "persona_refs"
+      ],
+      "title": "Scenario",
+      "type": "object"
     }
   },
   "properties": {
@@ -122,12 +122,12 @@
       "title": "Personas",
       "type": "array"
     },
-    "tasks": {
+    "scenarios": {
       "items": {
-        "$ref": "#/$defs/ExperimentTask"
+        "$ref": "#/$defs/Scenario"
       },
       "minItems": 1,
-      "title": "Tasks",
+      "title": "Scenarios",
       "type": "array"
     }
   },
@@ -136,7 +136,7 @@
     "id",
     "description",
     "personas",
-    "tasks"
+    "scenarios"
   ],
   "title": "Experiment v1",
   "type": "object"
