@@ -118,6 +118,19 @@ def test_the_tasks_screen_reports_six_of_six() -> None:
     assert (request.step, request.steps) == (6, 6)
 
 
+def test_criteria_cards_carry_no_metric_annotation() -> None:
+    request = _compose_at(SessionStep.CRITERIA)
+
+    components = [component for card in request.cards for component in card.components]
+    assert components
+    assert all("note" not in component.model_dump() for component in components)
+    assert all(
+        "measured by:" not in component.text
+        for component in components
+        if hasattr(component, "text")
+    )
+
+
 def test_the_terminal_step_carries_no_header() -> None:
     """DONE is off the interview list, so a request stamped there draws no header."""
     from metis.wizard.application import screens

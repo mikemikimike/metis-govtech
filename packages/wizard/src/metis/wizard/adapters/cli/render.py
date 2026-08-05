@@ -140,8 +140,6 @@ def _draw_card(
         match component.type:
             case CardComponentType.TEXT:
                 out(f"    - {component.text}")
-                if component.note:
-                    out(f"      {component.note}")
             case CardComponentType.OPTIONS:
                 for option in component.options:
                     mark = "[x] " if option.selected else "[ ] "

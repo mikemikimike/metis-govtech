@@ -11,8 +11,13 @@
 // but an outline asserts nothing, and holding it back left the user with no sight of what the
 // interview would produce during the one step where they are being asked the most.
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { SessionSummary, SessionView, UserResponse } from "./api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  MetricSpec,
+  SessionSummary,
+  SessionView,
+  UserResponse,
+} from "./api";
 import { api, TransportError } from "./api";
 import { Composer, Transcript } from "./Conversation";
 import { ConnectRepo } from "./ConnectRepo";
@@ -35,6 +40,15 @@ export function App() {
   // both-open, which is the right default rather than a lost setting.
   const [railOpen, setRailOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(true);
+  // Metric details are presentation metadata, not part of the session payload. Fetch them once
+  // after the first session opens and keep the lookup for this page lifetime; the catalogue is
+  // shared by every session and changes only when the page is reloaded.
+  const [metricCatalogue, setMetricCatalogue] = useState<MetricSpec[] | null>(null);
+  const [metricCatalogueState, setMetricCatalogueState] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
+  const metricCatalogueRequest = useRef<Promise<MetricSpec[]> | null>(null);
+  const [showMetrics, setShowMetrics] = useState(false);
   // The hand-authoring door: a form that writes an experiment file directly, with no session.
   // It is a second front door alongside the interview, not a step within one — so it is view
   // state on the shell, and leaving it discards any unsaved form work, by design.
@@ -43,6 +57,37 @@ export function App() {
   // the authoring form it is a front door held in shell view state; leaving it discards its
   // inputs and creates no session, which is the whole point of the depiction.
   const [connectingRepo, setConnectingRepo] = useState(false);
+
+  const activeSessionId = view?.id ?? null;
+
+  // This is deliberately keyed by the session id, not by pane mount state: collapsing the profile
+  // unmounts it, while moving to another session should restore the quiet default.
+  useEffect(() => {
+    setShowMetrics(false);
+  }, [activeSessionId]);
+
+  const hasSession = view !== null;
+  useEffect(() => {
+    if (!hasSession || metricCatalogueRequest.current) return;
+
+    setMetricCatalogueState("loading");
+    const request = api.metrics();
+    metricCatalogueRequest.current = request;
+    void request.then(
+      (rows) => {
+        setMetricCatalogue(rows);
+        setMetricCatalogueState("ready");
+      },
+      () => {
+        setMetricCatalogueState("error");
+      },
+    );
+  }, [hasSession]);
+
+  const metricByFqn = useMemo(
+    () => new Map((metricCatalogue ?? []).map((metric) => [metric.fqn, metric])),
+    [metricCatalogue],
+  );
 
   // The conversation's scroll viewport, and a record of the last `busy` value, so the effect
   // below can act on the busy→ready edge — the moment the model finished the next screen — and
@@ -260,6 +305,13 @@ export function App() {
               position={stepPosition(view.requests)}
               sessionStep={view.step}
               busy={busy}
+              showMetrics={showMetrics}
+              onShowMetricsChange={setShowMetrics}
+              metricByFqn={metricByFqn}
+              metricsLoading={
+                metricCatalogueState === "idle" || metricCatalogueState === "loading"
+              }
+              metricsError={metricCatalogueState === "error"}
               onCollapse={() => setProfileOpen(false)}
             />
           </aside>

@@ -138,6 +138,13 @@ def test_a_shared_metric_appears_once() -> None:
     assert task["metric_refs"].count(CITATION_METRIC) == 1
 
 
+def test_review_and_experiment_keep_the_fully_qualified_metric() -> None:
+    review = render_review(research_assistant(), EXPERIMENT_ID)
+
+    assert f"`{CITATION_METRIC}`" in review
+    assert CITATION_METRIC in to_yaml(compiled())
+
+
 def test_a_task_is_measured_only_on_what_it_covers() -> None:
     """Nothing rides along. A task's metrics come from its own ticked behaviours, full stop.
 

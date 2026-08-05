@@ -98,7 +98,6 @@ class CardComponent(BaseModel):
 class CardText(CardComponent):
     type: Literal[CardComponentType.TEXT] = CardComponentType.TEXT
     text: str
-    note: str | None = None  # an annotation — "measured by: Citation Resolution"
 
 
 class CardOptionGroup(CardComponent):

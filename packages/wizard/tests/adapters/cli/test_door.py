@@ -42,9 +42,7 @@ def a_screen(**overrides) -> ChoiceRequest:
                 section="Epic 1 · Answer quality",
                 title="Cites a source",
                 selected=True,
-                components=[
-                    CardText(text="Given x, when y, then z", note="measured by: X")
-                ],
+                components=[CardText(text="Given x, when y, then z")],
                 options=[
                     Option(id=OptionId(action="chat", target="EB-1"), label="Chat")
                 ],
@@ -130,7 +128,7 @@ def test_selection_state_and_components_draw() -> None:
     """One authoritative check that a screen's pieces render as the layout intends.
 
     Covers the section heading and its underline, card checkbox and indent, the chip's
-    target-without-verb tag, the stepper bounds, filenames, the note, and that a screen-level
+    target-without-verb tag, the stepper bounds, filenames, and that a screen-level
     reply carries no `(target)`. Kept as one test because these are all one behaviour — "the
     door draws a screen" — not separate contracts.
     """
@@ -151,7 +149,7 @@ def test_selection_state_and_components_draw() -> None:
 
     assert "3   [1–20]" in text  # stepper with its bounds
     assert "a.pdf" in text  # filenames
-    assert "measured by: X" in text  # the note
+    assert "measured by:" not in text
 
     assert "← Back" in text and "(back)" not in text  # a reply applies to nothing
 

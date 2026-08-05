@@ -25,9 +25,15 @@
 // arrival is marked; the change is not remembered.
 
 import { useState } from "react";
-import type { Behaviour, Epic, ProductProfile, WizardRequest } from "./api";
+import type {
+  Behaviour,
+  Epic,
+  MetricSpec,
+  ProductProfile,
+  WizardRequest,
+} from "./api";
 import { PanelRight } from "lucide-react";
-import { Chevron, cn, countRuns, formatRuns, Mono } from "./ui";
+import { Button, Chevron, cn, countRuns, formatRuns, Mono } from "./ui";
 
 // ── where the interview has got to ───────────────────────────────────────────
 
@@ -98,12 +104,22 @@ export function Profile({
   position,
   sessionStep,
   busy,
+  showMetrics,
+  onShowMetricsChange,
+  metricByFqn,
+  metricsLoading,
+  metricsError,
   onCollapse,
 }: {
   profile: ProductProfile;
   position?: StepPosition | null;
   sessionStep?: string;
   busy?: boolean;
+  showMetrics: boolean;
+  onShowMetricsChange: (show: boolean) => void;
+  metricByFqn: ReadonlyMap<string, MetricSpec>;
+  metricsLoading: boolean;
+  metricsError: boolean;
   onCollapse?: () => void;
 }) {
   const { product } = profile;
@@ -111,6 +127,10 @@ export function Profile({
 
   const { epics } = profile;
   const writing = busy && sessionStep ? WRITING_TARGET[sessionStep] : undefined;
+  const hasCriteria = epics.some((epic) =>
+    epic.behaviours.some((behaviour) => behaviour.criteria.length > 0),
+  );
+  const metricsAvailable = !metricsLoading && !metricsError;
 
   // The user is choosing which behaviours to measure for the whole of the prioritise step, and a
   // criteria blank must not appear until that choice is committed with Continue. The commit signal
@@ -127,8 +147,7 @@ export function Profile({
     <div className="h-full overflow-y-auto p-4">
       {/* The collapse control sits in the pane, above the sheet, rather than pinned inside the
           sheet's corner. It folds the pane away — it is chrome belonging to the pane, not part of
-          the document — and moving it out leaves the sheet's corner free for the ring, which is
-          about the document's own state. */}
+          the document — and moving it out leaves the sheet's corner free for the document header. */}
       {onCollapse && (
         <div className="mb-2 flex justify-end">
           <button
@@ -149,9 +168,30 @@ export function Profile({
           finished page" is exactly what a sheet-with-shadow says and a border cannot. Nothing here
           is an input; the shadow's job is to say so. */}
       <div className="flex flex-col gap-6 rounded-[12px] bg-card p-5 text-sm text-card-foreground shadow-sm">
-        <header className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 flex-col gap-1">
-            <h2 className="text-base font-semibold text-foreground">{named}</h2>
+        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3">
+          <h2 className="min-w-0 text-base font-semibold text-foreground">{named}</h2>
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            {hasCriteria && (
+              <Button
+                type="button"
+                variant="ghost"
+                active={showMetrics}
+                disabled={!metricsAvailable}
+                aria-pressed={showMetrics}
+                title={metricsError ? "Metric details unavailable" : "Show metrics"}
+                onClick={() => onShowMetricsChange(!showMetrics)}
+                className="px-2 py-1 text-xs"
+              >
+                Show metrics
+              </Button>
+            )}
+            {metricsError && (
+              <span role="alert" className="text-xs text-destructive">
+                Metric details unavailable
+              </span>
+            )}
+          </div>
+          <div className="min-w-0">
             {product.summary ? (
               <p className="animate-arrive text-muted-foreground">
                 {product.summary}
@@ -163,17 +203,17 @@ export function Profile({
               <Placeholder />
             )}
           </div>
-          {/* The ring alone — the step's name is not repeated here. The conversation's activity
-              line already names what the wizard is doing, and a two-line title under the ring
-              crowded the corner and competed with the product's own name for the eye. The name
-              still reaches assistive technology through the ring's label. */}
-          {position && (
-            <ProgressRing
-              step={position.step}
-              steps={position.steps}
-              title={position.title}
-            />
-          )}
+          <div className="flex justify-end">
+            {/* The ring shares the lower row with the description so the title and presentation
+                control stay aligned as the document's metadata. */}
+            {position && (
+              <ProgressRing
+                step={position.step}
+                steps={position.steps}
+                title={position.title}
+              />
+            )}
+          </div>
         </header>
 
         {/* Sections run in the order the interview fills them, and every one of them is drawn
@@ -188,7 +228,13 @@ export function Profile({
           {epics.length > 0 ? (
             <div className="flex flex-col gap-2">
               {epics.map((epic) => (
-                <EpicView key={epic.id} epic={epic} selecting={selecting} />
+                <EpicView
+                  key={epic.id}
+                  epic={epic}
+                  selecting={selecting}
+                  showMetrics={showMetrics}
+                  metricByFqn={metricByFqn}
+                />
               ))}
             </div>
           ) : (
@@ -438,9 +484,13 @@ function TaskField({
 function EpicView({
   epic,
   selecting,
+  showMetrics,
+  metricByFqn,
 }: {
   epic: Epic;
   selecting?: boolean;
+  showMetrics: boolean;
+  metricByFqn: ReadonlyMap<string, MetricSpec>;
 }) {
   const [open, setOpen] = useState(true);
   return (
@@ -460,7 +510,13 @@ function EpicView({
       {open && (
         <ul className="flex flex-col gap-1.5 border-l border-border pb-1 pl-3 ml-1.5">
           {epic.behaviours.map((b) => (
-            <BehaviourView key={b.id} behaviour={b} selecting={selecting} />
+            <BehaviourView
+              key={b.id}
+              behaviour={b}
+              selecting={selecting}
+              showMetrics={showMetrics}
+              metricByFqn={metricByFqn}
+            />
           ))}
         </ul>
       )}
@@ -471,9 +527,13 @@ function EpicView({
 function BehaviourView({
   behaviour,
   selecting,
+  showMetrics,
+  metricByFqn,
 }: {
   behaviour: Behaviour;
   selecting?: boolean;
+  showMetrics: boolean;
+  metricByFqn: ReadonlyMap<string, MetricSpec>;
 }) {
   // A behaviour the user hasn't ticked is dormant: its criteria are kept but won't be
   // measured, so it reads de-emphasised.
@@ -501,22 +561,27 @@ function BehaviourView({
       </div>
       {behaviour.criteria.length > 0 && (
         <ul className="flex flex-col gap-0.5 pl-3">
-          {behaviour.criteria.map((c) => (
-            <li key={c.id} className="animate-arrive flex flex-col gap-1 text-xs text-muted-foreground">
-              <span>
-                <span className="text-foreground">Given</span> {c.given},{" "}
-                <span className="text-foreground">when</span> {c.when},{" "}
-                <span className="text-foreground">then</span> {c.then}
-              </span>
-              {c.metric_fqn && (
-                // The metric is machine-named, so it reads as a line of code: mono on a light
-                // editor backing, set apart from the plain-language criterion above it.
-                <Mono className="block break-all rounded border border-border bg-muted px-2 py-1 leading-relaxed">
-                  {c.metric_fqn}
-                </Mono>
-              )}
-            </li>
-          ))}
+          {behaviour.criteria.map((c) => {
+            const metric = c.metric_fqn ? metricByFqn.get(c.metric_fqn) : undefined;
+            return (
+              <li
+                key={c.id}
+                className="animate-arrive flex flex-col gap-1 text-xs text-muted-foreground"
+              >
+                <span>
+                  <span className="text-foreground">Given</span> {c.given},{" "}
+                  <span className="text-foreground">when</span> {c.when},{" "}
+                  <span className="text-foreground">then</span> {c.then}
+                </span>
+                {showMetrics && metric && (
+                  <Mono className="block break-words rounded border border-border bg-muted px-2 py-1 leading-relaxed">
+                    <span className="block text-foreground">{metric.name}</span>
+                    <span className="block">{metric.description}</span>
+                  </Mono>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       {awaitingCriteria && (

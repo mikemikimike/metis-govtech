@@ -34,7 +34,6 @@ export interface CardText {
   type: "text";
   label?: string | null;
   text: string;
-  note?: string | null;
 }
 
 export interface CardOptionGroup {

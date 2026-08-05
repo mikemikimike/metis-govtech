@@ -201,18 +201,12 @@ def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
 def _criterion_components(behaviour: Behaviour) -> list[CardText]:
     components = []
     for criterion in behaviour.criteria:
-        measured = (
-            f"measured by: {criterion.metric_fqn.rsplit('.', 1)[-1]}"
-            if criterion.metric_fqn
-            else "measured by: a custom judge"
-        )
         components.append(
             CardText(
                 text=(
                     f"Given {criterion.given}, when {criterion.when}, "
                     f"then {criterion.then}"
-                ),
-                note=measured,
+                )
             )
         )
     return components

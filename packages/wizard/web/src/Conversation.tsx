@@ -374,12 +374,9 @@ function ComponentBlock({
     switch (component.type) {
       case "text":
         return (
-          <div className="flex flex-col">
-            <p className="whitespace-pre-wrap text-sm text-foreground">
-              {component.text}
-            </p>
-            {component.note && <Mono>{component.note}</Mono>}
-          </div>
+          <p className="whitespace-pre-wrap text-sm text-foreground">
+            {component.text}
+          </p>
         );
 
       case "options":

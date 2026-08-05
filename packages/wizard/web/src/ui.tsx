@@ -102,8 +102,8 @@ export function Chevron({
   );
 }
 
-// A small monospace token — an id, a metric FQN, a filename. JetBrains Mono is reserved for
-// the machine-named things, so they read as machine-named.
+// A small monospace token — an id, metric metadata, or a filename. JetBrains Mono is reserved for
+// machine-facing data, so it reads as implementation detail rather than ordinary prose.
 export function Mono({
   className,
   children,
