@@ -4,6 +4,14 @@ All notable changes to `metis-library` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] — 2026-08-05
+
+### Changed
+
+- Removed `retry_counts` field from `TraceMetadata` (no longer populated by extractor)
+- `SynthesisFaithfulnessMetric`, `RedelegationOnFailureMetric`, and `GapAcknowledgementMetric` now read subagent output from `test_case.context` instead of `delegation["response"]`
+- `BoundedTroubleshootingMetric` computes retry counts directly from `tool_calls` instead of relying on pre-computed `retry_counts` metadata
+
 ## [0.1.0] — 2026-08-03
 
 ### Added
