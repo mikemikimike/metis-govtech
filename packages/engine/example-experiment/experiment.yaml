@@ -67,10 +67,10 @@ scenarios:
     persona_refs:
       - cooperative-delegator
     metric_refs:
-      - metis.library.metrics.orchestration.DirectHandleRecognitionMetric
-      - metis.library.metrics.orchestration.ChatbotResponseQualityMetric
-      - metis.library.metrics.orchestration.ClarificationJudgementMetric
-      - metis.library.metrics.universal.TurnBudgetMetric:
+      - metis.library.metrics.DirectHandleRecognitionMetric
+      - metis.library.metrics.ChatbotResponseQualityMetric
+      - metis.library.metrics.ClarificationJudgementMetric
+      - metis.library.metrics.TurnBudgetMetric:
           max_turns: 4
 
   - id: ambiguous-request
@@ -84,11 +84,11 @@ scenarios:
     persona_refs:
       - uncertain-explorer
     metric_refs:
-      - metis.library.metrics.orchestration.RoutingAccuracyMetric
-      - metis.library.metrics.orchestration.ClarificationJudgementMetric
-      - metis.library.metrics.universal.SinglePromptClarificationMetric
-      - metis.library.metrics.universal.ClarificationPrecisionMetric
-      - metis.library.metrics.universal.TurnsToTaskStartMetric:
+      - metis.library.metrics.RoutingAccuracyMetric
+      - metis.library.metrics.ClarificationJudgementMetric
+      - metis.library.metrics.SinglePromptClarificationMetric
+      - metis.library.metrics.ClarificationPrecisionMetric
+      - metis.library.metrics.TurnsToTaskStartMetric:
           max_turns: 2
 
   - id: constrained-analysis
@@ -104,13 +104,13 @@ scenarios:
       - cooperative-delegator
       - impatient-executive
     metric_refs:
-      - metis.library.metrics.orchestration.RoutingAccuracyMetric
-      - metis.library.metrics.universal.ConstraintAdherenceMetric
-      - metis.library.metrics.universal.AssumptionTransparencyMetric
-      - metis.library.metrics.analysis.MethodAppropriatenessMetric
-      - metis.library.metrics.analysis.AnalyticalCorrectnessMetric
-      - metis.library.metrics.analysis.ScopeCorrectnessMetric
-      - metis.library.metrics.universal.TurnBudgetMetric:
+      - metis.library.metrics.RoutingAccuracyMetric
+      - metis.library.metrics.ConstraintAdherenceMetric
+      - metis.library.metrics.AssumptionTransparencyMetric
+      - metis.library.metrics.MethodAppropriatenessMetric
+      - metis.library.metrics.AnalyticalCorrectnessMetric
+      - metis.library.metrics.ScopeCorrectnessMetric
+      - metis.library.metrics.TurnBudgetMetric:
           max_turns: 8
 
   - id: multi-agent-pipeline
@@ -126,13 +126,13 @@ scenarios:
       - cooperative-delegator
       - impatient-executive
     metric_refs:
-      - metis.library.metrics.orchestration.RoutingAccuracyMetric
-      - metis.library.metrics.orchestration.DecompositionQualityMetric
-      - metis.library.metrics.orchestration.SynthesisFaithfulnessMetric
-      - metis.library.metrics.orchestration.FindingDeduplicationMetric
-      - metis.library.metrics.presentation.SlideSpecComplianceMetric
-      - metis.library.metrics.presentation.DeckSourceFaithfulnessMetric
-      - metis.library.metrics.universal.TurnBudgetMetric:
+      - metis.library.metrics.RoutingAccuracyMetric
+      - metis.library.metrics.DecompositionQualityMetric
+      - metis.library.metrics.SynthesisFaithfulnessMetric
+      - metis.library.metrics.FindingDeduplicationMetric
+      - metis.library.metrics.SlideSpecComplianceMetric
+      - metis.library.metrics.DeckSourceFaithfulnessMetric
+      - metis.library.metrics.TurnBudgetMetric:
           max_turns: 12
 
   - id: adversarial-slides
@@ -149,11 +149,11 @@ scenarios:
     persona_refs:
       - cooperative-delegator
     metric_refs:
-      - metis.library.metrics.orchestration.RoutingAccuracyMetric
-      - metis.library.metrics.orchestration.CapabilityHonestyMetric
-      - metis.library.metrics.presentation.SlideSpecComplianceMetric
-      - metis.library.metrics.presentation.DeckSourceFaithfulnessMetric
-      - metis.library.metrics.universal.TurnBudgetMetric:
+      - metis.library.metrics.RoutingAccuracyMetric
+      - metis.library.metrics.CapabilityHonestyMetric
+      - metis.library.metrics.SlideSpecComplianceMetric
+      - metis.library.metrics.DeckSourceFaithfulnessMetric
+      - metis.library.metrics.TurnBudgetMetric:
           max_turns: 6
 
   - id: corrupted-data
@@ -169,10 +169,10 @@ scenarios:
     persona_refs:
       - cooperative-delegator
     metric_refs:
-      - metis.library.metrics.universal.DiagnosisQualityMetric
-      - metis.library.metrics.universal.BoundedTroubleshootingMetric
-      - metis.library.metrics.universal.FailureReportQualityMetric
-      - metis.library.metrics.universal.TurnBudgetMetric:
+      - metis.library.metrics.DiagnosisQualityMetric
+      - metis.library.metrics.BoundedTroubleshootingMetric
+      - metis.library.metrics.FailureReportQualityMetric
+      - metis.library.metrics.TurnBudgetMetric:
           max_turns: 6
 
   - id: impossible-request
@@ -189,9 +189,9 @@ scenarios:
       - cooperative-delegator
       - skeptical-auditor
     metric_refs:
-      - metis.library.metrics.orchestration.RoutingAccuracyMetric
-      - metis.library.metrics.orchestration.CapabilityHonestyMetric
-      - metis.library.metrics.universal.TurnBudgetMetric:
+      - metis.library.metrics.RoutingAccuracyMetric
+      - metis.library.metrics.CapabilityHonestyMetric
+      - metis.library.metrics.TurnBudgetMetric:
           max_turns: 6
 
   - id: harmful-request
@@ -208,8 +208,8 @@ scenarios:
       - impatient-executive
       - boundary-pusher
     metric_refs:
-      - metis.library.metrics.orchestration.CapabilityHonestyMetric
-      - metis.library.metrics.universal.TurnBudgetMetric:
+      - metis.library.metrics.CapabilityHonestyMetric
+      - metis.library.metrics.TurnBudgetMetric:
           max_turns: 4
 
   - id: conflicting-sources
@@ -227,11 +227,11 @@ scenarios:
       - skeptical-auditor
       - cooperative-delegator
     metric_refs:
-      - metis.library.metrics.orchestration.RoutingAccuracyMetric
-      - metis.library.metrics.orchestration.FindingConsistencyMetric
-      - metis.library.metrics.orchestration.GapAcknowledgementMetric
-      - metis.library.metrics.orchestration.SynthesisFaithfulnessMetric
-      - metis.library.metrics.universal.TurnBudgetMetric:
+      - metis.library.metrics.RoutingAccuracyMetric
+      - metis.library.metrics.FindingConsistencyMetric
+      - metis.library.metrics.GapAcknowledgementMetric
+      - metis.library.metrics.SynthesisFaithfulnessMetric
+      - metis.library.metrics.TurnBudgetMetric:
           max_turns: 8
 
   - id: evolving-brief
@@ -249,11 +249,11 @@ scenarios:
       - scope-creeper
       - domain-expert-perfectionist
     metric_refs:
-      - metis.library.metrics.orchestration.RoutingAccuracyMetric
-      - metis.library.metrics.orchestration.DecompositionQualityMetric
-      - metis.library.metrics.universal.ConstraintAdherenceMetric
-      - metis.library.metrics.universal.ContextReuseMetric
-      - metis.library.metrics.orchestration.CrossAgentContextRetentionMetric
-      - metis.library.metrics.presentation.SlideSpecComplianceMetric
-      - metis.library.metrics.universal.TurnBudgetMetric:
+      - metis.library.metrics.RoutingAccuracyMetric
+      - metis.library.metrics.DecompositionQualityMetric
+      - metis.library.metrics.ConstraintAdherenceMetric
+      - metis.library.metrics.ContextReuseMetric
+      - metis.library.metrics.CrossAgentContextRetentionMetric
+      - metis.library.metrics.SlideSpecComplianceMetric
+      - metis.library.metrics.TurnBudgetMetric:
           max_turns: 14
