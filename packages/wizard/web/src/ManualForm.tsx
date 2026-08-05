@@ -19,7 +19,7 @@
 // compile route, and streams the returned file to a download. It stores nothing and creates no
 // session — leaving the screen discards the work, by design.
 
-import { ArrowLeft, Plus, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { MetricSpec } from "./api";
 import { api, TransportError } from "./api";
@@ -285,20 +285,11 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                         onChange={(v) => updateTask(i, { id: v })}
                       />
                     </Field>
-                    <Field label="Trials" className="w-24">
-                      <input
-                        type="number"
-                        min={1}
-                        className="w-full rounded-md border border-input bg-background p-2 text-sm"
+                    <Field label="Trials" className="w-28">
+                      <NumberInput
                         value={task.num_trials}
-                        onChange={(e) =>
-                          updateTask(i, {
-                            num_trials: Math.max(
-                              1,
-                              Number(e.target.value) || 1,
-                            ),
-                          })
-                        }
+                        min={1}
+                        onChange={(v) => updateTask(i, { num_trials: v })}
                       />
                     </Field>
                   </div>
@@ -638,6 +629,95 @@ function TextArea({
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
+  );
+}
+
+// A number field with stepper controls — the shadcn "number input with controls" shape, built
+// to the house style rather than pulled from a package whose defaults (shadow, larger radius) we
+// override anyway. A single bordered shell holds the value and a stacked up/down pair; the
+// browser spinner is hidden so the two controls are the only way to step. Steppers are neutral
+// currentColor, not accent — they are plain controls, not state — and the shell rings teal only
+// on focus.
+function NumberInput({
+  value,
+  min = 1,
+  max,
+  onChange,
+}: {
+  value: number;
+  min?: number;
+  max?: number;
+  onChange: (v: number) => void;
+}) {
+  const clamp = (n: number) =>
+    Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min, n));
+
+  return (
+    <div
+      className={cn(
+        "flex items-stretch overflow-hidden rounded-md border border-input bg-background",
+        "transition-colors focus-within:border-accent",
+      )}
+    >
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(clamp(Math.round(Number(e.target.value) || min)))}
+        // Hide the native spinner: the stepper column is the control, and two sets of arrows
+        // would be one of the machine-generated tells the style steers away from.
+        className={cn(
+          "w-full bg-transparent p-2 text-sm focus:outline-none",
+          "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+        )}
+      />
+      <div className="flex flex-col border-l border-input">
+        <Stepper
+          label="Increase"
+          disabled={max != null && value >= max}
+          onClick={() => onChange(clamp(value + 1))}
+        >
+          <ChevronUp size={12} strokeWidth={2} aria-hidden />
+        </Stepper>
+        <Stepper
+          label="Decrease"
+          disabled={value <= min}
+          onClick={() => onChange(clamp(value - 1))}
+        >
+          <ChevronDown size={12} strokeWidth={2} aria-hidden />
+        </Stepper>
+      </div>
+    </div>
+  );
+}
+
+function Stepper({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex flex-1 items-center justify-center px-2 text-muted-foreground transition-colors",
+        "hover:bg-muted hover:text-foreground",
+        "disabled:pointer-events-none disabled:opacity-40",
+        "[&:last-child]:border-t [&:last-child]:border-input",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

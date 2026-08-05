@@ -8,7 +8,7 @@
 
 import type { ComponentType, ReactNode } from "react";
 import { FilePen, FolderGit2 } from "lucide-react";
-import { Chevron, Panel } from "./ui";
+import { Chevron } from "./ui";
 
 export function Intro({
   composer,
@@ -38,16 +38,16 @@ export function Intro({
 
             <div className="grid grid-cols-2 gap-2">
               <LiveEntry
-                icon={FolderGit2}
-                title="Connect a repo"
-                detail="Point the wizard at your codebase and let it read the product for you."
-                onClick={onConnectRepo}
-              />
-              <LiveEntry
                 icon={FilePen}
                 title="Write the experiment yourself"
                 detail="Skip the interview and fill in the tasks, personas and metrics directly."
                 onClick={onAuthor}
+              />
+              <LiveEntry
+                icon={FolderGit2}
+                title="Connect a repo"
+                detail="Point the wizard at your codebase and let it read the product for you."
+                onClick={onConnectRepo}
               />
             </div>
           </div>
@@ -70,7 +70,10 @@ function LiveEntry({
 }) {
   return (
     <button type="button" onClick={onClick} className="text-left">
-      <Panel className="flex items-center gap-3 p-4 transition-colors hover:bg-muted">
+      {/* Not a Panel: these cards match the composer pill's larger corner radius (rounded-2xl)
+          so the input and the two entries below it read as one group. Panel's own rounded-md
+          would clash, and cn() is a plain join that can't reliably override it. */}
+      <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 text-card-foreground transition-colors hover:bg-muted">
         {/* A leading icon in a fixed-width gutter, so the two cards' titles line up down a
             common left edge however wide each icon draws. Neutral, in currentColor — no accent,
             since these are entries, not state. */}
@@ -82,7 +85,7 @@ function LiveEntry({
           <span className="text-xs text-muted-foreground">{detail}</span>
         </div>
         <Chevron dir="right" className="text-muted-foreground" />
-      </Panel>
+      </div>
     </button>
   );
 }
