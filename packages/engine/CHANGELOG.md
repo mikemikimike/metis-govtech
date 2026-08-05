@@ -8,10 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
-- Refactored Langfuse extractor to pre-extract all trace data into a `_TraceExtraction` bundle, eliminating redundant extraction passes and duplicate API calls
-- Removed `_extract_retry_counts` helper (retry detection now handled solely in metrics via raw tool calls)
-- Removed `response` field from delegation dict — subagent output is accessed via `LLMTestCase.context` instead
-- `_session_to_conversational_test_case` no longer requires a Langfuse client; accepts pre-extracted data directly
+- Updated metric FQNs in `experiment.yaml`, README, and orchestrator docstring to use package-level paths (`metis.library.metrics.X` instead of `metis.library.metrics.<module>.X`)
 ## [0.4.0] — 2026-08-04
 
 ### Changed
