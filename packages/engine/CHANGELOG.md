@@ -12,6 +12,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Removed `_extract_retry_counts` helper (retry detection now handled solely in metrics via raw tool calls)
 - Removed `response` field from delegation dict — subagent output is accessed via `LLMTestCase.context` instead
 - `_session_to_conversational_test_case` no longer requires a Langfuse client; accepts pre-extracted data directly
+## [0.4.0] — 2026-08-04
+
+### Changed
+
+- **BREAKING: Simulation type renames** — `SessionConfig` / `SessionRecord` / `SessionOutcome` / `SessionMeta` renamed to `RunConfig` / `RunRecord` / `RunOutcome` / `RunMeta` to avoid confusion with Langfuse sessions; output folder renamed from `sessions/` to `runs/`, manifest from `session-manifest.json` to `run-manifest.json`
+- **BREAKING: User-agent type renames** — `TurnPayload` → `UserAgentInput`, `UserAgentResponse` → `UserAgentOutput`; field renames: `UserAgentOutput.action` → `.decision`, `ConversationTurn.system_response` → `.target_response`, `UIState.agent_labels` → `.target_status_labels`
+- **Simulation API** — `fixtures_dir` is now a required parameter on `run_experiment` / `run_simulation` (removed dead `_DEFAULT_FIXTURES_DIR` fallback); `RunConfig` construction inlined inside `run_simulation`
+- **Extractor refactor** — introduced `_TraceExtraction` dataclass to bundle per-trace extraction results; `_trace_to_test_case` and `_session_to_conversational_test_case` now accept pre-extracted data instead of raw traces, eliminating redundant extraction passes and the `langfuse` client parameter on `_session_to_conversational_test_case`
+- **Removed `_types.py` indirection** — deleted `simulation/harness/_types.py` re-export shim; all imports come directly from `simulation/types.py`
+- **Test layout** — relocated unit tests from co-located `*_test.py` files in the source tree (`cli_test.py`, `simulation/schema_test.py`) to `tests/unit/engine/` per the monorepo architecture spec (§7)
+- **Test naming** — renamed to `test_*.py` convention consistent with the rest of the monorepo
+- **pytest config** — removed `packages/*/src/metis/*/` and `apps/*/src/metis/*/` workarounds from root `testpaths`; tests are now discoverable via `make test-unit` as intended
+
+### Fixed
+
+- **CLI test assertions** — corrected 9 tests that asserted error messages on stderr when `_validate_inputs` writes to stdout via `metis.core.console`; these tests were silently never running under `make test-unit`
 
 ## [0.3.0] — 2026-08-03
 

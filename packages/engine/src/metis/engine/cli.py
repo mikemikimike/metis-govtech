@@ -183,7 +183,7 @@ def simulate(
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
     from metis.engine.reporting import generate_report
     from metis.engine.simulation.harness import HarnessConfig, run_experiment
-    from metis.engine.simulation.types import Experiment, SessionRecord
+    from metis.engine.simulation.types import Experiment, RunRecord
 
     load_dotenv()
 
@@ -236,15 +236,15 @@ def simulate(
     )
 
     files = sorted(
-        experiment_dir.glob("sessions/*/record.json"), key=lambda p: p.stat().st_mtime
+        experiment_dir.glob("runs/*/record.json"), key=lambda p: p.stat().st_mtime
     )
-    records: list[SessionRecord] = [SessionRecord.load_file(f) for f in files]
+    records: list[RunRecord] = [RunRecord.load_file(f) for f in files]
 
     if not records:
-        console.print("No session records found.")
+        console.print("No run records found.")
         sys.exit(1)
 
-    console.print(f"  Loaded {len(records)} session record(s)")
+    console.print(f"  Loaded {len(records)} run record(s)")
 
     langfuse = get_langfuse_client()
     eval_results = []
@@ -269,7 +269,7 @@ def simulate(
 
         if not metric_refs:
             console.print(
-                "  WARNING: No metric_refs in session config — skipping evaluation",
+                "  WARNING: No metric_refs in run config — skipping evaluation",
                 style="yellow",
             )
             failed += 1
@@ -314,6 +314,6 @@ def simulate(
         )
 
     console.print(f"\n\n{'=' * 60}")
-    console.print(f"  PIPELINE COMPLETE — {len(records)} session(s), {failed} failed")
+    console.print(f"  PIPELINE COMPLETE — {len(records)} run(s), {failed} failed")
     console.print(f"  Experiment: {experiment_dir}")
     console.print(f"{'=' * 60}")

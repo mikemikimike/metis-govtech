@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ..types import SessionRecord
+from ..types import RunRecord
 
 _TYPE_MAP = {
     "pdf": "report",
@@ -28,18 +28,18 @@ def infer_artifact_type(filename: str) -> str:
     return _TYPE_MAP.get(ext, "unknown")
 
 
-def _save_artifacts(record: SessionRecord, session_dir: Path) -> dict:
-    """Write an artifact manifest for a completed simulation session.
+def _save_artifacts(record: RunRecord, run_dir: Path) -> dict:
+    """Write an artifact manifest for a completed simulation run.
 
     Artifacts are already on disk at their collected paths (written live during
     simulation). This function records them in a manifest file and returns the
     manifest dict.
 
-    :param record: The completed session record.
-    :param session_dir: The session folder (``sessions/<task>-<persona>-<uuid>/``).
-    :returns: The manifest dict (also written to ``session_dir/artifacts/session-manifest.json``).
+    :param record: The completed run record.
+    :param run_dir: The run folder (``runs/<task>-<persona>-<trial>/``).
+    :returns: The manifest dict (also written to ``run_dir/artifacts/run-manifest.json``).
     """
-    artifacts_dir = session_dir / "artifacts"
+    artifacts_dir = run_dir / "artifacts"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     manifest_artifacts = []
@@ -63,7 +63,7 @@ def _save_artifacts(record: SessionRecord, session_dir: Path) -> dict:
         "artifacts": manifest_artifacts,
     }
 
-    manifest_path = artifacts_dir / "session-manifest.json"
+    manifest_path = artifacts_dir / "run-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2))
 
     return manifest

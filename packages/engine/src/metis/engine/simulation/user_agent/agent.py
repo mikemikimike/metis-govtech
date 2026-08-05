@@ -12,9 +12,9 @@ from ..types import (
     ExperimentTask,
     FormElement,
     Persona,
-    TurnPayload,
     UIState,
-    UserAgentResponse,
+    UserAgentInput,
+    UserAgentOutput,
 )
 from .config import (
     USER_AGENT_MAX_TOKENS,
@@ -62,7 +62,7 @@ class UserAgent:
         self.client = OpenAI()
         self._system_prompt = self._build_system_prompt()
 
-    def generate_opening(self) -> UserAgentResponse:
+    def generate_opening(self) -> UserAgentOutput:
         """Generate the first message to start the conversation."""
         logger.info(
             "[user_agent] Generating opening message (persona=%s, model=%s)...",
@@ -77,7 +77,7 @@ class UserAgent:
         logger.info("[user_agent] === OPENING TURN ===")
         if response.reasoning:
             logger.info("[user_agent]   Reasoning: %s", response.reasoning)
-        logger.info("[user_agent]   Action: %s", response.action)
+        logger.info("[user_agent]   Decision: %s", response.decision)
         logger.info("[user_agent]   Message: %s", response.message[:200])
         if response.ui_actions:
             logger.info(
@@ -86,7 +86,7 @@ class UserAgent:
             )
         return response
 
-    def generate_response(self, turn_payload: TurnPayload) -> UserAgentResponse:
+    def generate_response(self, turn_payload: UserAgentInput) -> UserAgentOutput:
         """Given the system's response, generate the user's next message.
 
         :param turn_payload: Structured payload containing the target system's
@@ -124,7 +124,7 @@ class UserAgent:
         logger.info("[user_agent] === TURN %d DECISION ===", self.turn_count)
         if response.reasoning:
             logger.info("[user_agent]   Reasoning: %s", response.reasoning)
-        logger.info("[user_agent]   Action: %s", response.action)
+        logger.info("[user_agent]   Decision: %s", response.decision)
         logger.info("[user_agent]   Message: %s", response.message[:200])
         if response.ui_actions:
             logger.info(
@@ -209,10 +209,10 @@ class UserAgent:
         messages.append({"role": "user", "content": user_prompt})
         return messages
 
-    def _call_llm(self, user_prompt: str) -> UserAgentResponse:
+    def _call_llm(self, user_prompt: str) -> UserAgentOutput:
         """Call the LLM with structured output enforcement.
 
-        The OpenAI API guarantees the response conforms to UserAgentResponse's
+        The OpenAI API guarantees the response conforms to UserAgentOutput's
         schema, so no manual JSON parsing or retries are needed.
         """
         messages = self._build_messages(user_prompt)
@@ -230,7 +230,7 @@ class UserAgent:
                 messages=messages,
                 max_tokens=USER_AGENT_MAX_TOKENS,
                 temperature=USER_AGENT_TEMPERATURE,
-                response_format=UserAgentResponse,
+                response_format=UserAgentOutput,
             )
             message = response.choices[0].message
             if message.parsed is not None:
