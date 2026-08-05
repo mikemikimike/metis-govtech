@@ -22,9 +22,6 @@ from metis.wizard.contracts import (
     StepResult,
 )
 
-CITATION_METRIC = "metis.library.metrics.orchestration.SynthesisFaithfulnessMetric"
-BOUNDED = "metis.library.metrics.universal.BoundedTroubleshootingMetric"
-
 
 @dataclass
 class ScriptedInterviewer:
@@ -53,14 +50,10 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path="epics",
                     value={
-                        "id": "EP-1",
                         "name": "Answer quality",
                         "behaviours": [
-                            {
-                                "id": "EB-1",
-                                "statement": "Cites a source for every claim",
-                            },
-                            {"id": "EB-2", "statement": "Keeps answers short"},
+                            {"statement": "Cites a source for every claim"},
+                            {"statement": "Keeps answers short"},
                         ],
                     },
                 ),
@@ -68,11 +61,8 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path="epics",
                     value={
-                        "id": "EP-2",
                         "name": "Recovery",
-                        "behaviours": [
-                            {"id": "EB-3", "statement": "Stops after repeated failures"}
-                        ],
+                        "behaviours": [{"statement": "Stops after repeated failures"}],
                     },
                 ),
             ],
@@ -85,17 +75,14 @@ class ScriptedInterviewer:
             if behaviour.criteria:
                 continue
             epic = profile.epic_of(behaviour.id)
-            number = behaviour.id.split("-")[-1]
             patches.append(
                 Patch(
                     op=PatchOp.ADD,
                     path=f"epics[{epic.id}].behaviours[{behaviour.id}].criteria",
                     value={
-                        "id": f"AC-{number}-1",
                         "given": "a question it can answer",
                         "when": "the answer comes back",
                         "then": f"it satisfies: {behaviour.statement.lower()}",
-                        "metric_fqn": CITATION_METRIC,
                     },
                 )
             )
@@ -110,7 +97,7 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path="personas",
                     value={
-                        "id": "cooperative-delegator",
+                        "label": "cooperative-delegator",
                         "description": "Engages fully and answers questions willingly.",
                     },
                 ),
@@ -118,7 +105,7 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path="personas",
                     value={
-                        "id": "impatient-executive",
+                        "label": "impatient-executive",
                         "description": "Curt imperatives, no patience for clarification.",
                     },
                 ),
@@ -136,13 +123,11 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path="tasks",
                     value={
-                        "id": "T-1",
                         "description": "Ask for a literature review on a covered topic.",
                         # one task covering several behaviours — M:N, and what makes
                         # experiments cheaper than one task per behaviour
                         "behaviour_refs": covered,
                         "persona_refs": personas,
-                        "num_trials": 3,
                     },
                 ),
             ],
@@ -159,17 +144,10 @@ class ScriptedInterviewer:
     ) -> StepResult:
         """One new criterion for the named behaviour — a single add, as the driver requires.
 
-        The id extends the behaviour's own scheme (AC-<behaviour number>-<n>), taking the next
-        free index so a second suggestion does not collide with the first.
+        The materializer assigns the criterion id after validating this semantic draft.
         """
         self.calls.append("suggest_criterion")
         epic = profile.epic_of(behaviour_id)
-        behaviour = profile.behaviour(behaviour_id)
-        number = behaviour_id.split("-")[-1]
-        used = {c.id for c in behaviour.criteria} if behaviour else set()
-        n = 1
-        while f"AC-{number}-{n}" in used:
-            n += 1
         return StepResult(
             message="Here's one more you might want.",
             patches=[
@@ -177,11 +155,9 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path=f"epics[{epic.id}].behaviours[{behaviour_id}].criteria",
                     value={
-                        "id": f"AC-{number}-{n}",
                         "given": "a follow-up on the same topic",
                         "when": "the agent answers again",
                         "then": "it stays consistent with its first answer",
-                        "metric_fqn": CITATION_METRIC,
                     },
                 )
             ],

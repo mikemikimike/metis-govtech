@@ -70,6 +70,72 @@ def test_priority_is_owned_by_no_step() -> None:
         assert not any("priority" in g for g in globs)
 
 
+def test_strict_model_drafts_materialize_ids_and_task_defaults() -> None:
+    from metis.wizard.contracts import (
+        BehaviourDraft,
+        EpicDraft,
+        PersonaDraft,
+        StepResultPatch,
+        TaskDraft,
+    )
+
+    profile = research_assistant()
+    result = apply(
+        profile,
+        sanitise(
+            [
+                StepResultPatch(
+                    op=PatchOp.ADD,
+                    path="epics",
+                    value=EpicDraft(
+                        name="New",
+                        behaviours=[BehaviourDraft(statement="does something")],
+                    ),
+                ),
+                StepResultPatch(
+                    op=PatchOp.ADD,
+                    path="personas",
+                    value=PersonaDraft(
+                        label="Impatient Executive", description="short"
+                    ),
+                ),
+                StepResultPatch(
+                    op=PatchOp.ADD,
+                    path="tasks",
+                    value=TaskDraft(
+                        description="exercise it",
+                        behaviour_refs=["EB-4"],
+                        persona_refs=["impatient-executive-2"],
+                    ),
+                ),
+            ]
+        ),
+    )
+
+    assert not result.rejected
+    assert profile.epics[-1].id == "EP-3"
+    assert profile.epics[-1].behaviours[0].id == "EB-4"
+    assert profile.personas[-1].id == "impatient-executive-2"
+    assert profile.tasks[-1].id == "T-3"
+    assert profile.tasks[-1].num_trials == 3
+    assert profile.tasks[-1].fixtures == []
+
+
+def test_model_whole_entity_set_is_refused() -> None:
+    from metis.wizard.contracts import Patch, TaskDraft
+
+    profile = research_assistant()
+    patch_value = Patch(
+        op=PatchOp.SET,
+        path="tasks[T-1]",
+        value=TaskDraft(description="replacement", behaviour_refs=[], persona_refs=[]),
+    )
+    result = apply(profile, sanitise([patch_value]))
+    assert result.applied == []
+    assert result.rejected
+    assert profile.task("T-1").description.startswith("Ask for")  # type: ignore[union-attr]
+
+
 # ── the metric is the matcher's, not the model's ────────────────────────────
 
 
@@ -356,7 +422,7 @@ def test_paths_address_by_id_not_index() -> None:
     ("bracket", "expected_id", "raises"),
     [
         ("EB-1", "EB-1", False),  # an id that matches always wins
-        ("0", "EB-1", False),  # a bare integer falls back to a positional index
+        ("0", None, True),  # numeric brackets are not positional addresses
         ("99", None, True),  # out of range is still an error, not a silent miss
     ],
 )
@@ -388,7 +454,7 @@ def test_criteria_added_by_positional_index_actually_land() -> None:
         profile,
         [
             patch(
-                "epics[EP-1].behaviours[0].criteria",
+                "epics[EP-1].behaviours[EB-1].criteria",
                 {
                     "id": "AC-1-1",
                     "given": "a question",

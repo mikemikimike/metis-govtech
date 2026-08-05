@@ -172,6 +172,103 @@ def test_three_failures_raise() -> None:
     assert len(completions.calls) == ATTEMPTS
 
 
+def test_raw_task_fields_are_rejected_before_profile_materialization() -> None:
+    """The regression starts at provider JSON, before a typed Task can exist."""
+    from fixtures.profiles import research_assistant
+
+    invalid = json.dumps(
+        {
+            "message": "draft",
+            "patches": [
+                {
+                    "op": "add",
+                    "path": "tasks",
+                    "value": {
+                        "id": "MODEL-ID",
+                        "description": "x",
+                        "behaviour_refs": [],
+                        "persona_refs": [],
+                        "num_trials": 99,
+                        "fixtures": ["secret.txt"],
+                    },
+                }
+            ],
+        }
+    )
+    valid = json.dumps(
+        {
+            "message": "draft",
+            "patches": [
+                {
+                    "op": "add",
+                    "path": "tasks",
+                    "value": {
+                        "description": "x",
+                        "behaviour_refs": [],
+                        "persona_refs": [],
+                    },
+                }
+            ],
+        }
+    )
+    model, completions = interviewer([invalid, valid])
+
+    result = model._step("s", "u", research_assistant())
+
+    assert result.patches[0].value.description == "x"
+    assert len(completions.calls) == 2
+    assert any(
+        "didn't validate" in m["content"] for m in completions.calls[1]["messages"]
+    )
+
+
+def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
+    from fixtures.profiles import research_assistant
+
+    invalid = json.dumps(
+        {
+            "message": "draft",
+            "patches": [
+                {
+                    "op": "add",
+                    "path": "epics",
+                    "value": {
+                        "name": "Safety",
+                        "behaviours": [
+                            {
+                                "statement": "refuses unsafe requests",
+                                "priority": True,
+                                "criteria": [{"metric_fqn": "forbidden"}],
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+    )
+    valid = json.dumps(
+        {
+            "message": "draft",
+            "patches": [
+                {
+                    "op": "add",
+                    "path": "epics",
+                    "value": {
+                        "name": "Safety",
+                        "behaviours": [{"statement": "refuses unsafe requests"}],
+                    },
+                }
+            ],
+        }
+    )
+    model, completions = interviewer([invalid, valid])
+
+    result = model._step("s", "u", research_assistant())
+
+    assert result.patches[0].value.name == "Safety"
+    assert len(completions.calls) == 2
+
+
 def test_structured_output_is_requested_strictly() -> None:
     model, completions = interviewer([ClarifyResult(done=True).model_dump_json()])
 
@@ -182,27 +279,56 @@ def test_structured_output_is_requested_strictly() -> None:
     assert schema["json_schema"]["strict"] is True
 
 
-def test_patches_from_the_model_are_stamped_model_origin() -> None:
-    """Whatever the model claims, origin is the code's to assign."""
-    from metis.wizard.contracts import PatchOrigin, StepResult
+def test_model_schema_has_no_persisted_or_runtime_fields() -> None:
+    from metis.wizard.contracts import StepResult
 
-    payload = StepResult(
-        message="done",
-        patches=[
-            {
-                "op": "set",
-                "path": "personas[P-1].description",
-                "value": "x",
-                "origin": "wizard",
-            }
-        ],  # type: ignore[list-item]
-    ).model_dump_json()
-    model, _ = interviewer([payload])
+    schema = StepResult.model_json_schema()
+
+    def properties(node):
+        if isinstance(node, dict):
+            yield from node.get("properties", {}).keys()
+            for value in node.values():
+                yield from properties(value)
+        elif isinstance(node, list):
+            for value in node:
+                yield from properties(value)
+
+    names = set(properties(schema))
+    assert not names & {
+        "id",
+        "priority",
+        "metric_fqn",
+        "metric_args",
+        "fixtures",
+        "num_trials",
+        "origin",
+        "options",
+    }
+
+
+def test_model_origin_is_not_part_of_provider_schema() -> None:
+    """The provider cannot claim the runtime trust marker."""
+    bad = json.dumps(
+        {
+            "message": "done",
+            "patches": [
+                {
+                    "op": "set",
+                    "path": "personas[cooperative-delegator].description",
+                    "value": "x",
+                    "origin": "wizard",
+                }
+            ],
+        }
+    )
+    good = json.dumps({"message": "done", "patches": []})
+    model, completions = interviewer([bad, good])
     from fixtures.profiles import research_assistant
 
     result = model._step("s", "u", research_assistant())
 
-    assert result.patches[0].origin is PatchOrigin.MODEL
+    assert result.patches == []
+    assert len(completions.calls) == 2
 
 
 def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
@@ -211,7 +337,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     The model-facing schema and domain validation belong inside the same retry loop. The
     failed attempt must not apply its earlier product edit to the real profile.
     """
-    from metis.wizard.contracts import Epic, Product, ProductProfile, StepResult
+    from metis.wizard.contracts import EpicDraft, Product, ProductProfile
 
     profile = ProductProfile(product=Product(name="X", summary="", users=""))
     bad = json.dumps(
@@ -227,9 +353,8 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
                     "op": "add",
                     "path": "epics",
                     "value": {
-                        "id": "EP-1",
                         "name": "Routing",
-                        "behaviours": [{"id": "EB-1"}],
+                        "behaviours": [{"statement": "", "priority": True}],
                     },
                 },
             ],
@@ -242,46 +367,39 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
                 {
                     "op": "add",
                     "path": "epics",
-                    "value": {"id": "EP-1", "name": "Routing"},
+                    "value": {"name": "Routing", "behaviours": []},
                 }
             ],
         }
     )
-    good = StepResult(
-        message="drafted",
-        patches=[
-            {
-                "op": "set",
-                "path": "product.summary",
-                "value": "an orchestrator",
-            },
-            {
-                "op": "add",
-                "path": "epics",
-                "value": {
-                    "id": "EP-1",
-                    "name": "Routing",
-                    "behaviours": [
-                        {"id": "EB-1", "statement": "Routes to the right agent"}
-                    ],
+    good = json.dumps(
+        {
+            "message": "drafted",
+            "patches": [
+                {"op": "set", "path": "product.summary", "value": "an orchestrator"},
+                {
+                    "op": "add",
+                    "path": "epics",
+                    "value": {
+                        "name": "Routing",
+                        "behaviours": [{"statement": "Routes to the right agent"}],
+                    },
                 },
-            },
-        ],  # type: ignore[list-item]
-    ).model_dump_json()
+            ],
+        }
+    )
     model, completions = interviewer([bad, empty, good])
 
     result = model.draft_behaviours(profile, [])
 
     assert len(completions.calls) == 3
     epic = result.patches[-1].value
-    assert isinstance(epic, Epic)
+    assert isinstance(epic, EpicDraft)
     assert epic.behaviours[0].statement
     assert profile.product.summary == ""
     assert profile.epics == []
     retry_messages = completions.calls[2]["messages"]
-    assert any(
-        "behaviours.0.statement" in message["content"] for message in retry_messages
-    )
+    assert any("priority" in message["content"] for message in retry_messages)
     assert any("behaviours" in message["content"] for message in retry_messages)
 
 
@@ -298,7 +416,7 @@ def test_a_duplicate_persona_description_is_retried() -> None:
             {
                 "op": "add",
                 "path": "personas",
-                "value": {"id": "P-duplicate", "description": existing.description},
+                "value": {"label": "duplicate", "description": existing.description},
             }
         ],  # type: ignore[list-item]
     ).model_dump_json()

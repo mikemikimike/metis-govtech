@@ -26,18 +26,18 @@ from metis.wizard.contracts.conversation import (
     Warning,
     WarningSource,
 )
-from metis.wizard.contracts.output import StepResult
-from metis.wizard.contracts.session_state import SessionState
-from metis.wizard.domain.applier import apply, sanitise
-from metis.wizard.domain.patch import PatchOp
-from metis.wizard.domain.permissions import SessionStep
-from metis.wizard.domain.profile import (
-    Behaviour,
-    Criterion,
-    InteractionType,
-    Persona,
-    Task,
+from metis.wizard.contracts.output import (
+    CriterionDraft,
+    PersonaDraft,
+    StepResult,
+    TaskDraft,
 )
+from metis.wizard.contracts.session_state import SessionState
+from metis.wizard.domain import materializer
+from metis.wizard.domain.applier import apply, sanitise
+from metis.wizard.domain.patch import PatchOp, PatchOrigin
+from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.profile import Behaviour
 
 # After this many questions the wizard drafts regardless of whether the model thinks it has
 # enough. A mediocre first draft is recoverable — the behaviours are reviewed on the very
@@ -289,20 +289,23 @@ class StepDriver:
             return self._add_typed_criterion(state, request.target, values)
 
         if state.step is SessionStep.PERSONAS:
-            profile.personas.append(
-                Persona(
-                    id=values.get("id") or f"P-{len(profile.personas) + 1}",
+            materializer.add_persona(
+                profile,
+                PersonaDraft(
+                    label=values.get("label", values.get("id", "persona")),
                     description=values.get("description", ""),
-                    interaction_type=InteractionType.FORM,
-                )
+                ),
+                PatchOrigin.WIZARD,
             )
         elif state.step is SessionStep.TASKS:
-            profile.tasks.append(
-                Task(
-                    id=f"T-{len(profile.tasks) + 1}",
+            materializer.add_task(
+                profile,
+                TaskDraft(
                     description=values.get("description", ""),
-                    interaction_type=InteractionType.FORM,
-                )
+                    behaviour_refs=values.get("behaviour_refs", []),
+                    persona_refs=values.get("persona_refs", []),
+                ),
+                PatchOrigin.WIZARD,
             )
 
     def _add_typed_criterion(
@@ -319,31 +322,18 @@ class StepDriver:
         if behaviour is None:
             return self._refuse_unresolved_target()
 
-        behaviour.criteria.append(
-            Criterion(
-                id=self._next_criterion_id(behaviour),
+        materializer.add_criterion(
+            state.profile,
+            behaviour,
+            CriterionDraft(
                 given=values.get("given", ""),
                 when=values.get("when", ""),
                 then=values.get("then", ""),
-                interaction_type=InteractionType.FORM,
-            )
+            ),
+            PatchOrigin.WIZARD,
         )
         # The new criterion has no metric yet; match it, and only it, if a matcher is wired.
         self._match_new(behaviour, {c.id for c in behaviour.criteria[:-1]})
-
-    @staticmethod
-    def _next_criterion_id(behaviour: Behaviour) -> str:
-        """The next free id in this behaviour's own scheme — AC-<behaviour number>-<n>.
-
-        Derives the behaviour number the same way generation does (the trailing segment of the
-        behaviour id) and takes the lowest index not already used, so two manual entries in a
-        row produce two distinct criteria rather than colliding."""
-        number = behaviour.id.split("-")[-1]
-        used = {c.id for c in behaviour.criteria}
-        n = 1
-        while f"AC-{number}-{n}" in used:
-            n += 1
-        return f"AC-{number}-{n}"
 
     def _handle_choice(
         self, state: SessionState, request: AnyRequest, response: AnyResponse

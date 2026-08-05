@@ -4,15 +4,14 @@ The order of the checks is the whole design:
 
     1. origin      — did the package compose this? then it is trusted
     2. ownership   — does *any* step own this address?
-    3. fields      — of what the value carries, which parts does the model fill?
+    3. construction — strict drafts are materialized with code-owned fields.
 
 Origin comes first because an address check alone cannot tell the user's tick from the
 model's attempt at one — the two patches are byte-identical. See `PatchOrigin`.
 
-Two and three are the same rule read against the two shapes a patch comes in. A targeted
-write names its field in the path, so ownership catches it. A bundled one addresses a
-container and carries the whole object inside, where the path never names the fields within
-— so the value is filtered against `ModelWritableFields` on the way in.
+The model-facing contract is validated before this module sees provider JSON. Bundled values
+are strict drafts, and this module materializes ids, defaults and authorship before constructing
+the persisted domain object.
 
 A rejected patch is never silent. The user asked for something and part of it did not happen,
 so the applier says which part and why, and the caller attaches that as a RUNTIME warning.
@@ -28,9 +27,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from metis.wizard.domain import paths
+from metis.wizard.domain import materializer, paths
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
-from metis.wizard.domain.permissions import ModelWritableFields, owner_of
+from metis.wizard.domain.permissions import owner_of
 from metis.wizard.domain.profile import (
     Behaviour,
     Criterion,
@@ -48,6 +47,11 @@ _LIST_TYPES: dict[str, type] = {
     "personas": Persona,
     "tasks": Task,
 }
+
+
+def _draft(value: Any, name: str) -> bool:
+    """Recognise a strict draft without making the domain layer depend on contracts."""
+    return type(value).__name__ == name
 
 
 @dataclass
@@ -101,40 +105,45 @@ def _check(patch: Patch) -> str | None:
         # has never seen, so it is named as "part of this" rather than shown verbatim.
         return "I wasn't able to make part of that change — it isn't mine to write."
 
+    # A model may edit a named semantic field, but cannot replace a persisted entity wholesale:
+    # that would be a second creation route around the draft/materializer boundary.
+    if (
+        patch.origin is PatchOrigin.MODEL
+        and patch.op is PatchOp.SET
+        and patch.path.rsplit(".", 1)[-1].find("[") >= 0
+    ):
+        return "I can update a field on that item, but I can't replace the whole item."
+
     return None
 
 
-def _only_writable(field_name: str, value: Any) -> Any:
-    """Drop the fields the model does not fill, wherever they sit in the value.
-
-    The address check reads `patch.path`, and every step asks the model to draft its output in
-    one go — so its patches address a container and carry the finished object inside, where the
-    path never names the fields within. `ModelWritableFields` is that second half.
-
-    Recursive because Pydantic builds nested behaviours and criteria from raw dicts without
-    coming back through here, so filtering only the top level would leave the nesting open.
-    """
-    allowed = ModelWritableFields.get(field_name)
-    if allowed is None or not isinstance(value, dict):
-        return value
-    return {
-        key: [_only_writable(key, item) for item in inner]
-        if isinstance(inner := value[key], list)
-        else _only_writable(key, inner)
-        for key in value
-        if key in allowed
-    }
-
-
 def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
-    """Turn a dict from model output into the object its list holds.
-
-    A WIZARD patch passes through unfiltered, for the same reason `_check` reads origin first:
-    the package composed it and knows it did. That is what leaves room for the user's own
-    trials and fixtures edits to land on addresses the model can never write.
-    """
-    if origin is PatchOrigin.MODEL:
-        value = _only_writable(field_name, value)
+    """Turn a wizard-composed dictionary into the object its list holds."""
+    # Runtime callers from older integrations may still construct a generic model Patch. Keep
+    # that compatibility safe; provider JSON is already rejected by strict drafts before here.
+    if origin is PatchOrigin.MODEL and isinstance(value, dict):
+        allowed = {
+            "epics": {"id", "name", "behaviours"},
+            "behaviours": {"id", "statement", "criteria"},
+            "criteria": {"id", "given", "when", "then"},
+            "personas": {"id", "description"},
+            "tasks": {"id", "description", "behaviour_refs", "persona_refs"},
+        }.get(field_name)
+        if allowed is not None:
+            value = {
+                key: [
+                    _coerce(
+                        "behaviours" if key == "behaviours" else "criteria",
+                        item,
+                        origin,
+                    )
+                    for item in inner
+                ]
+                if isinstance(inner := value[key], list)
+                else inner
+                for key in value
+                if key in allowed
+            }
     model = _LIST_TYPES.get(field_name)
     if model is not None and isinstance(value, dict):
         return model.model_validate(value)
@@ -163,7 +172,27 @@ def _apply_one(profile: ProductProfile, patch: Patch) -> None:
         items = getattr(parent, segment.field)
         if not isinstance(items, list):
             raise paths.PathError(f"{patch.path!r}: cannot ADD to a non-list.")
-        items.append(_coerce(segment.field, patch.value, patch.origin))
+        value = patch.value
+        if _draft(value, "EpicDraft") and segment.field == "epics":
+            materializer.add_epic(profile, value, patch.origin)
+            return
+        if _draft(value, "BehaviourDraft") and segment.field == "behaviours":
+            items.append(materializer.add_behaviour(profile, value, patch.origin))
+            return
+        if _draft(value, "CriterionDraft") and segment.field == "criteria":
+            if not isinstance(parent, Behaviour):
+                raise paths.PathError(
+                    f"{patch.path!r}: criteria has no behaviour parent."
+                )
+            materializer.add_criterion(profile, parent, value, patch.origin)
+            return
+        if _draft(value, "PersonaDraft") and segment.field == "personas":
+            materializer.add_persona(profile, value, patch.origin)
+            return
+        if _draft(value, "TaskDraft") and segment.field == "tasks":
+            materializer.add_task(profile, value, patch.origin)
+            return
+        items.append(_coerce(segment.field, value, patch.origin))
 
     elif patch.op is PatchOp.REMOVE:
         items = getattr(parent, segment.field)
@@ -212,22 +241,32 @@ def apply(profile: ProductProfile, patches: list[Patch]) -> ApplyResult:
                 Rejection(patch, f"I couldn't apply that change to {patch.path}.")
             )
             continue
+        except (ValueError, TypeError) as exc:
+            result.rejected.append(
+                Rejection(patch, f"I couldn't apply that change: {exc}")
+            )
+            continue
         result.applied.append(patch)
 
     return result
 
 
-def sanitise(patches: Sequence[Patch]) -> list[Patch]:
+def sanitise(patches: Sequence[Any]) -> list[Patch]:
     """Force every patch to MODEL origin.
 
     Call this on anything that came out of a model. Origin is stamped by the code that builds
     a patch and is never carried in structured output, so a model claiming `wizard` is either
     confused or trying it on; either way the answer is the same.
     """
-    return [p.model_copy(update={"origin": PatchOrigin.MODEL}) for p in patches]
+    return [
+        p.model_copy(update={"origin": PatchOrigin.MODEL})
+        if isinstance(p, Patch)
+        else Patch(op=p.op, path=p.path, value=p.value, origin=PatchOrigin.MODEL)
+        for p in patches
+    ]
 
 
-def validate_model_patches(profile: ProductProfile, patches: Sequence[Patch]) -> None:
+def validate_model_patches(profile: ProductProfile, patches: Sequence[Any]) -> None:
     """Validate model patch values without touching the real profile.
 
     `Patch.value` is necessarily `Any`: its shape depends on the path. Structured output

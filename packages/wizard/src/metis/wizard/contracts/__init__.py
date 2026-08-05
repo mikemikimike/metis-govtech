@@ -29,7 +29,16 @@ from metis.wizard.contracts.conversation import (
     WizardRequest,
     WizardRequestState,
 )
-from metis.wizard.contracts.output import ClarifyResult, StepResult, StepResultPatch
+from metis.wizard.contracts.output import (
+    BehaviourDraft,
+    ClarifyResult,
+    CriterionDraft,
+    EpicDraft,
+    PersonaDraft,
+    StepResult,
+    StepResultPatch,
+    TaskDraft,
+)
 from metis.wizard.contracts.session_state import (
     SESSION_FORMAT_VERSION,
     SessionState,
@@ -55,6 +64,7 @@ __all__ = [
     "AnyResponse",
     "Authored",
     "Behaviour",
+    "BehaviourDraft",
     "BehaviourCard",
     "Card",
     "CardComponent",
@@ -69,7 +79,9 @@ __all__ = [
     "ChoiceResponse",
     "ClarifyResult",
     "Criterion",
+    "CriterionDraft",
     "Epic",
+    "EpicDraft",
     "FormField",
     "FormRequest",
     "FormResponse",
@@ -82,6 +94,7 @@ __all__ = [
     "PatchOp",
     "PatchOrigin",
     "Persona",
+    "PersonaDraft",
     "Product",
     "ProductProfile",
     "SESSION_FORMAT_VERSION",
@@ -90,6 +103,7 @@ __all__ = [
     "StepResult",
     "StepResultPatch",
     "Task",
+    "TaskDraft",
     "TaskCard",
     "Turn",
     "UserResponse",

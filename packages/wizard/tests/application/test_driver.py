@@ -173,7 +173,7 @@ def test_the_persona_add_form_keeps_the_description_and_generates_an_id() -> Non
 
     added = profile.personas[-1]
     assert len(profile.personas) == before + 1
-    assert added.id == f"P-{before + 1}"
+    assert added.id == "P-1"
     assert added.description == "Second-guesses each decision."
     assert added.is_user_typed
 

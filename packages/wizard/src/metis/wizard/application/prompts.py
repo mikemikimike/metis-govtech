@@ -28,10 +28,9 @@ You return patches, never whole documents. Each patch has:
   path  — an address, e.g. epics[EP-1].behaviours[EB-4].statement
   value — the new value
 
-Address nodes by id, never by position — `epics[EP-1]`, never `epics[0]`. Ids you create
-must follow the existing scheme: epics EP-n, behaviours EB-n, criteria AC-<behaviour
-number>-<n>, tasks T-n. Ids never contain a dot — a dot separates path segments, so one
-inside an id would split the address.
+Address existing nodes by id, never by position — `epics[EP-1]`, never `epics[0]`. Ids,
+defaults and authorship are assigned by the wizard when an item is created; never include them
+in a draft. Ids never contain a dot — a dot separates path segments.
 
 To create something, `add` to its **container** with the whole object as the value, children
 included inline — never `set` an id that does not exist yet (`set` changes a field that is
@@ -39,15 +38,17 @@ already there; it cannot create). One epic with its behaviours is a single patch
 
   op: add
   path: epics
-  value: {"id": "EP-1", "name": "…",
-          "behaviours": [{"id": "EB-1", "statement": "…"},
-                          {"id": "EB-2", "statement": "…"}]}
+  value: {"name": "…",
+          "behaviours": [{"statement": "…"}, {"statement": "…"}]}
 
-Mirror that shape, and the shape of anything already in the document. Ids are sequential per
-container: epics are `EP-1`, `EP-2`; behaviours are `EB-1`, `EB-2` across the whole document,
-not restarted inside each epic.
+Mirror that shape, and the shape of anything already in the document. The wizard allocates
+collision-free ids across the current profile.
 
-Two things you may never write, at any step:
+The wizard owns ids, authorship, defaults, priority, metric bindings, trials and fixtures. The
+model may never write any of them. Persona drafts use `label` and `description`; task drafts use
+only `description`, `behaviour_refs` and `persona_refs`.
+
+Two semantic fields you may never write, at any step:
   - a behaviour's `priority` — that is the user's decision alone
   - a criterion's `metric_fqn` — a separate matcher chooses it from the criterion's own
     wording. You can see which metric each criterion is bound to, but you cannot set it. If
@@ -55,9 +56,7 @@ Two things you may never write, at any step:
     criterion's `given` / `when` / `then` so the wording points at the metric they mean, and
     the matcher re-maps it. Say what you reworded, not that you changed the metric.
 
-`options` are suggestion chips: short labels, each carrying the patch that applies it, so the
-user can click one without you being asked again. Offer them when you are proposing changes
-rather than making them.
+Do not return suggestion options. If you are unsure, explain the alternatives in `message`.
 """.strip()
 
 
@@ -159,12 +158,12 @@ Propose 3–5 personas: behavioural archetypes describing *how someone interacts
 are. Any persona must make sense dropped into any task.
 
 Every persona must include exactly these two fields:
-- `id`: a short, stable, readable kebab-case label that tasks reference, such as
+- `label`: a short, stable, readable kebab-case label that the wizard turns into the id, such as
   `indecisive-junior-officer` or `impatient-executive`
 - `description`: one or two sentences describing how this archetype interacts, which the
   evaluation runner will use to simulate them
 
-Do not add `name`, `scope` or `behaviours`; a persona is only its id and behavioural description.
+Do not add `id`, `name`, `scope` or `behaviours`; a persona is only its label and behavioural description.
 
 Justify them by what the user chose to measure — "you're measuring citation discipline and
 scope refusal, so these will stress both" — in `message`. Include at least one who will
@@ -183,7 +182,7 @@ several behaviours at once, and one behaviour can be probed by several tasks.
 Every behaviour with priority=true must be covered by at least one task. Set behaviour_refs
 to what each task covers and persona_refs to who runs it (at least one). Those, and the
 description, are the whole of a task you write — how many trials it runs and which files it
-uses are the user's to set, and are dropped if you send them.
+uses are assigned by the wizard and cannot be sent by you.
 
 A behaviour about recovery is untestable unless a task actually makes something fail. Build
 the situation that forces the path you need to see.
@@ -231,7 +230,7 @@ existing one.
 Return a single add patch to `epics[…].behaviours[{behaviour_id}].criteria` and nothing else:
 no edits to any other behaviour, no second criterion, no changes elsewhere in the document.
 Give / when / then, concrete enough that someone reading a transcript could say whether it held.
-Do not set metric_fqn — that is resolved separately.
+Do not include an id or set metric_fqn — both are assigned separately.
 
 `message`: a sentence introducing the one you are offering.
 """.strip()

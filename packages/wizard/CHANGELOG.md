@@ -20,14 +20,13 @@ Initial release: an interview that turns a prose product description into a runn
   built bundle is committed so the server runs without a Node toolchain. Step metadata
   (`title`, `step`, `steps`) rides on the request so either door can show where the interview
   is without learning what a behaviour or a persona is.
-- **Patch-based editing.** The model edits by patch, and what it may write is checked twice:
-  the address, against the step that *owns* it — so an edit works from wherever the user is
-  standing — and the value, against a list of the fields the model fills in each kind of
-  object. Both are needed, because the model drafts a whole step at a time: `add tasks` carries
-  the finished task, and the path never names what is inside it. A few things are the user's
-  alone and pass neither check — a behaviour's `priority`, a task's `num_trials` and
-  `fixtures`. Edits that invalidate derived work ask in the same turn and leave no staleness
-  flag.
+- **Patch-based editing.** The model edits by patch, and the address is checked against the
+  step that *owns* it — so an edit works from wherever the user is standing. Provider JSON is
+  parsed into strict semantic drafts (`extra="forbid"`) before any persisted object exists;
+  application code then owns ids, authorship, defaults, references and matcher fields. This
+  closes the bundled-value hole that a recursive post-parse filter could not close. A few things
+  remain the user's alone — a behaviour's `priority`, a task's `num_trials` and `fixtures`.
+  Edits that invalidate derived work ask in the same turn and leave no staleness flag.
 - **Metric matching by embedding similarity.** Each acceptance criterion is matched against
   the metric catalogue by cosine similarity, with `CriterionGEvalMetric` as the fallback when
   nothing scores above the threshold or the embedding provider is unreachable — so a dead

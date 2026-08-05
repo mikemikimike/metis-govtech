@@ -34,7 +34,6 @@ from metis.wizard.application.interviewer import (
 from metis.wizard.contracts.output import ClarifyResult, StepResult
 from metis.wizard.contracts.session_state import Turn
 from metis.wizard.domain.applier import PatchValueError, validate_model_patches
-from metis.wizard.domain.patch import PatchOrigin
 from metis.wizard.domain.profile import ProductProfile
 
 BASE_URL_VAR = "PLATFORM_API_BASE_URL"
@@ -165,12 +164,6 @@ class GatewayInterviewer:
         # default; the patches, which are the real output, are kept either way.
         if recovered:
             result.message = ""
-        # Origin is stamped by the code that builds a patch. Anything arriving here is the
-        # model's, whatever it claims — `sanitise` in the driver enforces it again.
-        result.patches = [
-            patch.model_copy(update={"origin": PatchOrigin.MODEL})
-            for patch in result.patches
-        ]
         return result
 
     # ── the interview ──────────────────────────────────────────────────────

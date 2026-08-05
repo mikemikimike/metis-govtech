@@ -70,17 +70,6 @@ def _step_into(node: Any, segment: Segment, path: str) -> Any:
         if getattr(item, "id", None) == segment.key:
             return item
 
-    # No id matched. A model is told to address by id and mostly does, but it sometimes falls
-    # back to a positional index — `behaviours[0]` — and the whole patch (a behaviour's worth
-    # of freshly drafted criteria) would otherwise be silently rejected. A bare integer is
-    # unambiguously positional here: no id in the scheme (EP-n, EB-n, AC-x-y, T-n) is a bare
-    # integer, so this can never shadow a real id. Reordering between compose and apply stays
-    # the reason ids are preferred — this is only a last resort when no id matched at all.
-    if segment.key is not None and segment.key.isdigit():
-        index = int(segment.key)
-        if index < len(value):
-            return value[index]
-
     raise PathError(f"{path!r}: no {segment.field[:-1]} with id {segment.key!r}.")
 
 

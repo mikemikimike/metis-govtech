@@ -16,14 +16,8 @@ over a clearly stated intent. It stays bounded — an address no step owns is wr
 decision, and `num_trials` and `fixtures` are the user's to set, so none of them appears in any
 entry.
 
-`ModelWritableFields` closes the other route. Every step asks the model to draft its whole
-output in one go, so its patches address a *container* — `tasks`, `epics` — and carry the
-finished object inside the value. The path never names the fields within, so the address rule
-above cannot see them, and a user-owned field would arrive as a passenger. This lists what the
-model fills in each kind of object; the applier drops the rest before building anything.
-
-It is an allowlist so a field added to `Task` later is model-proof from the day it is added,
-and opens up only by a deliberate edit here.
+Bundled model values are protected at the structured-output boundary: strict draft models reject
+persisted ids, defaults, authorship and matcher-owned fields before a domain object exists.
 """
 
 from __future__ import annotations
@@ -80,25 +74,6 @@ StepPermissions: dict[SessionStep, list[str]] = {
         "tasks[*].behaviour_refs",
         "tasks[*].persona_refs",
     ],
-}
-
-
-# Keyed by the container field name a patch addresses, matching the applier's `_LIST_TYPES` —
-# `tasks` holds Tasks, `epics[EP-1].behaviours` holds Behaviours. A key appearing as a *field*
-# of another entry (`behaviours` inside an epic, `criteria` inside a behaviour) is how the
-# filter knows to recurse: Pydantic builds those nested objects from raw dicts, so an
-# unfiltered nested list is the whole smuggling route.
-#
-# What is absent is the point. Trials and fixtures are the user's to set; `priority` is the
-# user's tick; `metric_fqn` and `metric_args` are the matcher's, resolved from the criterion's
-# wording; `interaction_type` marks text the *user* typed, which the wizard asks before
-# discarding — a model able to stamp its own suggestions FORM would make them stick.
-ModelWritableFields: dict[str, frozenset[str]] = {
-    "epics": frozenset({"id", "name", "behaviours"}),
-    "behaviours": frozenset({"id", "statement", "criteria"}),
-    "criteria": frozenset({"id", "given", "when", "then"}),
-    "personas": frozenset({"id", "description"}),
-    "tasks": frozenset({"id", "description", "behaviour_refs", "persona_refs"}),
 }
 
 
