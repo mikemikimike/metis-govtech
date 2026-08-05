@@ -48,6 +48,9 @@ from .analysis import (
 from .analysis import (
     ScopeCorrectnessMetric as ScopeCorrectnessMetric,
 )
+from .default import (
+    CriterionGEvalMetric as CriterionGEvalMetric,
+)
 from .orchestration import (
     AgentStatusCommunicationMetric as AgentStatusCommunicationMetric,
 )
