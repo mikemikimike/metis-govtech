@@ -27,6 +27,11 @@ Initial release: an interview that turns a prose product description into a runn
   closes the bundled-value hole that a recursive post-parse filter could not close. A few things
   remain the user's alone — a behaviour's `priority`, a task's `num_trials` and `fixtures`.
   Edits that invalidate derived work ask in the same turn and leave no staleness flag.
+- **Task-card field editing.** Trials and fixture filename references are now editable in the
+  CLI and web interview through typed, request-bound wizard responses. The web door reuses the
+  hand-authoring number and filename-reference controls, and fixture values remain names only:
+  they are resolved from the experiment's `fixtures/` folder. Actual file upload and storage is a
+  separate future boundary; no file bytes or upload URLs enter the profile or session.
 - **Metric matching by embedding similarity.** Each acceptance criterion is matched against
   the metric catalogue by cosine similarity, with `CriterionGEvalMetric` as the fallback when
   nothing scores above the threshold or the embedding provider is unreachable — so a dead
@@ -63,14 +68,6 @@ Initial release: an interview that turns a prose product description into a runn
   Without it a degraded experiment would reference an FQN that does not import.
 
 ### Known debt
-
-- **Trials and files are display-only.** Neither is the model's to write, and neither is
-  settable by the user yet: `ChoiceResponse` carries selected option ids and has no channel for
-  a submitted value, so the task card's number and upload fields are a read-back. The addresses
-  are in place (`OptionId(action="trials"/"files", target=task.id)`), and a user's edit will
-  arrive `WIZARD`-origin, which both halves of the permission rule already pass through
-  untouched. Until then every task runs 3 trials with no fixtures. There is no upload storage
-  and no `fixtures/` folder emitted at compile.
 
 - **Dependency on `metis-engine`.** A deliberate break of the `wizard ↛ engine` invariant in
   the root `CLAUDE.md`, for one reason: the compiler locates the engine's

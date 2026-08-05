@@ -306,11 +306,14 @@ def test_the_gates_clear_themselves() -> None:
     assert next(o for o in request.options if o.id.action == "continue").enabled
 
 
-def test_the_task_card_shows_trials_and_files_as_display_only() -> None:
-    """The trials and files fields render their values and offer nothing selectable — no option
-    keyed to them ever reaches the driver, so the profile cannot be edited through them."""
+def test_task_card_fields_are_typed_and_separate_from_options() -> None:
+    """Fields have stable identities without pretending to be selectable option chips."""
     from metis.wizard.application.driver import _all_options
-    from metis.wizard.contracts import CardNumberField, CardUploadField
+    from metis.wizard.contracts import (
+        CardNumberField,
+        CardUploadField,
+        editable_fields_of,
+    )
 
     profile = research_assistant()
     request = _tasks_screen(profile)
@@ -319,10 +322,98 @@ def test_the_task_card_shows_trials_and_files_as_display_only() -> None:
     number = next(c for c in card.components if isinstance(c, CardNumberField))
     upload = next(c for c in card.components if isinstance(c, CardUploadField))
     assert number.value == profile.task("T-2").num_trials  # type: ignore[union-attr]
-    assert upload.value == "policy.pdf"
+    assert upload.value == ["policy.pdf"]
 
     keys = _all_options(request)
     assert str(number.id) not in keys and str(upload.id) not in keys
+    fields = editable_fields_of(request)
+    assert fields[str(number.id)] is number
+    assert fields[str(upload.id)] is upload
+
+
+def _task_edit_state():
+    profile = research_assistant()
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    state = SessionState(id="s", profile=profile, step=SessionStep.TASKS)
+    return driver, state, driver.compose(state)
+
+
+def test_a_trial_edit_recomposes_the_task_total() -> None:
+    driver, state, request = _task_edit_state()
+
+    driver.handle(state, request, ChoiceResponse(values={"trials:T-2": 7}))
+
+    assert state.profile.task("T-2").num_trials == 7  # type: ignore[union-attr]
+    refreshed = driver.compose(state)
+    assert "13 sessions" in (refreshed.footer or "")  # 2×3 + 1×7
+    task_card = next(card for card in refreshed.cards if card.id == "T-2")
+    assert next(c for c in task_card.components if c.type == "number").value == 7
+
+
+def test_fixture_edits_normalize_and_compile() -> None:
+    driver, state, request = _task_edit_state()
+
+    driver.handle(
+        state,
+        request,
+        ChoiceResponse(values={"files:T-2": [" policy.pdf ", "faq.md", "policy.pdf"]}),
+    )
+
+    task = state.profile.task("T-2")
+    assert task is not None and task.fixtures == ["policy.pdf", "faq.md"]
+
+    from metis.wizard.application.compile import compile_experiment
+
+    compiled = compile_experiment(state.profile, "edited")
+    assert next(t for t in compiled["tasks"] if t["id"] == "T-2")["fixtures"] == [
+        "policy.pdf",
+        "faq.md",
+    ]
+
+    refreshed = driver.compose(state)
+    files = next(card for card in refreshed.cards if card.id == "T-2").components[-1]
+    assert files.value == ["policy.pdf", "faq.md"]
+
+    driver.handle(state, refreshed, ChoiceResponse(values={"files:T-2": ["faq.md"]}))
+    assert state.profile.task("T-2").fixtures == ["faq.md"]  # type: ignore[union-attr]
+
+    refreshed = driver.compose(state)
+    driver.handle(state, refreshed, ChoiceResponse(values={"files:T-2": []}))
+    assert state.profile.task("T-2").fixtures == []  # type: ignore[union-attr]
+    assert "fixtures" not in next(
+        t
+        for t in compile_experiment(state.profile, "cleared")["tasks"]
+        if t["id"] == "T-2"
+    )
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        ChoiceResponse(values={"trials:T-2": 0}),
+        ChoiceResponse(values={"trials:T-2": 21}),
+        ChoiceResponse.model_construct(
+            selected=[], values={"trials:T-2": ["not a number"]}
+        ),
+        ChoiceResponse(values={"files:T-2": ["../secret.txt"]}),
+        ChoiceResponse(values={"files:T-2": ["/absolute.txt"]}),
+        ChoiceResponse(values={"files:T-2": ["folder\\secret.txt"]}),
+        ChoiceResponse(values={"files:T-2": [" "]}),
+        ChoiceResponse(values={"trials:T-404": 4}),
+        ChoiceResponse(values={"not-offered:T-2": 4}),
+        ChoiceResponse(selected=["continue"], values={"trials:T-2": 4}),
+        ChoiceResponse(values={"trials:T-2": 4, "files:T-2": []}),
+    ],
+)
+def test_invalid_or_mixed_field_edits_do_not_mutate(response) -> None:
+    driver, state, request = _task_edit_state()
+    before = state.profile.model_copy(deep=True)
+
+    driver.handle(state, request, response)
+
+    assert state.profile == before
+    refreshed = driver.compose(state)
+    assert any(w.source is WarningSource.RUNTIME for w in refreshed.warnings)
 
 
 def test_an_epic_with_nothing_ticked_is_not_warned() -> None:

@@ -211,6 +211,28 @@ def test_the_two_doors_agree_on_a_targeted_criterion_workflow(tmp_path: Path) ->
     )
 
 
+def test_the_two_doors_agree_on_typed_task_field_edits(tmp_path: Path) -> None:
+    _both_doors_through(
+        tmp_path,
+        [
+            {"type": "choice", "values": {"trials:T-2": 7}},
+            {
+                "type": "choice",
+                "values": {"files:T-2": [" policy.pdf ", "faq.md"]},
+            },
+        ],
+        step=SessionStep.TASKS,
+    )
+
+    web = SessionStore(tmp_path / "web").load("s")
+    assert web is not None
+    task = web.profile.task("T-2")
+    assert task is not None
+    assert (task.num_trials, task.fixtures) == (7, ["policy.pdf", "faq.md"])
+    assert web.pending is not None
+    assert "13 sessions" in web.pending.footer  # type: ignore[union-attr]
+
+
 def test_a_session_made_in_the_browser_is_resumable_from_the_terminal(
     tmp_path: Path,
 ) -> None:

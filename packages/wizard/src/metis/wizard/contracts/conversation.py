@@ -19,9 +19,9 @@ saying different things.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt, StrictStr, field_validator
 
 from metis.wizard.domain.patch import Patch
 from metis.wizard.domain.types import InteractionType
@@ -117,7 +117,18 @@ class CardNumberField(CardComponent):
 class CardUploadField(CardComponent):
     type: Literal[CardComponentType.UPLOAD] = CardComponentType.UPLOAD
     id: OptionId
-    value: str = ""  # "policy.pdf, faq.md"
+    value: list[str] = Field(default_factory=list)  # ["policy.pdf", "faq.md"]
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def _load_legacy_value(cls, value: object) -> object:
+        """Read the old comma-joined wire form while writing the structured form."""
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return value
+
+
+CardFieldValue: TypeAlias = StrictInt | list[StrictStr]
 
 
 AnyCardComponent = Annotated[
@@ -312,6 +323,25 @@ def options_of(request: AnyRequest) -> dict[str, Option]:
     return found
 
 
+def editable_fields_of(
+    request: AnyRequest,
+) -> dict[str, CardNumberField | CardUploadField]:
+    """Every value-bearing card component a choice request actually offered.
+
+    This deliberately stays separate from :func:`options_of`: a field is an input, not a
+    toggle or a navigation reply, even though both use the stable ``OptionId`` string form.
+    """
+    found: dict[str, CardNumberField | CardUploadField] = {}
+    if not isinstance(request, ChoiceRequest):
+        return found
+
+    for card in request.cards:
+        for component in card.components:
+            if isinstance(component, (CardNumberField, CardUploadField)):
+                found[str(component.id)] = component
+    return found
+
+
 # ── incoming ───────────────────────────────────────────────────────────────
 
 
@@ -328,6 +358,7 @@ class ChatResponse(UserResponse):
 class ChoiceResponse(UserResponse):
     type: Literal[InteractionType.CHOICE] = InteractionType.CHOICE
     selected: list[str] = Field(default_factory=list)  # option ids, whatever they were
+    values: dict[str, CardFieldValue] = Field(default_factory=dict)
 
 
 class FormResponse(UserResponse):

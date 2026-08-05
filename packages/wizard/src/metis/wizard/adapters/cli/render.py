@@ -18,6 +18,8 @@ from metis.wizard.contracts.conversation import (
     AnyResponse,
     Card,
     CardComponentType,
+    CardNumberField,
+    CardUploadField,
     ChatRequest,
     ChatResponse,
     ChoiceRequest,
@@ -116,7 +118,13 @@ def _choice_line(
     return f"{indent}{number}. {mark}{option.label}{tag}{suffix}"
 
 
-def _draw_card(card: Card, out: Printer, selectable: dict[str, Option]) -> None:
+def _draw_card(
+    card: Card,
+    out: Printer,
+    selectable: dict[str, Option],
+    editable: dict[str, CardNumberField | CardUploadField] | None = None,
+    field_numbers: dict[str, int] | None = None,
+) -> None:
     # Indented one level under its section heading, so the cards read as a list rather than a
     # wall of sentences. A card with a checkbox (`[x]`/`[ ]`) already reads as an item; one
     # without gets a bullet so it still does.
@@ -138,12 +146,30 @@ def _draw_card(card: Card, out: Printer, selectable: dict[str, Option]) -> None:
                     mark = "[x] " if option.selected else "[ ] "
                     out(_choice_line(option, selectable, indent="      ", mark=mark))
             case CardComponentType.NUMBER:
+                key = str(component.id)
+                if editable is not None:
+                    editable[key] = component
+                number = (
+                    f"{field_numbers[key]}. "
+                    if field_numbers is not None and key in field_numbers
+                    else ""
+                )
                 out(
-                    f"      ({component.id}) {component.value}   "
+                    f"      {number}({component.id}) {component.value}   "
                     f"[{component.min}–{component.max}]"
                 )
             case CardComponentType.UPLOAD:
-                out(f"      ({component.id}) {component.value or '—'}")
+                key = str(component.id)
+                if editable is not None:
+                    editable[key] = component
+                number = (
+                    f"{field_numbers[key]}. "
+                    if field_numbers is not None and key in field_numbers
+                    else ""
+                )
+                out(
+                    f"      {number}({component.id}) {', '.join(component.value) or '—'}"
+                )
 
     if card.note:
         out(f"    {card.note}")
@@ -151,9 +177,53 @@ def _draw_card(card: Card, out: Printer, selectable: dict[str, Option]) -> None:
         out(_choice_line(option, selectable, indent="    "))
 
 
-def _draw(request: ChoiceRequest, out: Printer) -> dict[str, Option]:
-    """Draw a choice screen and return what may be selected, keyed as the package sent it."""
+def _option_keys(request: ChoiceRequest) -> list[str]:
+    """Return enabled option keys in the same order the screen numbers them."""
+    keys: list[str] = []
+
+    def add(option: Option) -> None:
+        key = str(option.id)
+        if option.enabled and key not in keys:
+            keys.append(key)
+
+    for card in request.cards:
+        for component in card.components:
+            for option in getattr(component, "options", []) or []:
+                add(option)
+        for option in card.options:
+            add(option)
+    for warning in request.warnings:
+        for option in warning.options:
+            add(option)
+    for option in request.options:
+        add(option)
+    return keys
+
+
+def _field_keys(request: ChoiceRequest) -> list[str]:
+    keys: list[str] = []
+    for card in request.cards:
+        for component in card.components:
+            if component.type in {CardComponentType.NUMBER, CardComponentType.UPLOAD}:
+                key = str(component.id)
+                if key not in keys:
+                    keys.append(key)
+    return keys
+
+
+def _draw(
+    request: ChoiceRequest,
+    out: Printer,
+    editable: dict[str, CardNumberField | CardUploadField] | None = None,
+) -> dict[str, Option]:
+    """Draw a choice screen and return what may be selected."""
     selectable: dict[str, Option] = {}
+    field_numbers = None
+    if editable is not None:
+        field_numbers = {
+            key: len(_option_keys(request)) + index
+            for index, key in enumerate(_field_keys(request), start=1)
+        }
 
     section = None
     for card in request.cards:
@@ -164,7 +234,7 @@ def _draw(request: ChoiceRequest, out: Printer) -> dict[str, Option]:
                 # behaviours under them. Plain characters, so a redirected run stays readable.
                 out(f"\n{section}")
                 out("─" * len(section))
-        _draw_card(card, out, selectable)
+        _draw_card(card, out, selectable, editable, field_numbers)
 
     for warning in request.warnings:
         out(f"\n{'STOP' if warning.blocking else 'note'}  {warning.text}")
@@ -221,6 +291,35 @@ def _read_multiline(read: Reader, out: Printer) -> str:
         lines.append(value)
 
 
+def _read_number_field(
+    field: CardNumberField, key: str, read: Reader, out: Printer
+) -> ChoiceResponse:
+    while True:
+        raw = read(f"{field.label or 'Value'} ({field.min}–{field.max})\n> ").strip()
+        try:
+            value = int(raw)
+        except ValueError:
+            out(f"  Enter an integer from {field.min} to {field.max}.")
+            continue
+        if not number_within(value, field.min, field.max):
+            out(f"  Enter an integer from {field.min} to {field.max}.")
+            continue
+        return ChoiceResponse(values={key: value})
+
+
+def _read_file_field(field: CardUploadField, key: str, read: Reader) -> ChoiceResponse:
+    raw = read(f"{field.label or 'Names'} (comma-separated; blank clears)\n> ")
+    if not raw.strip():
+        values: list[str] = []
+    else:
+        values = []
+        for item in raw.split(","):
+            name = item.strip()
+            if name not in values:
+                values.append(name)
+    return ChoiceResponse(values={key: values})
+
+
 def _discard_buffered_input(read: Reader) -> None:
     """Drop the rest of a mistaken multiline paste before showing the menu again."""
     if read is not input:
@@ -273,8 +372,10 @@ def render(
             values[field.id] = read(f"{prompt}\n> ").strip()
         return FormResponse(values=values)
 
-    selectable = _draw(request, out)
-    numbers = {str(index): key for index, key in enumerate(selectable, start=1)}
+    editable: dict[str, CardNumberField | CardUploadField] = {}
+    selectable = _draw(request, out, editable)
+    ordered_keys = [*selectable, *editable]
+    numbers = {str(index): key for index, key in enumerate(ordered_keys, start=1)}
 
     while True:
         prompt = (
@@ -286,7 +387,8 @@ def render(
         entered = [k for k in (part.strip() for part in raw.split(",")) if k]
         keys = list(dict.fromkeys(numbers.get(key, key) for key in entered))
 
-        unknown = [key for key in entered if numbers.get(key, key) not in selectable]
+        known = set(ordered_keys)
+        unknown = [key for key in entered if numbers.get(key, key) not in known]
         if unknown:
             out("  This screen only accepts one of the menu choices above.")
             if request.instruction:
@@ -301,6 +403,19 @@ def render(
         if not keys:
             out("  Pick one.")
             continue
+
+        field_keys = [key for key in keys if key in editable]
+        if field_keys:
+            if len(keys) != 1:
+                out(
+                    "  Edit one field at a time; do not combine it with another choice."
+                )
+                continue
+            key = field_keys[0]
+            field = editable[key]
+            if isinstance(field, CardNumberField):
+                return _read_number_field(field, key, read, out)
+            return _read_file_field(field, key, read)
 
         return ChoiceResponse(selected=keys)
 

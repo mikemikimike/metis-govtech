@@ -19,10 +19,11 @@
 // compile route, and streams the returned file to a download. It stores nothing and creates no
 // session — leaving the screen discards the work, by design.
 
-import { ArrowLeft, ChevronDown, ChevronUp, Plus, X } from "lucide-react";
+import { ArrowLeft, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { MetricSpec } from "./api";
 import { api, TransportError } from "./api";
+import { FileReferenceListInput, NumberInput } from "./inputs";
 import { Button, Chevron, cn, Mono, Panel } from "./ui";
 
 interface PersonaDraft {
@@ -285,7 +286,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                         onChange={(v) => updateTask(i, { id: v })}
                       />
                     </Field>
-                    <Field label="Trials" className="w-28">
+                    <Field label="Trials" className="w-48">
                       <NumberInput
                         value={task.num_trials}
                         min={1}
@@ -348,8 +349,8 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                   </Field>
 
                   <Field label="Fixtures">
-                    <FixtureList
-                      fixtures={task.fixtures}
+                    <FileReferenceListInput
+                      value={task.fixtures}
                       onChange={(fixtures) => updateTask(i, { fixtures })}
                     />
                   </Field>
@@ -508,73 +509,6 @@ function MetricPicker({
   );
 }
 
-// ── fixtures ────────────────────────────────────────────────────────────────
-//
-// Filenames, not uploads. The engine reads fixtures from a directory beside the experiment file;
-// the form only names them, and the guidance says so plainly so a "Fixtures" label is not read
-// as an upload control.
-
-function FixtureList({
-  fixtures,
-  onChange,
-}: {
-  fixtures: string[];
-  onChange: (fixtures: string[]) => void;
-}) {
-  const [draft, setDraft] = useState("");
-  const add = () => {
-    const name = draft.trim();
-    if (!name || fixtures.includes(name)) return;
-    onChange([...fixtures, name]);
-    setDraft("");
-  };
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="text-xs text-muted-foreground">
-        Names of files the engine loads from the fixtures folder — nothing is
-        uploaded here.
-      </p>
-      {fixtures.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {fixtures.map((name) => (
-            <span
-              key={name}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5"
-            >
-              <Mono>{name}</Mono>
-              <button
-                type="button"
-                aria-label={`Remove ${name}`}
-                className="text-muted-foreground hover:text-foreground"
-                onClick={() => onChange(fixtures.filter((f) => f !== name))}
-              >
-                <X size={12} strokeWidth={2} aria-hidden />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="flex gap-2">
-        <input
-          className="flex-1 rounded-md border border-input bg-background p-2 text-sm"
-          placeholder="report.pdf"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              add();
-            }
-          }}
-        />
-        <Button variant="secondary" onClick={add} disabled={!draft.trim()}>
-          Add
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 // ── small building blocks ─────────────────────────────────────────────────────
 
 function Field({
@@ -629,95 +563,6 @@ function TextArea({
       value={value}
       onChange={(e) => onChange(e.target.value)}
     />
-  );
-}
-
-// A number field with stepper controls — the shadcn "number input with controls" shape, built
-// to the house style rather than pulled from a package whose defaults (shadow, larger radius) we
-// override anyway. A single bordered shell holds the value and a stacked up/down pair; the
-// browser spinner is hidden so the two controls are the only way to step. Steppers are neutral
-// currentColor, not accent — they are plain controls, not state — and the shell rings teal only
-// on focus.
-function NumberInput({
-  value,
-  min = 1,
-  max,
-  onChange,
-}: {
-  value: number;
-  min?: number;
-  max?: number;
-  onChange: (v: number) => void;
-}) {
-  const clamp = (n: number) =>
-    Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min, n));
-
-  return (
-    <div
-      className={cn(
-        "flex items-stretch overflow-hidden rounded-md border border-input bg-background",
-        "transition-colors focus-within:border-accent",
-      )}
-    >
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(clamp(Math.round(Number(e.target.value) || min)))}
-        // Hide the native spinner: the stepper column is the control, and two sets of arrows
-        // would be one of the machine-generated tells the style steers away from.
-        className={cn(
-          "w-full bg-transparent p-2 text-sm focus:outline-none",
-          "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
-        )}
-      />
-      <div className="flex flex-col border-l border-input">
-        <Stepper
-          label="Increase"
-          disabled={max != null && value >= max}
-          onClick={() => onChange(clamp(value + 1))}
-        >
-          <ChevronUp size={12} strokeWidth={2} aria-hidden />
-        </Stepper>
-        <Stepper
-          label="Decrease"
-          disabled={value <= min}
-          onClick={() => onChange(clamp(value - 1))}
-        >
-          <ChevronDown size={12} strokeWidth={2} aria-hidden />
-        </Stepper>
-      </div>
-    </div>
-  );
-}
-
-function Stepper({
-  label,
-  disabled,
-  onClick,
-  children,
-}: {
-  label: string;
-  disabled?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "flex flex-1 items-center justify-center px-2 text-muted-foreground transition-colors",
-        "hover:bg-muted hover:text-foreground",
-        "disabled:pointer-events-none disabled:opacity-40",
-        "[&:last-child]:border-t [&:last-child]:border-input",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 

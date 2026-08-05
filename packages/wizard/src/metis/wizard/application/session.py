@@ -208,10 +208,10 @@ def _describe(response: AnyResponse) -> str:
     text = getattr(response, "text", None)
     if text is not None:
         return str(text)
+    values = getattr(response, "values", None)
+    if values:
+        return "; ".join(f"{k}: {v}" for k, v in values.items())
     selected = getattr(response, "selected", None)
     if selected is not None:
         return ", ".join(selected)
-    values = getattr(response, "values", None)
-    if values is not None:
-        return "; ".join(f"{k}: {v}" for k, v in values.items())
     return ""

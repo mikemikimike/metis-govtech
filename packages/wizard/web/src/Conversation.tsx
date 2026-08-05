@@ -9,7 +9,7 @@
 // no such action, so the box greys itself with no step name written down anywhere here.
 
 import { ArrowUp, PencilSparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type {
   Card,
@@ -22,10 +22,12 @@ import type {
   WizardRequest,
 } from "./api";
 import { optionKey } from "./api";
+import { FileReferenceListInput, NumberInput } from "./inputs";
 import { Button, cn, Mono, Panel } from "./ui";
 
 // What a block can send up. `null` from a resolved or read-only block.
 type Emit = (response: UserResponse) => void;
+type CardFieldValue = number | string[];
 
 // A section heading the package composes as "Epic 1 · Finding sources". The user wants only the
 // descriptive name shown, not the "Epic N ·" prefix. Properly this belongs in the application
@@ -166,6 +168,8 @@ function ChoiceBlock({
   onRespond: Emit;
 }) {
   const send = (keys: string[]) => onRespond({ type: "choice", selected: keys });
+  const sendField = (key: string, value: CardFieldValue) =>
+    onRespond({ type: "choice", values: { [key]: value } });
   const disabled = resolved || busy;
 
   return (
@@ -203,6 +207,7 @@ function ChoiceBlock({
                   card={card}
                   disabled={disabled}
                   onPick={(k) => send([k])}
+                  onFieldChange={sendField}
                 />
               </div>
             );
@@ -264,10 +269,12 @@ function CardBlock({
   card,
   disabled,
   onPick,
+  onFieldChange,
 }: {
   card: Card;
   disabled: boolean;
   onPick: (key: string) => void;
+  onFieldChange: (key: string, value: CardFieldValue) => void;
 }) {
   // Three cases, decided by the package, not the door:
   //   • `selected == null` — no box at all. The behaviours review sends this: it lists the drafted
@@ -316,6 +323,7 @@ function CardBlock({
                 component={component}
                 disabled={disabled}
                 onPick={onPick}
+                onFieldChange={onFieldChange}
               />
             ))}
 
@@ -347,10 +355,12 @@ function ComponentBlock({
   component,
   disabled,
   onPick,
+  onFieldChange,
 }: {
   component: CardComponent;
   disabled: boolean;
   onPick: (key: string) => void;
+  onFieldChange: (key: string, value: CardFieldValue) => void;
 }) {
   // The value alone, unlabelled. `FormRow` decides where the label goes: a labelled component
   // reads as a form field (label in a left column, value at the right), an unlabelled one runs
@@ -373,7 +383,7 @@ function ComponentBlock({
         // A chip row. Each chip carries its own `selected`, so it toggles in place and posts
         // its action on click — a "T-1 covers EB-4" reference is one such chip.
         return (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex w-full flex-wrap gap-1.5">
             {component.options.map((o) => (
               <Button
                 key={optionKey(o.id)}
@@ -390,29 +400,58 @@ function ComponentBlock({
         );
 
       case "number":
-        // Display-only in the MVP. The package composes the field but registers no action for
-        // it — the CLI draws the same value as static text, and a door that grew its own
-        // stepper would be inventing a response the package does not read. Its bounds ride
-        // along so a later change can make it operable without a wire change.
         return (
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm text-foreground">
-              {component.value}
-            </span>
-            <Mono>
-              [{component.min}–{component.max}]
-            </Mono>
-          </div>
+          <NumberCardField
+            component={component}
+            disabled={disabled}
+            onCommit={(value) => onFieldChange(optionKey(component.id), value)}
+          />
         );
 
       case "upload":
-        // Filenames only in the MVP — no upload, and no action registered for it either. A
-        // labelled read-back of the finished text the package built, nothing operable.
-        return <Mono>{component.value || "—"}</Mono>;
+        return (
+          <FileReferenceListInput
+            value={component.value}
+            disabled={disabled}
+            onChange={(value) => onFieldChange(optionKey(component.id), value)}
+          />
+        );
     }
   })();
 
   return <FormRow label={component.label}>{value}</FormRow>;
+}
+
+function NumberCardField({
+  component,
+  disabled,
+  onCommit,
+}: {
+  component: Extract<CardComponent, { type: "number" }>;
+  disabled: boolean;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(component.value);
+
+  useEffect(() => setDraft(component.value), [component.value]);
+
+  const commit = (value: number) => {
+    const bounded = Math.min(component.max, Math.max(component.min, value));
+    setDraft(bounded);
+    if (bounded === component.value) return;
+    onCommit(bounded);
+  };
+
+  return (
+    <NumberInput
+      value={draft}
+      min={component.min}
+      max={component.max}
+      disabled={disabled}
+      onChange={setDraft}
+      onCommit={commit}
+    />
+  );
 }
 
 // One component's row. With a label it reads as a form field — the label in a fixed left column,

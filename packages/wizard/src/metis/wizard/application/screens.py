@@ -445,7 +445,7 @@ def tasks_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                 CardUploadField(
                     label="Files",
                     id=OptionId(action="files", target=task.id),
-                    value=", ".join(task.fixtures),
+                    value=list(task.fixtures),
                 ),
             ],
         )

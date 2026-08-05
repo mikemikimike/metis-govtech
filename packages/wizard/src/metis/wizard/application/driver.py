@@ -17,6 +17,9 @@ from metis.wizard.application.interviewer import Interviewer, InterviewerOutputE
 from metis.wizard.contracts.conversation import (
     AnyRequest,
     AnyResponse,
+    CardFieldValue,
+    CardNumberField,
+    CardUploadField,
     ChatRequest,
     ChoiceRequest,
     FormField,
@@ -25,6 +28,7 @@ from metis.wizard.contracts.conversation import (
     OptionId,
     Warning,
     WarningSource,
+    editable_fields_of,
 )
 from metis.wizard.contracts.output import (
     CriterionDraft,
@@ -35,7 +39,7 @@ from metis.wizard.contracts.output import (
 from metis.wizard.contracts.session_state import SessionState
 from metis.wizard.domain import materializer
 from metis.wizard.domain.applier import apply, sanitise
-from metis.wizard.domain.patch import PatchOp, PatchOrigin
+from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import SessionStep
 from metis.wizard.domain.profile import Behaviour
 
@@ -338,7 +342,17 @@ class StepDriver:
     def _handle_choice(
         self, state: SessionState, request: AnyRequest, response: AnyResponse
     ) -> None:
+        values = getattr(response, "values", {}) or {}
         selected = set(getattr(response, "selected", []) or [])
+
+        if values:
+            if selected or len(values) != 1:
+                return self._refuse_field_edit(
+                    "Edit one task field at a time; I left the profile unchanged."
+                )
+            key, value = next(iter(values.items()))
+            return self._handle_field_value(state, request, key, value)
+
         if not selected:
             return
 
@@ -386,6 +400,83 @@ class StepDriver:
 
         if "accept" in actions or "continue" in actions:
             self._advance(state)
+
+    def _handle_field_value(
+        self,
+        state: SessionState,
+        request: AnyRequest,
+        key: str,
+        value: CardFieldValue,
+    ) -> None:
+        """Validate one request-bound task field before composing its trusted patch."""
+        field = editable_fields_of(request).get(key)
+        if field is None:
+            return self._refuse_field_edit(
+                "That field is no longer available on this screen; I left the profile unchanged."
+            )
+
+        task_id = field.id.target
+        task = state.profile.task(task_id) if task_id else None
+        if task is None:
+            return self._refuse_field_edit(
+                "That task is no longer available; I left the profile unchanged."
+            )
+
+        if isinstance(field, CardNumberField):
+            if field.id.action != "trials":
+                return self._refuse_field_edit(
+                    "That task field is not a supported trial editor; I left the profile unchanged."
+                )
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not field.min <= value <= field.max
+            ):
+                return self._refuse_field_edit(
+                    f"Trials must be an integer from {field.min} to {field.max}; "
+                    "I left the profile unchanged."
+                )
+            path = f"tasks[{task.id}].num_trials"
+            patch_value: int | list[str] = value
+        elif isinstance(field, CardUploadField):
+            if field.id.action != "files":
+                return self._refuse_field_edit(
+                    "That task field is not a supported filename editor; "
+                    "I left the profile unchanged."
+                )
+            normalized = _normalise_fixture_references(value)
+            if normalized is None:
+                return self._refuse_field_edit(
+                    "Fixture references must be non-blank portable filenames; "
+                    "I left the profile unchanged."
+                )
+            path = f"tasks[{task.id}].fixtures"
+            patch_value = normalized
+        else:  # pragma: no cover - editable_fields_of only returns the two field shapes
+            return self._refuse_field_edit(
+                "That task field is not editable; I left the profile unchanged."
+            )
+
+        outcome = apply(
+            state.profile,
+            [
+                Patch(
+                    op=PatchOp.SET,
+                    path=path,
+                    value=patch_value,
+                    origin=PatchOrigin.WIZARD,
+                )
+            ],
+        )
+        if outcome.any_rejected:
+            return self._refuse_field_edit(
+                "That task field could not be updated; I left the profile unchanged."
+            )
+
+    def _refuse_field_edit(self, text: str) -> None:
+        self.pending_warnings.append(
+            Warning(text=text, source=WarningSource.RUNTIME, blocking=False)
+        )
 
     # ── the three criteria-card workflows ────────────────────────────────────
 
@@ -645,6 +736,31 @@ def _target_of(chosen: list[Option], action: str) -> str | None:
     unscoped; the criteria actions carry a behaviour id, which is what scopes them to one card.
     """
     return next((o.id.target for o in chosen if o.id.action == action), None)
+
+
+def _normalise_fixture_references(value: object) -> list[str] | None:
+    """Return safe, ordered filename references, or ``None`` when the value is invalid."""
+    if not isinstance(value, list):
+        return None
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            return None
+        name = item.strip()
+        if (
+            not name
+            or name in {".", ".."}
+            or "\x00" in name
+            or "/" in name
+            or "\\" in name
+        ):
+            return None
+        if name not in seen:
+            normalized.append(name)
+            seen.add(name)
+    return normalized
 
 
 def _all_options(request: AnyRequest) -> dict[str, Option]:

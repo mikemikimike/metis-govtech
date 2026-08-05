@@ -9,6 +9,7 @@ from metis.wizard.contracts.conversation import (
     Card,
     CardComponent,
     CardComponentType,
+    CardFieldValue,
     CardNumberField,
     CardOptionGroup,
     CardText,
@@ -28,6 +29,8 @@ from metis.wizard.contracts.conversation import (
     WarningSource,
     WizardRequest,
     WizardRequestState,
+    editable_fields_of,
+    options_of,
 )
 from metis.wizard.contracts.output import (
     BehaviourDraft,
@@ -67,6 +70,7 @@ __all__ = [
     "BehaviourDraft",
     "BehaviourCard",
     "Card",
+    "CardFieldValue",
     "CardComponent",
     "CardComponentType",
     "CardNumberField",
@@ -111,4 +115,6 @@ __all__ = [
     "WarningSource",
     "WizardRequest",
     "WizardRequestState",
+    "editable_fields_of",
+    "options_of",
 ]

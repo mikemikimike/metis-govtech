@@ -242,6 +242,33 @@ def test_numbered_choices_are_shown_and_selectable() -> None:
     assert "number or name" in prompts[0]
 
 
+def test_a_number_field_is_selectable_and_reprompts_until_bounded() -> None:
+    replies = iter(["trials:T-1", "0", "21", "8"])
+    out: list[str] = []
+
+    response = cli.render(a_screen(), out=out.append, read=lambda _: next(replies))
+
+    assert response.values == {"trials:T-1": 8}
+    assert sum("Enter an integer from 1 to 20." in line for line in out) == 2
+
+
+def test_a_file_field_returns_a_normalized_list_and_blank_clears() -> None:
+    replies = iter(["files:T-1", "  "])
+    response = cli.render(a_screen(), out=lambda _: None, read=lambda _: next(replies))
+
+    assert response.values == {"files:T-1": []}
+
+
+def test_a_field_cannot_be_combined_with_an_option() -> None:
+    replies = iter(["trials:T-1,back", "trials:T-1", "4"])
+    out: list[str] = []
+
+    response = cli.render(a_screen(), out=out.append, read=lambda _: next(replies))
+
+    assert response.values == {"trials:T-1": 4}
+    assert any("Edit one field at a time" in line for line in out)
+
+
 def test_multi_select_accepts_comma_separated_numbers() -> None:
     response = cli.render(
         a_screen(multi=True), out=lambda _: None, read=lambda _: "1,3"

@@ -19,12 +19,14 @@ from metis.wizard.application import (
     Turn,
 )
 from metis.wizard.contracts import (
+    CardUploadField,
     ChoiceRequest,
     ChoiceResponse,
     Option,
     OptionId,
     Product,
     ProductProfile,
+    TaskCard,
     WizardRequestState,
 )
 from metis.wizard.domain.permissions import SessionStep
@@ -97,6 +99,68 @@ def test_pending_request_rehydrates_as_its_subclass(tmp_path: Path) -> None:
     assert isinstance(loaded.pending, ChoiceRequest)
     assert loaded.pending.options[0].label == "Looks right"
     assert loaded.pending.options[0].id.action == "accept"
+
+
+def test_old_comma_joined_file_field_rehydrates_as_a_list(tmp_path: Path) -> None:
+    state = a_state(
+        pending=ChoiceRequest(
+            prompt="Edit tasks",
+            cards=[
+                TaskCard(
+                    id="T-2",
+                    title="Retry",
+                    components=[
+                        CardUploadField(
+                            label="Files",
+                            id=OptionId(action="files", target="T-2"),
+                            value="policy.pdf, faq.md",
+                        )
+                    ],
+                )
+            ],
+        )
+    )
+    path = tmp_path / "legacy.json"
+    state.save(path)
+
+    loaded = SessionState.load(path)
+    field = loaded.pending.cards[0].components[0]  # type: ignore[union-attr]
+    assert isinstance(field, CardUploadField)
+    assert field.value == ["policy.pdf", "faq.md"]
+
+    raw = json.loads(path.read_text())
+    assert raw["requests"][0]["cards"][0]["components"][0]["value"] == [
+        "policy.pdf",
+        "faq.md",
+    ]
+
+
+def test_a_task_field_edit_survives_resume(tmp_path: Path) -> None:
+    from fixtures.scripted import ScriptedInterviewer
+
+    from metis.wizard.application.driver import StepDriver
+
+    path = tmp_path / "session.json"
+    session = Session(
+        a_state(step=SessionStep.TASKS),
+        path=path,
+        driver=StepDriver(interviewer=ScriptedInterviewer()),
+    )
+    session.next()
+    session.respond(ChoiceResponse(values={"files:T-2": ["policy.pdf", "faq.md"]}))
+    assert any("files:T-2" in turn.text for turn in session.state.history)
+
+    resumed = Session.resume(path, driver=StepDriver(interviewer=ScriptedInterviewer()))
+    request = resumed.next()
+    assert resumed.state.profile.task("T-2").fixtures == [  # type: ignore[union-attr]
+        "policy.pdf",
+        "faq.md",
+    ]
+    assert request is not None
+    card = next(card for card in request.cards if card.id == "T-2")  # type: ignore[union-attr]
+    field = card.components[-1]
+    assert isinstance(field, CardUploadField)
+    assert field.value == ["policy.pdf", "faq.md"]
 
 
 # ── persistence ────────────────────────────────────────────────────────────

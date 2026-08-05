@@ -56,7 +56,7 @@ export interface CardUploadField {
   type: "upload";
   label?: string | null;
   id: OptionId;
-  value: string;
+  value: string[];
 }
 
 export type CardComponent =
@@ -156,7 +156,11 @@ export type WizardRequest = ChatRequest | ChoiceRequest | FormRequest;
 
 export type UserResponse =
   | { type: "chat"; text: string }
-  | { type: "choice"; selected: string[] }
+  | {
+      type: "choice";
+      selected?: string[];
+      values?: Record<string, number | string[]>;
+    }
   | { type: "form"; values: Record<string, string> };
 
 // ── profile (read-only document view) ────────────────────────────────────────
