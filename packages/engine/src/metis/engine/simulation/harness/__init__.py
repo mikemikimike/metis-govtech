@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 from metis.core.console import console
 from metis.core.logging import get_logger
 
-from ..types import Experiment, ExperimentTask, Persona, RunRecord
+from ..types import Experiment, Persona, RunRecord, Scenario
 from ._artifact_store import _save_artifacts
 from ._auth import login
 from ._config import HarnessConfig
@@ -31,23 +31,23 @@ def run_experiment(
     output_dir: Path | None = None,
     headed: bool = False,
 ) -> None:
-    """Run a full experiment (all task x persona pairs).
+    """Run a full experiment (all scenario x persona pairs).
 
     Manages: browser launch -> login -> iterate pairs -> save records -> close.
-    Records are saved as runs/<task>-<persona>-<trial>/record.json inside output_dir.
+    Records are saved as runs/<scenario>-<persona>-<trial>/record.json inside output_dir.
     """
-    # Expand tasks into individual runs
-    runs: list[tuple[ExperimentTask, Persona, int]] = []
-    for task in experiment.tasks:
-        for persona_ref in task.persona_refs:
+    # Expand scenarios into individual runs
+    runs: list[tuple[Scenario, Persona, int]] = []
+    for scenario in experiment.scenarios:
+        for persona_ref in scenario.persona_refs:
             persona = personas_by_id.get(persona_ref)
             if not persona:
                 available = ", ".join(personas_by_id.keys())
                 raise ValueError(
-                    f"Task '{task.id}': unknown persona_ref '{persona_ref}'. Available: {available}"
+                    f"Scenario '{scenario.id}': unknown persona_ref '{persona_ref}'. Available: {available}"
                 )
-            for trial in range(task.num_trials):
-                runs.append((task, persona, trial))
+            for trial in range(scenario.num_trials):
+                runs.append((scenario, persona, trial))
 
     total_runs = len(runs)
 
@@ -56,7 +56,9 @@ def run_experiment(
     logger.info("[experiment]   Total runs: %d", total_runs)
     logger.info("[experiment]   Output dir: %s", output_dir or "results/ (default)")
     logger.info("[experiment]   Mode: %s", "headed" if headed else "headless")
-    logger.info("[experiment]   Tasks: %s", ", ".join(t.id for t in experiment.tasks))
+    logger.info(
+        "[experiment]   Scenarios: %s", ", ".join(s.id for s in experiment.scenarios)
+    )
     logger.info("[experiment]   Personas: %s", ", ".join(personas_by_id.keys()))
     logger.info("=" * 60)
 
@@ -81,11 +83,11 @@ def run_experiment(
             logger.info("[experiment] Starting login sequence...")
             login(page, config)
 
-            for task, persona, trial in runs:
+            for scenario, persona, trial in runs:
                 run_index += 1
                 trial_label = (
-                    f" (trial {trial + 1}/{task.num_trials})"
-                    if task.num_trials > 1
+                    f" (trial {trial + 1}/{scenario.num_trials})"
+                    if scenario.num_trials > 1
                     else ""
                 )
                 logger.info("")
@@ -95,7 +97,7 @@ def run_experiment(
                     run_index,
                     total_runs,
                     persona.id,
-                    task.id,
+                    scenario.id,
                     trial_label,
                 )
                 logger.info("=" * 60)
@@ -128,8 +130,8 @@ def run_experiment(
                         pass
 
                 trial_index = trial + 1
-                pad = len(str(task.num_trials))
-                run_folder_name = f"{task.id}-{persona.id}-{trial_index:0{pad}}"
+                pad = len(str(scenario.num_trials))
+                run_folder_name = f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
                 run_dir = (
                     (output_dir / "runs" / run_folder_name)
                     if output_dir
@@ -138,14 +140,14 @@ def run_experiment(
                 run_dir.mkdir(parents=True, exist_ok=True)
 
                 console.print(
-                    f"  [{run_index}/{total_runs}] {task.id} × {persona.id} ..."
+                    f"  [{run_index}/{total_runs}] {scenario.id} × {persona.id} ..."
                 )
 
                 record = run_simulation(
                     page,
                     config,
                     persona,
-                    task,
+                    scenario,
                     run_dir,
                     fixtures_dir,
                 )
@@ -161,7 +163,7 @@ def run_experiment(
                 timing_str = f" [{', '.join(timing_parts)}]" if timing_parts else ""
 
                 console.print(
-                    f"  [{run_index}/{total_runs}] {task.id} × {persona.id} — "
+                    f"  [{run_index}/{total_runs}] {scenario.id} × {persona.id} — "
                     f"{record.outcome.stop_reason}, {record.outcome.total_turns} turns, "
                     f"{record.outcome.duration_seconds:.0f}s{timing_str}"
                 )
@@ -188,7 +190,7 @@ def run_experiment(
     console.print("\n\n========== SIMULATION SUMMARY ==========\n")
     for r in results:
         status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
-        console.print(f"  [{status}] {r.config.persona} x {r.config.task}")
+        console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
         console.print(
             f"         Turns: {r.outcome.total_turns}, "
             f"Duration: {r.outcome.duration_seconds}s, "
