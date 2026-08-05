@@ -2,6 +2,7 @@
 
 from metis.wizard.contracts.catalogue import MetricParam, MetricSpec
 from metis.wizard.contracts.conversation import (
+    AnyCard,
     AnyCardComponent,
     AnyRequest,
     AnyResponse,
@@ -62,6 +63,7 @@ from metis.wizard.domain.profile import (
 from metis.wizard.domain.types import InteractionType
 
 __all__ = [
+    "AnyCard",
     "AnyCardComponent",
     "AnyRequest",
     "AnyResponse",

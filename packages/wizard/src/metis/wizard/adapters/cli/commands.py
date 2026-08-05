@@ -13,6 +13,7 @@ import typer
 
 from metis.wizard import __version__, core_version
 from metis.wizard.application.interviewer import Interviewer, InterviewerUnavailable
+from metis.wizard.application.runs import format_runs
 
 app = typer.Typer(help="Generate METIS evaluation configurations.")
 _interviewer_factory: Callable[[], Interviewer] | None = None
@@ -78,7 +79,7 @@ def _run(session, out_dir: Path) -> None:
 
     typer.echo(f"\nWrote {experiment}")
     typer.echo(f"Wrote {review}")
-    typer.echo(f"\n{session.profile().session_count()} sessions when you run this.")
+    typer.echo(f"\n{format_runs(session.profile().run_count())} when you run this.")
 
 
 def _next_with_status(session, console):

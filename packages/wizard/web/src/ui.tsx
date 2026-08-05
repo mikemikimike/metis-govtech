@@ -9,6 +9,14 @@ export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
 }
 
+export function formatRuns(count: number): string {
+  return `${count} ${count === 1 ? "run" : "runs"}`;
+}
+
+export function countRuns(personaCount: number, trials: number): number {
+  return personaCount * trials;
+}
+
 type Variant = "primary" | "secondary" | "ghost";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

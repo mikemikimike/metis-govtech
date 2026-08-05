@@ -12,7 +12,7 @@ import { ArrowUp, PencilSparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type {
-  Card,
+  AnyCard,
   CardComponent,
   ChoiceRequest,
   FormRequest,
@@ -23,7 +23,7 @@ import type {
 } from "./api";
 import { optionKey } from "./api";
 import { FileReferenceListInput, NumberInput } from "./inputs";
-import { Button, cn, Mono, Panel } from "./ui";
+import { Button, cn, formatRuns, Mono, Panel } from "./ui";
 
 // What a block can send up. `null` from a resolved or read-only block.
 type Emit = (response: UserResponse) => void;
@@ -216,7 +216,7 @@ function ChoiceBlock({
       )}
 
       {request.footer && (
-        <p className="text-muted-foreground">{request.footer}</p>
+        <p className="text-right text-muted-foreground">{request.footer}</p>
       )}
 
       {/* Screen-level actions — every one the screen offers, including "Chat about it". A
@@ -271,7 +271,7 @@ function CardBlock({
   onPick,
   onFieldChange,
 }: {
-  card: Card;
+  card: AnyCard;
   disabled: boolean;
   onPick: (key: string) => void;
   onFieldChange: (key: string, value: CardFieldValue) => void;
@@ -321,6 +321,7 @@ function CardBlock({
               <ComponentBlock
                 key={i}
                 component={component}
+                runCount={"runs" in card ? card.runs : undefined}
                 disabled={disabled}
                 onPick={onPick}
                 onFieldChange={onFieldChange}
@@ -353,11 +354,13 @@ function CardBlock({
 
 function ComponentBlock({
   component,
+  runCount,
   disabled,
   onPick,
   onFieldChange,
 }: {
   component: CardComponent;
+  runCount?: number;
   disabled: boolean;
   onPick: (key: string) => void;
   onFieldChange: (key: string, value: CardFieldValue) => void;
@@ -400,12 +403,23 @@ function ComponentBlock({
         );
 
       case "number":
-        return (
+        return runCount === undefined ? (
           <NumberCardField
             component={component}
             disabled={disabled}
             onCommit={(value) => onFieldChange(optionKey(component.id), value)}
           />
+        ) : (
+          <div className="flex min-w-0 items-center gap-3">
+            <NumberCardField
+              component={component}
+              disabled={disabled}
+              onCommit={(value) => onFieldChange(optionKey(component.id), value)}
+            />
+            <span className="shrink-0 border-l border-border pl-3 text-xs text-muted-foreground">
+              {formatRuns(runCount)}
+            </span>
+          </div>
         );
 
       case "upload":

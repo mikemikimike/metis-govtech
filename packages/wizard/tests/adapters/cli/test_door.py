@@ -52,6 +52,7 @@ def a_screen(**overrides) -> ChoiceRequest:
             TaskCard(
                 id="T-1",
                 title="Ask for a review",
+                runs=6,
                 components=[
                     CardOptionGroup(
                         label="Covers",
@@ -80,7 +81,7 @@ def a_screen(**overrides) -> ChoiceRequest:
             Warning(text="EB-4 is covered by no task.", blocking=True),
             Warning(text="Epic 3 has nothing selected.", blocking=False),
         ],
-        footer="2 tasks · 3 pairs = 9 sessions",
+        footer="Total: 9 runs",
         options=[
             Option(id=OptionId(action="back"), label="← Back"),
             Option(id=OptionId(action="continue"), label="Continue", enabled=False),
@@ -119,6 +120,7 @@ def test_both_card_kinds_go_through_one_path() -> None:
 
     assert "Cites a source" in text
     assert "Ask for a review" in text
+    assert "6 runs" in text
 
 
 # ── every screen shape draws ───────────────────────────────────────────────

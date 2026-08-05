@@ -143,12 +143,14 @@ AnyCardComponent = Annotated[
 class Card(BaseModel):
     """`Card` holds one hundred percent of the data.
 
-    The two subclasses add no fields and exist to pin `selected` and to write down the two
-    layouts. They carry **no** discriminator, unlike `CardComponent`'s — the door never needs
-    to tell a behaviour card from a task card. The day one does is the day the door has
-    started learning the domain.
+    The subclasses pin their narrow fields and carry a stable wire discriminator. The door still
+    renders both through one shape-driven path; the discriminator exists so Pydantic can preserve
+    subtype-only fields such as a task's run count across HTTP and session persistence.
     """
 
+    # The base remains useful to shape-only helpers. Concrete cards narrow this to a Literal so
+    # `ChoiceRequest.cards` can use a discriminated union without making the renderer branch on it.
+    kind: str = "standard"
     id: str  # package bookkeeping — never comes back in a response
     title: str
     section: str | None = None  # "Epic 1 · Answer quality" — a heading above this card
@@ -169,12 +171,23 @@ class BehaviourCard(Card):
     which is what keeps the review screen from implying a decision the user has not been asked to
     make yet."""
 
+    kind: Literal["standard"] = "standard"  # pyright: ignore[reportIncompatibleVariableOverride]
+
 
 class TaskCard(Card):
     """The tasks step. components = [Covers, Run as, Trials, Files], in that order."""
 
+    kind: Literal["task"] = "task"  # pyright: ignore[reportIncompatibleVariableOverride]
+    # The value is carried as data so both doors can state the unit at the point they draw it.
+    runs: int
     # Narrowed deliberately: a task never has a tick. See BehaviourCard for why the ignore.
     selected: None = None  # pyright: ignore[reportIncompatibleVariableOverride]
+
+
+AnyCard: TypeAlias = Annotated[
+    BehaviourCard | TaskCard,
+    Field(discriminator="kind"),
+]
 
 
 # ── warnings ───────────────────────────────────────────────────────────────
@@ -264,11 +277,11 @@ class ChoiceRequest(WizardRequest):
     type: Literal[InteractionType.CHOICE] = InteractionType.CHOICE
     options: list[Option] = Field(default_factory=list)  # replies, Continue, Back
     multi: bool = False  # may several be sent together?
-    cards: list[Card] = Field(
+    cards: list[AnyCard] = Field(
         default_factory=list
     )  # when set, options grouped into rows
     warnings: list[Warning] = Field(default_factory=list)
-    footer: str | None = None  # finished text — "… = 9 sessions"
+    footer: str | None = None  # finished text — "Total: 9 runs"
     instruction: str | None = None  # finished text explaining how to answer this screen
 
 

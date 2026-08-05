@@ -27,7 +27,7 @@
 import { useState } from "react";
 import type { Behaviour, Epic, ProductProfile, WizardRequest } from "./api";
 import { PanelRight } from "lucide-react";
-import { Chevron, cn, Mono } from "./ui";
+import { Chevron, cn, countRuns, formatRuns, Mono } from "./ui";
 
 // ── where the interview has got to ───────────────────────────────────────────
 
@@ -213,25 +213,57 @@ export function Profile({
 
         <Section title="Tasks">
           {profile.tasks.length > 0 ? (
-            <ul className="flex flex-col gap-3">
-              {profile.tasks.map((t) => (
-                <li key={t.id} className="animate-arrive flex flex-col gap-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 flex-1 text-foreground">{t.description}</span>
-                    <Mono className="shrink-0 whitespace-nowrap">{t.id}</Mono>
-                  </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                    {t.behaviour_refs.map((ref) => (
-                      <Mono key={ref}>{ref}</Mono>
-                    ))}
-                    {t.persona_refs.map((ref) => (
-                      <Mono key={ref}>{ref}</Mono>
-                    ))}
-                    <Mono>{t.num_trials}×</Mono>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="flex flex-col gap-3">
+              <ul className="flex flex-col gap-4">
+                {profile.tasks.map((t) => (
+                  <li key={t.id} className="animate-arrive flex flex-col gap-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="min-w-0 flex-1 text-foreground">{t.description}</span>
+                      <Mono className="shrink-0 whitespace-nowrap">{t.id}</Mono>
+                    </div>
+                    <TaskField label="Covers">
+                      {t.behaviour_refs.length > 0 ? (
+                        t.behaviour_refs.map((ref) => <Mono key={ref}>{ref}</Mono>)
+                      ) : (
+                        <span className="text-xs text-muted-foreground">none</span>
+                      )}
+                    </TaskField>
+                    <TaskField label="Run as">
+                      {t.persona_refs.length > 0 ? (
+                        t.persona_refs.map((ref) => <Mono key={ref}>{ref}</Mono>)
+                      ) : (
+                        <span className="text-xs text-muted-foreground">none</span>
+                      )}
+                    </TaskField>
+                    <TaskField label="Trials">
+                      <Mono>{t.num_trials}</Mono>
+                    </TaskField>
+                    <TaskField label="Files">
+                      {t.fixtures.length > 0 ? (
+                        t.fixtures.map((file) => <Mono key={file}>{file}</Mono>)
+                      ) : (
+                        <span className="text-xs text-muted-foreground">none</span>
+                      )}
+                    </TaskField>
+                    <div className="flex items-baseline gap-3">
+                      <span className="w-16 shrink-0" aria-hidden />
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {formatRuns(countRuns(t.persona_refs.length, t.num_trials))}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex justify-end border-t border-border pt-2 text-sm text-muted-foreground">
+                Total: {formatRuns(
+                  profile.tasks.reduce(
+                    (total, task) =>
+                      total + countRuns(task.persona_refs.length, task.num_trials),
+                    0,
+                  ),
+                )}
+              </div>
+            </div>
           ) : (
             <Placeholder boxed writing={writing === "tasks"} />
           )}
@@ -377,6 +409,25 @@ function Section({
       </h3>
       {children}
     </section>
+  );
+}
+
+function TaskField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-baseline gap-3">
+      <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">
+        {label}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-wrap gap-x-3 gap-y-0.5">
+        {children}
+      </div>
+    </div>
   );
 }
 

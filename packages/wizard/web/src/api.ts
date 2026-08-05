@@ -65,7 +65,8 @@ export type CardComponent =
   | CardNumberField
   | CardUploadField;
 
-export interface Card {
+interface CardBase {
+  kind: "standard" | "task";
   id: string;
   title: string;
   section?: string | null;
@@ -75,6 +76,17 @@ export interface Card {
   note?: string | null;
   blocking: boolean;
 }
+
+export interface Card extends CardBase {
+  kind: "standard";
+}
+
+export interface TaskCard extends CardBase {
+  kind: "task";
+  runs: number;
+}
+
+export type AnyCard = Card | TaskCard;
 
 // ── warnings ─────────────────────────────────────────────────────────────────
 
@@ -123,7 +135,7 @@ export interface ChoiceRequest extends RequestHeader {
   state: RequestState;
   options: Option[];
   multi: boolean;
-  cards: Card[];
+  cards: AnyCard[];
   warnings: Warning[];
   footer?: string | null;
   instruction?: string | null;

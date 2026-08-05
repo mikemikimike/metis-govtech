@@ -137,11 +137,11 @@ class ProductProfile(BaseModel):
         """Ticked behaviours no task exercises — the blocking gate at the tasks step."""
         return [b for b in self.ticked() if not self.tasks_covering(b.id)]
 
-    def session_count(self) -> int:
-        """Sessions the engine will run: Σ over tasks of (personas × trials).
+    def run_count(self) -> int:
+        """Runs the engine will perform: Σ over tasks of (personas × trials).
 
         Mirrors the harness expansion exactly, so the footer the user reads during the
-        interview and the number of runs they actually pay for cannot disagree.
+        interview and the number of runs the engine performs cannot disagree.
         """
         return sum(len(t.persona_refs) * t.num_trials for t in self.tasks)
 

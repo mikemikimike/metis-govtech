@@ -14,6 +14,7 @@ wanting different phrasing changes this file, rather than two doors quietly disa
 
 from __future__ import annotations
 
+from metis.wizard.application.runs import format_runs
 from metis.wizard.contracts.conversation import (
     BehaviourCard,
     CardNumberField,
@@ -432,6 +433,7 @@ def tasks_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
             id=task.id,
             title=task.description,
             blocking=task.id in blocking_ids,
+            runs=len(task.persona_refs) * task.num_trials,
             components=[
                 _coverage_group(profile, task.id),
                 _persona_group(profile, task.id),
@@ -452,11 +454,7 @@ def tasks_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
         for task in profile.tasks
     ]
 
-    pairs = sum(len(t.persona_refs) for t in profile.tasks)
-    footer = (
-        f"{len(profile.tasks)} tasks · {pairs} task–persona pairs "
-        f"= {profile.session_count()} sessions"
-    )
+    footer = f"Total: {format_runs(profile.run_count())}"
 
     return ChoiceRequest(
         prompt=message,

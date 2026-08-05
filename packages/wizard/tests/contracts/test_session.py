@@ -109,6 +109,7 @@ def test_old_comma_joined_file_field_rehydrates_as_a_list(tmp_path: Path) -> Non
                 TaskCard(
                     id="T-2",
                     title="Retry",
+                    runs=1,
                     components=[
                         CardUploadField(
                             label="Files",
@@ -125,6 +126,7 @@ def test_old_comma_joined_file_field_rehydrates_as_a_list(tmp_path: Path) -> Non
 
     loaded = SessionState.load(path)
     field = loaded.pending.cards[0].components[0]  # type: ignore[union-attr]
+    assert loaded.pending.cards[0].runs == 1  # type: ignore[union-attr]
     assert isinstance(field, CardUploadField)
     assert field.value == ["policy.pdf", "faq.md"]
 
@@ -417,10 +419,11 @@ def test_a_current_version_file_loads(tmp_path: Path) -> None:
 def test_a_request_without_step_metadata_still_loads(tmp_path: Path) -> None:
     """The header fields are optional, so a session saved before they existed still resumes.
 
-    `title`, `step` and `steps` were added to `WizardRequest` after this format version. A
+    `title`, `step` and `steps` were added to `WizardRequest` after the original request shape. A
     `session.json` whose stored request predates them has no such keys; because the fields
     default to `None`, it must validate and simply render without a header rather than being
-    refused. This is why the version was not bumped — bumping would destroy exactly these.
+    rejected for missing metadata. The session version may still advance for a separate wire
+    contract change, as it does for the task-card discriminator in this change.
     """
     path = tmp_path / "session.json"
     path.write_text(

@@ -24,7 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { MetricSpec } from "./api";
 import { api, TransportError } from "./api";
 import { FileReferenceListInput, NumberInput } from "./inputs";
-import { Button, Chevron, cn, Mono, Panel } from "./ui";
+import { Button, Chevron, cn, countRuns, formatRuns, Mono, Panel } from "./ui";
 
 interface PersonaDraft {
   id: string;
@@ -354,12 +354,28 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                       onChange={(fixtures) => updateTask(i, { fixtures })}
                     />
                   </Field>
+                  <div className="flex justify-end pt-1 text-xs text-muted-foreground">
+                    {formatRuns(
+                      countRuns(task.persona_refs.length, task.num_trials),
+                    )}
+                  </div>
                 </div>
                 <RemoveButton label="Remove task" onClick={() => removeTask(i)} />
               </div>
             </Panel>
           ))}
           <AddButton label="Add a task" onClick={addTask} />
+          {tasks.length > 0 && (
+            <div className="flex justify-end border-t border-border pt-4 text-sm text-muted-foreground">
+              Total: {formatRuns(
+                tasks.reduce(
+                  (total, task) =>
+                    total + countRuns(task.persona_refs.length, task.num_trials),
+                  0,
+                ),
+              )}
+            </div>
+          )}
         </section>
 
         {/* ── download ──────────────────────────────────────────────────── */}

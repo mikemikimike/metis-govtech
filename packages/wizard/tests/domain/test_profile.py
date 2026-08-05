@@ -78,13 +78,19 @@ def test_criterion_ids_are_scoped_to_their_behaviour() -> None:
     assert [c.id for c in behaviour.criteria] == ["AC-1-1", "AC-1-2"]
 
 
-def test_coverage_and_session_count() -> None:
+def test_coverage_and_run_count() -> None:
     profile = research_assistant()
 
     assert profile.uncovered() == []
     assert [t.id for t in profile.tasks_covering("EB-1")] == ["T-1"]
     # T-1: 2 personas × 3 trials = 6; T-2: 1 × 3 = 3
-    assert profile.session_count() == 9
+    assert profile.run_count() == 9
+
+    profile.tasks[1].num_trials = 1
+    assert profile.run_count() == 7
+
+    profile.tasks[0].persona_refs = []
+    assert profile.run_count() == 1
 
 
 def test_uncovered_reports_ticked_behaviours_with_no_task() -> None:

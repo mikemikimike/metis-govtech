@@ -227,8 +227,13 @@ def test_the_footer_matches_the_harness_expansion() -> None:
 
     request = _tasks_screen(profile)
 
-    assert f"{profile.session_count()} sessions" in (request.footer or "")
-    assert "9 sessions" in (request.footer or "")  # 2×3 + 1×3
+    assert f"Total: {profile.run_count()} runs" == request.footer
+    assert "tasks" not in (request.footer or "")
+    assert "pairs" not in (request.footer or "")
+
+    cards = {card.id: card for card in request.cards}
+    assert cards["T-1"].runs == 6
+    assert cards["T-2"].runs == 3
 
 
 def test_an_uncovered_behaviour_blocks_and_carries_its_fixes() -> None:
@@ -253,6 +258,29 @@ def test_a_task_with_no_persona_blocks() -> None:
     request = _tasks_screen(profile)
 
     assert any(w.blocking and "T-1" in w.text for w in request.warnings)
+
+
+def test_run_count_is_zero_when_a_task_has_no_persona() -> None:
+    profile = research_assistant()
+    profile.task("T-1").persona_refs = []  # type: ignore[union-attr]
+
+    request = _tasks_screen(profile)
+    card = next(card for card in request.cards if card.id == "T-1")
+
+    assert card.runs == 0
+    assert request.footer == "Total: 3 runs"
+
+
+def test_run_count_uses_the_singular_for_one() -> None:
+    profile = research_assistant()
+    profile.task("T-1").persona_refs = []  # type: ignore[union-attr]
+    profile.task("T-2").num_trials = 1  # type: ignore[union-attr]
+
+    request = _tasks_screen(profile)
+    card = next(card for card in request.cards if card.id == "T-2")
+
+    assert card.runs == 1
+    assert request.footer == "Total: 1 run"
 
 
 @pytest.mark.parametrize(
@@ -345,9 +373,10 @@ def test_a_trial_edit_recomposes_the_task_total() -> None:
 
     assert state.profile.task("T-2").num_trials == 7  # type: ignore[union-attr]
     refreshed = driver.compose(state)
-    assert "13 sessions" in (refreshed.footer or "")  # 2×3 + 1×7
+    assert refreshed.footer == "Total: 13 runs"  # 2×3 + 1×7
     task_card = next(card for card in refreshed.cards if card.id == "T-2")
     assert next(c for c in task_card.components if c.type == "number").value == 7
+    assert task_card.runs == 7
 
 
 def test_fixture_edits_normalize_and_compile() -> None:

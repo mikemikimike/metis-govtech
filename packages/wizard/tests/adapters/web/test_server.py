@@ -102,6 +102,18 @@ def test_one_payload_serves_all_three_panes(tmp_path: Path) -> None:
     assert body["busy_message"] == "Building coverage tasks…"
 
 
+def test_task_card_run_count_survives_the_http_wire(tmp_path: Path) -> None:
+    _seed(tmp_path, "wizard-runs", step=SessionStep.TASKS)
+
+    body = client(tmp_path).get("/api/sessions/wizard-runs").json()
+    task_card = next(
+        card for card in body["requests"][-1]["cards"] if card["id"] == "T-1"
+    )
+
+    assert task_card["kind"] == "task"
+    assert task_card["runs"] == 6
+
+
 def test_an_unknown_session_is_a_404(tmp_path: Path) -> None:
     assert client(tmp_path).get("/api/sessions/nope").status_code == 404
 
@@ -230,7 +242,9 @@ def test_the_two_doors_agree_on_typed_task_field_edits(tmp_path: Path) -> None:
     assert task is not None
     assert (task.num_trials, task.fixtures) == (7, ["policy.pdf", "faq.md"])
     assert web.pending is not None
-    assert "13 sessions" in web.pending.footer  # type: ignore[union-attr]
+    assert "Total: 13 runs" in web.pending.footer  # type: ignore[union-attr]
+    task_card = next(card for card in web.pending.cards if card.id == "T-2")  # type: ignore[union-attr]
+    assert task_card.runs == 7
 
 
 def test_a_session_made_in_the_browser_is_resumable_from_the_terminal(

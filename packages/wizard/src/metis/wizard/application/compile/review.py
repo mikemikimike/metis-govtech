@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from metis.wizard.application.runs import format_runs
 from metis.wizard.domain.profile import Behaviour, Criterion, ProductProfile
 
 
@@ -62,14 +63,14 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
             out += _behaviour_lines(behaviour)
         out += [""]
 
-    out += ["## Who we simulate", ""]
+    out += ["## Personas", ""]
     for persona in profile.personas:
         out += [f"- **{persona.id}** — {persona.description}"]
     if not profile.personas:
         out += ["_none_"]
     out += [""]
 
-    out += ["## How we check it", ""]
+    out += ["## Tasks", ""]
     for task in profile.tasks:
         covers = ", ".join(task.behaviour_refs) or "nothing"
         runs = ", ".join(task.persona_refs) or "nobody"
@@ -89,11 +90,9 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
     # The same calculation the interview footer shows, so the document and the screen the
     # user decided on cannot disagree.
     out += [
-        "## What this costs",
+        "## Runs",
         "",
-        f"{len(profile.tasks)} tasks · "
-        f"{sum(len(t.persona_refs) for t in profile.tasks)} task–persona pairs · "
-        f"{profile.session_count()} sessions",
+        format_runs(profile.run_count()),
         "",
     ]
 

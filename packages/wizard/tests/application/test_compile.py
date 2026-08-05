@@ -202,13 +202,18 @@ def test_review_marks_why_each_behaviour_is_there() -> None:
     assert "_(considered, not measured)_" in review
 
 
-def test_review_session_count_matches_the_profile() -> None:
+def test_review_run_count_matches_the_profile() -> None:
     """The document and the interview footer read from the same calculation."""
     profile = research_assistant()
 
-    assert f"{profile.session_count()} sessions" in render_review(
-        profile, EXPERIMENT_ID
-    )
+    review = render_review(profile, EXPERIMENT_ID)
+    assert f"{profile.run_count()} runs" in review
+    assert "## Runs" in review
+    assert "task–persona pairs" not in review
+    assert "## Who we simulate" not in review
+    assert "## How we check it" not in review
+    assert "## Personas" in review
+    assert "## Tasks" in review
 
 
 def test_review_needs_no_session() -> None:

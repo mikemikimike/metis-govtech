@@ -4,6 +4,14 @@ All notable changes to `metis-wizard` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Name evaluation work as runs throughout the wizard, show per-task run counts and totals on the
+  interview, document pane, hand-authoring form and generated review, and persist task-card counts
+  through the version-4 session wire contract.
+
 ## [0.1.0] — 2026-08-03
 
 Initial release: an interview that turns a prose product description into a runnable
