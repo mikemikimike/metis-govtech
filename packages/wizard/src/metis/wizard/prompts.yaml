@@ -137,9 +137,33 @@ model_calls:
     Write acceptance criteria for every behaviour with priority=true that has none yet. Ignore
     behaviours with priority=false entirely — the user chose not to measure those.
 
-    1–4 criteria each, as many as the behaviour actually warrants. Each is given / when / then,
-    concrete enough that someone reading a transcript could say whether it held. Do not set
-    metric_fqn — that is resolved separately.
+    Write 2–5 criteria for each behaviour. Choose the number from the distinct qualities that need
+    to be checked. Use two for a narrow behaviour. Use more when the behaviour has separate
+    concerns such as correctness, completeness, faithfulness, format, constraint compliance,
+    usability or failure handling. Do not add weak or duplicate criteria only to reach five.
+
+    Each criterion must test one observable quality only. It must describe a result that can be
+    judged from the trace or generated output, be specific to the product and behaviour, and
+    remain valid across different evaluation scenarios. Use general input and output terms such as
+    source data, text data, CSV data, user instructions, reports, presentations or slides. Give
+    each criterion a different quality or condition, and make it suitable for evaluation by one
+    metric.
+
+    Do not include details that belong to a scenario, such as a business subject, named dataset,
+    reporting period, example value, named person, exact file name or requested presentation
+    content.
+
+    Use given / when / then. `given` describes a reusable condition or category of input; `when`
+    describes the product action being evaluated; and `then` describes one observable expected
+    result. When appropriate, cover both the normal path and an important boundary, constraint or
+    failure path.
+
+    For a presentation product, prefer "Given supported source data, when the product creates a
+    presentation, then the slides preserve the material facts in the source." Avoid "Given
+    quarterly financial data, when the product creates a sales deck, then the slides show the
+    correct Q3 revenue trends."
+
+    Do not set metric_fqn — that is resolved separately.
 
     `message`: a sentence introducing them.
   personas: |-
@@ -203,12 +227,19 @@ model_calls:
     $profile
 
     Suggest exactly one new acceptance criterion for the behaviour with id $behaviour_id. Look at
-    the criteria it already has and propose one that covers a case they miss — not a reword of an
-    existing one.
+    the criteria it already has and propose one that covers a distinct observable quality or
+    condition they miss — not a reword or overlap of an existing one.
+
+    Keep the criterion specific to the product and behaviour, but independent of any particular
+    scenario. Use general input and output terms such as source data, text data, CSV data, user
+    instructions, reports, presentations or slides. Do not use a business subject, named dataset,
+    reporting period, example value, named person, exact file name or requested presentation
+    content.
 
     Return a single add patch to `tasks[…].behaviours[$behaviour_id].criteria` and nothing else:
     no edits to any other behaviour, no second criterion, no changes elsewhere in the document.
-    Give / when / then, concrete enough that someone reading a transcript could say whether it held.
-    Do not include an id or set metric_fqn — both are assigned separately.
+    Give / when / then. The criterion must test one quality only and be concrete enough that someone
+    reading a trace or generated output could say whether it held. Make it suitable for evaluation
+    by one metric. Do not include an id or set metric_fqn — both are assigned separately.
 
     `message`: a sentence introducing the one you are offering.
