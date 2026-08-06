@@ -81,6 +81,7 @@ class CardComponentType(StrEnum):
     OPTIONS = "options"
     NUMBER = "number"
     UPLOAD = "upload"
+    DIVIDER = "divider"
 
 
 class CardComponent(BaseModel):
@@ -127,11 +128,21 @@ class CardUploadField(CardComponent):
         return value
 
 
+class CardDivider(CardComponent):
+    """A hairline rule between the component groups above and below it. Shape, not domain: the
+    package drops one between repeated groups — the two acceptance criteria on a behaviour card,
+    which are otherwise two runs of Given/When/Then with nothing to separate them — and the door
+    draws a rule without ever learning what the groups are. It carries nothing: a divider has no
+    label and no value, it is purely the gap made visible."""
+
+    type: Literal[CardComponentType.DIVIDER] = CardComponentType.DIVIDER
+
+
 CardFieldValue: TypeAlias = StrictInt | list[StrictStr]
 
 
 AnyCardComponent = Annotated[
-    CardText | CardOptionGroup | CardNumberField | CardUploadField,
+    CardText | CardOptionGroup | CardNumberField | CardUploadField | CardDivider,
     Field(discriminator="type"),
 ]
 

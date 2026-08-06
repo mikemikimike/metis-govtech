@@ -28,7 +28,12 @@ export interface Option {
 
 // ── card components (discriminated by shape) ─────────────────────────────────
 
-export type CardComponentType = "text" | "options" | "number" | "upload";
+export type CardComponentType =
+  | "text"
+  | "options"
+  | "number"
+  | "upload"
+  | "divider";
 
 export interface CardText {
   type: "text";
@@ -58,11 +63,19 @@ export interface CardUploadField {
   value: string[];
 }
 
+// A hairline between two component groups — the package drops it between a behaviour's
+// acceptance criteria. It carries nothing; the door draws the rule without knowing what it splits.
+export interface CardDivider {
+  type: "divider";
+  label?: string | null;
+}
+
 export type CardComponent =
   | CardText
   | CardOptionGroup
   | CardNumberField
-  | CardUploadField;
+  | CardUploadField
+  | CardDivider;
 
 interface CardBase {
   kind: "standard" | "scenario";

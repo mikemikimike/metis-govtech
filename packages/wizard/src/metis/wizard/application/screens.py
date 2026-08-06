@@ -16,7 +16,9 @@ from __future__ import annotations
 
 from metis.wizard.application.runs import format_runs
 from metis.wizard.contracts.conversation import (
+    AnyCardComponent,
     BehaviourCard,
+    CardDivider,
     CardNumberField,
     CardOptionGroup,
     CardText,
@@ -198,17 +200,24 @@ def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
 # ── step 3 · criteria ──────────────────────────────────────────────────────
 
 
-def _criterion_components(behaviour: Behaviour) -> list[CardText]:
-    components = []
+def _criterion_components(behaviour: Behaviour) -> list[AnyCardComponent]:
+    # Each clause is its own labelled component rather than one run-on sentence. A labelled
+    # component is a form row in both doors — the web aligns the label in a left column and the
+    # CLI prints it above the value — so "Given / When / Then" reads as three aligned rows,
+    # matching how the criterion is drawn in the document pane. The door stays shape-only: it
+    # renders whatever labels arrive and never learns these three are a criterion.
+    #
+    # A divider sits *between* criteria, never before the first or after the last, so a behaviour
+    # with several acceptance criteria does not read as one undifferentiated run of Given/When/Then
+    # rows. The divider is shape, not domain — the door draws a rule where one arrives and never
+    # learns it marks a criterion boundary.
+    components: list[AnyCardComponent] = []
     for criterion in behaviour.criteria:
-        components.append(
-            CardText(
-                text=(
-                    f"Given {criterion.given}, when {criterion.when}, "
-                    f"then {criterion.then}"
-                )
-            )
-        )
+        if components:
+            components.append(CardDivider())
+        components.append(CardText(label="Given", text=criterion.given))
+        components.append(CardText(label="When", text=criterion.when))
+        components.append(CardText(label="Then", text=criterion.then))
     return components
 
 

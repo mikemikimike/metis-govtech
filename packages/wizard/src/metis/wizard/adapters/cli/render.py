@@ -138,6 +138,10 @@ def _draw_card(
             out(f"    {component.label}")
 
         match component.type:
+            case CardComponentType.DIVIDER:
+                # A blank line between two component groups — the terminal's rule between a
+                # behaviour's acceptance criteria, so a run of them does not read as one block.
+                out("")
             case CardComponentType.TEXT:
                 out(f"    - {component.text}")
             case CardComponentType.OPTIONS:
@@ -206,7 +210,9 @@ def _field_keys(request: ChoiceRequest) -> list[str]:
     keys: list[str] = []
     for card in request.cards:
         for component in card.components:
-            if component.type in {CardComponentType.NUMBER, CardComponentType.UPLOAD}:
+            # Only the value-bearing components carry an id; isinstance narrows to those so the
+            # id access is type-safe as the component union grows (a divider, for one, has none).
+            if isinstance(component, (CardNumberField, CardUploadField)):
                 key = str(component.id)
                 if key not in keys:
                     keys.append(key)

@@ -440,8 +440,18 @@ function ComponentBlock({
             onUpload={fixtureActions.onUpload}
           />
         );
+
+      case "divider":
+        // A hairline between two component groups. The package drops it between a behaviour's
+        // acceptance criteria; the door draws the rule and never learns what it separates. It
+        // spans the full card width, so it returns before FormRow's label column below.
+        return <div className="border-t border-border" />;
     }
   })();
+
+  // A divider owns the whole row — it carries no label, so it skips FormRow's label/value split
+  // and rules straight across.
+  if (component.type === "divider") return value;
 
   return <FormRow label={component.label}>{value}</FormRow>;
 }

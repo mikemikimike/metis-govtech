@@ -224,6 +224,29 @@ def test_criteria_cards_carry_no_metric_annotation() -> None:
     )
 
 
+def test_a_criterion_is_three_labelled_rows_with_dividers_between() -> None:
+    """Each acceptance criterion is drawn as Given/When/Then labelled rows, and a divider
+    separates one criterion from the next so a multi-criterion behaviour does not read as one
+    undifferentiated block. The divider sits *between* criteria only — never leading or trailing.
+
+    EB-1 in the fixture is a ticked behaviour with two criteria, so its card is the case that
+    needs the boundary; EB-2 is unticked and draws a note instead of criteria.
+    """
+    request = _compose_at(SessionStep.CRITERIA)
+    card = next(card for card in request.cards if card.id == "EB-1")
+
+    kinds = [(c.type.value, getattr(c, "label", None)) for c in card.components]
+    assert kinds == [
+        ("text", "Given"),
+        ("text", "When"),
+        ("text", "Then"),
+        ("divider", None),
+        ("text", "Given"),
+        ("text", "When"),
+        ("text", "Then"),
+    ]
+
+
 def test_the_terminal_step_carries_no_header() -> None:
     """DONE is off the interview list, so a request stamped there draws no header."""
     from metis.wizard.application import screens
