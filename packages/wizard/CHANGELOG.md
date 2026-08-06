@@ -15,8 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   conversation, and use one package-owned opening question through the CLI and web doors. Rename
   the product depth field from `architecture` to `detail`.
 - Add optional Langfuse v3 model-call tracing for self-hosted server v3.153.0. Record prompts,
-  replies, retries, usage and latency without changing the interview when tracing is absent or
-  fails.
+  replies, retries, usage and latency, with the root trace summary exposing the initial input and
+  final output, without changing the interview when tracing is absent or fails.
 - Split package-owned model prompts into `prompts.yaml`, with strict validation and one complete
   `ModelPrompt` per model call. Keep the clarify limit and status copy in `interview.yaml`, with
   fresh reads through their separate application owners. Keep the agentic primer separate while

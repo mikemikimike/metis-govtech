@@ -114,11 +114,13 @@ class GatewayInterviewer:
             {"role": "user", "content": prompt.user},
         ]
         last_error: Exception | None = None
+        last_output: str | None = None
         tracer = self._tracer or tracing.NoopTracer()
         call_trace = tracer.start_call(
             name=prompt.name,
             model=self.model,
             session_id=self.session_id,
+            messages=[dict(message) for message in messages],
         )
 
         try:
@@ -143,6 +145,7 @@ class GatewayInterviewer:
                         },
                     )
                     text = response.choices[0].message.content or ""
+                    last_output = text
                     usage = tracing.usage_details_from_response(response)
                 except Exception as exc:
                     attempt_trace.finish(
@@ -190,7 +193,7 @@ class GatewayInterviewer:
                 f"Last error: {last_error}"
             )
         finally:
-            call_trace.finish()
+            call_trace.finish(output=last_output)
 
     def _step(self, prompt: prompts.ModelPrompt, profile: ProductProfile) -> StepResult:
         result, recovered = self._ask(

@@ -58,14 +58,19 @@ class CallTrace(Protocol):
         self, *, attempt: int, messages: Messages, model: str
     ) -> AttemptTrace: ...
 
-    def finish(self) -> None: ...
+    def finish(self, *, output: str | None = None) -> None: ...
 
 
 class Tracer(Protocol):
     """The tracer surface used by ``GatewayInterviewer._ask``."""
 
     def start_call(
-        self, *, name: str, model: str, session_id: str | None
+        self,
+        *,
+        name: str,
+        model: str,
+        session_id: str | None,
+        messages: Messages,
     ) -> CallTrace: ...
 
     def flush(self, timeout: float = FLUSH_TIMEOUT_SECONDS) -> None: ...
@@ -89,14 +94,21 @@ class _NoopCall:
     ) -> AttemptTrace:
         return _NoopAttempt()
 
-    def finish(self) -> None:
+    def finish(self, *, output: str | None = None) -> None:
         return None
 
 
 class NoopTracer:
     """A tracer with no side effects when Langfuse is absent or disabled."""
 
-    def start_call(self, *, name: str, model: str, session_id: str | None) -> CallTrace:
+    def start_call(
+        self,
+        *,
+        name: str,
+        model: str,
+        session_id: str | None,
+        messages: Messages,
+    ) -> CallTrace:
         return _NoopCall()
 
     def flush(self, timeout: float = FLUSH_TIMEOUT_SECONDS) -> None:
@@ -143,9 +155,9 @@ class _SafeCall:
         except Exception:
             return _NoopAttempt()
 
-    def finish(self) -> None:
+    def finish(self, *, output: str | None = None) -> None:
         try:
-            self._inner.finish()
+            self._inner.finish(output=output)
         except Exception:
             return None
 
@@ -156,10 +168,22 @@ class _SafeTracer:
     def __init__(self, inner: Tracer) -> None:
         self._inner = inner
 
-    def start_call(self, *, name: str, model: str, session_id: str | None) -> CallTrace:
+    def start_call(
+        self,
+        *,
+        name: str,
+        model: str,
+        session_id: str | None,
+        messages: Messages,
+    ) -> CallTrace:
         try:
             return _SafeCall(
-                self._inner.start_call(name=name, model=model, session_id=session_id)
+                self._inner.start_call(
+                    name=name,
+                    model=model,
+                    session_id=session_id,
+                    messages=messages,
+                )
             )
         except Exception:
             return _SafeCall(_NoopCall())
@@ -230,17 +254,28 @@ class _LangfuseCall:
         generation = context.__enter__()
         return _LangfuseAttempt(context, generation)
 
-    def finish(self) -> None:
+    def finish(self, *, output: str | None = None) -> None:
         if not self._closed:
             self._closed = True
-            self._context.__exit__(None, None, None)
+            try:
+                if output is not None:
+                    self._root.update_trace(output=output)
+            finally:
+                self._context.__exit__(None, None, None)
 
 
 class _LangfuseTracer:
     def __init__(self, client: Any) -> None:
         self._client = client
 
-    def start_call(self, *, name: str, model: str, session_id: str | None) -> CallTrace:
+    def start_call(
+        self,
+        *,
+        name: str,
+        model: str,
+        session_id: str | None,
+        messages: Messages,
+    ) -> CallTrace:
         context = self._client.start_as_current_observation(as_type="span", name=name)
         root = context.__enter__()
         try:
@@ -248,6 +283,7 @@ class _LangfuseTracer:
             update: dict[str, Any] = {
                 "name": name,
                 "metadata": trace_metadata,
+                "input": messages,
             }
             if session_id:
                 update["session_id"] = session_id

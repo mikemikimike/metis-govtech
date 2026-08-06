@@ -49,8 +49,10 @@ class RecordingCall:
     name: str
     model: str
     session_id: str | None
+    input_messages: tracing.Messages
     attempts: list[RecordingAttempt] = field(default_factory=list)
     finished: bool = False
+    output: str | None = None
 
     def start_attempt(
         self, *, attempt: int, messages: tracing.Messages, model: str
@@ -59,8 +61,9 @@ class RecordingCall:
         self.attempts.append(record)
         return record
 
-    def finish(self) -> None:
+    def finish(self, *, output: str | None = None) -> None:
         self.finished = True
+        self.output = output
 
 
 class RecordingTracer:
@@ -69,9 +72,14 @@ class RecordingTracer:
         self.flushes = 0
 
     def start_call(
-        self, *, name: str, model: str, session_id: str | None
+        self,
+        *,
+        name: str,
+        model: str,
+        session_id: str | None,
+        messages: tracing.Messages,
     ) -> RecordingCall:
-        call = RecordingCall(name, model, session_id)
+        call = RecordingCall(name, model, session_id, messages)
         self.calls.append(call)
         return call
 
@@ -152,7 +160,9 @@ def test_no_configuration_selects_noop_without_constructing_backend(
     )
 
     tracer = tracing.get_tracer()
-    tracer.start_call(name="clarify", model="model", session_id=None).finish()
+    tracer.start_call(
+        name="clarify", model="model", session_id=None, messages=[]
+    ).finish()
 
 
 def test_partial_configuration_stays_disabled(
@@ -192,8 +202,12 @@ def test_complete_configuration_builds_one_cached_backend(
 
     first = tracing.get_tracer()
     second = tracing.get_tracer()
-    first.start_call(name="clarify", model="model", session_id="wizard-test").finish()
-    second.start_call(name="clarify", model="model", session_id="wizard-test").finish()
+    first.start_call(
+        name="clarify", model="model", session_id="wizard-test", messages=[]
+    ).finish()
+    second.start_call(
+        name="clarify", model="model", session_id="wizard-test", messages=[]
+    ).finish()
     registered[0]()
 
     assert created == [("http://langfuse.local", "public", "secret")]
@@ -239,7 +253,12 @@ def test_call_records_prompt_retries_raw_reply_usage_and_session() -> None:
     assert call.name == "clarify"
     assert call.model == model.model
     assert call.session_id == "wizard-test"
+    assert call.input_messages == [
+        {"role": "system", "content": "system wording"},
+        {"role": "user", "content": "user wording"},
+    ]
     assert call.finished
+    assert call.output == good
     assert len(call.attempts) == 2
     assert call.attempts[0].messages == [
         {"role": "system", "content": "system wording"},
@@ -353,7 +372,12 @@ class FakeLangfuseClient:
 def test_v3_backend_uses_root_span_and_child_generation() -> None:
     client = FakeLangfuseClient()
     tracer = tracing._LangfuseTracer(client)
-    call = tracer.start_call(name="clarify", model="model", session_id="wizard-test")
+    call = tracer.start_call(
+        name="clarify",
+        model="model",
+        session_id="wizard-test",
+        messages=[{"role": "user", "content": "prompt"}],
+    )
     attempt = call.start_attempt(
         attempt=1,
         messages=[{"role": "user", "content": "prompt"}],
@@ -365,12 +389,14 @@ def test_v3_backend_uses_root_span_and_child_generation() -> None:
         latency_ms=12.5,
         error="validation failed",
     )
-    call.finish()
+    call.finish(output="reply")
 
     root, generation = client.observations
     assert root.as_type == "span"
     assert root.name == "clarify"
     assert root.trace_updates[0]["session_id"] == "wizard-test"
+    assert root.trace_updates[0]["input"] == [{"role": "user", "content": "prompt"}]
+    assert root.trace_updates[1]["output"] == "reply"
     assert generation.as_type == "generation"
     assert generation.kwargs["input"] == [{"role": "user", "content": "prompt"}]
     assert generation.updates[0]["output"] == "reply"
