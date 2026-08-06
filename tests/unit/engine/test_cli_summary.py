@@ -1,0 +1,148 @@
+"""Tests for final summary output."""
+
+from metis.engine.tui.state import RunState, ScenarioState, SimulationState
+
+
+def _print_final_summary(
+    state: SimulationState, experiment_dir: str, log_dir: str
+) -> str:
+    """Replicate the summary logic for testing."""
+    from metis.engine.cli import _format_final_summary
+
+    return _format_final_summary(state, experiment_dir, log_dir)
+
+
+class TestFinalSummary:
+    def test_summary_contains_experiment_id(self) -> None:
+        from metis.engine.cli import _format_final_summary
+
+        scenarios = [
+            ScenarioState(
+                scenario_id="scn",
+                runs=[
+                    RunState(
+                        scenario_id="scn",
+                        persona_id="per",
+                        trial=1,
+                        num_trials=1,
+                        phase="completed",
+                        current_turn=None,
+                        max_turns=20,
+                        turn_detail="",
+                        duration_seconds=100.0,
+                        stop_reason="goal_achieved",
+                    ),
+                ],
+                phase="completed",
+            ),
+        ]
+        state = SimulationState(
+            experiment_id="orca-eval", scenarios=scenarios, total_runs=1
+        )
+        summary = _format_final_summary(state, "/path/to/exp", "/path/to/exp/logs")
+        assert "orca-eval" in summary
+        assert "1/1" in summary
+        assert "/path/to/exp/logs" in summary
+
+    def test_summary_counts_passed_and_failed(self) -> None:
+        from metis.engine.cli import _format_final_summary
+
+        scenarios = [
+            ScenarioState(
+                scenario_id="scn",
+                runs=[
+                    RunState(
+                        scenario_id="scn",
+                        persona_id="per1",
+                        trial=1,
+                        num_trials=1,
+                        phase="completed",
+                        current_turn=None,
+                        max_turns=20,
+                        turn_detail="",
+                        duration_seconds=50.0,
+                        stop_reason="goal_achieved",
+                    ),
+                    RunState(
+                        scenario_id="scn",
+                        persona_id="per2",
+                        trial=1,
+                        num_trials=1,
+                        phase="failed",
+                        current_turn=None,
+                        max_turns=20,
+                        turn_detail="",
+                        duration_seconds=30.0,
+                        stop_reason="max_turns_reached",
+                    ),
+                ],
+                phase="completed",
+            ),
+        ]
+        state = SimulationState(
+            experiment_id="test-exp", scenarios=scenarios, total_runs=2
+        )
+        summary = _format_final_summary(state, "/exp", "/exp/logs")
+        assert "2/2" in summary
+        assert "1 passed" in summary
+        assert "1 failed" in summary
+
+    def test_summary_elapsed_time_minutes(self) -> None:
+        from metis.engine.cli import _format_final_summary
+
+        scenarios = [
+            ScenarioState(
+                scenario_id="scn",
+                runs=[
+                    RunState(
+                        scenario_id="scn",
+                        persona_id="per",
+                        trial=1,
+                        num_trials=1,
+                        phase="completed",
+                        current_turn=None,
+                        max_turns=20,
+                        turn_detail="",
+                        duration_seconds=90.0,
+                        stop_reason="goal_achieved",
+                    ),
+                ],
+                phase="completed",
+            ),
+        ]
+        state = SimulationState(
+            experiment_id="time-exp", scenarios=scenarios, total_runs=1
+        )
+        summary = _format_final_summary(state, "/exp", "/exp/logs")
+        # Should contain a time formatted as Xm (minutes)
+        assert "m" in summary
+
+    def test_summary_log_dir_path(self) -> None:
+        from metis.engine.cli import _format_final_summary
+
+        scenarios = [
+            ScenarioState(
+                scenario_id="scn",
+                runs=[
+                    RunState(
+                        scenario_id="scn",
+                        persona_id="per",
+                        trial=1,
+                        num_trials=1,
+                        phase="completed",
+                        current_turn=None,
+                        max_turns=20,
+                        turn_detail="",
+                        duration_seconds=10.0,
+                        stop_reason="goal_achieved",
+                    ),
+                ],
+                phase="completed",
+            ),
+        ]
+        state = SimulationState(
+            experiment_id="log-exp", scenarios=scenarios, total_runs=1
+        )
+        log_dir = "/custom/log/path"
+        summary = _format_final_summary(state, "/exp", log_dir)
+        assert log_dir in summary

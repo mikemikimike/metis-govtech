@@ -5,10 +5,13 @@ the Playwright page, enforces stopping conditions, and assembles the final
 RunRecord.
 """
 
+from __future__ import annotations
+
 import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from playwright.sync_api import Page
 
@@ -39,6 +42,9 @@ from ._ui_capture import (
     capture_ui_state,
 )
 
+if TYPE_CHECKING:
+    from metis.engine.tui import SimulationState, TUIContext
+
 logger = get_logger()
 
 
@@ -49,6 +55,9 @@ def run_simulation(
     scenario: Scenario,
     run_dir: Path,
     fixtures_dir: Path,
+    trial: int = 1,
+    state: SimulationState | None = None,
+    tui_ctx: TUIContext | None = None,
 ) -> RunRecord:
     """Run a full simulation run: drive the turn loop and produce a RunRecord.
 
@@ -59,6 +68,9 @@ def run_simulation(
     :param run_dir: Pre-created run folder (``runs/<scenario>-<persona>-<trial>/``).
         Artifacts are written to ``run_dir/artifacts/`` during the turn loop.
     :param fixtures_dir: Directory containing fixture files for upload.
+    :param trial: 1-based trial index (used for state updates).
+    :param state: Optional :class:`SimulationState` for TUI progress tracking.
+    :param tui_ctx: Optional :class:`TUIContext` to refresh after state mutations.
     :returns: A complete RunRecord with conversation, outcome, and artifacts.
     """
     run_config = RunConfig(
@@ -131,6 +143,19 @@ def run_simulation(
             elapsed_s,
             run_config.timeout_minutes * 60,
         )
+
+        # Notify TUI of turn progress
+        if state:
+            state.update_run_turn(
+                scenario.id,
+                persona.id,
+                trial=trial,
+                turn=turn_count,
+                max_turns=run_config.max_turns,
+                detail="sending message...",
+            )
+            if tui_ctx:
+                tui_ctx.refresh()
 
         # --- Stopping rule 1: max turns ---
         if turn_count > run_config.max_turns:
@@ -685,6 +710,19 @@ def run_simulation(
                 start_time,
                 target_session_id,
             )
+
+        # Notify TUI that we are now waiting for the LLM user agent
+        if state:
+            state.update_run_turn(
+                scenario.id,
+                persona.id,
+                trial=trial,
+                turn=turn_count,
+                max_turns=run_config.max_turns,
+                detail="waiting for LLM...",
+            )
+            if tui_ctx:
+                tui_ctx.refresh()
 
         # Get next response from user agent
         logger.info("=" * 60)

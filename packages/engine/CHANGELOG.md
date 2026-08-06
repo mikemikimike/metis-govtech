@@ -6,7 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.6.0] — 2026-08-05
 
-_Unreleased_
+### Added
+
+- **TUI control plane** — Rich-based live dashboard with progress bars (scenarios + runs), per-run status with turn detail, and a log tail panel; auto-activates in TTY, disabled in CI/pipes or with `--no-tui`
+- **Structured per-run log files** — each simulation run writes a DEBUG-level log to `logs/simulate-<scenario>_<persona>-<trial>.log`; format controlled by `--log-format` (text or json)
+- **Orchestration index** — `logs/simulate.log` records scenario/run start and completion events with pointers to per-run detail logs
+- **CLI flags** — `--no-tui`, `--quiet`, `--log-format {text,json}`, `--log-dir <path>`
+- **Final summary** — static summary printed after pipeline completes (run counts, pass/fail, log location)
+- **Graceful shutdown** — first Ctrl+C finishes current turn; second aborts immediately
+
+### Changed
+
+- `run_experiment()` and `run_simulation()` accept optional TUI/logging hooks (`state`, `orchestration_logger`, `log_router`, `tui_ctx`); existing behaviour preserved when called without them
+- Harness binds `structlog.contextvars` (scenario_id, persona_id, trial) per run for structured log routing
+- `configure_logging()` called before harness import with `cache_logger_on_first_use=False` to support dynamic processor chain updates
 
 ## [0.5.0] — 2026-08-05
 

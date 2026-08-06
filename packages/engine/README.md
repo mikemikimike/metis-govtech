@@ -24,14 +24,26 @@ cp packages/engine/.env.example .env
 ## Running
 
 ```bash
-# Run the example experiment
+# Run the example experiment (TUI auto-enabled in a terminal)
 metis engine simulate --input-dir packages/engine/example-experiment/
 
 # Headed mode (visible browser)
 HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/
 
-# Verbose logging
-metis engine simulate --input-dir packages/engine/example-experiment/ -vv
+# Verbosity — controls the TUI log tail and non-TUI stderr output.
+# The TUI dashboard (progress bars, scenario status) is always visible regardless.
+metis engine simulate --input-dir packages/engine/example-experiment/ -v    # INFO
+metis engine simulate --input-dir packages/engine/example-experiment/ -vv   # DEBUG
+metis engine simulate --input-dir packages/engine/example-experiment/ --quiet  # ERROR only
+
+# Disable TUI (force linear output)
+metis engine simulate --input-dir packages/engine/example-experiment/ --no-tui
+
+# Structured log files (JSON lines)
+metis engine simulate --input-dir packages/engine/example-experiment/ --log-format json
+
+# Override log directory (default: co-located with results)
+metis engine simulate --input-dir packages/engine/example-experiment/ --log-dir /tmp/my-logs
 
 # Custom Langfuse timeout (default: 90s)
 metis engine simulate --input-dir packages/engine/example-experiment/ --langfuse-timeout 120
@@ -55,7 +67,12 @@ Each run produces output in `experiments/<id>-<timestamp>/`:
 ```
 experiments/orca-eval-20260730-143022/
 ├── inputs/              # Snapshot of experiment inputs
-├── sessions/            # Per-run conversation records
+├── runs/                # Per-run conversation records
+├── logs/
+│   ├── simulate.log                                  # Orchestration timeline (index)
+│   ├── simulate-direct-question_cooperative-01.log   # Per-run detail (always DEBUG)
+│   ├── simulate-constrained-analysis_impatient-01.log
+│   └── ...
 └── reports/
     ├── report.json      # Machine-readable results
     └── report.html      # Visual report (open in browser)

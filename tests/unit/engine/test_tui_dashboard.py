@@ -1,0 +1,91 @@
+"""Tests for TUI dashboard panel rendering."""
+
+from rich.console import Console
+
+from metis.engine.tui.dashboard import render_dashboard
+from metis.engine.tui.state import RunState, ScenarioState, SimulationState
+
+
+def _make_state_with_active_run() -> SimulationState:
+    scenarios = [
+        ScenarioState(
+            scenario_id="direct-question",
+            runs=[
+                RunState(
+                    scenario_id="direct-question",
+                    persona_id="cooperative",
+                    trial=1,
+                    num_trials=1,
+                    phase="completed",
+                    current_turn=None,
+                    max_turns=20,
+                    turn_detail="",
+                    duration_seconds=226.0,
+                    stop_reason="goal_achieved",
+                ),
+            ],
+            phase="completed",
+        ),
+        ScenarioState(
+            scenario_id="constrained-analysis",
+            runs=[
+                RunState(
+                    scenario_id="constrained-analysis",
+                    persona_id="impatient",
+                    trial=1,
+                    num_trials=1,
+                    phase="simulating",
+                    current_turn=4,
+                    max_turns=8,
+                    turn_detail="waiting for LLM...",
+                    duration_seconds=None,
+                    stop_reason=None,
+                ),
+            ],
+            phase="active",
+        ),
+    ]
+    return SimulationState(experiment_id="orca-eval", scenarios=scenarios, total_runs=2)
+
+
+class TestRenderDashboard:
+    def test_returns_renderable(self) -> None:
+        state = _make_state_with_active_run()
+        result = render_dashboard(state)
+        assert result is not None
+
+    def test_contains_experiment_id(self) -> None:
+        state = _make_state_with_active_run()
+        result = render_dashboard(state)
+        console = Console(file=None, force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(result)
+        output = capture.get()
+        assert "orca-eval" in output
+
+    def test_contains_progress_fractions(self) -> None:
+        state = _make_state_with_active_run()
+        result = render_dashboard(state)
+        console = Console(file=None, force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(result)
+        output = capture.get()
+        assert "1/2" in output  # scenarios or runs
+
+    def test_contains_active_scenario(self) -> None:
+        state = _make_state_with_active_run()
+        result = render_dashboard(state)
+        console = Console(file=None, force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(result)
+        output = capture.get()
+        assert "constrained-analysis" in output
+
+    def test_contains_completed_scenario(self) -> None:
+        state = _make_state_with_active_run()
+        result = render_dashboard(state)
+        console = Console(file=None, force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(result)
+        output = capture.get()
+        assert "direct-question" in output
