@@ -56,7 +56,6 @@ class FormRequest(WizardRequest):
 link is visible without having to look anything up:
 
 ```python
-Epic.scope          → EpicScope
 Patch.op            → PatchOp
 Card.lines          → CardLine
 FormRequest.fields  → FormField
@@ -157,8 +156,8 @@ the scripted interviewer. It is the offline full happy-path check for both outpu
 - **Paths resolve by real id only.** Paths address by id (`behaviours[EB-1]`); a numeric bracket
   such as `behaviours[0]` is rejected rather than treated as a positional fallback. This keeps
   edits and references stable when lists are reordered.
-- **`ADD` addresses the container** (`epics`, `scenarios`), `SET`/`REMOVE` an element
-  (`epics[EP-1]`). `StepPermissions` must list both or half the operations are silently
+- **`ADD` addresses the container** (`tasks`, `scenarios`), `SET`/`REMOVE` an element
+  (`tasks[T-1]`). `StepPermissions` must list both or half the operations are silently
   forbidden.
 - **Strict drafts own the boundary.** Provider JSON is parsed into strict, model-only draft
   models (`extra="forbid"`) before any persisted profile object exists. The application

@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - Name evaluation work as runs throughout the wizard, show per-scenario run counts and totals on
   the interview, document pane, hand-authoring form and generated review, and persist scenario-card
-  counts through the version-4 session wire contract.
+  counts through the version-5 session wire contract.
 - Replace the opening screen's repository peer card with a composer source menu, and tuck honest
   Documents, Source Code and Traces trays beneath the composer with disabled source controls.
 
@@ -22,7 +22,7 @@ Initial release: an interview that turns a prose product description into a runn
 ### Added
 
 - **The interview.** Six steps that build a `ProductProfile` — the document the interview
-  writes — covering the product, its architecture, personas, epics and behaviours, scenarios, and
+  writes — covering the product, its architecture, personas, tasks and behaviours, scenarios, and
   a final review.
 - **A headless door contract.** `render(request) -> response`, with the package composing
   every string a door displays. Two doors ship against it: a Typer/Rich CLI (`metis wizard

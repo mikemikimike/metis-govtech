@@ -1,6 +1,6 @@
 """The CLI door.
 
-Nothing in this file names a behaviour, a criterion, an epic, a persona or a step. It
+Nothing in this file names a behaviour, a criterion, a task, a persona or a step. It
 branches on request type and on `CardComponentType` — a stepper is not a chip row — and on
 nothing else. A web door replaces the prints with components and is otherwise the same
 function.
@@ -232,7 +232,7 @@ def _draw(
         if card.section != section:  # a heading, whatever it happens to mean
             section = card.section
             if section:
-                # Underlined with the section's own width so epics stand apart from the
+                # Underlined with the section's own width so tasks stand apart from the
                 # behaviours under them. Plain characters, so a redirected run stays readable.
                 out(f"\n{section}")
                 out("─" * len(section))

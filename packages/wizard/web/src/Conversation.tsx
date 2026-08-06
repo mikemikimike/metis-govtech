@@ -29,20 +29,6 @@ import { Button, cn, formatRuns, Mono, Panel } from "./ui";
 type Emit = (response: UserResponse) => void;
 type CardFieldValue = number | string[];
 
-// A section heading the package composes as "Epic 1 · Finding sources". The user wants only the
-// descriptive name shown, not the "Epic N ·" prefix. Properly this belongs in the application
-// layer (`screens.py` `_section`), so both doors agree — but that file is shared with the CLI and
-// off-limits while it is being changed in parallel. Until then the door drops the prefix here by
-// splitting on the "·" separator. This is the one place the door reads structure inside a
-// package-composed string; if there is no separator it shows the string whole, so it degrades to a
-// no-op rather than mangling anything. Delete this and strip the prefix in `_section` once the
-// package is safe to touch.
-function sectionLabel(section: string | null | undefined): string {
-  if (!section) return "";
-  const parts = section.split("·");
-  return (parts.length > 1 ? parts.slice(1).join("·") : section).trim();
-}
-
 // ── whole transcript ─────────────────────────────────────────────────────────
 
 export function Transcript({
@@ -200,7 +186,7 @@ function ChoiceBlock({
               <div key={card.id} className="flex flex-col gap-1.5">
                 {startsGroup && (
                   <p className="pt-1 text-xs font-semibold text-muted-foreground">
-                    {sectionLabel(card.section)}
+                    {card.section}
                   </p>
                 )}
                 <CardBlock

@@ -40,27 +40,27 @@ class SessionStep(StrEnum):
 # the model may write nothing during either: clarify commits nothing at all, and the ticks
 # that make prioritise work are PatchOrigin.WIZARD, so they never reach an address check.
 # Note that each step owns both the *container* and its *elements*. ADD addresses the list
-# it appends to (`epics`, `epics[EP-1].behaviours`), while SET and REMOVE address an element
-# (`epics[EP-1]`). Listing only one of the two silently forbids half the operations.
+# it appends to (`tasks`, `tasks[T-1].behaviours`), while SET and REMOVE address an element
+# (`tasks[T-1]`). Listing only one of the two silently forbids half the operations.
 StepPermissions: dict[SessionStep, list[str]] = {
     SessionStep.BEHAVIOURS: [
-        "epics",
-        "epics[*]",
-        "epics[*].name",
-        "epics[*].behaviours",
-        "epics[*].behaviours[*]",
-        "epics[*].behaviours[*].statement",
+        "tasks",
+        "tasks[*]",
+        "tasks[*].name",
+        "tasks[*].behaviours",
+        "tasks[*].behaviours[*]",
+        "tasks[*].behaviours[*].statement",
         "product.summary",
         "product.users",
         "product.architecture",
         "product.name",
     ],
     SessionStep.CRITERIA: [
-        "epics[*].behaviours[*].criteria",
-        "epics[*].behaviours[*].criteria[*]",
-        "epics[*].behaviours[*].criteria[*].given",
-        "epics[*].behaviours[*].criteria[*].when",
-        "epics[*].behaviours[*].criteria[*].then",
+        "tasks[*].behaviours[*].criteria",
+        "tasks[*].behaviours[*].criteria[*]",
+        "tasks[*].behaviours[*].criteria[*].given",
+        "tasks[*].behaviours[*].criteria[*].when",
+        "tasks[*].behaviours[*].criteria[*].then",
     ],
     SessionStep.PERSONAS: [
         "personas",
@@ -78,7 +78,7 @@ StepPermissions: dict[SessionStep, list[str]] = {
 
 
 def _glob_to_regex(glob: str) -> re.Pattern[str]:
-    """`epics[*].behaviours[*]` matches `epics[EP-1].behaviours[EB-4]`.
+    """`tasks[*].behaviours[*]` matches `tasks[T-1].behaviours[EB-4]`.
 
     `*` stands for one id inside brackets and never spans a `.`, so a glob for a behaviour
     cannot accidentally match something nested deeper under it.

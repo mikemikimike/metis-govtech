@@ -1,5 +1,5 @@
 // The document view. This is the component in the door that reads `ProductProfile` and knows
-// its shape — epics hold behaviours hold criteria; personas and scenarios are flat lists. The
+// its shape — tasks hold behaviours hold criteria; personas and scenarios are flat lists. The
 // conversation stays shape-only so this can hold all of the interview's domain knowledge in one
 // place. There is one other domain-aware component, deliberately: the hand-authoring form
 // (`ManualForm.tsx`), which names the experiment schema's own fields; its header comment
@@ -7,8 +7,8 @@
 // conversation renderer, which remains the rule.
 //
 // It is read-only where it counts: no control here changes the profile — every edit still
-// originates in the conversation. The only controls are presentation: disclosures that fold an
-// epic open or closed, and a control to collapse the whole pane — both view state, not document
+// originates in the conversation. The only controls are presentation: disclosures that fold a
+// task open or closed, and a control to collapse the whole pane — both view state, not document
 // state.
 //
 // The pane is scaffold first and document second. Every section it will ever hold is drawn from
@@ -27,9 +27,9 @@
 import { useState } from "react";
 import type {
   Behaviour,
-  Epic,
   MetricSpec,
   ProductProfile,
+  Task,
   WizardRequest,
 } from "./api";
 import { PanelRight } from "lucide-react";
@@ -125,10 +125,10 @@ export function Profile({
   const { product } = profile;
   const named = product.name.trim() || "Untitled product";
 
-  const { epics } = profile;
+  const { tasks } = profile;
   const writing = busy && sessionStep ? WRITING_TARGET[sessionStep] : undefined;
-  const hasCriteria = epics.some((epic) =>
-    epic.behaviours.some((behaviour) => behaviour.criteria.length > 0),
+  const hasCriteria = tasks.some((task) =>
+    task.behaviours.some((behaviour) => behaviour.criteria.length > 0),
   );
   const metricsAvailable = !metricsLoading && !metricsError;
 
@@ -225,12 +225,12 @@ export function Profile({
             three of the same kind; "What should be true" was a sentence sitting between two nouns,
             which is what made it read as the odd one out. */}
         <Section title="Behaviours">
-          {epics.length > 0 ? (
+          {tasks.length > 0 ? (
             <div className="flex flex-col gap-2">
-              {epics.map((epic) => (
-                <EpicView
-                  key={epic.id}
-                  epic={epic}
+              {tasks.map((task) => (
+                <TaskView
+                  key={task.id}
+                  task={task}
                   selecting={selecting}
                   showMetrics={showMetrics}
                   metricByFqn={metricByFqn}
@@ -477,17 +477,17 @@ function ScenarioField({
   );
 }
 
-// Each epic is a disclosure: the header toggles its behaviours open and closed, so a long
-// document collapses to a scannable list of epic names. Note this toggle is *view* state
+// Each task is a disclosure: the header toggles its behaviours open and closed, so a long
+// document collapses to a scannable list of task names. Note this toggle is *view* state
 // only: it opens and closes a section, it never edits the profile, so the document view stays
 // read-only in the sense that matters — nothing here changes what the package built.
-function EpicView({
-  epic,
+function TaskView({
+  task,
   selecting,
   showMetrics,
   metricByFqn,
 }: {
-  epic: Epic;
+  task: Task;
   selecting?: boolean;
   showMetrics: boolean;
   metricByFqn: ReadonlyMap<string, MetricSpec>;
@@ -502,14 +502,14 @@ function EpicView({
         className="flex items-center gap-2 rounded py-1 text-left transition-colors hover:text-accent"
       >
         <Chevron dir={open ? "down" : "right"} className="text-muted-foreground transition-transform" />
-        <span className="font-medium text-foreground">{epic.name}</span>
+        <span className="font-medium text-foreground">{task.name}</span>
         <span className="text-xs text-muted-foreground">
-          {epic.behaviours.length}
+          {task.behaviours.length}
         </span>
       </button>
       {open && (
         <ul className="flex flex-col gap-1.5 border-l border-border pb-1 pl-3 ml-1.5">
-          {epic.behaviours.map((b) => (
+          {task.behaviours.map((b) => (
             <BehaviourView
               key={b.id}
               behaviour={b}

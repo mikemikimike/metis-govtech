@@ -8,9 +8,9 @@ from metis.wizard.domain import paths
 from metis.wizard.domain.applier import apply, sanitise
 from metis.wizard.domain.permissions import SessionStep, StepPermissions, owner_of
 
-EB1_PRIORITY = "epics[EP-1].behaviours[EB-1].priority"
-EB1_STATEMENT = "epics[EP-1].behaviours[EB-1].statement"
-AC1_METRIC = "epics[EP-1].behaviours[EB-1].criteria[AC-1-1].metric_fqn"
+EB1_PRIORITY = "tasks[T-1].behaviours[EB-1].priority"
+EB1_STATEMENT = "tasks[T-1].behaviours[EB-1].statement"
+AC1_METRIC = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].metric_fqn"
 
 
 def patch(path: str, value=None, *, op=PatchOp.SET, origin=PatchOrigin.MODEL) -> Patch:
@@ -73,10 +73,10 @@ def test_priority_is_owned_by_no_step() -> None:
 def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
     from metis.wizard.contracts import (
         BehaviourDraft,
-        EpicDraft,
         PersonaDraft,
         ScenarioDraft,
         StepResultPatch,
+        TaskDraft,
     )
 
     profile = research_assistant()
@@ -86,8 +86,8 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
             [
                 StepResultPatch(
                     op=PatchOp.ADD,
-                    path="epics",
-                    value=EpicDraft(
+                    path="tasks",
+                    value=TaskDraft(
                         name="New",
                         behaviours=[BehaviourDraft(statement="does something")],
                     ),
@@ -113,8 +113,8 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
     )
 
     assert not result.rejected
-    assert profile.epics[-1].id == "EP-3"
-    assert profile.epics[-1].behaviours[0].id == "EB-4"
+    assert profile.tasks[-1].id == "T-3"
+    assert profile.tasks[-1].behaviours[0].id == "EB-4"
     assert profile.personas[-1].id == "impatient-executive-2"
     assert profile.scenarios[-1].id == "S-3"
     assert profile.scenarios[-1].num_trials == 3
@@ -165,7 +165,7 @@ def test_rejecting_a_metric_write_points_at_rewording() -> None:
 # ── the fields inside a bundled value ──────────────────────────────────────
 #
 # The address check reads `patch.path` alone, and the model is told to draft a whole step in
-# one go — so its patches address a *container* (`scenarios`, `epics`) and carry the finished
+# one go — so its patches address a *container* (`scenarios`, `tasks`) and carry the finished
 # object inside. Every user-owned field below is reachable that way without the path ever
 # naming it. These are the same three rules as above, tested at the shape the model actually
 # sends rather than the targeted SET it rarely does.
@@ -202,8 +202,8 @@ def test_a_bundled_scenario_cannot_carry_trials_or_files() -> None:
     assert scenario.num_trials == 3  # the schema default, not the model's number
 
 
-def test_a_bundled_epic_cannot_carry_a_tick_or_a_metric() -> None:
-    """The recursion case. `Epic.model_validate` builds nested behaviours and criteria from
+def test_a_bundled_task_cannot_carry_a_tick_or_a_metric() -> None:
+    """The recursion case. `Task.model_validate` builds nested behaviours and criteria from
     raw dicts without re-entering the coercion, so the nesting is the whole smuggling route."""
     profile = research_assistant()
 
@@ -211,9 +211,9 @@ def test_a_bundled_epic_cannot_carry_a_tick_or_a_metric() -> None:
         profile,
         [
             patch(
-                "epics",
+                "tasks",
                 {
-                    "id": "EP-9",
+                    "id": "T-9",
                     "name": "Data handling",
                     "behaviours": [
                         {
@@ -381,7 +381,7 @@ def test_add_remove_and_set() -> None:
 def test_a_patch_at_a_missing_node_is_reported_not_raised() -> None:
     profile = research_assistant()
 
-    result = apply(profile, [patch("epics[EP-404].behaviours[EB-1].statement", "x")])
+    result = apply(profile, [patch("tasks[T-404].behaviours[EB-1].statement", "x")])
 
     assert result.applied == []
     assert result.any_rejected
@@ -399,8 +399,8 @@ def test_a_malformed_value_is_reported_not_raised() -> None:
         profile,
         [
             patch(
-                "epics",
-                {"id": "EP-9", "behaviours": ["EB-1", "EB-2"]},
+                "tasks",
+                {"id": "T-9", "behaviours": ["EB-1", "EB-2"]},
                 op=PatchOp.ADD,
                 origin=PatchOrigin.WIZARD,  # even a trusted patch must not crash on a bad value
             )
@@ -409,13 +409,13 @@ def test_a_malformed_value_is_reported_not_raised() -> None:
 
     assert result.applied == []
     assert result.any_rejected
-    assert not any(e.id == "EP-9" for e in profile.epics)
+    assert not any(e.id == "T-9" for e in profile.tasks)
 
 
 def test_paths_address_by_id_not_index() -> None:
     profile = research_assistant()
 
-    node = paths.resolve(profile, "epics[EP-1].behaviours[EB-1].criteria[AC-1-1]")
+    node = paths.resolve(profile, "tasks[T-1].behaviours[EB-1].criteria[AC-1-1]")
 
     assert node.id == "AC-1-1"
 
@@ -437,7 +437,7 @@ def test_a_list_is_addressed_by_id_first_then_by_numeric_index(
     from being silently dropped. Id addressing stays first and preferred.
     """
     profile = research_assistant()
-    path = f"epics[EP-1].behaviours[{bracket}]"
+    path = f"tasks[T-1].behaviours[{bracket}]"
 
     if raises:
         with pytest.raises(paths.PathError):
@@ -456,7 +456,7 @@ def test_criteria_added_by_positional_index_actually_land() -> None:
         profile,
         [
             patch(
-                "epics[EP-1].behaviours[EB-1].criteria",
+                "tasks[T-1].behaviours[EB-1].criteria",
                 {
                     "id": "AC-1-1",
                     "given": "a question",
@@ -474,9 +474,8 @@ def test_criteria_added_by_positional_index_actually_land() -> None:
 
 
 def test_a_glob_does_not_span_a_dot() -> None:
-    """`epics[*].behaviours[*]` must not match something nested deeper under it."""
-    assert owner_of("epics[EP-1].behaviours[EB-1]") is SessionStep.BEHAVIOURS
+    """`tasks[*].behaviours[*]` must not match something nested deeper under it."""
+    assert owner_of("tasks[T-1].behaviours[EB-1]") is SessionStep.BEHAVIOURS
     assert (
-        owner_of("epics[EP-1].behaviours[EB-1].criteria[AC-1-1]")
-        is SessionStep.CRITERIA
+        owner_of("tasks[T-1].behaviours[EB-1].criteria[AC-1-1]") is SessionStep.CRITERIA
     )

@@ -9,11 +9,11 @@ from metis.wizard.domain.profile import (
     Authored,
     Behaviour,
     Criterion,
-    Epic,
     Persona,
     Product,
     ProductProfile,
     Scenario,
+    Task,
 )
 from metis.wizard.domain.types import InteractionType
 
@@ -21,7 +21,6 @@ __all__ = [
     "Authored",
     "Behaviour",
     "Criterion",
-    "Epic",
     "InteractionType",
     "Patch",
     "PatchOp",
@@ -32,5 +31,6 @@ __all__ = [
     "Scenario",
     "SessionStep",
     "StepPermissions",
+    "Task",
     "owner_of",
 ]

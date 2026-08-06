@@ -34,7 +34,7 @@ class Interviewer(Protocol):
     def draft_behaviours(
         self, profile: ProductProfile, history: list[Turn]
     ) -> StepResult:
-        """Epics and behaviours. No criteria yet."""
+        """Tasks and behaviours. No criteria yet."""
         ...
 
     def draft_criteria(self, profile: ProductProfile) -> StepResult:

@@ -2,7 +2,7 @@
 
 A tree plus two reference lists:
 
-    epics → behaviours → criteria     what should be true
+    tasks → behaviours → criteria     what should be true
     personas, scenarios               how we'll check it
 
 `ProductProfile` is a pure artefact. It carries no step, no history and no session id, so it
@@ -70,7 +70,7 @@ class Behaviour(Authored):
     criteria: list[Criterion] = Field(default_factory=list)
 
 
-class Epic(BaseModel):
+class Task(BaseModel):
     id: str
     name: str
     behaviours: list[Behaviour] = Field(default_factory=list)
@@ -95,10 +95,10 @@ class Scenario(Authored):
 
 
 class ProductProfile(BaseModel):
-    """The whole document. Every epic in it was discovered from the interview."""
+    """The whole document. Every task in it was discovered from the interview."""
 
     product: Product
-    epics: list[Epic] = Field(default_factory=list)
+    tasks: list[Task] = Field(default_factory=list)
     personas: list[Persona] = Field(default_factory=list)
     scenarios: list[Scenario] = Field(default_factory=list)
 
@@ -106,23 +106,23 @@ class ProductProfile(BaseModel):
 
     def behaviours(self) -> list[Behaviour]:
         """Every behaviour, in document order."""
-        return [b for epic in self.epics for b in epic.behaviours]
+        return [b for task in self.tasks for b in task.behaviours]
 
     def ticked(self) -> list[Behaviour]:
         """The behaviours the user chose to measure."""
-        return [b for epic in self.epics for b in epic.behaviours if b.priority]
+        return [b for task in self.tasks for b in task.behaviours if b.priority]
 
     def behaviour(self, behaviour_id: str) -> Behaviour | None:
         return next((b for b in self.behaviours() if b.id == behaviour_id), None)
 
-    def epic(self, epic_id: str) -> Epic | None:
-        """One epic by id — symmetric with `behaviour`, `persona` and `scenario`."""
-        return next((e for e in self.epics if e.id == epic_id), None)
+    def task(self, task_id: str) -> Task | None:
+        """One task by id — symmetric with `behaviour`, `persona` and `scenario`."""
+        return next((t for t in self.tasks if t.id == task_id), None)
 
-    def epic_of(self, behaviour_id: str) -> Epic | None:
-        """Which epic owns a behaviour — symmetric with `epic` and `behaviour`."""
+    def task_of(self, behaviour_id: str) -> Task | None:
+        """Which task owns a behaviour — symmetric with `task` and `behaviour`."""
         return next(
-            (e for e in self.epics if any(b.id == behaviour_id for b in e.behaviours)),
+            (t for t in self.tasks if any(b.id == behaviour_id for b in t.behaviours)),
             None,
         )
 

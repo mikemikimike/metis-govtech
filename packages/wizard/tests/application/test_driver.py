@@ -72,7 +72,7 @@ def test_nothing_is_committed_during_clarify() -> None:
 
     driver.compose(state)
 
-    assert state.profile.epics == []
+    assert state.profile.tasks == []
     assert state.profile.scenarios == []
 
 
@@ -462,8 +462,8 @@ def test_invalid_or_mixed_field_edits_do_not_mutate(response) -> None:
     assert any(w.source is WarningSource.RUNTIME for w in refreshed.warnings)
 
 
-def test_an_epic_with_nothing_ticked_is_not_warned() -> None:
-    """Leaving an epic unticked is a legitimate choice, not a mistake to flag. The prioritise
+def test_a_task_with_nothing_ticked_is_not_warned() -> None:
+    """Leaving a task unticked is a legitimate choice, not a mistake to flag. The prioritise
     screen raises no warning for it, and Continue stays enabled."""
     profile = research_assistant()
     for behaviour in profile.behaviours():
@@ -594,7 +594,7 @@ def test_a_total_failure_warns_and_loses_nothing() -> None:
     runtime = [w for w in request.warnings if w.source is WarningSource.RUNTIME]
     assert runtime and "nothing you've decided has been lost" in runtime[0].text.lower()
     assert not runtime[0].blocking
-    assert state.profile.epics  # the profile is intact
+    assert state.profile.tasks  # the profile is intact
     assert state.step is SessionStep.PERSONAS  # and we did not advance past it
 
 
@@ -617,7 +617,7 @@ def test_ticking_costs_no_model_call() -> None:
 
 # ── a reworded criterion re-maps its metric, silently ───────────────────────
 
-_AC1 = "epics[EP-1].behaviours[EB-1].criteria[AC-1-1].then"
+_AC1 = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].then"
 
 
 @dataclass
@@ -672,8 +672,8 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
 
 # ── a scoped criteria chat stays on its own behaviour ────────────────────────
 
-_EB1_THEN = "epics[EP-1].behaviours[EB-1].criteria[AC-1-1].then"
-_EB2_THEN = "epics[EP-1].behaviours[EB-2].criteria[AC-2-1].then"
+_EB1_THEN = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].then"
+_EB2_THEN = "tasks[T-1].behaviours[EB-2].criteria[AC-2-1].then"
 
 
 def _criterion_action(driver, state, action, label):
@@ -805,7 +805,7 @@ class SuggestsElsewhere(ScriptedInterviewer):
             patches=[
                 Patch(
                     op=PatchOp.ADD,
-                    path="epics[EP-1].behaviours[EB-2].criteria",
+                    path="tasks[T-1].behaviours[EB-2].criteria",
                     value={
                         "id": "AC-2-9",
                         "given": "g",

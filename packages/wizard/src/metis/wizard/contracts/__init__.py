@@ -37,11 +37,11 @@ from metis.wizard.contracts.output import (
     BehaviourDraft,
     ClarifyResult,
     CriterionDraft,
-    EpicDraft,
     PersonaDraft,
     ScenarioDraft,
     StepResult,
     StepResultPatch,
+    TaskDraft,
 )
 from metis.wizard.contracts.session_state import (
     SESSION_FORMAT_VERSION,
@@ -54,11 +54,11 @@ from metis.wizard.domain.profile import (
     Authored,
     Behaviour,
     Criterion,
-    Epic,
     Persona,
     Product,
     ProductProfile,
     Scenario,
+    Task,
 )
 from metis.wizard.domain.types import InteractionType
 
@@ -86,8 +86,6 @@ __all__ = [
     "ClarifyResult",
     "Criterion",
     "CriterionDraft",
-    "Epic",
-    "EpicDraft",
     "FormField",
     "FormRequest",
     "FormResponse",
@@ -111,6 +109,8 @@ __all__ = [
     "SessionVersionError",
     "StepResult",
     "StepResultPatch",
+    "Task",
+    "TaskDraft",
     "Turn",
     "UserResponse",
     "Warning",

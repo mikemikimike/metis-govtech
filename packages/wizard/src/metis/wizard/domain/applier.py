@@ -33,15 +33,15 @@ from metis.wizard.domain.permissions import owner_of
 from metis.wizard.domain.profile import (
     Behaviour,
     Criterion,
-    Epic,
     Persona,
     ProductProfile,
     Scenario,
+    Task,
 )
 
 # What a list of each name holds, so an ADD patch can build the right object from a dict.
 _LIST_TYPES: dict[str, type] = {
-    "epics": Epic,
+    "tasks": Task,
     "behaviours": Behaviour,
     "criteria": Criterion,
     "personas": Persona,
@@ -123,7 +123,7 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
     # that compatibility safe; provider JSON is already rejected by strict drafts before here.
     if origin is PatchOrigin.MODEL and isinstance(value, dict):
         allowed = {
-            "epics": {"id", "name", "behaviours"},
+            "tasks": {"id", "name", "behaviours"},
             "behaviours": {"id", "statement", "criteria"},
             "criteria": {"id", "given", "when", "then"},
             "personas": {"id", "description"},
@@ -159,7 +159,7 @@ def _apply_one(profile: ProductProfile, patch: Patch) -> None:
                 parent, segment.field, _coerce(segment.field, patch.value, patch.origin)
             )
         else:
-            # Replacing a whole element by id, e.g. SET epics[EP-1].behaviours[EB-4].
+            # Replacing a whole element by id, e.g. SET tasks[T-1].behaviours[EB-4].
             items = getattr(parent, segment.field)
             replacement = _coerce(segment.field, patch.value, patch.origin)
             for i, item in enumerate(items):
@@ -173,8 +173,8 @@ def _apply_one(profile: ProductProfile, patch: Patch) -> None:
         if not isinstance(items, list):
             raise paths.PathError(f"{patch.path!r}: cannot ADD to a non-list.")
         value = patch.value
-        if _draft(value, "EpicDraft") and segment.field == "epics":
-            materializer.add_epic(profile, value, patch.origin)
+        if _draft(value, "TaskDraft") and segment.field == "tasks":
+            materializer.add_task(profile, value, patch.origin)
             return
         if _draft(value, "BehaviourDraft") and segment.field == "behaviours":
             items.append(materializer.add_behaviour(profile, value, patch.origin))

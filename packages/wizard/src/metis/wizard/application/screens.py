@@ -31,7 +31,7 @@ from metis.wizard.contracts.conversation import (
 )
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import SessionStep
-from metis.wizard.domain.profile import Behaviour, Epic, ProductProfile, Scenario
+from metis.wizard.domain.profile import Behaviour, ProductProfile, Scenario, Task
 
 TRIALS_MIN = 1
 TRIALS_MAX = 20
@@ -85,15 +85,15 @@ def _wizard_patch(path: str, value: object, op: PatchOp = PatchOp.SET) -> Patch:
 
 
 def _behaviour_path(profile: ProductProfile, behaviour_id: str, field: str) -> str:
-    epic = profile.epic_of(behaviour_id)
-    epic_id = epic.id if epic else "?"
-    return f"epics[{epic_id}].behaviours[{behaviour_id}].{field}"
+    task = profile.task_of(behaviour_id)
+    task_id = task.id if task else "?"
+    return f"tasks[{task_id}].behaviours[{behaviour_id}].{field}"
 
 
-def _section(epic: Epic) -> str:
-    # The name alone. "Epic 1 ·" was ordinal noise — the grouping is already visible, and the
-    # number matched nothing the user could refer to.
-    return epic.name
+def _section(task: Task) -> str:
+    # The name alone. "Task 1 ·" would be ordinal noise — the grouping is already visible, and
+    # the number matches nothing the user could refer to.
+    return task.name
 
 
 # ── the three replies ──────────────────────────────────────────────────────
@@ -125,12 +125,12 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     `None` selected (the CLI's `_checkbox` returns "", the web door renders the plain row).
     """
     cards = []
-    for epic in profile.epics:
-        for behaviour in epic.behaviours:
+    for task in profile.tasks:
+        for behaviour in task.behaviours:
             cards.append(
                 BehaviourCard(
                     id=behaviour.id,
-                    section=_section(epic),
+                    section=_section(task),
                     title=behaviour.statement,
                     selected=None,
                 )
@@ -156,12 +156,12 @@ def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
     """
     cards: list[BehaviourCard] = []
 
-    for epic in profile.epics:
-        for behaviour in epic.behaviours:
+    for task in profile.tasks:
+        for behaviour in task.behaviours:
             cards.append(
                 BehaviourCard(
                     id=behaviour.id,
-                    section=_section(epic),
+                    section=_section(task),
                     title=behaviour.statement,
                     selected=behaviour.priority,
                     options=[
@@ -178,7 +178,7 @@ def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
                 )
             )
 
-    # No empty-epic warning: leaving an epic unticked is a legitimate choice, not a mistake to
+    # No empty-task warning: leaving a task unticked is a legitimate choice, not a mistake to
     # flag. "Continue" is what generates criteria for whatever is ticked, so ticked-but-empty
     # cannot arise, and there is nothing here that needs blocking either.
     return ChoiceRequest(
@@ -220,13 +220,13 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     """
     cards: list[BehaviourCard] = []
 
-    for epic in profile.epics:
-        for behaviour in epic.behaviours:
+    for task in profile.tasks:
+        for behaviour in task.behaviours:
             if behaviour.priority:
                 cards.append(
                     BehaviourCard(
                         id=behaviour.id,
-                        section=_section(epic),
+                        section=_section(task),
                         title=behaviour.statement,
                         selected=True,
                         components=_criterion_components(behaviour),
@@ -258,7 +258,7 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                 cards.append(
                     BehaviourCard(
                         id=behaviour.id,
-                        section=_section(epic),
+                        section=_section(task),
                         title=behaviour.statement,
                         selected=False,
                         note="not selected — no criteria will be written",

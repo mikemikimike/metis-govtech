@@ -17,7 +17,7 @@ from metis.wizard.contracts import (
 )
 from metis.wizard.domain.permissions import SessionStep
 
-EB1_STATEMENT = "epics[EP-1].behaviours[EB-1].statement"
+EB1_STATEMENT = "tasks[T-1].behaviours[EB-1].statement"
 
 
 def edit(path: str, value="reworded") -> Patch:
@@ -96,7 +96,7 @@ def test_edits_that_derive_nothing_ask_nothing() -> None:
     profile = research_assistant()
 
     nothing = [
-        edit("epics[EP-1].behaviours[EB-1].priority", False),
+        edit("tasks[T-1].behaviours[EB-1].priority", False),
         edit("personas[cooperative-delegator].description", "different words"),
         edit("scenarios[S-1].behaviour_refs", ["EB-1"]),
         edit("scenarios[S-1].num_trials", 5),
@@ -112,7 +112,7 @@ def test_personas_are_reached_by_nothing() -> None:
     profile = research_assistant()
 
     questions = cascade.questions_for(
-        profile, [edit("epics[EP-1].behaviours[EB-1].criteria[AC-1-1].then", "x")]
+        profile, [edit("tasks[T-1].behaviours[EB-1].criteria[AC-1-1].then", "x")]
     )
 
     assert not any(q.kind == "persona" for q in questions)
@@ -159,14 +159,14 @@ def test_regenerating_clears_what_the_model_wrote() -> None:
 
 
 def test_a_product_edit_clears_everything_derived_from_it() -> None:
-    """Epics and scenarios were all derived from the product description."""
+    """Tasks and scenarios were all derived from the product description."""
     profile = research_assistant()
 
     cascade.clear_for_regeneration(
         profile, cascade.Question(text="", subject="product.summary", kind="tree")
     )
 
-    assert profile.epics == []
+    assert profile.tasks == []
     assert profile.scenarios == []
 
 

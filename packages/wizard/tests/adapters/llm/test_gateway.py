@@ -231,7 +231,7 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
             "patches": [
                 {
                     "op": "add",
-                    "path": "epics",
+                    "path": "tasks",
                     "value": {
                         "name": "Safety",
                         "behaviours": [
@@ -252,7 +252,7 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
             "patches": [
                 {
                     "op": "add",
-                    "path": "epics",
+                    "path": "tasks",
                     "value": {
                         "name": "Safety",
                         "behaviours": [{"statement": "refuses unsafe requests"}],
@@ -332,12 +332,12 @@ def test_model_origin_is_not_part_of_provider_schema() -> None:
 
 
 def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
-    """The patch envelope is valid, but its value is not an Epic.
+    """The patch envelope is valid, but its value is not a Task.
 
     The model-facing schema and domain validation belong inside the same retry loop. The
     failed attempt must not apply its earlier product edit to the real profile.
     """
-    from metis.wizard.contracts import EpicDraft, Product, ProductProfile
+    from metis.wizard.contracts import Product, ProductProfile, TaskDraft
 
     profile = ProductProfile(product=Product(name="X", summary="", users=""))
     bad = json.dumps(
@@ -351,7 +351,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
                 },
                 {
                     "op": "add",
-                    "path": "epics",
+                    "path": "tasks",
                     "value": {
                         "name": "Routing",
                         "behaviours": [{"statement": "", "priority": True}],
@@ -366,7 +366,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
             "patches": [
                 {
                     "op": "add",
-                    "path": "epics",
+                    "path": "tasks",
                     "value": {"name": "Routing", "behaviours": []},
                 }
             ],
@@ -379,7 +379,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
                 {"op": "set", "path": "product.summary", "value": "an orchestrator"},
                 {
                     "op": "add",
-                    "path": "epics",
+                    "path": "tasks",
                     "value": {
                         "name": "Routing",
                         "behaviours": [{"statement": "Routes to the right agent"}],
@@ -393,11 +393,11 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     result = model.draft_behaviours(profile, [])
 
     assert len(completions.calls) == 3
-    epic = result.patches[-1].value
-    assert isinstance(epic, EpicDraft)
-    assert epic.behaviours[0].statement
+    task = result.patches[-1].value
+    assert isinstance(task, TaskDraft)
+    assert task.behaviours[0].statement
     assert profile.product.summary == ""
-    assert profile.epics == []
+    assert profile.tasks == []
     retry_messages = completions.calls[2]["messages"]
     assert any("priority" in message["content"] for message in retry_messages)
     assert any("behaviours" in message["content"] for message in retry_messages)

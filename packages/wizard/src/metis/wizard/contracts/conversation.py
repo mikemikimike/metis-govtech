@@ -152,7 +152,9 @@ class Card(BaseModel):
     kind: str = "standard"
     id: str  # package bookkeeping — never comes back in a response
     title: str
-    section: str | None = None  # "Epic 1 · Answer quality" — a heading above this card
+    section: str | None = (
+        None  # "Answer quality" — a task's bare name, a heading above this card
+    )
     selected: bool | None = None  # a checkbox when set; none when None
     components: list[AnyCardComponent] = Field(default_factory=list)
     options: list[Option] = Field(default_factory=list)  # actions scoped to this card

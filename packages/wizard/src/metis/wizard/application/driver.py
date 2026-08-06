@@ -133,7 +133,7 @@ class StepDriver:
             step = SessionStep.BEHAVIOURS
 
         if step is SessionStep.BEHAVIOURS:
-            if not profile.epics:
+            if not profile.tasks:
                 self._try(
                     lambda: self.interviewer.draft_behaviours(profile, state.history),
                     state,

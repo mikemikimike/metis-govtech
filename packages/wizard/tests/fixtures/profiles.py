@@ -8,12 +8,12 @@ interview ever having run.
 from metis.wizard.contracts import (
     Behaviour,
     Criterion,
-    Epic,
     InteractionType,
     Persona,
     Product,
     ProductProfile,
     Scenario,
+    Task,
 )
 
 TURN_BUDGET = "metis.library.metrics.TurnBudgetMetric"
@@ -44,9 +44,9 @@ def research_assistant() -> ProductProfile:
                 "Search can time out. Nothing is carried between sessions."
             ),
         ),
-        epics=[
-            Epic(
-                id="EP-1",
+        tasks=[
+            Task(
+                id="T-1",
                 name="Answer quality",
                 behaviours=[
                     Behaviour(
@@ -86,8 +86,8 @@ def research_assistant() -> ProductProfile:
                     ),
                 ],
             ),
-            Epic(
-                id="EP-2",
+            Task(
+                id="T-2",
                 name="Recovery",
                 behaviours=[
                     Behaviour(

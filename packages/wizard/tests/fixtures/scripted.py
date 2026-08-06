@@ -48,7 +48,7 @@ class ScriptedInterviewer:
             patches=[
                 Patch(
                     op=PatchOp.ADD,
-                    path="epics",
+                    path="tasks",
                     value={
                         "name": "Answer quality",
                         "behaviours": [
@@ -59,7 +59,7 @@ class ScriptedInterviewer:
                 ),
                 Patch(
                     op=PatchOp.ADD,
-                    path="epics",
+                    path="tasks",
                     value={
                         "name": "Recovery",
                         "behaviours": [{"statement": "Stops after repeated failures"}],
@@ -74,11 +74,11 @@ class ScriptedInterviewer:
         for behaviour in profile.ticked():
             if behaviour.criteria:
                 continue
-            epic = profile.epic_of(behaviour.id)
+            task = profile.task_of(behaviour.id)
             patches.append(
                 Patch(
                     op=PatchOp.ADD,
-                    path=f"epics[{epic.id}].behaviours[{behaviour.id}].criteria",
+                    path=f"tasks[{task.id}].behaviours[{behaviour.id}].criteria",
                     value={
                         "given": "a question it can answer",
                         "when": "the answer comes back",
@@ -147,13 +147,13 @@ class ScriptedInterviewer:
         The materializer assigns the criterion id after validating this semantic draft.
         """
         self.calls.append("suggest_criterion")
-        epic = profile.epic_of(behaviour_id)
+        task = profile.task_of(behaviour_id)
         return StepResult(
             message="Here's one more you might want.",
             patches=[
                 Patch(
                     op=PatchOp.ADD,
-                    path=f"epics[{epic.id}].behaviours[{behaviour_id}].criteria",
+                    path=f"tasks[{task.id}].behaviours[{behaviour_id}].criteria",
                     value={
                         "given": "a follow-up on the same topic",
                         "when": "the agent answers again",
@@ -176,7 +176,7 @@ class RejectingInterviewer(ScriptedInterviewer):
         result = super().draft_criteria(profile)
         result.patches.append(
             Patch(
-                op=PatchOp.SET, path="epics[EP-1].behaviours[EB-2].priority", value=True
+                op=PatchOp.SET, path="tasks[T-1].behaviours[EB-2].priority", value=True
             )
         )
         return result

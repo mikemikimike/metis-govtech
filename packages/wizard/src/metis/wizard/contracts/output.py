@@ -23,7 +23,7 @@ class BehaviourDraft(_StrictDraft):
     statement: str
 
 
-class EpicDraft(_StrictDraft):
+class TaskDraft(_StrictDraft):
     name: str
     behaviours: list[BehaviourDraft] = Field(min_length=1)
 
@@ -45,7 +45,7 @@ class ScenarioDraft(_StrictDraft):
     persona_refs: list[str]
 
 
-_DRAFT_TYPES = (EpicDraft, BehaviourDraft, CriterionDraft, PersonaDraft, ScenarioDraft)
+_DRAFT_TYPES = (TaskDraft, BehaviourDraft, CriterionDraft, PersonaDraft, ScenarioDraft)
 
 
 def _container(path: str) -> str:
@@ -60,12 +60,12 @@ def _legacy_value(path: str, value: Any) -> Any:
     if not isinstance(value, dict):
         return value
     field = _container(path)
-    if field == "epics":
+    if field == "tasks":
         behaviours = [
             BehaviourDraft(statement=item["statement"])
             for item in value.get("behaviours", [])
         ]
-        return EpicDraft(name=value["name"], behaviours=behaviours)
+        return TaskDraft(name=value["name"], behaviours=behaviours)
     if field == "behaviours":
         return BehaviourDraft(statement=value["statement"])
     if field == "criteria":
@@ -99,7 +99,7 @@ class StepResultPatch(BaseModel):
     op: PatchOp
     path: str
     value: (
-        EpicDraft
+        TaskDraft
         | BehaviourDraft
         | CriterionDraft
         | PersonaDraft
@@ -128,7 +128,7 @@ class StepResultPatch(BaseModel):
         if self.op is PatchOp.ADD:
             field = self.path.rsplit(".", 1)[-1]
             expected = {
-                "epics": EpicDraft,
+                "tasks": TaskDraft,
                 "behaviours": BehaviourDraft,
                 "criteria": CriterionDraft,
                 "personas": PersonaDraft,

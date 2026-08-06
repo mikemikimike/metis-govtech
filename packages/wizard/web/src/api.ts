@@ -191,7 +191,7 @@ export interface Behaviour {
   criteria: Criterion[];
 }
 
-export interface Epic {
+export interface Task {
   id: string;
   name: string;
   behaviours: Behaviour[];
@@ -220,7 +220,7 @@ export interface Product {
 
 export interface ProductProfile {
   product: Product;
-  epics: Epic[];
+  tasks: Task[];
   personas: Persona[];
   scenarios: Scenario[];
 }

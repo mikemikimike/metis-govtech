@@ -25,19 +25,27 @@ PRIMER_FILE = "agentic-primer.md"
 _PATCH_RULES = """
 You return patches, never whole documents. Each patch has:
   op    — add | remove | set | reorder
-  path  — an address, e.g. epics[EP-1].behaviours[EB-4].statement
+  path  — an address, e.g. tasks[T-1].behaviours[EB-4].statement
   value — the new value
 
-Address existing nodes by id, never by position — `epics[EP-1]`, never `epics[0]`. Ids,
+Address existing nodes by id, never by position — `tasks[T-1]`, never `tasks[0]`. Ids,
 defaults and authorship are assigned by the wizard when an item is created; never include them
 in a draft. Ids never contain a dot — a dot separates path segments.
 
+A **task** here is a group of related behaviours — a job the product does for its users, such
+as "answer policy questions" or "handle a refund". A task is a heading that organises
+behaviours; it is never itself run, and it carries no situation, persona or steps. Do not read
+"task" as *a thing to be done*. The thing that gets run is a **scenario**, a single simulated
+situation you build much later to exercise behaviours. Keep them apart: a runnable,
+persona-facing situation is a scenario and never belongs in a task, and a bare grouping name is
+a task and never belongs in a scenario.
+
 To create something, `add` to its **container** with the whole object as the value, children
 included inline — never `set` an id that does not exist yet (`set` changes a field that is
-already there; it cannot create). One epic with its behaviours is a single patch:
+already there; it cannot create). One task with its behaviours is a single patch:
 
   op: add
-  path: epics
+  path: tasks
   value: {"name": "…",
           "behaviours": [{"statement": "…"}, {"statement": "…"}]}
 
@@ -123,9 +131,10 @@ The interview:
 First, record what you learned: set product.summary, product.users and
 product.architecture from the conversation.
 
-Then draft epics, each with 2–5 behaviours. A behaviour is one statement of something that
-should be true — "cites a source for every factual claim". No acceptance criteria yet, and do
-not set priority on anything.
+Then draft tasks, each with 2–5 behaviours. A task is a group of related behaviours — a job the
+product does, named as a heading; it is not a situation you run and has no persona or steps. A
+behaviour is one statement of something that should be true — "cites a source for every factual
+claim". No acceptance criteria yet, and do not set priority on anything.
 
 Statements about the machinery belong here alongside statements about features.
 
@@ -227,7 +236,7 @@ Suggest exactly one new acceptance criterion for the behaviour with id {behaviou
 the criteria it already has and propose one that covers a case they miss — not a reword of an
 existing one.
 
-Return a single add patch to `epics[…].behaviours[{behaviour_id}].criteria` and nothing else:
+Return a single add patch to `tasks[…].behaviours[{behaviour_id}].criteria` and nothing else:
 no edits to any other behaviour, no second criterion, no changes elsewhere in the document.
 Give / when / then, concrete enough that someone reading a transcript could say whether it held.
 Do not include an id or set metric_fqn — both are assigned separately.

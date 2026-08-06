@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "id": "compat-v1",
   "profile": {
     "product": {
@@ -8,9 +8,9 @@
       "users": "Policy analysts and their managers. Some know exactly what they want; others are exploring and do not.",
       "architecture": "A router agent with a document search tool and a summariser subagent. Search can time out. Nothing is carried between sessions."
     },
-    "epics": [
+    "tasks": [
       {
-        "id": "EP-1",
+        "id": "T-1",
         "name": "Answer quality",
         "behaviours": [
           {
@@ -59,7 +59,7 @@
         ]
       },
       {
-        "id": "EP-2",
+        "id": "T-2",
         "name": "Recovery",
         "behaviours": [
           {

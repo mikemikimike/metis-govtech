@@ -1,6 +1,6 @@
 """Resolving a patch path against the profile tree.
 
-Paths address nodes by id, not by index — `epics[EP-2].behaviours[EB-4].criteria[AC-4.1]`.
+Paths address nodes by id, not by index — `tasks[T-2].behaviours[EB-4].criteria[AC-4.1]`.
 Ids rather than positions because a list can be reordered between the model composing a
 patch and the applier running it, and an index would then point at the wrong node silently.
 """

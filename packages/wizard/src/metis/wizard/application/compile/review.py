@@ -57,9 +57,9 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
         out += ["## How it works", "", product.architecture, ""]
 
     out += ["## What should be true", ""]
-    for epic in profile.epics:
-        out += [f"### {epic.id} · {epic.name}", ""]
-        for behaviour in epic.behaviours:
+    for task in profile.tasks:
+        out += [f"### {task.id} · {task.name}", ""]
+        for behaviour in task.behaviours:
             out += _behaviour_lines(behaviour)
         out += [""]
 
@@ -97,7 +97,7 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
     ]
 
     not_measured = [
-        b for epic in profile.epics for b in epic.behaviours if not b.priority
+        b for task in profile.tasks for b in task.behaviours if not b.priority
     ]
     if not_measured:
         out += [

@@ -24,7 +24,7 @@ DOMAIN_WORDS = [
     "behaviour",
     "criterion",
     "criteria",
-    "epic",
+    "task",
     "persona",
     "scenario",
     "priority",
@@ -39,7 +39,7 @@ def a_screen(**overrides) -> ChoiceRequest:
         cards=[
             BehaviourCard(
                 id="EB-1",
-                section="Epic 1 · Answer quality",
+                section="Answer quality",
                 title="Cites a source",
                 selected=True,
                 components=[CardText(text="Given x, when y, then z")],
@@ -77,7 +77,7 @@ def a_screen(**overrides) -> ChoiceRequest:
         ],
         warnings=[
             Warning(text="EB-4 is covered by no scenario.", blocking=True),
-            Warning(text="Epic 3 has nothing selected.", blocking=False),
+            Warning(text="EB-2 has no acceptance criteria yet.", blocking=False),
         ],
         footer="Total: 9 runs",
         options=[
@@ -133,10 +133,10 @@ def test_selection_state_and_components_draw() -> None:
     door draws a screen" — not separate contracts.
     """
     text, _ = draw(a_screen())
-    section = "Epic 1 · Answer quality"
+    section = "Answer quality"
 
     # The heading is finished text the door does not interpret, underlined to its own width so
-    # an epic stands apart from the behaviours nested under it.
+    # a task stands apart from the behaviours nested under it.
     assert f"{section}\n{'─' * len(section)}" in text
 
     assert "  [x] Cites a source" in text  # card checkbox, indented under its section
@@ -169,7 +169,7 @@ def test_blocking_and_advisory_warnings_read_differently() -> None:
     text, _ = draw(a_screen())
 
     assert "STOP  EB-4 is covered by no scenario." in text
-    assert "note  Epic 3 has nothing selected." in text
+    assert "note  EB-2 has no acceptance criteria yet." in text
 
 
 def test_a_disabled_option_is_shown_but_not_selectable() -> None:

@@ -10,11 +10,11 @@ from metis.wizard.domain.patch import PatchOrigin
 from metis.wizard.domain.profile import (
     Behaviour,
     Criterion,
-    Epic,
     InteractionType,
     Persona,
     ProductProfile,
     Scenario,
+    Task,
 )
 
 
@@ -53,18 +53,18 @@ def _interaction(origin: PatchOrigin) -> InteractionType:
     )
 
 
-def add_epic(profile: ProductProfile, draft: Any, origin: PatchOrigin) -> Epic:
-    epic = Epic(
-        id=_next_numeric({e.id for e in profile.epics}, "EP"),
+def add_task(profile: ProductProfile, draft: Any, origin: PatchOrigin) -> Task:
+    task = Task(
+        id=_next_numeric({t.id for t in profile.tasks}, "T"),
         name=draft.name,
         behaviours=[],
     )
-    profile.epics.append(epic)
+    profile.tasks.append(task)
     for behaviour_draft in draft.behaviours:
-        epic.behaviours.append(
-            add_behaviour(profile, behaviour_draft, origin, epic=epic)
+        task.behaviours.append(
+            add_behaviour(profile, behaviour_draft, origin, task=task)
         )
-    return epic
+    return task
 
 
 def add_behaviour(
@@ -72,15 +72,15 @@ def add_behaviour(
     draft: Any,
     origin: PatchOrigin,
     *,
-    epic: Epic | None = None,
+    task: Task | None = None,
 ) -> Behaviour:
     behaviour = Behaviour(
         id=_next_numeric({b.id for b in profile.behaviours()}, "EB"),
         statement=draft.statement,
         interaction_type=_interaction(origin),
     )
-    if epic is not None:
-        # The caller appends the returned object; accepting ``epic`` here keeps the ownership
+    if task is not None:
+        # The caller appends the returned object; accepting ``task`` here keeps the ownership
         # explicit while avoiding a second append.
         pass
     return behaviour
