@@ -21,6 +21,33 @@ CITATION_METRIC = "metis.library.metrics.SynthesisFaithfulnessMetric"
 BOUNDED_TROUBLESHOOTING = "metis.library.metrics.BoundedTroubleshootingMetric"
 
 
+def orca_handover() -> ProductProfile:
+    """A rich product handover whose separate facts must survive clarify."""
+    return ProductProfile(
+        product=Product(
+            name="Orca",
+            users="Public Officers",
+            summary=(
+                "An orchestrator that coordinates specialist agents for public officers."
+            ),
+            detail=(
+                "Current specialists:\n"
+                "- Data Analyst performs exploratory analysis on supplied datasets.\n"
+                "- Text Analyst clusters and analyses collections of text.\n"
+                "- Slide Maker generates PowerPoint decks from a user's brief and evidence.\n"
+                "- Slide Reviewer checks generated decks and returns revision feedback.\n"
+                "- Criteria Evaluator assesses work against explicit evaluation criteria.\n\n"
+                "Workflow and coordination:\n"
+                "Orca interprets the request, routes each part to the relevant specialist and "
+                "returns their outputs within one workflow. A deck workflow can pass a generated "
+                "deck from Slide Maker to Slide Reviewer before returning it.\n\n"
+                "Current limits:\n"
+                "These five specialists are the capabilities live today."
+            ),
+        )
+    )
+
+
 def research_assistant() -> ProductProfile:
     """A profile exercising every shape the compiler has to handle.
 

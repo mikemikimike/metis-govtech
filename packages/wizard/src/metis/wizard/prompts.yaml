@@ -79,10 +79,28 @@ model_calls:
     initial capital for each word, such as `Public Officers`. Keep a longer audience description
     as normal prose.
 
-    Write only what the conversation established. You may set product.name, product.users and
-    product.summary, and put useful depth in product.detail. Do not fill a field to satisfy the
-    phase condition. Set done=true when you have enough about the product to draft expected
-    behaviours, or keep asking if the product is still unclear.
+    Write only what the conversation established. You may set product.name, product.users,
+    product.summary and product.detail.
+
+    Keep product.summary short: it is the one-line description compiled into the experiment.
+    Treat product.detail as the cumulative handover to every later step, not as a second summary.
+    Its depth must match the evidence. When the conversation or a supplied source establishes
+    several material facts, preserve them separately and with enough context to use later.
+    Material facts can include distinct capabilities, user workflows, operating steps,
+    coordination, inputs, outputs, constraints and current limits. These are examples, not a
+    checklist: do not invent facts or categories to fill it. Use paragraphs or line-separated
+    lists when that keeps distinct facts usable.
+
+    On every later turn, set product.detail to the complete merged handover: carry forward
+    established detail and add what the new answer established. A narrow new answer must not erase
+    unrelated earlier detail. Remove, replace or compress detail only when the user corrects it,
+    removes it from scope or explicitly asks for a shorter account. If the user says to remove a
+    fact, omit it entirely from the replacement detail; do not keep it as a negated fact or a note
+    about the correction. A sparse source may produce sparse detail; never pad it to meet a length
+    target.
+
+    Do not fill any field merely to satisfy the phase condition. Set done=true when you have enough
+    about the product to draft expected behaviours, or keep asking if the product is still unclear.
 
     `message`: the one question to show the user. Leave it empty only when done=true.
   clarify_machinery: |-
@@ -113,8 +131,26 @@ model_calls:
     already used those words or explained them.
 
     Write only what the conversation established. You may update product.name, product.users,
-    product.summary and product.detail. Set done=true when you have enough to draft expected
-    behaviours.
+    product.summary and product.detail.
+
+    Keep product.summary short: it is the one-line description compiled into the experiment.
+    Treat product.detail as the cumulative handover to every later step, not as a second summary.
+    Its depth must match the evidence. When the conversation or a supplied source establishes
+    several material facts, preserve them separately and with enough context to use later.
+    Material facts can include distinct capabilities, user workflows, operating steps,
+    coordination, inputs, outputs, constraints and current limits. These are examples, not a
+    checklist: do not invent facts or categories to fill it. Use paragraphs or line-separated
+    lists when that keeps distinct facts usable.
+
+    On every later turn, set product.detail to the complete merged handover: carry forward
+    established detail and add what the new answer established. A narrow new answer must not erase
+    unrelated earlier detail. Remove, replace or compress detail only when the user corrects it,
+    removes it from scope or explicitly asks for a shorter account. If the user says to remove a
+    fact, omit it entirely from the replacement detail; do not keep it as a negated fact or a note
+    about the correction. A sparse source may produce sparse detail; never pad it to meet a length
+    target.
+
+    Set done=true when you have enough to draft expected behaviours.
 
     `message`: the one question to show the user. Leave it empty only when done=true.
   behaviours: |-

@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib import resources
 from string import Template
-from typing import Literal
+from typing import Literal, cast
 
 import yaml
 
@@ -35,10 +35,20 @@ ModelCall = Literal[
 
 _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "clarify_product": frozenset(
-        {"profile", "history", "question_number", "question_cap"}
+        {
+            "profile",
+            "history",
+            "question_number",
+            "question_cap",
+        }
     ),
     "clarify_machinery": frozenset(
-        {"profile", "history", "question_number", "question_cap"}
+        {
+            "profile",
+            "history",
+            "question_number",
+            "question_cap",
+        }
     ),
     "behaviours": frozenset({"profile", "history"}),
     "criteria": frozenset({"profile"}),
@@ -211,7 +221,9 @@ def _compose(
         values,
     )
     return ModelPrompt(
-        name=call_name or template_name, system=_system_message(catalog), user=user
+        name=cast(ModelCall, call_name or template_name),
+        system=_system_message(catalog),
+        user=user,
     )
 
 

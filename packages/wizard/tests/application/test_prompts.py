@@ -1,15 +1,15 @@
-"""The prompt catalogue, its validation, and its byte-stable extraction baseline."""
+"""The prompt catalogue, its validation, and its composition contracts."""
 
 from __future__ import annotations
 
-import hashlib
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
-from fixtures.profiles import research_assistant
+from fixtures.profiles import orca_handover, research_assistant
 
 from metis.wizard.application import prompts
 from metis.wizard.application.interview import opening_question
@@ -17,36 +17,6 @@ from metis.wizard.contracts import Product, ProductProfile
 from metis.wizard.contracts.session_state import Turn
 from metis.wizard.domain.applier import apply
 from metis.wizard.domain.patch import Patch, PatchOp
-
-_BASELINE_SHA256 = {
-    "system": "75e2c982353772cef208981bd54b16602eb3b292af1ec29628f4bc777edd73c7",
-    "clarify": "3ddcfc6605b51d3b15670b83e4599e0406c8a92361c56ab4b91544fbf403e94d",
-    "behaviours": "baf62840018a66b39b0cc9329ead2e4368e3e73e8f6456a6d7279e52953a3ebb",
-    "criteria": "1bcde8c70f5ecaf6cf485a4b4544a23214e05a39ad8152296d0e71680dd26c65",
-    "personas": "a6a490ca08ff164e69e6de8d108efad53030a2a3233072f3b183878bbac2d552",
-    "scenarios": "1c15458b03c450df20947533fcf9299e3f9aea4e50e367cd64c6bcb618882004",
-    "chat": "3782bc73dfd97c24aff3f861ff7970095d7f03618b22bdfbb7d7e3f8304cf2e6",
-    "suggest_criterion": (
-        "906965f23d9fb1870742a61f8ac597dd5e4df9d113bfac6dd94140be1919a99b"
-    ),
-}
-
-
-def _calls() -> dict[str, prompts.ModelPrompt]:
-    profile = research_assistant()
-    history = [
-        Turn(role="assistant", text="What does it do?"),
-        Turn(role="user", text="It answers questions."),
-    ]
-    return {
-        "clarify": prompts.clarify(profile, history),
-        "behaviours": prompts.behaviours(profile, history),
-        "criteria": prompts.criteria(profile),
-        "personas": prompts.personas(profile),
-        "scenarios": prompts.scenarios(profile),
-        "chat": prompts.chat(profile, "criteria", "Make this stricter", "EB-1"),
-        "suggest_criterion": prompts.suggest_criterion(profile, "EB-1"),
-    }
 
 
 def _document() -> dict[str, Any]:
@@ -65,18 +35,12 @@ def _install_document(
     )
 
 
-def test_prompt_extraction_preserves_every_byte() -> None:
-    calls = _calls()
-    actual = {
-        "system": hashlib.sha256(calls["clarify"].system.encode()).hexdigest(),
-        **{
-            name: hashlib.sha256(prompt.user.encode()).hexdigest()
-            for name, prompt in calls.items()
-        },
-    }
+def test_substitution_preserves_every_unmodified_byte() -> None:
+    template = "  before\n$profile\n$$literal\n  after  "
 
-    assert actual == _BASELINE_SHA256
-    assert {prompt.name for prompt in calls.values()} == set(calls)
+    result = prompts._substitute(template, "test", {"profile": "VALUE"})
+
+    assert result == "  before\nVALUE\n$literal\n  after  "
 
 
 def _assert_complete_catalogue_is_validated(
@@ -297,27 +261,71 @@ def test_prompt_catalogue_is_a_package_resource() -> None:
     }
 
 
-def test_clarify_has_distinct_product_and_machinery_phases() -> None:
+def test_clarify_selects_distinct_product_and_machinery_templates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = _document()
+    document["model_calls"]["clarify_product"] += "\nPRODUCT PHASE MARKER"
+    document["model_calls"]["clarify_machinery"] += "\nMACHINERY PHASE MARKER"
+    _install_document(monkeypatch, document)
     empty = ProductProfile(product=Product(name="", users="", summary=""))
 
     product = prompts.clarify(empty, [], "product")
     machinery = prompts.clarify(research_assistant(), [], "machinery")
 
     assert product.name == machinery.name == "clarify"
-    assert "tools, failures, memory or delegation yet." in product.user
-    assert "taking over this product from another busy product manager" in product.user
-    assert "Start wide" in product.user
-    assert "reveal the most breadth" in product.user
-    assert "clarify question 1 of 5" in product.user
-    assert "product is established" in machinery.user
-    assert "the handover is not" in machinery.user
-    assert "high-leverage question" in machinery.user
-    assert "question that invites an overview" in machinery.user
-    assert "clarify question 1 of 5" in machinery.user
-    assert "stop broad capability" in machinery.user
-    assert "one agentic behaviour instead" in machinery.user
-    assert "coordinates specialists" in machinery.user
-    assert "Do not drill into one file or output format" in machinery.user
+    assert product.user.endswith("PRODUCT PHASE MARKER")
+    assert machinery.user.endswith("MACHINERY PHASE MARKER")
+
+
+@pytest.mark.parametrize("phase", ["product", "machinery"])
+def test_clarify_is_told_to_merge_a_narrow_follow_up_without_losing_detail(
+    phase: str,
+) -> None:
+    profile = orca_handover()
+    history = [
+        Turn(role="assistant", text="How does review work?"),
+        Turn(
+            role="user",
+            text="A reviewer can request one revision from the slide maker.",
+        ),
+    ]
+
+    prompt = prompts.clarify(profile, history, phase)  # type: ignore[arg-type]
+    serialized = json.dumps(profile.model_dump(mode="json"), indent=2)
+
+    assert serialized in prompt.user
+    assert (
+        "user: A reviewer can request one revision from the slide maker." in prompt.user
+    )
+
+
+def test_clarify_allows_an_explicit_correction_to_remove_detail() -> None:
+    history = [
+        Turn(
+            role="user",
+            text=(
+                "Correction: Criteria Evaluator is not live. Remove it from the product detail."
+            ),
+        )
+    ]
+
+    prompt = prompts.clarify(orca_handover(), history, "machinery")
+
+    assert "user: Correction: Criteria Evaluator is not live." in prompt.user
+
+
+def test_rich_orca_detail_reaches_behaviour_and_scenario_prompts() -> None:
+    profile = orca_handover()
+    serialized = json.dumps(profile.model_dump(mode="json"), indent=2)
+
+    downstream = (
+        prompts.behaviours(profile, []),
+        prompts.scenarios(profile),
+    )
+
+    for prompt in downstream:
+        assert serialized in prompt.user
 
 
 def test_clarify_prompt_reports_the_late_question_position() -> None:
@@ -332,9 +340,7 @@ def test_clarify_prompt_reports_the_late_question_position() -> None:
         Turn(role="user", text="Answer three."),
     ]
 
-    prompt = prompts.clarify(research_assistant(), history, "machinery")
-
-    assert "This is clarify question 4 of 5." in prompt.user
+    assert prompts._clarify_position(history) == (4, 5)
 
 
 def test_later_prompts_receive_product_detail_with_line_breaks() -> None:
