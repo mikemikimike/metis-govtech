@@ -33,8 +33,8 @@ from metis.wizard.contracts.conversation import (
 from metis.wizard.contracts.output import (
     CriterionDraft,
     PersonaDraft,
+    ScenarioDraft,
     StepResult,
-    TaskDraft,
 )
 from metis.wizard.contracts.session_state import SessionState
 from metis.wizard.domain import materializer
@@ -54,8 +54,8 @@ _NEXT_STEP = {
     SessionStep.BEHAVIOURS: SessionStep.PRIORITISE,
     SessionStep.PRIORITISE: SessionStep.CRITERIA,
     SessionStep.CRITERIA: SessionStep.PERSONAS,
-    SessionStep.PERSONAS: SessionStep.TASKS,
-    SessionStep.TASKS: SessionStep.DONE,
+    SessionStep.PERSONAS: SessionStep.SCENARIOS,
+    SessionStep.SCENARIOS: SessionStep.DONE,
 }
 
 # Only these screens expose Back. Keeping the map explicit makes the door's visible
@@ -64,14 +64,14 @@ _NEXT_STEP = {
 _PREVIOUS_STEP = {
     SessionStep.PRIORITISE: SessionStep.BEHAVIOURS,
     SessionStep.CRITERIA: SessionStep.PRIORITISE,
-    SessionStep.TASKS: SessionStep.PERSONAS,
+    SessionStep.SCENARIOS: SessionStep.PERSONAS,
 }
 
 _DEFAULT_MESSAGES = {
     SessionStep.BEHAVIOURS: "Here's the current draft.",
     SessionStep.CRITERIA: "Here are the current acceptance criteria.",
     SessionStep.PERSONAS: "Here are the current personas.",
-    SessionStep.TASKS: "Here are the current tasks.",
+    SessionStep.SCENARIOS: "Here are the current scenarios.",
 }
 
 
@@ -159,11 +159,11 @@ class StepDriver:
                 screens.personas_screen(profile, self._message(SessionStep.PERSONAS))
             )
 
-        if step is SessionStep.TASKS:
-            if not profile.tasks:
-                self._try(lambda: self.interviewer.draft_tasks(profile), state)
+        if step is SessionStep.SCENARIOS:
+            if not profile.scenarios:
+                self._try(lambda: self.interviewer.draft_scenarios(profile), state)
             return self._attach(
-                screens.tasks_screen(profile, self._message(SessionStep.TASKS))
+                screens.scenarios_screen(profile, self._message(SessionStep.SCENARIOS))
             )
 
         raise RuntimeError(f"Nothing to compose at step {step}.")
@@ -301,10 +301,10 @@ class StepDriver:
                 ),
                 PatchOrigin.WIZARD,
             )
-        elif state.step is SessionStep.TASKS:
-            materializer.add_task(
+        elif state.step is SessionStep.SCENARIOS:
+            materializer.add_scenario(
                 profile,
-                TaskDraft(
+                ScenarioDraft(
                     description=values.get("description", ""),
                     behaviour_refs=values.get("behaviour_refs", []),
                     persona_refs=values.get("persona_refs", []),
@@ -348,7 +348,7 @@ class StepDriver:
         if values:
             if selected or len(values) != 1:
                 return self._refuse_field_edit(
-                    "Edit one task field at a time; I left the profile unchanged."
+                    "Edit one scenario field at a time; I left the profile unchanged."
                 )
             key, value = next(iter(values.items()))
             return self._handle_field_value(state, request, key, value)
@@ -383,7 +383,7 @@ class StepDriver:
             return self._open_criterion_form(state, _target_of(chosen, "type"))
 
         if "add" in actions:
-            # The screen-level "I'll add one" on behaviours, personas and tasks — one
+            # The screen-level "I'll add one" on behaviours, personas and scenarios — one
             # free-text description, handled per step in `_handle_form`. Distinct from the
             # criteria card's "Write one myself" (`type`), which builds Given/When/Then.
             form = FormRequest(
@@ -408,24 +408,25 @@ class StepDriver:
         key: str,
         value: CardFieldValue,
     ) -> None:
-        """Validate one request-bound task field before composing its trusted patch."""
+        """Validate one request-bound scenario field before composing its trusted patch."""
         field = editable_fields_of(request).get(key)
         if field is None:
             return self._refuse_field_edit(
                 "That field is no longer available on this screen; I left the profile unchanged."
             )
 
-        task_id = field.id.target
-        task = state.profile.task(task_id) if task_id else None
-        if task is None:
+        scenario_id = field.id.target
+        scenario = state.profile.scenario(scenario_id) if scenario_id else None
+        if scenario is None:
             return self._refuse_field_edit(
-                "That task is no longer available; I left the profile unchanged."
+                "That scenario is no longer available; I left the profile unchanged."
             )
 
         if isinstance(field, CardNumberField):
             if field.id.action != "trials":
                 return self._refuse_field_edit(
-                    "That task field is not a supported trial editor; I left the profile unchanged."
+                    "That scenario field is not a supported trial editor; "
+                    "I left the profile unchanged."
                 )
             if (
                 isinstance(value, bool)
@@ -436,12 +437,12 @@ class StepDriver:
                     f"Trials must be an integer from {field.min} to {field.max}; "
                     "I left the profile unchanged."
                 )
-            path = f"tasks[{task.id}].num_trials"
+            path = f"scenarios[{scenario.id}].num_trials"
             patch_value: int | list[str] = value
         elif isinstance(field, CardUploadField):
             if field.id.action != "files":
                 return self._refuse_field_edit(
-                    "That task field is not a supported filename editor; "
+                    "That scenario field is not a supported filename editor; "
                     "I left the profile unchanged."
                 )
             normalized = _normalise_fixture_references(value)
@@ -450,11 +451,11 @@ class StepDriver:
                     "Fixture references must be non-blank portable filenames; "
                     "I left the profile unchanged."
                 )
-            path = f"tasks[{task.id}].fixtures"
+            path = f"scenarios[{scenario.id}].fixtures"
             patch_value = normalized
         else:  # pragma: no cover - editable_fields_of only returns the two field shapes
             return self._refuse_field_edit(
-                "That task field is not editable; I left the profile unchanged."
+                "That scenario field is not editable; I left the profile unchanged."
             )
 
         outcome = apply(
@@ -470,7 +471,7 @@ class StepDriver:
         )
         if outcome.any_rejected:
             return self._refuse_field_edit(
-                "That task field could not be updated; I left the profile unchanged."
+                "That scenario field could not be updated; I left the profile unchanged."
             )
 
     def _refuse_field_edit(self, text: str) -> None:
@@ -678,12 +679,12 @@ class StepDriver:
         if action == "regenerate":
             cascade.clear_for_regeneration(state.profile, question)
             # What is left is a state the forward pass already draws: a ticked behaviour
-            # with no criteria, or a behaviour no task covers.
+            # with no criteria, or a behaviour no scenario covers.
             if question.kind == "criteria":
                 self._run(state, self.interviewer.draft_criteria(state.profile))
                 self.match(state)
-            elif question.kind == "task":
-                self._run(state, self.interviewer.draft_tasks(state.profile))
+            elif question.kind == "scenario":
+                self._run(state, self.interviewer.draft_scenarios(state.profile))
             elif question.kind == "tree":
                 state.step = SessionStep.BEHAVIOURS
         elif action == "edit":

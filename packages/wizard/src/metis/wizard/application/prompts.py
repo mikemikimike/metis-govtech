@@ -45,8 +45,8 @@ Mirror that shape, and the shape of anything already in the document. The wizard
 collision-free ids across the current profile.
 
 The wizard owns ids, authorship, defaults, priority, metric bindings, trials and fixtures. The
-model may never write any of them. Persona drafts use `label` and `description`; task drafts use
-only `description`, `behaviour_refs` and `persona_refs`.
+model may never write any of them. Persona drafts use `label` and `description`; scenario drafts
+use only `description`, `behaviour_refs` and `persona_refs`.
 
 Two semantic fields you may never write, at any step:
   - a behaviour's `priority` — that is the user's decision alone
@@ -155,7 +155,7 @@ The document:
 {_profile(profile)}
 
 Propose 3–5 personas: behavioural archetypes describing *how someone interacts*, not who they
-are. Any persona must make sense dropped into any task.
+are. Any persona must make sense dropped into any scenario.
 
 Every persona must include exactly these two fields:
 - `label`: a short, stable, readable kebab-case label that the wizard turns into the id, such as
@@ -171,20 +171,20 @@ stress the machinery: someone who gives information in fragments, or changes the
 """.strip()
 
 
-def tasks_user(profile: ProductProfile) -> str:
+def scenarios_user(profile: ProductProfile) -> str:
     return f"""
 The document:
 {_profile(profile)}
 
-Draft the whole set of tasks in one go. A task is one simulated situation. It can exercise
-several behaviours at once, and one behaviour can be probed by several tasks.
+Draft the whole set of scenarios in one go. A scenario is one simulated situation. It can
+exercise several behaviours at once, and one behaviour can be probed by several scenarios.
 
-Every behaviour with priority=true must be covered by at least one task. Set behaviour_refs
-to what each task covers and persona_refs to who runs it (at least one). Those, and the
-description, are the whole of a task you write — how many trials it runs and which files it
+Every behaviour with priority=true must be covered by at least one scenario. Set behaviour_refs
+to what each scenario covers and persona_refs to who runs it (at least one). Those, and the
+description, are the whole of a scenario you write — how many trials it runs and which files it
 uses are assigned by the wizard and cannot be sent by you.
 
-A behaviour about recovery is untestable unless a task actually makes something fail. Build
+A behaviour about recovery is untestable unless a scenario actually makes something fail. Build
 the situation that forces the path you need to see.
 
 `message`: a sentence introducing the set.
@@ -207,7 +207,7 @@ particular, if they ask for a different metric, reword the criterion rather than
 `metric_fqn`.
 
 Replacement language is a replacement, not an addition. If the user supplies a list and says
-"these are the personas/tasks/behaviours I want", "use these instead", "revise the list to", or
+"these are the personas/scenarios/behaviours I want", "use these instead", "revise the list to", or
 equivalent, remove the existing CHAT-authored items in that collection and add or update the
 supplied set. Keep FORM-authored items unless the user explicitly says to remove them. If the same
 id or materially identical content already exists, update that item rather than adding a duplicate.

@@ -15,8 +15,8 @@ import math
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from metis.wizard.application.matching.catalogue import catalogue
-from metis.wizard.contracts.catalogue import MetricSpec
+from metis.wizard.application.matching.library_catalogue import library_catalogue
+from metis.wizard.contracts.metric_spec import MetricSpec
 from metis.wizard.domain.profile import Criterion, ProductProfile
 
 # One parameterised class that builds a judge from the criterion text. Not codegen: the
@@ -41,7 +41,7 @@ class EmbeddingMatcher:
     """Best cosine match above a threshold, or the generated judge."""
 
     embedder: Embedder
-    specs: list[MetricSpec] = field(default_factory=catalogue)
+    specs: list[MetricSpec] = field(default_factory=library_catalogue)
     threshold: float = DEFAULT_THRESHOLD
     degraded: bool = False  # the provider failed at least once this session
     _catalogue_vectors: list[list[float]] | None = None

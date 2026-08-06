@@ -13,7 +13,7 @@ from metis.wizard.domain.profile import (
     Persona,
     Product,
     ProductProfile,
-    Task,
+    Scenario,
 )
 from metis.wizard.domain.types import InteractionType
 
@@ -29,8 +29,8 @@ __all__ = [
     "Persona",
     "Product",
     "ProductProfile",
+    "Scenario",
     "SessionStep",
     "StepPermissions",
-    "Task",
     "owner_of",
 ]

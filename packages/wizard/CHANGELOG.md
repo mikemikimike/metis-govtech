@@ -8,9 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
-- Name evaluation work as runs throughout the wizard, show per-task run counts and totals on the
-  interview, document pane, hand-authoring form and generated review, and persist task-card counts
-  through the version-4 session wire contract.
+- Name evaluation work as runs throughout the wizard, show per-scenario run counts and totals on
+  the interview, document pane, hand-authoring form and generated review, and persist scenario-card
+  counts through the version-4 session wire contract.
 - Replace the opening screen's repository peer card with a composer source menu, and tuck honest
   Documents, Source Code and Traces trays beneath the composer with disabled source controls.
 
@@ -22,7 +22,7 @@ Initial release: an interview that turns a prose product description into a runn
 ### Added
 
 - **The interview.** Six steps that build a `ProductProfile` — the document the interview
-  writes — covering the product, its architecture, personas, epics and behaviours, tasks, and
+  writes — covering the product, its architecture, personas, epics and behaviours, scenarios, and
   a final review.
 - **A headless door contract.** `render(request) -> response`, with the package composing
   every string a door displays. Two doors ship against it: a Typer/Rich CLI (`metis wizard
@@ -35,9 +35,9 @@ Initial release: an interview that turns a prose product description into a runn
   parsed into strict semantic drafts (`extra="forbid"`) before any persisted object exists;
   application code then owns ids, authorship, defaults, references and matcher fields. This
   closes the bundled-value hole that a recursive post-parse filter could not close. A few things
-  remain the user's alone — a behaviour's `priority`, a task's `num_trials` and `fixtures`.
+  remain the user's alone — a behaviour's `priority`, a scenario's `num_trials` and `fixtures`.
   Edits that invalidate derived work ask in the same turn and leave no staleness flag.
-- **Task-card field editing.** Trials and fixture filename references are now editable in the
+- **Scenario-card field editing.** Trials and fixture filename references are now editable in the
   CLI and web interview through typed, request-bound wizard responses. The web door reuses the
   hand-authoring number and filename-reference controls, and fixture values remain names only:
   they are resolved from the experiment's `fixtures/` folder. Actual file upload and storage is a
@@ -58,7 +58,7 @@ Initial release: an interview that turns a prose product description into a runn
 - **Package-owned copy** in `statuses.yaml`, shared by both doors through the session facade,
   so activity wording changes without editing an adapter.
 - **A hand-authoring door in the web UI.** A form that writes `experiment.yaml` directly — id,
-  description, personas, and tasks — for people who already know what to evaluate. It creates
+  description, personas, and scenarios — for people who already know what to evaluate. It creates
   no session and stores nothing: the document is compiled and downloaded in one shot, and
   leaving the form discards it. Serialised through the interview's own `to_yaml`, so a
   hand-authored file and an interviewed one of the same content are byte-identical; a stateless

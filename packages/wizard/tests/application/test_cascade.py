@@ -32,14 +32,14 @@ def a_state(step=SessionStep.CRITERIA) -> SessionState:
 
 
 def test_rewording_a_behaviour_asks_twice_in_sequence() -> None:
-    """Criteria first, then each task covering it — nearest the edit, then further away."""
+    """Criteria first, then each scenario covering it — nearest the edit, then further away."""
     profile = research_assistant()
 
     questions = cascade.questions_for(profile, [edit(EB1_STATEMENT)])
 
-    assert [q.kind for q in questions] == ["criteria", "task"]
+    assert [q.kind for q in questions] == ["criteria", "scenario"]
     assert questions[0].subject == "EB-1"
-    assert questions[1].subject == "T-1"
+    assert questions[1].subject == "S-1"
 
 
 def test_the_wizard_offers_no_opinion_on_whether_they_still_hold() -> None:
@@ -98,9 +98,9 @@ def test_edits_that_derive_nothing_ask_nothing() -> None:
     nothing = [
         edit("epics[EP-1].behaviours[EB-1].priority", False),
         edit("personas[cooperative-delegator].description", "different words"),
-        edit("tasks[T-1].behaviour_refs", ["EB-1"]),
-        edit("tasks[T-1].num_trials", 5),
-        edit("tasks[T-1].fixtures", ["a.pdf"]),
+        edit("scenarios[S-1].behaviour_refs", ["EB-1"]),
+        edit("scenarios[S-1].num_trials", 5),
+        edit("scenarios[S-1].fixtures", ["a.pdf"]),
         edit("product.name", "New name"),
     ]
 
@@ -126,7 +126,7 @@ def test_each_thing_is_asked_about_once() -> None:
         profile, [edit(EB1_STATEMENT), edit(EB1_STATEMENT)]
     )
 
-    assert len(questions) == 2  # criteria + T-1, not four
+    assert len(questions) == 2  # criteria + S-1, not four
 
 
 # ── what regenerating clears ───────────────────────────────────────────────
@@ -159,7 +159,7 @@ def test_regenerating_clears_what_the_model_wrote() -> None:
 
 
 def test_a_product_edit_clears_everything_derived_from_it() -> None:
-    """Epics and tasks were all derived from the product description."""
+    """Epics and scenarios were all derived from the product description."""
     profile = research_assistant()
 
     cascade.clear_for_regeneration(
@@ -167,7 +167,7 @@ def test_a_product_edit_clears_everything_derived_from_it() -> None:
     )
 
     assert profile.epics == []
-    assert profile.tasks == []
+    assert profile.scenarios == []
 
 
 # ── the driver asks in the same turn ───────────────────────────────────────

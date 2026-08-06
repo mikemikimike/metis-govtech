@@ -112,8 +112,8 @@ class ScriptedInterviewer:
             ],
         )
 
-    def draft_tasks(self, profile: ProductProfile) -> StepResult:
-        self.calls.append("draft_tasks")
+    def draft_scenarios(self, profile: ProductProfile) -> StepResult:
+        self.calls.append("draft_scenarios")
         covered = [b.id for b in profile.ticked()]
         personas = [p.id for p in profile.personas]
         return StepResult(
@@ -121,11 +121,11 @@ class ScriptedInterviewer:
             patches=[
                 Patch(
                     op=PatchOp.ADD,
-                    path="tasks",
+                    path="scenarios",
                     value={
                         "description": "Ask for a literature review on a covered topic.",
-                        # one task covering several behaviours — M:N, and what makes
-                        # experiments cheaper than one task per behaviour
+                        # one scenario covering several behaviours — M:N, and what makes
+                        # experiments cheaper than one scenario per behaviour
                         "behaviour_refs": covered,
                         "persona_refs": personas,
                     },

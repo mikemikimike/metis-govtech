@@ -36,12 +36,12 @@ class Question:
 
     text: str
     subject: str  # the node whose derived work is in question
-    kind: str  # "criteria" | "task" | "tree"
+    kind: str  # "criteria" | "scenario" | "tree"
 
     def to_request(self) -> ChoiceRequest:
         keep, redo, mine = {
             "criteria": ("They're fine", "Regenerate", "I'll edit them myself"),
-            "task": ("It's fine", "Regenerate", "I'll edit it myself"),
+            "scenario": ("It's fine", "Regenerate", "I'll edit it myself"),
             "tree": (
                 "Keep the current draft",
                 "Redraft from the new description",
@@ -75,7 +75,7 @@ def questions_for(profile: ProductProfile, patches: list[Patch]) -> list[Questio
     `profile` is the document from before the patches. A product field written while the
     first tree is being drafted cannot invalidate that same draft — there was no older tree.
 
-    Sequenced deliberately: criteria first, then each task covering the behaviour. The user
+    Sequenced deliberately: criteria first, then each scenario covering the behaviour. The user
     answers about the thing nearest the edit before being asked about the thing further away.
     """
     asked: list[Question] = []
@@ -88,7 +88,7 @@ def questions_for(profile: ProductProfile, patches: list[Patch]) -> list[Questio
         elif impact.kind == "criteria":
             text = f"Done. Regenerate {impact.subject}'s acceptance criteria?"
         else:
-            text = f"{impact.subject} covers {impact.related_to}. Regenerate that task?"
+            text = f"{impact.subject} covers {impact.related_to}. Regenerate that scenario?"
         asked.append(Question(text=text, subject=impact.subject, kind=impact.kind))
     return asked
 
@@ -97,7 +97,7 @@ def clear_for_regeneration(profile: ProductProfile, question: Question) -> None:
     """Answering "Regenerate" lands in a state the screens already draw.
 
     A ticked behaviour with no criteria is what the prioritise step's Continue fills in; a
-    behaviour no task covers is what the tasks gate catches. Both were built for the forward
+    behaviour no scenario covers is what the scenarios gate catches. Both were built for the forward
     pass and happen to be the landing pad for coming back.
 
     **Text the user typed survives.** Anything with `interaction_type == FORM` came in through

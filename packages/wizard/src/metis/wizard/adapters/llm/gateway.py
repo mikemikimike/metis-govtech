@@ -195,8 +195,10 @@ class GatewayInterviewer:
             prompts.system_prompt(), prompts.personas_user(profile), profile
         )
 
-    def draft_tasks(self, profile: ProductProfile) -> StepResult:
-        return self._step(prompts.system_prompt(), prompts.tasks_user(profile), profile)
+    def draft_scenarios(self, profile: ProductProfile) -> StepResult:
+        return self._step(
+            prompts.system_prompt(), prompts.scenarios_user(profile), profile
+        )
 
     def chat(
         self, profile: ProductProfile, step: str, text: str, target: str | None

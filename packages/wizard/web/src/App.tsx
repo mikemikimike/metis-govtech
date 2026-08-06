@@ -30,7 +30,7 @@ import { PanelLeft, PanelRight } from "lucide-react";
 import { cn } from "./ui";
 
 const DEFAULT_OPENING_PROMPT =
-  "Describe your agent — what it does and for whom — and the wizard turns it into behaviours, criteria and tasks you can run.";
+  "Describe your agent — what it does and for whom — and the wizard turns it into behaviours, criteria and scenarios you can run.";
 
 function sourcePlaceholder(source: SourceTrayKind | null): string {
   if (source === "codebase") return "Analyse my source code…";

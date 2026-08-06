@@ -45,7 +45,7 @@ class Interviewer(Protocol):
         """Archetypes, justified by what the user chose to measure."""
         ...
 
-    def draft_tasks(self, profile: ProductProfile) -> StepResult:
+    def draft_scenarios(self, profile: ProductProfile) -> StepResult:
         """The whole covering set, in one call."""
         ...
 

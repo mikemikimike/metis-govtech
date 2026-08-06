@@ -54,7 +54,7 @@ export function Intro({
             <LiveEntry
               icon={FilePen}
               title="Write the experiment yourself"
-              detail="Skip the interview and fill in the tasks, personas and metrics directly."
+              detail="Skip the interview and fill in the scenarios, personas and metrics directly."
               onClick={onAuthor}
             />
           </div>

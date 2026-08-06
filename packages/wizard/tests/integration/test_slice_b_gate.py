@@ -99,7 +99,7 @@ def test_the_whole_flow_walks_to_done(tmp_path: Path) -> None:
         "draft_behaviours",
         "draft_criteria",
         "draft_personas",
-        "draft_tasks",
+        "draft_scenarios",
     } <= set(driver.interviewer.calls)  # type: ignore[attr-defined]
 
 
@@ -116,7 +116,7 @@ def test_it_produces_both_output_files(tmp_path: Path) -> None:
 
     from metis.engine.simulation.types import Experiment
 
-    assert Experiment.load_file(tmp_path / "experiment.yaml").tasks
+    assert Experiment.load_file(tmp_path / "experiment.yaml").scenarios
 
 
 def test_the_cli_door_renders_every_screen(tmp_path: Path) -> None:
@@ -153,7 +153,7 @@ def test_the_session_survives_a_restart_at_every_screen(tmp_path: Path) -> None:
             # Tick here and let a later iteration continue past prioritise. If the preamble
             # left prioritise unanswered, the resumed walk would tick it — then the walk that
             # follows would tick the same behaviours a second time, toggling them back off,
-            # and the tasks gate would hold with nothing selected.
+            # and the scenarios gate would hold with nothing selected.
             ticked = True
             session.respond(
                 ChoiceResponse(

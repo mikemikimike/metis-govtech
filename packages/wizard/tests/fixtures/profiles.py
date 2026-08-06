@@ -13,12 +13,12 @@ from metis.wizard.contracts import (
     Persona,
     Product,
     ProductProfile,
-    Task,
+    Scenario,
 )
 
-TURN_BUDGET = "metis.library.metrics.universal.TurnBudgetMetric"
-CITATION_METRIC = "metis.library.metrics.orchestration.SynthesisFaithfulnessMetric"
-BOUNDED_TROUBLESHOOTING = "metis.library.metrics.universal.BoundedTroubleshootingMetric"
+TURN_BUDGET = "metis.library.metrics.TurnBudgetMetric"
+CITATION_METRIC = "metis.library.metrics.SynthesisFaithfulnessMetric"
+BOUNDED_TROUBLESHOOTING = "metis.library.metrics.BoundedTroubleshootingMetric"
 
 
 def research_assistant() -> ProductProfile:
@@ -26,7 +26,7 @@ def research_assistant() -> ProductProfile:
 
     Deliberately contains: a ticked behaviour with several criteria, an unticked behaviour
     that still has criteria (dormant, not deleted), a criterion the user typed by hand, one
-    task covering two behaviours, and a task with two personas.
+    scenario covering two behaviours, and a scenario with two personas.
     """
     return ProductProfile(
         product=Product(
@@ -122,23 +122,26 @@ def research_assistant() -> ProductProfile:
                 id="impatient-executive",
                 description=(
                     "A time-poor director who writes in curt imperatives, will not "
-                    "answer clarifying questions, and abandons the task quickly."
+                    "answer clarifying questions, and abandons the work quickly."
                 ),
             ),
         ],
-        tasks=[
-            Task(
-                id="T-1",
+        scenarios=[
+            Scenario(
+                id="S-1",
                 description=(
                     "Ask for a literature review on a topic the library covers well, "
                     "then ask a follow-up that needs a second document."
                 ),
-                behaviour_refs=["EB-1", "EB-2"],  # M:N — one task covers two behaviours
+                behaviour_refs=[
+                    "EB-1",
+                    "EB-2",
+                ],  # M:N — one scenario covers two behaviours
                 persona_refs=["cooperative-delegator", "impatient-executive"],
                 num_trials=3,
             ),
-            Task(
-                id="T-2",
+            Scenario(
+                id="S-2",
                 description=(
                     "Ask a question whose documents live behind a search that will "
                     "time out, forcing the retry path."

@@ -14,7 +14,7 @@ from metis.wizard.domain.profile import (
     InteractionType,
     Persona,
     ProductProfile,
-    Task,
+    Scenario,
 )
 
 
@@ -35,7 +35,7 @@ def _slug(label: str) -> str:
 
 def _persona_id(profile: ProductProfile, label: str, *, manual: bool) -> str:
     used = {p.id for p in profile.personas}
-    used.update(ref for task in profile.tasks for ref in task.persona_refs)
+    used.update(ref for scenario in profile.scenarios for ref in scenario.persona_refs)
     if manual:
         return _next_numeric(used, "P")
     base = _slug(label)
@@ -116,16 +116,16 @@ def add_persona(profile: ProductProfile, draft: Any, origin: PatchOrigin) -> Per
     return persona
 
 
-def add_task(profile: ProductProfile, draft: Any, origin: PatchOrigin) -> Task:
+def add_scenario(profile: ProductProfile, draft: Any, origin: PatchOrigin) -> Scenario:
     behaviour_ids = {b.id for b in profile.behaviours()}
     persona_ids = {p.id for p in profile.personas}
     unknown_behaviours = set(draft.behaviour_refs) - behaviour_ids
     unknown_personas = set(draft.persona_refs) - persona_ids
     if unknown_behaviours or unknown_personas:
         missing = sorted(unknown_behaviours | unknown_personas)
-        raise ValueError(f"task references unknown ids: {', '.join(missing)}")
-    task = Task(
-        id=_next_numeric({t.id for t in profile.tasks}, "T"),
+        raise ValueError(f"scenario references unknown ids: {', '.join(missing)}")
+    scenario = Scenario(
+        id=_next_numeric({s.id for s in profile.scenarios}, "S"),
         description=draft.description,
         behaviour_refs=list(draft.behaviour_refs),
         persona_refs=list(draft.persona_refs),
@@ -133,5 +133,5 @@ def add_task(profile: ProductProfile, draft: Any, origin: PatchOrigin) -> Task:
         num_trials=3,
         interaction_type=_interaction(origin),
     )
-    profile.tasks.append(task)
-    return task
+    profile.scenarios.append(scenario)
+    return scenario

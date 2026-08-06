@@ -73,7 +73,7 @@ def test_nothing_is_committed_during_clarify() -> None:
     driver.compose(state)
 
     assert state.profile.epics == []
-    assert state.profile.tasks == []
+    assert state.profile.scenarios == []
 
 
 def test_the_cap_is_a_single_named_constant() -> None:
@@ -102,7 +102,7 @@ def test_every_screen_reports_a_position_consistent_with_its_step() -> None:
         SessionStep.PRIORITISE: ("What to measure", 3),
         SessionStep.CRITERIA: ("Acceptance criteria", 4),
         SessionStep.PERSONAS: ("Personas", 5),
-        SessionStep.TASKS: ("Tasks", 6),
+        SessionStep.SCENARIOS: ("Scenarios", 6),
     }
 
     for step, (title, position) in expected.items():
@@ -112,8 +112,8 @@ def test_every_screen_reports_a_position_consistent_with_its_step() -> None:
         assert request.steps == 6, step
 
 
-def test_the_tasks_screen_reports_six_of_six() -> None:
-    request = _compose_at(SessionStep.TASKS)
+def test_the_scenarios_screen_reports_six_of_six() -> None:
+    request = _compose_at(SessionStep.SCENARIOS)
 
     assert (request.step, request.steps) == (6, 6)
 
@@ -195,7 +195,7 @@ def test_the_persona_add_form_keeps_the_description_and_generates_an_id() -> Non
 
 
 def test_a_persona_id_is_both_the_label_and_reference() -> None:
-    """Cards, Run-as chips and task references use the same stable readable id."""
+    """Cards, Run-as chips and scenario references use the same stable readable id."""
     driver = StepDriver(interviewer=ScriptedInterviewer())
     profile = research_assistant()
 
@@ -210,75 +210,77 @@ def test_a_persona_id_is_both_the_label_and_reference() -> None:
 
     from metis.wizard.contracts import CardOptionGroup
 
-    tasks = driver.compose(
-        SessionState(id="s", profile=profile, step=SessionStep.TASKS)
+    scenarios = driver.compose(
+        SessionState(id="s", profile=profile, step=SessionStep.SCENARIOS)
     )
     run_as = next(
         comp
-        for card in tasks.cards
-        if card.id == "T-1"
+        for card in scenarios.cards
+        if card.id == "S-1"
         for comp in card.components
         if isinstance(comp, CardOptionGroup) and comp.label == "Run as"
     )
     chips = {opt.id.via: opt.label for opt in run_as.options}
     assert chips["cooperative-delegator"] == "cooperative-delegator"
     assert chips["impatient-executive"] == "impatient-executive"
-    assert profile.task("T-1").persona_refs == list(chips)  # type: ignore[union-attr]
+    assert profile.scenario("S-1").persona_refs == list(chips)  # type: ignore[union-attr]
 
 
-# ── the tasks gates ────────────────────────────────────────────────────────
+# ── the scenarios gates ─────────────────────────────────────────────────────
 
 
-def _tasks_screen(profile):
+def _scenarios_screen(profile):
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(id="s", profile=profile, step=SessionStep.TASKS)
+    state = SessionState(id="s", profile=profile, step=SessionStep.SCENARIOS)
     return driver.compose(state)
 
 
 def test_the_footer_matches_the_harness_expansion() -> None:
     profile = research_assistant()
 
-    request = _tasks_screen(profile)
+    request = _scenarios_screen(profile)
 
     assert f"Total: {profile.run_count()} runs" == request.footer
-    assert "tasks" not in (request.footer or "")
+    assert "scenarios" not in (request.footer or "")
     assert "pairs" not in (request.footer or "")
 
     cards = {card.id: card for card in request.cards}
-    assert cards["T-1"].runs == 6
-    assert cards["T-2"].runs == 3
+    assert cards["S-1"].runs == 6
+    assert cards["S-2"].runs == 3
 
 
 def test_an_uncovered_behaviour_blocks_and_carries_its_fixes() -> None:
     profile = research_assistant()
-    profile.tasks = [t for t in profile.tasks if t.id != "T-2"]  # EB-3 now uncovered
+    profile.scenarios = [
+        t for t in profile.scenarios if t.id != "S-2"
+    ]  # EB-3 now uncovered
 
-    request = _tasks_screen(profile)
+    request = _scenarios_screen(profile)
 
     blocking = [w for w in request.warnings if w.blocking]
     assert blocking and "EB-3" in blocking[0].text
-    assert [o.id.action for o in blocking[0].options][0] == "generate-task"
+    assert [o.id.action for o in blocking[0].options][0] == "generate-scenario"
     assert any(o.id.action == "cover" for o in blocking[0].options)
     continue_option = next(o for o in request.options if o.id.action == "continue")
     assert not continue_option.enabled
 
 
-def test_a_task_with_no_persona_blocks() -> None:
+def test_a_scenario_with_no_persona_blocks() -> None:
     """The schema declares persona_refs with minItems 1 — the engine would refuse the file."""
     profile = research_assistant()
-    profile.task("T-1").persona_refs = []  # type: ignore[union-attr]
+    profile.scenario("S-1").persona_refs = []  # type: ignore[union-attr]
 
-    request = _tasks_screen(profile)
+    request = _scenarios_screen(profile)
 
-    assert any(w.blocking and "T-1" in w.text for w in request.warnings)
+    assert any(w.blocking and "S-1" in w.text for w in request.warnings)
 
 
-def test_run_count_is_zero_when_a_task_has_no_persona() -> None:
+def test_run_count_is_zero_when_a_scenario_has_no_persona() -> None:
     profile = research_assistant()
-    profile.task("T-1").persona_refs = []  # type: ignore[union-attr]
+    profile.scenario("S-1").persona_refs = []  # type: ignore[union-attr]
 
-    request = _tasks_screen(profile)
-    card = next(card for card in request.cards if card.id == "T-1")
+    request = _scenarios_screen(profile)
+    card = next(card for card in request.cards if card.id == "S-1")
 
     assert card.runs == 0
     assert request.footer == "Total: 3 runs"
@@ -286,11 +288,11 @@ def test_run_count_is_zero_when_a_task_has_no_persona() -> None:
 
 def test_run_count_uses_the_singular_for_one() -> None:
     profile = research_assistant()
-    profile.task("T-1").persona_refs = []  # type: ignore[union-attr]
-    profile.task("T-2").num_trials = 1  # type: ignore[union-attr]
+    profile.scenario("S-1").persona_refs = []  # type: ignore[union-attr]
+    profile.scenario("S-2").num_trials = 1  # type: ignore[union-attr]
 
-    request = _tasks_screen(profile)
-    card = next(card for card in request.cards if card.id == "T-2")
+    request = _scenarios_screen(profile)
+    card = next(card for card in request.cards if card.id == "S-2")
 
     assert card.runs == 1
     assert request.footer == "Total: 1 run"
@@ -306,48 +308,50 @@ def test_run_count_uses_the_singular_for_one() -> None:
         (["EB-2", "EB-1"], False),  # one selected ref is enough
     ],
 )
-def test_a_task_must_cover_a_selected_behaviour(refs: list[str], blocks: bool) -> None:
-    """A task covers nothing measurable unless a currently selected behaviour is among its
+def test_a_scenario_must_cover_a_selected_behaviour(
+    refs: list[str], blocks: bool
+) -> None:
+    """A scenario covers nothing measurable unless a currently selected behaviour is among its
     refs. Empty, unknown and unticked refs all fail the gate; one good ref clears it."""
     profile = research_assistant()
-    profile.task("T-1").behaviour_refs = refs  # type: ignore[union-attr]
+    profile.scenario("S-1").behaviour_refs = refs  # type: ignore[union-attr]
 
-    request = _tasks_screen(profile)
+    request = _scenarios_screen(profile)
 
     flagged = any(
-        w.blocking and "T-1 covers no selected" in w.text for w in request.warnings
+        w.blocking and "S-1 covers no selected" in w.text for w in request.warnings
     )
     assert flagged is blocks
-    card = next(c for c in request.cards if c.id == "T-1")
+    card = next(c for c in request.cards if c.id == "S-1")
     assert card.blocking is blocks
 
 
 def test_the_coverage_gate_clears_itself() -> None:
     """Document warnings are recomputed every screen — covering a selected behaviour clears it."""
     profile = research_assistant()
-    profile.task("T-1").behaviour_refs = []  # type: ignore[union-attr]
-    assert any(w.blocking for w in _tasks_screen(profile).warnings)
+    profile.scenario("S-1").behaviour_refs = []  # type: ignore[union-attr]
+    assert any(w.blocking for w in _scenarios_screen(profile).warnings)
 
-    profile.task("T-1").behaviour_refs = ["EB-1"]  # type: ignore[union-attr]
+    profile.scenario("S-1").behaviour_refs = ["EB-1"]  # type: ignore[union-attr]
 
-    request = _tasks_screen(profile)
+    request = _scenarios_screen(profile)
     assert not any("covers no selected" in w.text for w in request.warnings)
 
 
 def test_the_gates_clear_themselves() -> None:
     """Document warnings are recomputed every screen — nothing carries a stale flag."""
     profile = research_assistant()
-    profile.tasks = [t for t in profile.tasks if t.id != "T-2"]
-    assert any(w.blocking for w in _tasks_screen(profile).warnings)
+    profile.scenarios = [t for t in profile.scenarios if t.id != "S-2"]
+    assert any(w.blocking for w in _scenarios_screen(profile).warnings)
 
-    profile.task("T-1").behaviour_refs.append("EB-3")  # type: ignore[union-attr]
+    profile.scenario("S-1").behaviour_refs.append("EB-3")  # type: ignore[union-attr]
 
-    request = _tasks_screen(profile)
+    request = _scenarios_screen(profile)
     assert not any(w.blocking for w in request.warnings)
     assert next(o for o in request.options if o.id.action == "continue").enabled
 
 
-def test_task_card_fields_are_typed_and_separate_from_options() -> None:
+def test_scenario_card_fields_are_typed_and_separate_from_options() -> None:
     """Fields have stable identities without pretending to be selectable option chips."""
     from metis.wizard.application.driver import _all_options
     from metis.wizard.contracts import (
@@ -357,12 +361,12 @@ def test_task_card_fields_are_typed_and_separate_from_options() -> None:
     )
 
     profile = research_assistant()
-    request = _tasks_screen(profile)
-    card = next(c for c in request.cards if c.id == "T-2")
+    request = _scenarios_screen(profile)
+    card = next(c for c in request.cards if c.id == "S-2")
 
     number = next(c for c in card.components if isinstance(c, CardNumberField))
     upload = next(c for c in card.components if isinstance(c, CardUploadField))
-    assert number.value == profile.task("T-2").num_trials  # type: ignore[union-attr]
+    assert number.value == profile.scenario("S-2").num_trials  # type: ignore[union-attr]
     assert upload.value == ["policy.pdf"]
 
     keys = _all_options(request)
@@ -372,83 +376,83 @@ def test_task_card_fields_are_typed_and_separate_from_options() -> None:
     assert fields[str(upload.id)] is upload
 
 
-def _task_edit_state():
+def _scenario_edit_state():
     profile = research_assistant()
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(id="s", profile=profile, step=SessionStep.TASKS)
+    state = SessionState(id="s", profile=profile, step=SessionStep.SCENARIOS)
     return driver, state, driver.compose(state)
 
 
-def test_a_trial_edit_recomposes_the_task_total() -> None:
-    driver, state, request = _task_edit_state()
+def test_a_trial_edit_recomposes_the_scenario_total() -> None:
+    driver, state, request = _scenario_edit_state()
 
-    driver.handle(state, request, ChoiceResponse(values={"trials:T-2": 7}))
+    driver.handle(state, request, ChoiceResponse(values={"trials:S-2": 7}))
 
-    assert state.profile.task("T-2").num_trials == 7  # type: ignore[union-attr]
+    assert state.profile.scenario("S-2").num_trials == 7  # type: ignore[union-attr]
     refreshed = driver.compose(state)
     assert refreshed.footer == "Total: 13 runs"  # 2×3 + 1×7
-    task_card = next(card for card in refreshed.cards if card.id == "T-2")
-    assert next(c for c in task_card.components if c.type == "number").value == 7
-    assert task_card.runs == 7
+    scenario_card = next(card for card in refreshed.cards if card.id == "S-2")
+    assert next(c for c in scenario_card.components if c.type == "number").value == 7
+    assert scenario_card.runs == 7
 
 
 def test_fixture_edits_normalize_and_compile() -> None:
-    driver, state, request = _task_edit_state()
+    driver, state, request = _scenario_edit_state()
 
     driver.handle(
         state,
         request,
-        ChoiceResponse(values={"files:T-2": [" policy.pdf ", "faq.md", "policy.pdf"]}),
+        ChoiceResponse(values={"files:S-2": [" policy.pdf ", "faq.md", "policy.pdf"]}),
     )
 
-    task = state.profile.task("T-2")
-    assert task is not None and task.fixtures == ["policy.pdf", "faq.md"]
+    scenario = state.profile.scenario("S-2")
+    assert scenario is not None and scenario.fixtures == ["policy.pdf", "faq.md"]
 
     from metis.wizard.application.compile import compile_experiment
 
     compiled = compile_experiment(state.profile, "edited")
-    assert next(t for t in compiled["tasks"] if t["id"] == "T-2")["fixtures"] == [
+    assert next(t for t in compiled["scenarios"] if t["id"] == "S-2")["fixtures"] == [
         "policy.pdf",
         "faq.md",
     ]
 
     refreshed = driver.compose(state)
-    files = next(card for card in refreshed.cards if card.id == "T-2").components[-1]
+    files = next(card for card in refreshed.cards if card.id == "S-2").components[-1]
     assert files.value == ["policy.pdf", "faq.md"]
 
-    driver.handle(state, refreshed, ChoiceResponse(values={"files:T-2": ["faq.md"]}))
-    assert state.profile.task("T-2").fixtures == ["faq.md"]  # type: ignore[union-attr]
+    driver.handle(state, refreshed, ChoiceResponse(values={"files:S-2": ["faq.md"]}))
+    assert state.profile.scenario("S-2").fixtures == ["faq.md"]  # type: ignore[union-attr]
 
     refreshed = driver.compose(state)
-    driver.handle(state, refreshed, ChoiceResponse(values={"files:T-2": []}))
-    assert state.profile.task("T-2").fixtures == []  # type: ignore[union-attr]
+    driver.handle(state, refreshed, ChoiceResponse(values={"files:S-2": []}))
+    assert state.profile.scenario("S-2").fixtures == []  # type: ignore[union-attr]
     assert "fixtures" not in next(
         t
-        for t in compile_experiment(state.profile, "cleared")["tasks"]
-        if t["id"] == "T-2"
+        for t in compile_experiment(state.profile, "cleared")["scenarios"]
+        if t["id"] == "S-2"
     )
 
 
 @pytest.mark.parametrize(
     "response",
     [
-        ChoiceResponse(values={"trials:T-2": 0}),
-        ChoiceResponse(values={"trials:T-2": 21}),
+        ChoiceResponse(values={"trials:S-2": 0}),
+        ChoiceResponse(values={"trials:S-2": 21}),
         ChoiceResponse.model_construct(
-            selected=[], values={"trials:T-2": ["not a number"]}
+            selected=[], values={"trials:S-2": ["not a number"]}
         ),
-        ChoiceResponse(values={"files:T-2": ["../secret.txt"]}),
-        ChoiceResponse(values={"files:T-2": ["/absolute.txt"]}),
-        ChoiceResponse(values={"files:T-2": ["folder\\secret.txt"]}),
-        ChoiceResponse(values={"files:T-2": [" "]}),
-        ChoiceResponse(values={"trials:T-404": 4}),
-        ChoiceResponse(values={"not-offered:T-2": 4}),
-        ChoiceResponse(selected=["continue"], values={"trials:T-2": 4}),
-        ChoiceResponse(values={"trials:T-2": 4, "files:T-2": []}),
+        ChoiceResponse(values={"files:S-2": ["../secret.txt"]}),
+        ChoiceResponse(values={"files:S-2": ["/absolute.txt"]}),
+        ChoiceResponse(values={"files:S-2": ["folder\\secret.txt"]}),
+        ChoiceResponse(values={"files:S-2": [" "]}),
+        ChoiceResponse(values={"trials:S-404": 4}),
+        ChoiceResponse(values={"not-offered:S-2": 4}),
+        ChoiceResponse(selected=["continue"], values={"trials:S-2": 4}),
+        ChoiceResponse(values={"trials:S-2": 4, "files:S-2": []}),
     ],
 )
 def test_invalid_or_mixed_field_edits_do_not_mutate(response) -> None:
-    driver, state, request = _task_edit_state()
+    driver, state, request = _scenario_edit_state()
     before = state.profile.model_copy(deep=True)
 
     driver.handle(state, request, response)
@@ -491,7 +495,7 @@ def test_an_epic_with_nothing_ticked_is_not_warned() -> None:
             "I'll write acceptance criteria for the ones you pick.",
         ),
         (
-            SessionStep.TASKS,
+            SessionStep.SCENARIOS,
             SessionStep.PERSONAS,
             "Review the personas.",
         ),
@@ -507,7 +511,7 @@ def test_every_visible_back_transition_restores_its_destination(
         SessionStep.BEHAVIOURS: "Review the behaviour draft.",
         SessionStep.CRITERIA: "Review the acceptance criteria.",
         SessionStep.PERSONAS: "Review the personas.",
-        SessionStep.TASKS: "Review the tasks.",
+        SessionStep.SCENARIOS: "Review the scenarios.",
     }
     state = SessionState(
         id="s",

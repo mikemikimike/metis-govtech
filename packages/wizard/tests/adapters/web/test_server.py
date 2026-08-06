@@ -99,19 +99,19 @@ def test_one_payload_serves_all_three_panes(tmp_path: Path) -> None:
     assert body["requests"], "the live screen is in the list"
     assert body["requests"][-1]["state"] == "pending"
     assert body["profile"]["product"]["name"] == "Research assistant"
-    assert body["busy_message"] == "Building coverage tasks…"
+    assert body["busy_message"] == "Building coverage scenarios…"
 
 
-def test_task_card_run_count_survives_the_http_wire(tmp_path: Path) -> None:
-    _seed(tmp_path, "wizard-runs", step=SessionStep.TASKS)
+def test_scenario_card_run_count_survives_the_http_wire(tmp_path: Path) -> None:
+    _seed(tmp_path, "wizard-runs", step=SessionStep.SCENARIOS)
 
     body = client(tmp_path).get("/api/sessions/wizard-runs").json()
-    task_card = next(
-        card for card in body["requests"][-1]["cards"] if card["id"] == "T-1"
+    scenario_card = next(
+        card for card in body["requests"][-1]["cards"] if card["id"] == "S-1"
     )
 
-    assert task_card["kind"] == "task"
-    assert task_card["runs"] == 6
+    assert scenario_card["kind"] == "scenario"
+    assert scenario_card["runs"] == 6
 
 
 def test_an_unknown_session_is_a_404(tmp_path: Path) -> None:
@@ -223,28 +223,28 @@ def test_the_two_doors_agree_on_a_targeted_criterion_workflow(tmp_path: Path) ->
     )
 
 
-def test_the_two_doors_agree_on_typed_task_field_edits(tmp_path: Path) -> None:
+def test_the_two_doors_agree_on_typed_scenario_field_edits(tmp_path: Path) -> None:
     _both_doors_through(
         tmp_path,
         [
-            {"type": "choice", "values": {"trials:T-2": 7}},
+            {"type": "choice", "values": {"trials:S-2": 7}},
             {
                 "type": "choice",
-                "values": {"files:T-2": [" policy.pdf ", "faq.md"]},
+                "values": {"files:S-2": [" policy.pdf ", "faq.md"]},
             },
         ],
-        step=SessionStep.TASKS,
+        step=SessionStep.SCENARIOS,
     )
 
     web = SessionStore(tmp_path / "web").load("s")
     assert web is not None
-    task = web.profile.task("T-2")
-    assert task is not None
-    assert (task.num_trials, task.fixtures) == (7, ["policy.pdf", "faq.md"])
+    scenario = web.profile.scenario("S-2")
+    assert scenario is not None
+    assert (scenario.num_trials, scenario.fixtures) == (7, ["policy.pdf", "faq.md"])
     assert web.pending is not None
     assert "Total: 13 runs" in web.pending.footer  # type: ignore[union-attr]
-    task_card = next(card for card in web.pending.cards if card.id == "T-2")  # type: ignore[union-attr]
-    assert task_card.runs == 7
+    scenario_card = next(card for card in web.pending.cards if card.id == "S-2")  # type: ignore[union-attr]
+    assert scenario_card.runs == 7
 
 
 def test_a_session_made_in_the_browser_is_resumable_from_the_terminal(
@@ -313,23 +313,23 @@ def test_the_experiment_can_be_downloaded(tmp_path: Path) -> None:
     response = client(tmp_path).get("/api/sessions/wizard-fff/experiment.yaml")
 
     assert response.status_code == 200
-    assert "tasks:" in response.text
+    assert "scenarios:" in response.text
 
 
 # ── the metric catalogue ─────────────────────────────────────────────────────
 
 
 def test_the_catalogue_route_serves_every_metric(tmp_path: Path) -> None:
-    """The picker offers exactly what the catalogue reader knows, each with a group."""
-    from metis.wizard.application.matching.catalogue import catalogue
+    """The picker offers exactly what the catalogue reader knows, as one flat list."""
+    from metis.wizard.application.matching.library_catalogue import library_catalogue
 
     rows = client(tmp_path).get("/api/metrics").json()
 
-    assert {r["fqn"] for r in rows} == {s.fqn for s in catalogue()}
+    assert {r["fqn"] for r in rows} == {s.fqn for s in library_catalogue()}
     first = rows[0]
-    assert set(first) >= {"fqn", "name", "description", "group"}
-    # The group is the module the metric lives in — the segment before the class name.
-    assert all(r["fqn"].rsplit(".", 2)[-2] == r["group"] for r in rows)
+    assert set(first) >= {"fqn", "name", "description"}
+    # Flat FQNs after the library restructure: no module segment to group on.
+    assert all(r["fqn"].startswith("metis.library.metrics.") for r in rows)
 
 
 # ── authoring an experiment without an interview ─────────────────────────────
@@ -338,9 +338,9 @@ VALID_DOC = {
     "id": "hand-authored",
     "description": "An experiment typed in directly.",
     "personas": [{"id": "analyst", "description": "A policy analyst."}],
-    "tasks": [
+    "scenarios": [
         {
-            "id": "T-1",
+            "id": "S-1",
             "description": "Ask a question the library covers.",
             "num_trials": 3,
             "persona_refs": ["analyst"],
@@ -359,7 +359,7 @@ def test_a_submitted_document_compiles_to_a_downloadable_file(tmp_path: Path) ->
     parsed = yaml.safe_load(response.text)
     assert parsed["id"] == "hand-authored"
     assert parsed["schema_version"] == 1  # stamped by the server, not supplied
-    assert [t["id"] for t in parsed["tasks"]] == ["T-1"]
+    assert [t["id"] for t in parsed["scenarios"]] == ["S-1"]
 
 
 def test_a_submitted_document_serialises_like_an_interviewed_one(
@@ -367,14 +367,14 @@ def test_a_submitted_document_serialises_like_an_interviewed_one(
 ) -> None:
     """Both doors route through the same serialiser, so identical content is byte-identical."""
     from metis.wizard.application.compile import compile_experiment, to_yaml
-    from metis.wizard.contracts import Persona, Product, ProductProfile, Task
+    from metis.wizard.contracts import Persona, Product, ProductProfile, Scenario
 
     profile = ProductProfile(
         product=Product(name="X", summary="the same description", users=""),
         personas=[Persona(id="analyst", description="A policy analyst.")],
-        tasks=[
-            Task(
-                id="T-1",
+        scenarios=[
+            Scenario(
+                id="S-1",
                 description="Ask a question.",
                 persona_refs=["analyst"],
                 num_trials=3,
@@ -387,9 +387,9 @@ def test_a_submitted_document_serialises_like_an_interviewed_one(
         "id": "same-id",
         "description": "the same description",
         "personas": [{"id": "analyst", "description": "A policy analyst."}],
-        "tasks": [
+        "scenarios": [
             {
-                "id": "T-1",
+                "id": "S-1",
                 "description": "Ask a question.",
                 "num_trials": 3,
                 "persona_refs": ["analyst"],
@@ -408,8 +408,11 @@ def test_a_submitted_document_serialises_like_an_interviewed_one(
         (lambda d: d.update(id=""), "a blank id"),
         (lambda d: d.update(description=""), "a blank description"),
         (lambda d: d.update(personas=[]), "no personas"),
-        (lambda d: d.update(tasks=[]), "no tasks"),
-        (lambda d: d["tasks"][0].update(persona_refs=[]), "a task with no persona"),
+        (lambda d: d.update(scenarios=[]), "no scenarios"),
+        (
+            lambda d: d["scenarios"][0].update(persona_refs=[]),
+            "a scenario with no persona",
+        ),
     ],
 )
 def test_an_invalid_document_is_refused_with_no_file(

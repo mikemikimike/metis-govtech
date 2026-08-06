@@ -142,7 +142,7 @@ def _driver(interviewer):
     """The driver, with the matcher wired to the same gateway.
 
     The matcher is not optional in a real run. Without it every criterion keeps
-    `metric_fqn=None`, the compiler drops it from the task's metric list, and the experiment
+    `metric_fqn=None`, the compiler drops it from the scenario's metric list, and the experiment
     comes out with empty `metric_refs` — it validates, it loads, and it measures nothing at
     all. `test_cli.py` guards this.
 

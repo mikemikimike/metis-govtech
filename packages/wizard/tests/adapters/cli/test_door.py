@@ -16,7 +16,7 @@ from metis.wizard.contracts import (
     ChoiceRequest,
     Option,
     OptionId,
-    TaskCard,
+    ScenarioCard,
     Warning,
 )
 
@@ -26,7 +26,7 @@ DOMAIN_WORDS = [
     "criteria",
     "epic",
     "persona",
-    "task",
+    "scenario",
     "priority",
     "profile",
 ]
@@ -47,8 +47,8 @@ def a_screen(**overrides) -> ChoiceRequest:
                     Option(id=OptionId(action="chat", target="EB-1"), label="Chat")
                 ],
             ),
-            TaskCard(
-                id="T-1",
+            ScenarioCard(
+                id="S-1",
                 title="Ask for a review",
                 runs=6,
                 components=[
@@ -56,7 +56,7 @@ def a_screen(**overrides) -> ChoiceRequest:
                         label="Covers",
                         options=[
                             Option(
-                                id=OptionId(action="cover", target="T-1", via="EB-1"),
+                                id=OptionId(action="cover", target="S-1", via="EB-1"),
                                 label="Cites a source",
                                 selected=True,
                             )
@@ -64,19 +64,19 @@ def a_screen(**overrides) -> ChoiceRequest:
                     ),
                     CardNumberField(
                         label="Trials",
-                        id=OptionId(action="trials", target="T-1"),
+                        id=OptionId(action="trials", target="S-1"),
                         value=3,
                     ),
                     CardUploadField(
                         label="Files",
-                        id=OptionId(action="files", target="T-1"),
+                        id=OptionId(action="files", target="S-1"),
                         value="a.pdf",
                     ),
                 ],
             ),
         ],
         warnings=[
-            Warning(text="EB-4 is covered by no task.", blocking=True),
+            Warning(text="EB-4 is covered by no scenario.", blocking=True),
             Warning(text="Epic 3 has nothing selected.", blocking=False),
         ],
         footer="Total: 9 runs",
@@ -100,7 +100,7 @@ def draw(request: ChoiceRequest) -> tuple[str, dict]:
 def test_the_renderer_names_no_domain_concept() -> None:
     """It branches on request type and component shape, and on nothing else.
 
-    The day the door needs to tell a behaviour card from a task card is the day it has
+    The day the door needs to tell a behaviour card from a scenario card is the day it has
     started learning the domain.
     """
     source = inspect.getsource(cli)
@@ -113,7 +113,7 @@ def test_the_renderer_names_no_domain_concept() -> None:
 
 
 def test_both_card_kinds_go_through_one_path() -> None:
-    """A BehaviourCard and a TaskCard render through the same code."""
+    """A BehaviourCard and a ScenarioCard render through the same code."""
     text, _ = draw(a_screen())
 
     assert "Cites a source" in text
@@ -144,7 +144,7 @@ def test_selection_state_and_components_draw() -> None:
 
     # The chip shows the item it applies to, without the `cover` verb: the number selects and
     # the verb is machinery the user never types. Selection still keys on the full id (below).
-    assert "[x] Cites a source  (T-1:EB-1)" in text
+    assert "[x] Cites a source  (S-1:EB-1)" in text
     assert "(cover:" not in text
 
     assert "3   [1–20]" in text  # stepper with its bounds
@@ -168,7 +168,7 @@ def test_a_checkbox_less_card_gets_a_bullet_and_indent() -> None:
 def test_blocking_and_advisory_warnings_read_differently() -> None:
     text, _ = draw(a_screen())
 
-    assert "STOP  EB-4 is covered by no task." in text
+    assert "STOP  EB-4 is covered by no scenario." in text
     assert "note  Epic 3 has nothing selected." in text
 
 
@@ -185,12 +185,12 @@ def test_warning_fixes_are_selectable() -> None:
     screen = a_screen(
         warnings=[
             Warning(
-                text="EB-4 is covered by no task.",
+                text="EB-4 is covered by no scenario.",
                 blocking=True,
                 options=[
                     Option(
-                        id=OptionId(action="cover", target="T-1", via="EB-4"),
-                        label="add to T-1",
+                        id=OptionId(action="cover", target="S-1", via="EB-4"),
+                        label="add to S-1",
                     )
                 ],
             )
@@ -198,8 +198,8 @@ def test_warning_fixes_are_selectable() -> None:
     )
     text, selectable = draw(screen)
 
-    assert "add to T-1" in text
-    assert "cover:T-1:EB-4" in selectable
+    assert "add to S-1" in text
+    assert "cover:S-1:EB-4" in selectable
 
 
 # ── the door enforces what it was told ─────────────────────────────────────
@@ -243,29 +243,29 @@ def test_numbered_choices_are_shown_and_selectable() -> None:
 
 
 def test_a_number_field_is_selectable_and_reprompts_until_bounded() -> None:
-    replies = iter(["trials:T-1", "0", "21", "8"])
+    replies = iter(["trials:S-1", "0", "21", "8"])
     out: list[str] = []
 
     response = cli.render(a_screen(), out=out.append, read=lambda _: next(replies))
 
-    assert response.values == {"trials:T-1": 8}
+    assert response.values == {"trials:S-1": 8}
     assert sum("Enter an integer from 1 to 20." in line for line in out) == 2
 
 
 def test_a_file_field_returns_a_normalized_list_and_blank_clears() -> None:
-    replies = iter(["files:T-1", "  "])
+    replies = iter(["files:S-1", "  "])
     response = cli.render(a_screen(), out=lambda _: None, read=lambda _: next(replies))
 
-    assert response.values == {"files:T-1": []}
+    assert response.values == {"files:S-1": []}
 
 
 def test_a_field_cannot_be_combined_with_an_option() -> None:
-    replies = iter(["trials:T-1,back", "trials:T-1", "4"])
+    replies = iter(["trials:S-1,back", "trials:S-1", "4"])
     out: list[str] = []
 
     response = cli.render(a_screen(), out=out.append, read=lambda _: next(replies))
 
-    assert response.values == {"trials:T-1": 4}
+    assert response.values == {"trials:S-1": 4}
     assert any("Edit one field at a time" in line for line in out)
 
 
@@ -418,7 +418,7 @@ def test_the_header_is_drawn_once_and_only_when_the_step_changes() -> None:
     replies = iter(["nonsense", "back"])
     out: list[str] = []
     cli.render(
-        a_screen(title="Tasks", step=6, steps=6),
+        a_screen(title="Scenarios", step=6, steps=6),
         out=out.append,
         read=lambda _: next(replies),
     )

@@ -39,13 +39,13 @@ class PersonaDraft(_StrictDraft):
     description: str
 
 
-class TaskDraft(_StrictDraft):
+class ScenarioDraft(_StrictDraft):
     description: str
     behaviour_refs: list[str]
     persona_refs: list[str]
 
 
-_DRAFT_TYPES = (EpicDraft, BehaviourDraft, CriterionDraft, PersonaDraft, TaskDraft)
+_DRAFT_TYPES = (EpicDraft, BehaviourDraft, CriterionDraft, PersonaDraft, ScenarioDraft)
 
 
 def _container(path: str) -> str:
@@ -77,8 +77,8 @@ def _legacy_value(path: str, value: Any) -> Any:
             label=value.get("label", value.get("id", "persona")),
             description=value["description"],
         )
-    if field == "tasks":
-        return TaskDraft(
+    if field == "scenarios":
+        return ScenarioDraft(
             description=value["description"],
             behaviour_refs=value.get("behaviour_refs", []),
             persona_refs=value.get("persona_refs", []),
@@ -103,7 +103,7 @@ class StepResultPatch(BaseModel):
         | BehaviourDraft
         | CriterionDraft
         | PersonaDraft
-        | TaskDraft
+        | ScenarioDraft
         | str
         | int
         | bool
@@ -132,7 +132,7 @@ class StepResultPatch(BaseModel):
                 "behaviours": BehaviourDraft,
                 "criteria": CriterionDraft,
                 "personas": PersonaDraft,
-                "tasks": TaskDraft,
+                "scenarios": ScenarioDraft,
             }.get(field)
             if expected is None or not isinstance(self.value, expected):
                 raise ValueError(f"add to {field!r} requires its strict draft")

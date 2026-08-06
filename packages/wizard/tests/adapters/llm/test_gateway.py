@@ -172,8 +172,8 @@ def test_three_failures_raise() -> None:
     assert len(completions.calls) == ATTEMPTS
 
 
-def test_raw_task_fields_are_rejected_before_profile_materialization() -> None:
-    """The regression starts at provider JSON, before a typed Task can exist."""
+def test_raw_scenario_fields_are_rejected_before_profile_materialization() -> None:
+    """The regression starts at provider JSON, before a typed Scenario can exist."""
     from fixtures.profiles import research_assistant
 
     invalid = json.dumps(
@@ -182,7 +182,7 @@ def test_raw_task_fields_are_rejected_before_profile_materialization() -> None:
             "patches": [
                 {
                     "op": "add",
-                    "path": "tasks",
+                    "path": "scenarios",
                     "value": {
                         "id": "MODEL-ID",
                         "description": "x",
@@ -201,7 +201,7 @@ def test_raw_task_fields_are_rejected_before_profile_materialization() -> None:
             "patches": [
                 {
                     "op": "add",
-                    "path": "tasks",
+                    "path": "scenarios",
                     "value": {
                         "description": "x",
                         "behaviour_refs": [],
@@ -473,7 +473,7 @@ def test_the_primer_is_not_a_checklist() -> None:
     assert "secondary to what they tell you" in text
 
 
-def test_the_primer_warns_that_tasks_must_force_the_path() -> None:
+def test_the_primer_warns_that_scenarios_must_force_the_path() -> None:
     """The step that is easiest to miss and does the most work."""
     assert "untestable unless" in prompts.primer()
 
@@ -495,7 +495,11 @@ def test_every_step_prompt_hands_over_the_profile() -> None:
 
     profile = research_assistant()
 
-    for builder in (prompts.criteria_user, prompts.personas_user, prompts.tasks_user):
+    for builder in (
+        prompts.criteria_user,
+        prompts.personas_user,
+        prompts.scenarios_user,
+    ):
         assert "EB-1" in builder(profile)
 
     persona_prompt = prompts.personas_user(profile)

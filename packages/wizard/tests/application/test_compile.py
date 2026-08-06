@@ -77,7 +77,7 @@ def test_the_engine_model_accepts_the_compiled_document() -> None:
     experiment = Experiment.model_validate(compiled())
 
     assert experiment.schema_version == SCHEMA_VERSION
-    assert len(experiment.tasks) == 2
+    assert len(experiment.scenarios) == 2
 
 
 # ── the hand-authored door ───────────────────────────────────────────────────
@@ -97,7 +97,7 @@ def test_a_hand_authored_document_matches_an_interviewed_one() -> None:
         experiment_id=interviewed["id"],
         description=interviewed["description"],
         personas=interviewed["personas"],
-        tasks=interviewed["tasks"],
+        scenarios=interviewed["scenarios"],
     )
 
     assert to_yaml(hand) == to_yaml(interviewed)
@@ -108,9 +108,9 @@ def test_a_hand_authored_document_is_validated() -> None:
     with pytest.raises(CompilationError):
         build_experiment_document(
             experiment_id="x",
-            description="a task with no persona reference",
+            description="a scenario with no persona reference",
             personas=[{"id": "p", "description": "someone"}],
-            tasks=[{"id": "T-1", "description": "do a thing", "persona_refs": []}],
+            scenarios=[{"id": "S-1", "description": "do a thing", "persona_refs": []}],
         )
 
 
@@ -120,8 +120,8 @@ def test_a_hand_authored_document_stamps_the_schema_version() -> None:
         experiment_id="x",
         description="d",
         personas=[{"id": "p", "description": "someone"}],
-        tasks=[
-            {"id": "T-1", "description": "do a thing", "persona_refs": ["p"]},
+        scenarios=[
+            {"id": "S-1", "description": "do a thing", "persona_refs": ["p"]},
         ],
     )
 
@@ -132,10 +132,10 @@ def test_a_hand_authored_document_stamps_the_schema_version() -> None:
 
 
 def test_a_shared_metric_appears_once() -> None:
-    """EB-1's two criteria resolve to the same metric; the task should carry it once."""
-    task = next(t for t in compiled()["tasks"] if t["id"] == "T-1")
+    """EB-1's two criteria resolve to the same metric; the scenario should carry it once."""
+    scenario = next(t for t in compiled()["scenarios"] if t["id"] == "S-1")
 
-    assert task["metric_refs"].count(CITATION_METRIC) == 1
+    assert scenario["metric_refs"].count(CITATION_METRIC) == 1
 
 
 def test_review_and_experiment_keep_the_fully_qualified_metric() -> None:
@@ -145,18 +145,18 @@ def test_review_and_experiment_keep_the_fully_qualified_metric() -> None:
     assert CITATION_METRIC in to_yaml(compiled())
 
 
-def test_a_task_is_measured_only_on_what_it_covers() -> None:
-    """Nothing rides along. A task's metrics come from its own ticked behaviours, full stop.
+def test_a_scenario_is_measured_only_on_what_it_covers() -> None:
+    """Nothing rides along. A scenario's metrics come from its own ticked behaviours, full stop.
 
-    T-1 covers EB-1 (ticked, citation) and EB-2 (unticked, turn budget); T-2 covers EB-3
+    S-1 covers EB-1 (ticked, citation) and EB-2 (unticked, turn budget); S-2 covers EB-3
     (ticked, bounded troubleshooting). So the turn budget metric — bound only to an unticked
-    behaviour — reaches no task at all.
+    behaviour — reaches no scenario at all.
     """
     document = compiled()
-    by_id = {t["id"]: t["metric_refs"] for t in document["tasks"]}
+    by_id = {t["id"]: t["metric_refs"] for t in document["scenarios"]}
 
-    assert by_id["T-1"] == [CITATION_METRIC]
-    assert by_id["T-2"] == [BOUNDED_TROUBLESHOOTING]
+    assert by_id["S-1"] == [CITATION_METRIC]
+    assert by_id["S-2"] == [BOUNDED_TROUBLESHOOTING]
     assert not any(TURN_BUDGET in refs for refs in by_id.values())
 
 
@@ -165,13 +165,13 @@ def test_a_deleted_persona_is_not_referenced() -> None:
     profile = research_assistant()
     profile.personas = [p for p in profile.personas if p.id != "impatient-executive"]
 
-    task = next(
+    scenario = next(
         t
-        for t in compile_experiment(profile, EXPERIMENT_ID)["tasks"]
-        if t["id"] == "T-1"
+        for t in compile_experiment(profile, EXPERIMENT_ID)["scenarios"]
+        if t["id"] == "S-1"
     )
 
-    assert task["persona_refs"] == ["cooperative-delegator"]
+    assert scenario["persona_refs"] == ["cooperative-delegator"]
 
 
 def test_personas_are_inline() -> None:
@@ -216,11 +216,11 @@ def test_review_run_count_matches_the_profile() -> None:
     review = render_review(profile, EXPERIMENT_ID)
     assert f"{profile.run_count()} runs" in review
     assert "## Runs" in review
-    assert "task–persona pairs" not in review
+    assert "scenario–persona pairs" not in review
     assert "## Who we simulate" not in review
     assert "## How we check it" not in review
     assert "## Personas" in review
-    assert "## Tasks" in review
+    assert "## Scenarios" in review
 
 
 def test_review_needs_no_session() -> None:

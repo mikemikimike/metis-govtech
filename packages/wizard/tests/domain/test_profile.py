@@ -15,7 +15,7 @@ def test_round_trips_through_json_unchanged() -> None:
     assert parsed == original
     # spot-check the things a loose serialiser would quietly flatten
     assert parsed.behaviour("EB-3").interaction_type is InteractionType.FORM  # type: ignore[union-attr]
-    assert parsed.task("T-1").behaviour_refs == ["EB-1", "EB-2"]  # type: ignore[union-attr]
+    assert parsed.scenario("S-1").behaviour_refs == ["EB-1", "EB-2"]  # type: ignore[union-attr]
 
 
 def test_save_and_load_round_trip(tmp_path: Path) -> None:
@@ -82,19 +82,19 @@ def test_coverage_and_run_count() -> None:
     profile = research_assistant()
 
     assert profile.uncovered() == []
-    assert [t.id for t in profile.tasks_covering("EB-1")] == ["T-1"]
-    # T-1: 2 personas × 3 trials = 6; T-2: 1 × 3 = 3
+    assert [t.id for t in profile.scenarios_covering("EB-1")] == ["S-1"]
+    # S-1: 2 personas × 3 trials = 6; S-2: 1 × 3 = 3
     assert profile.run_count() == 9
 
-    profile.tasks[1].num_trials = 1
+    profile.scenarios[1].num_trials = 1
     assert profile.run_count() == 7
 
-    profile.tasks[0].persona_refs = []
+    profile.scenarios[0].persona_refs = []
     assert profile.run_count() == 1
 
 
-def test_uncovered_reports_ticked_behaviours_with_no_task() -> None:
+def test_uncovered_reports_ticked_behaviours_with_no_scenario() -> None:
     profile = research_assistant()
-    profile.tasks = [t for t in profile.tasks if t.id != "T-2"]
+    profile.scenarios = [t for t in profile.scenarios if t.id != "S-2"]
 
     assert [b.id for b in profile.uncovered()] == ["EB-3"]

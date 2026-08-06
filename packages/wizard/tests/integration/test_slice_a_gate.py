@@ -34,8 +34,8 @@ def _input_dir(tmp_path: Path) -> Path:
 
     fixtures = tmp_path / "fixtures"
     fixtures.mkdir()
-    for task in profile.tasks:
-        for name in task.fixtures:
+    for scenario in profile.scenarios:
+        for name in scenario.fixtures:
             (fixtures / name).write_text("stand-in fixture\n")
 
     return tmp_path

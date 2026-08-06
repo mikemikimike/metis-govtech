@@ -24,14 +24,14 @@ from metis.wizard.contracts.conversation import (
     ChoiceRequest,
     Option,
     OptionId,
-    TaskCard,
+    ScenarioCard,
     Warning,
     WarningSource,
     WizardRequest,
 )
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import SessionStep
-from metis.wizard.domain.profile import Behaviour, Epic, ProductProfile, Task
+from metis.wizard.domain.profile import Behaviour, Epic, ProductProfile, Scenario
 
 TRIALS_MIN = 1
 TRIALS_MAX = 20
@@ -52,7 +52,7 @@ _STEP_TITLES: dict[SessionStep, str] = {
     SessionStep.PRIORITISE: "What to measure",
     SessionStep.CRITERIA: "Acceptance criteria",
     SessionStep.PERSONAS: "Personas",
-    SessionStep.TASKS: "Tasks",
+    SessionStep.SCENARIOS: "Scenarios",
 }
 _INTERVIEW_STEPS: list[SessionStep] = list(_STEP_TITLES)
 
@@ -303,21 +303,21 @@ def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     )
 
 
-# ── step 5 · tasks ─────────────────────────────────────────────────────────
+# ── step 5 · scenarios ───────────────────────────────────────────────────────
 
 
-def _coverage_group(profile: ProductProfile, task_id: str) -> CardOptionGroup:
-    task = profile.task(task_id)
-    covered = set(task.behaviour_refs) if task else set()
+def _coverage_group(profile: ProductProfile, scenario_id: str) -> CardOptionGroup:
+    scenario = profile.scenario(scenario_id)
+    covered = set(scenario.behaviour_refs) if scenario else set()
     return CardOptionGroup(
         label="Covers",
         options=[
             Option(
-                id=OptionId(action="cover", target=task_id, via=behaviour.id),
+                id=OptionId(action="cover", target=scenario_id, via=behaviour.id),
                 label=behaviour.statement,
                 selected=behaviour.id in covered,
                 patch=_wizard_patch(
-                    f"tasks[{task_id}].behaviour_refs",
+                    f"scenarios[{scenario_id}].behaviour_refs",
                     sorted(covered ^ {behaviour.id}),
                 ),
             )
@@ -326,18 +326,18 @@ def _coverage_group(profile: ProductProfile, task_id: str) -> CardOptionGroup:
     )
 
 
-def _persona_group(profile: ProductProfile, task_id: str) -> CardOptionGroup:
-    task = profile.task(task_id)
-    running = set(task.persona_refs) if task else set()
+def _persona_group(profile: ProductProfile, scenario_id: str) -> CardOptionGroup:
+    scenario = profile.scenario(scenario_id)
+    running = set(scenario.persona_refs) if scenario else set()
     return CardOptionGroup(
         label="Run as",
         options=[
             Option(
-                id=OptionId(action="run", target=task_id, via=persona.id),
+                id=OptionId(action="run", target=scenario_id, via=persona.id),
                 label=persona.id,
                 selected=persona.id in running,
                 patch=_wizard_patch(
-                    f"tasks[{task_id}].persona_refs",
+                    f"scenarios[{scenario_id}].persona_refs",
                     sorted(running ^ {persona.id}),
                 ),
             )
@@ -346,65 +346,66 @@ def _persona_group(profile: ProductProfile, task_id: str) -> CardOptionGroup:
     )
 
 
-def _covers_a_selection(profile: ProductProfile, task: Task) -> bool:
-    """Does the task reference at least one currently selected behaviour?
+def _covers_a_selection(profile: ProductProfile, scenario: Scenario) -> bool:
+    """Does the scenario reference at least one currently selected behaviour?
 
-    `ticked()` is exactly that set. A task whose refs are all empty, unknown or unticked
+    `ticked()` is exactly that set. A scenario whose refs are all empty, unknown or unticked
     covers nothing the experiment will measure — nothing rides along to make up the
     difference — so it fails this test and the gate below stops the step.
     """
-    return bool(set(task.behaviour_refs) & {b.id for b in profile.ticked()})
+    return bool(set(scenario.behaviour_refs) & {b.id for b in profile.ticked()})
 
 
-def _task_warnings(profile: ProductProfile) -> list[Warning]:
+def _scenario_warnings(profile: ProductProfile) -> list[Warning]:
     """The blocking gates. Each carries its own fixes where it can."""
     warnings: list[Warning] = []
 
     for behaviour in profile.uncovered():
         fixes = [
             Option(
-                id=OptionId(action="generate-task", via=behaviour.id),
+                id=OptionId(action="generate-scenario", via=behaviour.id),
                 label="Generate one",
             )
         ]
         fixes += [
             Option(
-                id=OptionId(action="cover", target=task.id, via=behaviour.id),
-                label=f"add to {task.id}",
+                id=OptionId(action="cover", target=scenario.id, via=behaviour.id),
+                label=f"add to {scenario.id}",
                 patch=_wizard_patch(
-                    f"tasks[{task.id}].behaviour_refs",
-                    sorted({*task.behaviour_refs, behaviour.id}),
+                    f"scenarios[{scenario.id}].behaviour_refs",
+                    sorted({*scenario.behaviour_refs, behaviour.id}),
                 ),
             )
-            for task in profile.tasks
+            for scenario in profile.scenarios
         ]
         warnings.append(
             Warning(
-                text=f"{behaviour.id} is covered by no task.",
+                text=f"{behaviour.id} is covered by no scenario.",
                 source=WarningSource.DOCUMENT,
                 blocking=True,
                 options=fixes,
             )
         )
 
-    for task in profile.tasks:
-        if not _covers_a_selection(profile, task):
-            # A task that measures no selected behaviour is a session spent proving nothing. The
-            # fix is a click on the card's own "Covers" group already on screen, so no options.
+    for scenario in profile.scenarios:
+        if not _covers_a_selection(profile, scenario):
+            # A scenario that measures no selected behaviour is a session spent proving
+            # nothing. The fix is a click on the card's own "Covers" group already on screen,
+            # so no options.
             warnings.append(
                 Warning(
-                    text=f"{task.id} covers no selected behaviour.",
+                    text=f"{scenario.id} covers no selected behaviour.",
                     source=WarningSource.DOCUMENT,
                     blocking=True,
                 )
             )
 
-        if not task.persona_refs:
-            # The experiment schema declares persona_refs with minItems 1, so a task with
+        if not scenario.persona_refs:
+            # The experiment schema declares persona_refs with minItems 1, so a scenario with
             # every chip off produces a file the engine refuses to load.
             warnings.append(
                 Warning(
-                    text=f"{task.id} has nobody to run it.",
+                    text=f"{scenario.id} has nobody to run it.",
                     source=WarningSource.DOCUMENT,
                     blocking=True,
                 )
@@ -413,39 +414,39 @@ def _task_warnings(profile: ProductProfile) -> list[Warning]:
     return warnings
 
 
-def tasks_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
-    warnings = _task_warnings(profile)
+def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+    warnings = _scenario_warnings(profile)
     blocked = any(w.blocking for w in warnings)
     blocking_ids = (
-        {t.id for t in profile.tasks if not t.persona_refs}
-        | {t.id for t in profile.tasks if not _covers_a_selection(profile, t)}
-        | {t.id for b in profile.uncovered() for t in profile.tasks_covering(b.id)}
+        {s.id for s in profile.scenarios if not s.persona_refs}
+        | {s.id for s in profile.scenarios if not _covers_a_selection(profile, s)}
+        | {s.id for b in profile.uncovered() for s in profile.scenarios_covering(b.id)}
     )
 
     cards = [
-        TaskCard(
-            id=task.id,
-            title=task.description,
-            blocking=task.id in blocking_ids,
-            runs=len(task.persona_refs) * task.num_trials,
+        ScenarioCard(
+            id=scenario.id,
+            title=scenario.description,
+            blocking=scenario.id in blocking_ids,
+            runs=len(scenario.persona_refs) * scenario.num_trials,
             components=[
-                _coverage_group(profile, task.id),
-                _persona_group(profile, task.id),
+                _coverage_group(profile, scenario.id),
+                _persona_group(profile, scenario.id),
                 CardNumberField(
                     label="Trials",
-                    id=OptionId(action="trials", target=task.id),
-                    value=task.num_trials,
+                    id=OptionId(action="trials", target=scenario.id),
+                    value=scenario.num_trials,
                     min=TRIALS_MIN,
                     max=TRIALS_MAX,
                 ),
                 CardUploadField(
                     label="Files",
-                    id=OptionId(action="files", target=task.id),
-                    value=list(task.fixtures),
+                    id=OptionId(action="files", target=scenario.id),
+                    value=list(scenario.fixtures),
                 ),
             ],
         )
-        for task in profile.tasks
+        for scenario in profile.scenarios
     ]
 
     footer = f"Total: {format_runs(profile.run_count())}"

@@ -1,5 +1,5 @@
 // The document view. This is the component in the door that reads `ProductProfile` and knows
-// its shape — epics hold behaviours hold criteria; personas and tasks are flat lists. The
+// its shape — epics hold behaviours hold criteria; personas and scenarios are flat lists. The
 // conversation stays shape-only so this can hold all of the interview's domain knowledge in one
 // place. There is one other domain-aware component, deliberately: the hand-authoring form
 // (`ManualForm.tsx`), which names the experiment schema's own fields; its header comment
@@ -91,12 +91,12 @@ export function stepPosition(requests: WizardRequest[]): StepPosition | null {
 // This exclusion is provisional. It follows from clarify writing nothing until its last turn, not
 // from any rule that the document must be still while the user is being asked questions — a later
 // change makes clarify populate the document as it goes, and should loosen this then.
-type WritingTarget = "behaviours" | "personas" | "tasks";
+type WritingTarget = "behaviours" | "personas" | "scenarios";
 
 const WRITING_TARGET: Record<string, WritingTarget> = {
   behaviours: "behaviours",
   criteria: "personas",
-  personas: "tasks",
+  personas: "scenarios",
 };
 
 export function Profile({
@@ -220,7 +220,7 @@ export function Profile({
             whether or not it holds anything yet.
 
             Each heading is the package's own name for the step that fills it — "Behaviours",
-            "Personas", "Tasks" — so the document and the conversation use one vocabulary and the
+            "Personas", "Scenarios" — so the document and the conversation use one vocabulary and the
             sheet reads as the interview's output section by section. They are entity names, all
             three of the same kind; "What should be true" was a sentence sitting between two nouns,
             which is what made it read as the odd one out. */}
@@ -257,44 +257,44 @@ export function Profile({
           )}
         </Section>
 
-        <Section title="Tasks">
-          {profile.tasks.length > 0 ? (
+        <Section title="Scenarios">
+          {profile.scenarios.length > 0 ? (
             <div className="flex flex-col gap-3">
               <ul className="flex flex-col gap-4">
-                {profile.tasks.map((t) => (
-                  <li key={t.id} className="animate-arrive flex flex-col gap-2">
+                {profile.scenarios.map((s) => (
+                  <li key={s.id} className="animate-arrive flex flex-col gap-2">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="min-w-0 flex-1 text-foreground">{t.description}</span>
-                      <Mono className="shrink-0 whitespace-nowrap">{t.id}</Mono>
+                      <span className="min-w-0 flex-1 text-foreground">{s.description}</span>
+                      <Mono className="shrink-0 whitespace-nowrap">{s.id}</Mono>
                     </div>
-                    <TaskField label="Covers">
-                      {t.behaviour_refs.length > 0 ? (
-                        t.behaviour_refs.map((ref) => <Mono key={ref}>{ref}</Mono>)
+                    <ScenarioField label="Covers">
+                      {s.behaviour_refs.length > 0 ? (
+                        s.behaviour_refs.map((ref) => <Mono key={ref}>{ref}</Mono>)
                       ) : (
                         <span className="text-xs text-muted-foreground">none</span>
                       )}
-                    </TaskField>
-                    <TaskField label="Run as">
-                      {t.persona_refs.length > 0 ? (
-                        t.persona_refs.map((ref) => <Mono key={ref}>{ref}</Mono>)
+                    </ScenarioField>
+                    <ScenarioField label="Run as">
+                      {s.persona_refs.length > 0 ? (
+                        s.persona_refs.map((ref) => <Mono key={ref}>{ref}</Mono>)
                       ) : (
                         <span className="text-xs text-muted-foreground">none</span>
                       )}
-                    </TaskField>
-                    <TaskField label="Trials">
-                      <Mono>{t.num_trials}</Mono>
-                    </TaskField>
-                    <TaskField label="Files">
-                      {t.fixtures.length > 0 ? (
-                        t.fixtures.map((file) => <Mono key={file}>{file}</Mono>)
+                    </ScenarioField>
+                    <ScenarioField label="Trials">
+                      <Mono>{s.num_trials}</Mono>
+                    </ScenarioField>
+                    <ScenarioField label="Files">
+                      {s.fixtures.length > 0 ? (
+                        s.fixtures.map((file) => <Mono key={file}>{file}</Mono>)
                       ) : (
                         <span className="text-xs text-muted-foreground">none</span>
                       )}
-                    </TaskField>
+                    </ScenarioField>
                     <div className="flex items-baseline gap-3">
                       <span className="w-16 shrink-0" aria-hidden />
                       <span className="ml-auto text-xs text-muted-foreground">
-                        {formatRuns(countRuns(t.persona_refs.length, t.num_trials))}
+                        {formatRuns(countRuns(s.persona_refs.length, s.num_trials))}
                       </span>
                     </div>
                   </li>
@@ -302,16 +302,16 @@ export function Profile({
               </ul>
               <div className="flex justify-end border-t border-border pt-2 text-sm text-muted-foreground">
                 Total: {formatRuns(
-                  profile.tasks.reduce(
-                    (total, task) =>
-                      total + countRuns(task.persona_refs.length, task.num_trials),
+                  profile.scenarios.reduce(
+                    (total, scenario) =>
+                      total + countRuns(scenario.persona_refs.length, scenario.num_trials),
                     0,
                   ),
                 )}
               </div>
             </div>
           ) : (
-            <Placeholder boxed writing={writing === "tasks"} />
+            <Placeholder boxed writing={writing === "scenarios"} />
           )}
         </Section>
       </div>
@@ -328,7 +328,7 @@ export function Profile({
 // rather than space waiting to be filled. Enclosed, they are unambiguously the contents of a
 // reserved region, and the dotted edge carries that message rather than the lines themselves.
 //
-// The frame specifically means "a list will grow here": Behaviours, Personas and Tasks all fill
+// The frame specifically means "a list will grow here": Behaviours, Personas and Scenarios all fill
 // with lists of items, so all three get the identical framed placeholder. The header summary is one
 // piece of prose, not a list, so it takes the same lines without the frame — framing a single line
 // would promise a growing region that never arrives.
@@ -458,7 +458,7 @@ function Section({
   );
 }
 
-function TaskField({
+function ScenarioField({
   label,
   children,
 }: {

@@ -11,7 +11,7 @@ from fixtures.profiles import research_assistant
 from metis.wizard.application.matching import (
     GENERATED_JUDGE_FQN,
     EmbeddingMatcher,
-    catalogue,
+    library_catalogue,
     match_profile,
 )
 from metis.wizard.contracts import Criterion, MetricSpec
@@ -57,33 +57,53 @@ def a_criterion(then: str, **kw) -> Criterion:
 
 
 def test_the_catalogue_reads_real_metrics() -> None:
-    specs = catalogue()
+    specs = library_catalogue()
 
     assert specs
     assert all(spec.fqn and spec.name and spec.description for spec in specs)
     assert any("TurnBudgetMetric" in spec.fqn for spec in specs)
 
 
+def test_the_catalogue_covers_every_exported_metric() -> None:
+    """The reader must find the whole library, not the one non-underscored module a submodule
+    walk would leave. Verified against the library's own export list, so a metric dropped in
+    the file split is caught rather than silently absent from the picker."""
+    import inspect
+
+    import metis.library.metrics as metrics
+
+    exported = {
+        name
+        for name, obj in vars(metrics).items()
+        if inspect.isclass(obj)
+        and obj.__name__.endswith("Metric")
+        and not obj.__name__.startswith(("Base", "Sync"))
+        and obj.__module__.startswith("metis.library.metrics")
+    }
+    catalogued = {spec.fqn.rsplit(".", 1)[-1] for spec in library_catalogue()}
+    assert catalogued == exported
+
+
 def test_the_catalogue_never_instantiates_a_metric(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Many metrics take constructor arguments; reading a display name must not build one."""
-    from metis.library.metrics import universal
+    from metis.library.metrics import TurnBudgetMetric
 
     def explode(*_a, **_kw):
         raise AssertionError("the catalogue instantiated a metric")
 
-    monkeypatch.setattr(universal.TurnBudgetMetric, "__init__", explode)
+    monkeypatch.setattr(TurnBudgetMetric, "__init__", explode)
 
-    catalogue.cache_clear()
-    assert catalogue()
-    catalogue.cache_clear()
+    library_catalogue.cache_clear()
+    assert library_catalogue()
+    library_catalogue.cache_clear()
 
 
 def test_every_catalogued_fqn_is_importable() -> None:
     import importlib
 
-    for spec in catalogue():
+    for spec in library_catalogue():
         module_path, _, class_name = spec.fqn.rpartition(".")
         assert hasattr(importlib.import_module(module_path), class_name), spec.fqn
 

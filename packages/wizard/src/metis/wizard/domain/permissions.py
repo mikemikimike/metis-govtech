@@ -32,7 +32,7 @@ class SessionStep(StrEnum):
     PRIORITISE = "prioritise"
     CRITERIA = "criteria"
     PERSONAS = "personas"
-    TASKS = "tasks"
+    SCENARIOS = "scenarios"
     DONE = "done"
 
 
@@ -67,12 +67,12 @@ StepPermissions: dict[SessionStep, list[str]] = {
         "personas[*]",
         "personas[*].description",
     ],
-    SessionStep.TASKS: [
-        "tasks",
-        "tasks[*]",
-        "tasks[*].description",
-        "tasks[*].behaviour_refs",
-        "tasks[*].persona_refs",
+    SessionStep.SCENARIOS: [
+        "scenarios",
+        "scenarios[*]",
+        "scenarios[*].description",
+        "scenarios[*].behaviour_refs",
+        "scenarios[*].persona_refs",
     ],
 }
 

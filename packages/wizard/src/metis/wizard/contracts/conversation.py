@@ -35,11 +35,11 @@ class OptionId(BaseModel):
     Opaque to the door, which sends back whatever it was handed. The package dispatches on
     `action` and is passed `target` — so a per-card action arrives as ("chat", "EB-1")
     rather than a string the package has to parse its own convention out of. `via` is the
-    second reference the chip toggles need: ("cover", "T-1", via="EB-4") is "T-1 covers EB-4".
+    second reference the chip toggles need: ("cover", "S-1", via="EB-4") is "S-1 covers EB-4".
     """
 
     action: str  # "chat" · "tick" · "cover" · "continue"
-    target: str | None = None  # "EB-1" · "T-1"
+    target: str | None = None  # "EB-1" · "S-1"
     via: str | None = None  # "EB-4" · "P-2"
 
     def __str__(self) -> str:  # doors key on this; it is stable and unique
@@ -144,7 +144,7 @@ class Card(BaseModel):
 
     The subclasses pin their narrow fields and carry a stable wire discriminator. The door still
     renders both through one shape-driven path; the discriminator exists so Pydantic can preserve
-    subtype-only fields such as a task's run count across HTTP and session persistence.
+    subtype-only fields such as a scenario's run count across HTTP and session persistence.
     """
 
     # The base remains useful to shape-only helpers. Concrete cards narrow this to a Literal so
@@ -173,18 +173,18 @@ class BehaviourCard(Card):
     kind: Literal["standard"] = "standard"  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
-class TaskCard(Card):
-    """The tasks step. components = [Covers, Run as, Trials, Files], in that order."""
+class ScenarioCard(Card):
+    """The scenarios step. components = [Covers, Run as, Trials, Files], in that order."""
 
-    kind: Literal["task"] = "task"  # pyright: ignore[reportIncompatibleVariableOverride]
+    kind: Literal["scenario"] = "scenario"  # pyright: ignore[reportIncompatibleVariableOverride]
     # The value is carried as data so both doors can state the unit at the point they draw it.
     runs: int
-    # Narrowed deliberately: a task never has a tick. See BehaviourCard for why the ignore.
+    # Narrowed deliberately: a scenario never has a tick. See BehaviourCard for why the ignore.
     selected: None = None  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
 AnyCard: TypeAlias = Annotated[
-    BehaviourCard | TaskCard,
+    BehaviourCard | ScenarioCard,
     Field(discriminator="kind"),
 ]
 

@@ -70,13 +70,13 @@ def test_priority_is_owned_by_no_step() -> None:
         assert not any("priority" in g for g in globs)
 
 
-def test_strict_model_drafts_materialize_ids_and_task_defaults() -> None:
+def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
     from metis.wizard.contracts import (
         BehaviourDraft,
         EpicDraft,
         PersonaDraft,
+        ScenarioDraft,
         StepResultPatch,
-        TaskDraft,
     )
 
     profile = research_assistant()
@@ -101,8 +101,8 @@ def test_strict_model_drafts_materialize_ids_and_task_defaults() -> None:
                 ),
                 StepResultPatch(
                     op=PatchOp.ADD,
-                    path="tasks",
-                    value=TaskDraft(
+                    path="scenarios",
+                    value=ScenarioDraft(
                         description="exercise it",
                         behaviour_refs=["EB-4"],
                         persona_refs=["impatient-executive-2"],
@@ -116,24 +116,26 @@ def test_strict_model_drafts_materialize_ids_and_task_defaults() -> None:
     assert profile.epics[-1].id == "EP-3"
     assert profile.epics[-1].behaviours[0].id == "EB-4"
     assert profile.personas[-1].id == "impatient-executive-2"
-    assert profile.tasks[-1].id == "T-3"
-    assert profile.tasks[-1].num_trials == 3
-    assert profile.tasks[-1].fixtures == []
+    assert profile.scenarios[-1].id == "S-3"
+    assert profile.scenarios[-1].num_trials == 3
+    assert profile.scenarios[-1].fixtures == []
 
 
 def test_model_whole_entity_set_is_refused() -> None:
-    from metis.wizard.contracts import Patch, TaskDraft
+    from metis.wizard.contracts import Patch, ScenarioDraft
 
     profile = research_assistant()
     patch_value = Patch(
         op=PatchOp.SET,
-        path="tasks[T-1]",
-        value=TaskDraft(description="replacement", behaviour_refs=[], persona_refs=[]),
+        path="scenarios[S-1]",
+        value=ScenarioDraft(
+            description="replacement", behaviour_refs=[], persona_refs=[]
+        ),
     )
     result = apply(profile, sanitise([patch_value]))
     assert result.applied == []
     assert result.rejected
-    assert profile.task("T-1").description.startswith("Ask for")  # type: ignore[union-attr]
+    assert profile.scenario("S-1").description.startswith("Ask for")  # type: ignore[union-attr]
 
 
 # ── the metric is the matcher's, not the model's ────────────────────────────
@@ -163,23 +165,23 @@ def test_rejecting_a_metric_write_points_at_rewording() -> None:
 # ── the fields inside a bundled value ──────────────────────────────────────
 #
 # The address check reads `patch.path` alone, and the model is told to draft a whole step in
-# one go — so its patches address a *container* (`tasks`, `epics`) and carry the finished
+# one go — so its patches address a *container* (`scenarios`, `epics`) and carry the finished
 # object inside. Every user-owned field below is reachable that way without the path ever
 # naming it. These are the same three rules as above, tested at the shape the model actually
 # sends rather than the targeted SET it rarely does.
 
 
-def test_a_bundled_task_cannot_carry_trials_or_files() -> None:
-    """`add tasks` is the shape `tasks_user` asks for. The task lands; the two fields don't."""
+def test_a_bundled_scenario_cannot_carry_trials_or_files() -> None:
+    """`add scenarios` is the shape `scenarios_user` asks for. The scenario lands; the two fields don't."""
     profile = research_assistant()
 
     result = apply(
         profile,
         [
             patch(
-                "tasks",
+                "scenarios",
                 {
-                    "id": "T-9",
+                    "id": "S-9",
                     "description": "Ask for an analysis of an uploaded spreadsheet",
                     "behaviour_refs": ["EB-1"],
                     "persona_refs": ["impatient-executive"],
@@ -191,13 +193,13 @@ def test_a_bundled_task_cannot_carry_trials_or_files() -> None:
         ],
     )
 
-    assert len(result.applied) == 1  # the task itself is the model's to draft
-    task = profile.task("T-9")
-    assert task is not None
-    assert task.description.startswith("Ask for an analysis")
-    assert task.behaviour_refs == ["EB-1"]  # what the model does decide, untouched
-    assert task.fixtures == []  # no file the user never uploaded
-    assert task.num_trials == 3  # the schema default, not the model's number
+    assert len(result.applied) == 1  # the scenario itself is the model's to draft
+    scenario = profile.scenario("S-9")
+    assert scenario is not None
+    assert scenario.description.startswith("Ask for an analysis")
+    assert scenario.behaviour_refs == ["EB-1"]  # what the model does decide, untouched
+    assert scenario.fixtures == []  # no file the user never uploaded
+    assert scenario.num_trials == 3  # the schema default, not the model's number
 
 
 def test_a_bundled_epic_cannot_carry_a_tick_or_a_metric() -> None:
@@ -280,9 +282,9 @@ def test_the_filter_never_touches_what_the_wizard_composed() -> None:
         profile,
         [
             patch(
-                "tasks",
+                "scenarios",
                 {
-                    "id": "T-9",
+                    "id": "S-9",
                     "description": "Typed by the user in the manual form",
                     "fixtures": ["uploaded_by_the_user.csv"],
                     "num_trials": 10,
@@ -295,17 +297,17 @@ def test_the_filter_never_touches_what_the_wizard_composed() -> None:
     )
 
     assert len(result.applied) == 1
-    task = profile.task("T-9")
-    assert task is not None
-    assert task.fixtures == ["uploaded_by_the_user.csv"]
-    assert task.num_trials == 10
-    assert task.interaction_type is InteractionType.FORM
+    scenario = profile.scenario("S-9")
+    assert scenario is not None
+    assert scenario.fixtures == ["uploaded_by_the_user.csv"]
+    assert scenario.num_trials == 10
+    assert scenario.interaction_type is InteractionType.FORM
 
 
 def test_trials_and_files_are_owned_by_no_step() -> None:
     """The other half, mirroring priority: the targeted SET the field filter cannot see."""
-    assert owner_of("tasks[T-1].num_trials") is None
-    assert owner_of("tasks[T-1].fixtures") is None
+    assert owner_of("scenarios[S-1].num_trials") is None
+    assert owner_of("scenarios[S-1].fixtures") is None
     for globs in StepPermissions.values():
         assert not any("num_trials" in g or "fixtures" in g for g in globs)
 

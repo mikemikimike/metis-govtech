@@ -21,7 +21,7 @@ class Impact:
     """A derived profile node whose current value may need a user decision."""
 
     subject: str
-    kind: str  # "criteria" | "task" | "tree"
+    kind: str  # "criteria" | "scenario" | "tree"
     related_to: str | None = None
 
 
@@ -34,7 +34,7 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
         path = patch.path
 
         if path in PRODUCT_WIDE:
-            has_derived_work = bool(profile.epics) or bool(profile.tasks)
+            has_derived_work = bool(profile.epics) or bool(profile.scenarios)
             if not has_derived_work:
                 continue
             key = ("tree", "product")
@@ -55,12 +55,12 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
             seen.add(("criteria", behaviour.id))
             impacts.append(Impact(subject=behaviour.id, kind="criteria"))
 
-        for task in profile.tasks_covering(behaviour.id):
-            if ("task", task.id) in seen:
+        for scenario in profile.scenarios_covering(behaviour.id):
+            if ("scenario", scenario.id) in seen:
                 continue
-            seen.add(("task", task.id))
+            seen.add(("scenario", scenario.id))
             impacts.append(
-                Impact(subject=task.id, kind="task", related_to=behaviour.id)
+                Impact(subject=scenario.id, kind="scenario", related_to=behaviour.id)
             )
 
     return impacts
@@ -73,14 +73,14 @@ def clear_for_regeneration(profile: ProductProfile, impact: Impact) -> None:
         if behaviour is not None:
             behaviour.criteria = [c for c in behaviour.criteria if c.is_user_typed]
 
-    elif impact.kind == "task":
-        task = profile.task(impact.subject)
-        if task is not None and not task.is_user_typed:
-            profile.tasks = [t for t in profile.tasks if t.id != impact.subject]
+    elif impact.kind == "scenario":
+        scenario = profile.scenario(impact.subject)
+        if scenario is not None and not scenario.is_user_typed:
+            profile.scenarios = [s for s in profile.scenarios if s.id != impact.subject]
 
     elif impact.kind == "tree":
         profile.epics = []
-        profile.tasks = []
+        profile.scenarios = []
 
 
 def _behaviour_id(path: str) -> str | None:

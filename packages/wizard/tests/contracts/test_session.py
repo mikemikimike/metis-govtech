@@ -26,7 +26,7 @@ from metis.wizard.contracts import (
     OptionId,
     Product,
     ProductProfile,
-    TaskCard,
+    ScenarioCard,
     WizardRequestState,
 )
 from metis.wizard.domain.permissions import SessionStep
@@ -104,16 +104,16 @@ def test_pending_request_rehydrates_as_its_subclass(tmp_path: Path) -> None:
 def test_old_comma_joined_file_field_rehydrates_as_a_list(tmp_path: Path) -> None:
     state = a_state(
         pending=ChoiceRequest(
-            prompt="Edit tasks",
+            prompt="Edit scenarios",
             cards=[
-                TaskCard(
-                    id="T-2",
+                ScenarioCard(
+                    id="S-2",
                     title="Retry",
                     runs=1,
                     components=[
                         CardUploadField(
                             label="Files",
-                            id=OptionId(action="files", target="T-2"),
+                            id=OptionId(action="files", target="S-2"),
                             value="policy.pdf, faq.md",
                         )
                     ],
@@ -137,29 +137,29 @@ def test_old_comma_joined_file_field_rehydrates_as_a_list(tmp_path: Path) -> Non
     ]
 
 
-def test_a_task_field_edit_survives_resume(tmp_path: Path) -> None:
+def test_a_scenario_field_edit_survives_resume(tmp_path: Path) -> None:
     from fixtures.scripted import ScriptedInterviewer
 
     from metis.wizard.application.driver import StepDriver
 
     path = tmp_path / "session.json"
     session = Session(
-        a_state(step=SessionStep.TASKS),
+        a_state(step=SessionStep.SCENARIOS),
         path=path,
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )
     session.next()
-    session.respond(ChoiceResponse(values={"files:T-2": ["policy.pdf", "faq.md"]}))
-    assert any("files:T-2" in turn.text for turn in session.state.history)
+    session.respond(ChoiceResponse(values={"files:S-2": ["policy.pdf", "faq.md"]}))
+    assert any("files:S-2" in turn.text for turn in session.state.history)
 
     resumed = Session.resume(path, driver=StepDriver(interviewer=ScriptedInterviewer()))
     request = resumed.next()
-    assert resumed.state.profile.task("T-2").fixtures == [  # type: ignore[union-attr]
+    assert resumed.state.profile.scenario("S-2").fixtures == [  # type: ignore[union-attr]
         "policy.pdf",
         "faq.md",
     ]
     assert request is not None
-    card = next(card for card in request.cards if card.id == "T-2")  # type: ignore[union-attr]
+    card = next(card for card in request.cards if card.id == "S-2")  # type: ignore[union-attr]
     field = card.components[-1]
     assert isinstance(field, CardUploadField)
     assert field.value == ["policy.pdf", "faq.md"]
@@ -321,9 +321,9 @@ def test_a_targeted_follow_up_keeps_its_target_across_save_and_resume(
 
 def test_going_back_leaves_the_abandoned_screen_in_the_conversation() -> None:
     """Back sets the step. It does not rewrite what already happened."""
-    session = _driven(SessionStep.TASKS)
+    session = _driven(SessionStep.SCENARIOS)
     session.next()
-    tasks_before = len(session.state.profile.tasks)
+    scenarios_before = len(session.state.profile.scenarios)
 
     session.back(SessionStep.PERSONAS)
     session.next()
@@ -331,7 +331,7 @@ def test_going_back_leaves_the_abandoned_screen_in_the_conversation() -> None:
     assert len(session.state.requests) == 2
     assert session.state.requests[0].state is WizardRequestState.RESOLVED
     assert session.state.step is SessionStep.PERSONAS
-    assert len(session.state.profile.tasks) == tasks_before  # nothing discarded
+    assert len(session.state.profile.scenarios) == scenarios_before  # nothing discarded
 
 
 def test_a_version_one_session_is_refused(tmp_path: Path) -> None:
@@ -423,7 +423,7 @@ def test_a_request_without_step_metadata_still_loads(tmp_path: Path) -> None:
     `session.json` whose stored request predates them has no such keys; because the fields
     default to `None`, it must validate and simply render without a header rather than being
     rejected for missing metadata. The session version may still advance for a separate wire
-    contract change, as it does for the task-card discriminator in this change.
+    contract change, as it does for the scenario-card discriminator in this change.
     """
     path = tmp_path / "session.json"
     path.write_text(
@@ -461,14 +461,16 @@ def test_a_request_without_step_metadata_still_loads(tmp_path: Path) -> None:
 
 def test_back_sets_the_step_and_nothing_else() -> None:
     """Not a mechanism — nothing is truncated and nothing is replayed."""
-    session = Session(a_state(step=SessionStep.TASKS))
+    session = Session(a_state(step=SessionStep.SCENARIOS))
     before = session.state.profile.model_copy(deep=True)
     history_length = len(session.state.history)
 
     session.back(SessionStep.PRIORITISE)
 
     assert session.state.step is SessionStep.PRIORITISE
-    assert session.state.profile == before  # every task, persona and criterion intact
+    assert (
+        session.state.profile == before
+    )  # every scenario, persona and criterion intact
     assert len(session.state.history) == history_length
 
 

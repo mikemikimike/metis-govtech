@@ -65,7 +65,7 @@ export type CardComponent =
   | CardUploadField;
 
 interface CardBase {
-  kind: "standard" | "task";
+  kind: "standard" | "scenario";
   id: string;
   title: string;
   section?: string | null;
@@ -80,12 +80,12 @@ export interface Card extends CardBase {
   kind: "standard";
 }
 
-export interface TaskCard extends CardBase {
-  kind: "task";
+export interface ScenarioCard extends CardBase {
+  kind: "scenario";
   runs: number;
 }
 
-export type AnyCard = Card | TaskCard;
+export type AnyCard = Card | ScenarioCard;
 
 // ── warnings ─────────────────────────────────────────────────────────────────
 
@@ -202,7 +202,7 @@ export interface Persona {
   description: string;
 }
 
-export interface Task {
+export interface Scenario {
   id: string;
   description: string;
   behaviour_refs: string[];
@@ -222,7 +222,7 @@ export interface ProductProfile {
   product: Product;
   epics: Epic[];
   personas: Persona[];
-  tasks: Task[];
+  scenarios: Scenario[];
 }
 
 // ── the one payload that serves all three panes ──────────────────────────────
@@ -245,13 +245,13 @@ export interface SessionSummary {
 
 // ── the metric catalogue (the hand-authoring door's picker) ───────────────────
 
-// One row of the catalogue the manual form's metric picker offers. `group` is the module the
-// metric lives in, computed by the package so the browser groups without parsing identifiers.
+// One row of the catalogue the manual form's metric picker offers. The library re-exports every
+// metric from one flat namespace, so there is no module segment to group on; the picker shows one
+// alphabetical list.
 export interface MetricSpec {
   fqn: string;
   name: string;
   description: string;
-  group: string;
 }
 
 // ── transport ─────────────────────────────────────────────────────────────────

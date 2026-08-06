@@ -36,7 +36,7 @@ from metis.wizard.domain.profile import (
     Epic,
     Persona,
     ProductProfile,
-    Task,
+    Scenario,
 )
 
 # What a list of each name holds, so an ADD patch can build the right object from a dict.
@@ -45,7 +45,7 @@ _LIST_TYPES: dict[str, type] = {
     "behaviours": Behaviour,
     "criteria": Criterion,
     "personas": Persona,
-    "tasks": Task,
+    "scenarios": Scenario,
 }
 
 
@@ -127,7 +127,7 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
             "behaviours": {"id", "statement", "criteria"},
             "criteria": {"id", "given", "when", "then"},
             "personas": {"id", "description"},
-            "tasks": {"id", "description", "behaviour_refs", "persona_refs"},
+            "scenarios": {"id", "description", "behaviour_refs", "persona_refs"},
         }.get(field_name)
         if allowed is not None:
             value = {
@@ -189,8 +189,8 @@ def _apply_one(profile: ProductProfile, patch: Patch) -> None:
         if _draft(value, "PersonaDraft") and segment.field == "personas":
             materializer.add_persona(profile, value, patch.origin)
             return
-        if _draft(value, "TaskDraft") and segment.field == "tasks":
-            materializer.add_task(profile, value, patch.origin)
+        if _draft(value, "ScenarioDraft") and segment.field == "scenarios":
+            materializer.add_scenario(profile, value, patch.origin)
             return
         items.append(_coerce(segment.field, value, patch.origin))
 

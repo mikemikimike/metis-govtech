@@ -166,19 +166,21 @@ def create_app(
     def metrics() -> list[dict[str, Any]]:
         """The catalogue the form's metric picker offers.
 
-        The group is the module a metric lives in — the FQN segment before the class name —
-        so the browser groups without parsing identifiers itself.
+        A single flat list, already sorted by the reader. The library re-exports every metric
+        from one flat namespace, so there is no module segment to group on any more; the picker
+        shows one alphabetical list rather than a section per module.
         """
-        from metis.wizard.application.matching.catalogue import catalogue
+        from metis.wizard.application.matching.library_catalogue import (
+            library_catalogue,
+        )
 
         return [
             {
                 "fqn": spec.fqn,
                 "name": spec.name,
                 "description": spec.description,
-                "group": spec.fqn.rsplit(".", 2)[-2],
             }
-            for spec in catalogue()
+            for spec in library_catalogue()
         ]
 
     @app.post("/api/experiment.yaml")
@@ -214,7 +216,7 @@ def create_app(
                 experiment_id=experiment_id,
                 description=description,
                 personas=payload.get("personas", []),
-                tasks=payload.get("tasks", []),
+                scenarios=payload.get("scenarios", []),
             )
         except CompilationError as exc:
             raise HTTPException(422, str(exc)) from exc

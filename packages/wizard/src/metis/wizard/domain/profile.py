@@ -3,7 +3,7 @@
 A tree plus two reference lists:
 
     epics → behaviours → criteria     what should be true
-    personas, tasks                   how we'll check it
+    personas, scenarios               how we'll check it
 
 `ProductProfile` is a pure artefact. It carries no step, no history and no session id, so it
 can be hand-written in a fixture, rendered, compiled or diffed without an interview ever
@@ -77,14 +77,16 @@ class Epic(BaseModel):
 
 
 class Persona(Authored):
-    id: str  # stable key, visible label, and what compiled tasks reference
+    id: str  # stable key, visible label, and what compiled scenarios reference
     description: str
 
 
-class Task(Authored):
+class Scenario(Authored):
     id: str
     description: str  # the situation
-    behaviour_refs: list[str] = Field(default_factory=list)  # M:N — several per task
+    behaviour_refs: list[str] = Field(
+        default_factory=list
+    )  # M:N — several per scenario
     persona_refs: list[str] = Field(default_factory=list)
     fixtures: list[str] = Field(
         default_factory=list
@@ -98,7 +100,7 @@ class ProductProfile(BaseModel):
     product: Product
     epics: list[Epic] = Field(default_factory=list)
     personas: list[Persona] = Field(default_factory=list)
-    tasks: list[Task] = Field(default_factory=list)
+    scenarios: list[Scenario] = Field(default_factory=list)
 
     # ── walking the tree ───────────────────────────────────────────────────
 
@@ -114,7 +116,7 @@ class ProductProfile(BaseModel):
         return next((b for b in self.behaviours() if b.id == behaviour_id), None)
 
     def epic(self, epic_id: str) -> Epic | None:
-        """One epic by id — symmetric with `behaviour`, `persona` and `task`."""
+        """One epic by id — symmetric with `behaviour`, `persona` and `scenario`."""
         return next((e for e in self.epics if e.id == epic_id), None)
 
     def epic_of(self, behaviour_id: str) -> Epic | None:
@@ -127,23 +129,23 @@ class ProductProfile(BaseModel):
     def persona(self, persona_id: str) -> Persona | None:
         return next((p for p in self.personas if p.id == persona_id), None)
 
-    def task(self, task_id: str) -> Task | None:
-        return next((t for t in self.tasks if t.id == task_id), None)
+    def scenario(self, scenario_id: str) -> Scenario | None:
+        return next((s for s in self.scenarios if s.id == scenario_id), None)
 
-    def tasks_covering(self, behaviour_id: str) -> list[Task]:
-        return [t for t in self.tasks if behaviour_id in t.behaviour_refs]
+    def scenarios_covering(self, behaviour_id: str) -> list[Scenario]:
+        return [s for s in self.scenarios if behaviour_id in s.behaviour_refs]
 
     def uncovered(self) -> list[Behaviour]:
-        """Ticked behaviours no task exercises — the blocking gate at the tasks step."""
-        return [b for b in self.ticked() if not self.tasks_covering(b.id)]
+        """Ticked behaviours no scenario exercises — the blocking gate at the scenarios step."""
+        return [b for b in self.ticked() if not self.scenarios_covering(b.id)]
 
     def run_count(self) -> int:
-        """Runs the engine will perform: Σ over tasks of (personas × trials).
+        """Runs the engine will perform: Σ over scenarios of (personas × trials).
 
         Mirrors the harness expansion exactly, so the footer the user reads during the
         interview and the number of runs the engine performs cannot disagree.
         """
-        return sum(len(t.persona_refs) * t.num_trials for t in self.tasks)
+        return sum(len(s.persona_refs) * s.num_trials for s in self.scenarios)
 
     # ── persistence ────────────────────────────────────────────────────────
 

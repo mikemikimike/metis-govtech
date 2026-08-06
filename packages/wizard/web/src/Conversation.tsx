@@ -1,6 +1,6 @@
 // The conversation. Every block here is drawn from request `type` and `CardComponentType`
 // alone — there is not one domain word in this file, and there must never be. A behaviour, a
-// persona and a task all arrive as `Card`; the door draws a card. What each card *means* is
+// persona and a scenario all arrive as `Card`; the door draws a card. What each card *means* is
 // in its `title`, `section` and `label`s, which the package composed.
 //
 // One rule governs the text box, and it is the whole of the "greyed on strict screens"
@@ -332,7 +332,7 @@ function CardBlock({
               <p className="text-sm text-muted-foreground">{card.note}</p>
             )}
 
-            {/* Actions scoped to this card — "chat", "add a task", "remove". The tick, if any, is
+            {/* Actions scoped to this card — "chat", "add a scenario", "remove". The tick, if any, is
                 the checkbox above, so it is filtered out here. */}
             {actions.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-1">
@@ -368,8 +368,8 @@ function ComponentBlock({
   // The value alone, unlabelled. `FormRow` decides where the label goes: a labelled component
   // reads as a form field (label in a left column, value at the right), an unlabelled one runs
   // full-width. This is a *shape* choice — "does this component carry a label" — not a domain
-  // one; only the task card composes labelled components, so this is what gives it its form look
-  // without the door ever learning it is a task.
+  // one; only the scenario card composes labelled components, so this is what gives it its form look
+  // without the door ever learning it is a scenario.
   const value = (() => {
     switch (component.type) {
       case "text":
@@ -466,7 +466,7 @@ function NumberCardField({
 }
 
 // One component's row. With a label it reads as a form field — the label in a fixed left column,
-// the value aligned to the right of the row — which is what turns the task card's stack of
+// the value aligned to the right of the row — which is what turns the scenario card's stack of
 // labelled components into a two-column form. Without a label it runs full-width, so the
 // behaviours', criteria' and personas' unlabelled text is untouched.
 function FormRow({
@@ -494,7 +494,7 @@ function FormRow({
 
 // ── warnings ─────────────────────────────────────────────────────────────────
 
-// Rendered by source. A document gate ("your document needs a task here") is the user's to
+// Rendered by source. A document gate ("your document needs a scenario here") is the user's to
 // clear and reads calm; a runtime event ("we couldn't reach the model") is not their fault
 // and reads as ours. Same component, different skin — never the same skin.
 function WarningBlock({

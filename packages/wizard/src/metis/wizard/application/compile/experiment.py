@@ -4,7 +4,7 @@ A pure function. Give it a profile, get back a dict; nothing is read from disk e
 schema, and nothing is written unless validation passes.
 
 **No output models.** The compiler emits a plain dict and validates it against the engine's
-own JSON schema. Mirroring `Experiment` / `ExperimentTask` / `MetricRef` as wizard-side
+own JSON schema. Mirroring `Experiment` / `Scenario` / `MetricRef` as wizard-side
 Pydantic classes would be more classes that silently drift from the real schema, and the
 schema file is already the contract. The cost is real and accepted: no autocomplete while
 writing this module, and a mistyped key surfaces at validation rather than construction.
@@ -21,7 +21,7 @@ from typing import Any
 import jsonschema
 import yaml
 
-from metis.wizard.domain.profile import Behaviour, ProductProfile, Task
+from metis.wizard.domain.profile import Behaviour, ProductProfile, Scenario
 
 # The engine declares `schema_version: Literal[1]` with no default and requires it. A file
 # without it is one the engine refuses to load, so the compiler states it explicitly rather
@@ -64,10 +64,10 @@ def _schema() -> dict[str, Any]:
 
 
 def _metric_refs(behaviours: list[Behaviour]) -> list[str]:
-    """Every metric that will judge this task.
+    """Every metric that will judge this scenario.
 
-    The criteria metrics of the behaviours it covers, and nothing else — a task is measured
-    on what it was written to exercise.
+    The criteria metrics of the behaviours it covers, and nothing else — a scenario is
+    measured on what it was written to exercise.
 
     De-duplicated in document order rather than sorted: two behaviours often share a metric,
     and document order is the one a reader of `review.md` already has in their head. Order
@@ -82,7 +82,7 @@ def _metric_refs(behaviours: list[Behaviour]) -> list[str]:
     return list(dict.fromkeys(fqns))  # order-preserving dedup
 
 
-def _compile_task(profile: ProductProfile, task: Task) -> dict[str, Any]:
+def _compile_scenario(profile: ProductProfile, scenario: Scenario) -> dict[str, Any]:
     known_personas = {p.id for p in profile.personas}
     ticked = {b.id for b in profile.ticked()}
 
@@ -90,18 +90,20 @@ def _compile_task(profile: ProductProfile, task: Task) -> dict[str, Any]:
     # persona_ref rather than skipping it, so emitting one produces a file that fails at run
     # time instead of here. Unticked behaviours contribute nothing by the same logic — they
     # were deliberately not measured, and they survive in review.md.
-    persona_refs = [ref for ref in task.persona_refs if ref in known_personas]
-    covered = [b for b in profile.ticked() if b.id in set(task.behaviour_refs) & ticked]
+    persona_refs = [ref for ref in scenario.persona_refs if ref in known_personas]
+    covered = [
+        b for b in profile.ticked() if b.id in set(scenario.behaviour_refs) & ticked
+    ]
 
     compiled: dict[str, Any] = {
-        "id": task.id,
-        "description": task.description,
-        "num_trials": task.num_trials,
+        "id": scenario.id,
+        "description": scenario.description,
+        "num_trials": scenario.num_trials,
         "persona_refs": persona_refs,
         "metric_refs": _metric_refs(covered),
     }
-    if task.fixtures:
-        compiled["fixtures"] = list(task.fixtures)
+    if scenario.fixtures:
+        compiled["fixtures"] = list(scenario.fixtures)
     return compiled
 
 
@@ -110,7 +112,7 @@ def build_experiment_document(
     experiment_id: str,
     description: str,
     personas: list[dict[str, Any]],
-    tasks: list[dict[str, Any]],
+    scenarios: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Assemble and validate an experiment document from its parts.
 
@@ -119,9 +121,9 @@ def build_experiment_document(
     emits the same bytes from the same content. The schema version is stamped here rather
     than supplied by a caller: a form never asks the user for it.
 
-    `personas` and `tasks` arrive already in document shape (the dicts the schema expects),
-    so this function neither knows nor cares whether they came from a `ProductProfile` or a
-    submitted form.
+    `personas` and `scenarios` arrive already in document shape (the dicts the schema
+    expects), so this function neither knows nor cares whether they came from a
+    `ProductProfile` or a submitted form.
 
     Raises `CompilationError` if the result does not satisfy the schema — the caller writes
     nothing in that case, so a malformed experiment never reaches disk or a browser.
@@ -133,7 +135,7 @@ def build_experiment_document(
         # Personas are inline: one output file, one schema. The input directory the engine
         # reads is experiment.yaml plus a fixtures/ folder — there is no personas file.
         "personas": personas,
-        "tasks": tasks,
+        "scenarios": scenarios,
     }
 
     try:
@@ -158,7 +160,9 @@ def compile_experiment(profile: ProductProfile, experiment_id: str) -> dict[str,
         experiment_id=experiment_id,
         description=profile.product.summary,
         personas=[{"id": p.id, "description": p.description} for p in profile.personas],
-        tasks=[_compile_task(profile, task) for task in profile.tasks],
+        scenarios=[
+            _compile_scenario(profile, scenario) for scenario in profile.scenarios
+        ],
     )
 
 

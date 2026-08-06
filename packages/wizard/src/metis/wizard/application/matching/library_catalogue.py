@@ -5,6 +5,13 @@ which the wizard is allowed to depend on, so nothing here breaks the `wizard ↛
 invariant in the root CLAUDE.md. Keeping the location in one string is what made moving them
 out of the engine a one-line change here.
 
+The metrics each live in their own `_`-prefixed module and are re-exported flat from
+`metis.library.metrics.__init__`, which documents that path as canonical and calls the file
+layout semantically weightless. So this reads the classes the package re-exports rather than
+walking submodules — walking the submodules would skip every `_`-prefixed file and find
+almost nothing. The emitted FQN is the flat canonical path, `metis.library.metrics.<Class>`,
+which is what the engine resolves by ``import_module`` + ``getattr``.
+
 Design-time metadata only. The wizard never instantiates a metric and never runs one — which
 is why specs are built from class names and docstrings rather than from instances. Many
 metrics take constructor arguments, so building one just to read its display name would be
@@ -14,12 +21,11 @@ the wizard doing exactly what it says it never does.
 from __future__ import annotations
 
 import inspect
-import pkgutil
 import re
 from functools import lru_cache
 from importlib import import_module
 
-from metis.wizard.contracts.catalogue import MetricParam, MetricSpec
+from metis.wizard.contracts.metric_spec import MetricParam, MetricSpec
 
 # The one string that says where the metrics live.
 METRICS_PACKAGE = "metis.library.metrics"
@@ -66,21 +72,23 @@ def _params(cls: type) -> list[MetricParam]:
     return params
 
 
-def _is_metric(obj: object, module_name: str) -> bool:
+def _is_metric(obj: object) -> bool:
     if not inspect.isclass(obj):
         return False
     if not obj.__name__.endswith("Metric"):
         return False
     if obj.__name__.startswith(("Base", "Sync")):  # abstract bases, not choices
         return False
-    # Defined here rather than imported from somewhere else, so each metric is catalogued
-    # once under the module it actually lives in.
-    return obj.__module__ == module_name
+    # Defined inside the library, not something the package happens to import from elsewhere.
+    return obj.__module__.startswith(METRICS_PACKAGE)
 
 
 @lru_cache(maxsize=1)
-def catalogue() -> list[MetricSpec]:
+def library_catalogue() -> list[MetricSpec]:
     """Every metric the wizard may match against.
+
+    Read from the classes `metis.library.metrics` re-exports, so it is the full set the
+    library publishes rather than whatever a submodule walk would happen to find.
 
     Cached: the catalogue cannot change within a run, and it is read once per session start
     and once per matcher construction.
@@ -88,22 +96,16 @@ def catalogue() -> list[MetricSpec]:
     package = import_module(METRICS_PACKAGE)
     specs: list[MetricSpec] = []
 
-    for info in pkgutil.iter_modules(package.__path__):
-        if info.name.startswith("_"):
+    for name, obj in vars(package).items():
+        if not _is_metric(obj):
             continue
-        module_name = f"{METRICS_PACKAGE}.{info.name}"
-        module = import_module(module_name)
-
-        for name, obj in vars(module).items():
-            if not _is_metric(obj, module_name):
-                continue
-            specs.append(
-                MetricSpec(
-                    fqn=f"{module_name}.{name}",
-                    name=_human_name(name),
-                    description=_summary(obj),
-                    params=_params(obj),
-                )
+        specs.append(
+            MetricSpec(
+                fqn=f"{METRICS_PACKAGE}.{name}",
+                name=_human_name(name),
+                description=_summary(obj),
+                params=_params(obj),
             )
+        )
 
     return sorted(specs, key=lambda s: s.fqn)

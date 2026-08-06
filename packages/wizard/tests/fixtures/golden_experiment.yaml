@@ -8,9 +8,9 @@ personas:
     willingly, and redirects gently if things stall.
 - id: impatient-executive
   description: A time-poor director who writes in curt imperatives, will not answer clarifying
-    questions, and abandons the task quickly.
-tasks:
-- id: T-1
+    questions, and abandons the work quickly.
+scenarios:
+- id: S-1
   description: Ask for a literature review on a topic the library covers well, then ask a
     follow-up that needs a second document.
   num_trials: 3
@@ -18,14 +18,14 @@ tasks:
   - cooperative-delegator
   - impatient-executive
   metric_refs:
-  - metis.library.metrics.orchestration.SynthesisFaithfulnessMetric
-- id: T-2
+  - metis.library.metrics.SynthesisFaithfulnessMetric
+- id: S-2
   description: Ask a question whose documents live behind a search that will time out, forcing
     the retry path.
   num_trials: 3
   persona_refs:
   - cooperative-delegator
   metric_refs:
-  - metis.library.metrics.universal.BoundedTroubleshootingMetric
+  - metis.library.metrics.BoundedTroubleshootingMetric
   fixtures:
   - policy.pdf

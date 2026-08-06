@@ -1,6 +1,5 @@
 """Serializable contracts exchanged by the wizard and its doors or providers."""
 
-from metis.wizard.contracts.catalogue import MetricParam, MetricSpec
 from metis.wizard.contracts.conversation import (
     AnyCard,
     AnyCardComponent,
@@ -24,7 +23,7 @@ from metis.wizard.contracts.conversation import (
     FormResponse,
     Option,
     OptionId,
-    TaskCard,
+    ScenarioCard,
     UserResponse,
     Warning,
     WarningSource,
@@ -33,15 +32,16 @@ from metis.wizard.contracts.conversation import (
     editable_fields_of,
     options_of,
 )
+from metis.wizard.contracts.metric_spec import MetricParam, MetricSpec
 from metis.wizard.contracts.output import (
     BehaviourDraft,
     ClarifyResult,
     CriterionDraft,
     EpicDraft,
     PersonaDraft,
+    ScenarioDraft,
     StepResult,
     StepResultPatch,
-    TaskDraft,
 )
 from metis.wizard.contracts.session_state import (
     SESSION_FORMAT_VERSION,
@@ -58,7 +58,7 @@ from metis.wizard.domain.profile import (
     Persona,
     Product,
     ProductProfile,
-    Task,
+    Scenario,
 )
 from metis.wizard.domain.types import InteractionType
 
@@ -104,13 +104,13 @@ __all__ = [
     "Product",
     "ProductProfile",
     "SESSION_FORMAT_VERSION",
+    "Scenario",
+    "ScenarioCard",
+    "ScenarioDraft",
     "SessionState",
     "SessionVersionError",
     "StepResult",
     "StepResultPatch",
-    "Task",
-    "TaskDraft",
-    "TaskCard",
     "Turn",
     "UserResponse",
     "Warning",

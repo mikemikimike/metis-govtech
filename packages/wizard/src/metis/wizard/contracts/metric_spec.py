@@ -21,7 +21,7 @@ class MetricParam(BaseModel):
 
 
 class MetricSpec(BaseModel):
-    fqn: str  # "metis.library.metrics.universal.TurnBudgetMetric"
+    fqn: str  # "metis.library.metrics.TurnBudgetMetric"
     name: str  # "Turn budget" — what the user sees
     description: str
     # Unused in the MVP: arguments are always left at their defaults, so a criterion saying

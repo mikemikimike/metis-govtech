@@ -96,7 +96,7 @@ plan reads well either way, which is what makes this hard to catch by eye.
 
 **Delegation.** Routing to the wrong subagent, or handling something directly that should have
 been routed. Losing context across the handoff, so the second agent re-asks what the user
-already said. Passing along a subagent's output without checking it. Decomposing a task into
+already said. Passing along a subagent's output without checking it. Breaking work into
 steps that do not add up to the original request. And the failure specific to chains: a small
 early error that each subsequent agent treats as given, so that by the end it is load-bearing
 and invisible.
@@ -186,12 +186,12 @@ A behaviour is worth writing when the system could plausibly fail it. Statements
 true by construction — it cannot send mail, so it will not send the wrong mail — measure
 nothing.
 
-## Tasks
+## Scenarios
 
 **This matters most and is easiest to forget.** A behaviour about bounded retry is untestable
-unless some task actually makes a tool fail. A behaviour about carrying context is untestable
-unless some task spans two subagents or changes direction mid-session. A behaviour about
-resisting instructions in content is untestable unless some task puts them there. Happy-path
+unless some scenario actually makes a tool fail. A behaviour about carrying context is untestable
+unless some scenario spans two subagents or changes direction mid-session. A behaviour about
+resisting instructions in content is untestable unless some scenario puts them there. Happy-path
 situations produce clean traces with nothing in them to measure, and no amount of well-written
 criteria recovers from that.
 
@@ -199,9 +199,9 @@ Build the situation that forces the interesting path. The refund on an order tha
 exist. The question whose documents are behind a search that times out. The request that
 changes after the work has started. The document that contains a line telling the agent to do
 something else. The request that is one step past what the system is allowed to commit to.
-The task that can be finished properly or finished fast, but not both.
+The scenario that can be finished properly or finished fast, but not both.
 
-Where two abilities meet, put a task there. That is where the failures nobody anticipated live.
+Where two abilities meet, put a scenario there. That is where the failures nobody anticipated live.
 
 ## Personas
 

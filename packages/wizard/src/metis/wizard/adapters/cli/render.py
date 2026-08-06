@@ -89,7 +89,7 @@ def _checkbox(selected: bool | None) -> str:
 def _ref(option: Option) -> str:
     """The item a choice applies to, without the action verb.
 
-    Displayed beside a choice so a user can see *which* behaviour or task a repeated label
+    Displayed beside a choice so a user can see *which* behaviour or scenario a repeated label
     ("Chat about it") belongs to. The verb (`chat`, `tick`, `cover`) is machinery the user
     never types — the number selects — so it is dropped from the display. Selection still
     keys on the full `str(option.id)`, so a typed key like `chat:EB-6` keeps working.

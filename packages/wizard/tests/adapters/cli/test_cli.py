@@ -97,11 +97,11 @@ def test_an_unmatched_profile_loses_the_users_metrics() -> None:
 
     document = compile_experiment(profile, "unmatched")
 
-    assert all(t["metric_refs"] == [] for t in document["tasks"])
+    assert all(t["metric_refs"] == [] for t in document["scenarios"])
 
 
 def test_a_matched_profile_keeps_them() -> None:
-    """The same profile, matched — every task carries the metrics its behaviours earned."""
+    """The same profile, matched — every scenario carries the metrics its behaviours earned."""
     from metis.wizard.application.matching import match_profile
 
     profile = research_assistant()
@@ -113,11 +113,13 @@ def test_a_matched_profile_keeps_them() -> None:
     document = compile_experiment(profile, "matched")
 
     # the stub embeds everything identically, so matches land on the fallback or a real
-    # metric — either way every task ends up measured by something, which is the whole
+    # metric — either way every scenario ends up measured by something, which is the whole
     # difference from the unmatched case above.
-    for task in document["tasks"]:
-        assert task["metric_refs"]
-    assert all(ref for task in document["tasks"] for ref in task["metric_refs"])
+    for scenario in document["scenarios"]:
+        assert scenario["metric_refs"]
+    assert all(
+        ref for scenario in document["scenarios"] for ref in scenario["metric_refs"]
+    )
 
 
 def test_every_criterion_ends_up_measured_by_something() -> None:

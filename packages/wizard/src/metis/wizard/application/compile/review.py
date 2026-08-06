@@ -70,21 +70,21 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
         out += ["_none_"]
     out += [""]
 
-    out += ["## Tasks", ""]
-    for task in profile.tasks:
-        covers = ", ".join(task.behaviour_refs) or "nothing"
-        runs = ", ".join(task.persona_refs) or "nobody"
+    out += ["## Scenarios", ""]
+    for scenario in profile.scenarios:
+        covers = ", ".join(scenario.behaviour_refs) or "nothing"
+        runs = ", ".join(scenario.persona_refs) or "nobody"
         out += [
-            f"### {task.id}",
+            f"### {scenario.id}",
             "",
-            task.description,
+            scenario.description,
             "",
             f"- *covers:* {covers}",
             f"- *run as:* {runs}",
-            f"- *trials:* {task.num_trials}",
+            f"- *trials:* {scenario.num_trials}",
         ]
-        if task.fixtures:
-            out += [f"- *files:* {', '.join(task.fixtures)}"]
+        if scenario.fixtures:
+            out += [f"- *files:* {', '.join(scenario.fixtures)}"]
         out += [""]
 
     # The same calculation the interview footer shows, so the document and the screen the

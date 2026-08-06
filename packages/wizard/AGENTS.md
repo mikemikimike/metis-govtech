@@ -157,7 +157,7 @@ the scripted interviewer. It is the offline full happy-path check for both outpu
 - **Paths resolve by real id only.** Paths address by id (`behaviours[EB-1]`); a numeric bracket
   such as `behaviours[0]` is rejected rather than treated as a positional fallback. This keeps
   edits and references stable when lists are reordered.
-- **`ADD` addresses the container** (`epics`, `tasks`), `SET`/`REMOVE` an element
+- **`ADD` addresses the container** (`epics`, `scenarios`), `SET`/`REMOVE` an element
   (`epics[EP-1]`). `StepPermissions` must list both or half the operations are silently
   forbidden.
 - **Strict drafts own the boundary.** Provider JSON is parsed into strict, model-only draft
@@ -169,7 +169,10 @@ the scripted interviewer. It is the offline full happy-path check for both outpu
 ## Package-Specific Notes
 
 The metric catalogue now reads from **metis-library** (`metis.library.metrics.*`), so
-`application/matching/catalogue.py` is back on the DAG.
+`application/matching/library_catalogue.py` is back on the DAG. It enumerates the classes
+re-exported flat from `metis.library.metrics.__init__` and emits canonical FQNs
+`metis.library.metrics.<Class>`; the `MetricSpec`/`MetricParam` types it returns live in
+`contracts/metric_spec.py`.
 
 The wizard still depends on **metis-engine** in one place, breaking the DAG: `application/compile/experiment.py`
 locates the experiment schema on disk relative to the installed `metis.engine` module (the schema
