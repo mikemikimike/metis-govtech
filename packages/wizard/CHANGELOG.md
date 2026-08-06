@@ -8,12 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- Show Name, Users and Details in a scaffolded Product section while keeping the short summary in
+  the document header. Reveal product prose by word, animate only changed word runs during
+  corrections, preserve line breaks and capitalisation, and rest the reveal and writing marker
+  under reduced motion.
 - Ask high-breadth product-manager handover questions before drilling into examples or internal
   handoffs, and present short audience labels such as `Public Officers` with initial capitals in
   the document pane.
 - Clarify the product before asking about its machinery, persist product fields during the
   conversation, and use one package-owned opening question through the CLI and web doors. Rename
-  the product depth field from `architecture` to `detail`.
+  the product depth field from `architecture` to `detail`, and preserve it as an
+  evidence-proportional, cumulative handover instead of compressing rich sources into another
+  summary.
 - Add optional Langfuse v3 model-call tracing for self-hosted server v3.153.0. Record prompts,
   replies, retries, usage and latency, with the root trace summary exposing the initial input and
   final output, without changing the interview when tracing is absent or fails.

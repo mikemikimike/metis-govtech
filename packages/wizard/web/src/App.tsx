@@ -379,6 +379,7 @@ export function App() {
             className="min-w-[20rem] shrink-0 border-l border-border bg-muted"
           >
             <Profile
+              key={view.id}
               profile={view.profile}
               // Where the interview has got to, and what it is doing right now. Both are read
               // straight off the payload: the position from the step metadata the package stamps

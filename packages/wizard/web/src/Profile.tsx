@@ -20,9 +20,9 @@
 // second drawing of what is already on screen.
 //
 // It is a live mirror of the profile the package built, drawn fresh each time the payload arrives.
-// It holds no change history and no diff: content that has just landed animates in as it mounts,
-// and once that has finished it is drawn exactly like content that arrived ten turns ago. The
-// arrival is marked; the change is not remembered.
+// It holds no persistent change history and no whole-profile diff. Each product value remembers
+// only the string it last received while mounted, which is enough to mark an arrival or correction;
+// once that reveal has finished, the text looks like content that arrived ten turns ago.
 
 import { useState } from "react";
 import type {
@@ -34,6 +34,7 @@ import type {
 } from "./api";
 import { api } from "./api";
 import { PanelRight } from "lucide-react";
+import { RevealText } from "./RevealText";
 import { Button, Chevron, Chip, cn, countRuns, formatRuns, Mono, Tooltip } from "./ui";
 
 // ── where the interview has got to ───────────────────────────────────────────
@@ -81,20 +82,12 @@ export function stepPosition(requests: WizardRequest[]): StepPosition | null {
 // generates land inside already-populated behaviours, so there is no empty section to shimmer for
 // it, and the arrival animation still fires on each criterion as it mounts.
 //
-// Clarify is absent for a different reason. A clarify turn writes nothing to the profile: the
-// driver files the answer in history and asks the next question, and only the final turn falls
-// through to drafting — a choice made inside the model call, which neither the door nor the package
-// can see coming. Marking a section there would promise content that is four turns away, and would
-// put motion on screen through the interview's longest conversational phase, competing with the
-// chat exactly when the document has nothing to say. The cost is that the one turn which writes the
-// most is the one turn nothing is marked; the arrival animation still fires when the draft lands.
-//
-// This exclusion is provisional. It follows from clarify writing nothing until its last turn, not
-// from any rule that the document must be still while the user is being asked questions — a later
-// change makes clarify populate the document as it goes, and should loosen this then.
-type WritingTarget = "behaviours" | "personas" | "scenarios";
+// Clarify now writes the Product section on every useful answer, so it follows the same rule as the
+// later drafting steps instead of being a special case.
+type WritingTarget = "product" | "behaviours" | "personas" | "scenarios";
 
 const WRITING_TARGET: Record<string, WritingTarget> = {
+  clarify: "product",
   behaviours: "behaviours",
   criteria: "personas",
   personas: "scenarios",
@@ -135,8 +128,6 @@ export function Profile({
   done?: boolean;
 }) {
   const { product } = profile;
-  const named = product.name.trim() || "Untitled product";
-
   const { tasks } = profile;
   const writing = busy && sessionStep ? WRITING_TARGET[sessionStep] : undefined;
   const hasCriteria = tasks.some((task) =>
@@ -204,56 +195,40 @@ export function Profile({
           the headings to meet. */}
       <div className="quiet-scrollbar flex-1 overflow-y-auto overflow-x-hidden rounded-[12px] bg-card text-sm text-card-foreground shadow-sm">
         <div className="flex flex-col gap-8 px-5 pb-5">
-        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3 pt-5">
-          <h2 className="min-w-0 text-base font-semibold text-foreground">{named}</h2>
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-            {hasCriteria && (
-              <Button
-                type="button"
-                variant="ghost"
-                active={showMetrics}
-                disabled={!metricsAvailable}
-                aria-pressed={showMetrics}
-                title={metricsError ? "Metric details unavailable" : "Show metrics"}
-                onClick={() => onShowMetricsChange(!showMetrics)}
-                className="px-2 py-1 text-xs"
-              >
-                Show metrics
-              </Button>
-            )}
-            {metricsError && (
-              <span role="alert" className="text-xs text-destructive">
-                Metric details unavailable
-              </span>
-            )}
-          </div>
-          <div className="min-w-0">
-            {product.summary ? (
-              <p className="animate-arrive text-muted-foreground">
-                {product.summary}
-              </p>
-            ) : (
-              // The header holds one piece of prose — the product summary — not a list, so it gets
-              // the ruled lines without the frame. The frame says "a region reserved for a growing
-              // list of items"; the sections below fill with lists, the summary does not.
-              <Placeholder />
-            )}
-          </div>
-          <div className="col-span-full grid gap-3 @container">
-            {product.users ? (
-              <ProductProse label="Who uses it">
-                {formatAudience(product.users)}
-              </ProductProse>
-            ) : (
-              <ProductProsePlaceholder label="Who uses it" />
-            )}
-            {product.detail ? (
-              <ProductProse label="How it works">{product.detail}</ProductProse>
-            ) : (
-              <ProductProsePlaceholder label="How it works" />
-            )}
-          </div>
-        </header>
+          {/* The header carries only the pane's metric controls, pinned to the right. It draws
+              nothing until there is a control to hold, so an early document opens straight onto
+              Product rather than onto an empty strip. */}
+          {(hasCriteria || metricsError) && (
+            <header className="flex flex-wrap items-center justify-end gap-2 pt-5">
+              {hasCriteria && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  active={showMetrics}
+                  disabled={!metricsAvailable}
+                  aria-pressed={showMetrics}
+                  title={metricsError ? "Metric details unavailable" : "Show metrics"}
+                  onClick={() => onShowMetricsChange(!showMetrics)}
+                  className="px-2 py-1 text-xs"
+                >
+                  Show metrics
+                </Button>
+              )}
+              {metricsError && (
+                <span role="alert" className="text-xs text-destructive">
+                  Metric details unavailable
+                </span>
+              )}
+            </header>
+          )}
+
+          <Section title="Product" writing={writing === "product"}>
+            <div className="flex flex-col gap-4">
+              <ProductField label="Name" value={product.name} />
+              <ProductField label="Users" value={product.users} preserveLines />
+              <ProductField label="Details" value={product.detail} preserveLines />
+            </div>
+          </Section>
 
         {/* Sections run in the order the interview fills them, and every one of them is drawn
             whether or not it holds anything yet.
@@ -263,7 +238,11 @@ export function Profile({
             sheet reads as the interview's output section by section. They are entity names, all
             three of the same kind; "What should be true" was a sentence sitting between two nouns,
             which is what made it read as the odd one out. */}
-        <Section title="Behaviours" count={behaviourCount}>
+        <Section
+          title="Behaviours"
+          count={behaviourCount}
+          writing={writing === "behaviours"}
+        >
           {tasks.length > 0 ? (
             // Groups are set well apart from one another, so the section reads as a handful of
             // named groups rather than one long run of behaviours. The gap is the largest inside
@@ -280,11 +259,15 @@ export function Profile({
               ))}
             </div>
           ) : (
-            <Placeholder boxed writing={writing === "behaviours"} />
+            <Placeholder boxed />
           )}
         </Section>
 
-        <Section title="Personas" count={profile.personas.length}>
+        <Section
+          title="Personas"
+          count={profile.personas.length}
+          writing={writing === "personas"}
+        >
           {profile.personas.length > 0 ? (
             // Each persona leads with its name and is anchored by a marker at the left edge, so a
             // run of them is countable at a glance rather than read to be counted. The two were
@@ -307,11 +290,15 @@ export function Profile({
               ))}
             </ul>
           ) : (
-            <Placeholder boxed writing={writing === "personas"} />
+            <Placeholder boxed />
           )}
         </Section>
 
-        <Section title="Scenarios" count={profile.scenarios.length}>
+        <Section
+          title="Scenarios"
+          count={profile.scenarios.length}
+          writing={writing === "scenarios"}
+        >
           {profile.scenarios.length > 0 ? (
             <div className="flex flex-col gap-3">
               <ul className="flex flex-col gap-4">
@@ -393,7 +380,7 @@ export function Profile({
               </div>
             </div>
           ) : (
-            <Placeholder boxed writing={writing === "scenarios"} />
+            <Placeholder boxed />
           )}
         </Section>
         </div>
@@ -469,7 +456,7 @@ function ProfileFooter({
 // reserved region, and the dotted edge carries that message rather than the lines themselves.
 //
 // The frame specifically means "a list will grow here": Behaviours, Personas and Scenarios all fill
-// with lists of items, so all three get the identical framed placeholder. The header summary is one
+// with lists of items, so all three get the identical framed placeholder. A Product field is one
 // piece of prose, not a list, so it takes the same lines without the frame — framing a single line
 // would promise a growing region that never arrives.
 //
@@ -584,64 +571,59 @@ function ProgressSegments({
 function Section({
   title,
   count,
+  writing = false,
   children,
 }: {
   title: string;
   count?: number;
+  writing?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3">
+    <section className={cn("flex flex-col gap-3", writing && "is-writing")}>
       <div className="sticky top-0 z-10 -mx-5 flex items-baseline justify-between gap-3 border-b border-border bg-card px-5 pb-2 pt-4">
-        <h3 className="min-w-0 text-base font-semibold tracking-tight text-foreground">
+        <h2 className="min-w-0 text-base font-semibold tracking-tight text-foreground">
           {title}
-        </h3>
-        {count != null && count > 0 && (
-          <Mono className="shrink-0 tabular-nums">{count}</Mono>
-        )}
+        </h2>
+        <div className="flex shrink-0 items-center gap-2">
+          {writing && (
+            <span
+              aria-hidden
+              className="section-writing-marker h-1.5 w-1.5 rounded-full bg-accent"
+            />
+          )}
+          {count != null && count > 0 && <Mono className="tabular-nums">{count}</Mono>}
+        </div>
       </div>
       {children}
     </section>
   );
 }
 
-function ProductProse({
+function ProductField({
   label,
-  children,
+  value,
+  preserveLines = false,
 }: {
   label: string;
-  children: string;
+  value: string;
+  preserveLines?: boolean;
 }) {
   return (
-    <div className="animate-arrive flex flex-col gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <p className="text-muted-foreground">{children}</p>
-    </div>
-  );
-}
-
-// A short audience phrase is a standalone label in the document. Keep longer descriptions as
-// prose so a sentence such as "Policy analysts and their managers." is not title-cased word by
-// word.
-function formatAudience(value: string): string {
-  const text = value.trim();
-  if (!text) return value;
-
-  const words = text.split(/\s+/);
-  if (words.length <= 4 && !/[.!?;:]/.test(text)) {
-    return words
-      .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : word))
-      .join(" ");
-  }
-
-  return text[0].toUpperCase() + text.slice(1);
-}
-
-function ProductProsePlaceholder({ label }: { label: string }) {
-  return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <Placeholder />
+      <h3 className="text-xs font-medium text-muted-foreground">{label}</h3>
+      {/* RevealText stays mounted under the placeholder. On the first response it therefore sees
+          empty → written; on a resumed session its initial value is already the completed text. */}
+      <p
+        className={cn(
+          "text-muted-foreground",
+          preserveLines && "whitespace-pre-line",
+          !value && "hidden",
+        )}
+      >
+        <RevealText value={value} />
+      </p>
+      {!value && <Placeholder />}
     </div>
   );
 }

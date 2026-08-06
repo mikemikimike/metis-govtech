@@ -257,3 +257,28 @@
   background-size: 200% 100%;
   animation: writing 1.6s ease-in-out infinite;
 }
+
+@keyframes section-writing {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.section-writing-marker {
+  animation: section-writing 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-writing .placeholder-rule {
+    animation: none !important;
+    background-image: none;
+  }
+
+  .section-writing-marker {
+    animation: none !important;
+  }
+}
