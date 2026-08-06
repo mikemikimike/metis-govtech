@@ -8,7 +8,8 @@ from fixtures.scripted import ScriptedInterviewer
 
 from metis.wizard.adapters.llm.gateway import ModelOutputError
 from metis.wizard.application import SessionState, Turn
-from metis.wizard.application.driver import CLARIFY_TURN_CAP, StepDriver
+from metis.wizard.application.driver import StepDriver
+from metis.wizard.application.interview import clarify_turn_cap
 from metis.wizard.contracts import (
     ChatRequest,
     ChatResponse,
@@ -47,7 +48,7 @@ class NeverDone(ScriptedInterviewer):
 def test_a_model_that_never_stops_is_stopped() -> None:
     """An interview that never ends is not recoverable; a thin first draft is."""
     driver = StepDriver(interviewer=NeverDone())
-    history = [Turn(role="assistant", text=f"q{i}") for i in range(CLARIFY_TURN_CAP)]
+    history = [Turn(role="assistant", text=f"q{i}") for i in range(clarify_turn_cap())]
     state = empty_state(history=history)
 
     driver.compose(state)
@@ -76,8 +77,8 @@ def test_nothing_is_committed_during_clarify() -> None:
     assert state.profile.scenarios == []
 
 
-def test_the_cap_is_a_single_named_constant() -> None:
-    assert isinstance(CLARIFY_TURN_CAP, int) and CLARIFY_TURN_CAP > 0
+def test_the_configured_cap_is_positive() -> None:
+    assert clarify_turn_cap() > 0
 
 
 # ── the step header ────────────────────────────────────────────────────────

@@ -1,3 +1,6 @@
+settings:
+  clarify_turn_cap: 5
+
 statuses:
   clarify: "Understanding your agent…"
   behaviours: "Shaping expected behaviours…"

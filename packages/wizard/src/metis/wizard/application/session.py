@@ -144,7 +144,7 @@ class Session:
 
     def busy_message(self) -> str:
         """Finished package copy for work started from the current phase."""
-        from metis.wizard.application.statuses import status_for
+        from metis.wizard.application.interview import status_for
 
         return status_for(self.state.step)
 

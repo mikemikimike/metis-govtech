@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- Split package-owned model prompts into `prompts.yaml`, with strict validation and one complete
+  `ModelPrompt` per model call. Keep the clarify limit and status copy in `interview.yaml`, with
+  fresh reads through their separate application owners. Keep the agentic primer separate while
+  making primer edits visible on the next model call.
 - Name evaluation work as runs throughout the wizard, show per-scenario run counts and totals on
   the interview, document pane, hand-authoring form and generated review, and persist scenario-card
   counts through the version-5 session wire contract.

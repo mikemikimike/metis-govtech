@@ -1,95 +1,172 @@
-"""One prompt per step, and the primer that sits behind all of them.
+"""Load and compose the package-owned prompts for each model call.
 
-The primer goes in the **session system prompt**, present for every call in the session,
-rather than being injected per step. That removes a judgement — which steps get it — that
-would otherwise need remaking every time a step is added. Scope is already guarded
-structurally by `StepPermissions`, and a code check beats a withheld prompt string.
-
-Each per-step prompt says what that step is for and hands the model the profile. Note what it
-does *not* hand over after clarify: the transcript. Steps build their prompts from the
-document, which is why architectural detail has to be promoted into `product.architecture` to
-be visible at all.
+The catalogue is model-facing text. This module owns its validation and substitution, so the
+gateway receives a complete value and never needs to know the YAML shape.
 """
 
 from __future__ import annotations
 
 import json
-from functools import lru_cache
+from collections.abc import Mapping
+from dataclasses import dataclass
 from importlib import resources
+from string import Template
+from typing import Literal
+
+import yaml
 
 from metis.wizard.contracts.session_state import Turn
 from metis.wizard.domain.profile import ProductProfile
 
+PROMPTS_FILE = "prompts.yaml"
 PRIMER_FILE = "agentic-primer.md"
 
-_PATCH_RULES = """
-You return patches, never whole documents. Each patch has:
-  op    — add | remove | set | reorder
-  path  — an address, e.g. tasks[T-1].behaviours[EB-4].statement
-  value — the new value
+ModelCall = Literal[
+    "clarify",
+    "behaviours",
+    "criteria",
+    "personas",
+    "scenarios",
+    "chat",
+    "suggest_criterion",
+]
 
-Address existing nodes by id, never by position — `tasks[T-1]`, never `tasks[0]`. Ids,
-defaults and authorship are assigned by the wizard when an item is created; never include them
-in a draft. Ids never contain a dot — a dot separates path segments.
-
-A **task** here is a group of related behaviours — a job the product does for its users, such
-as "answer policy questions" or "handle a refund". A task is a heading that organises
-behaviours; it is never itself run, and it carries no situation, persona or steps. Do not read
-"task" as *a thing to be done*. The thing that gets run is a **scenario**, a single simulated
-situation you build much later to exercise behaviours. Keep them apart: a runnable,
-persona-facing situation is a scenario and never belongs in a task, and a bare grouping name is
-a task and never belongs in a scenario.
-
-To create something, `add` to its **container** with the whole object as the value, children
-included inline — never `set` an id that does not exist yet (`set` changes a field that is
-already there; it cannot create). One task with its behaviours is a single patch:
-
-  op: add
-  path: tasks
-  value: {"name": "…",
-          "behaviours": [{"statement": "…"}, {"statement": "…"}]}
-
-Mirror that shape, and the shape of anything already in the document. The wizard allocates
-collision-free ids across the current profile.
-
-The wizard owns ids, authorship, defaults, priority, metric bindings, trials and fixtures. The
-model may never write any of them. Persona drafts use `label` and `description`; scenario drafts
-use only `description`, `behaviour_refs` and `persona_refs`.
-
-Two semantic fields you may never write, at any step:
-  - a behaviour's `priority` — that is the user's decision alone
-  - a criterion's `metric_fqn` — a separate matcher chooses it from the criterion's own
-    wording. You can see which metric each criterion is bound to, but you cannot set it. If
-    the user wants a different metric, do not touch `metric_fqn`; instead reword that
-    criterion's `given` / `when` / `then` so the wording points at the metric they mean, and
-    the matcher re-maps it. Say what you reworded, not that you changed the metric.
-
-Do not return suggestion options. If you are unsure, explain the alternatives in `message`.
-""".strip()
+_MODEL_CALL_PLACEHOLDERS: dict[ModelCall, frozenset[str]] = {
+    "clarify": frozenset({"profile", "history"}),
+    "behaviours": frozenset({"profile", "history"}),
+    "criteria": frozenset({"profile"}),
+    "personas": frozenset({"profile"}),
+    "scenarios": frozenset({"profile"}),
+    "chat": frozenset({"profile", "step", "text", "scope"}),
+    "suggest_criterion": frozenset({"profile", "behaviour_id"}),
+}
+_SYSTEM_PLACEHOLDERS = frozenset({"patch_rules", "primer"})
 
 
-@lru_cache(maxsize=1)
-def primer() -> str:
-    """The agentic primer, read from disk.
+class PromptCatalogError(RuntimeError):
+    """The package-owned prompt catalogue cannot be used."""
 
-    A file rather than a string constant because it is meant to be tuned as the team learns
-    which questions produce useful profiles — without touching code or redeploying.
-    """
-    return (
-        resources.files("metis.wizard.application")
-        .joinpath(PRIMER_FILE)
-        .read_text(encoding="utf-8")
+
+@dataclass(frozen=True)
+class ModelPrompt:
+    """One complete, immutable model call composed from one catalogue snapshot."""
+
+    name: ModelCall
+    system: str
+    user: str
+
+
+@dataclass(frozen=True)
+class PromptCatalog:
+    """A complete, validated snapshot of ``prompts.yaml``."""
+
+    system_template: str
+    patch_rules: str
+    model_calls: Mapping[ModelCall, str]
+
+
+def _error(key: str, detail: str) -> PromptCatalogError:
+    return PromptCatalogError(f"{PROMPTS_FILE} key '{key}' {detail}")
+
+
+def _mapping(value: object, key: str) -> Mapping[object, object]:
+    if not isinstance(value, Mapping):
+        raise _error(key, "must be a mapping.")
+    return value
+
+
+def _required(mapping: Mapping[object, object], key: str) -> object:
+    name = key.rsplit(".", maxsplit=1)[-1]
+    if name not in mapping:
+        raise _error(key, "is missing.")
+    return mapping[name]
+
+
+def _text(mapping: Mapping[object, object], key: str) -> str:
+    value = _required(mapping, key)
+    if not isinstance(value, str) or not value.strip():
+        raise _error(key, "must be a non-empty string.")
+    return value
+
+
+def _validate_template(value: str, key: str, allowed: frozenset[str]) -> None:
+    template = Template(value)
+    if not template.is_valid():
+        raise _error(key, "is not a valid $name template.")
+    unsupported = sorted(
+        identifier
+        for identifier in template.get_identifiers()
+        if identifier not in allowed
+    )
+    if unsupported:
+        names = ", ".join(unsupported)
+        raise _error(key, f"uses unsupported placeholder(s): {names}.")
+
+
+def _read_catalog_text() -> str:
+    try:
+        return (
+            resources.files("metis.wizard")
+            .joinpath(PROMPTS_FILE)
+            .read_text(encoding="utf-8")
+        )
+    except (FileNotFoundError, ModuleNotFoundError) as exc:
+        raise _error("<file>", "is missing.") from exc
+
+
+def load_prompt_catalog() -> PromptCatalog:
+    """Read and validate a fresh prompt-catalogue snapshot."""
+    try:
+        raw = yaml.safe_load(_read_catalog_text())
+    except yaml.YAMLError as exc:
+        raise _error("<document>", f"is not valid YAML: {exc}.") from exc
+
+    document = _mapping(raw, "<document>")
+    system = _mapping(_required(document, "system"), "system")
+    model_calls = _mapping(_required(document, "model_calls"), "model_calls")
+
+    system_template = _text(system, "system.template")
+    patch_rules = _text(system, "system.patch_rules")
+    _validate_template(system_template, "system.template", _SYSTEM_PLACEHOLDERS)
+
+    calls: dict[ModelCall, str] = {}
+    for name, allowed in _MODEL_CALL_PLACEHOLDERS.items():
+        value = _text(model_calls, f"model_calls.{name}")
+        _validate_template(value, f"model_calls.{name}", allowed)
+        calls[name] = value
+
+    return PromptCatalog(
+        system_template=system_template,
+        patch_rules=patch_rules,
+        model_calls=calls,
     )
 
 
-def system_prompt() -> str:
-    return (
-        "You are interviewing a product owner to build an evaluation for their AI agent.\n"
-        "You are direct, you ask one thing at a time, and you never use jargon you have not\n"
-        "already explained. Everything you write is read by a non-technical user.\n\n"
-        f"{_PATCH_RULES}\n\n"
-        "--- background reading (never mention or cite this to the user) ---\n\n"
-        f"{primer()}"
+def _substitute(template: str, key: str, values: Mapping[str, str]) -> str:
+    try:
+        return Template(template).substitute(values)
+    except (KeyError, ValueError) as exc:
+        missing = exc.args[0] if isinstance(exc, KeyError) else "<template>"
+        raise _error(key, f"could not substitute '{missing}'.") from exc
+
+
+def primer() -> str:
+    """Read the agentic background guide without a process-lifetime cache."""
+    try:
+        return (
+            resources.files("metis.wizard.application")
+            .joinpath(PRIMER_FILE)
+            .read_text(encoding="utf-8")
+        )
+    except (FileNotFoundError, ModuleNotFoundError) as exc:
+        raise PromptCatalogError(f"{PRIMER_FILE} is missing.") from exc
+
+
+def _system_message(catalog: PromptCatalog) -> str:
+    return _substitute(
+        catalog.system_template,
+        "system.template",
+        {"patch_rules": catalog.patch_rules, "primer": primer()},
     )
 
 
@@ -101,145 +178,73 @@ def _transcript(history: list[Turn]) -> str:
     return "\n".join(f"{t.role}: {t.text}" for t in history)
 
 
-# ── per-step ───────────────────────────────────────────────────────────────
+def _compose(name: ModelCall, values: Mapping[str, str]) -> ModelPrompt:
+    """Compose system and user messages from one fresh catalogue snapshot."""
+    catalog = load_prompt_catalog()
+    user = _substitute(catalog.model_calls[name], f"model_calls.{name}", values)
+    return ModelPrompt(name=name, system=_system_message(catalog), user=user)
 
 
-def clarify_user(profile: ProductProfile, history: list[Turn]) -> str:
-    return f"""
-The product so far:
-{_profile(profile)}
-
-The conversation so far:
-{_transcript(history)}
-
-Ask ONE open question about whatever is still missing — what it does, who uses it, or how it
-actually works: its tools, what it does when one fails, what it carries between turns.
-
-Set done=true when you have enough to draft expected behaviours. Write nothing to the
-document at this step; you are only asking.
-""".strip()
+def clarify(profile: ProductProfile, history: list[Turn]) -> ModelPrompt:
+    return _compose(
+        "clarify", {"profile": _profile(profile), "history": _transcript(history)}
+    )
 
 
-def behaviours_user(profile: ProductProfile, history: list[Turn]) -> str:
-    return f"""
-The product:
-{_profile(profile)}
-
-The interview:
-{_transcript(history)}
-
-First, record what you learned: set product.summary, product.users and
-product.architecture from the conversation.
-
-Then draft tasks, each with 2–5 behaviours. A task is a group of related behaviours — a job the
-product does, named as a heading; it is not a situation you run and has no persona or steps. A
-behaviour is one statement of something that should be true — "cites a source for every factual
-claim". No acceptance criteria yet, and do not set priority on anything.
-
-Statements about the machinery belong here alongside statements about features.
-
-`message`: a sentence introducing the list for review.
-""".strip()
+def behaviours(profile: ProductProfile, history: list[Turn]) -> ModelPrompt:
+    return _compose(
+        "behaviours", {"profile": _profile(profile), "history": _transcript(history)}
+    )
 
 
-def criteria_user(profile: ProductProfile) -> str:
-    return f"""
-The document:
-{_profile(profile)}
-
-Write acceptance criteria for every behaviour with priority=true that has none yet. Ignore
-behaviours with priority=false entirely — the user chose not to measure those.
-
-1–4 criteria each, as many as the behaviour actually warrants. Each is given / when / then,
-concrete enough that someone reading a transcript could say whether it held. Do not set
-metric_fqn — that is resolved separately.
-
-`message`: a sentence introducing them.
-""".strip()
+def criteria(profile: ProductProfile) -> ModelPrompt:
+    return _compose("criteria", {"profile": _profile(profile)})
 
 
-def personas_user(profile: ProductProfile) -> str:
-    return f"""
-The document:
-{_profile(profile)}
-
-Propose 3–5 personas: behavioural archetypes describing *how someone interacts*, not who they
-are. Any persona must make sense dropped into any scenario.
-
-Every persona must include exactly these two fields:
-- `label`: a short, stable, readable kebab-case label that the wizard turns into the id, such as
-  `indecisive-junior-officer` or `impatient-executive`
-- `description`: one or two sentences describing how this archetype interacts, which the
-  evaluation runner will use to simulate them
-
-Do not add `id`, `name`, `scope` or `behaviours`; a persona is only its label and behavioural description.
-
-Justify them by what the user chose to measure — "you're measuring citation discipline and
-scope refusal, so these will stress both" — in `message`. Include at least one who will
-stress the machinery: someone who gives information in fragments, or changes their mind.
-""".strip()
+def personas(profile: ProductProfile) -> ModelPrompt:
+    return _compose("personas", {"profile": _profile(profile)})
 
 
-def scenarios_user(profile: ProductProfile) -> str:
-    return f"""
-The document:
-{_profile(profile)}
-
-Draft the whole set of scenarios in one go. A scenario is one simulated situation. It can
-exercise several behaviours at once, and one behaviour can be probed by several scenarios.
-
-Every behaviour with priority=true must be covered by at least one scenario. Set behaviour_refs
-to what each scenario covers and persona_refs to who runs it (at least one). Those, and the
-description, are the whole of a scenario you write — how many trials it runs and which files it
-uses are assigned by the wizard and cannot be sent by you.
-
-A behaviour about recovery is untestable unless a scenario actually makes something fail. Build
-the situation that forces the path you need to see.
-
-`message`: a sentence introducing the set.
-""".strip()
+def scenarios(profile: ProductProfile) -> ModelPrompt:
+    return _compose("scenarios", {"profile": _profile(profile)})
 
 
-def chat_user(profile: ProductProfile, step: str, text: str, target: str | None) -> str:
+def chat(
+    profile: ProductProfile, step: str, text: str, target: str | None
+) -> ModelPrompt:
     scope = f"\nThey are talking about {target}." if target else ""
-    return f"""
-The document:
-{_profile(profile)}
-
-The user is at the {step} step and said:
-{text}
-{scope}
-
-Do what they asked, as patches. You may edit any part of the document they clearly meant,
-even if it belongs to an earlier step — except the three things you may never write. In
-particular, if they ask for a different metric, reword the criterion rather than trying to set
-`metric_fqn`.
-
-Replacement language is a replacement, not an addition. If the user supplies a list and says
-"these are the personas/scenarios/behaviours I want", "use these instead", "revise the list to", or
-equivalent, remove the existing CHAT-authored items in that collection and add or update the
-supplied set. Keep FORM-authored items unless the user explicitly says to remove them. If the same
-id or materially identical content already exists, update that item rather than adding a duplicate.
-Only append when the user clearly says to add, include, or keep the existing suggestions.
-
-If you are unsure what they want, propose 2–3 suggestion chips instead of guessing, each
-carrying its patch. `message`: what you did, or what you are offering.
-""".strip()
+    return _compose(
+        "chat",
+        {
+            "profile": _profile(profile),
+            "step": step,
+            "text": text,
+            "scope": scope,
+        },
+    )
 
 
-def suggest_criterion_user(profile: ProductProfile, behaviour_id: str) -> str:
-    return f"""
-The document:
-{_profile(profile)}
+def suggest_criterion(profile: ProductProfile, behaviour_id: str) -> ModelPrompt:
+    return _compose(
+        "suggest_criterion",
+        {"profile": _profile(profile), "behaviour_id": behaviour_id},
+    )
 
-Suggest exactly one new acceptance criterion for the behaviour with id {behaviour_id}. Look at
-the criteria it already has and propose one that covers a case they miss — not a reword of an
-existing one.
 
-Return a single add patch to `tasks[…].behaviours[{behaviour_id}].criteria` and nothing else:
-no edits to any other behaviour, no second criterion, no changes elsewhere in the document.
-Give / when / then, concrete enough that someone reading a transcript could say whether it held.
-Do not include an id or set metric_fqn — both are assigned separately.
-
-`message`: a sentence introducing the one you are offering.
-""".strip()
+__all__ = [
+    "ModelCall",
+    "ModelPrompt",
+    "PROMPTS_FILE",
+    "PRIMER_FILE",
+    "PromptCatalog",
+    "PromptCatalogError",
+    "behaviours",
+    "chat",
+    "clarify",
+    "criteria",
+    "load_prompt_catalog",
+    "personas",
+    "primer",
+    "scenarios",
+    "suggest_criterion",
+]

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from metis.wizard.application import cascade, screens
+from metis.wizard.application import cascade, interview, screens
 from metis.wizard.application.interviewer import Interviewer, InterviewerOutputError
 from metis.wizard.contracts.conversation import (
     AnyRequest,
@@ -42,12 +42,6 @@ from metis.wizard.domain.applier import apply, sanitise
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import SessionStep
 from metis.wizard.domain.profile import Behaviour
-
-# After this many questions the wizard drafts regardless of whether the model thinks it has
-# enough. A mediocre first draft is recoverable — the behaviours are reviewed on the very
-# next screen — whereas an interview that never ends is not. Chosen to be tuned once real
-# interviews exist, not defended.
-CLARIFY_TURN_CAP = 5
 
 _NEXT_STEP = {
     SessionStep.CLARIFY: SessionStep.BEHAVIOURS,
@@ -124,7 +118,7 @@ class StepDriver:
 
         if step is SessionStep.CLARIFY:
             asked = sum(1 for t in state.history if t.role == "assistant")
-            if asked < CLARIFY_TURN_CAP:
+            if asked < interview.clarify_turn_cap():
                 result = self.interviewer.clarify(profile, state.history)
                 if not result.done and result.question:
                     return ChatRequest(prompt=result.question)
@@ -787,4 +781,4 @@ def _all_options(request: AnyRequest) -> dict[str, Option]:
     return found
 
 
-__all__ = ["CLARIFY_TURN_CAP", "OptionId", "StepDriver"]
+__all__ = ["OptionId", "StepDriver"]

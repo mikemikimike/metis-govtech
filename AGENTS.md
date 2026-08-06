@@ -94,7 +94,10 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 - Release workflow: develop on `release/<package>/v<semver>` branch → merge to `main` → tag the merge commit (`<package>/v<semver>`)
 - Every merge to `main` MUST be tagged with a version bump for the affected package(s)
 - Each package maintains a `CHANGELOG.md` — write entries during development, not at merge time
-- Commit messages on `main` MUST be prefixed with package scope (e.g., `engine: fix trace parsing`)
+- Commit messages MUST use a Conventional Commit type and the package scope in parentheses:
+  `feat(wizard): split prompt configuration ownership`. Use the affected package name as the
+  scope (`core`, `library`, `engine`, `wizard`, or `insights`), not the `metis-` distribution
+  prefix. Common types are `feat`, `fix`, `refactor`, `test`, `docs`, and `chore`.
 
 ## Per-Package Guides
 

@@ -55,6 +55,10 @@ def interviewer(replies: list[str]) -> tuple[GatewayInterviewer, FakeCompletions
     return GatewayInterviewer(_client=FakeClient(completions=completions)), completions
 
 
+def simple_prompt(name: prompts.ModelCall = "clarify") -> prompts.ModelPrompt:
+    return prompts.ModelPrompt(name=name, system="s", user="u")
+
+
 @pytest.fixture(autouse=True)
 def _credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(BASE_URL_VAR, "https://gateway.example")
@@ -93,7 +97,7 @@ def test_a_first_attempt_miss_is_invisible() -> None:
     good = ClarifyResult(done=False, question="What does it do?").model_dump_json()
     model, completions = interviewer(["{not json at all", good])
 
-    result, recovered = model._ask("s", "u", ClarifyResult)
+    result, recovered = model._ask(simple_prompt(), ClarifyResult)
 
     assert result.question == "What does it do?"
     assert recovered  # a retry was needed, and the caller is told so
@@ -105,7 +109,7 @@ def test_a_first_attempt_success_reports_no_recovery() -> None:
     good = ClarifyResult(done=False, question="What does it do?").model_dump_json()
     model, _ = interviewer([good])
 
-    _, recovered = model._ask("s", "u", ClarifyResult)
+    _, recovered = model._ask(simple_prompt(), ClarifyResult)
 
     assert not recovered
 
@@ -115,7 +119,7 @@ def test_the_validation_error_is_fed_back() -> None:
     good = ClarifyResult(done=True).model_dump_json()
     model, completions = interviewer(["{}", good])
 
-    model._ask("s", "u", ClarifyResult)
+    model._ask(simple_prompt(), ClarifyResult)
 
     retry_messages = completions.calls[1]["messages"]
     assert any("didn't validate" in m["content"] for m in retry_messages)
@@ -136,7 +140,7 @@ def test_a_recovered_step_drops_its_narrated_intro() -> None:
     ).model_dump_json()
     model, completions = interviewer([bad, corrected])
 
-    result = model._step("s", "u", research_assistant())
+    result = model._step(simple_prompt("chat"), research_assistant())
 
     assert (
         result.message == ""
@@ -156,7 +160,7 @@ def test_a_clean_step_keeps_the_model_intro() -> None:
     ).model_dump_json()
     model, _ = interviewer([clean])
 
-    result = model._step("s", "u", research_assistant())
+    result = model._step(simple_prompt("chat"), research_assistant())
 
     assert (
         result.message == "These personas stress citation discipline and scope refusal."
@@ -167,7 +171,7 @@ def test_three_failures_raise() -> None:
     model, completions = interviewer(["nonsense"])
 
     with pytest.raises(ModelOutputError):
-        model._ask("s", "u", ClarifyResult)
+        model._ask(simple_prompt(), ClarifyResult)
 
     assert len(completions.calls) == ATTEMPTS
 
@@ -213,7 +217,7 @@ def test_raw_scenario_fields_are_rejected_before_profile_materialization() -> No
     )
     model, completions = interviewer([invalid, valid])
 
-    result = model._step("s", "u", research_assistant())
+    result = model._step(simple_prompt("chat"), research_assistant())
 
     assert result.patches[0].value.description == "x"
     assert len(completions.calls) == 2
@@ -263,7 +267,7 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
     )
     model, completions = interviewer([invalid, valid])
 
-    result = model._step("s", "u", research_assistant())
+    result = model._step(simple_prompt("chat"), research_assistant())
 
     assert result.patches[0].value.name == "Safety"
     assert len(completions.calls) == 2
@@ -272,7 +276,7 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
 def test_structured_output_is_requested_strictly() -> None:
     model, completions = interviewer([ClarifyResult(done=True).model_dump_json()])
 
-    model._ask("s", "u", ClarifyResult)
+    model._ask(simple_prompt(), ClarifyResult)
 
     schema = completions.calls[0]["response_format"]
     assert schema["type"] == "json_schema"
@@ -325,7 +329,7 @@ def test_model_origin_is_not_part_of_provider_schema() -> None:
     model, completions = interviewer([bad, good])
     from fixtures.profiles import research_assistant
 
-    result = model._step("s", "u", research_assistant())
+    result = model._step(simple_prompt("chat"), research_assistant())
 
     assert result.patches == []
     assert len(completions.calls) == 2
@@ -436,22 +440,88 @@ def test_a_duplicate_persona_description_is_retried() -> None:
 def test_chat_prompt_distinguishes_replacement_from_addition() -> None:
     from fixtures.profiles import research_assistant
 
-    prompt = prompts.chat_user(
+    prompt = prompts.chat(
         research_assistant(),
         "personas",
         "These are the three personas I want",
         None,
-    )
+    ).user
 
     assert "Replacement language is a replacement, not an addition" in prompt
     assert "Only append when the user clearly says to add" in prompt
+
+
+def test_each_semantic_call_sends_one_complete_named_prompt() -> None:
+    from fixtures.profiles import research_assistant
+
+    from metis.wizard.contracts import StepResult
+
+    profile = research_assistant()
+    cases = [
+        (
+            "clarify",
+            lambda model: model.clarify(profile, []),
+            lambda: prompts.clarify(profile, []),
+            ClarifyResult(done=True).model_dump_json(),
+        ),
+        (
+            "behaviours",
+            lambda model: model.draft_behaviours(profile, []),
+            lambda: prompts.behaviours(profile, []),
+            StepResult(message="", patches=[]).model_dump_json(),
+        ),
+        (
+            "criteria",
+            lambda model: model.draft_criteria(profile),
+            lambda: prompts.criteria(profile),
+            StepResult(message="", patches=[]).model_dump_json(),
+        ),
+        (
+            "personas",
+            lambda model: model.draft_personas(profile),
+            lambda: prompts.personas(profile),
+            StepResult(message="", patches=[]).model_dump_json(),
+        ),
+        (
+            "scenarios",
+            lambda model: model.draft_scenarios(profile),
+            lambda: prompts.scenarios(profile),
+            StepResult(message="", patches=[]).model_dump_json(),
+        ),
+        (
+            "chat",
+            lambda model: model.chat(profile, "criteria", "edit", "EB-1"),
+            lambda: prompts.chat(profile, "criteria", "edit", "EB-1"),
+            StepResult(message="", patches=[]).model_dump_json(),
+        ),
+        (
+            "suggest_criterion",
+            lambda model: model.suggest_criterion(profile, "EB-1"),
+            lambda: prompts.suggest_criterion(profile, "EB-1"),
+            StepResult(message="", patches=[]).model_dump_json(),
+        ),
+    ]
+
+    for name, invoke, compose, reply in cases:
+        model, completions = interviewer([reply])
+        expected = compose()
+
+        invoke(model)
+
+        assert expected.name == name
+        assert completions.calls[0]["messages"] == [
+            {"role": "system", "content": expected.system},
+            {"role": "user", "content": expected.user},
+        ]
 
 
 # ── the primer ─────────────────────────────────────────────────────────────
 
 
 def test_the_primer_is_in_the_system_prompt() -> None:
-    system = prompts.system_prompt()
+    from fixtures.profiles import research_assistant
+
+    system = prompts.criteria(research_assistant()).system
 
     assert prompts.primer() in system
     assert "never mention" in system.lower()
@@ -482,11 +552,11 @@ def test_changing_the_primer_file_changes_the_prompt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """It is a file so it can be tuned without touching code or redeploying."""
+    from fixtures.profiles import research_assistant
+
     monkeypatch.setattr(prompts, "primer", lambda: "REPLACED PRIMER TEXT")
 
-    assert "REPLACED PRIMER TEXT" in prompts.system_prompt()
-    # monkeypatch restores the real function on teardown; its cache still holds the real
-    # file's text, which is what every other test expects.
+    assert "REPLACED PRIMER TEXT" in prompts.criteria(research_assistant()).system
 
 
 def test_every_step_prompt_hands_over_the_profile() -> None:
@@ -496,19 +566,21 @@ def test_every_step_prompt_hands_over_the_profile() -> None:
     profile = research_assistant()
 
     for builder in (
-        prompts.criteria_user,
-        prompts.personas_user,
-        prompts.scenarios_user,
+        lambda value: prompts.criteria(value).user,
+        lambda value: prompts.personas(value).user,
+        lambda value: prompts.scenarios(value).user,
     ):
         assert "EB-1" in builder(profile)
 
-    persona_prompt = prompts.personas_user(profile)
+    persona_prompt = prompts.personas(profile).user
     assert "exactly these two fields" in persona_prompt
     assert all(f"`{field}`" in persona_prompt for field in ("id", "description"))
 
 
 def test_the_patch_rules_forbid_the_protected_addresses() -> None:
-    system = prompts.system_prompt()
+    from fixtures.profiles import research_assistant
+
+    system = prompts.criteria(research_assistant()).system
 
     assert "priority" in system
     assert "metric_fqn" in system

@@ -18,7 +18,6 @@ text never leaves the gateway — a code guarantee, not a prompt instruction.
 
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -91,8 +90,7 @@ class GatewayInterviewer:
 
     def _ask(
         self,
-        system: str,
-        user: str,
+        prompt: prompts.ModelPrompt,
         schema: type[T],
         validate: Callable[[T], None] | None = None,
     ) -> tuple[T, bool]:
@@ -106,8 +104,8 @@ class GatewayInterviewer:
         model's intro can be trusted in front of the user.
         """
         messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
+            {"role": "system", "content": prompt.system},
+            {"role": "user", "content": prompt.user},
         ]
         last_error: Exception | None = None
 
@@ -150,10 +148,9 @@ class GatewayInterviewer:
             f"Last error: {last_error}"
         )
 
-    def _step(self, system: str, user: str, profile: ProductProfile) -> StepResult:
+    def _step(self, prompt: prompts.ModelPrompt, profile: ProductProfile) -> StepResult:
         result, recovered = self._ask(
-            system,
-            user,
+            prompt,
             StepResult,
             validate=lambda candidate: validate_model_patches(
                 profile, candidate.patches
@@ -172,8 +169,7 @@ class GatewayInterviewer:
         # No user-facing intro to protect here — ClarifyResult carries only `done` and the
         # next `question`, so the recovery flag is discarded.
         result, _ = self._ask(
-            prompts.system_prompt(),
-            prompts.clarify_user(profile, history),
+            prompts.clarify(profile, history),
             ClarifyResult,
         )
         return result
@@ -181,40 +177,27 @@ class GatewayInterviewer:
     def draft_behaviours(
         self, profile: ProductProfile, history: list[Turn]
     ) -> StepResult:
-        return self._step(
-            prompts.system_prompt(), prompts.behaviours_user(profile, history), profile
-        )
+        return self._step(prompts.behaviours(profile, history), profile)
 
     def draft_criteria(self, profile: ProductProfile) -> StepResult:
-        return self._step(
-            prompts.system_prompt(), prompts.criteria_user(profile), profile
-        )
+        return self._step(prompts.criteria(profile), profile)
 
     def draft_personas(self, profile: ProductProfile) -> StepResult:
-        return self._step(
-            prompts.system_prompt(), prompts.personas_user(profile), profile
-        )
+        return self._step(prompts.personas(profile), profile)
 
     def draft_scenarios(self, profile: ProductProfile) -> StepResult:
-        return self._step(
-            prompts.system_prompt(), prompts.scenarios_user(profile), profile
-        )
+        return self._step(prompts.scenarios(profile), profile)
 
     def chat(
         self, profile: ProductProfile, step: str, text: str, target: str | None
     ) -> StepResult:
-        return self._step(
-            prompts.system_prompt(),
-            prompts.chat_user(profile, step, text, target),
-            profile,
-        )
+        return self._step(prompts.chat(profile, step, text, target), profile)
 
     def suggest_criterion(
         self, profile: ProductProfile, behaviour_id: str
     ) -> StepResult:
         return self._step(
-            prompts.system_prompt(),
-            prompts.suggest_criterion_user(profile, behaviour_id),
+            prompts.suggest_criterion(profile, behaviour_id),
             profile,
         )
 
@@ -225,13 +208,3 @@ class GatewayInterviewer:
     ) -> list[list[float]]:
         response = self._client.embeddings.create(model=model, input=texts)
         return [item.embedding for item in response.data]
-
-
-def _profile_json(profile: ProductProfile) -> str:
-    """What the model reads. Deliberately the profile, not the transcript.
-
-    Steps after clarify build their prompts from the document rather than the conversation,
-    which is why architectural detail has to be promoted into `product.architecture` to
-    survive at all.
-    """
-    return json.dumps(profile.model_dump(mode="json"), indent=2)
