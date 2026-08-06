@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Orca Eval Report — combined-sample-report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px 32px; background: #f9fafb; color: #111827; max-width: 1400px; margin: 0 auto; }
+        h1 { font-size: 22px; margin-bottom: 2px; }
+        h2 { font-size: 16px; margin: 24px 0 10px; color: #374151; }
+        .subtitle { color: #6b7280; margin-bottom: 20px; font-size: 13px; }
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-bottom: 24px; }
+        .card { background: white; border-radius: 8px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card-value { font-size: 26px; font-weight: 700; }
+        .card-label { color: #6b7280; font-size: 12px; margin-top: 2px; }
+        .section { margin-bottom: 24px; }
+        code { background: #f3f4f6; padding: 2px 5px; border-radius: 3px; font-size: 11px; }
+        details { margin-top: 6px; }
+        details summary { cursor: pointer; color: #6b7280; font-size: 13px; }
+
+        /* Task / Behaviour / AC hierarchy */
+        .task-section { background: white; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+        .task-title { padding: 12px 16px; font-size: 15px; font-weight: 700; color: #111827; cursor: pointer; text-transform: capitalize; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+        .task-title:hover { background: #f3f4f6; }
+        .task-body { padding: 10px 16px 16px; }
+        .task-context { margin-bottom: 12px; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; }
+        .task-description { font-size: 12px; color: #1e40af; line-height: 1.5; margin-bottom: 6px; }
+        .task-meta { display: flex; flex-direction: column; gap: 3px; }
+        .task-meta-item { font-size: 11px; color: #374151; line-height: 1.4; }
+        .task-meta-item strong { color: #1e3a5f; }
+        .behaviour-block { margin-bottom: 14px; }
+        .behaviour-block:last-child { margin-bottom: 0; }
+        .behaviour-header { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+        .behaviour-desc { font-size: 13px; font-weight: 600; color: #374151; flex: 1; }
+        .behaviour-rate { font-size: 16px; font-weight: 700; }
+        .ac-list { padding-left: 12px; margin-top: 6px; }
+        .ac-row { margin-bottom: 6px; padding: 8px 10px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb; }
+        .ac-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .ac-desc { font-size: 12px; color: #374151; flex: 1; }
+        .ac-metrics-ids { font-size: 10px; color: #9ca3af; font-family: monospace; }
+        .ac-pass { font-size: 11px; font-weight: 600; color: #166534; background: #dcfce7; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+        .ac-fail { font-size: 11px; font-weight: 600; color: #991b1b; background: #fecaca; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+        .ac-nodata { font-size: 11px; color: #9ca3af; }
+        .ac-failures-toggle { margin-top: 6px; }
+        .ac-failures-summary { font-size: 11px; color: #991b1b; cursor: pointer; padding: 2px 0; }
+        .ac-failures { margin-top: 6px; padding-left: 8px; border-left: 3px solid #fecaca; }
+        .ac-failure { margin-bottom: 8px; padding: 6px 10px; background: #fef2f2; border-radius: 5px; }
+        .ac-failure.session-type { background: #fffbeb; border-left: 3px solid #f59e0b; }
+        .ac-failure-reason { font-size: 11px; color: #1f2937; line-height: 1.4; margin-bottom: 3px; }
+        .ac-failure-meta { font-size: 10px; color: #6b7280; margin-bottom: 3px; }
+        .ac-turns { margin-top: 6px; }
+        .ac-turn { padding: 6px 8px; margin-bottom: 4px; border-radius: 5px; background: white; }
+        .ac-turn-label { font-size: 10px; font-weight: 600; color: #6b7280; margin-bottom: 3px; }
+        .ac-turn-io { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .ac-turn-io pre { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 4px; padding: 6px; font-size: 10px; white-space: pre-wrap; word-break: break-word; max-height: 250px; overflow-y: auto; }
+        .context-label { font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 2px; }
+
+        /* Session turns (for session-level failures) */
+        .turn-user, .turn-assistant { padding: 5px 8px; margin-bottom: 3px; border-radius: 5px; }
+        .turn-user { background: #eff6ff; border-left: 3px solid #3b82f6; }
+        .turn-assistant { background: #f0fdf4; border-left: 3px solid #22c55e; }
+        .turn-user pre, .turn-assistant pre { font-size: 10px; white-space: pre-wrap; word-break: break-word; max-height: 180px; overflow-y: auto; margin: 3px 0 0; }
+
+        /* Secondary sections */
+        .secondary-section { margin-top: 36px; border-top: 2px solid #e5e7eb; padding-top: 16px; }
+        .secondary-section > details > summary { font-size: 15px; font-weight: 600; color: #6b7280; padding: 6px 0; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; margin-top: 12px; }
+        th { background: #f3f4f6; text-align: left; padding: 10px 12px; font-size: 13px; color: #374151; }
+        td { padding: 10px 12px; border-top: 1px solid #e5e7eb; font-size: 13px; }
+        tr:hover { background: #f9fafb; }
+
+        /* Trace detail (secondary) */
+        .trace-card { background: white; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .trace-card summary { padding: 14px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+        .trace-card summary:hover { background: #f9fafb; border-radius: 8px; }
+        .trace-meta { color: #6b7280; font-size: 12px; margin-left: auto; }
+        .trace-body { padding: 0 16px 16px; }
+        .session-turn { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+        .session-turn-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
+        .session-turn-io { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; }
+        .io-block pre { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; font-size: 11px; white-space: pre-wrap; word-break: break-word; max-height: 500px; overflow-y: auto; }
+        .metrics-dropdown { margin-top: 6px; }
+        .metrics-dropdown summary { cursor: pointer; color: #6b7280; font-size: 12px; font-weight: 500; padding: 4px 0; }
+        .trace-metrics-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+        .trace-metric { padding: 8px 12px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb; }
+        .trace-metric-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .trace-metric-name { font-size: 12px; font-weight: 500; color: #374151; }
+        .trace-metric-reason { font-size: 12px; color: #6b7280; line-height: 1.4; }
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-pass { background: #dcfce7; color: #166534; }
+        .badge-fail { background: #fecaca; color: #991b1b; }
+        .badge-skip { background: #e5e7eb; color: #6b7280; }
+    </style>
+</head>
+<body>
+    <h1>Orca Eval Report</h1>
+    <p class="description">End-to-end evaluation of Orca&#x27;s various capabilities.
+</p>
+    <p class="subtitle">Run: combined-sample-report &middot; 2026-08-06 16:02</p>
+
+    <div class="summary-cards">
+        <div class="card">
+            <div class="card-value">20</div>
+            <div class="card-label">Traces Evaluated</div>
+        </div>
+        <div class="card">
+            <div class="card-value">10</div>
+            <div class="card-label">Metrics</div>
+        </div>
+        <div class="card">
+            <div class="card-value" style="color: #eab308">53.3%</div>
+            <div class="card-label">Pass Rate (excl. skipped)</div>
+        </div>
+        <div class="card">
+            <div class="card-value" style="color: #ef4444">7</div>
+            <div class="card-label">Failures</div>
+        </div>
+        <div class="card">
+            <div class="card-value" style="color: #9ca3af">0</div>
+            <div class="card-label">Skipped</div>
+        </div>
+        <div class="card">
+            <div class="card-value">2556.3s</div>
+            <div class="card-label">Latency</div>
+        </div>
+        <div class="card">
+            <div class="card-value">N/A</div>
+            <div class="card-label">Judge Cost</div>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>Trace Routing</h2>
+        <p style="color:#6b7280;margin-bottom:8px">17 traces evaluated</p>
+        <div style="width:100%;height:24px;border-radius:6px;overflow:hidden;background:#e5e7eb;margin:8px 0"><div style="width:52.94117647058824%;background:#3b82f6;height:100%;display:inline-block" title="data_analyst: 9"></div><div style="width:35.294117647058826%;background:#8b5cf6;height:100%;display:inline-block" title="slide_maker: 6"></div><div style="width:11.76470588235294%;background:#6b7280;height:100%;display:inline-block" title="direct: 2"></div></div>
+        <div style="font-size:13px;margin-top:8px"><span style="display:inline-flex;align-items:center;margin-right:16px"><span style="width:12px;height:12px;border-radius:3px;background:#3b82f6;display:inline-block;margin-right:6px"></span>data_analyst: 9</span><span style="display:inline-flex;align-items:center;margin-right:16px"><span style="width:12px;height:12px;border-radius:3px;background:#8b5cf6;display:inline-block;margin-right:6px"></span>slide_maker: 6</span><span style="display:inline-flex;align-items:center;margin-right:16px"><span style="width:12px;height:12px;border-radius:3px;background:#6b7280;display:inline-block;margin-right:6px"></span>direct: 2</span></div>
+    </div>
+    
+    <div class="section">
+        <h2>Tasks</h2>
+        <p style="color:#6b7280;font-size:13px;margin-bottom:16px">Results grouped by task. Failed metrics show judge reasoning with expandable traces.</p>
+        <details class="task-section" open>
+            <summary class="task-title">Ambiguous Request</summary>
+            <div class="task-body">
+                <div class="task-context"><p class="task-description">Upload q3_sales.csv and open with a deliberately vague request for &quot;help with the data&quot; without specifying what analysis is needed. Orca should ask one focused clarifying question before proceeding, then route to the data analyst agent.
+</p><div class="task-meta"><span class="task-meta-item"><strong>Persona:</strong> Uncertain Explorer — A junior analyst in their first month who is not sure what is possible or what they even need. They over-explain with he</span><span class="task-meta-item"><strong>Fixtures:</strong> q3_sales.csv</span><span class="task-meta-item"><strong>Outcome:</strong> user abandoned · 6 turns · 869s</span></div></div>
+                <div class="ac-list"><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Clarification Judgement</span>
+                    <span class="behaviour-rate" style="color:#22c55e;font-size:14px">100%</span>
+                    <span class="ac-pass">1/1 passed</span>
+                </div>
+                
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Clarification Precision</span>
+                    <span class="behaviour-rate" style="color:#22c55e;font-size:14px">100%</span>
+                    <span class="ac-pass">1/1 passed</span>
+                </div>
+                
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Context Reuse</span>
+                    <span class="behaviour-rate" style="color:#22c55e;font-size:14px">100%</span>
+                    <span class="ac-pass">1/1 passed</span>
+                </div>
+                
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Session Completeness</span>
+                    <span class="behaviour-rate" style="color:#22c55e;font-size:14px">100%</span>
+                    <span class="ac-pass">1/1 passed</span>
+                </div>
+                
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Turn Budget</span>
+                    <span class="behaviour-rate" style="color:#ef4444;font-size:14px">0%</span>
+                    <span class="ac-fail">1/1 failed</span>
+                </div>
+                <details class="ac-failures-toggle"><summary class="ac-failures-summary">1 failure — click to expand</summary><div class="ac-failures"><div class="ac-failure">
+                    <div class="ac-failure-reason">Session used 6 turns, exceeding the allowed budget of 4. The extra turns came from the user organically expanding scope (charts → pricing → report), not from system inefficiency.</div>
+                    <div class="ac-failure-meta"><code>sess-2608051</code> · Turn 6/6 · direct</div>
+                    <details><summary>Show 7 turns up to failure</summary><div class="ac-turns"><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 1</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Hi there! I hope you&#x27;re doing well. I have this file, q3_sales.csv, and I&#x27;m hoping you can help me with the data. I&#x27;m not really sure what I need to do with it, but any assistance or guidance would be greatly appreciated! Thanks!</pre></div><div><div class="context-label">Output</div><pre>I&#x27;ve popped up a quick form so you can tell me what you&#x27;d like to do with your sales data — once you fill it in, I&#x27;ll route it to the right specialist to get it done.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 2</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>I&#x27;ll select &#x27;Explore the data — trends, totals, breakdowns by region/product&#x27; as my goal.</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form for choosing the AI model — please fill it in to kick off the exploratory analysis of your Q3 sales data.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 3</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>I&#x27;ll fill in the goal as &#x27;Explore the data — trends, totals, breakdowns by region/product&#x27; and select &#x27;Fast (Claude Haiku)&#x27; as the AI model. Then I&#x27;ll submit the form to proceed with the analysis.</pre></div><div><div class="context-label">Output</div><pre>Done! The Data Analyst dug into your Q3 sales data and built a quick predictive model for revenue. Here&#x27;s the gist:
+
+Model comparison
+
+Tried Linear Regression and XGBoost to predict revenue
+Linear Regression won (R² = 0.336, RMSE = $10.00, MAE = $8.29) — XGBoost overfit badly on this small dataset (only 200 rows), so it was ruled out
+
+What went into the model
+
+Categorical: region, product
+Numeric: units_sold
+Engineered from date: week, day of week, day of month
+
+What you got (in the Artifacts panel):
+
+File	What it&#x27;s for
+q3_sales_fast_model.py	Full script — data prep, training, evaluation
+linear_regression_model.pkl	The trained model, ready to reuse
+model_summary.csv	Performance metrics
+predictions.csv	Actual vs. predicted revenue + residuals
+actual_vs_predicted_linear_regression.vl.json	Interactive scatter chart
+residual_plot_linear_regression.vl.json	Residual diagnostics chart
+
+The R² of 0.336 means the model explains about a third of the variation in revenue — decent for a quick baseline, but there&#x27;s clearly more signal in the data than these features capture. If you want, I can have the Data Analyst dig deeper (e.g., add more features, try a larger dataset, or focus on a different target like units sold) — just let me know what you&#x27;d like next.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 4</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>I&#x27;ll go ahead and select &#x27;Create charts/visualizations from the sales data&#x27; as the goal and keep the AI model as &#x27;Fast (Claude Haiku)&#x27; to move forward with the analysis.</pre></div><div><div class="context-label">Output</div><pre>All done! The Data Analyst built out 5 interactive charts from your Q3 sales data:
+
+Chart	Key Insight
+Revenue by Region	North leads with $3,722 (~32-38% of total); West, East, South trail
+Revenue by Product	DataSync tops the list at $3,831, followed by CloudBase ($3,694) and Widget Pro ($3,146)
+Revenue Trend Over Time	Daily revenue swings from $145–$1,023 (avg $267) — noticeable variability across Q3
+Units Sold vs Revenue	Almost no correlation (-0.0073) — revenue isn&#x27;t just about volume, likely pricing/product mix drives it
+Product × Region Heatmap	DataSync in the North is the standout combo ($1,609); South consistently underperforms
+
+Bottom line: Total Q3 revenue was $11,671.20, concentrated in the North region and led by DataSync. Since unit volume doesn&#x27;t track with revenue, it&#x27;s worth digging into pricing or product-mix differences next if you want to explore further.
+
+All the charts (interactive .vl.json — click to zoom, hover for details) and the underlying script are in your Artifacts panel. Let me know if you&#x27;d like to dig deeper — e.g., break down the pricing effect, or turn this into a report/deck.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 5</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>I&#x27;d like to explore the impact of pricing on our revenue. It seems that there might be some interesting dynamics at play since revenue and units sold don&#x27;t correlate well. Could we analyze that further?</pre></div><div><div class="context-label">Output</div><pre>Great news — pricing turns out to be the real story behind your Q3 revenue, not volume. Here&#x27;s the rundown:
+
+🎯 Core Finding: Revenue is driven by PRICE, not volume
+Correlation	Value	Meaning
+Unit Price → Revenue	+0.84	Price is the main lever
+Units Sold → Revenue	-0.01	Volume barely matters
+Unit Price ↔ Units Sold	-0.51	Lower prices → higher volume (as expected)
+💡 What&#x27;s driving it
+Three distinct pricing strategies by product:
+CloudBase ($1.35/unit) — premium, very stable (0.9% volatility)
+DataSync ($0.93/unit avg) — wild swings (99% volatility, $0.81–$8.19 range) — looks like dynamic/inconsistent pricing
+Widget Pro ($0.38/unit) — stable budget pricing, highest volume (8,371 units) but only 27% of revenue
+DataSync is the wild card: your top revenue earner ($3,831, 33% of total), and commands a 58% price premium in the North ($1.28 vs $0.81 elsewhere). One transaction on Aug 9 spiked to $8.19/unit — worth checking if that&#x27;s a real premium deal or a data error.
+Regional price power: North charges the most ($0.98 avg) and pulls in 32% of revenue; South charges least ($0.79) and contributes only 16%.
+Widget Pro is likely underpriced: huge volume, low revenue share — a price test in East/South could capture more margin without much volume loss.
+🚀 Suggested next steps
+Audit why DataSync pricing swings so much — formalize it if it&#x27;s intentional.
+Verify the $8.19/unit DataSync outlier (legit premium vs. data issue).
+Test a modest Widget Pro price increase (~$0.42–0.45) in East/South.
+T</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 6  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Yes, please go ahead and turn these pricing findings into a written report for wider sharing. That would be really helpful!</pre></div><div><div class="context-label">Output</div><pre>Your report is ready! 📄
+
+Q3_Pricing_Analysis_Report.docx is now in your Artifacts panel, fully formatted for wider sharing. Here&#x27;s what&#x27;s inside:
+
+Executive Summary — the headline: revenue is driven by price, not volume
+5 key findings — price-vs-volume dynamics, the three distinct product pricing strategies (CloudBase premium, DataSync volatile, Widget Pro budget), regional pricing gaps, and the product × region revenue matrix
+Data tables — pricing strategy comparison, regional breakdown, product × region matrix, key metrics
+5 strategic recommendations — formalizing DataSync&#x27;s dynamic pricing, testing a Widget Pro price bump, regionalizing CloudBase pricing in the North, tackling South&#x27;s underperformance, and setting up ongoing price monitoring
+Appendix — data sources and correlation stats for anyone who wants to check the numbers
+
+It&#x27;s ready to hand straight to stakeholders or your sales team. Want me to also turn this into a slide deck version for a presentation, or dig into anything else from the Q3 data?</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 6  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre></pre></div><div><div class="context-label">Output</div><pre></pre></div></div>
+                    </div></div></details>
+                </div></div></details>
+            </div></div>
+            </div>
+        </details><details class="task-section" open>
+            <summary class="task-title">Evolving Brief</summary>
+            <div class="task-body">
+                <div class="task-context"><p class="task-description">A multi-turn session. The user opens by uploading q3_sales.csv and asking for a North and East region analysis only, denominated in SGD, with the August DataSync outlier excluded. After receiving the analysis they ask Orca to now turn it into a slide deck — without re-stating any of the earlier constraints. Orca should carry all established context (region filter, currency, outlier exclusion) across the analysis-to-slides agent switch without re-asking.
+</p><div class="task-meta"><span class="task-meta-item"><strong>Persona:</strong> Scope Creeper — A friendly, engaged user who keeps changing and expanding the request as the conversation goes — asking to also add last</span><span class="task-meta-item"><strong>Fixtures:</strong> q3_sales.csv</span><span class="task-meta-item"><strong>Outcome:</strong> timeout · 8 turns · 1089s</span></div></div>
+                <div class="ac-list"><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Constraint Adherence</span>
+                    <span class="behaviour-rate" style="color:#ef4444;font-size:14px">0%</span>
+                    <span class="ac-fail">1/1 failed</span>
+                </div>
+                <details class="ac-failures-toggle"><summary class="ac-failures-summary">1 failure — click to expand</summary><div class="ac-failures"><div class="ac-failure">
+                    <div class="ac-failure-reason">The Data Analyst produced an analysis, but the output text mentions &#x27;Q3 sales data&#x27; broadly without confirming it was filtered to North and East regions only, denominated in SGD, or that the DataSync outlier was excluded. The constraints from turn 1 may have been partially ignored.</div>
+                    <div class="ac-failure-meta"><code>sess-2608051</code> · Turn 5/8 · data_analyst</div>
+                    <details><summary>Show 5 turns up to failure</summary><div class="ac-turns"><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 1</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Hi there! I&#x27;m excited to get started on analyzing some sales data. I&#x27;ve uploaded a file, q3_sales.csv, and I would like to focus on the North and East regions for the analysis. Could you help me with that? Thanks!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 2</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Selecting the AI Model and submitting the form now to continue with the analysis.</pre></div><div><div class="context-label">Output</div><pre>Reasoning (11 steps)</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 3</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s proceed with the analysis!</pre></div><div><div class="context-label">Output</div><pre>Response cancelled</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 4</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s try that again! I&#x27;ll go ahead and select &#x27;Fast (Claude Haiku)&#x27; for the AI model to move forward with the analysis.</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 5  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s fill in the AI model again. I&#x27;ll select &#x27;Fast (Claude Haiku)&#x27; and submit the form now!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has finished the fast-model analysis of your Q3 sales data. Here&#x27;s the rundown:
+
+✅ Revenue Prediction Model Complete
+
+Winner: Linear Regression (Random Forest badly overfit — R² of ‑29 on the test set, so it was ruled out)
+
+Metric	Linear Regression	Random Forest
+Test R²	0.54	-29.31
+Test RMSE	$8.31	$67.59
+Test MAE	$6.58	$17.54
+CV R² (mean)	0.36	-7.32
+
+Key drivers of revenue:
+
+Units sold — the dominant factor (strong positive effect, ~73% of feature importance)
+Product — significant negative effect (~16% importance)
+Region — comparatively minor effect (~11% importance)
+
+Linear Regression is the clear, production-ready choice here — simple, stable, and reasonably predictive, while the Random Forest essentially memorized noise.
+
+What&#x27;s in your Artifacts panel:
+
+6 evaluation charts (actual vs. predicted, residuals, and feature importance for both models)
+Trained model files (linear_regression_model.pkl, plus the scaler and encoders needed to reuse it)
+model_summary.csv (side-by-side metrics) and predictions.csv (test-set predictions)
+The full reproducible analysis script
+
+Let me know if you&#x27;d like the Data Analyst to dig further — e.g., isolate just North vs. East region comparisons more explicitly, or try other features/models.</pre></div></div>
+                    </div></div></details>
+                </div></div></details>
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Cross-Agent Context Retention</span>
+                    <span class="behaviour-rate" style="color:#ef4444;font-size:14px">0%</span>
+                    <span class="ac-fail">2/2 failed</span>
+                </div>
+                <details class="ac-failures-toggle"><summary class="ac-failures-summary">2 failures — click to expand</summary><div class="ac-failures"><div class="ac-failure">
+                    <div class="ac-failure-reason">The handoff from Data Analyst to Slide Maker shows no evidence that the user&#x27;s original constraints (North/East only, SGD, exclude DataSync outlier) or the analysis findings were passed along. The Slide Maker&#x27;s form asks about styling preferences — not analytical scope — suggesting the context was n...</div>
+                    <div class="ac-failure-meta"><code>sess-2608051</code> · Turn 6/8 · slide_maker</div>
+                    <details><summary>Show 6 turns up to failure</summary><div class="ac-turns"><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 1</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Hi there! I&#x27;m excited to get started on analyzing some sales data. I&#x27;ve uploaded a file, q3_sales.csv, and I would like to focus on the North and East regions for the analysis. Could you help me with that? Thanks!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 2</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Selecting the AI Model and submitting the form now to continue with the analysis.</pre></div><div><div class="context-label">Output</div><pre>Reasoning (11 steps)</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 3</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s proceed with the analysis!</pre></div><div><div class="context-label">Output</div><pre>Response cancelled</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 4</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s try that again! I&#x27;ll go ahead and select &#x27;Fast (Claude Haiku)&#x27; for the AI model to move forward with the analysis.</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 5</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s fill in the AI model again. I&#x27;ll select &#x27;Fast (Claude Haiku)&#x27; and submit the form now!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has finished the fast-model analysis of your Q3 sales data. Here&#x27;s the rundown:
+
+✅ Revenue Prediction Model Complete
+
+Winner: Linear Regression (Random Forest badly overfit — R² of ‑29 on the test set, so it was ruled out)
+
+Metric	Linear Regression	Random Forest
+Test R²	0.54	-29.31
+Test RMSE	$8.31	$67.59
+Test MAE	$6.58	$17.54
+CV R² (mean)	0.36	-7.32
+
+Key drivers of revenue:
+
+Units sold — the dominant factor (strong positive effect, ~73% of feature importance)
+Product — significant negative effect (~16% importance)
+Region — comparatively minor effect (~11% importance)
+
+Linear Regression is the clear, production-ready choice here — simple, stable, and reasonably predictive, while the Random Forest essentially memorized noise.
+
+What&#x27;s in your Artifacts panel:
+
+6 evaluation charts (actual vs. predicted, residuals, and feature importance for both models)
+Trained model files (linear_regression_model.pkl, plus the scaler and encoders needed to reuse it)
+model_summary.csv (side-by-side metrics) and predictions.csv (test-set predictions)
+The full reproducible analysis script
+
+Let me know if you&#x27;d like the Data Analyst to dig further — e.g., isolate just North vs. East region comparisons more explicitly, or try other features/models.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 6  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Could you please turn this analysis into a slide deck? I&#x27;d love to see it presented in that format!</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div></div></details>
+                </div><div class="ac-failure">
+                    <div class="ac-failure-reason">The user&#x27;s original constraints (North/East regions, SGD currency, exclude DataSync outlier) were stated in turn 1 but never visibly confirmed in the Data Analyst output (turn 5), and there is no evidence they were forwarded to the Slide Maker (turn 6). The cross-agent handoff lost analytical contex...</div>
+                    <div class="ac-failure-meta"><code>sess-2608051</code> · Turn 8/8 · direct</div>
+                    <details><summary>Show 9 turns up to failure</summary><div class="ac-turns"><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 1</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Hi there! I&#x27;m excited to get started on analyzing some sales data. I&#x27;ve uploaded a file, q3_sales.csv, and I would like to focus on the North and East regions for the analysis. Could you help me with that? Thanks!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 2</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Selecting the AI Model and submitting the form now to continue with the analysis.</pre></div><div><div class="context-label">Output</div><pre>Reasoning (11 steps)</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 3</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s proceed with the analysis!</pre></div><div><div class="context-label">Output</div><pre>Response cancelled</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 4</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s try that again! I&#x27;ll go ahead and select &#x27;Fast (Claude Haiku)&#x27; for the AI model to move forward with the analysis.</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 5</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s fill in the AI model again. I&#x27;ll select &#x27;Fast (Claude Haiku)&#x27; and submit the form now!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has finished the fast-model analysis of your Q3 sales data. Here&#x27;s the rundown:
+
+✅ Revenue Prediction Model Complete
+
+Winner: Linear Regression (Random Forest badly overfit — R² of ‑29 on the test set, so it was ruled out)
+
+Metric	Linear Regression	Random Forest
+Test R²	0.54	-29.31
+Test RMSE	$8.31	$67.59
+Test MAE	$6.58	$17.54
+CV R² (mean)	0.36	-7.32
+
+Key drivers of revenue:
+
+Units sold — the dominant factor (strong positive effect, ~73% of feature importance)
+Product — significant negative effect (~16% importance)
+Region — comparatively minor effect (~11% importance)
+
+Linear Regression is the clear, production-ready choice here — simple, stable, and reasonably predictive, while the Random Forest essentially memorized noise.
+
+What&#x27;s in your Artifacts panel:
+
+6 evaluation charts (actual vs. predicted, residuals, and feature importance for both models)
+Trained model files (linear_regression_model.pkl, plus the scaler and encoders needed to reuse it)
+model_summary.csv (side-by-side metrics) and predictions.csv (test-set predictions)
+The full reproducible analysis script
+
+Let me know if you&#x27;d like the Data Analyst to dig further — e.g., isolate just North vs. East region comparisons more explicitly, or try other features/models.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 6</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Could you please turn this analysis into a slide deck? I&#x27;d love to see it presented in that format!</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 7</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>I&#x27;ll fill out the form now! 
+- Target Audience: C-suite executives
+- Document Title: Q3 Sales Analysis
+- Tone: Professional
+- Page Numbers: Show page numbers
+
+Let&#x27;s submit this!</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 8  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s fill in the form now!</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 8  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre></pre></div><div><div class="context-label">Output</div><pre></pre></div></div>
+                    </div></div></details>
+                </div></div></details>
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Task Completion</span>
+                    <span class="behaviour-rate" style="color:#ef4444;font-size:14px">0%</span>
+                    <span class="ac-fail">1/1 failed</span>
+                </div>
+                <details class="ac-failures-toggle"><summary class="ac-failures-summary">1 failure — click to expand</summary><div class="ac-failures"><div class="ac-failure">
+                    <div class="ac-failure-reason">The user asked for analysis (partially delivered in turn 5) and slides (never delivered — Slide Maker got stuck in a form loop). Session timed out with only one of two requested deliverables produced, and that one didn&#x27;t visibly respect the stated constraints.</div>
+                    <div class="ac-failure-meta"><code>sess-2608051</code> · Turn 8/8 · direct</div>
+                    <details><summary>Show 9 turns up to failure</summary><div class="ac-turns"><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 1</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Hi there! I&#x27;m excited to get started on analyzing some sales data. I&#x27;ve uploaded a file, q3_sales.csv, and I would like to focus on the North and East regions for the analysis. Could you help me with that? Thanks!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 2</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Selecting the AI Model and submitting the form now to continue with the analysis.</pre></div><div><div class="context-label">Output</div><pre>Reasoning (11 steps)</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 3</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s proceed with the analysis!</pre></div><div><div class="context-label">Output</div><pre>Response cancelled</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 4</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s try that again! I&#x27;ll go ahead and select &#x27;Fast (Claude Haiku)&#x27; for the AI model to move forward with the analysis.</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 5</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s fill in the AI model again. I&#x27;ll select &#x27;Fast (Claude Haiku)&#x27; and submit the form now!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has finished the fast-model analysis of your Q3 sales data. Here&#x27;s the rundown:
+
+✅ Revenue Prediction Model Complete
+
+Winner: Linear Regression (Random Forest badly overfit — R² of ‑29 on the test set, so it was ruled out)
+
+Metric	Linear Regression	Random Forest
+Test R²	0.54	-29.31
+Test RMSE	$8.31	$67.59
+Test MAE	$6.58	$17.54
+CV R² (mean)	0.36	-7.32
+
+Key drivers of revenue:
+
+Units sold — the dominant factor (strong positive effect, ~73% of feature importance)
+Product — significant negative effect (~16% importance)
+Region — comparatively minor effect (~11% importance)
+
+Linear Regression is the clear, production-ready choice here — simple, stable, and reasonably predictive, while the Random Forest essentially memorized noise.
+
+What&#x27;s in your Artifacts panel:
+
+6 evaluation charts (actual vs. predicted, residuals, and feature importance for both models)
+Trained model files (linear_regression_model.pkl, plus the scaler and encoders needed to reuse it)
+model_summary.csv (side-by-side metrics) and predictions.csv (test-set predictions)
+The full reproducible analysis script
+
+Let me know if you&#x27;d like the Data Analyst to dig further — e.g., isolate just North vs. East region comparisons more explicitly, or try other features/models.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 6</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Could you please turn this analysis into a slide deck? I&#x27;d love to see it presented in that format!</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 7</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>I&#x27;ll fill out the form now! 
+- Target Audience: C-suite executives
+- Document Title: Q3 Sales Analysis
+- Tone: Professional
+- Page Numbers: Show page numbers
+
+Let&#x27;s submit this!</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 8  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s fill in the form now!</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 8  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre></pre></div><div><div class="context-label">Output</div><pre></pre></div></div>
+                    </div></div></details>
+                </div></div></details>
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Turn Budget</span>
+                    <span class="behaviour-rate" style="color:#22c55e;font-size:14px">100%</span>
+                    <span class="ac-pass">1/1 passed</span>
+                </div>
+                
+            </div></div>
+            </div>
+        </details><details class="task-section" open>
+            <summary class="task-title">Multi Agent Pipeline</summary>
+            <div class="task-body">
+                <div class="task-context"><p class="task-description">Upload q3_sales.csv and ask Orca to produce a slide deck summarising the key findings for a team meeting. Orca should decompose the task — routing first to the data analyst agent then passing the findings to the slide maker agent — and synthesise the outputs faithfully into a coherent deck.
+</p><div class="task-meta"><span class="task-meta-item"><strong>Persona:</strong> Cooperative Delegator — A mid-level programme manager who is comfortable with AI tools, has time to engage, and communicates in a friendly, conv</span><span class="task-meta-item"><strong>Fixtures:</strong> q3_sales.csv</span><span class="task-meta-item"><strong>Outcome:</strong> system error · 3 turns · 598s</span></div></div>
+                <div class="ac-list"><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Decomposition Quality</span>
+                    <span class="behaviour-rate" style="color:#ef4444;font-size:14px">50%</span>
+                    <span class="ac-fail">1/2 failed</span>
+                </div>
+                <details class="ac-failures-toggle"><summary class="ac-failures-summary">1 failure — click to expand</summary><div class="ac-failures"><div class="ac-failure">
+                    <div class="ac-failure-reason">The system transitioned to the Slide Maker after the user filled the Data Analyst&#x27;s form, but no analysis output is visible in the conversation. Either the analysis was skipped entirely, or it happened internally without surfacing results. Premature transition — the user has no way to verify the fir...</div>
+                    <div class="ac-failure-meta"><code>sess-2608051</code> · Turn 2/3 · slide_maker</div>
+                    <details><summary>Show 2 turns up to failure</summary><div class="ac-turns"><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 1</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Hi there! I hope you&#x27;re doing well. I&#x27;ve got a CSV file with our Q3 sales data that I&#x27;d like to analyze. Could you help me create a slide deck summarizing the key findings for our upcoming team meeting? I&#x27;m uploading the file now!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form — please fill it in so it can start the analysis.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 2  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>I&#x27;ll select &#x27;Fast (Claude Haiku)&#x27; and submit the form now to get the analysis started!</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you to pick a theme and any extra styling for the deck — please fill it in.</pre></div></div>
+                    </div></div></details>
+                </div></div></details>
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Task Completion</span>
+                    <span class="behaviour-rate" style="color:#ef4444;font-size:14px">0%</span>
+                    <span class="ac-fail">1/1 failed</span>
+                </div>
+                <details class="ac-failures-toggle"><summary class="ac-failures-summary">1 failure — click to expand</summary><div class="ac-failures"><div class="ac-failure">
+                    <div class="ac-failure-reason">The session terminated with system_error before any deliverable was produced. Neither analysis nor slides were surfaced to the user. Complete failure.</div>
+                    <div class="ac-failure-meta"><code>sess-2608051</code> · Turn 3/3 · direct</div>
+                    <details><summary>Show 4 turns up to failure</summary><div class="ac-turns"><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 1</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Hi there! I hope you&#x27;re doing well. I&#x27;ve got a CSV file with our Q3 sales data that I&#x27;d like to analyze. Could you help me create a slide deck summarizing the key findings for our upcoming team meeting? I&#x27;m uploading the file now!</pre></div><div><div class="context-label">Output</div><pre>The Data Analyst has set up a form — please fill it in so it can start the analysis.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #e5e7eb">
+                        <div class="ac-turn-label">Turn 2</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>I&#x27;ll select &#x27;Fast (Claude Haiku)&#x27; and submit the form now to get the analysis started!</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you to pick a theme and any extra styling for the deck — please fill it in.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 3  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre>Let&#x27;s go with a &#x27;Professional&#x27; tone for the slide deck. The title can be &#x27;Q3 Sales Summary&#x27; and I&#x27;ll choose &#x27;Show page numbers&#x27;.</pre></div><div><div class="context-label">Output</div><pre>The Slide Maker has set up a form for you to pick a theme and any extra styling for the deck — please fill it in.</pre></div></div>
+                    </div><div class="ac-turn" style="border-left:3px solid #ef4444">
+                        <div class="ac-turn-label">Turn 3  ← failure</div>
+                        <div class="ac-turn-io"><div><div class="context-label">Input</div><pre></pre></div><div><div class="context-label">Output</div><pre></pre></div></div>
+                    </div></div></details>
+                </div></div></details>
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Task Decomposition Accuracy</span>
+                    <span class="behaviour-rate" style="color:#22c55e;font-size:14px">100%</span>
+                    <span class="ac-pass">1/1 passed</span>
+                </div>
+                
+            </div><div class="ac-row">
+                <div class="ac-header">
+                    <span class="ac-desc">Turn Budget</span>
+                    <span class="behaviour-rate" style="color:#22c55e;font-size:14px">100%</span>
+                    <span class="ac-pass">1/1 passed</span>
+                </div>
+                
+            </div></div>
+            </div>
+        </details>
+    </div>
+
+    <div class="secondary-section">
+        <details>
+            <summary>Metric Summary (flat table)</summary>
+            <table>
+                <thead><tr><th>Metric</th><th>Pass</th><th>Fail</th><th>Skip</th><th>Rate</th></tr></thead>
+                <tbody>
+        <tr>
+            <td>Clarification Judgement</td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+            <td style="color: #22c55e; font-weight: bold">100.0%</td>
+        </tr>
+        <tr>
+            <td>Clarification Precision</td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+            <td style="color: #22c55e; font-weight: bold">100.0%</td>
+        </tr>
+        <tr>
+            <td>Constraint Adherence</td>
+            <td>0</td>
+            <td>1</td>
+            <td>0</td>
+            <td style="color: #ef4444; font-weight: bold">0.0%</td>
+        </tr>
+        <tr>
+            <td>Context Reuse</td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+            <td style="color: #22c55e; font-weight: bold">100.0%</td>
+        </tr>
+        <tr>
+            <td>Cross-Agent Context Retention</td>
+            <td>0</td>
+            <td>2</td>
+            <td>0</td>
+            <td style="color: #ef4444; font-weight: bold">0.0%</td>
+        </tr>
+        <tr>
+            <td>Decomposition Quality</td>
+            <td>1</td>
+            <td>1</td>
+            <td>0</td>
+            <td style="color: #ef4444; font-weight: bold">50.0%</td>
+        </tr>
+        <tr>
+            <td>Session Completeness</td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+            <td style="color: #22c55e; font-weight: bold">100.0%</td>
+        </tr>
+        <tr>
+            <td>Task Completion</td>
+            <td>0</td>
+            <td>2</td>
+            <td>0</td>
+            <td style="color: #ef4444; font-weight: bold">0.0%</td>
+        </tr>
+        <tr>
+            <td>Task Decomposition Accuracy</td>
+            <td>1</td>
+            <td>0</td>
+            <td>0</td>
+            <td style="color: #22c55e; font-weight: bold">100.0%</td>
+        </tr>
+        <tr>
+            <td>Turn Budget</td>
+            <td>2</td>
+            <td>1</td>
+            <td>0</td>
+            <td style="color: #ef4444; font-weight: bold">66.7%</td>
+        </tr></tbody>
+            </table>
+        </details>
+    </div>
+
+    <div class="secondary-section">
+        <details>
+            <summary>Per-Trace Detail (all metrics per session)</summary>
+            <p style="color:#6b7280;margin:12px 0;font-size:13px">All metrics for each trace, with score and judge reasoning.</p>
+            
+        <details class="trace-card" open>
+            <summary>
+                <span style="color:#ef4444;font-weight:600">Session 1</span>
+                <code>sess-260805164134-acec</code>
+                <span class="trace-meta">7 turn(s) &middot; 4P 1F 0S</span>
+            </summary>
+            <div class="trace-body">
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 1</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">direct &middot; 2P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Hi there! I hope you&#x27;re doing well. I have this file, q3_sales.csv, and I&#x27;m hoping you can help me with the data. I&#x27;m not really sure what I need to do with it, but any assistance or guidance would be greatly appreciated! Thanks!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>I&#x27;ve popped up a quick form so you can tell me what you&#x27;d like to do with your sales data — once you fill it in, I&#x27;ll route it to the right specialist to get it done.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (2)</summary>
+                    <div class="trace-metrics-list">
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-pass">0.75</span>
+                        <span class="trace-metric-name">Clarification Judgement</span>
+                    </div>
+                    <div class="trace-metric-reason">The user&#x27;s request was genuinely ambiguous (&#x27;help me with the data&#x27; with no stated goal). The orchestrator correctly identified the need for clarification and presented a structured form to gather intent. This is appropriate — routing blindly would risk wasted work.</div>
+                </div>
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-pass">0.80</span>
+                        <span class="trace-metric-name">Clarification Precision</span>
+                    </div>
+                    <div class="trace-metric-reason">The form offered concrete goal options (explore, visualize, summarize) which efficiently narrowed the user&#x27;s intent in a single interaction. However, it could have also asked about scope (which regions/metrics matter) to avoid later back-and-forth.</div>
+                </div></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 2</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>I&#x27;ll select &#x27;Explore the data — trends, totals, breakdowns by region/product&#x27; as my goal.</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Data Analyst has set up a form for choosing the AI model — please fill it in to kick off the exploratory analysis of your Q3 sales data.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 3</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>I&#x27;ll fill in the goal as &#x27;Explore the data — trends, totals, breakdowns by region/product&#x27; and select &#x27;Fast (Claude Haiku)&#x27; as the AI model. Then I&#x27;ll submit the form to proceed with the analysis.</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>Done! The Data Analyst dug into your Q3 sales data and built a quick predictive model for revenue. Here&#x27;s the gist:
+
+Model comparison
+
+Tried Linear Regression and XGBoost to predict revenue
+Linear Regression won (R² = 0.336, RMSE = $10.00, MAE = $8.29) — XGBoost overfit badly on this small dataset (only 200 rows), so it was ruled out
+
+What went into the model
+
+Categorical: region, product
+Numeric: units_sold
+Engineered from date: week, day of week, day of month
+
+What you got (in the Artifacts panel):
+
+File	What it&#x27;s for
+q3_sales_fast_model.py	Full script — data prep, training, evaluation
+linear_regression_model.pkl	The trained model, ready to reuse
+model_summary.csv	Performance metrics
+predictions.csv	Actual vs. predicted revenue + residuals
+actual_vs_predicted_linear_regression.vl.json	Interactive scatter chart
+residual_plot_linear_regression.vl.json	Residual diagnostics chart
+
+The R² of 0.336 means the model explains about a third of the variation in revenue — decent for a quick baseline, but there&#x27;s clearly more signal in the data than these features capture. If you want, I can have the Data Analyst dig deeper (e.g., add more features, try a larger dataset, or focus on a different target like units sold) — just let me know what you&#x27;d like next.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 4</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>I&#x27;ll go ahead and select &#x27;Create charts/visualizations from the sales data&#x27; as the goal and keep the AI model as &#x27;Fast (Claude Haiku)&#x27; to move forward with the analysis.</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>All done! The Data Analyst built out 5 interactive charts from your Q3 sales data:
+
+Chart	Key Insight
+Revenue by Region	North leads with $3,722 (~32-38% of total); West, East, South trail
+Revenue by Product	DataSync tops the list at $3,831, followed by CloudBase ($3,694) and Widget Pro ($3,146)
+Revenue Trend Over Time	Daily revenue swings from $145–$1,023 (avg $267) — noticeable variability across Q3
+Units Sold vs Revenue	Almost no correlation (-0.0073) — revenue isn&#x27;t just about volume, likely pricing/product mix drives it
+Product × Region Heatmap	DataSync in the North is the standout combo ($1,609); South consistently underperforms
+
+Bottom line: Total Q3 revenue was $11,671.20, concentrated in the North region and led by DataSync. Since unit volume doesn&#x27;t track with revenue, it&#x27;s worth digging into pricing or product-mix differences next if you want to explore further.
+
+All the charts (interactive .vl.json — click to zoom, hover for details) and the underlying script are in your Artifacts panel. Let me know if you&#x27;d like to dig deeper — e.g., break down the pricing effect, or turn this into a report/deck.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 5</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>I&#x27;d like to explore the impact of pricing on our revenue. It seems that there might be some interesting dynamics at play since revenue and units sold don&#x27;t correlate well. Could we analyze that further?</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>Great news — pricing turns out to be the real story behind your Q3 revenue, not volume. Here&#x27;s the rundown:
+
+🎯 Core Finding: Revenue is driven by PRICE, not volume
+Correlation	Value	Meaning
+Unit Price → Revenue	+0.84	Price is the main lever
+Units Sold → Revenue	-0.01	Volume barely matters
+Unit Price ↔ Units Sold	-0.51	Lower prices → higher volume (as expected)
+💡 What&#x27;s driving it
+Three distinct pricing strategies by product:
+CloudBase ($1.35/unit) — premium, very stable (0.9% volatility)
+DataSync ($0.93/unit avg) — wild swings (99% volatility, $0.81–$8.19 range) — looks like dynamic/inconsistent pricing
+Widget Pro ($0.38/unit) — stable budget pricing, highest volume (8,371 units) but only 27% of revenue
+DataSync is the wild card: your top revenue earner ($3,831, 33% of total), and commands a 58% price premium in the North ($1.28 vs $0.81 elsewhere). One transaction on Aug 9 spiked to $8.19/unit — worth checking if that&#x27;s a real premium deal or a data error.
+Regional price power: North charges the most ($0.98 avg) and pulls in 32% of revenue; South charges least ($0.79) and contributes only 16%.
+Widget Pro is likely underpriced: huge volume, low revenue share — a price test in East/South could capture more margin without much volume loss.
+🚀 Suggested next steps
+Audit why DataSync pricing swings so much — formalize it if it&#x27;s intentional.
+Verify the $8.19/unit DataSync outlier (legit premium vs. data issue).
+Test a modest Widget Pro price increase (~$0.42–0.45) in East/South.
+Test a regional premium for CloudBase in the North (~$1.45+).
+
+You&#x27;ve got 5 new interactive charts (unit price by product, price × region heatmap, price-vs-volume scatter, price volatility by product, and a revenue-drivers bubble chart) plus a full pricing insights summary and analysis script — all in your Artifacts panel.
+
+Want me to turn these pricing findings into a slide deck or a written report for wider sharing?</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 6</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Yes, please go ahead and turn these pricing findings into a written report for wider sharing. That would be really helpful!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>Your report is ready! 📄
+
+Q3_Pricing_Analysis_Report.docx is now in your Artifacts panel, fully formatted for wider sharing. Here&#x27;s what&#x27;s inside:
+
+Executive Summary — the headline: revenue is driven by price, not volume
+5 key findings — price-vs-volume dynamics, the three distinct product pricing strategies (CloudBase premium, DataSync volatile, Widget Pro budget), regional pricing gaps, and the product × region revenue matrix
+Data tables — pricing strategy comparison, regional breakdown, product × region matrix, key metrics
+5 strategic recommendations — formalizing DataSync&#x27;s dynamic pricing, testing a Widget Pro price bump, regionalizing CloudBase pricing in the North, tackling South&#x27;s underperformance, and setting up ongoing price monitoring
+Appendix — data sources and correlation stats for anyone who wants to check the numbers
+
+It&#x27;s ready to hand straight to stakeholders or your sales team. Want me to also turn this into a slide deck version for a presentation, or dig into anything else from the Q3 data?</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#ef4444;font-weight:600">Turn 7</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">direct &middot; 2P 1F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre></pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre></pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (3)</summary>
+                    <div class="trace-metrics-list">
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-fail">0.00</span>
+                        <span class="trace-metric-name">Turn Budget</span>
+                    </div>
+                    <div class="trace-metric-reason">Session used 6 turns, exceeding the allowed budget of 4. The extra turns came from the user organically expanding scope (charts → pricing → report), not from system inefficiency.</div>
+                </div>
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-pass">0.85</span>
+                        <span class="trace-metric-name">Context Reuse</span>
+                    </div>
+                    <div class="trace-metric-reason">The system correctly retained the uploaded file (q3_sales.csv) and the user&#x27;s earlier analysis results across turns. Pricing analysis in turn 5 built on earlier exploration without re-asking for the file or goal.</div>
+                </div>
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-pass">0.90</span>
+                        <span class="trace-metric-name">Session Completeness</span>
+                    </div>
+                    <div class="trace-metric-reason">Despite exceeding the turn budget, the session delivered multiple outputs: exploratory analysis, 5 charts, pricing analysis, and a formatted report. The user&#x27;s evolving requests were all fulfilled. Marked as &#x27;user_abandoned&#x27; but the user had received substantial value.</div>
+                </div></div>
+                </details>
+            </div></div>
+        </details>
+        <details class="trace-card" open>
+            <summary>
+                <span style="color:#ef4444;font-weight:600">Session 2</span>
+                <code>sess-260805170601-b44e</code>
+                <span class="trace-meta">9 turn(s) &middot; 1P 4F 0S</span>
+            </summary>
+            <div class="trace-body">
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 1</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Hi there! I&#x27;m excited to get started on analyzing some sales data. I&#x27;ve uploaded a file, q3_sales.csv, and I would like to focus on the North and East regions for the analysis. Could you help me with that? Thanks!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 2</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Selecting the AI Model and submitting the form now to continue with the analysis.</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>Reasoning (11 steps)</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 3</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Let&#x27;s proceed with the analysis!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>Response cancelled</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 4</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Let&#x27;s try that again! I&#x27;ll go ahead and select &#x27;Fast (Claude Haiku)&#x27; for the AI model to move forward with the analysis.</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Data Analyst has set up a form for you — please fill it in to continue.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#ef4444;font-weight:600">Turn 5</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 0P 1F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Let&#x27;s fill in the AI model again. I&#x27;ll select &#x27;Fast (Claude Haiku)&#x27; and submit the form now!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Data Analyst has finished the fast-model analysis of your Q3 sales data. Here&#x27;s the rundown:
+
+✅ Revenue Prediction Model Complete
+
+Winner: Linear Regression (Random Forest badly overfit — R² of ‑29 on the test set, so it was ruled out)
+
+Metric	Linear Regression	Random Forest
+Test R²	0.54	-29.31
+Test RMSE	$8.31	$67.59
+Test MAE	$6.58	$17.54
+CV R² (mean)	0.36	-7.32
+
+Key drivers of revenue:
+
+Units sold — the dominant factor (strong positive effect, ~73% of feature importance)
+Product — significant negative effect (~16% importance)
+Region — comparatively minor effect (~11% importance)
+
+Linear Regression is the clear, production-ready choice here — simple, stable, and reasonably predictive, while the Random Forest essentially memorized noise.
+
+What&#x27;s in your Artifacts panel:
+
+6 evaluation charts (actual vs. predicted, residuals, and feature importance for both models)
+Trained model files (linear_regression_model.pkl, plus the scaler and encoders needed to reuse it)
+model_summary.csv (side-by-side metrics) and predictions.csv (test-set predictions)
+The full reproducible analysis script
+
+Let me know if you&#x27;d like the Data Analyst to dig further — e.g., isolate just North vs. East region comparisons more explicitly, or try other features/models.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (1)</summary>
+                    <div class="trace-metrics-list">
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-fail">0.60</span>
+                        <span class="trace-metric-name">Constraint Adherence</span>
+                    </div>
+                    <div class="trace-metric-reason">The Data Analyst produced an analysis, but the output text mentions &#x27;Q3 sales data&#x27; broadly without confirming it was filtered to North and East regions only, denominated in SGD, or that the DataSync outlier was excluded. The constraints from turn 1 may have been partially ignored.</div>
+                </div></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#ef4444;font-weight:600">Turn 6</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">slide_maker &middot; 0P 1F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Could you please turn this analysis into a slide deck? I&#x27;d love to see it presented in that format!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (1)</summary>
+                    <div class="trace-metrics-list">
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-fail">0.40</span>
+                        <span class="trace-metric-name">Cross-Agent Context Retention</span>
+                    </div>
+                    <div class="trace-metric-reason">The handoff from Data Analyst to Slide Maker shows no evidence that the user&#x27;s original constraints (North/East only, SGD, exclude DataSync outlier) or the analysis findings were passed along. The Slide Maker&#x27;s form asks about styling preferences — not analytical scope — suggesting the context was not forwarded.</div>
+                </div></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 7</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">slide_maker &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>I&#x27;ll fill out the form now! 
+- Target Audience: C-suite executives
+- Document Title: Q3 Sales Analysis
+- Tone: Professional
+- Page Numbers: Show page numbers
+
+Let&#x27;s submit this!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 8</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">slide_maker &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Let&#x27;s fill in the form now!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Slide Maker has set up a form for you — please fill it in to continue.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#ef4444;font-weight:600">Turn 9</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">direct &middot; 1P 2F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre></pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre></pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (3)</summary>
+                    <div class="trace-metrics-list">
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-fail">0.30</span>
+                        <span class="trace-metric-name">Task Completion</span>
+                    </div>
+                    <div class="trace-metric-reason">The user asked for analysis (partially delivered in turn 5) and slides (never delivered — Slide Maker got stuck in a form loop). Session timed out with only one of two requested deliverables produced, and that one didn&#x27;t visibly respect the stated constraints.</div>
+                </div>
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-fail">0.35</span>
+                        <span class="trace-metric-name">Cross-Agent Context Retention</span>
+                    </div>
+                    <div class="trace-metric-reason">The user&#x27;s original constraints (North/East regions, SGD currency, exclude DataSync outlier) were stated in turn 1 but never visibly confirmed in the Data Analyst output (turn 5), and there is no evidence they were forwarded to the Slide Maker (turn 6). The cross-agent handoff lost analytical context.</div>
+                </div>
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-pass">1.00</span>
+                        <span class="trace-metric-name">Turn Budget</span>
+                    </div>
+                    <div class="trace-metric-reason">Session used 8 turns, within the budget of 14.</div>
+                </div></div>
+                </details>
+            </div></div>
+        </details>
+        <details class="trace-card" open>
+            <summary>
+                <span style="color:#ef4444;font-weight:600">Session 3</span>
+                <code>sess-260805165601-d416</code>
+                <span class="trace-meta">4 turn(s) &middot; 3P 2F 0S</span>
+            </summary>
+            <div class="trace-body">
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 1</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">data_analyst &middot; 1P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Hi there! I hope you&#x27;re doing well. I&#x27;ve got a CSV file with our Q3 sales data that I&#x27;d like to analyze. Could you help me create a slide deck summarizing the key findings for our upcoming team meeting? I&#x27;m uploading the file now!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Data Analyst has set up a form — please fill it in so it can start the analysis.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (1)</summary>
+                    <div class="trace-metrics-list">
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-pass">0.85</span>
+                        <span class="trace-metric-name">Decomposition Quality</span>
+                    </div>
+                    <div class="trace-metric-reason">The system correctly identified this as a multi-step task requiring (1) data analysis then (2) slide generation, and routed to the Data Analyst first. The decomposition logic is sound — analysis must precede presentation.</div>
+                </div></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#ef4444;font-weight:600">Turn 2</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">slide_maker &middot; 0P 1F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>I&#x27;ll select &#x27;Fast (Claude Haiku)&#x27; and submit the form now to get the analysis started!</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Slide Maker has set up a form for you to pick a theme and any extra styling for the deck — please fill it in.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (1)</summary>
+                    <div class="trace-metrics-list">
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-fail">0.40</span>
+                        <span class="trace-metric-name">Decomposition Quality</span>
+                    </div>
+                    <div class="trace-metric-reason">The system transitioned to the Slide Maker after the user filled the Data Analyst&#x27;s form, but no analysis output is visible in the conversation. Either the analysis was skipped entirely, or it happened internally without surfacing results. Premature transition — the user has no way to verify the first step completed.</div>
+                </div></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#22c55e;font-weight:600">Turn 3</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">slide_maker &middot; 0P 0F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre>Let&#x27;s go with a &#x27;Professional&#x27; tone for the slide deck. The title can be &#x27;Q3 Sales Summary&#x27; and I&#x27;ll choose &#x27;Show page numbers&#x27;.</pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre>The Slide Maker has set up a form for you to pick a theme and any extra styling for the deck — please fill it in.</pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (0)</summary>
+                    <div class="trace-metrics-list"></div>
+                </details>
+            </div>
+            <div class="session-turn">
+                <div class="session-turn-header">
+                    <span style="color:#ef4444;font-weight:600">Turn 4</span>
+                    <code>sess-2608051</code>
+                    <span class="trace-meta">direct &middot; 2P 1F 0S</span>
+                </div>
+                <div class="session-turn-io">
+                    <div class="io-block">
+                        <div class="context-label">Input</div>
+                        <pre></pre>
+                    </div>
+                    <div class="io-block">
+                        <div class="context-label">Output</div>
+                        <pre></pre>
+                    </div>
+                </div>
+                <details class="metrics-dropdown">
+                    <summary>Metrics (3)</summary>
+                    <div class="trace-metrics-list">
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-fail">0.00</span>
+                        <span class="trace-metric-name">Task Completion</span>
+                    </div>
+                    <div class="trace-metric-reason">The session terminated with system_error before any deliverable was produced. Neither analysis nor slides were surfaced to the user. Complete failure.</div>
+                </div>
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-pass">0.70</span>
+                        <span class="trace-metric-name">Task Decomposition Accuracy</span>
+                    </div>
+                    <div class="trace-metric-reason">The system correctly identified the need for data_analyst → slide_maker sequencing. However, it transitioned to the Slide Maker without surfacing intermediate analysis output, making it impossible to verify the first step completed before the second began.</div>
+                </div>
+                <div class="trace-metric">
+                    <div class="trace-metric-header">
+                        <span class="badge badge-pass">1.00</span>
+                        <span class="trace-metric-name">Turn Budget</span>
+                    </div>
+                    <div class="trace-metric-reason">Session used 3 turns, well within the budget of 12. However, the session ended due to system error, not because the task was completed efficiently.</div>
+                </div></div>
+                </details>
+            </div></div>
+        </details>
+        </details>
+    </div>
+</body>
+</html>
