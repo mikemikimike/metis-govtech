@@ -240,3 +240,14 @@ def test_review_and_experiment_use_the_same_persona_ids() -> None:
         "cooperative-delegator",
         "impatient-executive",
     ]
+
+
+def test_the_product_detail_is_kept_in_review_but_not_compiled() -> None:
+    profile = research_assistant()
+
+    review = render_review(profile, EXPERIMENT_ID)
+    experiment = to_yaml(compile_experiment(profile, EXPERIMENT_ID))
+
+    assert profile.product.detail in review
+    assert profile.product.detail not in experiment
+    assert yaml.safe_load(experiment)["description"] == profile.product.summary

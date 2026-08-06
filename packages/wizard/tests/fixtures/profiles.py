@@ -39,7 +39,7 @@ def research_assistant() -> ProductProfile:
                 "Policy analysts and their managers. Some know exactly what they want; "
                 "others are exploring and do not."
             ),
-            architecture=(
+            detail=(
                 "A router agent with a document search tool and a summariser subagent. "
                 "Search can time out. Nothing is carried between sessions."
             ),

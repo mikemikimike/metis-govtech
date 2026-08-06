@@ -15,6 +15,8 @@ from typing import Literal
 
 import yaml
 
+from metis.wizard.application.interview import clarify_turn_cap, opening_question
+from metis.wizard.application.interviewer import ClarifyPhase
 from metis.wizard.contracts.session_state import Turn
 from metis.wizard.domain.profile import ProductProfile
 
@@ -31,8 +33,13 @@ ModelCall = Literal[
     "suggest_criterion",
 ]
 
-_MODEL_CALL_PLACEHOLDERS: dict[ModelCall, frozenset[str]] = {
-    "clarify": frozenset({"profile", "history"}),
+_MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
+    "clarify_product": frozenset(
+        {"profile", "history", "question_number", "question_cap"}
+    ),
+    "clarify_machinery": frozenset(
+        {"profile", "history", "question_number", "question_cap"}
+    ),
     "behaviours": frozenset({"profile", "history"}),
     "criteria": frozenset({"profile"}),
     "personas": frozenset({"profile"}),
@@ -62,7 +69,7 @@ class PromptCatalog:
 
     system_template: str
     patch_rules: str
-    model_calls: Mapping[ModelCall, str]
+    model_calls: Mapping[str, str]
 
 
 def _error(key: str, detail: str) -> PromptCatalogError:
@@ -129,7 +136,7 @@ def load_prompt_catalog() -> PromptCatalog:
     patch_rules = _text(system, "system.patch_rules")
     _validate_template(system_template, "system.template", _SYSTEM_PLACEHOLDERS)
 
-    calls: dict[ModelCall, str] = {}
+    calls: dict[str, str] = {}
     for name, allowed in _MODEL_CALL_PLACEHOLDERS.items():
         value = _text(model_calls, f"model_calls.{name}")
         _validate_template(value, f"model_calls.{name}", allowed)
@@ -178,16 +185,52 @@ def _transcript(history: list[Turn]) -> str:
     return "\n".join(f"{t.role}: {t.text}" for t in history)
 
 
-def _compose(name: ModelCall, values: Mapping[str, str]) -> ModelPrompt:
+def _clarify_position(history: list[Turn]) -> tuple[int, int]:
+    """Return the next model question's one-based position and the package cap."""
+    asked = sum(1 for turn in history if turn.role == "assistant")
+    if (
+        history
+        and history[0].role == "assistant"
+        and history[0].text == opening_question()
+    ):
+        asked -= 1
+    return max(1, asked + 1), clarify_turn_cap()
+
+
+def _compose(
+    template_name: str,
+    values: Mapping[str, str],
+    *,
+    call_name: ModelCall | None = None,
+) -> ModelPrompt:
     """Compose system and user messages from one fresh catalogue snapshot."""
     catalog = load_prompt_catalog()
-    user = _substitute(catalog.model_calls[name], f"model_calls.{name}", values)
-    return ModelPrompt(name=name, system=_system_message(catalog), user=user)
+    user = _substitute(
+        catalog.model_calls[template_name],
+        f"model_calls.{template_name}",
+        values,
+    )
+    return ModelPrompt(
+        name=call_name or template_name, system=_system_message(catalog), user=user
+    )
 
 
-def clarify(profile: ProductProfile, history: list[Turn]) -> ModelPrompt:
+def clarify(
+    profile: ProductProfile,
+    history: list[Turn],
+    phase: ClarifyPhase = "product",
+) -> ModelPrompt:
+    template_name = "clarify_product" if phase == "product" else "clarify_machinery"
+    question_number, question_cap = _clarify_position(history)
     return _compose(
-        "clarify", {"profile": _profile(profile), "history": _transcript(history)}
+        template_name,
+        {
+            "profile": _profile(profile),
+            "history": _transcript(history),
+            "question_number": str(question_number),
+            "question_cap": str(question_cap),
+        },
+        call_name="clarify",
     )
 
 
@@ -234,6 +277,7 @@ def suggest_criterion(profile: ProductProfile, behaviour_id: str) -> ModelPrompt
 __all__ = [
     "ModelCall",
     "ModelPrompt",
+    "ClarifyPhase",
     "PROMPTS_FILE",
     "PRIMER_FILE",
     "PromptCatalog",

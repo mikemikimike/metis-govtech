@@ -36,13 +36,20 @@ class SessionStep(StrEnum):
     DONE = "done"
 
 
-# Note that CLARIFY and PRIORITISE have no entry, which is the point. Both steps exist and
-# the model may write nothing during either: clarify commits nothing at all, and the ticks
-# that make prioritise work are PatchOrigin.WIZARD, so they never reach an address check.
+# Note that PRIORITISE has no entry: the ticks that make it work are PatchOrigin.WIZARD, so they
+# never reach an address check. Clarify owns the product prose. The driver narrows a clarify result
+# to those four paths before applying it; the global owner lookup remains what lets a later step
+# correct an earlier step's fields.
 # Note that each step owns both the *container* and its *elements*. ADD addresses the list
 # it appends to (`tasks`, `tasks[T-1].behaviours`), while SET and REMOVE address an element
 # (`tasks[T-1]`). Listing only one of the two silently forbids half the operations.
 StepPermissions: dict[SessionStep, list[str]] = {
+    SessionStep.CLARIFY: [
+        "product.name",
+        "product.users",
+        "product.summary",
+        "product.detail",
+    ],
     SessionStep.BEHAVIOURS: [
         "tasks",
         "tasks[*]",
@@ -50,10 +57,6 @@ StepPermissions: dict[SessionStep, list[str]] = {
         "tasks[*].behaviours",
         "tasks[*].behaviours[*]",
         "tasks[*].behaviours[*].statement",
-        "product.summary",
-        "product.users",
-        "product.architecture",
-        "product.name",
     ],
     SessionStep.CRITERIA: [
         "tasks[*].behaviours[*].criteria",

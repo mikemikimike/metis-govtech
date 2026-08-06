@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from fixtures.profiles import research_assistant
+from fixtures.scripted import ScriptedInterviewer
 
 from metis.wizard.application import (
     SESSION_FORMAT_VERSION,
@@ -20,6 +21,7 @@ from metis.wizard.application import (
 )
 from metis.wizard.contracts import (
     CardUploadField,
+    ChatResponse,
     ChoiceRequest,
     ChoiceResponse,
     Option,
@@ -70,7 +72,12 @@ def test_session_fixture_preserves_its_wire_shape(
     assert [turn.model_dump(mode="json") for turn in loaded.history] == raw["history"]
     assert [r.model_dump(mode="json") for r in loaded.requests] == raw["requests"]
     assert isinstance(loaded.pending, ChoiceRequest)
-    assert loaded.profile.model_dump(mode="json") == raw["profile"]
+    expected_profile = dict(raw["profile"])
+    expected_product = dict(expected_profile["product"])
+    expected_product.pop("architecture")
+    expected_product["detail"] = ""
+    expected_profile["product"] = expected_product
+    assert loaded.profile.model_dump(mode="json") == expected_profile
 
 
 def test_the_live_request_is_not_persisted_separately(tmp_path: Path) -> None:
@@ -506,3 +513,42 @@ def test_a_fresh_session_starts_at_clarify() -> None:
 
     assert session.state.step is SessionStep.CLARIFY
     assert session.state.id
+
+
+def test_product_writes_are_persisted_before_the_next_question(tmp_path: Path) -> None:
+    from metis.wizard.application.driver import StepDriver
+
+    session = Session.start(
+        ProductProfile(product=Product(name="", summary="", users="")),
+        path=tmp_path / "session.json",
+        driver=StepDriver(interviewer=ScriptedInterviewer()),
+    )
+
+    opening = session.next()
+    assert opening is not None
+    session.respond(ChatResponse(text="It answers research questions."))
+    question = session.next()
+
+    saved = SessionState.load(tmp_path / "session.json")
+    assert saved.history[0].role == "assistant"
+    assert saved.history[0].text == opening.prompt
+    assert saved.profile.product.name == "Research assistant"
+    assert saved.profile.product.detail
+    assert question is not None
+
+
+def test_product_line_breaks_survive_persistence_and_prompt_composition(
+    tmp_path: Path,
+) -> None:
+    from metis.wizard.application import prompts
+
+    profile = research_assistant()
+    profile.product.detail = "First line.\nSecond line."
+    path = tmp_path / "session.json"
+    SessionState(id="s", profile=profile).save(path)
+
+    loaded = SessionState.load(path)
+    prompt = prompts.scenarios(loaded.profile)
+
+    assert loaded.profile.product.detail == "First line.\nSecond line."
+    assert "First line.\\nSecond line." in prompt.user

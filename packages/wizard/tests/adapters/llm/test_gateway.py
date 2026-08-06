@@ -94,19 +94,19 @@ def test_credentials_are_checked_before_any_call(
 
 def test_a_first_attempt_miss_is_invisible() -> None:
     """A schema miss is common and recoverable; the user should never learn it happened."""
-    good = ClarifyResult(done=False, question="What does it do?").model_dump_json()
+    good = ClarifyResult(message="What does it do?", done=False).model_dump_json()
     model, completions = interviewer(["{not json at all", good])
 
     result, recovered = model._ask(simple_prompt(), ClarifyResult)
 
-    assert result.question == "What does it do?"
+    assert result.message == "What does it do?"
     assert recovered  # a retry was needed, and the caller is told so
     assert len(completions.calls) == 2
 
 
 def test_a_first_attempt_success_reports_no_recovery() -> None:
     """The flag is what lets a step keep the model's intro when nothing went wrong."""
-    good = ClarifyResult(done=False, question="What does it do?").model_dump_json()
+    good = ClarifyResult(message="What does it do?", done=False).model_dump_json()
     model, _ = interviewer([good])
 
     _, recovered = model._ask(simple_prompt(), ClarifyResult)
@@ -116,7 +116,7 @@ def test_a_first_attempt_success_reports_no_recovery() -> None:
 
 def test_the_validation_error_is_fed_back() -> None:
     """Retrying blind would be a worse use of the second attempt."""
-    good = ClarifyResult(done=True).model_dump_json()
+    good = ClarifyResult(message="", done=True).model_dump_json()
     model, completions = interviewer(["{}", good])
 
     model._ask(simple_prompt(), ClarifyResult)
@@ -274,7 +274,9 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
 
 
 def test_structured_output_is_requested_strictly() -> None:
-    model, completions = interviewer([ClarifyResult(done=True).model_dump_json()])
+    model, completions = interviewer(
+        [ClarifyResult(message="", done=True).model_dump_json()]
+    )
 
     model._ask(simple_prompt(), ClarifyResult)
 
@@ -462,7 +464,7 @@ def test_each_semantic_call_sends_one_complete_named_prompt() -> None:
             "clarify",
             lambda model: model.clarify(profile, []),
             lambda: prompts.clarify(profile, []),
-            ClarifyResult(done=True).model_dump_json(),
+            ClarifyResult(message="", done=True).model_dump_json(),
         ),
         (
             "behaviours",

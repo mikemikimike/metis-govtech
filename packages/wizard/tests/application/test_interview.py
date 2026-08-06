@@ -168,6 +168,8 @@ def test_a_limit_edit_affects_an_active_interview(
         profile=research_assistant(),
         step=SessionStep.CLARIFY,
         history=[
+            Turn(role="assistant", text=interview.opening_question()),
+            Turn(role="user", text="the first answer"),
             Turn(role="assistant", text="question one"),
             Turn(role="assistant", text="question two"),
         ],
@@ -187,4 +189,5 @@ def test_interview_configuration_is_a_package_resource() -> None:
     config = interview.load_interview_config()
 
     assert config.clarify_turn_cap > 0
+    assert config.opening_question
     assert set(config.statuses) == set(SessionStep)

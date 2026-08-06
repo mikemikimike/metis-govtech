@@ -53,8 +53,8 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
         "",
     ]
 
-    if product.architecture:
-        out += ["## How it works", "", product.architecture, ""]
+    if product.detail:
+        out += ["## How it works", "", product.detail, ""]
 
     out += ["## What should be true", ""]
     for task in profile.tasks:

@@ -74,6 +74,34 @@ def test_the_cli_wires_a_matcher() -> None:
     assert isinstance(driver.matcher, EmbeddingMatcher)
 
 
+def test_the_cli_passes_one_session_id_to_the_interviewer_and_session(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from fixtures.scripted import ScriptedInterviewer
+    from typer.testing import CliRunner
+
+    from metis.wizard.bootstrap import create_cli_app
+
+    seen: list[str | None] = []
+    sessions = []
+
+    def factory(session_id: str | None):
+        seen.append(session_id)
+        return ScriptedInterviewer()
+
+    monkeypatch.setattr(cli, "_run", lambda session, out_dir: sessions.append(session))
+    result = CliRunner().invoke(
+        create_cli_app(factory),
+        ["init", "--out-dir", str(tmp_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(seen) == 1
+    assert seen[0] is not None
+    assert len(sessions) == 1
+    assert sessions[0].state.id == seen[0]
+
+
 def test_the_matcher_uses_the_same_gateway() -> None:
     """One endpoint and one key serve chat and embeddings, so the interviewer is the
     embedder — there is no second integration to configure."""

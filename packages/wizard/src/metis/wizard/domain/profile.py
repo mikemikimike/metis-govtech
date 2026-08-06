@@ -38,9 +38,9 @@ class Authored(BaseModel):
 
 class Product(BaseModel):
     name: str
-    summary: str  # what it does, for whom
-    users: str  # prose — feeds persona proposal
-    architecture: str = ""  # prose — the machinery: tools, delegation, memory, recovery
+    users: str  # prose — who the product serves
+    summary: str  # prose — the short description compiled into the experiment
+    detail: str = ""  # prose — useful depth, including how the product works
 
 
 class Criterion(Authored):

@@ -10,6 +10,7 @@ package composed and the profile it built; the words are all already in them.
 
 from __future__ import annotations
 
+import inspect
 import json
 import shutil
 import uuid
@@ -135,7 +136,7 @@ def _view(session: Session) -> dict[str, Any]:
 
 def create_app(
     *,
-    interviewer_factory: Callable[[], Interviewer],
+    interviewer_factory: Callable[..., Interviewer],
     root: Path = Path("evaluation"),
 ) -> FastAPI:
     """Compose the web door.
@@ -152,17 +153,50 @@ def create_app(
         if path is None:
             raise HTTPException(404, f"No session {session_id}.")
         try:
-            return Session.resume(path, driver=_driver(_interviewer()))
+            return Session.resume(path, driver=_driver(_interviewer(session_id)))
         except SessionVersionError as exc:
             raise HTTPException(409, str(exc)) from exc
 
-    def _interviewer() -> Interviewer:
+    def _interviewer(session_id: str | None = None) -> Interviewer:
         try:
+            parameters = inspect.signature(interviewer_factory).parameters
+        except (TypeError, ValueError):
+            try:
+                return interviewer_factory()
+            except InterviewerUnavailable as exc:
+                raise HTTPException(503, str(exc)) from exc
+
+        try:
+            session_parameter = parameters.get("session_id")
+            accepts_keywords = any(
+                parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in parameters.values()
+            )
+            if accepts_keywords or session_parameter is not None:
+                if (
+                    session_parameter is not None
+                    and session_parameter.kind is inspect.Parameter.POSITIONAL_ONLY
+                ):
+                    return interviewer_factory(session_id)
+                return interviewer_factory(session_id=session_id)
             return interviewer_factory()
         except InterviewerUnavailable as exc:
             raise HTTPException(503, str(exc)) from exc
 
     # ── sessions ───────────────────────────────────────────────────────────
+
+    @app.get("/api/interview")
+    def interview_configuration() -> dict[str, Any]:
+        """Return package-owned copy needed before a session exists."""
+        from metis.wizard.application.interview import load_interview_config
+
+        config = load_interview_config()
+        # Statuses are keyed by SessionStep; the door addresses them by the session's
+        # current step string, so send the enum values as plain keys.
+        return {
+            "opening_question": config.opening_question,
+            "statuses": {step.value: text for step, text in config.statuses.items()},
+        }
 
     @app.get("/api/sessions")
     def list_sessions() -> list[dict[str, Any]]:
@@ -185,7 +219,7 @@ def create_app(
         session = Session.start(
             profile,
             path=store.new_path(session_id),
-            driver=_driver(_interviewer()),
+            driver=_driver(_interviewer(session_id)),
             session_id=session_id,
         )
         return _view(session)

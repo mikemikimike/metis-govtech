@@ -32,6 +32,13 @@ web = [
     "uvicorn>=0.27",
 ]
 
+# Langfuse server v3.153.0 supports the Python SDK v3 observation API. Keep the SDK optional so
+# the wizard's core interview does not initialise observability unless the operator installs and
+# configures it.
+observability = [
+    "langfuse>=3.0,<4.0",
+]
+
 [project.scripts]
 metis-wizard = "metis.wizard.bootstrap:cli_app"
 

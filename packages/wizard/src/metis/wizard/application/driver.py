@@ -68,6 +68,28 @@ _DEFAULT_MESSAGES = {
     SessionStep.SCENARIOS: "Here are the current scenarios.",
 }
 
+_CLARIFY_PRODUCT_PATHS = frozenset(
+    {
+        "product.name",
+        "product.users",
+        "product.summary",
+        "product.detail",
+    }
+)
+
+
+def _clarify_questions_asked(history) -> int:
+    """Count only questions composed by the model, not the package opening line."""
+    count = sum(1 for turn in history if turn.role == "assistant")
+    if history and history[0].role == "assistant":
+        try:
+            opening = interview.opening_question()
+        except RuntimeError:
+            opening = ""
+        if opening and history[0].text == opening:
+            count -= 1
+    return max(0, count)
+
 
 @dataclass
 class StepDriver:
@@ -117,11 +139,26 @@ class StepDriver:
             return self.pending_questions[0].to_request()
 
         if step is SessionStep.CLARIFY:
-            asked = sum(1 for t in state.history if t.role == "assistant")
+            # The package-owned opening line is an assistant turn for context, but it is not a
+            # question composed by the model and must not consume the clarify budget.
+            if not any(t.role == "user" for t in state.history):
+                return ChatRequest(prompt=interview.opening_question())
+
+            asked = _clarify_questions_asked(state.history)
             if asked < interview.clarify_turn_cap():
-                result = self.interviewer.clarify(profile, state.history)
-                if not result.done and result.question:
-                    return ChatRequest(prompt=result.question)
+                phase = (
+                    "product"
+                    if not (profile.product.summary and profile.product.users)
+                    else "machinery"
+                )
+                result = self.interviewer.clarify(profile, state.history, phase)
+                self._run(
+                    state,
+                    result,
+                    allowed_paths=_CLARIFY_PRODUCT_PATHS,
+                )
+                if not result.done and result.message:
+                    return ChatRequest(prompt=result.message)
             # Either the model is finished or the cap is reached. Draft regardless.
             state.step = SessionStep.BEHAVIOURS
             step = SessionStep.BEHAVIOURS
@@ -641,7 +678,13 @@ class StepDriver:
             )
             return False
 
-    def _run(self, state: SessionState, result: StepResult) -> None:
+    def _run(
+        self,
+        state: SessionState,
+        result: StepResult,
+        *,
+        allowed_paths: frozenset[str] | None = None,
+    ) -> None:
         """Apply a model result, reporting anything the applier refused.
 
         `sanitise` forces MODEL origin first: origin is stamped by the code that builds a
@@ -650,7 +693,25 @@ class StepDriver:
         before = state.profile.model_copy(deep=True)
         if result.message:
             self._step_messages[state.step] = result.message
-        outcome = apply(state.profile, sanitise(result.patches))
+        patches = sanitise(result.patches)
+        if allowed_paths is not None:
+            admitted: list[Patch] = []
+            for patch in patches:
+                if patch.path in allowed_paths:
+                    admitted.append(patch)
+                else:
+                    self.pending_warnings.append(
+                        Warning(
+                            text=(
+                                "I can only record product details during this conversation, "
+                                "so I left that other change unchanged."
+                            ),
+                            source=WarningSource.RUNTIME,
+                            blocking=False,
+                        )
+                    )
+            patches = admitted
+        outcome = apply(state.profile, patches)
 
         for rejection in outcome.rejected:
             self.pending_warnings.append(

@@ -6,6 +6,8 @@ they run is the same two lines any door runs.
 
 from __future__ import annotations
 
+import inspect
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 
@@ -16,10 +18,10 @@ from metis.wizard.application.interviewer import Interviewer, InterviewerUnavail
 from metis.wizard.application.runs import format_runs
 
 app = typer.Typer(help="Generate METIS evaluation configurations.")
-_interviewer_factory: Callable[[], Interviewer] | None = None
+_interviewer_factory: Callable[..., Interviewer] | None = None
 
 
-def configure(*, interviewer_factory: Callable[[], Interviewer]) -> None:
+def configure(*, interviewer_factory: Callable[..., Interviewer]) -> None:
     """Inject the provider used by commands.
 
     The CLI adapter deliberately does not import a concrete gateway. The composition root
@@ -29,12 +31,36 @@ def configure(*, interviewer_factory: Callable[[], Interviewer]) -> None:
     _interviewer_factory = interviewer_factory
 
 
-def _new_interviewer() -> Interviewer:
+def _new_interviewer(session_id: str | None = None) -> Interviewer:
     if _interviewer_factory is None:
         raise RuntimeError(
             "The wizard CLI is not composed. Use metis.wizard.bootstrap.cli_app."
         )
-    return _interviewer_factory()
+    factory = _interviewer_factory
+    try:
+        parameters = inspect.signature(factory).parameters
+    except (TypeError, ValueError):
+        return factory()
+
+    session_parameter = parameters.get("session_id")
+    accepts_keywords = any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    )
+    if accepts_keywords or session_parameter is not None:
+        if (
+            session_parameter is not None
+            and session_parameter.kind is inspect.Parameter.POSITIONAL_ONLY
+        ):
+            return factory(session_id)
+        return factory(session_id=session_id)
+    return factory()
+
+
+def _bind_session_id(interviewer: Interviewer, session_id: str) -> None:
+    """Attach a loaded session id to the concrete gateway before its first model call."""
+    if hasattr(interviewer, "session_id"):
+        object.__setattr__(interviewer, "session_id", session_id)
 
 
 def version_callback(value: bool):
@@ -193,20 +219,23 @@ def init(
     try:
         # Checked before anything else happens, so a missing key costs nothing and is
         # reported as the environment problem it is.
-        interviewer = _new_interviewer()
+        session_id = f"wizard-{uuid.uuid4().hex[:8]}"
+        interviewer = _new_interviewer(session_id)
     except InterviewerUnavailable as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
 
-    # The product name is not asked for here — the opening question collects it. Seeding a
-    # placeholder keeps the profile valid until the clarify step fills it in.
-    profile = ProductProfile(product=Product(name="your product", summary="", users=""))
+    # The opening question collects the name. Keep it empty so the model writes what the user
+    # actually established instead of preserving a door-owned placeholder in the document.
+    profile = ProductProfile(product=Product(name="", summary="", users=""))
     session = Session.start(
-        profile, path=_session_path(out_dir), driver=_driver(interviewer)
+        profile,
+        path=_session_path(out_dir),
+        driver=_driver(interviewer),
+        session_id=session_id,
     )
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    typer.echo("Tell me about your product — what it does and who it's for.")
     _run(session, out_dir)
 
 
@@ -237,6 +266,8 @@ def resume(
     except SessionVersionError as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
+
+    _bind_session_id(interviewer, session.state.id)
 
     typer.echo(f"Resuming at the {session.state.step} step.")
     _run(session, out_dir)

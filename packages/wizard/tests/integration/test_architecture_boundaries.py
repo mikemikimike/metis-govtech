@@ -59,6 +59,17 @@ def test_adapters_do_not_import_sibling_adapters() -> None:
                         )
 
 
+def test_langfuse_import_is_owned_by_the_llm_adapter() -> None:
+    owner = SRC / "adapters" / "llm" / "tracing.py"
+    for path in SRC.rglob("*.py"):
+        for imported in _imports(path):
+            if imported == "langfuse" or imported.startswith("langfuse."):
+                assert path == owner, (
+                    f"{path.relative_to(SRC)} imports optional tracing SDK; "
+                    "only adapters/llm/tracing.py may own it"
+                )
+
+
 def test_bootstrap_is_the_only_adapter_composition_root() -> None:
     for path in SRC.rglob("*.py"):
         if path == SRC / "bootstrap.py":

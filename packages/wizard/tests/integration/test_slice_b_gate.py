@@ -31,7 +31,7 @@ def a_session(path: Path | None = None, interviewer=None) -> tuple[Session, Step
             name="Research assistant",
             summary="Answers research questions over an internal library.",
             users="Policy analysts.",
-            architecture="A router with a search tool that can time out.",
+            detail="A router with a search tool that can time out.",
         )
     )
     return Session.start(profile, path=path, driver=driver), driver

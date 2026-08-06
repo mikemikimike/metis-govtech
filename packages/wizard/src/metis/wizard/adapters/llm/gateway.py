@@ -19,14 +19,17 @@ text never leaves the gateway — a code guarantee, not a prompt instruction.
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from metis.wizard.adapters.llm import tracing
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import (
+    ClarifyPhase,
     InterviewerOutputError,
     InterviewerUnavailable,
 )
@@ -75,9 +78,12 @@ class GatewayInterviewer:
 
     model: str = field(default_factory=lambda: os.environ.get(MODEL_VAR, DEFAULT_MODEL))
     _client: Any = None
+    session_id: str | None = None
+    _tracer: tracing.Tracer | None = None
 
     def __post_init__(self) -> None:
         check_credentials()
+        self._tracer = tracing.make_safe_tracer(self._tracer or tracing.get_tracer())
         if self._client is None:
             from openai import OpenAI
 
@@ -108,45 +114,83 @@ class GatewayInterviewer:
             {"role": "user", "content": prompt.user},
         ]
         last_error: Exception | None = None
-
-        for attempt in range(ATTEMPTS):
-            response = self._client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": schema.__name__,
-                        "schema": schema.model_json_schema(),
-                        "strict": True,
-                    },
-                },
-            )
-            text = response.choices[0].message.content or ""
-            try:
-                result = schema.model_validate_json(text)
-                if validate is not None:
-                    validate(result)
-                return result, attempt > 0
-            except (ValidationError, PatchValueError) as exc:
-                last_error = exc
-                if attempt < ATTEMPTS - 1:
-                    # Feed the failure back rather than re-asking blind.
-                    messages += [
-                        {"role": "assistant", "content": text},
-                        {
-                            "role": "user",
-                            "content": (
-                                "That didn't validate against the schema:\n"
-                                f"{exc}\n\nReturn corrected JSON only."
-                            ),
-                        },
-                    ]
-
-        raise ModelOutputError(
-            f"The model returned output I couldn't read, {ATTEMPTS} times running. "
-            f"Last error: {last_error}"
+        tracer = self._tracer or tracing.NoopTracer()
+        call_trace = tracer.start_call(
+            name=prompt.name,
+            model=self.model,
+            session_id=self.session_id,
         )
+
+        try:
+            for attempt in range(ATTEMPTS):
+                attempt_trace = call_trace.start_attempt(
+                    attempt=attempt + 1,
+                    messages=[dict(message) for message in messages],
+                    model=self.model,
+                )
+                started = time.perf_counter()
+                try:
+                    response = self._client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        response_format={
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": schema.__name__,
+                                "schema": schema.model_json_schema(),
+                                "strict": True,
+                            },
+                        },
+                    )
+                    text = response.choices[0].message.content or ""
+                    usage = tracing.usage_details_from_response(response)
+                except Exception as exc:
+                    attempt_trace.finish(
+                        output="",
+                        usage=None,
+                        latency_ms=(time.perf_counter() - started) * 1000,
+                        error=str(exc),
+                    )
+                    raise
+
+                try:
+                    result = schema.model_validate_json(text)
+                    if validate is not None:
+                        validate(result)
+                except (ValidationError, PatchValueError) as exc:
+                    attempt_trace.finish(
+                        output=text,
+                        usage=usage,
+                        latency_ms=(time.perf_counter() - started) * 1000,
+                        error=str(exc),
+                    )
+                    last_error = exc
+                    if attempt < ATTEMPTS - 1:
+                        # Feed the failure back rather than re-asking blind.
+                        messages += [
+                            {"role": "assistant", "content": text},
+                            {
+                                "role": "user",
+                                "content": (
+                                    "That didn't validate against the schema:\n"
+                                    f"{exc}\n\nReturn corrected JSON only."
+                                ),
+                            },
+                        ]
+                else:
+                    attempt_trace.finish(
+                        output=text,
+                        usage=usage,
+                        latency_ms=(time.perf_counter() - started) * 1000,
+                    )
+                    return result, attempt > 0
+
+            raise ModelOutputError(
+                f"The model returned output I couldn't read, {ATTEMPTS} times running. "
+                f"Last error: {last_error}"
+            )
+        finally:
+            call_trace.finish()
 
     def _step(self, prompt: prompts.ModelPrompt, profile: ProductProfile) -> StepResult:
         result, recovered = self._ask(
@@ -165,12 +209,18 @@ class GatewayInterviewer:
 
     # ── the interview ──────────────────────────────────────────────────────
 
-    def clarify(self, profile: ProductProfile, history: list[Turn]) -> ClarifyResult:
-        # No user-facing intro to protect here — ClarifyResult carries only `done` and the
-        # next `question`, so the recovery flag is discarded.
+    def clarify(
+        self,
+        profile: ProductProfile,
+        history: list[Turn],
+        phase: ClarifyPhase = "product",
+    ) -> ClarifyResult:
         result, _ = self._ask(
-            prompts.clarify(profile, history),
+            prompts.clarify(profile, history, phase),
             ClarifyResult,
+            validate=lambda candidate: validate_model_patches(
+                profile, candidate.patches
+            ),
         )
         return result
 

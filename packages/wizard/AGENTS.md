@@ -144,6 +144,23 @@ committing it, or it stops buying anything.
 `tests/integration/test_cli_happy_path.py` drives the actual Typer app through `CliRunner` with
 the scripted interviewer. It is the offline full happy-path check for both output files.
 
+## Optional Langfuse tracing
+
+The model gateway can record prompts, raw replies, retries, token counts and latency in a
+self-hosted Langfuse server. The target server release is `v3.153.0`, using the Python SDK v3
+line.
+
+Install the optional dependency with `uv sync --package metis-wizard --extra observability`. Set
+these three environment variables before starting the wizard:
+
+- `LANGFUSE_BASE_URL`
+- `LANGFUSE_PUBLIC_KEY`
+- `LANGFUSE_SECRET_KEY`
+
+Tracing is disabled when any variable is missing. There is no default host. The core wizard does
+not import or initialise Langfuse until the optional dependency is installed and all three values
+are present. The CLI and web doors use the same session id for all model-call traces.
+
 ## Things that look like bugs and are not
 
 - **Ticks toggle.** Each option's patch flips that behaviour's *current* value, so sending the

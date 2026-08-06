@@ -141,15 +141,16 @@ class StepResultPatch(BaseModel):
         return self
 
 
-class ClarifyResult(BaseModel):
-    done: bool
-    question: str | None = None
-
-
 class StepResult(BaseModel):
-    """What every step other than clarify returns."""
+    """The text shown with a step and the model's proposed edits."""
 
     model_config = ConfigDict(extra="forbid")
 
     message: str
     patches: list[StepResultPatch] = Field(default_factory=list)
+
+
+class ClarifyResult(StepResult):
+    """A clarify question plus product edits and the option to finish early."""
+
+    done: bool = False

@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from metis.wizard.application import Turn
+from metis.wizard.application.interviewer import ClarifyPhase
 from metis.wizard.contracts import (
     ClarifyResult,
     Patch,
@@ -30,13 +31,46 @@ class ScriptedInterviewer:
     clarify_questions: int = 2
     calls: list[str] = field(default_factory=list)
 
-    def clarify(self, profile: ProductProfile, history: list[Turn]) -> ClarifyResult:
+    def clarify(
+        self,
+        profile: ProductProfile,
+        history: list[Turn],
+        phase: ClarifyPhase = "product",
+    ) -> ClarifyResult:
         self.calls.append("clarify")
         asked = sum(1 for t in history if t.role == "assistant")
+        if history and history[0].text.startswith("Tell me about your product"):
+            asked -= 1
         if asked >= self.clarify_questions:
-            return ClarifyResult(done=True)
+            return ClarifyResult(message="", done=True)
+        patches = []
+        if not profile.product.summary or not profile.product.users:
+            patches = [
+                Patch(
+                    op=PatchOp.SET,
+                    path="product.name",
+                    value="Research assistant",
+                ),
+                Patch(
+                    op=PatchOp.SET,
+                    path="product.users",
+                    value="Policy analysts",
+                ),
+                Patch(
+                    op=PatchOp.SET,
+                    path="product.summary",
+                    value="Answers research questions over an internal library.",
+                ),
+                Patch(
+                    op=PatchOp.SET,
+                    path="product.detail",
+                    value="It uses search and can recover from a timeout.",
+                ),
+            ]
         return ClarifyResult(
-            done=False, question=f"Question {asked + 1}: what does it do?"
+            message=f"Question {asked + 1}: what does it do?",
+            done=False,
+            patches=patches,
         )
 
     def draft_behaviours(

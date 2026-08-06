@@ -13,7 +13,7 @@ from metis.wizard.domain.patch import Patch
 from metis.wizard.domain.profile import ProductProfile
 
 BEHAVIOUR_STATEMENT = "statement"
-PRODUCT_WIDE = ("product.summary", "product.architecture")
+PRODUCT_WIDE = ("product.summary", "product.detail")
 
 
 @dataclass(frozen=True)

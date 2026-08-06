@@ -54,7 +54,7 @@ def test_the_wizard_offers_no_opinion_on_whether_they_still_hold() -> None:
 
 
 def test_editing_the_product_reaches_the_whole_tree() -> None:
-    for path in ("product.summary", "product.architecture"):
+    for path in ("product.summary", "product.detail"):
         questions = cascade.questions_for(research_assistant(), [edit(path)])
 
         assert [q.kind for q in questions] == ["tree"]
@@ -67,19 +67,19 @@ def test_initial_product_capture_does_not_invalidate_its_own_draft() -> None:
         profile,
         [
             edit("product.summary", "A new product"),
-            edit("product.architecture", "Tools"),
+            edit("product.detail", "Tools"),
         ],
     )
 
     assert questions == []
 
 
-def test_summary_and_architecture_edits_ask_about_the_tree_once() -> None:
+def test_summary_and_detail_edits_ask_about_the_tree_once() -> None:
     profile = research_assistant()
 
     questions = cascade.questions_for(
         profile,
-        [edit("product.summary"), edit("product.architecture")],
+        [edit("product.summary"), edit("product.detail")],
     )
 
     assert [question.kind for question in questions] == ["tree"]
@@ -232,7 +232,7 @@ def test_answering_regenerate_lands_in_a_state_the_screens_already_draw() -> Non
 def test_reviewing_a_product_edit_returns_to_the_draft_screen() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = a_state(step=SessionStep.CRITERIA)
-    question = cascade.questions_for(state.profile, [edit("product.architecture")])[0]
+    question = cascade.questions_for(state.profile, [edit("product.detail")])[0]
     driver.pending_questions = [question]
 
     driver._answer_question(

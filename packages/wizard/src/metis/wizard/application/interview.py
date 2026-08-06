@@ -22,6 +22,7 @@ class InterviewConfig:
     """A complete, validated snapshot of ``interview.yaml``."""
 
     clarify_turn_cap: int
+    opening_question: str
     statuses: Mapping[SessionStep, str]
 
 
@@ -68,6 +69,10 @@ def load_interview_config() -> InterviewConfig:
     if isinstance(turn_cap, bool) or not isinstance(turn_cap, int) or turn_cap <= 0:
         raise _error("settings.clarify_turn_cap", "must be a positive integer.")
 
+    opening_question = _required(document, "opening_question")
+    if not isinstance(opening_question, str) or not opening_question.strip():
+        raise _error("opening_question", "must be a non-empty string.")
+
     checked: dict[SessionStep, str] = {}
     for step in SessionStep:
         key = f"statuses.{step.value}"
@@ -76,7 +81,11 @@ def load_interview_config() -> InterviewConfig:
             raise _error(key, "must be a non-empty string.")
         checked[step] = value
 
-    return InterviewConfig(clarify_turn_cap=turn_cap, statuses=checked)
+    return InterviewConfig(
+        clarify_turn_cap=turn_cap,
+        opening_question=opening_question,
+        statuses=checked,
+    )
 
 
 def clarify_turn_cap() -> int:
@@ -89,11 +98,17 @@ def status_for(step: SessionStep) -> str:
     return load_interview_config().statuses[step]
 
 
+def opening_question() -> str:
+    """Return the package-owned question shown before the first model call."""
+    return load_interview_config().opening_question
+
+
 __all__ = [
     "INTERVIEW_FILE",
     "InterviewConfig",
     "InterviewConfigError",
     "clarify_turn_cap",
     "load_interview_config",
+    "opening_question",
     "status_for",
 ]

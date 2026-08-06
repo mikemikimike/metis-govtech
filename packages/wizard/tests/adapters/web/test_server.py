@@ -16,7 +16,7 @@ import pytest
 from fixtures.profiles import research_assistant
 from fixtures.scripted import ScriptedInterviewer
 
-from metis.wizard.application import Session, SessionState
+from metis.wizard.application import Session, SessionState, interview
 from metis.wizard.contracts import ChoiceResponse
 from metis.wizard.domain.permissions import SessionStep
 
@@ -31,7 +31,11 @@ from metis.wizard.adapters.web.store import UNTITLED, SessionStore  # noqa: E402
 
 
 def client(root: Path) -> TestClient:
-    return TestClient(create_app(interviewer_factory=ScriptedInterviewer, root=root))
+    return TestClient(
+        create_app(
+            interviewer_factory=lambda session_id: ScriptedInterviewer(), root=root
+        )
+    )
 
 
 def _seed(root: Path, name: str, *, step=SessionStep.PERSONAS) -> SessionState:
@@ -127,6 +131,39 @@ def test_a_new_session_starts_at_clarify(tmp_path: Path) -> None:
     assert body["step"] == "clarify"
     assert body["profile"]["product"]["name"] == ""
     assert (tmp_path / body["id"] / "session.json").is_file()
+
+
+def test_the_web_door_exposes_the_package_interview_copy(tmp_path: Path) -> None:
+    api = client(tmp_path)
+
+    configuration = api.get("/api/interview").json()
+    session = api.post("/api/sessions").json()
+
+    config = interview.load_interview_config()
+    assert configuration == {
+        "opening_question": config.opening_question,
+        # Statuses are re-keyed by the step's string value for the door — the progress caption
+        # addresses them by the session's current step.
+        "statuses": {step.value: text for step, text in config.statuses.items()},
+    }
+    assert session["requests"][-1]["prompt"] == configuration["opening_question"]
+
+
+def test_the_web_door_passes_the_session_id_to_each_interviewer(
+    tmp_path: Path,
+) -> None:
+    seen: list[str | None] = []
+
+    def factory(session_id: str | None):
+        seen.append(session_id)
+        return ScriptedInterviewer()
+
+    api = TestClient(create_app(interviewer_factory=factory, root=tmp_path))
+    body = api.post("/api/sessions").json()
+    api.get(f"/api/sessions/{body['id']}")
+
+    assert seen
+    assert all(session_id == body["id"] for session_id in seen)
 
 
 # ── the two doors agree ────────────────────────────────────────────────────

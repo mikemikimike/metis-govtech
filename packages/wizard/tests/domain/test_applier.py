@@ -346,9 +346,14 @@ def test_an_address_no_step_owns_is_writable_nowhere() -> None:
     assert owner_of("product.invented_field") is None
 
 
-def test_clarify_and_prioritise_grant_nothing() -> None:
-    """Both steps exist and the model may write nothing during either."""
-    assert SessionStep.CLARIFY not in StepPermissions
+def test_clarify_owns_product_and_prioritise_grants_nothing() -> None:
+    """Clarify owns the product prose; prioritise still has no model-owned paths."""
+    assert StepPermissions[SessionStep.CLARIFY] == [
+        "product.name",
+        "product.users",
+        "product.summary",
+        "product.detail",
+    ]
     assert SessionStep.PRIORITISE not in StepPermissions
 
 

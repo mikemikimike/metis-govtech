@@ -9,7 +9,7 @@ from fixtures.scripted import ScriptedInterviewer
 from metis.wizard.adapters.llm.gateway import ModelOutputError
 from metis.wizard.application import SessionState, Turn
 from metis.wizard.application.driver import StepDriver
-from metis.wizard.application.interview import clarify_turn_cap
+from metis.wizard.application.interview import clarify_turn_cap, opening_question
 from metis.wizard.contracts import (
     ChatRequest,
     ChatResponse,
@@ -38,17 +38,36 @@ def empty_state(step=SessionStep.CLARIFY, history=None) -> SessionState:
 class NeverDone(ScriptedInterviewer):
     """A model that always says it needs one more question."""
 
-    def clarify(self, profile, history):
+    def clarify(self, profile, history, phase="product"):
         self.calls.append("clarify")
         from metis.wizard.contracts import ClarifyResult
 
-        return ClarifyResult(done=False, question="One more thing?")
+        return ClarifyResult(message="One more thing?", done=False)
+
+
+def after_opening(*model_questions: str) -> list[Turn]:
+    return [
+        Turn(role="assistant", text=opening_question()),
+        Turn(role="user", text="It answers research questions."),
+        *(Turn(role="assistant", text=q) for q in model_questions),
+    ]
+
+
+def test_the_opening_question_costs_no_model_call() -> None:
+    interviewer = NeverDone()
+    driver = StepDriver(interviewer=interviewer)
+
+    request = driver.compose(empty_state())
+
+    assert isinstance(request, ChatRequest)
+    assert request.prompt == opening_question()
+    assert interviewer.calls == []
 
 
 def test_a_model_that_never_stops_is_stopped() -> None:
     """An interview that never ends is not recoverable; a thin first draft is."""
     driver = StepDriver(interviewer=NeverDone())
-    history = [Turn(role="assistant", text=f"q{i}") for i in range(clarify_turn_cap())]
+    history = after_opening(*(f"q{i}" for i in range(clarify_turn_cap())))
     state = empty_state(history=history)
 
     driver.compose(state)
@@ -58,7 +77,7 @@ def test_a_model_that_never_stops_is_stopped() -> None:
 
 def test_below_the_cap_it_keeps_asking() -> None:
     driver = StepDriver(interviewer=NeverDone())
-    state = empty_state(history=[Turn(role="assistant", text="q1")])
+    state = empty_state(history=after_opening("q1"))
 
     request = driver.compose(state)
 
@@ -66,15 +85,88 @@ def test_below_the_cap_it_keeps_asking() -> None:
     assert state.step is SessionStep.CLARIFY
 
 
-def test_nothing_is_committed_during_clarify() -> None:
-    """Answers live in history; the profile stays empty until behaviours are drafted."""
+def test_clarify_commits_product_but_not_behaviours() -> None:
+    """Clarify writes the product before the next question, but never drafts behaviours."""
     driver = StepDriver(interviewer=ScriptedInterviewer(clarify_questions=5))
-    state = empty_state()
+    state = empty_state(history=after_opening())
+
+    request = driver.compose(state)
+
+    assert request.prompt
+    assert state.profile.product.name == "Research assistant"
+    assert state.profile.product.users == "Policy analysts"
+    assert state.profile.product.summary
+    assert state.profile.product.detail
+    assert state.profile.tasks == []
+    assert state.profile.scenarios == []
+
+
+def test_a_thin_answer_leaves_the_product_gate_closed() -> None:
+    @dataclass
+    class ThinInterviewer(ScriptedInterviewer):
+        def clarify(self, profile, history, phase="product"):
+            from metis.wizard.contracts import ClarifyResult
+
+            return ClarifyResult(message="Tell me a little more.", done=False)
+
+    state = empty_state(history=after_opening())
+    driver = StepDriver(interviewer=ThinInterviewer())
+
+    request = driver.compose(state)
+
+    assert request.prompt == "Tell me a little more."
+    assert state.profile.product.summary == ""
+    assert state.profile.product.users == ""
+    assert state.step is SessionStep.CLARIFY
+
+
+def test_clarify_rejects_a_non_product_patch() -> None:
+    @dataclass
+    class WritesABehaviour(NeverDone):
+        def clarify(self, profile, history, phase="product"):
+            from metis.wizard.contracts import ClarifyResult
+
+            return ClarifyResult(
+                message="One more thing?",
+                done=False,
+                patches=[
+                    {
+                        "op": "set",
+                        "path": "tasks[T-1].name",
+                        "value": "Not during clarify",
+                    }
+                ],
+            )
+
+    state = empty_state(history=after_opening())
+    driver = StepDriver(interviewer=WritesABehaviour())
 
     driver.compose(state)
 
     assert state.profile.tasks == []
-    assert state.profile.scenarios == []
+    assert any("only record product details" in w.text for w in driver.pending_warnings)
+
+
+def test_a_later_product_edit_does_not_move_the_step() -> None:
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    state = empty_state(step=SessionStep.CRITERIA)
+
+    driver._run(
+        state,
+        StepResult(
+            message="",
+            patches=[
+                {
+                    "op": "set",
+                    "path": "product.summary",
+                    "value": "A corrected description",
+                }
+            ],
+        ),
+    )
+
+    assert state.profile.product.summary == "A corrected description"
+    assert state.step is SessionStep.CRITERIA
 
 
 def test_the_configured_cap_is_positive() -> None:

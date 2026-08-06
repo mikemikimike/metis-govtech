@@ -14,13 +14,13 @@ from metis.wizard.adapters.llm.gateway import GatewayInterviewer
 from metis.wizard.application.interviewer import Interviewer
 
 
-def platform_interviewer() -> Interviewer:
+def platform_interviewer(session_id: str | None = None) -> Interviewer:
     """Construct the real gateway-backed interviewer for one CLI run."""
-    return GatewayInterviewer()
+    return GatewayInterviewer(session_id=session_id)
 
 
 def create_cli_app(
-    interviewer_factory: Callable[[], Interviewer] = platform_interviewer,
+    interviewer_factory: Callable[..., Interviewer] = platform_interviewer,
 ):
     """Compose the CLI with an interviewer provider.
 
@@ -32,7 +32,7 @@ def create_cli_app(
 
 
 def create_web_app(
-    interviewer_factory: Callable[[], Interviewer] = platform_interviewer,
+    interviewer_factory: Callable[..., Interviewer] = platform_interviewer,
     *,
     root: Path = Path("evaluation"),
 ):

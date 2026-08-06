@@ -9,7 +9,7 @@ Every method returns structured output. Nothing here returns prose the caller ha
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Literal, Protocol
 
 from metis.wizard.contracts.output import ClarifyResult, StepResult
 from metis.wizard.contracts.session_state import Turn
@@ -24,10 +24,18 @@ class InterviewerOutputError(RuntimeError):
     """An interviewer could not return a valid structured result after its retries."""
 
 
+ClarifyPhase = Literal["product", "machinery"]
+
+
 class Interviewer(Protocol):
     """The model, from the driver's point of view."""
 
-    def clarify(self, profile: ProductProfile, history: list[Turn]) -> ClarifyResult:
+    def clarify(
+        self,
+        profile: ProductProfile,
+        history: list[Turn],
+        phase: ClarifyPhase = "product",
+    ) -> ClarifyResult:
         """One open question, or done. The only step the model may end on its own."""
         ...
 
