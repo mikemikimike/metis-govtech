@@ -33,6 +33,28 @@ def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     return structlog.get_logger(logger_name=name)
 
 
+_NAME_TO_LEVEL = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
+    "critical": logging.CRITICAL,
+}
+
+
+def _make_level_filter(min_level: int) -> Processor:
+    """Return a processor that drops events below *min_level*."""
+
+    def _filter(_logger: Any, _name: str, event_dict: EventDict) -> EventDict:
+        level_name = event_dict.get("level", "debug")
+        level_num = _NAME_TO_LEVEL.get(level_name, logging.DEBUG)
+        if level_num < min_level:
+            raise structlog.DropEvent
+        return event_dict
+
+    return _filter
+
+
 def configure_logging(
     *,
     level: str | None = None,
@@ -47,6 +69,7 @@ def configure_logging(
     shared_processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
+        _make_level_filter(resolved_level),
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
@@ -105,7 +128,7 @@ _LEVEL_STYLES = {
 }
 
 
-def _rich_console_renderer(logger: Any, name: str, event_dict: EventDict) -> str:
+def _rich_console_renderer(_logger: Any, _name: str, event_dict: EventDict) -> str:
     """Render a log event to stderr using Rich."""
     level = event_dict.pop("level", "info")
     event = event_dict.pop("event", "")

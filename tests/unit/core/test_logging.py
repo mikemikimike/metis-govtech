@@ -74,6 +74,39 @@ class TestConfigureLogging:
         assert root.level == logging.WARNING
 
 
+class TestStructlogLevelFiltering:
+    """Verify that structlog's own processor chain respects the configured level."""
+
+    def setup_method(self):
+        structlog.reset_defaults()
+        root = logging.getLogger()
+        root.handlers.clear()
+
+    def test_debug_events_dropped_at_warning_level(self, capsys):
+        configure_logging(level="WARNING", json=True)
+        log = get_logger("test.filter")
+        log.debug("should_not_appear")
+
+        captured = capsys.readouterr()
+        assert "should_not_appear" not in captured.err
+
+    def test_info_events_pass_at_info_level(self, capsys):
+        configure_logging(level="INFO", json=True)
+        log = get_logger("test.filter")
+        log.info("should_appear")
+
+        captured = capsys.readouterr()
+        assert "should_appear" in captured.err
+
+    def test_all_events_pass_at_debug_level(self, capsys):
+        configure_logging(level="DEBUG", json=True)
+        log = get_logger("test.filter")
+        log.debug("debug_visible")
+
+        captured = capsys.readouterr()
+        assert "debug_visible" in captured.err
+
+
 class TestPublicExports:
     def test_logging_importable_from_metis_core(self):
         from metis.core import configure_logging, get_logger
