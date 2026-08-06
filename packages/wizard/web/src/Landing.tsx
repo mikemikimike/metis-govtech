@@ -12,12 +12,14 @@ import { SourceTray, type SourceTrayKind } from "./SourceTray";
 import { Chevron, Tooltip } from "./ui";
 
 export function Intro({
+  openingQuestion,
   composer,
   selectedSource,
   onAuthor,
   onSource,
   onCloseSource,
 }: {
+  openingQuestion: string;
   // Landing owns the menu, so the shell supplies a composer factory rather than an opaque node.
   composer: (sourceControl: ReactNode) => ReactNode;
   // One source depiction can peek beneath the composer without leaving the opening chat screen.
@@ -33,7 +35,7 @@ export function Intro({
         <div className="flex w-full max-w-3xl flex-col gap-8">
           <header className="flex flex-col gap-2 text-center">
             <h1 className="text-2xl font-semibold text-foreground">
-              What are we evaluating?
+              {openingQuestion}
             </h1>
           </header>
 

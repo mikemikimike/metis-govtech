@@ -224,7 +224,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-10 py-8">
+    <div className="quiet-scrollbar flex-1 overflow-y-auto px-10 py-8">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
         <div className="flex flex-col gap-4">
           <button
@@ -564,7 +564,7 @@ function TextArea({
 }) {
   return (
     <textarea
-      className="min-h-16 rounded-md border border-input bg-background p-2 text-sm"
+      className="min-h-16 rounded-lg border border-input bg-background p-2 text-sm"
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}

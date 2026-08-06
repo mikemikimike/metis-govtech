@@ -31,13 +31,21 @@ import type { SourceTrayKind } from "./SourceTray";
 import { PanelLeft, PanelRight } from "lucide-react";
 import { cn } from "./ui";
 
-const DEFAULT_OPENING_PROMPT =
-  "Describe your agent — what it does and for whom — and the wizard turns it into behaviours, criteria and scenarios you can run.";
+// The document pane's share of the window. It reads as the interview's other half rather than a
+// margin note: the user is meant to review it as the conversation fills it in, deciding whether
+// what is there is enough, and that is reading work that a narrow column makes harder — prose in a
+// 30% pane wrapped every few words and turned every description into a paragraph.
+const DOCUMENT_WIDTH_DEFAULT = 42;
+const DOCUMENT_WIDTH_MIN = 24;
+const DOCUMENT_WIDTH_MAX = 60;
 
-function sourcePlaceholder(source: SourceTrayKind | null): string {
+function sourcePlaceholder(
+  source: SourceTrayKind | null,
+  openingQuestion: string,
+): string {
   if (source === "codebase") return "Analyse my source code…";
   if (source === "traces") return "Analyse my traces…";
-  return DEFAULT_OPENING_PROMPT;
+  return openingQuestion;
 }
 
 export function App() {
@@ -46,11 +54,20 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [openingQuestion, setOpeningQuestion] = useState("");
+  // Package-owned status copy, keyed by session step. The progress caption in the document pane
+  // reads the line for the session's current step from here, so the wording lives in interview.yaml
+  // rather than in the frontend.
+  const [statuses, setStatuses] = useState<Record<string, string>>({});
   // Whether each side pane is open. A reading preference for the moment, not a fact about the
   // interview, so it lives here in the shell — not persisted, not on the wire. A reload returns to
   // both-open, which is the right default rather than a lost setting.
   const [railOpen, setRailOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(true);
+  // How wide the document pane is, as a percentage of the window. Dragging it is the same kind of
+  // reading preference as collapsing it, so it is held the same way: in the shell, unpersisted,
+  // back to the default on reload.
+  const [documentWidth, setDocumentWidth] = useState(DOCUMENT_WIDTH_DEFAULT);
   // Metric details are presentation metadata, not part of the session payload. Fetch them once
   // after the first session opens and keep the lookup for this page lifetime; the catalogue is
   // shared by every session and changes only when the page is reloaded.
@@ -139,10 +156,26 @@ export function App() {
     }
   }, []);
 
-  // First paint: learn whether any sessions exist, which decides the whole layout.
+  // First paint: learn the sessions and the package-owned opening copy, which the landing door
+  // needs before a session exists.
   useEffect(() => {
-    void refreshList().finally(() => setLoaded(true));
-  }, [refreshList]);
+    const load = async () => {
+      try {
+        const [existing, configuration] = await Promise.all([
+          api.listSessions(),
+          api.interview(),
+        ]);
+        setSessions(existing);
+        setOpeningQuestion(configuration.opening_question);
+        setStatuses(configuration.statuses);
+      } catch (e) {
+        report(e, setError);
+      } finally {
+        setLoaded(true);
+      }
+    };
+    void load();
+  }, []);
 
   const open = useCallback(async (id: string) => {
     setBusy(true);
@@ -281,6 +314,7 @@ export function App() {
         ) : view === null ? (
           // No session open: the intro, with a type-first composer that begins the interview.
           <Intro
+            openingQuestion={openingQuestion}
             composer={(sourceControl) => (
               <Composer
                 request={undefined}
@@ -288,7 +322,7 @@ export function App() {
                 alwaysEnabled
                 leadingIcon
                 bare
-                placeholder={sourcePlaceholder(sourceTray)}
+                placeholder={sourcePlaceholder(sourceTray, openingQuestion)}
                 onSend={beginWithMessage}
                 sourceControl={sourceControl}
               />
@@ -311,9 +345,12 @@ export function App() {
             <div
               key={view.id}
               ref={scrollRef}
-              className="animate-enter-conversation flex-1 overflow-y-auto px-10 py-10"
+              className="quiet-scrollbar animate-enter-conversation flex-1 overflow-y-auto py-10"
             >
-              <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+              {/* The chat column is 80% of the panel, centred — the 10% gutters on each side are
+                  the pane's column padding, wider than a fixed inset and proportional to the panel
+                  as it resizes. The docked composer uses the same 80% column so the two align. */}
+              <div className="mx-auto flex w-4/5 flex-col gap-8">
                 <Transcript
                   requests={view.requests}
                   busy={busy}
@@ -321,7 +358,7 @@ export function App() {
                   fixtureActions={fixtureActions}
                 />
                 {busy && <ThinkingLine message={view.busy_message} />}
-                {view.done && <Done sessionId={view.id} />}
+                {view.done && <Done />}
               </div>
             </div>
             <Composer request={pending} busy={busy} onSend={sendChat} />
@@ -332,7 +369,15 @@ export function App() {
       {showDocument &&
         view &&
         (profileOpen ? (
-          <aside className="w-[30%] min-w-[20rem] shrink-0 border-l border-border bg-muted">
+          <>
+          <ResizeHandle
+            width={documentWidth}
+            onWidth={setDocumentWidth}
+          />
+          <aside
+            style={{ width: `${documentWidth}%` }}
+            className="min-w-[20rem] shrink-0 border-l border-border bg-muted"
+          >
             <Profile
               profile={view.profile}
               // Where the interview has got to, and what it is doing right now. Both are read
@@ -341,6 +386,7 @@ export function App() {
               // across; `Profile` is the one component that maps them onto sections.
               position={stepPosition(view.requests)}
               sessionStep={view.step}
+              statusText={statuses[view.step]}
               busy={busy}
               showMetrics={showMetrics}
               onShowMetricsChange={setShowMetrics}
@@ -350,8 +396,11 @@ export function App() {
               }
               metricsError={metricCatalogueState === "error"}
               onCollapse={() => setProfileOpen(false)}
+              sessionId={view.id}
+              done={view.done}
             />
           </aside>
+          </>
         ) : (
           <EdgeStrip
             side="right"
@@ -360,6 +409,66 @@ export function App() {
           />
         ))}
     </div>
+  );
+}
+
+// The divider between the conversation and the document, and the grip that moves it. It is a
+// hairline at rest — the panes are separated by a border like every other pane boundary — and it
+// takes the accent only while it is being pointed at or driven, which is the accent doing its one
+// job of marking state. Keyboard users get the same control through the arrow keys, since a pane
+// width that only a pointer can reach is a pane width some users cannot set at all.
+function ResizeHandle({
+  width,
+  onWidth,
+}: {
+  width: number;
+  onWidth: (width: number) => void;
+}) {
+  const clamp = (value: number) =>
+    Math.min(DOCUMENT_WIDTH_MAX, Math.max(DOCUMENT_WIDTH_MIN, value));
+
+  // Width is tracked from the right edge, because that is the edge the document is anchored to:
+  // dragging left widens it. Listeners live on the window for the duration of the drag so the
+  // pointer can leave the 4px handle without dropping it.
+  const startDrag = (event: React.PointerEvent) => {
+    event.preventDefault();
+    const move = (moved: PointerEvent) => {
+      onWidth(
+        clamp(((window.innerWidth - moved.clientX) / window.innerWidth) * 100),
+      );
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      document.body.style.userSelect = "";
+    };
+    // Without this a drag across the conversation selects the transcript as it goes.
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+  };
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize document"
+      aria-valuenow={Math.round(width)}
+      aria-valuemin={DOCUMENT_WIDTH_MIN}
+      aria-valuemax={DOCUMENT_WIDTH_MAX}
+      tabIndex={0}
+      onPointerDown={startDrag}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") onWidth(clamp(width + 2));
+        else if (event.key === "ArrowRight") onWidth(clamp(width - 2));
+        else return;
+        event.preventDefault();
+      }}
+      className={cn(
+        "w-1 shrink-0 cursor-col-resize bg-transparent transition-colors duration-150",
+        "hover:bg-accent/40 focus-visible:bg-accent/40",
+      )}
+    />
   );
 }
 

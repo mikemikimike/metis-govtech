@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
-@import "@fontsource/lato/300.css";
-@import "@fontsource/lato/400.css";
-@import "@fontsource/lato/700.css";
+@import "@fontsource/figtree/400.css";
+@import "@fontsource/figtree/500.css";
+@import "@fontsource/figtree/600.css";
+@import "@fontsource/figtree/700.css";
 @import "@fontsource/jetbrains-mono/400.css";
 
 /* ============================================================
@@ -42,7 +43,13 @@
   --input: 0 0% 90%;
   --ring: 187 71% 19%;
 
-  --radius: 3px;
+  /* Radius — two tiers. Small controls (buttons, badges, single-line inputs)
+     take 8px; large surfaces (cards, panels, text areas, dropdowns, floating
+     surfaces) take 16px. The contrast between the two is the point, so don't
+     introduce a third value. Named without the `-sm`/`-lg` suffixes because
+     those are the Tailwind theme keys below, which read from these. */
+  --radius: 8px;
+  --radius-large: 16px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -96,11 +103,13 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
 
+  /* `rounded-sm`/`rounded-md` land on the small tier, so a component that says
+     nothing gets the control radius; `rounded-lg` is the opt-in for a surface. */
   --radius-sm: var(--radius);
   --radius-md: var(--radius);
-  --radius-lg: var(--radius);
+  --radius-lg: var(--radius-large);
 
-  --font-sans: "Lato", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
@@ -141,6 +150,45 @@
       transition-duration: 0.01ms !important;
     }
   }
+}
+
+/* A scrollbar toned down rather than reinvented. The platform default is a wide opaque bar, and
+   inside a rounded composer it landed hard against the border and read as a fragment of some other
+   interface. This keeps the native control and native behaviour — it only narrows the thumb and
+   drops it to the same hairline grey as every border in the product, on a track of nothing. The
+   scrollbar still looks and works like a scrollbar; it just stops shouting. */
+.quiet-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.quiet-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.quiet-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.quiet-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  /* A thumb is a handle, not a surface, so it is not on the two-tier radius scale: fully rounded
+     is what a scrollbar thumb is everywhere, and matching a control radius would look arbitrary. */
+  border-radius: 999px;
+}
+
+.quiet-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* A scrolled field fades out at its top edge. Text scrolling out of a box has to end somewhere,
+   and ending it on a hard horizontal cut a few pixels beneath a rounded border made the composer
+   look broken rather than scrolled. The fade is applied only once the field is actually scrolled,
+   so the first line is never dimmed while it is the only line. */
+.faded-top {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 1rem);
+  mask-image: linear-gradient(to bottom, transparent 0, black 1rem);
 }
 
 /* The one scripted transition in the product: arriving at the conversation. When the opening

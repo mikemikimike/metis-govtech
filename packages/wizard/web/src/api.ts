@@ -213,9 +213,9 @@ export interface Scenario {
 
 export interface Product {
   name: string;
-  summary: string;
   users: string;
-  architecture: string;
+  summary: string;
+  detail: string;
 }
 
 export interface ProductProfile {
@@ -241,6 +241,13 @@ export interface SessionSummary {
   title: string;
   step: string;
   updated: number;
+}
+
+export interface InterviewConfiguration {
+  opening_question: string;
+  // Package-owned status copy, keyed by session step (the string carried on `SessionView.step`).
+  // The progress caption reads the line for the session's current step from here.
+  statuses: Record<string, string>;
 }
 
 // Fixture metadata is safe to send over the session door. File bytes stay in the upload and
@@ -303,6 +310,8 @@ const POST = {
 };
 
 export const api = {
+  interview: () => call<InterviewConfiguration>("/api/interview"),
+
   listSessions: () => call<SessionSummary[]>("/api/sessions"),
 
   createSession: () => call<SessionView>("/api/sessions", { ...POST }),

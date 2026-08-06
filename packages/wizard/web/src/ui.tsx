@@ -1,6 +1,7 @@
 // The house style, in as few primitives as the three panes need. Every rule the style
 // checklist enforces lives here once — near-black primary (never teal), borders not shadows,
-// the single 3px radius from the token file, sentence case left to the package's own strings.
+// the two radius tiers from the token file — `rounded-md` for small controls, `rounded-lg` for
+// surfaces — sentence case left to the package's own strings.
 
 import { ChevronRight } from "lucide-react";
 import { useId, useRef, useState } from "react";
@@ -28,12 +29,24 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 // The accent earns its scarcity here: it is a 1px ring and a tint on a *selected* chip, and
 // it is nowhere else. A primary button is near-black.
+//
+// Every variant answers a press as well as a hover. Without the pressed state a click produced no
+// acknowledgement at all — the button looked identical the whole way down, and whatever the click
+// started took long enough that the only feedback was the result arriving. Hover and press are two
+// steps of the same neutral ramp: the fill goes to `muted` under the pointer and on to `border`,
+// one step darker again, while held. The solid variant shifts opacity instead, having no fill to
+// deepen.
+//
+// It is a colour shift and nothing else. No scale, no spring: a button that shrinks under the
+// cursor is the decorative kind of motion this product does without, and the press only has to
+// report that the click landed.
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-primary text-primary-foreground border border-primary hover:opacity-90",
+    "bg-primary text-primary-foreground border border-primary hover:opacity-90 active:opacity-80",
   secondary:
-    "bg-secondary text-secondary-foreground border border-border hover:bg-muted",
-  ghost: "bg-transparent text-foreground border border-border hover:bg-muted",
+    "bg-secondary text-secondary-foreground border border-border hover:bg-muted active:bg-border",
+  ghost:
+    "bg-transparent text-foreground border border-border hover:bg-muted active:bg-border",
 };
 
 export function Button({
@@ -145,7 +158,7 @@ export function Panel({
   return (
     <div
       className={cn(
-        "rounded-md border border-border bg-card text-card-foreground",
+        "rounded-lg border border-border bg-card text-card-foreground",
         className,
       )}
     >
@@ -177,19 +190,63 @@ export function Chevron({
   );
 }
 
-// A small monospace token — an id, metric metadata, or a filename. JetBrains Mono is reserved for
-// machine-facing data, so it reads as implementation detail rather than ordinary prose.
-export function Mono({
+// A bordered monospace token: an id being referenced, a filename, a count.
+//
+// Neutral is the default and covers almost every chip, because most of them mark *what a thing
+// refers to* — a behaviour, a persona, a file — and a reference is not a state. The accent tone is
+// for the few that report one: a count that has become non-zero, something live. It is drawn as
+// teal text and a teal edge rather than a teal fill, so a row of chips still reads as one family
+// and the coloured one stands out by tone instead of by mass.
+//
+// This does not wrap `Mono`. Both would set a text colour, and two competing `text-*` utilities
+// resolve by stylesheet order rather than by which was passed last, so the tone could silently
+// lose. Setting the type here keeps the outcome deterministic.
+export function Chip({
+  tone = "neutral",
   className,
   children,
 }: {
+  tone?: "neutral" | "accent";
   className?: string;
   children: ReactNode;
 }) {
   return (
     <span
       className={cn(
-        "font-mono text-xs text-muted-foreground tracking-tight",
+        "inline-block rounded-md border px-1.5 py-0.5",
+        "font-mono text-xs tracking-tight tabular-nums",
+        tone === "accent"
+          ? "border-accent/40 text-accent"
+          : "border-border text-muted-foreground",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+// A small monospace token — an id, metric metadata, or a filename. JetBrains Mono is reserved for
+// machine-facing data, so it reads as implementation detail rather than ordinary prose.
+// `tone` picks the ink, because `cn` is a plain join rather than tailwind-merge: a `text-*` passed
+// through `className` does not override the base colour, it just sits beside it and loses on source
+// order. So the one colour a caller legitimately varies — muted by default, accent when the id
+// marks a live/selected state — is a prop the component resolves itself, leaving `className` for
+// everything that does not conflict.
+export function Mono({
+  className,
+  children,
+  tone = "muted",
+}: {
+  className?: string;
+  children: ReactNode;
+  tone?: "muted" | "accent";
+}) {
+  return (
+    <span
+      className={cn(
+        "font-mono text-xs tracking-tight",
+        tone === "accent" ? "text-accent" : "text-muted-foreground",
         className,
       )}
     >

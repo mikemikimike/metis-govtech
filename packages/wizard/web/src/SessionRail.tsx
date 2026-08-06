@@ -22,7 +22,7 @@ export function SessionRail({
   onCollapse?: () => void;
 }) {
   return (
-    <nav className="flex h-full w-[15%] min-w-[13rem] flex-col border-r border-border bg-muted/30">
+    <nav className="flex h-full w-[15%] min-w-[13rem] flex-col border-r border-border bg-muted">
       {/* The wordmark sits at the top-left, then a margin, then the new-evaluation control below
           it — the shape a chat app's rail takes, so the product name anchors the shell and the
           action reads as the first row of the list beneath it rather than a toolbar button. */}
@@ -42,10 +42,15 @@ export function SessionRail({
       </div>
       <div className="border-b border-border p-3">
         <Button
-          variant="primary"
+          // Bordered rather than solid. The rail's strongest mark belongs to the session you are
+          // in, and a near-black button above the list was competing with it for that job — two
+          // emphatic things stacked, only one of which reports state. Outlined, this reads as an
+          // available action and the filled row below reads as where you are.
+          variant="ghost"
           // Left-aligned rather than centred: the rail is a list of conversations, and its lead
           // control should read as the first row of that list, not as a centred toolbar button.
-          className="w-full justify-start"
+          // `bg-background` lifts it off the rail's muted fill, which `ghost` alone leaves flat.
+          className="w-full justify-start bg-background"
           disabled={busy}
           onClick={onNew}
         >
@@ -53,15 +58,27 @@ export function SessionRail({
           New evaluation
         </Button>
       </div>
-      <ul className="flex-1 overflow-y-auto p-3">
+      <ul className="quiet-scrollbar flex-1 overflow-y-auto p-3">
         {sessions.map((s) => (
           <li key={s.id}>
+            {/* The open session is filled with the accent outright, not tinted with it. A 10%
+                wash was the quietest possible way to say "you are here" and it lost that argument
+                against a near-black button sitting directly above it. A solid row is the one
+                place in the rail worth spending the accent on, and it is at most one row at a
+                time, so the colour stays as scarce as it was.
+
+                Everything inside the row inherits the fill's foreground rather than keeping its
+                own grey: muted text on a dark teal ground is unreadable, so the icon and the
+                timestamp step up with it, the timestamp held back by opacity so the title still
+                leads. */}
             <button
               className={cn(
-                "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors",
+                "flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors duration-150",
                 s.id === currentId
-                  ? "border border-accent bg-accent/10"
-                  : "border border-transparent hover:bg-muted",
+                  ? "bg-accent text-accent-foreground"
+                  // The rail is already `bg-muted`, so a muted hover was a no-op. The lift is to
+                  // the canvas colour, matching the new-evaluation control above.
+                  : "hover:bg-background",
               )}
               onClick={() => onOpen(s.id)}
             >
@@ -69,15 +86,30 @@ export function SessionRail({
                 size={15}
                 strokeWidth={1.3}
                 aria-hidden
-                className="shrink-0 text-muted-foreground"
+                className={cn(
+                  "shrink-0",
+                  s.id === currentId ? "text-accent-foreground" : "text-muted-foreground",
+                )}
               />
               {/* One line per session: the title runs at the start and truncates, the timestamp
                   sits at the end and never shrinks. The step is shown in the conversation header,
                   not repeated here, so the rail stays scannable as a plain list. */}
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate text-sm",
+                  s.id === currentId ? "font-semibold" : "font-medium text-foreground",
+                )}
+              >
                 {s.title}
               </span>
-              <span className="shrink-0 text-xs text-muted-foreground">
+              <span
+                className={cn(
+                  "shrink-0 text-xs",
+                  s.id === currentId
+                    ? "text-accent-foreground/75"
+                    : "text-muted-foreground",
+                )}
+              >
                 {relativeTime(s.updated)}
               </span>
             </button>

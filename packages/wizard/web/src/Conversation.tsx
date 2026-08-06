@@ -9,7 +9,7 @@
 // no such action, so the box greys itself with no step name written down anywhere here.
 
 import { ArrowUp, PencilSparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type {
   AnyCard,
@@ -195,7 +195,7 @@ function ChoiceBlock({
         // set apart from the plain chat turns above and below it. It is drawn from the cards
         // alone, not the resolved flag, so it persists once the block becomes a receipt; the
         // receipt's dimming rides on top from the enclosing section.
-        <div className="flex flex-col gap-3 rounded-md bg-muted p-3">
+        <div className="flex flex-col gap-3 rounded-lg bg-muted p-3">
           {request.cards.map((card, i) => {
             // The heading is emitted once per group, ahead of that group's cards — a header
             // is drawn only when this card's section differs from the one before it. The door
@@ -524,7 +524,7 @@ function WarningBlock({
     <div
       role="status"
       className={cn(
-        "rounded-md border p-2.5 text-sm",
+        "rounded-lg border p-2.5 text-sm",
         runtime
           ? "border-destructive/50 bg-destructive/8 text-foreground"
           : "border-gold/50 bg-gold/10 text-foreground",
@@ -596,7 +596,7 @@ function FormBlock({
           <span className="text-sm font-medium">{field.label}</span>
           {field.multiline ? (
             <textarea
-              className="min-h-20 rounded-md border border-input bg-background p-2 text-sm"
+              className="min-h-20 rounded-lg border border-input bg-background p-2 text-sm"
               placeholder={field.placeholder}
               value={values[field.id] ?? ""}
               disabled={busy}
@@ -702,6 +702,25 @@ export function Composer({
 
   const canSend = enabled && text.trim().length > 0;
 
+  // The box grows with what is being typed and only scrolls once it has run out of room. The
+  // comment below the textarea has always claimed this; nothing implemented it, so `rows={3}` was
+  // the whole story and a paragraph was written through a three-line slot that scrolled from the
+  // second sentence onward. Measuring is the only way to do it: reset to `auto` first, or
+  // `scrollHeight` reports the height already set rather than the height wanted.
+  const field = useRef<HTMLTextAreaElement | null>(null);
+  useLayoutEffect(() => {
+    const el = field.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
+
+  // Whether the field has been scrolled away from its first line. Once it has, the top edge takes
+  // a short fade so the partial line at the cut reads as text continuing above rather than as text
+  // sliced through — the hard clip a few pixels under a rounded border looked like a rendering
+  // fault. At rest there is nothing to fade, and applying it then would wash out the first line.
+  const [scrolled, setScrolled] = useState(false);
+
   const sendButton = (
     <button
       type="button"
@@ -723,6 +742,7 @@ export function Composer({
 
   const textarea = (
     <textarea
+      ref={field}
       className={cn(
         // Taller by default and a higher cap: the box showed barely a line, so a
         // paragraph scrolled out of sight while being written. Three lines to start,
@@ -730,11 +750,16 @@ export function Composer({
         "max-h-64 min-h-[4.5rem] flex-1 resize-none bg-transparent py-2.5",
         "placeholder:text-muted-foreground focus:outline-none",
         "disabled:cursor-not-allowed",
+        // A hairline thumb instead of the platform's default bar, which sat wide and opaque
+        // against the rounded edge of the composer and read as a piece of another interface.
+        "quiet-scrollbar",
+        scrolled && "faded-top",
       )}
       placeholder={hint}
       value={text}
       disabled={!enabled}
       rows={3}
+      onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
       onChange={(e) => setText(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -788,12 +813,13 @@ export function Composer({
     </div>
   );
 
-  // Bare: the caller owns width and spacing. Docked: float clear of the bottom edge with room
-  // on every side, centred in its own max-width the way a modern chat input sits.
+  // Bare: the caller owns width and spacing. Docked: float clear of the bottom edge, centred in an
+  // 80%-wide column so the 10% gutters on each side match the transcript's and the input sits over
+  // the same width as the conversation above it.
   if (bare) return pill;
   return (
-    <div className="px-6 pb-6 pt-2">
-      <div className="mx-auto w-full max-w-3xl">{pill}</div>
+    <div className="pb-6 pt-2">
+      <div className="mx-auto w-4/5">{pill}</div>
     </div>
   );
 }
