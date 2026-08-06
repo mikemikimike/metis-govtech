@@ -4,7 +4,7 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.6.0] — 2026-08-05
+## [0.6.0] — 2026-08-06
 
 ### Added
 
@@ -14,12 +14,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **CLI flags** — `--no-tui`, `--quiet`, `--log-format {text,json}`, `--log-dir <path>`
 - **Final summary** — static summary printed after pipeline completes (run counts, pass/fail, log location)
 - **Graceful shutdown** — first Ctrl+C finishes current turn; second aborts immediately
+- **Report task context** — HTML report now renders per-scenario context (description, persona, fixtures, outcome/duration) in an info card above each task section; `TaskContext` TypedDict exported from `metis.engine.reporting`
 
 ### Changed
 
 - `run_experiment()` and `run_simulation()` accept optional TUI/logging hooks (`state`, `orchestration_logger`, `log_router`, `tui_ctx`); existing behaviour preserved when called without them
 - Harness binds `structlog.contextvars` (scenario_id, persona_id, trial) per run for structured log routing
 - `configure_logging()` called before harness import with `cache_logger_on_first_use=False` to support dynamic processor chain updates
+- `generate_report()` and `save_html_report()` accept optional `task_contexts` parameter for enriching the HTML report with scenario metadata
+- Failure-reason snippets in HTML report expanded from 120 to 300 characters
 
 ## [0.5.0] — 2026-08-05
 
