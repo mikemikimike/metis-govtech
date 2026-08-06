@@ -1,15 +1,33 @@
 """Command-line interface for metis-engine."""
 
+import logging
+import os
 import shutil
+import signal
 import sys
+import threading
+from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import typer
 from dotenv import load_dotenv
 
 from metis.core.console import console
 from metis.engine import __version__
+from metis.engine.logging import (
+    OrchestrationLogger,
+    setup_engine_logging,
+    teardown_engine_logging,
+)
+from metis.engine.tui import (
+    RunState,
+    ScenarioState,
+    SimulationState,
+    TailBuffer,
+    TUIContext,
+)
 
 app = typer.Typer(help="Run METIS evaluations against traces.")
 
@@ -163,6 +181,29 @@ def _validate_inputs(input_dir: Path) -> None:
                 sys.exit(1)
 
 
+def _format_final_summary(state: "Any", experiment_dir: str, log_dir: str) -> str:
+    """Build the static final summary printed after TUI exits."""
+    total = state.total_runs
+    completed = state.completed_runs
+    passed = sum(
+        1 for sc in state.scenarios for r in sc.runs if r.stop_reason == "goal_achieved"
+    )
+    failed = completed - passed
+
+    elapsed = state.elapsed_seconds
+    h = int(elapsed) // 3600
+    m = (int(elapsed) % 3600) // 60
+
+    elapsed_str = f"{h}h {m:02d}m" if h > 0 else f"{m}m"
+
+    lines = [
+        f"METIS {state.experiment_id} — completed in {elapsed_str}",
+        f"Simulation: {completed}/{total} runs ({passed} passed, {failed} failed)",
+        f"Logs:   {log_dir}/",
+    ]
+    return "\n".join(lines)
+
+
 @app.command()
 def simulate(
     input_dir: Path = typer.Option(
@@ -174,27 +215,56 @@ def simulate(
     verbose: int = typer.Option(
         0, "--verbose", "-v", count=True, help="Increase logging verbosity"
     ),
+    quiet: bool = typer.Option(
+        False, "--quiet", help="Suppress output below ERROR level"
+    ),
+    no_tui: bool = typer.Option(
+        False, "--no-tui", help="Disable TUI even in a terminal"
+    ),
+    log_format: str = typer.Option(
+        "text", "--log-format", help="Log file format: text or json"
+    ),
+    log_dir: Path | None = typer.Option(
+        None,
+        "--log-dir",
+        help="Override log directory (default: co-located with results)",
+    ),
 ) -> None:
     """Run end-to-end simulation, evaluation, and report."""
-    import os
-
-    from metis.core.logging import configure_logging
-    from metis.engine.evaluation import evaluate
-    from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
-    from metis.engine.reporting import generate_report
-    from metis.engine.simulation.harness import HarnessConfig, run_experiment
-    from metis.engine.simulation.types import Experiment, RunRecord
-
     load_dotenv()
 
-    if verbose >= 2:
+    use_tui = not no_tui and sys.stderr.isatty()
+
+    if quiet:
+        log_level = "ERROR"
+    elif verbose >= 2:
         log_level = "DEBUG"
     elif verbose >= 1:
         log_level = "INFO"
     else:
         log_level = "WARNING"
 
-    configure_logging(level=log_level)
+    # Configure logging BEFORE importing harness modules — they create
+    # module-level loggers that cache the processor chain.
+    # When TUI is active, set DEBUG so all events flow through the router.
+    from metis.core.logging import configure_logging
+
+    configure_logging(level="DEBUG" if use_tui else log_level)
+
+    # Disable structlog's per-proxy bind caching so that module-level loggers
+    # (created at import time below) always use the latest processor chain —
+    # required for setup_engine_logging to inject the router after import.
+    import structlog
+
+    structlog.configure(cache_logger_on_first_use=False)
+
+    # Deferred imports: these pull in playwright, deepeval, langfuse, and openai
+    # which are expensive to load. Keeping them here avoids penalising --help/--version.
+    from metis.engine.evaluation import evaluate
+    from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
+    from metis.engine.reporting import generate_report
+    from metis.engine.simulation.harness import HarnessConfig, run_experiment
+    from metis.engine.simulation.types import Experiment, RunRecord
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
         os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
@@ -226,14 +296,103 @@ def simulate(
     console.print(f"  Input: {resolved_input_dir}")
     console.print(f"  Mode: {'headed' if headed else 'headless'}\n")
 
-    run_experiment(
-        config=config,
-        experiment=experiment,
-        personas_by_id=personas_by_id,
-        output_dir=experiment_dir,
-        fixtures_dir=fixtures_dir,
-        headed=headed,
+    # --- Set up logging and TUI ---
+    resolved_log_dir = log_dir or (experiment_dir / "logs")
+    resolved_log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build initial SimulationState from the experiment config
+    scenarios_state: list[ScenarioState] = []
+    total_run_count = 0
+    for scenario in experiment.scenarios:
+        run_states: list[RunState] = []
+        for persona_ref in scenario.persona_refs:
+            for trial_idx in range(scenario.num_trials):
+                total_run_count += 1
+                run_states.append(
+                    RunState(
+                        scenario_id=scenario.id,
+                        persona_id=persona_ref,
+                        trial=trial_idx + 1,
+                        num_trials=scenario.num_trials,
+                        phase="pending",
+                        current_turn=None,
+                        max_turns=20,  # RunConfig default; overwritten by update_run_turn() during simulation
+                        turn_detail="",
+                        duration_seconds=None,
+                        stop_reason=None,
+                    )
+                )
+        scenarios_state.append(
+            ScenarioState(
+                scenario_id=scenario.id,
+                runs=run_states,
+                phase="pending",
+            )
+        )
+
+    sim_state = SimulationState(
+        experiment_id=experiment.id,
+        scenarios=scenarios_state,
+        total_runs=total_run_count,
     )
+
+    display_level = getattr(logging, log_level)
+
+    tail_buffer = TailBuffer(max_lines=15, min_level=display_level)
+    log_router = setup_engine_logging(
+        log_dir=resolved_log_dir,
+        log_format=log_format,
+        tail_buffer=tail_buffer,
+    )
+    orchestration_logger = OrchestrationLogger(
+        log_dir=resolved_log_dir, log_format=log_format
+    )
+
+    tui_ctx: TUIContext | None = None
+    if use_tui:
+        tui_ctx = TUIContext(state=sim_state, tail_buffer=tail_buffer)
+
+    _interrupt_count = 0
+    _interrupt_lock = threading.Lock()
+
+    def _handle_sigint(signum: int, frame: Any) -> None:
+        nonlocal _interrupt_count
+        with _interrupt_lock:
+            _interrupt_count += 1
+            if _interrupt_count >= 2:
+                console.print("\nForce abort.", style="bold red")
+                sys.exit(130)
+            console.print(
+                "\nInterrupt received — finishing current turn. Press Ctrl+C again to abort.",
+                style="yellow",
+            )
+
+    prev_handler = signal.signal(signal.SIGINT, _handle_sigint)
+    try:
+        with tui_ctx if tui_ctx else nullcontext():
+            run_experiment(
+                config=config,
+                experiment=experiment,
+                personas_by_id=personas_by_id,
+                output_dir=experiment_dir,
+                fixtures_dir=fixtures_dir,
+                headed=headed,
+                state=sim_state,
+                orchestration_logger=orchestration_logger,
+                log_router=log_router,
+                tui_ctx=tui_ctx,
+            )
+    finally:
+        signal.signal(signal.SIGINT, prev_handler)
+        teardown_engine_logging(log_router)
+        orchestration_logger.close()
+
+    summary = _format_final_summary(
+        sim_state,
+        str(experiment_dir),
+        str(resolved_log_dir),
+    )
+    console.print(summary)
 
     files = sorted(
         experiment_dir.glob("runs/*/record.json"), key=lambda p: p.stat().st_mtime

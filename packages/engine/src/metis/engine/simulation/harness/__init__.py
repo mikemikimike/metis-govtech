@@ -4,6 +4,8 @@ The auth flow, page selectors, and session-ID extraction are currently
 coupled to Orca (the default target).
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -11,6 +13,8 @@ from playwright.sync_api import sync_playwright
 
 from metis.core.console import console
 from metis.core.logging import get_logger
+from metis.engine.logging import LogRouter, OrchestrationLogger
+from metis.engine.tui import SimulationState, TUIContext
 
 from ..types import Experiment, Persona, RunRecord, Scenario
 from ._artifact_store import _save_artifacts
@@ -30,6 +34,11 @@ def run_experiment(
     fixtures_dir: Path,
     output_dir: Path | None = None,
     headed: bool = False,
+    # Optional hooks for TUI / structured-logging integration
+    state: SimulationState | None = None,
+    orchestration_logger: OrchestrationLogger | None = None,
+    log_router: LogRouter | None = None,
+    tui_ctx: TUIContext | None = None,
 ) -> None:
     """Run a full experiment (all scenario x persona pairs).
 
@@ -64,6 +73,7 @@ def run_experiment(
 
     results: list[RunRecord] = []
     run_index = 0
+    prev_scenario: Scenario | None = None
 
     with sync_playwright() as pw:
         logger.info(
@@ -139,6 +149,41 @@ def run_experiment(
                 )
                 run_dir.mkdir(parents=True, exist_ok=True)
 
+                # --- Bind structlog context for this run ---
+                import structlog.contextvars
+
+                structlog.contextvars.clear_contextvars()
+                structlog.contextvars.bind_contextvars(
+                    scenario_id=scenario.id,
+                    persona_id=persona.id,
+                    trial=trial_index,
+                )
+
+                # --- Emit pre-run orchestration events ---
+                if _is_new_scenario(scenario, prev_scenario) and orchestration_logger:
+                    orchestration_logger.scenario_started(scenario.id)
+
+                if orchestration_logger:
+                    orchestration_logger.run_started(
+                        scenario.id,
+                        persona.id,
+                        trial=trial_index,
+                        num_trials=scenario.num_trials,
+                    )
+                if log_router:
+                    log_router.open_run(
+                        scenario.id,
+                        persona.id,
+                        trial=trial_index,
+                        num_trials=scenario.num_trials,
+                    )
+                if state:
+                    state.start_run(scenario.id, persona.id, trial=trial_index)
+                if tui_ctx:
+                    tui_ctx.refresh()
+
+                prev_scenario = scenario
+
                 console.print(
                     f"  [{run_index}/{total_runs}] {scenario.id} × {persona.id} ..."
                 )
@@ -150,7 +195,45 @@ def run_experiment(
                     scenario,
                     run_dir,
                     fixtures_dir,
+                    trial=trial_index,
+                    state=state,
+                    tui_ctx=tui_ctx,
                 )
+
+                # --- Emit post-run orchestration events ---
+                if state:
+                    state.complete_run(
+                        scenario.id,
+                        persona.id,
+                        trial=trial_index,
+                        stop_reason=record.outcome.stop_reason,
+                        duration_seconds=record.outcome.duration_seconds,
+                    )
+                if orchestration_logger:
+                    orchestration_logger.run_completed(
+                        scenario.id,
+                        persona.id,
+                        trial=trial_index,
+                        num_trials=scenario.num_trials,
+                        stop_reason=record.outcome.stop_reason,
+                        total_turns=record.outcome.total_turns,
+                        duration_seconds=record.outcome.duration_seconds,
+                    )
+                if log_router:
+                    log_router.close_run(scenario.id, persona.id, trial=trial_index)
+                if tui_ctx:
+                    tui_ctx.refresh()
+
+                # Emit scenario completion when all runs for this scenario are done
+                if state and _scenario_just_completed(state, scenario.id):
+                    sc = next(
+                        s for s in state.scenarios if s.scenario_id == scenario.id
+                    )
+                    passed = sum(1 for r in sc.runs if r.stop_reason == "goal_achieved")
+                    if orchestration_logger:
+                        orchestration_logger.scenario_completed(
+                            scenario.id, runs_passed=passed, runs_total=len(sc.runs)
+                        )
 
                 # Save run record to disk
                 _save_run_record(record, run_dir)
@@ -205,3 +288,14 @@ def _save_run_record(record: RunRecord, run_dir: Path) -> None:
     """Save a run record as record.json inside the run folder."""
     filepath = run_dir / "record.json"
     filepath.write_text(json.dumps(record.model_dump(), indent=2))
+
+
+def _is_new_scenario(current: Scenario, prev: Scenario | None) -> bool:
+    """Return True when we are entering a new scenario (first run or ID changed)."""
+    return prev is None or current.id != prev.id
+
+
+def _scenario_just_completed(state: SimulationState, scenario_id: str) -> bool:
+    """Return True when every run in the given scenario is now complete/failed."""
+    sc = next((s for s in state.scenarios if s.scenario_id == scenario_id), None)
+    return sc is not None and sc.phase == "completed"

@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import TypedDict
 
 from metis.core.console import console
 from metis.engine.evaluation.types import EvalResult
@@ -18,6 +19,17 @@ from metis.engine.extractor.types import (
     RoutingSummary,
     SessionMetricsEntry,
 )
+
+
+class TaskContext(TypedDict, total=False):
+    description: str
+    persona_id: str
+    persona_description: str
+    fixtures: list[str]
+    stop_reason: str
+    total_turns: int
+    duration_seconds: float
+
 
 RESULTS_DIR = Path.cwd() / "results"
 
@@ -185,6 +197,7 @@ def save_html_report(
     timings: dict | None = None,
     output_dir: Path | None = None,
     experiment_description: str | None = None,
+    task_contexts: dict[str, TaskContext] | None = None,
 ) -> Path:
     """Generate a self-contained HTML report."""
     target_dir = output_dir or RESULTS_DIR
@@ -233,6 +246,7 @@ def save_html_report(
         total_cost,
         total_latency,
         experiment_description=experiment_description,
+        task_contexts=task_contexts,
     )
     with open(filepath, "w") as f:
         f.write(html)
@@ -245,6 +259,7 @@ def generate_report(
     run_id: str | None = None,
     output_dir: Path | None = None,
     experiment_description: str | None = None,
+    task_contexts: dict[str, TaskContext] | None = None,
 ) -> ReportResult:
     """Generate terminal summary, JSON results, and HTML report.
 
@@ -335,6 +350,7 @@ def generate_report(
         eval_result.timings,
         output_dir=output_dir,
         experiment_description=experiment_description,
+        task_contexts=task_contexts,
     )
     console.print(f"  HTML report:  {html_path}")
     console.print(f"  Open with:    open {html_path}\n")
@@ -520,6 +536,7 @@ def _render_html(
     total_cost: float = 0,
     total_latency: float = 0,
     experiment_description: str | None = None,
+    task_contexts: dict[str, TaskContext] | None = None,
 ) -> str:
     import html as html_mod
 
@@ -659,7 +676,7 @@ def _render_html(
             for f in metric_failures[:5]:
                 reason_text = f["reason"]
                 reason_short = html_mod.escape(
-                    reason_text[:120] + ("..." if len(reason_text) > 120 else "")
+                    reason_text[:300] + ("..." if len(reason_text) > 300 else "")
                 )
                 sid = f.get("session_id") or f["trace_id"]
                 turn_idx = f.get("turn_index", 0)
@@ -704,9 +721,50 @@ def _render_html(
             </div>"""
 
         task_title = task_id.replace("-", " ").title()
+        context_html = ""
+        if task_contexts and task_id in task_contexts:
+            ctx = task_contexts[task_id]
+            ctx_parts = []
+            if ctx.get("description"):
+                ctx_parts.append(
+                    f'<p class="task-description">{html_mod.escape(ctx["description"])}</p>'
+                )
+            meta_spans = []
+            if ctx.get("persona_id"):
+                persona_label = ctx["persona_id"].replace("-", " ").title()
+                desc_snippet = (ctx.get("persona_description") or "")[:120]
+                if desc_snippet:
+                    meta_spans.append(
+                        f'<span class="task-meta-item"><strong>Persona:</strong> {html_mod.escape(persona_label)} — {html_mod.escape(desc_snippet)}</span>'
+                    )
+                else:
+                    meta_spans.append(
+                        f'<span class="task-meta-item"><strong>Persona:</strong> {html_mod.escape(persona_label)}</span>'
+                    )
+            if ctx.get("fixtures"):
+                meta_spans.append(
+                    f'<span class="task-meta-item"><strong>Fixtures:</strong> {html_mod.escape(", ".join(ctx["fixtures"]))}</span>'
+                )
+            outcome_parts = []
+            if ctx.get("stop_reason"):
+                outcome_parts.append(ctx["stop_reason"].replace("_", " "))
+            if ctx.get("total_turns"):
+                outcome_parts.append(f"{ctx['total_turns']} turns")
+            if ctx.get("duration_seconds"):
+                outcome_parts.append(f"{ctx['duration_seconds']:.0f}s")
+            if outcome_parts:
+                meta_spans.append(
+                    f'<span class="task-meta-item"><strong>Outcome:</strong> {html_mod.escape(" · ".join(outcome_parts))}</span>'
+                )
+            if meta_spans:
+                ctx_parts.append(f'<div class="task-meta">{"".join(meta_spans)}</div>')
+            if ctx_parts:
+                context_html = f'<div class="task-context">{"".join(ctx_parts)}</div>'
+
         task_sections_html += f"""<details class="task-section" open>
             <summary class="task-title">{html_mod.escape(task_title)}</summary>
             <div class="task-body">
+                {context_html}
                 <div class="ac-list">{metrics_html}</div>
             </div>
         </details>"""
@@ -846,6 +904,11 @@ def _render_html(
         .task-title {{ padding: 12px 16px; font-size: 15px; font-weight: 700; color: #111827; cursor: pointer; text-transform: capitalize; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }}
         .task-title:hover {{ background: #f3f4f6; }}
         .task-body {{ padding: 10px 16px 16px; }}
+        .task-context {{ margin-bottom: 12px; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; }}
+        .task-description {{ font-size: 12px; color: #1e40af; line-height: 1.5; margin-bottom: 6px; }}
+        .task-meta {{ display: flex; flex-direction: column; gap: 3px; }}
+        .task-meta-item {{ font-size: 11px; color: #374151; line-height: 1.4; }}
+        .task-meta-item strong {{ color: #1e3a5f; }}
         .behaviour-block {{ margin-bottom: 14px; }}
         .behaviour-block:last-child {{ margin-bottom: 0; }}
         .behaviour-header {{ display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }}
