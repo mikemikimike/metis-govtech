@@ -6,13 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.2.0] — 2026-08-05
 
-### Added
+### Fixed
 
-- _TBD_
-
-### Changed
-
-- _TBD_
+- `configure_logging()` now inserts a level-filtering processor into structlog's chain so that `get_logger()` respects the configured verbosity threshold — previously only stdlib (third-party) loggers were gated by the root logger level
 
 ---
 
