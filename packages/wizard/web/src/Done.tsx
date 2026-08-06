@@ -1,7 +1,6 @@
-// The end of the interview. Two actions, and the asymmetry between them is the point: the
-// document is built, so downloading it is a real link; running the evaluation belongs to the
-// engine, which this door is forbidden to import, so that button is present but disabled and
-// labelled as such. Nothing here reaches across the dependency boundary.
+// The end of the interview. The document and its fixture library are downloaded together as an
+// engine-ready ZIP; running the evaluation belongs to the engine, which this door is forbidden to
+// import, so that button is present but disabled and labelled as such.
 
 import { api } from "./api";
 import { Button, cn, Panel } from "./ui";

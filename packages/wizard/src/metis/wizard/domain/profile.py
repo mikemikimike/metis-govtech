@@ -90,7 +90,7 @@ class Scenario(Authored):
     persona_refs: list[str] = Field(default_factory=list)
     fixtures: list[str] = Field(
         default_factory=list
-    )  # filenames only — no upload in MVP
+    )  # filenames only; web fixture bytes live beside the session or in a request bundle
     num_trials: int = 3  # one run of a non-deterministic agent says very little
 
 

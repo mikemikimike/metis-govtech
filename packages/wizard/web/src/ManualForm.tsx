@@ -21,9 +21,10 @@
 
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { MetricSpec } from "./api";
+import type { FixtureMetadata, MetricSpec } from "./api";
 import { api, TransportError } from "./api";
-import { FileReferenceListInput, NumberInput } from "./inputs";
+import { FixtureInput, NumberInput } from "./inputs";
+import { validateFixtureSelection } from "./fixture-policy";
 import { Button, cn, countRuns, formatRuns, Mono, Panel } from "./ui";
 
 interface PersonaDraft {
@@ -38,6 +39,10 @@ interface ScenarioDraft {
   persona_refs: string[];
   metric_refs: string[]; // metric FQNs
   fixtures: string[];
+}
+
+interface BrowserFixture extends FixtureMetadata {
+  file: File;
 }
 
 function newPersona(): PersonaDraft {
@@ -60,6 +65,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
   const [description, setDescription] = useState("");
   const [personas, setPersonas] = useState<PersonaDraft[]>([]);
   const [scenarios, setScenarios] = useState<ScenarioDraft[]>([]);
+  const [library, setLibrary] = useState<BrowserFixture[]>([]);
 
   // The catalogue the metric picker offers. `null` while it is still loading; a fetch failure is
   // reported in the door's own error style rather than leaving an empty picker that looks like a
@@ -118,6 +124,17 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
   const removeScenario = (i: number) =>
     setScenarios((ss) => ss.filter((_, j) => j !== i));
 
+  const uploadFiles = async (files: File[]): Promise<FixtureMetadata[]> => {
+    const names = validateFixtureSelection(files, library);
+    const added = files.map((file, i) => ({
+      name: names[i],
+      size: file.size,
+      file,
+    }));
+    setLibrary((current) => [...current, ...added]);
+    return added.map(({ file: _file, ...metadata }) => metadata);
+  };
+
   // The personas a scenario may reference: exactly those currently defined and named. A blank-id
   // persona offers nothing to reference, so it is not listed.
   const definedPersonaIds = useMemo(
@@ -132,6 +149,14 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
 
   const missing = useMemo(() => {
     const problems: string[] = [];
+    const uploaded = new Set(library.map((item) => item.name));
+    const missingFiles = [
+      ...new Set(
+        scenarios.flatMap((scenario) =>
+          scenario.fixtures.filter((name) => !uploaded.has(name)),
+        ),
+      ),
+    ];
     if (!id.trim()) problems.push("an experiment id");
     if (!description.trim()) problems.push("a description");
     if (personas.length === 0) problems.push("at least one persona");
@@ -146,8 +171,10 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
       if (scenarios.some((s) => s.persona_refs.length === 0))
         problems.push("a persona for every scenario");
     }
+    if (missingFiles.length > 0)
+      problems.push(`files: ${missingFiles.join(", ")}`);
     return problems;
-  }, [id, description, personas, scenarios]);
+  }, [id, description, personas, scenarios, library]);
 
   const ready = missing.length === 0;
 
@@ -177,13 +204,14 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
       })),
     };
     try {
-      const yaml = await api.compileExperiment(payload);
-      const url = URL.createObjectURL(
-        new Blob([yaml], { type: "application/x-yaml" }),
+      const bundle = await api.compileBundle(
+        payload,
+        library.map(({ name, file }) => ({ name, file })),
       );
+      const url = URL.createObjectURL(bundle);
       const anchor = window.document.createElement("a");
       anchor.href = url;
-      anchor.download = "experiment.yaml";
+      anchor.download = "experiment.zip";
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -212,8 +240,8 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
               Write the experiment yourself
             </h1>
             <p className="text-sm text-muted-foreground">
-              Fill in the scenarios, personas and metrics, and download the
-              experiment file.
+              Fill in the scenarios, personas, metrics and fixture files, and
+              download the experiment bundle.
             </p>
           </header>
         </div>
@@ -349,9 +377,10 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                   </Field>
 
                   <Field label="Fixtures">
-                    <FileReferenceListInput
+                    <FixtureInput
                       value={scenario.fixtures}
                       onChange={(fixtures) => updateScenario(i, { fixtures })}
+                      onUpload={uploadFiles}
                     />
                   </Field>
                   <div className="flex justify-end pt-1 text-xs text-muted-foreground">

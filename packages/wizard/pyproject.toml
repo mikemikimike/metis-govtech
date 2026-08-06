@@ -28,6 +28,7 @@ dependencies = [
 # list as well as in the import graph.
 web = [
     "fastapi>=0.110",
+    "python-multipart>=0.0.18",
     "uvicorn>=0.27",
 ]
 

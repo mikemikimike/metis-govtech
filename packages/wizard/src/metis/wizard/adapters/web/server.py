@@ -10,24 +10,85 @@ package composed and the profile it built; the words are all already in them.
 
 from __future__ import annotations
 
+import json
+import shutil
 import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import TypeAdapter
+from starlette.background import BackgroundTask
 
 from metis.wizard.adapters.web.store import SessionStore
 from metis.wizard.application import Session, SessionVersionError
+from metis.wizard.application.compile import (
+    BundleError,
+    CompilationError,
+    build_experiment_document,
+    compile_experiment,
+    temporary_bundle_directory,
+    to_yaml,
+    write_bundle,
+)
+from metis.wizard.application.fixtures import FixtureError, FixtureLibrary
 from metis.wizard.application.interviewer import Interviewer, InterviewerUnavailable
 from metis.wizard.contracts.conversation import AnyResponse
 
 _response_adapter: TypeAdapter[AnyResponse] = TypeAdapter(AnyResponse)
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+def _fixture_library(path: Path) -> FixtureLibrary:
+    return FixtureLibrary(path.parent / "fixtures")
+
+
+def _profile_fixture_names(session: Session) -> list[str]:
+    return [
+        name for scenario in session.profile().scenarios for name in scenario.fixtures
+    ]
+
+
+def _cleanup_directory(path: Path) -> None:
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def _bundle_response(path: Path, *, cleanup: Path | None = None) -> FileResponse:
+    background = (
+        BackgroundTask(_cleanup_directory, cleanup) if cleanup is not None else None
+    )
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename="experiment.zip",
+        background=background,
+    )
+
+
+def _submitted_document(payload: dict[str, Any]) -> dict[str, Any]:
+    """Apply the hand-authoring presence rules shared by YAML and ZIP routes."""
+
+    experiment_id = str(payload.get("id", "")).strip()
+    description = str(payload.get("description", "")).strip()
+    for field, value in (("id", experiment_id), ("description", description)):
+        if not value:
+            raise HTTPException(
+                422, f"The experiment needs a {field}; it cannot be blank."
+            )
+
+    try:
+        return build_experiment_document(
+            experiment_id=experiment_id,
+            description=description,
+            personas=payload.get("personas", []),
+            scenarios=payload.get("scenarios", []),
+        )
+    except CompilationError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 def _driver(interviewer: Interviewer):
@@ -155,6 +216,69 @@ def create_app(
         write_experiment(session.profile(), session.state.id, target)
         return FileResponse(target, filename="experiment.yaml")
 
+    @app.get("/api/sessions/{session_id}/fixtures")
+    def list_fixtures(session_id: str) -> list[dict[str, Any]]:
+        path = store.path_for(session_id)
+        if path is None:
+            raise HTTPException(404, f"No session {session_id}.")
+        return [item.model_dump(mode="json") for item in _fixture_library(path).list()]
+
+    @app.post("/api/sessions/{session_id}/fixtures")
+    def upload_fixtures(
+        session_id: str,
+        files: list[UploadFile] = File(default=[]),
+    ) -> dict[str, Any]:
+        path = store.path_for(session_id)
+        if path is None:
+            raise HTTPException(404, f"No session {session_id}.")
+        library = _fixture_library(path)
+        try:
+            added = library.upload([(file.filename or "", file.file) for file in files])
+        except FixtureError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return {
+            "added": [item.model_dump(mode="json") for item in added],
+            "fixtures": [item.model_dump(mode="json") for item in library.list()],
+        }
+
+    @app.delete("/api/sessions/{session_id}/fixtures/{filename}")
+    def delete_fixture(session_id: str, filename: str) -> dict[str, Any]:
+        path = store.path_for(session_id)
+        if path is None:
+            raise HTTPException(404, f"No session {session_id}.")
+        session = Session.resume(path)
+        try:
+            _fixture_library(path).delete(
+                filename,
+                referenced=_profile_fixture_names(session),
+            )
+        except FixtureError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {
+            "fixtures": [
+                item.model_dump(mode="json") for item in _fixture_library(path).list()
+            ]
+        }
+
+    @app.get("/api/sessions/{session_id}/experiment.zip")
+    def experiment_bundle(session_id: str) -> FileResponse:
+        path = store.path_for(session_id)
+        if path is None:
+            raise HTTPException(404, f"No session {session_id}.")
+        session = Session.resume(path)
+        temporary = temporary_bundle_directory(prefix="metis-session-bundle-")
+        try:
+            document = compile_experiment(session.profile(), session.state.id)
+            target = temporary / "experiment.zip"
+            write_bundle(document, path.parent / "fixtures", target)
+        except (CompilationError, BundleError) as exc:
+            _cleanup_directory(temporary)
+            raise HTTPException(422, str(exc)) from exc
+        except Exception:
+            _cleanup_directory(temporary)
+            raise
+        return _bundle_response(target, cleanup=temporary)
+
     # ── the hand-authoring door ──────────────────────────────────────────────
     #
     # The second way in: a form that authors the experiment document directly, with no
@@ -192,40 +316,42 @@ def create_app(
         the schema rejects returns a 422 with the offending location and no file — the browser
         gates on the same rules, so a rejection here is a safety net rather than the norm.
         """
-        from metis.wizard.application.compile import (
-            CompilationError,
-            build_experiment_document,
-            to_yaml,
-        )
-
-        # The schema requires id and description be present, but not that they carry text — an
-        # experiment with a blank id or description is one no reader can act on, so the form
-        # gates on both and this route holds the same line as its safety net. The interview's
-        # own compiler is left untouched: this presence rule is the hand-authoring door's, not
-        # a change to what the schema means.
-        experiment_id = str(payload.get("id", "")).strip()
-        description = str(payload.get("description", "")).strip()
-        for field, value in (("id", experiment_id), ("description", description)):
-            if not value:
-                raise HTTPException(
-                    422, f"The experiment needs a {field}; it cannot be blank."
-                )
-
-        try:
-            document = build_experiment_document(
-                experiment_id=experiment_id,
-                description=description,
-                personas=payload.get("personas", []),
-                scenarios=payload.get("scenarios", []),
-            )
-        except CompilationError as exc:
-            raise HTTPException(422, str(exc)) from exc
+        document = _submitted_document(payload)
 
         return Response(
             content=to_yaml(document),
             media_type="application/x-yaml",
             headers={"content-disposition": 'attachment; filename="experiment.yaml"'},
         )
+
+    @app.post("/api/experiment.zip")
+    def compile_submitted_bundle(
+        document: str = Form(...),
+        files: list[UploadFile] = File(default=[]),
+    ) -> FileResponse:
+        try:
+            payload = json.loads(document)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                422, "The experiment document must be valid JSON."
+            ) from exc
+        if not isinstance(payload, dict):
+            raise HTTPException(422, "The experiment document must be a JSON object.")
+
+        compiled = _submitted_document(payload)
+        temporary = temporary_bundle_directory()
+        try:
+            library = FixtureLibrary(temporary / "fixtures")
+            library.upload([(file.filename or "", file.file) for file in files])
+            target = temporary / "experiment.zip"
+            write_bundle(compiled, library.root, target)
+        except (FixtureError, BundleError) as exc:
+            _cleanup_directory(temporary)
+            raise HTTPException(422, str(exc)) from exc
+        except Exception:
+            _cleanup_directory(temporary)
+            raise
+        return _bundle_response(target, cleanup=temporary)
 
     # ── the app itself ─────────────────────────────────────────────────────
 

@@ -7,6 +7,9 @@ thing either one implements is how to draw a screen.
 
 from __future__ import annotations
 
+import io
+import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -314,6 +317,134 @@ def test_the_experiment_can_be_downloaded(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     assert "scenarios:" in response.text
+
+
+def test_session_fixture_upload_lists_metadata_and_keeps_bytes_out_of_session_json(
+    tmp_path: Path,
+) -> None:
+    _seed(tmp_path, "wizard-fixtures")
+    upload = client(tmp_path).post(
+        "/api/sessions/wizard-fixtures/fixtures",
+        files=[("files", ("policy.pdf", b"pdf bytes", "application/pdf"))],
+    )
+
+    assert upload.status_code == 200
+    assert upload.json()["added"] == [{"name": "policy.pdf", "size": 9}]
+    assert client(tmp_path).get("/api/sessions/wizard-fixtures/fixtures").json() == [
+        {"name": "policy.pdf", "size": 9}
+    ]
+    session_json = (tmp_path / "wizard-fixtures" / "session.json").read_text()
+    assert "pdf bytes" not in session_json
+    assert (
+        tmp_path / "wizard-fixtures" / "fixtures" / "policy.pdf"
+    ).read_bytes() == b"pdf bytes"
+
+
+def test_engine_example_csv_fixture_uploads_without_transformation(
+    tmp_path: Path,
+) -> None:
+    _seed(tmp_path, "wizard-example-csv")
+    source = (
+        Path(__file__).resolve().parents[5]
+        / "packages/engine/example-experiment/fixtures/q3_sales.csv"
+    )
+
+    with source.open("rb") as fixture:
+        response = client(tmp_path).post(
+            "/api/sessions/wizard-example-csv/fixtures",
+            files=[("files", (source.name, fixture, "text/csv"))],
+        )
+
+    assert response.status_code == 200
+    stored = tmp_path / "wizard-example-csv" / "fixtures" / source.name
+    assert stored.read_bytes() == source.read_bytes()
+
+
+def test_fixture_upload_batches_are_all_or_nothing(tmp_path: Path) -> None:
+    _seed(tmp_path, "wizard-batch")
+    response = client(tmp_path).post(
+        "/api/sessions/wizard-batch/fixtures",
+        files=[
+            ("files", ("good.txt", b"good", "text/plain")),
+            ("files", ("bad.exe", b"bad", "application/octet-stream")),
+        ],
+    )
+
+    assert response.status_code == 422
+    assert client(tmp_path).get("/api/sessions/wizard-batch/fixtures").json() == []
+
+
+def test_referenced_fixture_cannot_be_deleted_but_unreferenced_can(
+    tmp_path: Path,
+) -> None:
+    _seed(tmp_path, "wizard-delete")
+    api = client(tmp_path)
+    api.post(
+        "/api/sessions/wizard-delete/fixtures",
+        files=[
+            ("files", ("policy.pdf", b"policy", "application/pdf")),
+            ("files", ("notes.txt", b"notes", "text/plain")),
+        ],
+    )
+
+    assert (
+        api.delete("/api/sessions/wizard-delete/fixtures/policy.pdf").status_code == 409
+    )
+    assert (
+        api.delete("/api/sessions/wizard-delete/fixtures/notes.txt").status_code == 200
+    )
+    assert [
+        row["name"] for row in api.get("/api/sessions/wizard-delete/fixtures").json()
+    ] == ["policy.pdf"]
+
+
+def test_interview_bundle_download_has_the_engine_layout(tmp_path: Path) -> None:
+    _seed(tmp_path, "wizard-zip", step=SessionStep.DONE)
+    api = client(tmp_path)
+    api.post(
+        "/api/sessions/wizard-zip/fixtures",
+        files=[("files", ("policy.pdf", b"policy", "application/pdf"))],
+    )
+
+    response = api.get("/api/sessions/wizard-zip/experiment.zip")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    assert "experiment.zip" in response.headers["content-disposition"]
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert "experiment.yaml" in archive.namelist()
+        assert "fixtures/policy.pdf" in archive.namelist()
+    assert not (tmp_path / "wizard-zip" / "experiment.zip").exists()
+
+
+def test_manual_bundle_route_is_stateless_and_includes_uploaded_files(
+    tmp_path: Path,
+) -> None:
+    response = client(tmp_path).post(
+        "/api/experiment.zip",
+        data={"document": json.dumps(VALID_DOC)},
+        files=[("files", ("data.csv", b"a,b\n1,2\n", "text/csv"))],
+    )
+
+    assert response.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert archive.read("fixtures/data.csv") == b"a,b\n1,2\n"
+    assert client(tmp_path).get("/api/sessions").json() == []
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_manual_bundle_route_refuses_a_missing_referenced_file(tmp_path: Path) -> None:
+    import copy
+
+    document = copy.deepcopy(VALID_DOC)
+    document["scenarios"][0]["fixtures"] = ["missing.txt"]
+    response = client(tmp_path).post(
+        "/api/experiment.zip", data={"document": json.dumps(document)}
+    )
+
+    assert response.status_code == 422
+    assert "missing.txt" in response.text
+    assert list(tmp_path.iterdir()) == []
 
 
 # ── the metric catalogue ─────────────────────────────────────────────────────

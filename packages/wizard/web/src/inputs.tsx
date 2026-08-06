@@ -1,6 +1,19 @@
-import { Minus, Plus, X } from "lucide-react";
-import { useState } from "react";
-import { Button, cn, Mono } from "./ui";
+import { Minus, Plus, Upload, X } from "lucide-react";
+import { useRef, useState } from "react";
+import type { FixtureMetadata } from "./api";
+import {
+  ACCEPTED_FIXTURE_EXTENSIONS,
+  FIXTURE_MAX_FILES,
+  validateFixtureSelection,
+} from "./fixture-policy";
+import { cn, Mono } from "./ui";
+
+export {
+  ACCEPTED_FIXTURE_EXTENSIONS,
+  FIXTURE_MAX_BYTES,
+  FIXTURE_MAX_FILES,
+  fixtureNames,
+} from "./fixture-policy";
 
 export function NumberInput({
   value,
@@ -72,71 +85,110 @@ export function NumberInput({
   );
 }
 
-export function FileReferenceListInput({
+export function FixtureInput({
   value,
   onChange,
+  onUpload,
   disabled = false,
-  placeholder = "report.pdf",
 }: {
   value: string[];
   onChange: (value: string[]) => void;
+  onUpload: (files: File[]) => Promise<FixtureMetadata[]>;
   disabled?: boolean;
-  placeholder?: string;
 }) {
-  const [draft, setDraft] = useState("");
-  const add = () => {
-    const name = draft.trim();
-    if (disabled || !name || value.includes(name)) return;
-    onChange([...value, name]);
-    setDraft("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const addFiles = async (files: File[]) => {
+    if (disabled || uploading || files.length === 0) return;
+    setError(null);
+    try {
+      if (files.length > FIXTURE_MAX_FILES) {
+        setError(`You can upload up to ${FIXTURE_MAX_FILES} files at a time.`);
+        return;
+      }
+      const names = validateFixtureSelection(files, []);
+      setUploading(true);
+      const added = await onUpload(files);
+      const approved = added.map((item) => item.name);
+      onChange([...value, ...approved.filter((name) => !value.includes(name))]);
+      // `names` is evaluated before the request so browser-only tests and old servers still get
+      // a useful local validation path if a response carries no added rows.
+      if (approved.length === 0 && names.length > 0) onChange([...value, ...names]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Couldn't upload the files.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const toggle = (name: string) => {
+    if (disabled || uploading) return;
+    onChange(
+      value.includes(name)
+        ? value.filter((item) => item !== name)
+        : [...value, name],
+    );
   };
 
   return (
-    <div className="flex w-full flex-col gap-2">
-      {value.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {value.map((name) => (
-            <span
-              key={name}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-0.5"
-            >
-              <Mono>{name}</Mono>
-              <button
-                type="button"
-                aria-label={`Remove ${name}`}
-                disabled={disabled}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-40"
-                onClick={() => onChange(value.filter((item) => item !== name))}
-              >
-                <X size={12} strokeWidth={2} aria-hidden />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="flex w-full gap-2">
-        <input
-          className="flex-1 rounded-md border border-input bg-background p-2 text-sm"
-          placeholder={placeholder}
-          value={draft}
-          disabled={disabled}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              add();
-            }
-          }}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={add}
-          disabled={disabled || !draft.trim()}
+    <div className="flex w-full flex-col gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <label
+          className={cn(
+            "inline-flex h-8 w-fit shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-sm",
+            "transition-colors hover:border-accent hover:bg-accent/5 focus-within:border-accent",
+            (disabled || uploading) && "pointer-events-none opacity-45",
+          )}
         >
-          Add
-        </Button>
+          <Upload size={14} strokeWidth={1.75} aria-hidden />
+          Choose file
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            disabled={disabled || uploading}
+            accept={ACCEPTED_FIXTURE_EXTENSIONS.map((item) => `.${item}`).join(",")}
+            className="sr-only"
+            aria-label="Choose fixture files"
+            onChange={(event) => void addFiles(Array.from(event.target.files ?? []))}
+          />
+        </label>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          {uploading && (
+            <span className="truncate text-sm text-muted-foreground">Uploading…</span>
+          )}
+          {!uploading && value.length === 0 && (
+            <span className="truncate text-sm text-muted-foreground">No file chosen</span>
+          )}
+          {!uploading &&
+            value.length > 0 &&
+            value.map((name) => (
+              <span
+                key={name}
+                className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-border px-2 py-0.5"
+              >
+                <Mono className="truncate">{name}</Mono>
+                <button
+                  type="button"
+                  aria-label={`Remove ${name}`}
+                  disabled={disabled || uploading}
+                  className="shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  onClick={() => toggle(name)}
+                >
+                  <X size={12} strokeWidth={2} aria-hidden />
+                </button>
+              </span>
+            ))}
+        </div>
       </div>
+      {error && (
+        <p className="text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

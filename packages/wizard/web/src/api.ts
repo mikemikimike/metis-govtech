@@ -243,6 +243,18 @@ export interface SessionSummary {
   updated: number;
 }
 
+// Fixture metadata is safe to send over the session door. File bytes stay in the upload and
+// bundle requests, never in a session view or a choice response.
+export interface FixtureMetadata {
+  name: string;
+  size: number;
+}
+
+export interface FixtureUploadResponse {
+  added: FixtureMetadata[];
+  fixtures: FixtureMetadata[];
+}
+
 // ── the metric catalogue (the hand-authoring door's picker) ───────────────────
 
 // One row of the catalogue the manual form's metric picker offers. The library re-exports every
@@ -305,7 +317,30 @@ export const api = {
     }),
 
   experimentUrl: (id: string) =>
-    `/api/sessions/${encodeURIComponent(id)}/experiment.yaml`,
+    `/api/sessions/${encodeURIComponent(id)}/experiment.zip`,
+
+  fixtures: (id: string) =>
+    call<FixtureMetadata[]>(
+      `/api/sessions/${encodeURIComponent(id)}/fixtures`,
+    ),
+
+  uploadFixtures: async (
+    id: string,
+    files: File[],
+  ): Promise<FixtureUploadResponse> => {
+    const form = new FormData();
+    for (const file of files) form.append("files", file, file.name);
+    return call<FixtureUploadResponse>(
+      `/api/sessions/${encodeURIComponent(id)}/fixtures`,
+      { method: "POST", body: form },
+    );
+  },
+
+  deleteFixture: (id: string, name: string) =>
+    call<{ fixtures: FixtureMetadata[] }>(
+      `/api/sessions/${encodeURIComponent(id)}/fixtures/${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+    ),
 
   // ── the hand-authoring door ────────────────────────────────────────────────
 
@@ -335,5 +370,35 @@ export const api = {
       throw new TransportError(detail);
     }
     return res.text();
+  },
+
+  compileBundle: async (
+    document: unknown,
+    files: Array<{ name: string; file: File }>,
+  ): Promise<Blob> => {
+    const form = new FormData();
+    form.append("document", JSON.stringify(document));
+    for (const entry of files) form.append("files", entry.file, entry.name);
+
+    let res: Response;
+    try {
+      res = await fetch("/api/experiment.zip", {
+        method: "POST",
+        body: form,
+      });
+    } catch (cause) {
+      throw new TransportError("Couldn't reach the wizard.", { cause });
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try {
+        const body = await res.json();
+        if (typeof body?.detail === "string") detail = body.detail;
+      } catch {
+        // a non-JSON error body is not worth surfacing over the status text
+      }
+      throw new TransportError(detail);
+    }
+    return res.blob();
   },
 };

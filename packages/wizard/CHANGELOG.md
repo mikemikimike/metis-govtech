@@ -13,6 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   counts through the version-5 session wire contract.
 - Replace the opening screen's repository peer card with a composer source menu, and tuck honest
   Documents, Source Code and Traces trays beneath the composer with disabled source controls.
+- Make scenario fixtures uploadable through a shared experiment library with the accepted CSV,
+  PDF, DOCX, XLSX, PPTX, TXT, JSON, PNG, JPG, GIF, WEBP, Markdown and HTML formats, bounded at
+  20 files and 100 MB total. Downloaded experiments now include `experiment.yaml` and `fixtures/`
+  in an `experiment.zip` bundle while the visible download action keeps its existing label.
+- Keep identical fixture re-uploads idempotent while rejecting different content under the same
+  filename, and use a compact upload-icon Choose file control with a No file chosen status in the
+  web door. Accepted extensions stay in the fixture policy rather than repeating on every task
+  card.
 
 ## [0.1.0] — 2026-08-03
 

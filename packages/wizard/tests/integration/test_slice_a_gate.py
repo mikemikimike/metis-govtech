@@ -12,12 +12,18 @@ part is the one that matters most here — metric FQNs are strings until run tim
 a compiled file is invisible until something tries to import it.
 """
 
+import zipfile
 from pathlib import Path
 
 import pytest
 from fixtures.profiles import CITATION_METRIC, research_assistant
 
-from metis.wizard.application.compile import write_experiment, write_review
+from metis.wizard.application.compile import (
+    build_experiment_document,
+    write_bundle,
+    write_experiment,
+    write_review,
+)
 
 EXPERIMENT_ID = "research-assistant"
 
@@ -77,3 +83,36 @@ def test_the_gate_would_catch_an_unimportable_metric(tmp_path: Path) -> None:
         _validate_inputs(input_dir)
 
     assert exit_info.value.code == 1
+
+
+def test_an_extracted_bundle_passes_the_engine_input_gate(tmp_path: Path) -> None:
+    """The ZIP is not just well formed; its extracted root is a real engine input directory."""
+    from metis.engine.cli import _validate_inputs
+
+    document = build_experiment_document(
+        experiment_id="bundle-gate",
+        description="CSV and text fixtures",
+        personas=[{"id": "p", "description": "A person."}],
+        scenarios=[
+            {
+                "id": "S-1",
+                "description": "Read the inputs.",
+                "num_trials": 1,
+                "persona_refs": ["p"],
+                "metric_refs": [],
+                "fixtures": ["data.csv", "notes.txt"],
+            }
+        ],
+    )
+    fixture_dir = tmp_path / "source" / "fixtures"
+    fixture_dir.mkdir(parents=True)
+    (fixture_dir / "data.csv").write_text("name,value\nalpha,1\n")
+    (fixture_dir / "notes.txt").write_text("fixture notes\n")
+    archive = tmp_path / "experiment.zip"
+    write_bundle(document, fixture_dir, archive)
+
+    extracted = tmp_path / "extracted"
+    with zipfile.ZipFile(archive) as bundle:
+        bundle.extractall(extracted)
+
+    _validate_inputs(extracted)

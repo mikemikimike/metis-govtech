@@ -4,6 +4,11 @@ Both are pure functions of the profile. Neither needs a session, a step or any h
 which is what makes the golden-file test possible.
 """
 
+from metis.wizard.application.compile.bundle import (
+    BundleError,
+    temporary_bundle_directory,
+    write_bundle,
+)
 from metis.wizard.application.compile.experiment import (
     SCHEMA_VERSION,
     CompilationError,
@@ -16,6 +21,7 @@ from metis.wizard.application.compile.review import render_review, write_review
 
 __all__ = [
     "SCHEMA_VERSION",
+    "BundleError",
     "CompilationError",
     "build_experiment_document",
     "compile_experiment",
@@ -23,4 +29,6 @@ __all__ = [
     "to_yaml",
     "write_experiment",
     "write_review",
+    "temporary_bundle_directory",
+    "write_bundle",
 ]

@@ -15,6 +15,7 @@ import type {
   AnyCard,
   CardComponent,
   ChoiceRequest,
+  FixtureMetadata,
   FormRequest,
   Option,
   UserResponse,
@@ -22,12 +23,16 @@ import type {
   WizardRequest,
 } from "./api";
 import { optionKey } from "./api";
-import { FileReferenceListInput, NumberInput } from "./inputs";
+import { FixtureInput, NumberInput } from "./inputs";
 import { Button, cn, formatRuns, Mono, Panel } from "./ui";
 
 // What a block can send up. `null` from a resolved or read-only block.
 type Emit = (response: UserResponse) => void;
 type CardFieldValue = number | string[];
+
+export interface FixtureActions {
+  onUpload: (files: File[]) => Promise<FixtureMetadata[]>;
+}
 
 // ── whole transcript ─────────────────────────────────────────────────────────
 
@@ -35,10 +40,12 @@ export function Transcript({
   requests,
   busy,
   onRespond,
+  fixtureActions,
 }: {
   requests: WizardRequest[];
   busy: boolean;
   onRespond: Emit;
+  fixtureActions: FixtureActions;
 }) {
   return (
     <div className="flex flex-col gap-8">
@@ -60,7 +67,12 @@ export function Transcript({
             data-step-start={startsStep ? "" : undefined}
             className={cn(startsStep && "border-t border-border pt-8")}
           >
-            <RequestBlock request={request} busy={busy} onRespond={onRespond} />
+            <RequestBlock
+              request={request}
+              busy={busy}
+              onRespond={onRespond}
+              fixtureActions={fixtureActions}
+            />
           </div>
         );
       })}
@@ -72,10 +84,12 @@ function RequestBlock({
   request,
   busy,
   onRespond,
+  fixtureActions,
 }: {
   request: WizardRequest;
   busy: boolean;
   onRespond: Emit;
+  fixtureActions: FixtureActions;
 }) {
   const resolved = request.state === "resolved";
   return (
@@ -96,6 +110,7 @@ function RequestBlock({
         resolved={resolved}
         busy={busy}
         onRespond={onRespond}
+        fixtureActions={fixtureActions}
       />
     </section>
   );
@@ -106,11 +121,13 @@ function RequestBody({
   resolved,
   busy,
   onRespond,
+  fixtureActions,
 }: {
   request: WizardRequest;
   resolved: boolean;
   busy: boolean;
   onRespond: Emit;
+  fixtureActions: FixtureActions;
 }) {
   switch (request.type) {
     case "chat":
@@ -135,6 +152,7 @@ function RequestBody({
           resolved={resolved}
           busy={busy}
           onRespond={onRespond}
+          fixtureActions={fixtureActions}
         />
       );
   }
@@ -147,11 +165,13 @@ function ChoiceBlock({
   resolved,
   busy,
   onRespond,
+  fixtureActions,
 }: {
   request: ChoiceRequest;
   resolved: boolean;
   busy: boolean;
   onRespond: Emit;
+  fixtureActions: FixtureActions;
 }) {
   const send = (keys: string[]) => onRespond({ type: "choice", selected: keys });
   const sendField = (key: string, value: CardFieldValue) =>
@@ -194,6 +214,7 @@ function ChoiceBlock({
                   disabled={disabled}
                   onPick={(k) => send([k])}
                   onFieldChange={sendField}
+                  fixtureActions={fixtureActions}
                 />
               </div>
             );
@@ -256,11 +277,13 @@ function CardBlock({
   disabled,
   onPick,
   onFieldChange,
+  fixtureActions,
 }: {
   card: AnyCard;
   disabled: boolean;
   onPick: (key: string) => void;
   onFieldChange: (key: string, value: CardFieldValue) => void;
+  fixtureActions: FixtureActions;
 }) {
   // Three cases, decided by the package, not the door:
   //   • `selected == null` — no box at all. The behaviours review sends this: it lists the drafted
@@ -311,6 +334,7 @@ function CardBlock({
                 disabled={disabled}
                 onPick={onPick}
                 onFieldChange={onFieldChange}
+                fixtureActions={fixtureActions}
               />
             ))}
 
@@ -344,12 +368,14 @@ function ComponentBlock({
   disabled,
   onPick,
   onFieldChange,
+  fixtureActions,
 }: {
   component: CardComponent;
   runCount?: number;
   disabled: boolean;
   onPick: (key: string) => void;
   onFieldChange: (key: string, value: CardFieldValue) => void;
+  fixtureActions: FixtureActions;
 }) {
   // The value alone, unlabelled. `FormRow` decides where the label goes: a labelled component
   // reads as a form field (label in a left column, value at the right), an unlabelled one runs
@@ -407,10 +433,11 @@ function ComponentBlock({
 
       case "upload":
         return (
-          <FileReferenceListInput
+          <FixtureInput
             value={component.value}
             disabled={disabled}
             onChange={(value) => onFieldChange(optionKey(component.id), value)}
+            onUpload={fixtureActions.onUpload}
           />
         );
     }

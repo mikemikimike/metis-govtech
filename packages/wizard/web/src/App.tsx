@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  FixtureMetadata,
   MetricSpec,
   SessionSummary,
   SessionView,
@@ -20,6 +21,7 @@ import type {
 } from "./api";
 import { api, TransportError } from "./api";
 import { Composer, Transcript } from "./Conversation";
+import type { FixtureActions } from "./Conversation";
 import { Done } from "./Done";
 import { Intro } from "./Landing";
 import { ManualForm } from "./ManualForm";
@@ -224,6 +226,24 @@ export function App() {
     [send],
   );
 
+  const uploadFixtures = useCallback(
+    async (files: File[]): Promise<FixtureMetadata[]> => {
+      if (!view) return [];
+      setBusy(true);
+      try {
+        const result = await api.uploadFixtures(view.id, files);
+        return result.added;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [view],
+  );
+
+  const fixtureActions: FixtureActions = {
+    onUpload: uploadFixtures,
+  };
+
   if (!loaded) return null; // one frame, avoids flashing the intro before the list lands
 
   // The document belongs to a session, so it shows whenever one is open — and only then. The two
@@ -298,6 +318,7 @@ export function App() {
                   requests={view.requests}
                   busy={busy}
                   onRespond={send}
+                  fixtureActions={fixtureActions}
                 />
                 {busy && <ThinkingLine message={view.busy_message} />}
                 {view.done && <Done sessionId={view.id} />}
