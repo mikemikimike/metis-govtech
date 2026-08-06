@@ -87,9 +87,7 @@ class LogRouter:
             handle.close()
         self._handles.clear()
 
-    def process(
-        self, logger: Any, method_name: str, event_dict: EventDict
-    ) -> str:
+    def process(self, logger: Any, method_name: str, event_dict: EventDict) -> str:
         """Structlog renderer: routes to files + tail, returns "" to suppress stderr."""
         scenario_id = event_dict.get("scenario_id")
         persona_id = event_dict.get("persona_id")

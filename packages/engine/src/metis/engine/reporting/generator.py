@@ -8,7 +8,7 @@ Produces:
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
@@ -19,6 +19,7 @@ from metis.engine.extractor.types import (
     RoutingSummary,
     SessionMetricsEntry,
 )
+
 
 class TaskContext(TypedDict, total=False):
     description: str
@@ -748,9 +749,9 @@ def _render_html(
             if ctx.get("stop_reason"):
                 outcome_parts.append(ctx["stop_reason"].replace("_", " "))
             if ctx.get("total_turns"):
-                outcome_parts.append(f'{ctx["total_turns"]} turns')
+                outcome_parts.append(f"{ctx['total_turns']} turns")
             if ctx.get("duration_seconds"):
-                outcome_parts.append(f'{ctx["duration_seconds"]:.0f}s')
+                outcome_parts.append(f"{ctx['duration_seconds']:.0f}s")
             if outcome_parts:
                 meta_spans.append(
                     f'<span class="task-meta-item"><strong>Outcome:</strong> {html_mod.escape(" · ".join(outcome_parts))}</span>'
