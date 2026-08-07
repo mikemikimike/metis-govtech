@@ -121,9 +121,9 @@ model_calls:
     This is clarify question $question_number of $question_cap. Do not repeat a question the
     conversation has already answered, and do not ask "what else does it do?" after the profile or
     history already lists several capabilities. On question 4 or later, stop broad capability
-    inventory and ask about one agentic behaviour instead: how Orca interprets a request, chooses or
-    coordinates specialists, sequences a multi-step job, passes context, verifies a result, handles
-    uncertainty or recovers from failure. Choose one aspect and ask one high-value question.
+    inventory and ask about one agentic behaviour instead: how the application interprets a request,
+    chooses or coordinates specialists, passes context, verifies a result, handles uncertainty or
+    recovers from failure. Choose one aspect and ask one high-value question.
 
     Do not drill into one file or output format merely because the latest example mentioned it. Do
     not list categories or ask a compound question. Do not present categories from your own

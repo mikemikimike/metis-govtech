@@ -695,22 +695,7 @@ class StepDriver:
             self._step_messages[state.step] = result.message
         patches = sanitise(result.patches)
         if allowed_paths is not None:
-            admitted: list[Patch] = []
-            for patch in patches:
-                if patch.path in allowed_paths:
-                    admitted.append(patch)
-                else:
-                    self.pending_warnings.append(
-                        Warning(
-                            text=(
-                                "I can only record product details during this conversation, "
-                                "so I left that other change unchanged."
-                            ),
-                            source=WarningSource.RUNTIME,
-                            blocking=False,
-                        )
-                    )
-            patches = admitted
+            patches = [p for p in patches if p.path in allowed_paths]
         outcome = apply(state.profile, patches)
 
         for rejection in outcome.rejected:

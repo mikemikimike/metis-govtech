@@ -144,7 +144,6 @@ def test_clarify_rejects_a_non_product_patch() -> None:
     driver.compose(state)
 
     assert state.profile.tasks == []
-    assert any("only record product details" in w.text for w in driver.pending_warnings)
 
 
 def test_a_later_product_edit_does_not_move_the_step() -> None:
