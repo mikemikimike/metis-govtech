@@ -11,7 +11,7 @@
 // but an outline asserts nothing, and holding it back left the user with no sight of what the
 // interview would produce during the one step where they are being asked the most.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   FixtureMetadata,
   MetricSpec,
@@ -116,37 +116,44 @@ export function App() {
     [metricCatalogue],
   );
 
-  // The conversation's scroll viewport, and a record of the last `busy` value, so the effect
-  // below can act on the busy→ready edge — the moment the model finished the next screen — and
-  // not on every render while it is composing.
+  // Capture the reader's intent before an action changes the transcript. The browser can reset the
+  // scroll position while the API response replaces the view, so the decision must not depend on a
+  // later scroll event or on the temporary thinking line.
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const wasBusy = useRef(false);
-  const turns = view?.requests.length ?? 0;
+  const pendingScroll = useRef<{
+    sourceView: SessionView;
+    top: number;
+    followBottom: boolean;
+  } | null>(null);
 
-  // When the model finishes composing the next screen, glide the start of that new step into
-  // view — but only for a user already reading near the foot, so someone who has scrolled up to
-  // re-read is left where they are. The first turn is exempt: its arrival is the entrance
-  // animation's job, not a scroll. Smooth here degrades to instant under `prefers-reduced-motion`
-  // via the global rule in globals.css, so no extra guard is needed.
+  // A pending action belongs to one session only. Do not let it affect a session opened while the
+  // previous request is still settling.
   useEffect(() => {
-    const finished = wasBusy.current && !busy;
-    wasBusy.current = busy;
-    if (!finished) return;
-    const container = scrollRef.current;
-    if (!container || turns <= 1) return;
-
-    const distanceFromFoot =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    if (distanceFromFoot > container.clientHeight) return; // reading scrollback — leave it
-
-    const marks = container.querySelectorAll<HTMLElement>("[data-step-start]");
-    const target = marks[marks.length - 1];
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    if (pendingScroll.current && pendingScroll.current.sourceView.id !== activeSessionId) {
+      pendingScroll.current = null;
     }
-  }, [busy, turns]);
+  }, [activeSessionId]);
+
+  // Apply the intent after the API has supplied a new view. Waiting for that identity change is
+  // important: applying it when busy starts would be too early, before the response recomposes the
+  // transcript, and the browser could reset the position again afterwards.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    const intent = pendingScroll.current;
+    if (!el || !intent) return;
+    if (view?.id !== intent.sourceView.id) {
+      pendingScroll.current = null;
+      return;
+    }
+    if (view === intent.sourceView) return;
+
+    if (intent.followBottom) {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      el.scrollTop = intent.top;
+    }
+    pendingScroll.current = null;
+  }, [view]);
 
   const refreshList = useCallback(async () => {
     try {
@@ -232,12 +239,23 @@ export function App() {
   const send = useCallback(
     async (response: UserResponse) => {
       if (!view) return;
+      const el = scrollRef.current;
+      if (el) {
+        const distanceFromBottom =
+          el.scrollHeight - el.scrollTop - el.clientHeight;
+        pendingScroll.current = {
+          sourceView: view,
+          top: el.scrollTop,
+          followBottom: distanceFromBottom < 80,
+        };
+      }
       setBusy(true);
       setError(null);
       try {
         setView(await api.respond(view.id, response));
         await refreshList();
       } catch (e) {
+        pendingScroll.current = null;
         report(e, setError);
       } finally {
         setBusy(false);
