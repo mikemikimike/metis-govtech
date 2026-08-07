@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from playwright.sync_api import Page
+from playwright.async_api import Page
 
 from metis.core.logging import get_logger
 
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
-def run_simulation(
+async def run_simulation(
     page: Page,
     config: HarnessConfig,
     persona: Persona,
@@ -103,7 +103,18 @@ def run_simulation(
     # Generate opening message
     logger.info("[sim] Generating opening message via LLM...")
     opening_start = time.time()
-    opening = agent.generate_opening()
+    try:
+        opening = await agent.generate_opening()
+    except Exception as exc:
+        logger.info("[sim] STOP: system_error (opening LLM call failed: %s)", exc)
+        return _build_record(
+            "system_error",
+            run_config,
+            [],
+            [],
+            start_time,
+            None,
+        )
     logger.info(
         "[sim] Opening message (%.1fs): %r",
         time.time() - opening_start,
@@ -117,7 +128,7 @@ def run_simulation(
 
     # Dismiss modals before starting the turn loop
     logger.info("[sim] Dismissing modals before turn loop...")
-    dismiss_modals(page)
+    await dismiss_modals(page)
 
     # Track uploaded files to avoid duplicates
     uploaded_files: set[str] = set()
@@ -218,14 +229,14 @@ def run_simulation(
                     attempt,
                     artifact_deadline - time.time(),
                 )
-                panel_artifacts = capture_artifacts_panel(page)
+                panel_artifacts = await capture_artifacts_panel(page)
                 if panel_artifacts:
                     logger.info(
                         "[turn %d] Found %d artifact(s) — downloading...",
                         turn_count,
                         len(panel_artifacts),
                     )
-                    downloaded = _download_artifacts(
+                    downloaded = await _download_artifacts(
                         page,
                         [
                             {"name": a.name, "type": a.type, "url": a.url}
@@ -243,7 +254,7 @@ def run_simulation(
                         )
                     if artifacts_collected:
                         break
-                page.wait_for_timeout(5000)
+                await page.wait_for_timeout(5000)
 
             if not artifacts_collected:
                 logger.info(
@@ -325,7 +336,7 @@ def run_simulation(
                     len(current_ui_actions),
                     action.file,
                 )
-                upload_file(page, file_path)
+                await upload_file(page, file_path)
                 uploaded_files.add(action.file)
 
             elif isinstance(action, ButtonClickAction):
@@ -339,12 +350,12 @@ def run_simulation(
                 try:
                     is_css = bool(re.search(r"[.#\[\]=:>~+]", action.selector))
                     if is_css:
-                        page.locator(action.selector).first.click(timeout=5000)
+                        await page.locator(action.selector).first.click(timeout=5000)
                     else:
-                        page.get_by_text(action.selector, exact=True).first.click(
+                        await page.get_by_text(action.selector, exact=True).first.click(
                             timeout=5000
                         )
-                    page.wait_for_timeout(1000)
+                    await page.wait_for_timeout(1000)
                     logger.info(
                         "[turn %d]   Action %d/%d: Click successful",
                         turn_count,
@@ -365,7 +376,9 @@ def run_simulation(
 
                 # Override AI Model selects to "Fast (Claude Haiku)"
                 try:
-                    is_model_select = page.locator(action.selector).first.evaluate(
+                    is_model_select = await page.locator(
+                        action.selector
+                    ).first.evaluate(
                         """el => {
                             const label = el.closest('div')?.querySelector('label')?.textContent || '';
                             return /ai model/i.test(label);
@@ -396,24 +409,24 @@ def run_simulation(
 
                 try:
                     el = page.locator(action.selector).first
-                    tag_name = el.evaluate("e => e.tagName.toLowerCase()")
+                    tag_name = await el.evaluate("e => e.tagName.toLowerCase()")
                     logger.debug("[turn %d]   Element tag: <%s>", turn_count, tag_name)
                     if tag_name == "select":
                         try:
-                            el.select_option(label=fill_value)
+                            await el.select_option(label=fill_value)
                         except Exception:
-                            el.select_option(fill_value)
+                            await el.select_option(fill_value)
                     elif tag_name == "input":
-                        input_type = el.evaluate("e => e.type")
+                        input_type = await el.evaluate("e => e.type")
                         if input_type in ("radio", "checkbox"):
-                            el.check()
+                            await el.check()
                         else:
-                            el.fill(fill_value)
+                            await el.fill(fill_value)
                     elif tag_name == "textarea":
-                        el.fill(fill_value)
+                        await el.fill(fill_value)
                     else:
-                        el.click()
-                    page.wait_for_timeout(500)
+                        await el.click()
+                    await page.wait_for_timeout(500)
                 except Exception as exc:
                     logger.warning(
                         "[turn %d]   Action %d/%d: FORM_FILL FAILED: %s",
@@ -429,7 +442,7 @@ def run_simulation(
                 "[turn %d] No form submit in UI actions — trying auto_fill_and_submit...",
                 turn_count,
             )
-            form_submitted = auto_fill_and_submit(page)
+            form_submitted = await auto_fill_and_submit(page)
             if form_submitted:
                 has_form_submit = True
 
@@ -456,10 +469,10 @@ def run_simulation(
                 processing_deadline = time.time() * 1000 + (
                     response_timeout or config.timeouts.response_wait_ms
                 )
-                page.wait_for_timeout(5000)
+                await page.wait_for_timeout(5000)
                 poll_count = 0
                 while time.time() * 1000 < processing_deadline:
-                    still_processing = page.evaluate("""() => {
+                    still_processing = await page.evaluate("""() => {
                         const hasSpinner = document.querySelector('[class*="loading"], [class*="spinner"], [class*="animate-spin"]') !== null;
                         const hasTyping = document.querySelector('[class*="typing"], [class*="streaming"]') !== null;
                         const buttons = Array.from(document.querySelectorAll('button'));
@@ -475,17 +488,17 @@ def run_simulation(
                             turn_count,
                             poll_count,
                         )
-                    page.wait_for_timeout(3000)
+                    await page.wait_for_timeout(3000)
                 logger.info(
                     "[turn %d] Form processing complete (polled %d times)",
                     turn_count,
                     poll_count,
                 )
-                page.wait_for_timeout(2000)
-                ui_state = capture_ui_state(page)
+                await page.wait_for_timeout(2000)
+                ui_state = await capture_ui_state(page)
             else:
                 logger.info("[turn %d] Sending message to target...", turn_count)
-                ui_state = send_message(
+                ui_state = await send_message(
                     page, current_message, config, timeout_override=response_timeout
                 )
 
@@ -504,7 +517,7 @@ def run_simulation(
                         "[turn %d] Response hints at artifacts — checking panel...",
                         turn_count,
                     )
-                    panel_artifacts = capture_artifacts_panel(page)
+                    panel_artifacts = await capture_artifacts_panel(page)
                     if panel_artifacts:
                         logger.info(
                             "[turn %d] Found %d artifact(s) in panel",
@@ -530,7 +543,7 @@ def run_simulation(
             )
 
         send_elapsed = time.time() - send_start
-        logger.info("[turn %d] ⏱ send+wait: %.1fs", turn_count, send_elapsed)
+        logger.info("[turn %d] send+wait: %.1fs", turn_count, send_elapsed)
 
         # Extract target session ID from URL
         if not target_session_id:
@@ -598,7 +611,7 @@ def run_simulation(
                 turn_count,
                 len(ui_state.artifacts),
             )
-            downloaded_files = _download_artifacts(
+            downloaded_files = await _download_artifacts(
                 page,
                 [
                     {"name": a.name, "type": a.type, "url": a.url}
@@ -635,7 +648,7 @@ def run_simulation(
         # Capture inline charts as artifacts
         try:
             chart_dir = run_dir / "artifacts" / "charts"
-            charts = capture_inline_charts(page, chart_dir)
+            charts = await capture_inline_charts(page, chart_dir)
             for chart in charts:
                 artifacts_collected.append(
                     CollectedArtifact(
@@ -769,7 +782,7 @@ def run_simulation(
 
         agent_start = time.time()
         try:
-            response = agent.generate_response(turn_payload)
+            response = await agent.generate_response(turn_payload)
         except Exception as exc:
             logger.info(
                 "[turn %d] STOP: system_error (user agent LLM failed: %s)",
@@ -785,7 +798,7 @@ def run_simulation(
                 target_session_id,
             )
         agent_elapsed = time.time() - agent_start
-        logger.info("[turn %d] ⏱ user-agent LLM: %.1fs", turn_count, agent_elapsed)
+        logger.info("[turn %d] user-agent LLM: %.1fs", turn_count, agent_elapsed)
 
         # Update for next iteration
         current_message = response.message
@@ -815,16 +828,7 @@ def _build_record(
     start_time: float,
     target_session_id: str | None,
 ) -> RunRecord:
-    """Assemble the final RunRecord from accumulated state.
-
-    :param stop_reason: Why the simulation stopped (max_turns, timeout, etc.).
-    :param run_config: The run configuration.
-    :param conversation: List of recorded conversation turns.
-    :param artifacts_collected: List of collected artifacts.
-    :param start_time: Epoch timestamp when the simulation started.
-    :param target_session_id: The target system's session ID extracted from URL, if found.
-    :returns: A complete RunRecord.
-    """
+    """Assemble the final RunRecord from accumulated state."""
     duration_seconds = time.time() - start_time
     return RunRecord(
         config=run_config,
@@ -839,18 +843,12 @@ def _build_record(
     )
 
 
-def _download_artifacts(
+async def _download_artifacts(
     page: Page,
     artifacts: list[dict],
     run_dir: Path,
 ) -> list[dict]:
-    """Download detected artifacts to disk using Playwright's download handling.
-
-    :param page: The active Playwright page.
-    :param artifacts: List of dicts with keys: name, type, url (optional).
-    :param run_dir: Directory to save downloaded files.
-    :returns: List of dicts with keys: filename, local_path.
-    """
+    """Download detected artifacts to disk using Playwright's download handling."""
     run_dir.mkdir(parents=True, exist_ok=True)
     downloaded: list[dict] = []
     download_count = sum(1 for a in artifacts if a.get("type") == "download")
@@ -882,20 +880,19 @@ def _download_artifacts(
                 link = page.locator(
                     f'a[href="{escaped_url}"], a[download="{escaped_name}"]'
                 ).first
-                link_exists = (
-                    link.count() > 0
-                    if hasattr(link, "count")
-                    else link.is_visible(timeout=1000)
-                )
+                try:
+                    link_exists = await link.is_visible(timeout=1000)
+                except Exception:
+                    link_exists = False
 
                 if link_exists:
                     logger.debug("[download]   Clicking link element...")
-                    with page.expect_download(timeout=15000) as download_info:
-                        link.click()
-                    download = download_info.value
+                    async with page.expect_download(timeout=15000) as download_info:
+                        await link.click()
+                    download = await download_info.value
                     filename = Path(download.suggested_filename or name).name
                     dest_path = run_dir / filename
-                    download.save_as(str(dest_path))
+                    await download.save_as(str(dest_path))
                     downloaded.append(
                         {"filename": filename, "local_path": str(dest_path)}
                     )
@@ -906,8 +903,8 @@ def _download_artifacts(
                     logger.debug(
                         "[download]   Injecting anchor for programmatic download..."
                     )
-                    with page.expect_download(timeout=15000) as download_info:
-                        page.evaluate(
+                    async with page.expect_download(timeout=15000) as download_info:
+                        await page.evaluate(
                             """(url) => {
                                 const a = document.createElement('a');
                                 a.href = url;
@@ -918,10 +915,10 @@ def _download_artifacts(
                             }""",
                             url,
                         )
-                    download = download_info.value
+                    download = await download_info.value
                     filename = Path(download.suggested_filename or name).name
                     dest_path = run_dir / filename
-                    download.save_as(str(dest_path))
+                    await download.save_as(str(dest_path))
                     downloaded.append(
                         {"filename": filename, "local_path": str(dest_path)}
                     )
@@ -941,17 +938,17 @@ def _download_artifacts(
                     .first
                 )
                 try:
-                    btn_visible = btn.is_visible(timeout=2000)
+                    btn_visible = await btn.is_visible(timeout=2000)
                 except Exception:
                     btn_visible = False
 
                 if btn_visible:
-                    with page.expect_download(timeout=15000) as download_info:
-                        btn.click()
-                    download = download_info.value
+                    async with page.expect_download(timeout=15000) as download_info:
+                        await btn.click()
+                    download = await download_info.value
                     filename = Path(download.suggested_filename or name).name
                     dest_path = run_dir / filename
-                    download.save_as(str(dest_path))
+                    await download.save_as(str(dest_path))
                     downloaded.append(
                         {"filename": filename, "local_path": str(dest_path)}
                     )

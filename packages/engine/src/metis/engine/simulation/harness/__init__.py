@@ -6,17 +6,20 @@ coupled to Orca (the default target).
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+import structlog
+from playwright.async_api import Browser, async_playwright
+from playwright.async_api import Page as AsyncPage
 
 from metis.core.console import console
 from metis.core.logging import get_logger
 from metis.engine.logging import LogRouter, OrchestrationLogger
 from metis.engine.tui import SimulationState, TUIContext
 
-from ..types import Experiment, Persona, RunRecord, Scenario
+from ..types import Experiment, Persona, RunConfig, RunOutcome, RunRecord, Scenario
 from ._artifact_store import _save_artifacts
 from ._auth import login
 from ._config import HarnessConfig
@@ -34,6 +37,7 @@ def run_experiment(
     fixtures_dir: Path,
     output_dir: Path | None = None,
     headed: bool = False,
+    concurrency: int = 1,
     # Optional hooks for TUI / structured-logging integration
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
@@ -42,9 +46,39 @@ def run_experiment(
 ) -> None:
     """Run a full experiment (all scenario x persona pairs).
 
-    Manages: browser launch -> login -> iterate pairs -> save records -> close.
-    Records are saved as runs/<scenario>-<persona>-<trial>/record.json inside output_dir.
+    Sync entry point — delegates to the async orchestrator via asyncio.run().
     """
+    asyncio.run(
+        _run_experiment_async(
+            config=config,
+            experiment=experiment,
+            personas_by_id=personas_by_id,
+            fixtures_dir=fixtures_dir,
+            output_dir=output_dir,
+            headed=headed,
+            concurrency=concurrency,
+            state=state,
+            orchestration_logger=orchestration_logger,
+            log_router=log_router,
+            tui_ctx=tui_ctx,
+        )
+    )
+
+
+async def _run_experiment_async(
+    config: HarnessConfig,
+    experiment: Experiment,
+    personas_by_id: dict[str, Persona],
+    fixtures_dir: Path,
+    output_dir: Path | None = None,
+    headed: bool = False,
+    concurrency: int = 1,
+    state: SimulationState | None = None,
+    orchestration_logger: OrchestrationLogger | None = None,
+    log_router: LogRouter | None = None,
+    tui_ctx: TUIContext | None = None,
+) -> None:
+    """Async experiment orchestrator with concurrent browser contexts."""
     # Expand scenarios into individual runs
     runs: list[tuple[Scenario, Persona, int]] = []
     for scenario in experiment.scenarios:
@@ -53,7 +87,8 @@ def run_experiment(
             if not persona:
                 available = ", ".join(personas_by_id.keys())
                 raise ValueError(
-                    f"Scenario '{scenario.id}': unknown persona_ref '{persona_ref}'. Available: {available}"
+                    f"Scenario '{scenario.id}': unknown persona_ref '{persona_ref}'. "
+                    f"Available: {available}"
                 )
             for trial in range(scenario.num_trials):
                 runs.append((scenario, persona, trial))
@@ -63,6 +98,7 @@ def run_experiment(
     logger.info("=" * 60)
     logger.info("[experiment] STARTING EXPERIMENT")
     logger.info("[experiment]   Total runs: %d", total_runs)
+    logger.info("[experiment]   Concurrency: %d worker(s)", concurrency)
     logger.info("[experiment]   Output dir: %s", output_dir or "results/ (default)")
     logger.info("[experiment]   Mode: %s", "headed" if headed else "headless")
     logger.info(
@@ -71,124 +107,165 @@ def run_experiment(
     logger.info("[experiment]   Personas: %s", ", ".join(personas_by_id.keys()))
     logger.info("=" * 60)
 
-    results: list[RunRecord] = []
-    run_index = 0
-    prev_scenario: Scenario | None = None
+    # Distribute runs across workers (round-robin for balanced load)
+    worker_slices = _distribute_runs(runs, concurrency)
 
-    with sync_playwright() as pw:
+    # Console lock for safe Rich output from concurrent workers
+    console_lock = asyncio.Lock()
+
+    async with async_playwright() as pw:
         logger.info(
             "[experiment] Launching Chromium browser (%s mode)...",
             "headed" if headed else "headless",
         )
-        browser = pw.chromium.launch(headless=not headed)
+        browser = await pw.chromium.launch(headless=not headed)
         try:
-            context = browser.new_context(
-                viewport={"width": 1440, "height": 900},
-                accept_downloads=True,
+            worker_tasks = [
+                _worker(
+                    worker_id=wid,
+                    browser=browser,
+                    config=config,
+                    run_slice=slice_runs,
+                    total_runs=total_runs,
+                    output_dir=output_dir,
+                    fixtures_dir=fixtures_dir,
+                    console_lock=console_lock,
+                    state=state,
+                    orchestration_logger=orchestration_logger,
+                    log_router=log_router,
+                    tui_ctx=tui_ctx,
+                )
+                for wid, slice_runs in enumerate(worker_slices)
+                if slice_runs  # skip empty slices
+            ]
+
+            raw_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
+
+            # Collect results, log any worker crashes
+            all_records: list[RunRecord] = []
+            for wid, result in enumerate(raw_results):
+                if isinstance(result, BaseException):
+                    logger.error("[experiment] Worker w%d crashed: %s", wid, result)
+                else:
+                    all_records.extend(result)
+        finally:
+            logger.info("[experiment] Closing browser...")
+            await browser.close()
+
+    # Print summary
+    console.print("\n\n========== SIMULATION SUMMARY ==========\n")
+    for r in all_records:
+        status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
+        console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
+        console.print(
+            f"         Turns: {r.outcome.total_turns}, "
+            f"Duration: {r.outcome.duration_seconds}s, "
+            f"Reason: {r.outcome.stop_reason}"
+        )
+    console.print()
+    achieved = sum(1 for r in all_records if r.outcome.stop_reason == "goal_achieved")
+    console.print(f"Goals achieved: {achieved}/{len(all_records)}")
+
+
+async def _worker(
+    worker_id: int,
+    browser: Browser,
+    config: HarnessConfig,
+    run_slice: list[tuple[Scenario, Persona, int]],
+    total_runs: int,
+    output_dir: Path | None,
+    fixtures_dir: Path,
+    console_lock: asyncio.Lock,
+    state: SimulationState | None = None,
+    orchestration_logger: OrchestrationLogger | None = None,
+    log_router: LogRouter | None = None,
+    tui_ctx: TUIContext | None = None,
+) -> list[RunRecord]:
+    """One concurrent worker: own context, own page, own login session."""
+    structlog.contextvars.bind_contextvars(worker=f"w{worker_id}")
+
+    logger.info(
+        "[experiment] Worker w%d starting with %d run(s)", worker_id, len(run_slice)
+    )
+
+    context = await browser.new_context(
+        viewport={"width": 1440, "height": 900},
+        accept_downloads=True,
+    )
+    page = await context.new_page()
+
+    seen_scenarios: set[str] = set()
+
+    try:
+        logger.info("[experiment] Worker w%d: logging in...", worker_id)
+        await login(page, config)
+
+        records: list[RunRecord] = []
+        for idx, (scenario, persona, trial) in enumerate(run_slice):
+            trial_index = trial + 1
+            trial_label = (
+                f" (trial {trial_index}/{scenario.num_trials})"
+                if scenario.num_trials > 1
+                else ""
             )
-            page = context.new_page()
-            logger.info("[experiment] Browser ready (viewport: 1440x900)")
+            logger.info(
+                "[experiment] RUN: %s x %s%s",
+                persona.id,
+                scenario.id,
+                trial_label,
+            )
 
-            # Login once
-            logger.info("[experiment] Starting login sequence...")
-            login(page, config)
+            # Start a fresh chat (except first run — login already did it)
+            if idx > 0:
+                await _navigate_new_chat(page, config)
 
-            for scenario, persona, trial in runs:
-                run_index += 1
-                trial_label = (
-                    f" (trial {trial + 1}/{scenario.num_trials})"
-                    if scenario.num_trials > 1
-                    else ""
-                )
-                logger.info("")
-                logger.info("=" * 60)
-                logger.info(
-                    "[experiment] RUN [%d/%d]: %s x %s%s",
-                    run_index,
-                    total_runs,
-                    persona.id,
-                    scenario.id,
-                    trial_label,
-                )
-                logger.info("=" * 60)
+            pad = len(str(scenario.num_trials))
+            run_folder_name = f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
+            run_dir = (
+                (output_dir / "runs" / run_folder_name)
+                if output_dir
+                else Path("results") / "runs" / run_folder_name
+            )
+            run_dir.mkdir(parents=True, exist_ok=True)
 
-                # Start a fresh chat (except first run — login already did it)
-                if run_index > 1:
-                    logger.info("[experiment] Starting fresh chat...")
-                    try:
-                        page.get_by_text("New chat").click(timeout=5000)
-                        page.wait_for_timeout(2000)
-                        logger.info("[experiment] Clicked 'New chat'")
-                    except Exception:
-                        logger.info(
-                            "[experiment] 'New chat' not found — navigating to /chat"
-                        )
-                        page.goto(
-                            config.url + "/chat",
-                            wait_until="domcontentloaded",
-                            timeout=15000,
-                        )
-                        page.wait_for_timeout(2000)
-                    # Dismiss tour modal if it reappears
-                    try:
-                        skip_btn = page.get_by_text("Skip for now")
-                        if skip_btn.is_visible(timeout=2000):
-                            logger.info("[experiment] Dismissing tour modal")
-                            skip_btn.click()
-                            page.wait_for_timeout(1000)
-                    except Exception:
-                        pass
+            # Bind structlog contextvars for per-run log routing
+            structlog.contextvars.bind_contextvars(
+                worker=f"w{worker_id}",
+                scenario_id=scenario.id,
+                persona_id=persona.id,
+                trial=trial_index,
+            )
 
-                trial_index = trial + 1
-                pad = len(str(scenario.num_trials))
-                run_folder_name = f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
-                run_dir = (
-                    (output_dir / "runs" / run_folder_name)
-                    if output_dir
-                    else Path("results") / "runs" / run_folder_name
-                )
-                run_dir.mkdir(parents=True, exist_ok=True)
-
-                # --- Bind structlog context for this run ---
-                import structlog.contextvars
-
-                structlog.contextvars.clear_contextvars()
-                structlog.contextvars.bind_contextvars(
-                    scenario_id=scenario.id,
-                    persona_id=persona.id,
-                    trial=trial_index,
-                )
-
-                # --- Emit pre-run orchestration events ---
-                if _is_new_scenario(scenario, prev_scenario) and orchestration_logger:
+            # Emit pre-run orchestration events
+            if scenario.id not in seen_scenarios:
+                seen_scenarios.add(scenario.id)
+                if orchestration_logger:
                     orchestration_logger.scenario_started(scenario.id)
 
-                if orchestration_logger:
-                    orchestration_logger.run_started(
-                        scenario.id,
-                        persona.id,
-                        trial=trial_index,
-                        num_trials=scenario.num_trials,
-                    )
-                if log_router:
-                    log_router.open_run(
-                        scenario.id,
-                        persona.id,
-                        trial=trial_index,
-                        num_trials=scenario.num_trials,
-                    )
-                if state:
-                    state.start_run(scenario.id, persona.id, trial=trial_index)
-                if tui_ctx:
-                    tui_ctx.refresh()
-
-                prev_scenario = scenario
-
-                console.print(
-                    f"  [{run_index}/{total_runs}] {scenario.id} × {persona.id} ..."
+            if orchestration_logger:
+                orchestration_logger.run_started(
+                    scenario.id,
+                    persona.id,
+                    trial=trial_index,
+                    num_trials=scenario.num_trials,
                 )
+            if log_router:
+                log_router.open_run(
+                    scenario.id,
+                    persona.id,
+                    trial=trial_index,
+                    num_trials=scenario.num_trials,
+                )
+            if state:
+                state.start_run(scenario.id, persona.id, trial=trial_index)
+            if tui_ctx:
+                tui_ctx.refresh()
 
-                record = run_simulation(
+            async with console_lock:
+                console.print(f"  [w{worker_id}] {scenario.id} × {persona.id} ...")
+
+            try:
+                record = await run_simulation(
                     page,
                     config,
                     persona,
@@ -199,100 +276,149 @@ def run_experiment(
                     state=state,
                     tui_ctx=tui_ctx,
                 )
+            except Exception as exc:
+                logger.error(
+                    "[experiment] Worker w%d: run_simulation crashed for %s × %s: %s",
+                    worker_id,
+                    scenario.id,
+                    persona.id,
+                    exc,
+                )
+                record = RunRecord(
+                    config=RunConfig(
+                        persona=persona.id,
+                        scenario=scenario.id,
+                        metric_refs=scenario.metric_refs,
+                    ),
+                    target_session_id=None,
+                    outcome=RunOutcome(
+                        stop_reason="system_error",
+                        total_turns=0,
+                        duration_seconds=0.0,
+                    ),
+                    conversation=[],
+                    artifacts_collected=[],
+                )
 
-                # --- Emit post-run orchestration events ---
-                if state:
-                    state.complete_run(
-                        scenario.id,
-                        persona.id,
-                        trial=trial_index,
-                        stop_reason=record.outcome.stop_reason,
-                        duration_seconds=record.outcome.duration_seconds,
-                    )
-                if orchestration_logger:
-                    orchestration_logger.run_completed(
-                        scenario.id,
-                        persona.id,
-                        trial=trial_index,
-                        num_trials=scenario.num_trials,
-                        stop_reason=record.outcome.stop_reason,
-                        total_turns=record.outcome.total_turns,
-                        duration_seconds=record.outcome.duration_seconds,
-                    )
-                if log_router:
-                    log_router.close_run(scenario.id, persona.id, trial=trial_index)
-                if tui_ctx:
-                    tui_ctx.refresh()
+            # Emit post-run orchestration events
+            if state:
+                state.complete_run(
+                    scenario.id,
+                    persona.id,
+                    trial=trial_index,
+                    stop_reason=record.outcome.stop_reason,
+                    duration_seconds=record.outcome.duration_seconds,
+                )
+            if orchestration_logger:
+                orchestration_logger.run_completed(
+                    scenario.id,
+                    persona.id,
+                    trial=trial_index,
+                    num_trials=scenario.num_trials,
+                    stop_reason=record.outcome.stop_reason,
+                    total_turns=record.outcome.total_turns,
+                    duration_seconds=record.outcome.duration_seconds,
+                )
+            if log_router:
+                log_router.close_run(scenario.id, persona.id, trial=trial_index)
 
-                # Emit scenario completion when all runs for this scenario are done
-                if state and _scenario_just_completed(state, scenario.id):
-                    sc = next(
-                        s for s in state.scenarios if s.scenario_id == scenario.id
-                    )
-                    passed = sum(1 for r in sc.runs if r.stop_reason == "goal_achieved")
-                    if orchestration_logger:
-                        orchestration_logger.scenario_completed(
-                            scenario.id, runs_passed=passed, runs_total=len(sc.runs)
-                        )
+            # Check scenario completion
+            if (
+                state
+                and orchestration_logger
+                and _scenario_just_completed(state, scenario.id)
+            ):
+                sc = next(s for s in state.scenarios if s.scenario_id == scenario.id)
+                passed = sum(1 for r in sc.runs if r.stop_reason == "goal_achieved")
+                orchestration_logger.scenario_completed(
+                    scenario.id, runs_passed=passed, runs_total=len(sc.runs)
+                )
 
-                # Save run record to disk
-                _save_run_record(record, run_dir)
-                logger.info("[experiment] Saved record: %s", run_dir / "record.json")
+            if tui_ctx:
+                tui_ctx.refresh()
 
-                # Build per-turn timing breakdown
-                timing_parts: list[str] = []
-                for t in record.conversation:
-                    timing_parts.append(f"t{t.turn_number}={t.duration_ms / 1000:.0f}s")
-                timing_str = f" [{', '.join(timing_parts)}]" if timing_parts else ""
+            # Save run record to disk
+            _save_run_record(record, run_dir)
+            logger.info("[experiment] Saved record: %s", run_dir / "record.json")
 
+            # Build per-turn timing breakdown
+            timing_parts: list[str] = []
+            for t in record.conversation:
+                timing_parts.append(f"t{t.turn_number}={t.duration_ms / 1000:.0f}s")
+            timing_str = f" [{', '.join(timing_parts)}]" if timing_parts else ""
+
+            async with console_lock:
                 console.print(
-                    f"  [{run_index}/{total_runs}] {scenario.id} × {persona.id} — "
-                    f"{record.outcome.stop_reason}, {record.outcome.total_turns} turns, "
+                    f"  [w{worker_id}] {scenario.id} × {persona.id} — "
+                    f"{record.outcome.stop_reason}, "
+                    f"{record.outcome.total_turns} turns, "
                     f"{record.outcome.duration_seconds:.0f}s{timing_str}"
                 )
+
+            logger.info(
+                "[experiment] Result: stop_reason=%s, turns=%d, duration=%.1fs",
+                record.outcome.stop_reason,
+                record.outcome.total_turns,
+                record.outcome.duration_seconds,
+            )
+
+            if record.artifacts_collected:
+                manifest = _save_artifacts(record, run_dir)
                 logger.info(
-                    "[experiment] Result: stop_reason=%s, turns=%d, duration=%.1fs",
-                    record.outcome.stop_reason,
-                    record.outcome.total_turns,
-                    record.outcome.duration_seconds,
+                    "[experiment] Artifacts: %d saved (target_session: %s)",
+                    len(manifest["artifacts"]),
+                    manifest["session_id"],
                 )
 
-                if record.artifacts_collected:
-                    manifest = _save_artifacts(record, run_dir)
-                    logger.info(
-                        "[experiment] Artifacts: %d saved (target_session: %s)",
-                        len(manifest["artifacts"]),
-                        manifest["session_id"],
-                    )
+            records.append(record)
 
-                results.append(record)
-        finally:
-            logger.info("[experiment] Closing browser...")
-            browser.close()
+        return records
+    finally:
+        await context.close()
+        structlog.contextvars.unbind_contextvars("worker")
 
-    console.print("\n\n========== SIMULATION SUMMARY ==========\n")
-    for r in results:
-        status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
-        console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
-        console.print(
-            f"         Turns: {r.outcome.total_turns}, "
-            f"Duration: {r.outcome.duration_seconds}s, "
-            f"Reason: {r.outcome.stop_reason}"
+
+async def _navigate_new_chat(page: AsyncPage, config: HarnessConfig) -> None:
+    """Navigate to a fresh chat session between runs."""
+    logger.info("[experiment] Starting fresh chat...")
+    try:
+        await page.get_by_text("New chat").click(timeout=5000)
+        await page.wait_for_timeout(2000)
+        logger.info("[experiment] Clicked 'New chat'")
+    except Exception:
+        logger.info("[experiment] 'New chat' not found — navigating to /chat")
+        await page.goto(
+            config.url + "/chat",
+            wait_until="domcontentloaded",
+            timeout=15000,
         )
-    console.print()
-    achieved = sum(1 for r in results if r.outcome.stop_reason == "goal_achieved")
-    console.print(f"Goals achieved: {achieved}/{len(results)}")
+        await page.wait_for_timeout(2000)
+    # Dismiss tour modal if it reappears
+    try:
+        skip_btn = page.get_by_text("Skip for now")
+        if await skip_btn.is_visible(timeout=2000):
+            logger.info("[experiment] Dismissing tour modal")
+            await skip_btn.click()
+            await page.wait_for_timeout(1000)
+    except Exception:
+        pass
+
+
+def _distribute_runs(
+    runs: list[tuple[Scenario, Persona, int]],
+    concurrency: int,
+) -> list[list[tuple[Scenario, Persona, int]]]:
+    """Distribute runs across workers using round-robin."""
+    slices: list[list[tuple[Scenario, Persona, int]]] = [[] for _ in range(concurrency)]
+    for i, run in enumerate(runs):
+        slices[i % concurrency].append(run)
+    return slices
 
 
 def _save_run_record(record: RunRecord, run_dir: Path) -> None:
     """Save a run record as record.json inside the run folder."""
     filepath = run_dir / "record.json"
     filepath.write_text(json.dumps(record.model_dump(), indent=2))
-
-
-def _is_new_scenario(current: Scenario, prev: Scenario | None) -> bool:
-    """Return True when we are entering a new scenario (first run or ID changed)."""
-    return prev is None or current.id != prev.id
 
 
 def _scenario_just_completed(state: SimulationState, scenario_id: str) -> bool:

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from playwright.sync_api import Page
+from playwright.async_api import Page
 
 from metis.core.logging import get_logger
 
@@ -220,10 +220,10 @@ _CAPTURE_UI_STATE_JS = """() => {
 }"""
 
 
-def capture_ui_state(page: Page) -> UIState:
+async def capture_ui_state(page: Page) -> UIState:
     """Extract the current UI state from the page."""
     logger.debug("[ui_capture] Evaluating UI state extraction JS...")
-    raw = page.evaluate(_CAPTURE_UI_STATE_JS)
+    raw = await page.evaluate(_CAPTURE_UI_STATE_JS)
     state = UIState.model_validate(raw)
     logger.debug(
         "[ui_capture] Captured: text=%d chars, artifacts=%d, forms=%d, errors=%d, labels=%d",
@@ -236,13 +236,13 @@ def capture_ui_state(page: Page) -> UIState:
     return state
 
 
-def capture_artifacts_panel(page: Page) -> list[Artifact]:
+async def capture_artifacts_panel(page: Page) -> list[Artifact]:
     """Open More/panel buttons and scan for downloadable artifacts."""
     logger.debug("[artifacts_panel] Scanning for artifacts...")
 
     # Strategy 1: Click "More" buttons on inline artifact widgets
     more_buttons = page.locator('button:has-text("More"), button[aria-label*="more" i]')
-    more_count = more_buttons.count()
+    more_count = await more_buttons.count()
     if more_count > 0:
         logger.debug(
             "[artifacts_panel] Found %d 'More' button(s) — clicking first visible...",
@@ -251,10 +251,10 @@ def capture_artifacts_panel(page: Page) -> list[Artifact]:
     for i in range(more_count):
         try:
             btn = more_buttons.nth(i)
-            if btn.is_visible(timeout=1000):
-                btn.click()
+            if await btn.is_visible(timeout=1000):
+                await btn.click()
                 logger.debug("[artifacts_panel] Clicked 'More' button #%d", i + 1)
-                page.wait_for_timeout(1000)
+                await page.wait_for_timeout(1000)
                 break
         except Exception:
             continue
@@ -268,16 +268,16 @@ def capture_artifacts_panel(page: Page) -> list[Artifact]:
     ]
     for trigger in sidebar_triggers:
         try:
-            if trigger.is_visible(timeout=1000):
-                trigger.click()
+            if await trigger.is_visible(timeout=1000):
+                await trigger.click()
                 logger.debug("[artifacts_panel] Opened sidebar via header icon")
-                page.wait_for_timeout(1500)
+                await page.wait_for_timeout(1500)
                 break
         except Exception:
             continue
 
     # Scan full page for download links
-    raw_artifacts = page.evaluate("""() => {
+    raw_artifacts = await page.evaluate("""() => {
         const found = [];
         const body = document.body;
         const downloadLinks = body.querySelectorAll('a[download], a[href*=".csv"], a[href*=".xlsx"], a[href*=".pdf"], a[href*=".pptx"], a[href*=".png"], a[href*=".json"], a[href*=".py"], a[href*=".html"], a[href*=".zip"]');
@@ -307,8 +307,8 @@ def capture_artifacts_panel(page: Page) -> list[Artifact]:
     }""")
 
     # Close any open menu
-    page.keyboard.press("Escape")
-    page.wait_for_timeout(500)
+    await page.keyboard.press("Escape")
+    await page.wait_for_timeout(500)
 
     artifacts = [Artifact.model_validate(a) for a in raw_artifacts]
     if artifacts:
@@ -322,7 +322,7 @@ def capture_artifacts_panel(page: Page) -> list[Artifact]:
     return artifacts
 
 
-def capture_inline_charts(page: Page, output_dir: Path) -> list[dict]:
+async def capture_inline_charts(page: Page, output_dir: Path) -> list[dict]:
     """Screenshot inline chart/SVG/canvas elements as PNG files."""
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[dict] = []
@@ -336,17 +336,17 @@ def capture_inline_charts(page: Page, output_dir: Path) -> list[dict]:
 
     for spec in locator_specs:
         elements = page.locator(spec)
-        count = elements.count()
+        count = await elements.count()
         for i in range(count):
             try:
                 el = elements.nth(i)
-                if el.is_visible(timeout=1000):
-                    box = el.bounding_box()
+                if await el.is_visible(timeout=1000):
+                    box = await el.bounding_box()
                     if box and box["width"] > 100 and box["height"] > 50:
                         chart_index += 1
                         filename = f"chart-{chart_index}.png"
                         out_path = output_dir / filename
-                        el.screenshot(path=str(out_path))
+                        await el.screenshot(path=str(out_path))
                         results.append({"filename": filename, "path": str(out_path)})
                         logger.debug(
                             "[charts] Captured chart #%d: %dx%d -> %s",
