@@ -6,7 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.7.0] — 2026-08-07
 
-_Release notes to be added._
+### Added
+
+- **Concurrent simulation** — `--concurrency N` flag runs N browser contexts in parallel on a single browser process; round-robin run distribution across workers
+- **Async Playwright harness** — full async conversion (`playwright.async_api`) of auth, page actions, UI capture, and environment modules
+- **Async OpenAI client** — `AsyncOpenAI` for non-blocking LLM calls across concurrent workers
+- **Worker isolation** — each worker gets its own BrowserContext, page, login session, and `structlog.contextvars` binding (`worker=w0`, `worker=w1`, …)
+- **Crash resilience** — individual `run_simulation()` failures are caught per-run (worker continues remaining runs); `generate_opening()` failures produce a `system_error` record instead of crashing
+- **Per-worker log tail panels** — TUI splits the log tail into N vertically-stacked panels (one per worker) so each shows a clean sequential narrative; events without a worker key broadcast to all panels
+
+### Changed
+
+- `run_experiment()` accepts `concurrency: int` parameter (default 1 preserves sequential behaviour)
+- CLI `simulate` command accepts `--concurrency / -c` option (min 1)
+- `log_format` CLI option typed as `Literal["text", "json"]` for pyright correctness
 
 ## [0.6.0] — 2026-08-06
 

@@ -9,7 +9,15 @@ LLM-driven persona simulation for end-to-end testing of an AI assistant. Drives 
 ## Architecture
 
 ```
-User Agent (Python/OpenAI)  →  Environment (Python/Playwright)  →  Target UI
+CLI (sync) → run_experiment() → asyncio.run()
+  └── async_playwright() → 1 browser
+       ├── Worker 0: BrowserContext → Page → login → run slice
+       ├── Worker 1: BrowserContext → Page → login → run slice
+       └── ... (N workers, set by --concurrency)
+```
+
+```
+User Agent (Python/AsyncOpenAI)  →  Environment (Python/async Playwright)  →  Target UI
 ```
 
 - **User Agent** — embodies the persona, generates next messages; imported and called directly by the environment harness

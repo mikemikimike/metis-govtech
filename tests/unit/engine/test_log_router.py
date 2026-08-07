@@ -49,7 +49,7 @@ class TestLogRouter:
 
     def test_process_sends_to_tail_buffer(self, tmp_path: Path) -> None:
         tail = TailBuffer(max_lines=10, min_level=logging.DEBUG)
-        router = LogRouter(log_dir=tmp_path, log_format="text", tail_buffer=tail)
+        router = LogRouter(log_dir=tmp_path, log_format="text", tail_buffers={"w0": tail})
         router.open_run("scn", "per", trial=1, num_trials=1)
         event_dict = {
             "event": "tail test",
@@ -58,6 +58,7 @@ class TestLogRouter:
             "scenario_id": "scn",
             "persona_id": "per",
             "trial": 1,
+            "worker": "w0",
         }
         router.process(None, "warning", event_dict.copy())
         lines = tail.get_lines()

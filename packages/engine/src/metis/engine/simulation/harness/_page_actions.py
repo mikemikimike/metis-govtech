@@ -6,7 +6,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from playwright.sync_api import Page
+from playwright.async_api import Page
 
 from metis.core.logging import get_logger
 
@@ -18,7 +18,7 @@ from ._ui_capture import capture_ui_state
 logger = get_logger()
 
 
-def send_message(
+async def send_message(
     page: Page,
     message: str,
     config: HarnessConfig,
@@ -31,7 +31,7 @@ def send_message(
 
     # Snapshot pre-state (placeholder + message count)
     logger.debug("[send_message] Capturing pre-state snapshot...")
-    pre_state = page.evaluate("""() => {
+    pre_state = await page.evaluate("""() => {
         const textarea = document.querySelector("textarea");
         const placeholder = textarea?.getAttribute("placeholder") || "";
         const sel = '[class*="message"], [class*="Message"], ' +
@@ -48,36 +48,36 @@ def send_message(
 
     # Find and fill the textarea
     input_el = page.locator("textarea").first
-    if not input_el.is_visible(timeout=2000):
+    if not await input_el.is_visible(timeout=2000):
         logger.info(
             "[send_message] Textarea not visible — trying fallback selectors..."
         )
         try:
-            page.get_by_placeholder(
+            await page.get_by_placeholder(
                 re.compile(r"ask anything|reply", re.IGNORECASE)
             ).click(timeout=5000)
         except Exception:
-            page.locator(
+            await page.locator(
                 '[class*="input"], [class*="Input"], [class*="chat"] >> visible=true'
             ).first.click(timeout=3000)
-        page.wait_for_timeout(1000)
+        await page.wait_for_timeout(1000)
         input_el = page.locator("textarea").first
-        input_el.wait_for(state="visible", timeout=5000)
+        await input_el.wait_for(state="visible", timeout=5000)
 
     logger.info("[send_message] Filling textarea and pressing Enter...")
-    input_el.fill(message)
-    input_el.press("Enter")
+    await input_el.fill(message)
+    await input_el.press("Enter")
 
     # Wait for response using dual-condition approach
     logger.info("[send_message] Waiting for response (initial 3s buffer)...")
-    page.wait_for_timeout(3000)
+    await page.wait_for_timeout(3000)
     placeholder_already_reply = "Reply" in pre_state["placeholder"]
 
     logger.info(
         "[send_message] Waiting for new message or placeholder change (timeout=%dms)...",
         timeout,
     )
-    page.wait_for_function(
+    await page.wait_for_function(
         """({ prevCount, alreadyReply }) => {
             const textarea = document.querySelector("textarea");
             if (!textarea) return false;
@@ -107,7 +107,7 @@ def send_message(
     poll_deadline = time.time() * 1000 + 300000
     poll_count = 0
     while time.time() * 1000 < poll_deadline:
-        still_processing = page.evaluate("""() => {
+        still_processing = await page.evaluate("""() => {
             const spinSel = '[class*="loading"], ' +
               '[class*="spinner"], [class*="animate-spin"]';
             const hasSpinner =
@@ -127,24 +127,24 @@ def send_message(
         poll_count += 1
         if poll_count % 5 == 1:
             logger.info("[send_message] Still processing (poll #%d)...", poll_count)
-        page.wait_for_timeout(2000)
+        await page.wait_for_timeout(2000)
 
     if poll_count > 0:
         logger.info("[send_message] Processing complete after %d poll(s)", poll_count)
 
     # Final buffer for remaining streaming
     logger.debug("[send_message] Final 2s buffer...")
-    page.wait_for_timeout(2000)
+    await page.wait_for_timeout(2000)
     logger.info("[send_message] Capturing UI state...")
-    return capture_ui_state(page)
+    return await capture_ui_state(page)
 
 
-def upload_file(page: Page, file_path: Path) -> None:
+async def upload_file(page: Page, file_path: Path) -> None:
     """Upload a file via the target system's attach-file flow."""
     filename = file_path.name
     logger.info("[upload] Step 1/5: Starting upload of '%s' (%s)", filename, file_path)
 
-    dismiss_modals(page)
+    await dismiss_modals(page)
 
     # Click the attach button to trigger file chooser
     logger.info("[upload] Step 2/5: Clicking attach button...")
@@ -162,9 +162,9 @@ def upload_file(page: Page, file_path: Path) -> None:
     # Use expect_file_chooser context manager
     file_chooser = None
     try:
-        with page.expect_file_chooser(timeout=10000) as fc_info:
-            attach_button.click(timeout=5000)
-        file_chooser = fc_info.value
+        async with page.expect_file_chooser(timeout=10000) as fc_info:
+            await attach_button.click(timeout=5000)
+        file_chooser = await fc_info.value
         logger.info("[upload] Step 3/5: File chooser opened — setting file...")
     except Exception:
         logger.info(
@@ -172,29 +172,29 @@ def upload_file(page: Page, file_path: Path) -> None:
         )
 
     if file_chooser:
-        file_chooser.set_files(str(file_path))
+        await file_chooser.set_files(str(file_path))
     else:
         # Fallback: find input[type="file"] and set directly
         file_input = page.locator('input[type="file"]').first
-        file_input.wait_for(state="attached", timeout=5000)
-        file_input.set_input_files(str(file_path))
+        await file_input.wait_for(state="attached", timeout=5000)
+        await file_input.set_input_files(str(file_path))
 
-    page.wait_for_timeout(2000)
+    await page.wait_for_timeout(2000)
 
     # Check for "Unsupported format" error — retry with .txt extension (once)
-    has_unsupported = page.evaluate(
+    has_unsupported = await page.evaluate(
         "() => document.body.innerText.includes('Unsupported format')"
     )
     if has_unsupported and file_path.suffix != ".txt":
         logger.info(
             "[upload] Unsupported format detected — retrying '%s' as .txt", filename
         )
-        page.keyboard.press("Escape")
-        page.wait_for_timeout(1000)
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(1000)
         tmp_dir = Path(tempfile.mkdtemp())
         txt_path = tmp_dir / file_path.with_suffix(".txt").name
         shutil.copy2(file_path, txt_path)
-        upload_file(page, txt_path)
+        await upload_file(page, txt_path)
         return
 
     # Confirm the upload
@@ -210,12 +210,12 @@ def upload_file(page: Page, file_path: Path) -> None:
     for pattern in confirm_patterns:
         try:
             btn = page.locator("button").filter(has_text=pattern).first
-            if btn.is_visible(timeout=1000):
+            if await btn.is_visible(timeout=1000):
                 logger.info(
                     "[upload] Step 4/5: Clicked confirm button matching '%s'",
                     pattern.pattern,
                 )
-                btn.click()
+                await btn.click()
                 confirmed = True
                 break
         except Exception:
@@ -223,13 +223,13 @@ def upload_file(page: Page, file_path: Path) -> None:
 
     if not confirmed:
         logger.info("[upload] Step 4/5: No confirm button found — pressing Escape")
-        page.keyboard.press("Escape")
+        await page.keyboard.press("Escape")
 
-    page.wait_for_timeout(2000)
+    await page.wait_for_timeout(2000)
 
     # Verify attachment
     logger.info("[upload] Step 5/5: Verifying attachment visibility...")
-    file_visible = page.evaluate(
+    file_visible = await page.evaluate(
         """(name) => {
             const body = document.body.innerText;
             const baseName = name.replace(/\\.[^.]+$/, "");
@@ -247,13 +247,13 @@ def upload_file(page: Page, file_path: Path) -> None:
         )
 
 
-def auto_fill_and_submit(page: Page) -> bool:
+async def auto_fill_and_submit(page: Page) -> bool:
     """Auto-fill visible forms and click Submit. Returns True if form was submitted."""
     form_submit_btn = page.locator(
         'button:has-text("Submit"), button:has-text("Confirm Theme"), button:has-text("Confirm")'
     ).first
     try:
-        form_visible = form_submit_btn.is_visible(timeout=3000)
+        form_visible = await form_submit_btn.is_visible(timeout=3000)
     except Exception:
         return False
     if not form_visible:
@@ -265,59 +265,59 @@ def auto_fill_and_submit(page: Page) -> bool:
 
     # Fill selects with first non-placeholder option
     selects = page.locator("main select")
-    select_count = selects.count()
+    select_count = await selects.count()
     if select_count > 0:
         logger.info("[auto_fill] Filling %d select element(s)...", select_count)
     for i in range(select_count):
         sel = selects.nth(i)
         try:
-            current_val = sel.input_value()
+            current_val = await sel.input_value()
         except Exception:
             continue
         if not current_val or current_val == "Select an option...":
-            options = sel.locator("option").all_text_contents()
+            options = await sel.locator("option").all_text_contents()
             first_real = next(
                 (o for o in options if o != "Select an option..." and o.strip()),
                 None,
             )
             if first_real:
-                sel.select_option(label=first_real)
+                await sel.select_option(label=first_real)
                 logger.info("[auto_fill]   Select #%d -> %r", i + 1, first_real)
 
     # Fill empty text inputs with placeholder text
     inputs = page.locator('main input[type="text"], main input:not([type])')
-    input_count = inputs.count()
+    input_count = await inputs.count()
     filled_inputs = 0
     for i in range(input_count):
         inp = inputs.nth(i)
         try:
-            val = inp.input_value()
+            val = await inp.input_value()
         except Exception:
             continue
         if not val:
-            placeholder = inp.get_attribute("placeholder") or "General audience"
-            inp.fill(placeholder)
+            placeholder = await inp.get_attribute("placeholder") or "General audience"
+            await inp.fill(placeholder)
             filled_inputs += 1
     if filled_inputs > 0:
         logger.info("[auto_fill] Filled %d empty text input(s)", filled_inputs)
 
     # Select first radio button if none selected
     radios = page.locator('main input[type="radio"]')
-    if radios.count() > 0:
-        any_checked = page.locator('main input[type="radio"]:checked').count()
+    if await radios.count() > 0:
+        any_checked = await page.locator('main input[type="radio"]:checked').count()
         if any_checked == 0:
             logger.info("[auto_fill] No radio selected — checking first option")
             label = radios.first.locator("xpath=ancestor::label")
             try:
-                if label.is_visible(timeout=2000):
-                    label.click(force=True)
+                if await label.is_visible(timeout=2000):
+                    await label.click(force=True)
                 else:
-                    radios.first.check(force=True)
+                    await radios.first.check(force=True)
             except Exception:
-                radios.first.check(force=True)
+                await radios.first.check(force=True)
 
-    page.wait_for_timeout(500)
+    await page.wait_for_timeout(500)
     logger.info("[auto_fill] Clicking submit button...")
-    form_submit_btn.click()
+    await form_submit_btn.click()
     logger.info("[auto_fill] Form submitted")
     return True

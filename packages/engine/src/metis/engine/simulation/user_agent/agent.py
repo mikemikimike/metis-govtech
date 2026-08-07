@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 
-from openai import APIError, OpenAI
+from openai import APIError, AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
@@ -59,17 +59,17 @@ class UserAgent:
         self.scenario = scenario
         self.conversation_history: list[HistoryEntry] = []
         self.turn_count = 0
-        self.client = OpenAI()
+        self.client = AsyncOpenAI()
         self._system_prompt = self._build_system_prompt()
 
-    def generate_opening(self) -> UserAgentOutput:
+    async def generate_opening(self) -> UserAgentOutput:
         """Generate the first message to start the conversation."""
         logger.info(
             "[user_agent] Generating opening message (persona=%s, model=%s)...",
             self.persona.id,
             USER_AGENT_MODEL,
         )
-        response = self._call_llm(OPENING_TURN_PROMPT)
+        response = await self._call_llm(OPENING_TURN_PROMPT)
         self.turn_count += 1
         self.conversation_history.append(
             HistoryEntry(role=HistoryRole.USER_AGENT, content=response.message)
@@ -86,7 +86,7 @@ class UserAgent:
             )
         return response
 
-    def generate_response(self, turn_payload: UserAgentInput) -> UserAgentOutput:
+    async def generate_response(self, turn_payload: UserAgentInput) -> UserAgentOutput:
         """Given the system's response, generate the user's next message.
 
         :param turn_payload: Structured payload containing the target system's
@@ -114,7 +114,7 @@ class UserAgent:
         )
 
         # Call LLM
-        response = self._call_llm(user_prompt)
+        response = await self._call_llm(user_prompt)
         self.turn_count += 1
 
         self.conversation_history.append(
@@ -209,7 +209,7 @@ class UserAgent:
         messages.append({"role": "user", "content": user_prompt})
         return messages
 
-    def _call_llm(self, user_prompt: str) -> UserAgentOutput:
+    async def _call_llm(self, user_prompt: str) -> UserAgentOutput:
         """Call the LLM with structured output enforcement.
 
         The OpenAI API guarantees the response conforms to UserAgentOutput's
@@ -225,7 +225,7 @@ class UserAgent:
         )
 
         try:
-            response = self.client.beta.chat.completions.parse(
+            response = await self.client.beta.chat.completions.parse(
                 model=USER_AGENT_MODEL,
                 messages=messages,
                 max_tokens=USER_AGENT_MAX_TOKENS,

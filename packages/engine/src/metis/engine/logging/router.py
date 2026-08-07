@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json as json_mod
 import logging
+import time
 from pathlib import Path
 from typing import IO, Any, Literal
 
@@ -55,12 +56,13 @@ class LogRouter:
         self,
         log_dir: Path,
         log_format: Literal["text", "json"] = "text",
-        tail_buffer: TailBuffer | None = None,
+        tail_buffers: dict[str, TailBuffer] | None = None,
     ) -> None:
         self._log_dir = log_dir
         self._log_format = log_format
-        self._tail_buffer = tail_buffer
+        self._tail_buffers = tail_buffers
         self._handles: dict[str, IO[str]] = {}
+        self._start_time = time.monotonic()
         log_dir.mkdir(parents=True, exist_ok=True)
 
     def _run_key(self, scenario_id: str, persona_id: str, trial: int) -> str:
@@ -100,28 +102,35 @@ class LogRouter:
             if handle:
                 handle.write(self._format_file_line(event_dict) + "\n")
 
-        # Route to tail buffer — styled the same way as core's renderer
-        if self._tail_buffer is not None:
+        # Route to per-worker tail buffer (or broadcast if no worker key)
+        if self._tail_buffers:
             level_name = event_dict.get("level", "debug")
             level_num = _LEVEL_MAP.get(level_name, logging.DEBUG)
             styled = self._render_styled(event_dict)
-            self._tail_buffer.append(styled, level=level_num)
+            worker = event_dict.get("worker")
+            if worker and worker in self._tail_buffers:
+                self._tail_buffers[worker].append(styled, level=level_num)
+            else:
+                for buf in self._tail_buffers.values():
+                    buf.append(styled, level=level_num)
 
         return ""
 
+    def _elapsed_str(self) -> str:
+        """Format elapsed time since router creation as HH:MM:SS."""
+        elapsed = time.monotonic() - self._start_time
+        h = int(elapsed) // 3600
+        m = (int(elapsed) % 3600) // 60
+        s = int(elapsed) % 60
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
     def _render_styled(self, event_dict: EventDict) -> Text:
-        """Build a styled Rich Text — same format as core's _rich_console_renderer."""
-        level = event_dict.get("level", "info")
+        """Build a styled Rich Text for the TUI tail panel."""
         event = event_dict.get("event", "")
-        timestamp = event_dict.get("timestamp", "")
-        logger_name = event_dict.get("logger_name", "")
 
         output = Text()
-        output.append(f"{timestamp} ", style="dim")
-        output.append(f"[{level.upper():<8}]", style=_LEVEL_STYLES.get(level, ""))
-        if logger_name:
-            output.append(f" {logger_name}  ", style="dim cyan")
-        output.append(f" {event}")
+        output.append(f"{self._elapsed_str()} ", style="dim")
+        output.append(event)
         return output
 
     def _format_file_line(self, event_dict: EventDict) -> str:
@@ -140,7 +149,7 @@ class LogRouter:
 def setup_engine_logging(
     log_dir: Path,
     log_format: Literal["text", "json"] = "text",
-    tail_buffer: TailBuffer | None = None,
+    tail_buffers: dict[str, TailBuffer] | None = None,
 ) -> LogRouter:
     """Create a LogRouter and install it as structlog's renderer.
 
@@ -150,7 +159,7 @@ def setup_engine_logging(
     """
     import structlog
 
-    router = LogRouter(log_dir=log_dir, log_format=log_format, tail_buffer=tail_buffer)
+    router = LogRouter(log_dir=log_dir, log_format=log_format, tail_buffers=tail_buffers)
 
     config = structlog.get_config()
     current_processors = list(config.get("processors", []))

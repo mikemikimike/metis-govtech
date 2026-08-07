@@ -56,9 +56,9 @@ def render_dashboard(state: SimulationState) -> RenderableType:
     parts.append(scenarios_table)
     parts.append(Text(""))
 
-    # Active scenario
-    active = state.active_scenario
-    if active:
+    # Active scenarios (may be multiple with concurrent workers)
+    active_scenarios = [sc for sc in state.scenarios if sc.phase == "active"]
+    for active in active_scenarios:
         active_text = Text()
         active_text.append(f"Ongoing scenario: {active.scenario_id}\n", style="bold")
         for run in active.runs:

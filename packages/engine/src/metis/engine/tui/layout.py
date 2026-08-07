@@ -16,30 +16,30 @@ from .tail import TailBuffer
 
 
 class _LiveTailRenderable:
-    """Renderable that reads from the tail buffer at render time.
-
-    The buffer stores pre-styled Rich Text objects (built by format_log_text
-    with the same styling as core's _rich_console_renderer).
-    """
+    """Renderable for a single worker's tail buffer."""
 
     def __init__(self, tail_buffer: TailBuffer) -> None:
-        self._tail_buffer = tail_buffer
+        self._buf = tail_buffer
 
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
-        entries = self._tail_buffer.get_entries()
+        entries = self._buf.get_entries()
+        max_lines = max(1, (options.height or 10) - 1)
+        entries = entries[-max_lines:]
+
         if not entries:
-            yield Text("(no log output)", style="dim")
+            yield Text("(waiting for output)", style="dim")
             return
+
         output = Text()
-        for i, entry in enumerate(entries[-15:]):
+        for i, entry in enumerate(entries):
             if i > 0:
                 output.append("\n")
-            if isinstance(entry, Text):
-                output.append_text(entry)
+            if isinstance(entry.content, Text):
+                output.append_text(entry.content)
             else:
-                output.append(entry)
+                output.append(entry.content)
         yield output
 
 
@@ -51,7 +51,7 @@ def is_tui_active() -> bool:
 
 
 def _create_live(layout: Layout, console: Console) -> Live:
-    return Live(layout, console=console, refresh_per_second=2, screen=False)
+    return Live(layout, console=console, refresh_per_second=1, screen=True)
 
 
 class _LiveDashboardRenderable:
@@ -66,19 +66,49 @@ class _LiveDashboardRenderable:
         yield render_dashboard(self._state)
 
 
+
+
 class TUIContext:
     """Context manager that owns the Rich Live display."""
 
-    def __init__(self, state: SimulationState, tail_buffer: TailBuffer) -> None:
+    def __init__(
+        self, state: SimulationState, tail_buffers: dict[str, TailBuffer]
+    ) -> None:
         self._state = state
-        self._tail_buffer = tail_buffer
+        self._tail_buffers = tail_buffers
         self._console = Console(stderr=True)
+
         self._layout = Layout()
+
+        # Build tail section: one panel per worker, stacked vertically
+        sorted_keys = sorted(tail_buffers.keys())
+        tail_panels = [Layout(name=f"tail-{k}") for k in sorted_keys]
+
+        if len(tail_panels) == 1:
+            tail_section = Layout(name="tail", ratio=3)
+            tail_section.update(
+                Panel(
+                    _LiveTailRenderable(tail_buffers[sorted_keys[0]]),
+                    title="Log Tail",
+                    border_style="dim",
+                )
+            )
+        else:
+            tail_section = Layout(name="tail", ratio=3)
+            tail_section.split_column(*tail_panels)
+            for key, panel_layout in zip(sorted_keys, tail_panels, strict=True):
+                panel_layout.update(
+                    Panel(
+                        _LiveTailRenderable(tail_buffers[key]),
+                        title=key,
+                        border_style="dim",
+                    )
+                )
+
         self._layout.split_column(
             Layout(name="dashboard", ratio=2),
-            Layout(name="tail", ratio=3),
+            tail_section,
         )
-        # Set panels to live renderables that read current state on every frame
         self._layout["dashboard"].update(
             Panel(
                 _LiveDashboardRenderable(state),
@@ -86,13 +116,7 @@ class TUIContext:
                 border_style="blue",
             )
         )
-        self._layout["tail"].update(
-            Panel(
-                _LiveTailRenderable(tail_buffer),
-                title="Log Tail",
-                border_style="dim",
-            )
-        )
+
         self._live: Live | None = None
 
     def __enter__(self) -> TUIContext:

@@ -40,7 +40,7 @@ class TestTUIContext:
             mock_live.return_value.__enter__ = lambda s: s
             mock_live.return_value.__exit__ = lambda s, *a: None
             mock_live.return_value.update = lambda *a: None
-            ctx = TUIContext(state=state, tail_buffer=tail)
+            ctx = TUIContext(state=state, tail_buffers={"w0": tail})
             with ctx:
                 assert is_tui_active()
             assert not is_tui_active()
@@ -52,6 +52,6 @@ class TestTUIContext:
             mock_live.return_value.__enter__ = lambda s: s
             mock_live.return_value.__exit__ = lambda s, *a: None
             mock_live.return_value.update = lambda *a: None
-            ctx = TUIContext(state=state, tail_buffer=tail)
+            ctx = TUIContext(state=state, tail_buffers={"w0": tail})
             with ctx:
                 ctx.refresh()  # should not raise
