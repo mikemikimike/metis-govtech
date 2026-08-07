@@ -88,7 +88,7 @@ src/metis/wizard/
 ├── adapters/
 │   ├── cli/      Typer commands, Rich renderer and terminal input
 │   ├── llm/      PlatformAI structured-output and embedding gateway
-│   └── web/      reserved ownership root; intentionally empty in this MVP
+│   └── web/      HTTP server, per-session store and the built React bundle in static/
 ├── bootstrap.py  the only adapter composition root
 └── __init__.py   stable headless facade
 ```
