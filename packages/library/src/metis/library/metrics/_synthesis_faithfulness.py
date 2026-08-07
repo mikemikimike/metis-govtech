@@ -11,7 +11,7 @@ from ._types import TraceMetadata
 
 
 class SynthesisFaithfulnessMetric(SyncBaseMetric):
-    """Does the orchestrator faithfully synthesise subagent outputs into its final answer, without distorting, inventing, or dropping their findings? (AC-ORCA-6)
+    """Synthesis faithfulness — AC-ORCA-6.
 
     Does the orchestrator's response faithfully represent what the subagent
     returned? Extracts subagent output from delegation.response and passes it

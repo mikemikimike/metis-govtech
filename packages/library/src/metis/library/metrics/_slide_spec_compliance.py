@@ -51,7 +51,7 @@ def _extract_deck_properties(test_case: LLMTestCase) -> dict:
 
 
 class SlideSpecComplianceMetric(SyncBaseMetric):
-    """Does the generated slide deck comply with the explicit specifications the user requested, such as slide count, theme, and other stated formatting instructions? (AC-SM-11)
+    """AC-SM-11 — Slide spec compliance.
 
     Checks whether the generated deck meets explicit user specifications:
     slide count, theme, and any other instructions the user stated.
