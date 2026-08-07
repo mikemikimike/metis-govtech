@@ -113,6 +113,9 @@ async def _run_experiment_async(
     # Console lock for safe Rich output from concurrent workers
     console_lock = asyncio.Lock()
 
+    # Shared across workers so scenario_started fires exactly once
+    started_scenarios: set[str] = set()
+
     async with async_playwright() as pw:
         logger.info(
             "[experiment] Launching Chromium browser (%s mode)...",
@@ -120,30 +123,34 @@ async def _run_experiment_async(
         )
         browser = await pw.chromium.launch(headless=not headed)
         try:
-            worker_tasks = [
-                _worker(
-                    worker_id=wid,
-                    browser=browser,
-                    config=config,
-                    run_slice=slice_runs,
-                    total_runs=total_runs,
-                    output_dir=output_dir,
-                    fixtures_dir=fixtures_dir,
-                    console_lock=console_lock,
-                    state=state,
-                    orchestration_logger=orchestration_logger,
-                    log_router=log_router,
-                    tui_ctx=tui_ctx,
-                )
-                for wid, slice_runs in enumerate(worker_slices)
-                if slice_runs  # skip empty slices
-            ]
+            active_worker_ids: list[int] = []
+            worker_tasks = []
+            for wid, slice_runs in enumerate(worker_slices):
+                if slice_runs:
+                    active_worker_ids.append(wid)
+                    worker_tasks.append(
+                        _worker(
+                            worker_id=wid,
+                            browser=browser,
+                            config=config,
+                            run_slice=slice_runs,
+                            total_runs=total_runs,
+                            output_dir=output_dir,
+                            fixtures_dir=fixtures_dir,
+                            console_lock=console_lock,
+                            started_scenarios=started_scenarios,
+                            state=state,
+                            orchestration_logger=orchestration_logger,
+                            log_router=log_router,
+                            tui_ctx=tui_ctx,
+                        )
+                    )
 
             raw_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
 
             # Collect results, log any worker crashes
             all_records: list[RunRecord] = []
-            for wid, result in enumerate(raw_results):
+            for wid, result in zip(active_worker_ids, raw_results, strict=True):
                 if isinstance(result, BaseException):
                     logger.error("[experiment] Worker w%d crashed: %s", wid, result)
                 else:
@@ -176,12 +183,14 @@ async def _worker(
     output_dir: Path | None,
     fixtures_dir: Path,
     console_lock: asyncio.Lock,
+    started_scenarios: set[str],
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
 ) -> list[RunRecord]:
     """One concurrent worker: own context, own page, own login session."""
+    structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(worker=f"w{worker_id}")
 
     logger.info(
@@ -193,8 +202,6 @@ async def _worker(
         accept_downloads=True,
     )
     page = await context.new_page()
-
-    seen_scenarios: set[str] = set()
 
     try:
         logger.info("[experiment] Worker w%d: logging in...", worker_id)
@@ -236,9 +243,9 @@ async def _worker(
                 trial=trial_index,
             )
 
-            # Emit pre-run orchestration events
-            if scenario.id not in seen_scenarios:
-                seen_scenarios.add(scenario.id)
+            # Emit pre-run orchestration events (shared set — fires once across all workers)
+            if scenario.id not in started_scenarios:
+                started_scenarios.add(scenario.id)
                 if orchestration_logger:
                     orchestration_logger.scenario_started(scenario.id)
 
@@ -258,10 +265,10 @@ async def _worker(
                 )
             if state:
                 state.start_run(scenario.id, persona.id, trial=trial_index)
-            if tui_ctx:
-                tui_ctx.refresh()
 
             async with console_lock:
+                if tui_ctx:
+                    tui_ctx.refresh()
                 console.print(f"  [w{worker_id}] {scenario.id} × {persona.id} ...")
 
             try:
@@ -334,8 +341,9 @@ async def _worker(
                     scenario.id, runs_passed=passed, runs_total=len(sc.runs)
                 )
 
-            if tui_ctx:
-                tui_ctx.refresh()
+            async with console_lock:
+                if tui_ctx:
+                    tui_ctx.refresh()
 
             # Save run record to disk
             _save_run_record(record, run_dir)
