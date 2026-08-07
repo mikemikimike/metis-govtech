@@ -697,6 +697,9 @@ class BrokenInterviewer(ScriptedInterviewer):
     def draft_personas(self, profile):
         raise ModelOutputError("three attempts, all malformed")
 
+    def chat(self, profile, step, text, target):
+        raise ModelOutputError("three attempts, all malformed")
+
 
 def test_a_total_failure_warns_and_loses_nothing() -> None:
     profile = research_assistant()
@@ -711,6 +714,26 @@ def test_a_total_failure_warns_and_loses_nothing() -> None:
     assert not runtime[0].blocking
     assert state.profile.tasks  # the profile is intact
     assert state.step is SessionStep.PERSONAS  # and we did not advance past it
+
+
+def test_a_chat_failure_warns_and_loses_nothing() -> None:
+    """A chat is a model call like any other: when all its retries fail, it degrades to a
+    warning and touches nothing, rather than crashing the turn."""
+    profile = research_assistant()
+    before = profile.model_copy(deep=True)
+    driver = StepDriver(interviewer=BrokenInterviewer())
+    state = SessionState(id="s", profile=profile, step=SessionStep.CRITERIA)
+
+    driver.handle(
+        state,
+        ChatRequest(prompt="q", multiline=True),
+        ChatResponse(text="change something"),
+    )
+
+    runtime = [w for w in driver.pending_warnings if w.source is WarningSource.RUNTIME]
+    assert runtime and "left your profile exactly as it is" in runtime[0].text.lower()
+    assert not runtime[0].blocking
+    assert state.profile == before  # nothing applied
 
 
 # ── responses that cost no model call ──────────────────────────────────────

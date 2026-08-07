@@ -246,11 +246,30 @@ class StepDriver:
         # reach across and rewrite a different card's.
         target = request.target
         before_texts = self._criterion_texts(state)
-        result = self.interviewer.chat(state.profile, str(state.step), text, target)
+        try:
+            result = self.interviewer.chat(state.profile, str(state.step), text, target)
+        except InterviewerOutputError:
+            # Every model call the driver makes degrades to a warning rather than a crash;
+            # chat is no exception. All the retries already failed inside the client, so tell
+            # the user and leave the profile untouched — nothing was applied.
+            return self._refuse_chat()
         if target is not None:
             result = self._confine_to_behaviour(result, target)
         self._run(state, result)
         self._rematch_reworded(state, before_texts)
+
+    def _refuse_chat(self) -> None:
+        """Change nothing and say so, when a chat could not be answered by the model."""
+        self.pending_warnings.append(
+            Warning(
+                text=(
+                    "I couldn't work out a change from that just then, so I've left your "
+                    "profile exactly as it is. Try saying it again."
+                ),
+                source=WarningSource.RUNTIME,
+                blocking=False,
+            )
+        )
 
     def _confine_to_behaviour(
         self, result: StepResult, behaviour_id: str
