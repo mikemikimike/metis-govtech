@@ -55,11 +55,11 @@ class LogRouter:
         self,
         log_dir: Path,
         log_format: Literal["text", "json"] = "text",
-        tail_buffer: TailBuffer | None = None,
+        tail_buffers: dict[str, TailBuffer] | None = None,
     ) -> None:
         self._log_dir = log_dir
         self._log_format = log_format
-        self._tail_buffer = tail_buffer
+        self._tail_buffers = tail_buffers
         self._handles: dict[str, IO[str]] = {}
         log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -100,12 +100,17 @@ class LogRouter:
             if handle:
                 handle.write(self._format_file_line(event_dict) + "\n")
 
-        # Route to tail buffer — styled the same way as core's renderer
-        if self._tail_buffer is not None:
+        # Route to per-worker tail buffer (or broadcast if no worker key)
+        if self._tail_buffers:
             level_name = event_dict.get("level", "debug")
             level_num = _LEVEL_MAP.get(level_name, logging.DEBUG)
             styled = self._render_styled(event_dict)
-            self._tail_buffer.append(styled, level=level_num)
+            worker = event_dict.get("worker")
+            if worker and worker in self._tail_buffers:
+                self._tail_buffers[worker].append(styled, level=level_num)
+            else:
+                for buf in self._tail_buffers.values():
+                    buf.append(styled, level=level_num)
 
         return ""
 
@@ -115,9 +120,12 @@ class LogRouter:
         event = event_dict.get("event", "")
         timestamp = event_dict.get("timestamp", "")
         logger_name = event_dict.get("logger_name", "")
+        worker = event_dict.get("worker")
 
         output = Text()
         output.append(f"{timestamp} ", style="dim")
+        if worker:
+            output.append(f"[{worker}] ", style="bold cyan")
         output.append(f"[{level.upper():<8}]", style=_LEVEL_STYLES.get(level, ""))
         if logger_name:
             output.append(f" {logger_name}  ", style="dim cyan")
@@ -140,7 +148,7 @@ class LogRouter:
 def setup_engine_logging(
     log_dir: Path,
     log_format: Literal["text", "json"] = "text",
-    tail_buffer: TailBuffer | None = None,
+    tail_buffers: dict[str, TailBuffer] | None = None,
 ) -> LogRouter:
     """Create a LogRouter and install it as structlog's renderer.
 
@@ -150,7 +158,7 @@ def setup_engine_logging(
     """
     import structlog
 
-    router = LogRouter(log_dir=log_dir, log_format=log_format, tail_buffer=tail_buffer)
+    router = LogRouter(log_dir=log_dir, log_format=log_format, tail_buffers=tail_buffers)
 
     config = structlog.get_config()
     current_processors = list(config.get("processors", []))

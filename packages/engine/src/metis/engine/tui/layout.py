@@ -69,28 +69,48 @@ class _LiveDashboardRenderable:
 class TUIContext:
     """Context manager that owns the Rich Live display."""
 
-    def __init__(self, state: SimulationState, tail_buffer: TailBuffer) -> None:
+    def __init__(
+        self, state: SimulationState, tail_buffers: dict[str, TailBuffer]
+    ) -> None:
         self._state = state
-        self._tail_buffer = tail_buffer
+        self._tail_buffers = tail_buffers
         self._console = Console(stderr=True)
         self._layout = Layout()
+
+        # Build tail section: one panel per worker, stacked vertically
+        sorted_keys = sorted(tail_buffers.keys())
+        if len(sorted_keys) == 1:
+            tail_layout = Layout(name="tail", ratio=3)
+            tail_layout.update(
+                Panel(
+                    _LiveTailRenderable(tail_buffers[sorted_keys[0]]),
+                    title="Log Tail",
+                    border_style="dim",
+                )
+            )
+        else:
+            tail_layout = Layout(name="tails", ratio=3)
+            tail_layout.split_column(
+                *[Layout(name=f"tail-{key}") for key in sorted_keys]
+            )
+            for key in sorted_keys:
+                tail_layout[f"tail-{key}"].update(
+                    Panel(
+                        _LiveTailRenderable(tail_buffers[key]),
+                        title=f"Worker {key}",
+                        border_style="dim",
+                    )
+                )
+
         self._layout.split_column(
             Layout(name="dashboard", ratio=2),
-            Layout(name="tail", ratio=3),
+            tail_layout,
         )
-        # Set panels to live renderables that read current state on every frame
         self._layout["dashboard"].update(
             Panel(
                 _LiveDashboardRenderable(state),
                 title="Dashboard",
                 border_style="blue",
-            )
-        )
-        self._layout["tail"].update(
-            Panel(
-                _LiveTailRenderable(tail_buffer),
-                title="Log Tail",
-                border_style="dim",
             )
         )
         self._live: Live | None = None

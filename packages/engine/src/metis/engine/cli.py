@@ -345,11 +345,14 @@ def simulate(
 
     display_level = getattr(logging, log_level)
 
-    tail_buffer = TailBuffer(max_lines=15, min_level=display_level)
+    tail_buffers = {
+        f"w{i}": TailBuffer(max_lines=15, min_level=display_level)
+        for i in range(concurrency)
+    }
     log_router = setup_engine_logging(
         log_dir=resolved_log_dir,
         log_format=log_format,
-        tail_buffer=tail_buffer,
+        tail_buffers=tail_buffers,
     )
     orchestration_logger = OrchestrationLogger(
         log_dir=resolved_log_dir, log_format=log_format
@@ -357,7 +360,7 @@ def simulate(
 
     tui_ctx: TUIContext | None = None
     if use_tui:
-        tui_ctx = TUIContext(state=sim_state, tail_buffer=tail_buffer)
+        tui_ctx = TUIContext(state=sim_state, tail_buffers=tail_buffers)
 
     _interrupt_count = 0
     _interrupt_lock = threading.Lock()
