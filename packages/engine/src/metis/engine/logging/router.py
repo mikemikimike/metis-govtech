@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json as json_mod
 import logging
+import time
 from pathlib import Path
 from typing import IO, Any, Literal
 
@@ -61,6 +62,7 @@ class LogRouter:
         self._log_format = log_format
         self._tail_buffers = tail_buffers
         self._handles: dict[str, IO[str]] = {}
+        self._start_time = time.monotonic()
         log_dir.mkdir(parents=True, exist_ok=True)
 
     def _run_key(self, scenario_id: str, persona_id: str, trial: int) -> str:
@@ -114,22 +116,21 @@ class LogRouter:
 
         return ""
 
+    def _elapsed_str(self) -> str:
+        """Format elapsed time since router creation as HH:MM:SS."""
+        elapsed = time.monotonic() - self._start_time
+        h = int(elapsed) // 3600
+        m = (int(elapsed) % 3600) // 60
+        s = int(elapsed) % 60
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
     def _render_styled(self, event_dict: EventDict) -> Text:
-        """Build a styled Rich Text — same format as core's _rich_console_renderer."""
-        level = event_dict.get("level", "info")
+        """Build a styled Rich Text for the TUI tail panel."""
         event = event_dict.get("event", "")
-        timestamp = event_dict.get("timestamp", "")
-        logger_name = event_dict.get("logger_name", "")
-        worker = event_dict.get("worker")
 
         output = Text()
-        output.append(f"{timestamp} ", style="dim")
-        if worker:
-            output.append(f"[{worker}] ", style="bold cyan")
-        output.append(f"[{level.upper():<8}]", style=_LEVEL_STYLES.get(level, ""))
-        if logger_name:
-            output.append(f" {logger_name}  ", style="dim cyan")
-        output.append(f" {event}")
+        output.append(f"{self._elapsed_str()} ", style="dim")
+        output.append(event)
         return output
 
     def _format_file_line(self, event_dict: EventDict) -> str:
