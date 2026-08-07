@@ -73,6 +73,70 @@ def _step_into(node: Any, segment: Segment, path: str) -> Any:
     raise PathError(f"{path!r}: no {segment.field[:-1]} with id {segment.key!r}.")
 
 
+def _render(segments: list[Segment]) -> str:
+    """The inverse of `parse` — segments back to a path string."""
+    return ".".join(
+        segment.field if segment.key is None else f"{segment.field}[{segment.key}]"
+        for segment in segments
+    )
+
+
+def _deposition(profile: ProductProfile, segments: list[Segment]) -> list[Segment]:
+    """Rewrite any positional bracket (`tasks[0]`) to the real id at that index.
+
+    Paths are meant to address by id, and a numeric bracket is a model mistake — a user
+    tick or edit is always built with real ids. But it is a recoverable one: walking the
+    tree top-down, an integer key names the element at that index, whose id we can read and
+    substitute. A key that is not a plain integer, or an index off the end, is left as-is so
+    it fails downstream exactly as before.
+    """
+    node: Any = profile
+    rewritten: list[Segment] = []
+    for segment in segments:
+        key = segment.key
+        if key is not None and key.lstrip("-").isdigit():
+            value = getattr(node, segment.field, None)
+            if isinstance(value, list) and -len(value) <= int(key) < len(value):
+                real_id = getattr(value[int(key)], "id", None)
+                if real_id is not None:
+                    segment = Segment(segment.field, real_id)
+        rewritten.append(segment)
+        try:
+            node = _step_into(node, segment, "")
+        except PathError:
+            # The rest cannot be walked (unknown id, non-list); leave the tail untouched and
+            # let apply() report it. Positional keys deeper down simply do not get resolved.
+            rewritten.extend(segments[len(rewritten) :])
+            return rewritten
+    return rewritten
+
+
+def normalise(profile: ProductProfile, path: str) -> str:
+    """Repair a drafted path so a recoverable model mistake does not reach the user.
+
+    Two mistakes, both of which name a node that is plainly there:
+
+    * A positional bracket — `tasks[0].behaviours[0]` — where the contract is to address by
+      id. `_deposition` reads the id at each index and substitutes it.
+    * A right, unique behaviour id under the wrong task ancestor — `tasks[T-3].behaviours[EB-6]`
+      when EB-6 lives under T-4. A behaviour id is unique across the whole profile, so the
+      task segment is redundant for locating it; rewrite it to the task that truly owns it.
+
+    Anything else is returned unchanged — an unknown id still fails downstream, as it should.
+    """
+    segments = _deposition(profile, parse(path))
+    if (
+        len(segments) >= 2
+        and segments[0].field == "tasks"
+        and segments[1].field == "behaviours"
+        and segments[1].key is not None
+    ):
+        owner = profile.task_of(segments[1].key)
+        if owner is not None and owner.id != segments[0].key:
+            segments[0] = Segment("tasks", owner.id)
+    return _render(segments)
+
+
 def resolve(profile: ProductProfile, path: str) -> Any:
     """The node a path names."""
     node: Any = profile

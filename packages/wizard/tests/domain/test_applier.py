@@ -386,10 +386,59 @@ def test_add_remove_and_set() -> None:
 def test_a_patch_at_a_missing_node_is_reported_not_raised() -> None:
     profile = research_assistant()
 
-    result = apply(profile, [patch("tasks[T-404].behaviours[EB-1].statement", "x")])
+    # A behaviour id no task owns stays unreachable — a wrong *task* ancestor is corrected
+    # against the behaviour id (see `test_a_wrong_task_ancestor_is_corrected`), but a wrong
+    # behaviour id is a genuinely missing node.
+    result = apply(profile, [patch("tasks[T-404].behaviours[EB-404].statement", "x")])
 
     assert result.applied == []
     assert result.any_rejected
+
+
+def test_a_wrong_task_ancestor_is_corrected() -> None:
+    """A model drafting criteria can pair the right, unique behaviour id with the wrong
+    task ancestor — `tasks[T-1].behaviours[EB-3]` when EB-3 lives under T-2. Behaviour ids
+    are globally unique, so the applier corrects the ancestor against the behaviour rather
+    than reporting a node it could plainly find. This is what stops "no behaviour with id
+    'EB-3'" from reaching the user during the criteria step.
+    """
+    profile = research_assistant()
+    assert profile.task_of("EB-3").id == "T-2"  # type: ignore[union-attr]
+
+    result = apply(
+        profile,
+        [
+            patch(
+                "tasks[T-1].behaviours[EB-3].statement",
+                "Stops after repeated failures and reports what it tried",
+            )
+        ],
+    )
+
+    assert result.applied and not result.any_rejected
+    assert (
+        profile.behaviour("EB-3").statement  # type: ignore[union-attr]
+        == "Stops after repeated failures and reports what it tried"
+    )
+
+
+def test_a_positional_path_is_resolved_to_ids() -> None:
+    """A model can draft a positional path — `tasks[0].behaviours[0]` — against the contract
+    to address by id. The index plainly names a node, so the applier reads the id at each
+    index and substitutes it rather than reporting "no task with id '0'". User ticks and
+    edits are always built with real ids, so only a model mistake ever carries a number.
+    """
+    profile = research_assistant()
+    first_task = profile.tasks[0]
+    first_behaviour = first_task.behaviours[0]
+
+    result = apply(
+        profile,
+        [patch("tasks[0].behaviours[0].statement", "Cites a source for every claim")],
+    )
+
+    assert result.applied and not result.any_rejected
+    assert first_behaviour.statement == "Cites a source for every claim"
 
 
 def test_a_malformed_value_is_reported_not_raised() -> None:

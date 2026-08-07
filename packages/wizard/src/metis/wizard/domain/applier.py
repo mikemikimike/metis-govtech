@@ -151,7 +151,10 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
 
 
 def _apply_one(profile: ProductProfile, patch: Patch) -> None:
-    parent, segment = paths.resolve_parent(profile, patch.path)
+    # A model can pair a right, unique behaviour id with a wrong task ancestor; correct the
+    # ancestor against the behaviour it names before resolving. See `paths.normalise`.
+    path = paths.normalise(profile, patch.path)
+    parent, segment = paths.resolve_parent(profile, path)
 
     if patch.op is PatchOp.SET:
         if segment.key is None:
