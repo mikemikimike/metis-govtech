@@ -31,7 +31,7 @@ def _extract_source_facts(test_case: LLMTestCase) -> list:
 
 
 class DeckSourceFaithfulnessMetric(SyncBaseMetric):
-    """AC-SM-18 — Deck source faithfulness.
+    """Does the generated slide deck stay faithful to the source material, without contradicting or misrepresenting facts from the uploaded data? (AC-SM-18)
 
     Does the deck contradict or misrepresent facts from the source material?
     Extracts source file contents from read_source_file tool calls and passes
