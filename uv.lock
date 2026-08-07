@@ -932,14 +932,10 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "fastapi" },
-    { name = "httpx" },
     { name = "jsonschema" },
     { name = "pyright" },
     { name = "pytest" },
-    { name = "python-multipart" },
     { name = "ruff" },
-    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -952,14 +948,10 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "fastapi", specifier = ">=0.110" },
-    { name = "httpx", specifier = ">=0.27" },
     { name = "jsonschema", specifier = ">=4.20.0" },
     { name = "pyright", specifier = ">=1.1" },
     { name = "pytest", specifier = ">=9.1.1" },
-    { name = "python-multipart", specifier = ">=0.0.18" },
     { name = "ruff", specifier = ">=0.11" },
-    { name = "uvicorn", specifier = ">=0.27" },
 ]
 
 [[package]]
@@ -1071,6 +1063,7 @@ observability = [
 ]
 web = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "python-multipart" },
     { name = "uvicorn" },
 ]
@@ -1078,6 +1071,7 @@ web = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.110" },
+    { name = "httpx", marker = "extra == 'web'", specifier = ">=0.27" },
     { name = "jsonschema", specifier = ">=4.20.0" },
     { name = "langfuse", marker = "extra == 'observability'", specifier = ">=3.0,<4.0" },
     { name = "metis-core", editable = "packages/core" },

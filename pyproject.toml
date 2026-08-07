@@ -78,10 +78,4 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.11",
     "jsonschema>=4.20.0",
-    # The wizard's web door is an optional extra; the dev environment carries it so the
-    # server and its tests run without a separate install step.
-    "fastapi>=0.110",
-    "python-multipart>=0.0.18",
-    "uvicorn>=0.27",
-    "httpx>=0.27",
 ]

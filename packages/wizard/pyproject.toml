@@ -28,6 +28,9 @@ dependencies = [
 # list as well as in the import graph.
 web = [
     "fastapi>=0.110",
+    # FastAPI's TestClient uses httpx; keeping it here makes the web adapter testable with the
+    # same optional install as the adapter itself.
+    "httpx>=0.27",
     "python-multipart>=0.0.18",
     "uvicorn>=0.27",
 ]
