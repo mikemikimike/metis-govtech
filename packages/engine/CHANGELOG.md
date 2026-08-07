@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Async OpenAI client** — `AsyncOpenAI` for non-blocking LLM calls across concurrent workers
 - **Worker isolation** — each worker gets its own BrowserContext, page, login session, and `structlog.contextvars` binding (`worker=w0`, `worker=w1`, …)
 - **Crash resilience** — individual `run_simulation()` failures are caught per-run (worker continues remaining runs); `generate_opening()` failures produce a `system_error` record instead of crashing
+- **Per-worker log tail panels** — TUI splits the log tail into N vertically-stacked panels (one per worker) so each shows a clean sequential narrative; events without a worker key broadcast to all panels
 
 ### Changed
 
