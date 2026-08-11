@@ -23,6 +23,7 @@ from deepeval.test_case.conversational_test_case import (
 )
 from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
+from langfuse.api import ObservationsView
 
 from metis.engine.extractor.types import SessionContext
 from metis.engine.simulation.types import CollectedArtifact, Persona, Scenario
@@ -572,7 +573,7 @@ def fetch_by_session_id(
             skipped += 1
             continue
 
-        observations: list = langfuse.api.legacy.observations_v1.get_many(trace_id=trace.id).data
+        observations: list[ObservationsView] = langfuse.api.trace.get(trace_id=trace.id).observations
         ext = _extract_all(trace, observations)
         extractions.append(ext)
 
