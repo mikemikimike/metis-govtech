@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - CLI `simulate` command accepts `--concurrency / -c` option (min 1)
 - `log_format` CLI option typed as `Literal["text", "json"]` for pyright correctness
 
+### Fixed
+
+- **Langfuse v3 observations fetch** — replaced `langfuse.api.observations.get_many(trace_id=...)` with `langfuse.api.trace.get(trace_id=...).observations` for compatibility with Langfuse v3 servers that do not expose the v2 observations-list endpoint
+
 ## [0.6.0] — 2026-08-06
 
 ### Added
