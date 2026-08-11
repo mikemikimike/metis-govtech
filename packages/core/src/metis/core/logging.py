@@ -76,15 +76,27 @@ def configure_logging(
         structlog.processors.TimeStamper(fmt="iso"),
     ]
 
+    # foreign_pre_chain must NOT include _make_level_filter because
+    # DropEvent crashes inside ProcessorFormatter. Stdlib's root logger
+    # level gate (set below) handles filtering for third-party loggers.
+    foreign_processors: list[Processor] = [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.TimeStamper(fmt="iso"),
+    ]
+
     if show_caller:
-        shared_processors.append(
-            structlog.processors.CallsiteParameterAdder(
-                [
-                    structlog.processors.CallsiteParameter.MODULE,
-                    structlog.processors.CallsiteParameter.LINENO,
-                ]
-            )
+        callsite_adder = structlog.processors.CallsiteParameterAdder(
+            [
+                structlog.processors.CallsiteParameter.MODULE,
+                structlog.processors.CallsiteParameter.LINENO,
+            ]
         )
+        shared_processors.append(callsite_adder)
+        foreign_processors.append(callsite_adder)
 
     if use_json:
         renderer: Processor = structlog.processors.JSONRenderer()
@@ -112,7 +124,7 @@ def configure_logging(
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             renderer,
         ],
-        foreign_pre_chain=shared_processors,
+        foreign_pre_chain=foreign_processors,
     )
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(formatter)
