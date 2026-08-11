@@ -10,10 +10,6 @@ title: "{{package}}/v{{version}}"
      GitHub: symlinked at .github/ISSUE_TEMPLATE/release-issue.md
      GitLab: symlink .gitlab/issue_templates/release-issue.md to this file -->
 
-## Summary
-
-<!-- What's in this release? Fill in as scope becomes clear. -->
-
 ## Branch
 
 `{{package}}/v{{version}}`
