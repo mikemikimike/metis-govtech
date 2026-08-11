@@ -1,0 +1,13 @@
+settings:
+  clarify_turn_cap: 5
+
+opening_question: "Tell me about your product — what it does and who it's for."
+
+statuses:
+  clarify: "Understanding your agent…"
+  behaviours: "Shaping expected behaviours…"
+  prioritise: "Writing testable criteria…"
+  criteria: "Designing evaluator personas…"
+  personas: "Building coverage scenarios…"
+  scenarios: "Finalising your evaluation…"
+  done: "Finishing up…"

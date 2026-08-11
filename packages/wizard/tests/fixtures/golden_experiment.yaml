@@ -1,0 +1,31 @@
+schema_version: 1
+id: research-assistant
+description: An agent that answers research questions over an internal document library, citing
+  what it used.
+personas:
+- id: cooperative-delegator
+  description: A policy analyst comfortable with AI tools who engages fully, answers questions
+    willingly, and redirects gently if things stall.
+- id: impatient-executive
+  description: A time-poor director who writes in curt imperatives, will not answer clarifying
+    questions, and abandons the work quickly.
+scenarios:
+- id: S-1
+  description: Ask for a literature review on a topic the library covers well, then ask a
+    follow-up that needs a second document.
+  num_trials: 3
+  persona_refs:
+  - cooperative-delegator
+  - impatient-executive
+  metric_refs:
+  - metis.library.metrics.SynthesisFaithfulnessMetric
+- id: S-2
+  description: Ask a question whose documents live behind a search that will time out, forcing
+    the retry path.
+  num_trials: 3
+  persona_refs:
+  - cooperative-delegator
+  metric_refs:
+  - metis.library.metrics.BoundedTroubleshootingMetric
+  fixtures:
+  - policy.pdf

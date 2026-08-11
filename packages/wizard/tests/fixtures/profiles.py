@@ -1,0 +1,182 @@
+"""Hand-authored profiles used across the tests.
+
+Writing one by hand is the point of `ProductProfile` carrying no step, no history and no
+session id: this file proves the document is a pure artefact by building one without an
+interview ever having run.
+"""
+
+from metis.wizard.contracts import (
+    Behaviour,
+    Criterion,
+    InteractionType,
+    Persona,
+    Product,
+    ProductProfile,
+    Scenario,
+    Task,
+)
+
+TURN_BUDGET = "metis.library.metrics.TurnBudgetMetric"
+CITATION_METRIC = "metis.library.metrics.SynthesisFaithfulnessMetric"
+BOUNDED_TROUBLESHOOTING = "metis.library.metrics.BoundedTroubleshootingMetric"
+
+
+def orca_handover() -> ProductProfile:
+    """A rich product handover whose separate facts must survive clarify."""
+    return ProductProfile(
+        product=Product(
+            name="Orca",
+            users="Public Officers",
+            summary=(
+                "An orchestrator that coordinates specialist agents for public officers."
+            ),
+            detail=(
+                "Current specialists:\n"
+                "- Data Analyst performs exploratory analysis on supplied datasets.\n"
+                "- Text Analyst clusters and analyses collections of text.\n"
+                "- Slide Maker generates PowerPoint decks from a user's brief and evidence.\n"
+                "- Slide Reviewer checks generated decks and returns revision feedback.\n"
+                "- Criteria Evaluator assesses work against explicit evaluation criteria.\n\n"
+                "Workflow and coordination:\n"
+                "Orca interprets the request, routes each part to the relevant specialist and "
+                "returns their outputs within one workflow. A deck workflow can pass a generated "
+                "deck from Slide Maker to Slide Reviewer before returning it.\n\n"
+                "Current limits:\n"
+                "These five specialists are the capabilities live today."
+            ),
+        )
+    )
+
+
+def research_assistant() -> ProductProfile:
+    """A profile exercising every shape the compiler has to handle.
+
+    Deliberately contains: a ticked behaviour with several criteria, an unticked behaviour
+    that still has criteria (dormant, not deleted), a criterion the user typed by hand, one
+    scenario covering two behaviours, and a scenario with two personas.
+    """
+    return ProductProfile(
+        product=Product(
+            name="Research assistant",
+            summary=(
+                "An agent that answers research questions over an internal document "
+                "library, citing what it used."
+            ),
+            users=(
+                "Policy analysts and their managers. Some know exactly what they want; "
+                "others are exploring and do not."
+            ),
+            detail=(
+                "A router agent with a document search tool and a summariser subagent. "
+                "Search can time out. Nothing is carried between sessions."
+            ),
+        ),
+        tasks=[
+            Task(
+                id="T-1",
+                name="Answer quality",
+                behaviours=[
+                    Behaviour(
+                        id="EB-1",
+                        statement="Cites a source for every factual claim",
+                        priority=True,
+                        criteria=[
+                            Criterion(
+                                id="AC-1-1",
+                                given="a question answerable from the library",
+                                when="the answer is returned",
+                                then="every factual claim names the document it came from",
+                                metric_fqn=CITATION_METRIC,
+                            ),
+                            Criterion(
+                                id="AC-1-2",
+                                given="a question the library cannot answer",
+                                when="the answer is returned",
+                                then="it says so rather than citing an unrelated document",
+                                metric_fqn=CITATION_METRIC,
+                            ),
+                        ],
+                    ),
+                    Behaviour(
+                        id="EB-2",
+                        statement="Keeps answers under a page unless asked otherwise",
+                        priority=False,  # unticked — criteria below are dormant, not deleted
+                        criteria=[
+                            Criterion(
+                                id="AC-2-1",
+                                given="a question with no length instruction",
+                                when="the answer is returned",
+                                then="it is under 500 words",
+                                metric_fqn=TURN_BUDGET,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            Task(
+                id="T-2",
+                name="Recovery",
+                behaviours=[
+                    Behaviour(
+                        id="EB-3",
+                        statement="Stops after repeated search failures and says what it tried",
+                        priority=True,
+                        # the user typed this one — it must survive any regeneration
+                        interaction_type=InteractionType.FORM,
+                        criteria=[
+                            Criterion(
+                                id="AC-3-1",
+                                given="a document search that times out repeatedly",
+                                when="the agent has retried three times",
+                                then="it stops and reports what it attempted",
+                                metric_fqn=BOUNDED_TROUBLESHOOTING,
+                                interaction_type=InteractionType.FORM,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+        personas=[
+            Persona(
+                id="cooperative-delegator",
+                description=(
+                    "A policy analyst comfortable with AI tools who engages fully, "
+                    "answers questions willingly, and redirects gently if things stall."
+                ),
+            ),
+            Persona(
+                id="impatient-executive",
+                description=(
+                    "A time-poor director who writes in curt imperatives, will not "
+                    "answer clarifying questions, and abandons the work quickly."
+                ),
+            ),
+        ],
+        scenarios=[
+            Scenario(
+                id="S-1",
+                description=(
+                    "Ask for a literature review on a topic the library covers well, "
+                    "then ask a follow-up that needs a second document."
+                ),
+                behaviour_refs=[
+                    "EB-1",
+                    "EB-2",
+                ],  # M:N — one scenario covers two behaviours
+                persona_refs=["cooperative-delegator", "impatient-executive"],
+                num_trials=3,
+            ),
+            Scenario(
+                id="S-2",
+                description=(
+                    "Ask a question whose documents live behind a search that will "
+                    "time out, forcing the retry path."
+                ),
+                behaviour_refs=["EB-3"],
+                persona_refs=["cooperative-delegator"],
+                fixtures=["policy.pdf"],
+                num_trials=3,
+            ),
+        ],
+    )

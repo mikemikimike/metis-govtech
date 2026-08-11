@@ -19,7 +19,7 @@ help:
 	@printf "  make release-issue     Create release tracking issue only\n"
 
 install:
-	uv sync --group dev
+	uv sync --all-packages --group dev --extra web
 	$(MAKE) -C packages/engine install-playwright
 
 lint:
