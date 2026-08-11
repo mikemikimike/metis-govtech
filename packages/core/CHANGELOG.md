@@ -6,9 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.3.0] — 2026-08-11
 
-### Added
+### Fixed
 
-- _(nothing yet)_
+- `configure_logging()` no longer crashes when third-party libraries (e.g. deepeval) emit stdlib log messages — the `DropEvent`-raising level filter was incorrectly included in `ProcessorFormatter.foreign_pre_chain`, where structlog does not catch it
 
 ---
 
