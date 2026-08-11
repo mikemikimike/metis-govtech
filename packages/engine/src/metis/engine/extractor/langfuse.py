@@ -572,7 +572,7 @@ def fetch_by_session_id(
             skipped += 1
             continue
 
-        observations: list = langfuse.api.observations.get_many(trace_id=trace.id).data
+        observations: list = langfuse.api.legacy.observations_v1.get_many(trace_id=trace.id).data
         ext = _extract_all(trace, observations)
         extractions.append(ext)
 
