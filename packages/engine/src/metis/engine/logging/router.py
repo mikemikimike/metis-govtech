@@ -48,19 +48,22 @@ def _run_log_filename(
 class LogRouter:
     """Final structlog processor that replaces the default renderer.
 
-    Routes every event to per-run files and the tail buffer, then returns ""
-    so nothing hits stderr (Rich Live owns the terminal when TUI is active).
+    Routes every event to per-run files and the tail buffer. When TUI is
+    active, returns "" to suppress stderr (Rich Live owns the terminal).
+    When no TUI, falls through to the original renderer for stderr output.
     """
 
     def __init__(
         self,
         log_dir: Path,
         log_format: Literal["text", "json"] = "text",
-        tail_buffers: dict[str, TailBuffer] | None = None,
+        tail_buffer: TailBuffer | None = None,
+        fallback_renderer: Any = None,
     ) -> None:
         self._log_dir = log_dir
         self._log_format = log_format
-        self._tail_buffers = tail_buffers
+        self._tail_buffer = tail_buffer
+        self._fallback_renderer = fallback_renderer
         self._handles: dict[str, IO[str]] = {}
         self._start_time = time.monotonic()
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -90,7 +93,7 @@ class LogRouter:
         self._handles.clear()
 
     def process(self, logger: Any, method_name: str, event_dict: EventDict) -> str:
-        """Structlog renderer: routes to files + tail, returns "" to suppress stderr."""
+        """Structlog renderer: routes to files + tail, optionally to stderr."""
         scenario_id = event_dict.get("scenario_id")
         persona_id = event_dict.get("persona_id")
         trial = event_dict.get("trial")
@@ -113,6 +116,10 @@ class LogRouter:
             else:
                 for buf in self._tail_buffers.values():
                     buf.append(styled, level=level_num)
+
+        # When no TUI, fall through to the original renderer for stderr output
+        if self._fallback_renderer is not None:
+            return self._fallback_renderer(logger, method_name, event_dict)
 
         return ""
 
@@ -149,20 +156,34 @@ class LogRouter:
 def setup_engine_logging(
     log_dir: Path,
     log_format: Literal["text", "json"] = "text",
-    tail_buffers: dict[str, TailBuffer] | None = None,
+    tail_buffer: TailBuffer | None = None,
+    use_tui: bool = True,
 ) -> LogRouter:
     """Create a LogRouter and install it as structlog's renderer.
 
     Replaces the last processor (core's _rich_console_renderer) with the
     router, which handles both file output and TUI tail rendering.
+    When use_tui=False, the original renderer is kept as a fallback so
+    events still appear on stderr.
     Must be called AFTER configure_logging().
     """
     import structlog
 
-    router = LogRouter(log_dir=log_dir, log_format=log_format, tail_buffers=tail_buffers)
-
     config = structlog.get_config()
     current_processors = list(config.get("processors", []))
+
+    # Capture the current renderer to use as fallback when no TUI
+    fallback = None
+    if not use_tui and current_processors:
+        fallback = current_processors[-1]
+
+    router = LogRouter(
+        log_dir=log_dir,
+        log_format=log_format,
+        tail_buffer=tail_buffer,
+        fallback_renderer=fallback,
+    )
+
     # Replace the last processor (the renderer) with our router
     if current_processors:
         current_processors[-1] = router.process

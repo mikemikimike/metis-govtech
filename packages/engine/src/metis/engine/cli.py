@@ -229,12 +229,8 @@ def simulate(
         "--log-dir",
         help="Override log directory (default: co-located with results)",
     ),
-    concurrency: int = typer.Option(
-        1,
-        "--concurrency",
-        "-c",
-        help="Number of parallel browser contexts (workers)",
-        min=1,
+    pretty: bool = typer.Option(
+        False, "--pretty", help="Force human-readable colored output (even when piped)"
     ),
 ) -> None:
     """Run end-to-end simulation, evaluation, and report."""
@@ -256,7 +252,10 @@ def simulate(
     # When TUI is active, set DEBUG so all events flow through the router.
     from metis.core.logging import configure_logging
 
-    configure_logging(level="DEBUG" if use_tui else log_level)
+    configure_logging(
+        level="DEBUG" if use_tui else log_level,
+        pretty=pretty or None,
+    )
 
     # Disable structlog's per-proxy bind caching so that module-level loggers
     # (created at import time below) always use the latest processor chain —
@@ -352,7 +351,8 @@ def simulate(
     log_router = setup_engine_logging(
         log_dir=resolved_log_dir,
         log_format=log_format,
-        tail_buffers=tail_buffers,
+        tail_buffer=tail_buffer,
+        use_tui=use_tui,
     )
     orchestration_logger = OrchestrationLogger(
         log_dir=resolved_log_dir, log_format=log_format

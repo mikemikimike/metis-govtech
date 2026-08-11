@@ -116,6 +116,7 @@ class UserAgentInput(BaseModel):
 
     ui_state: UIState = Field(default_factory=UIState)
     run_meta: RunMeta | None = None
+    action_feedback: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -310,9 +311,9 @@ class RunFailure(BaseModel, extra="ignore"):
 class ConversationTurn(BaseModel, extra="ignore"):
     turn_number: int
     user_message: str
-    target_response: dict
-    duration_ms: int
-    timestamp: str
+    target_response: dict = {}
+    duration_ms: int = 0
+    timestamp: str = ""
     user_ui_actions: list[dict] = []
     diagnostics: TurnDiagnostics | None = None
 

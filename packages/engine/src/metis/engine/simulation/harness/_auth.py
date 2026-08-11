@@ -5,7 +5,7 @@ from playwright.async_api import Page
 from metis.core.logging import get_logger
 
 from ._config import HarnessConfig
-from ._element_resolver import AriaStrategy, CSSStrategy, TextStrategy, resolve_element
+from ._protocol import expect, stabilize
 
 logger = get_logger()
 
@@ -19,8 +19,8 @@ async def dismiss_modals(page: Page) -> None:
         skip_btn = page.get_by_text("Skip for now")
         if await skip_btn.is_visible(timeout=1000):
             logger.info("[modal] Clicking 'Skip for now' (onboarding tour)")
-            await skip_btn.click()
-            await page.wait_for_timeout(500)
+            skip_btn.click()
+            stabilize(page, "modal dismiss after 'Skip for now'", 500)
     except Exception:
         pass
 
@@ -30,19 +30,27 @@ async def dismiss_modals(page: Page) -> None:
             btn = page.get_by_text(text, exact=True)
             if await btn.is_visible(timeout=500):
                 logger.info("[modal] Clicking '%s' button", text)
-                await btn.click()
-                await page.wait_for_timeout(500)
+                btn.click()
+                stabilize(page, f"modal dismiss after '{text}'", 500)
                 break
     except Exception:
         pass
 
-    # Strategy 3: Click any button inside a dialog element
+    # Strategy 3: Click a safe dismiss button inside a dialog element
     try:
-        dialog_btn = page.locator('[role="dialog"] button')
-        if await dialog_btn.first.is_visible(timeout=500):
-            logger.info("[modal] Clicking first button inside dialog")
-            await dialog_btn.first.click()
-            await page.wait_for_timeout(500)
+        dialog = page.locator('[role="dialog"]')
+        if dialog.first.is_visible(timeout=500):
+            safe_btn = dialog.locator(
+                'button:has-text("Cancel"), '
+                'button:has-text("Close"), '
+                'button:has-text("Dismiss"), '
+                'button:has-text("Got it"), '
+                'button:has-text("OK")'
+            ).first
+            if safe_btn.is_visible(timeout=500):
+                logger.info("[modal] Clicking safe dialog button")
+                safe_btn.click()
+                stabilize(page, "modal dismiss after dialog button click", 500)
     except Exception:
         pass
 
@@ -51,25 +59,28 @@ async def dismiss_modals(page: Page) -> None:
         aria_close = page.locator('[aria-label="Close"]')
         if await aria_close.first.is_visible(timeout=500):
             logger.info("[modal] Clicking aria-label='Close' button")
-            await aria_close.first.click()
-            await page.wait_for_timeout(500)
+            aria_close.first.click()
+            stabilize(page, "modal dismiss after aria-close click", 500)
     except Exception:
         pass
 
-    # Strategy 5: Press Escape to dismiss modal
+    # Strategy 5: Press Escape only if a dialog is still present
     try:
-        await page.keyboard.press("Escape")
-        await page.wait_for_timeout(500)
+        if page.locator('[role="dialog"]').first.is_visible(timeout=500):
+            logger.info("[modal] Dialog still present — pressing Escape")
+            page.keyboard.press("Escape")
+            stabilize(page, "modal dismiss after Escape key", 500)
     except Exception:
         pass
 
-    # Strategy 6: Click the backdrop overlay to dismiss
+    # Strategy 6: Click outside the dialog (backdrop) to dismiss
     try:
-        backdrop = page.locator('[role="dialog"] .absolute.inset-0')
-        if await backdrop.first.is_visible(timeout=500):
-            logger.info("[modal] Clicking backdrop overlay")
-            await backdrop.first.click(position={"x": 10, "y": 10}, force=True)
-            await page.wait_for_timeout(500)
+        dialog = page.locator('[role="dialog"]')
+        if dialog.first.is_visible(timeout=500):
+            # Click at top-left corner of viewport — outside the centered dialog
+            logger.info("[modal] Clicking outside dialog (backdrop)")
+            page.mouse.click(5, 5)
+            stabilize(page, "modal dismiss after backdrop click", 500)
     except Exception:
         pass
 
@@ -83,10 +94,15 @@ async def dismiss_modals(page: Page) -> None:
             await page.evaluate(
                 """() => {
                 document.querySelectorAll('[role="dialog"]').forEach(d => d.remove());
-                document.querySelectorAll('.fixed.inset-0[class*="bg-"]').forEach(o => o.remove());
+                // Remove any overlay siblings (common pattern: fixed overlay before dialog)
+                document.querySelectorAll('[aria-hidden="true"]').forEach(o => {
+                    if (o.style.position === 'fixed' || getComputedStyle(o).position === 'fixed') {
+                        o.remove();
+                    }
+                });
             }"""
             )
-            await page.wait_for_timeout(300)
+            stabilize(page, "DOM mutation after dialog removal", 300)
     except Exception:
         pass
 
@@ -122,63 +138,47 @@ async def login(page: Page, config: HarnessConfig) -> None:
 
     # Now wait for the IdP login form (username field) to appear.
     logger.info("[login] Step 5/8: Waiting for IdP login form...")
-    await page.get_by_label("username", exact=False).wait_for(state="visible", timeout=60000)
+    username_locator = page.get_by_label("username", exact=False)
+    await username_locator.wait_for(state="visible", timeout=60000)
     logger.info("[login] Step 5/8: IdP form visible — filling credentials")
-
-    username_field = await resolve_element(
-        page,
-        intent="username field",
-        strategies=[
-            CSSStrategy(selector='input[name="loginfmt"]'),
-            CSSStrategy(selector='input[name="username"]'),
-            CSSStrategy(selector='input[autocomplete="username"]'),
-            CSSStrategy(selector='input[type="text"]'),
-        ],
-    )
-    await username_field.fill(config.auth.username)
-
-    password_field = await resolve_element(
-        page,
-        intent="password field",
-        strategies=[
-            CSSStrategy(selector='input[type="password"]'),
-            CSSStrategy(selector='input[name="passwd"]'),
-            CSSStrategy(selector='input[name="password"]'),
-        ],
-    )
-    await password_field.fill(config.auth.password)
+    await username_locator.fill(config.auth.username)
+    await page.get_by_label("password", exact=False).fill(config.auth.password)
 
     # Click "Sign in"
     logger.info("[login] Step 6/8: Clicking '%s'...", config.auth.signin_button_text)
-    signin_button = await resolve_element(
-        page,
-        intent="sign-in button",
-        strategies=[
-            AriaStrategy(role="button", name=config.auth.signin_button_text),
-            CSSStrategy(selector='button[type="submit"], input[type="submit"]'),
-            TextStrategy(text=config.auth.signin_button_text),
-        ],
-    )
-    await signin_button.click()
+    await page.get_by_role("button", name=config.auth.signin_button_text).click()
 
-    # Wait for app to load, then navigate to fresh chat
+    # Wait for app to load post-login
     logger.info("[login] Step 7/8: Waiting for app to load after sign-in...")
-    await page.wait_for_timeout(3000)
+    expect(
+        page,
+        description="app loaded post-login",
+        predicate="""() => {
+            return !!document.querySelector('textarea') ||
+                   document.body.innerText.includes('New chat');
+        }""",
+        timeout_ms=15000,
+    )
     logger.info("[login] Step 7/8: Post-login URL: %s", page.url)
     try:
         await page.get_by_text("New chat").click(timeout=5000)
         logger.info("[login] Step 7/8: Clicked 'New chat'")
     except Exception:
         logger.info("[login] Step 7/8: 'New chat' not found — navigating to /chat")
-        await page.goto(
-            config.url + "/chat", wait_until="domcontentloaded", timeout=15000
-        )
-    await page.wait_for_timeout(2000)
+        page.goto(config.url + "/chat", wait_until="domcontentloaded", timeout=15000)
+
+    # Wait for chat to be ready
+    expect(
+        page,
+        description="chat textarea ready",
+        predicate="() => !!document.querySelector('textarea')",
+        timeout_ms=10000,
+    )
 
     # Dismiss modals
     logger.info("[login] Step 8/8: Dismissing modals...")
     await dismiss_modals(page)
 
-    # Wait for chat textarea to be ready
-    await page.wait_for_selector("textarea", timeout=10000)
+    # Final readiness check
+    page.wait_for_selector("textarea", timeout=10000)
     logger.info("[login] Login complete — chat textarea ready (URL: %s)", page.url)

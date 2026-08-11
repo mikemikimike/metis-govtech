@@ -1,25 +1,201 @@
 """Browser interactions — send messages, upload files, fill forms."""
 
+import contextlib
 import re
 import shutil
 import tempfile
 import time
 from pathlib import Path
 
-from playwright.async_api import Page
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import Locator, Page
 
 from metis.core.logging import get_logger
 
-from ..exceptions import ResponseTimeoutError
 from ..types import UIState
 from ._auth import dismiss_modals
 from ._config import HarnessConfig
-from ._element_resolver import AriaStrategy, CSSStrategy, TextStrategy, resolve_element
-from ._retry import action_retry, track_submission
+from ._protocol import (
+    ActionResult,
+    do_action,
+    is_page_active,
+    stabilize,
+    wait_until_settled,
+)
 from ._ui_capture import capture_ui_state
 
 logger = get_logger()
+
+_FILE_VISIBLE_JS = """(name) => {
+    const body = document.body.innerText.toLowerCase();
+    const base = name.replace(/\\.[^.]+$/, "").toLowerCase();
+    return body.includes(name.toLowerCase()) || body.includes(base);
+}"""
+
+# --- Orca-specific selectors (hardcoded from dom-dump-post.json) ---
+#
+# Chat input placeholder (two variants):
+#   Pre-response:  "Ask anything — type / for agents, @ for your library files"
+#   Post-response: "Reply, or type / for agents, @ for library files..."
+_CHAT_INPUT_PLACEHOLDER = re.compile(
+    r"ask anything|reply.*type /|type / for agents", re.IGNORECASE
+)
+
+# Container for chat messages — Orca uses <main> (no role="log" exists)
+_CHAT_CONTAINER_SELECTOR = "main"
+
+# Message elements: Orca uses exactly these two classes on message wrappers.
+# Confirmed from dom-dump-post.json sampleMessageClasses:
+#   "message-user"      — user message wrapper
+#   "message-assistant" — assistant message wrapper
+_MESSAGE_SELECTOR = ".message-user, .message-assistant"
+
+
+def _find_chat_textarea(page: Page) -> Locator:
+    """Find the chat input textarea (not form textareas).
+
+    Orca shows form textareas (e.g. 'keep it under 8 slides') above the
+    chat input when agent configuration forms are active. We identify the
+    chat input by its known placeholder pattern.
+    """
+    # Primary: find by placeholder pattern (most reliable)
+    chat_input = page.get_by_placeholder(_CHAT_INPUT_PLACEHOLDER).first
+    try:
+        if chat_input.is_visible(timeout=1000):
+            return chat_input
+    except Exception:
+        pass
+
+    # Fallback: textbox role (may match form fields too)
+    textbox = page.get_by_role("textbox").first
+    try:
+        if textbox.is_visible(timeout=1000):
+            return textbox
+    except Exception:
+        pass
+
+    # Last resort: any textarea
+    return page.locator("textarea").last
+
+
+def _get_chat_text_length(page: Page) -> int:
+    """Get the text length of the main chat area.
+
+    Orca has no [role="log"] — main is the chat container.
+    Text-length delta is the primary response detection signal.
+    """
+    try:
+        main = page.locator("main")
+        if main.count() > 0:
+            return len(main.first.inner_text(timeout=2000))
+    except Exception:
+        pass
+    return 0
+
+
+def _count_chat_messages(page: Page) -> int:
+    """Count chat messages using Orca's exact class names.
+
+    From dom-dump-post.json: .message-user and .message-assistant
+    are the definitive message wrapper classes.
+    """
+    try:
+        count = page.evaluate("""() => {
+            const container = document.querySelector('main') || document.body;
+            return container.querySelectorAll('.message-user, .message-assistant').length;
+        }""")
+        return count
+    except Exception:
+        return 0
+
+
+def _wait_for_response(
+    page: Page, pre_count: int, pre_text_len: int, timeout_ms: int
+) -> bool:
+    """Poll until a new response appears. Returns True if detected.
+
+    Detection strategies (in priority order):
+    1. Text growth >50 chars in main — universal, works even when agents
+       generate responses asynchronously (the primary strategy)
+    2. Message count increase — fast early-exit when message elements appear
+    3. Chat input placeholder changed to "Reply" — catches the transition
+       from initial state to post-first-response state
+    """
+    poll_ms = 500
+    start = time.time()
+    deadline = start + timeout_ms / 1000
+
+    while time.time() < deadline:
+        # Strategy 1 (primary): text content grew substantially
+        current_len = _get_chat_text_length(page)
+        if current_len > pre_text_len + 50:
+            logger.info(
+                "[response] Detected via text growth: %d -> %d (+%d chars, %.0fms)",
+                pre_text_len,
+                current_len,
+                current_len - pre_text_len,
+                (time.time() - start) * 1000,
+            )
+            return True
+
+        # Strategy 2 (fast exit): message count increased
+        current_count = _count_chat_messages(page)
+        if current_count > pre_count:
+            logger.info(
+                "[response] Detected via message count: %d -> %d (%.0fms)",
+                pre_count,
+                current_count,
+                (time.time() - start) * 1000,
+            )
+            return True
+
+        # Strategy 3: chat input placeholder changed to "Reply"
+        try:
+            chat_input = page.get_by_placeholder(_CHAT_INPUT_PLACEHOLDER).first
+            placeholder = chat_input.get_attribute("placeholder") or ""
+            if "Reply" in placeholder and pre_text_len == 0:
+                logger.info(
+                    "[response] Detected via placeholder change (%.0fms)",
+                    (time.time() - start) * 1000,
+                )
+                return True
+        except Exception:
+            pass
+
+        try:
+            page.wait_for_timeout(poll_ms)
+        except Exception:
+            # Browser context destroyed — page closed or crashed
+            logger.warning("[response] Page context lost during polling")
+            return False
+
+    logger.warning(
+        "[response] NOT detected after %dms (count=%d->%d, text=%d->%d)",
+        timeout_ms,
+        pre_count,
+        _count_chat_messages(page),
+        pre_text_len,
+        _get_chat_text_length(page),
+    )
+    return False
+
+
+_CONFIRM_PATTERNS = [
+    re.compile(r"add to chat", re.IGNORECASE),
+    re.compile(r"upload", re.IGNORECASE),
+    re.compile(r"confirm", re.IGNORECASE),
+    re.compile(r"attach", re.IGNORECASE),
+    re.compile(r"done", re.IGNORECASE),
+]
+
+_ATTACH_SELECTOR = ", ".join(
+    [
+        'button:has(span.sr-only:has-text("Attach file"))',
+        'button:has(span:has-text("Attach file"))',
+        'button:has-text("Attach file")',
+        'button[aria-label*="attach" i]',
+        'button[aria-label*="file" i]',
+    ]
+)
 
 
 async def send_message(
@@ -30,235 +206,191 @@ async def send_message(
 ) -> UIState:
     """Send a message in the chat and wait for the full response."""
     timeout = timeout_override or config.timeouts.response_wait_ms
+    msg_preview = message[:80] + ("..." if len(message) > 80 else "")
+    logger.info("[send_message] Sending: %r (timeout=%dms)", msg_preview, timeout)
 
-    @action_retry(config.retry)
-    async def _send() -> UIState:
-        msg_preview = message[:80] + ("..." if len(message) > 80 else "")
-        logger.info("[send_message] Sending: %r (timeout=%dms)", msg_preview, timeout)
-
-        # Snapshot pre-state (placeholder + message count)
-        logger.debug("[send_message] Capturing pre-state snapshot...")
-        pre_state = await page.evaluate("""() => {
-            const textarea = document.querySelector("textarea");
-            const placeholder = textarea?.getAttribute("placeholder") || "";
-            const sel = '[class*="message"], [class*="Message"], ' +
-              '[class*="response"], [class*="Response"], ' +
-              '[class*="assistant"], [class*="Assistant"]';
-            const messages = document.querySelectorAll(sel);
-            return { placeholder, messageCount: messages.length };
-        }""")
-        logger.debug(
-            "[send_message] Pre-state: placeholder=%r, messageCount=%d",
-            pre_state["placeholder"],
-            pre_state["messageCount"],
-        )
-
-        # Find and fill the textarea using intent-based element resolution
-        input_el = await resolve_element(
-            page,
-            intent="chat_textarea",
-            strategies=[
-                CSSStrategy("textarea"),
-                AriaStrategy(role="textbox", name="Message"),
-                CSSStrategy('[class*="input"], [class*="Input"], [class*="chat"] textarea'),
-            ],
-        )
-
-        logger.info("[send_message] Filling textarea and pressing Enter...")
-        await input_el.fill(message)
-        await input_el.press("Enter")
-        track_submission()
-
-        # Wait for response using dual-condition approach
-        logger.info("[send_message] Waiting for response (initial 3s buffer)...")
-        await page.wait_for_timeout(3000)
-        placeholder_already_reply = "Reply" in pre_state["placeholder"]
-
-        logger.info(
-            "[send_message] Waiting for new message or placeholder change (timeout=%dms)...",
-            timeout,
-        )
-        try:
-            await page.wait_for_function(
-                """({ prevCount, alreadyReply }) => {
-                    const textarea = document.querySelector("textarea");
-                    if (!textarea) return false;
-                    const currentPlaceholder =
-                      textarea.getAttribute("placeholder") || "";
-                    const sel = '[class*="message"], [class*="Message"], ' +
-                      '[class*="response"], [class*="Response"], ' +
-                      '[class*="assistant"], [class*="Assistant"]';
-                    const messages = document.querySelectorAll(sel);
-                    const currentCount = messages.length;
-                    const placeholderChanged =
-                      !alreadyReply && currentPlaceholder.includes("Reply");
-                    const newMessageAppeared = currentCount > prevCount;
-                    return placeholderChanged || newMessageAppeared;
-                }""",
-                arg={
-                    "prevCount": pre_state["messageCount"],
-                    "alreadyReply": placeholder_already_reply,
-                },
-                timeout=timeout,
-            )
-        except PlaywrightTimeoutError:
-            raise ResponseTimeoutError(
-                f"Response polling timed out after {timeout}ms"
-            ) from None
-        logger.info(
-            "[send_message] Response detected — polling for processing completion..."
-        )
-
-        # Poll for processing completion
-        poll_deadline = time.time() * 1000 + 300000
-        poll_count = 0
-        while time.time() * 1000 < poll_deadline:
-            still_processing = await page.evaluate("""() => {
-                const spinSel = '[class*="loading"], ' +
-                  '[class*="spinner"], [class*="animate-spin"]';
-                const hasSpinner =
-                  document.querySelector(spinSel) !== null;
-                const typeSel =
-                  '[class*="typing"], [class*="streaming"]';
-                const hasTyping =
-                  document.querySelector(typeSel) !== null;
-                const buttons =
-                  Array.from(document.querySelectorAll('button'));
-                const hasStop = buttons.some(
-                  b => b.textContent?.includes('Stop generating'));
-                return hasSpinner || hasTyping || hasStop;
-            }""")
-            if not still_processing:
-                break
-            poll_count += 1
-            if poll_count % 5 == 1:
-                logger.info("[send_message] Still processing (poll #%d)...", poll_count)
-            await page.wait_for_timeout(2000)
-
-        if poll_count > 0:
-            logger.info("[send_message] Processing complete after %d poll(s)", poll_count)
-
-        # Final buffer for remaining streaming
-        logger.debug("[send_message] Final 2s buffer...")
-        await page.wait_for_timeout(2000)
-        logger.info("[send_message] Capturing UI state...")
-        return await capture_ui_state(page)
-
-    return await _send()
-
-
-async def upload_file(page: Page, file_path: Path, config: HarnessConfig | None = None) -> None:
-    """Upload a file via the target system's attach-file flow."""
-    filename = file_path.name
-    logger.info("[upload] Step 1/5: Starting upload of '%s' (%s)", filename, file_path)
-
-    await dismiss_modals(page)
-
-    # Click the attach button to trigger file chooser
-    logger.info("[upload] Step 2/5: Clicking attach button...")
-    attach_selector = ", ".join(
-        [
-            'button:has(span.sr-only:has-text("Attach file"))',
-            'button:has(span:has-text("Attach file"))',
-            'button:has-text("Attach file")',
-            'button[aria-label*="attach" i]',
-            'button[aria-label*="file" i]',
-        ]
+    # Snapshot pre-state: text length (primary) + message count (secondary)
+    pre_text_len = _get_chat_text_length(page)
+    pre_count = _count_chat_messages(page)
+    logger.debug(
+        "[send_message] Pre-state: text_len=%d, message_count=%d",
+        pre_text_len,
+        pre_count,
     )
-    attach_button = page.locator(attach_selector).first
 
-    # Use expect_file_chooser context manager
+    # Find the CHAT textarea (not form textareas that may appear above it)
+    input_el = _find_chat_textarea(page)
+    try:
+        visible = input_el.is_visible(timeout=2000)
+    except Exception:
+        visible = False
+    if not visible:
+        logger.info("[send_message] Chat textarea not visible — trying fallback...")
+        try:
+            page.get_by_placeholder(_CHAT_INPUT_PLACEHOLDER).click(timeout=5000)
+        except Exception:
+            try:
+                page.get_by_role("textbox").last.click(timeout=3000)
+            except Exception:
+                logger.warning("[send_message] No textbox found at all")
+                return capture_ui_state(page)
+        stabilize(page, "input focus after fallback click", 1000)
+        input_el = _find_chat_textarea(page)
+        try:
+            input_el.wait_for(state="visible", timeout=5000)
+        except Exception:
+            logger.warning("[send_message] Chat input never appeared")
+            return capture_ui_state(page)
+
+    # Ensure Orca isn't mid-generation before we send (avoids "Response cancelled")
+    if is_page_active(page):
+        logger.info("[send_message] Page still active — waiting before sending...")
+        wait_until_settled(page, idle_timeout_ms=30000)
+
+    # Send the message — single type() call avoids stale element between fill/press
+    send_result = do_action(
+        page,
+        intent=f"send message: {msg_preview}",
+        act=lambda: input_el.type(message + "\n", delay=0),
+    )
+    if not send_result.succeeded:
+        logger.warning("[send_message] type() failed — not waiting for response")
+        return capture_ui_state(page)
+
+    # Wait for response (text-delta primary, message-count secondary)
+    response_detected = _wait_for_response(page, pre_count, pre_text_len, timeout)
+
+    if not response_detected:
+        # Check if a dialog appeared during the wait — dismiss and retry
+        try:
+            dialog = page.get_by_role("dialog")
+            if dialog.count() > 0 and dialog.first.is_visible():
+                logger.info(
+                    "[send_message] Dialog appeared during wait — dismissing and retrying..."
+                )
+                dismiss_modals(page)
+                stabilize(page, "post-dialog-dismiss", 1000)
+                response_detected = _wait_for_response(
+                    page, pre_count, pre_text_len, min(timeout, 60000)
+                )
+        except Exception:
+            pass
+        if not response_detected:
+            logger.warning(
+                "[send_message] Response did not appear within %dms", timeout
+            )
+
+    # Wait for processing to complete — keeps waiting while page is active
+    wait_until_settled(page)
+
+    # Check for "Response cancelled" — means we interrupted Orca mid-generation.
+    # Wait for the real response that follows the cancellation.
+    try:
+        last_msg = page.locator("main .message-assistant").last
+        if last_msg.count() > 0:
+            text = last_msg.inner_text(timeout=2000).strip()
+            if text.lower() in ("response cancelled", "response cancelled."):
+                logger.info(
+                    "[send_message] Detected 'Response cancelled' — waiting for real response..."
+                )
+                new_text_len = _get_chat_text_length(page)
+                _wait_for_response(page, pre_count, new_text_len, min(timeout, 120000))
+                wait_until_settled(page)
+    except Exception:
+        pass
+
+    logger.info("[send_message] Capturing UI state...")
+    return await capture_ui_state(page)
+
+
+def _execute_upload_flow(page: Page, file_path: Path) -> None:
+    """Raw upload mechanics — click attach, set file, confirm. No waits."""
+    dismiss_modals(page)
+
+    attach_button = page.locator(_ATTACH_SELECTOR).first
+
+    # Trigger file chooser
     file_chooser = None
     try:
-        async with page.expect_file_chooser(timeout=10000) as fc_info:
-            await attach_button.click(timeout=5000)
-        file_chooser = await fc_info.value
-        logger.info("[upload] Step 3/5: File chooser opened — setting file...")
+        with page.expect_file_chooser(timeout=10000) as fc_info:
+            attach_button.click(timeout=5000)
+        file_chooser = fc_info.value
+        logger.info("[upload] File chooser opened — setting file...")
     except Exception:
-        logger.info(
-            "[upload] Step 3/5: File chooser failed — using fallback input[type=file]"
-        )
+        logger.info("[upload] File chooser failed — using fallback input[type=file]")
 
     if file_chooser:
         await file_chooser.set_files(str(file_path))
     else:
-        # Fallback: find input[type="file"] and set directly
-        file_input = page.locator('input[type="file"]').first
-        await file_input.wait_for(state="attached", timeout=5000)
-        await file_input.set_input_files(str(file_path))
+        try:
+            file_input = page.locator('input[type="file"]').first
+            file_input.wait_for(state="attached", timeout=5000)
+            file_input.set_input_files(str(file_path))
+        except Exception as exc:
+            raise RuntimeError(f"Cannot set upload file: {exc}") from exc
 
-    await page.wait_for_timeout(2000)
-
-    # Check for "Unsupported format" error — retry with .txt extension (once)
-    has_unsupported = await page.evaluate(
-        "() => document.body.innerText.includes('Unsupported format')"
-    )
+    # Check for "Unsupported format" error — retry with .txt extension
+    try:
+        has_unsupported = page.evaluate(
+            """() => {
+                const alerts = document.querySelectorAll('[role="alert"]');
+                return Array.from(alerts).some(el => el.innerText.includes('Unsupported format'))
+                    || document.body.innerText.includes('Unsupported format');
+            }"""
+        )
+    except Exception:
+        has_unsupported = False
     if has_unsupported and file_path.suffix != ".txt":
         logger.info(
-            "[upload] Unsupported format detected — retrying '%s' as .txt", filename
+            "[upload] Unsupported format detected — retrying '%s' as .txt",
+            file_path.name,
         )
-        await page.keyboard.press("Escape")
-        await page.wait_for_timeout(1000)
-        tmp_dir = Path(tempfile.mkdtemp())
-        txt_path = tmp_dir / file_path.with_suffix(".txt").name
-        shutil.copy2(file_path, txt_path)
-        await upload_file(page, txt_path)
-        return
+        with contextlib.suppress(Exception):
+            page.keyboard.press("Escape")
+        stabilize(page, "escape unsupported-format dialog", 500)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            txt_path = Path(tmp_dir) / file_path.with_suffix(".txt").name
+            shutil.copy2(file_path, txt_path)
+            _execute_upload_flow(page, txt_path)
 
-    # Confirm the upload
-    logger.info("[upload] Step 4/5: Confirming upload...")
-    confirm_patterns = [
-        re.compile(r"add to chat", re.IGNORECASE),
-        re.compile(r"upload", re.IGNORECASE),
-        re.compile(r"confirm", re.IGNORECASE),
-        re.compile(r"attach", re.IGNORECASE),
-        re.compile(r"done", re.IGNORECASE),
-    ]
-    confirmed = False
-    for pattern in confirm_patterns:
+    # Click confirm button if visible
+    for pattern in _CONFIRM_PATTERNS:
         try:
             btn = page.locator("button").filter(has_text=pattern).first
             if await btn.is_visible(timeout=1000):
                 logger.info(
-                    "[upload] Step 4/5: Clicked confirm button matching '%s'",
-                    pattern.pattern,
+                    "[upload] Clicked confirm button matching '%s'", pattern.pattern
                 )
-                await btn.click()
-                confirmed = True
+                btn.click()
                 break
         except Exception:
             continue
 
-    if not confirmed:
-        logger.info("[upload] Step 4/5: No confirm button found — pressing Escape")
-        await page.keyboard.press("Escape")
 
-    await page.wait_for_timeout(2000)
+def upload_file(page: Page, file_path: Path) -> ActionResult:
+    """Upload a file via the target system's attach-file flow.
 
-    # Verify attachment
-    logger.info("[upload] Step 5/5: Verifying attachment visibility...")
-    file_visible = await page.evaluate(
-        """(name) => {
-            const body = document.body.innerText;
-            const baseName = name.replace(/\\.[^.]+$/, "");
-            return body.toLowerCase().includes(name.toLowerCase()) ||
-                   body.toLowerCase().includes(baseName.toLowerCase());
-        }""",
-        filename,
+    Returns ActionResult with effect_verified indicating whether the file
+    chip appeared in the UI after upload.
+    """
+    filename = file_path.name
+    return do_action(
+        page,
+        intent=f"upload '{filename}'",
+        act=lambda: _execute_upload_flow(page, file_path),
+        verify=_FILE_VISIBLE_JS,
+        verify_args=filename,
+        verify_timeout_ms=5000,
     )
-    if file_visible:
-        logger.info("[upload] Step 5/5: File '%s' confirmed visible in UI", filename)
-    else:
-        logger.warning(
-            "[upload] Step 5/5: File '%s' NOT visible in UI — may not have attached",
-            filename,
-        )
 
 
-async def auto_fill_and_submit(page: Page, config: HarnessConfig | None = None) -> bool:
+async def auto_fill_and_submit(page: Page) -> bool:
     """Auto-fill visible forms and click Submit. Returns True if form was submitted."""
     form_submit_btn = page.locator(
-        'button:has-text("Submit"), button:has-text("Confirm Theme"), button:has-text("Confirm")'
+        'button:has-text("Submit"), '
+        'button:has-text("Continue"), '
+        'button:has-text("Confirm Theme"), '
+        'button:has-text("Confirm")'
     ).first
     try:
         form_visible = await form_submit_btn.is_visible(timeout=3000)
@@ -271,61 +403,84 @@ async def auto_fill_and_submit(page: Page, config: HarnessConfig | None = None) 
         "[auto_fill] Form detected — auto-filling (user agent didn't provide actions)"
     )
 
-    # Fill selects with first non-placeholder option
-    selects = page.locator("main select")
-    select_count = await selects.count()
+    # Fill selects with first non-placeholder option — re-query after each
+    # because filling one select can trigger conditional form logic
+    try:
+        select_count = page.locator("main select").count()
+    except Exception:
+        select_count = 0
     if select_count > 0:
         logger.info("[auto_fill] Filling %d select element(s)...", select_count)
     for i in range(select_count):
-        sel = selects.nth(i)
         try:
-            current_val = await sel.input_value()
+            selects = page.locator("main select")
+            if i >= selects.count():
+                break
+            sel = selects.nth(i)
+            current_val = sel.input_value()
+            if not current_val or current_val == "Select an option...":
+                options = sel.locator("option").all_text_contents()
+                first_real = next(
+                    (o for o in options if o != "Select an option..." and o.strip()),
+                    None,
+                )
+                if first_real:
+                    sel.select_option(label=first_real)
+                    logger.info("[auto_fill]   Select #%d -> %r", i + 1, first_real)
+                    stabilize(page, "form update after select change", 300)
         except Exception:
             continue
-        if not current_val or current_val == "Select an option...":
-            options = await sel.locator("option").all_text_contents()
-            first_real = next(
-                (o for o in options if o != "Select an option..." and o.strip()),
-                None,
-            )
-            if first_real:
-                await sel.select_option(label=first_real)
-                logger.info("[auto_fill]   Select #%d -> %r", i + 1, first_real)
 
-    # Fill empty text inputs with placeholder text
-    inputs = page.locator('main input[type="text"], main input:not([type])')
-    input_count = await inputs.count()
+    # Fill empty text inputs with placeholder text — re-query each iteration
+    try:
+        input_count = page.locator(
+            'main input[type="text"], main input:not([type])'
+        ).count()
+    except Exception:
+        input_count = 0
     filled_inputs = 0
     for i in range(input_count):
-        inp = inputs.nth(i)
         try:
-            val = await inp.input_value()
+            inputs = page.locator('main input[type="text"], main input:not([type])')
+            if i >= inputs.count():
+                break
+            inp = inputs.nth(i)
+            val = inp.input_value()
+            if not val:
+                placeholder = inp.get_attribute("placeholder") or "General audience"
+                inp.fill(placeholder)
+                filled_inputs += 1
+                stabilize(page, "form update after input fill", 200)
         except Exception:
             continue
-        if not val:
-            placeholder = await inp.get_attribute("placeholder") or "General audience"
-            await inp.fill(placeholder)
-            filled_inputs += 1
     if filled_inputs > 0:
         logger.info("[auto_fill] Filled %d empty text input(s)", filled_inputs)
 
     # Select first radio button if none selected
-    radios = page.locator('main input[type="radio"]')
-    if await radios.count() > 0:
-        any_checked = await page.locator('main input[type="radio"]:checked').count()
-        if any_checked == 0:
-            logger.info("[auto_fill] No radio selected — checking first option")
-            label = radios.first.locator("xpath=ancestor::label")
-            try:
-                if await label.is_visible(timeout=2000):
-                    await label.click(force=True)
-                else:
-                    await radios.first.check(force=True)
-            except Exception:
-                await radios.first.check(force=True)
+    try:
+        radios = page.locator('main input[type="radio"]')
+        if radios.count() > 0:
+            any_checked = page.locator('main input[type="radio"]:checked').count()
+            if any_checked == 0:
+                logger.info("[auto_fill] No radio selected — checking first option")
+                label = radios.first.locator("xpath=ancestor::label")
+                try:
+                    if label.is_visible(timeout=2000):
+                        label.click(force=True)
+                    else:
+                        radios.first.check(force=True)
+                except Exception:
+                    with contextlib.suppress(Exception):
+                        radios.first.check(force=True)
+    except Exception:
+        pass
 
-    await page.wait_for_timeout(500)
+    stabilize(page, "form values committed before submit", 500)
     logger.info("[auto_fill] Clicking submit button...")
-    await form_submit_btn.click()
+    try:
+        form_submit_btn.click()
+    except Exception as exc:
+        logger.warning("[auto_fill] Submit click failed: %s", exc)
+        return False
     logger.info("[auto_fill] Form submitted")
     return True

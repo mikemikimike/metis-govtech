@@ -7,6 +7,7 @@ RunRecord.
 
 from __future__ import annotations
 
+import contextlib
 import re
 import time
 from datetime import UTC, datetime
@@ -17,14 +18,6 @@ from playwright.async_api import Page
 
 from metis.core.logging import get_logger
 
-from ..exceptions import (
-    ConsecutiveFailureEscalation,
-    PostSubmissionObservationError,
-    ResponseTimeoutError,
-    RunRecoverableError,
-    TransientDOMError,
-    TurnRecoverableError,
-)
 from ..types import (
     ButtonClickAction,
     CollectedArtifact,
@@ -38,13 +31,20 @@ from ..types import (
     RunRecord,
     Scenario,
     UIAction,
-    UIState,
     UserAgentInput,
 )
 from ..user_agent.agent import UserAgent
+from ._action_filter import ActionIntent, SkipReason, filter_actions
 from ._auth import dismiss_modals
 from ._config import HarnessConfig
 from ._page_actions import auto_fill_and_submit, send_message, upload_file
+from ._protocol import (
+    GuardFailed,
+    do_action,
+    guard_element,
+    stabilize,
+    wait_until_settled,
+)
 from ._ui_capture import (
     capture_artifacts_panel,
     capture_inline_charts,
@@ -55,36 +55,6 @@ if TYPE_CHECKING:
     from metis.engine.tui import SimulationState, TUIContext
 
 logger = get_logger()
-
-
-async def _recover_page(page: Page, config: HarnessConfig) -> None:
-    """Lightweight page recovery: refresh + wait for chat textarea."""
-    await page.reload(wait_until="domcontentloaded", timeout=15000)
-    await dismiss_modals(page)
-    await page.wait_for_selector("textarea", timeout=10000)
-
-
-async def _recover_and_check(
-    page: Page,
-    config: HarnessConfig,
-    sent_message: str,
-) -> UIState | None:
-    """Recover page and check whether the sent message got a response.
-
-    Returns UIState if the message was already processed (don't resend),
-    or None if the message was never received (safe to resend).
-    """
-    await _recover_page(page, config)
-    ui_state = await capture_ui_state(page)
-
-    last_user_msg = await page.evaluate("""() => {
-        const msgs = document.querySelectorAll('[class*="user"], [class*="User"]');
-        return msgs.length ? msgs[msgs.length - 1].innerText?.trim() || "" : "";
-    }""")
-
-    if sent_message[:80] in (last_user_msg or ""):
-        return ui_state
-    return None
 
 
 async def run_simulation(
@@ -172,29 +142,32 @@ async def run_simulation(
     # Track uploaded files to avoid duplicates
     uploaded_files: set[str] = set()
 
+    # Track consecutive failures per action key for hard-stop
+    consecutive_failures: dict[str, int] = {}
+
     # Capture target session ID from URL
     target_session_id: str | None = None
+
+    def _finish(stop_reason: str) -> RunRecord:
+        return _build_record(
+            stop_reason,
+            run_config,
+            conversation,
+            artifacts_collected,
+            start_time,
+            target_session_id,
+        )
 
     # Initial state from opening
     current_message: str = opening.message
     current_ui_actions: list[UIAction] = opening.ui_actions
     current_decision: str = opening.decision
 
-    consecutive_failures = 0
-
     # Turn loop
     while True:
         turn_count += 1
         turn_start = time.time()
         elapsed_s = time.time() - start_time
-
-        logger.info("-" * 50)
-        logger.info(
-            "[turn %d] Starting (elapsed: %.1fs / %ds max)",
-            turn_count,
-            elapsed_s,
-            run_config.timeout_minutes * 60,
-        )
 
         # Notify TUI of turn progress
         if state:
@@ -216,14 +189,7 @@ async def run_simulation(
                 turn_count,
                 run_config.max_turns,
             )
-            return _build_record(
-                "max_turns",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
+            return _finish("max_turns")
 
         # --- Stopping rule 2: timeout ---
         if elapsed_s >= run_config.timeout_minutes * 60:
@@ -233,47 +199,32 @@ async def run_simulation(
                 elapsed_s,
                 run_config.timeout_minutes * 60,
             )
-            return _build_record(
-                "timeout",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
+            return _finish("timeout")
 
         # --- Stopping rule: user abandoned ---
         if current_decision == "giving_up":
             logger.info("[turn %d] STOP: user_abandoned (agent gave up)", turn_count)
-            return _build_record(
-                "user_abandoned",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
+            return _finish("user_abandoned")
 
-        # --- Stopping rule: goal achieved (with artifact capture window) ---
+        # --- Stopping rule: goal achieved (with single artifact capture attempt) ---
         if current_decision == "goal_achieved":
             logger.info(
-                "[turn %d] STOP: goal_achieved — entering 2-min artifact capture phase...",
+                "[turn %d] STOP: goal_achieved",
                 turn_count,
             )
-            artifact_deadline = time.time() + 120  # 2 min
-            attempt = 0
-            while time.time() < artifact_deadline and not artifacts_collected:
-                attempt += 1
+            # Only attempt artifact capture if we already found some during the run
+            if artifacts_collected:
                 logger.info(
-                    "[turn %d] Artifact capture attempt %d (%.0fs remaining)...",
+                    "[turn %d] Collected %d artifact(s) during run",
                     turn_count,
-                    attempt,
-                    artifact_deadline - time.time(),
+                    len(artifacts_collected),
                 )
-                panel_artifacts = await capture_artifacts_panel(page)
+            else:
+                # Single attempt — don't loop for 2 minutes
+                panel_artifacts = capture_artifacts_panel(page)
                 if panel_artifacts:
                     logger.info(
-                        "[turn %d] Found %d artifact(s) — downloading...",
+                        "[turn %d] Found %d artifact(s) in final check — downloading...",
                         turn_count,
                         len(panel_artifacts),
                     )
@@ -284,6 +235,7 @@ async def run_simulation(
                             for a in panel_artifacts
                         ],
                         run_dir / "artifacts",
+                        turn=turn_count,
                     )
                     for dl in downloaded:
                         artifacts_collected.append(
@@ -293,31 +245,8 @@ async def run_simulation(
                                 path=dl["local_path"],
                             )
                         )
-                    if artifacts_collected:
-                        break
-                await page.wait_for_timeout(5000)
 
-            if not artifacts_collected:
-                logger.info(
-                    "[turn %d] No artifacts captured after %d attempts",
-                    turn_count,
-                    attempt,
-                )
-            else:
-                logger.info(
-                    "[turn %d] Collected %d artifact(s)",
-                    turn_count,
-                    len(artifacts_collected),
-                )
-
-            return _build_record(
-                "goal_achieved",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
+            return _finish("goal_achieved")
 
         logger.info(
             "[turn %d] Decision: %r | Message: %r",
@@ -326,93 +255,141 @@ async def run_simulation(
             current_message[:80],
         )
 
-        # Detect actions that trigger long processing
+        # --- Action validation layer (one place, one policy) ---
+        available_files = (
+            [f.name for f in fixtures_dir.iterdir() if f.is_file()]
+            if fixtures_dir.exists()
+            else []
+        )
+        filter_result = filter_actions(
+            current_ui_actions,
+            uploaded_files=uploaded_files,
+            available_files=available_files,
+        )
+
+        # Detect actions that trigger long processing (from validated set)
         has_new_file_upload = any(
-            isinstance(a, FileUploadAction) and a.file not in uploaded_files
-            for a in current_ui_actions
+            va.intent == ActionIntent.upload for va in filter_result.actions
         )
         has_form_submit = any(
-            isinstance(a, ButtonClickAction)
-            and re.search(
-                r"submit|generate|run|start|create|analyze|confirm",
-                a.selector,
-                re.IGNORECASE,
-            )
-            for a in current_ui_actions
+            va.intent == ActionIntent.submit for va in filter_result.actions
         )
 
-        # Execute UI actions before sending the message
-        if current_ui_actions:
-            logger.info(
-                "[turn %d] Executing %d UI action(s) before message...",
-                turn_count,
-                len(current_ui_actions),
-            )
-        for action_idx, action in enumerate(current_ui_actions, 1):
-            if isinstance(action, FileUploadAction):
-                if action.file in uploaded_files:
-                    logger.info(
-                        "[turn %d]   Action %d/%d: SKIP duplicate upload '%s'",
-                        turn_count,
-                        action_idx,
-                        len(current_ui_actions),
-                        action.file,
-                    )
-                    continue
+        # Report skipped actions as feedback
+        turn_action_feedback: list[str] = []
+        for sk in filter_result.skipped:
+            if sk.reason == SkipReason.duplicate_upload:
+                turn_action_feedback.append(
+                    f"upload '{sk.action.file}': skipped — already uploaded"  # type: ignore[union-attr]
+                )
+            elif sk.reason == SkipReason.file_not_found:
+                turn_action_feedback.append(
+                    f"upload '{sk.action.file}': FAILED — file not found. "  # type: ignore[union-attr]
+                    f"Available: {sk.detail}"
+                )
+
+        # --- action dispatch ---
+        has_submit_action = False
+
+        for validated in filter_result.actions:
+            action = validated.action
+
+            if validated.intent == ActionIntent.upload:
+                assert isinstance(action, FileUploadAction)
+                action_key = f"upload:{action.file}"
                 file_path = fixtures_dir / action.file
-                if not file_path.exists():
-                    logger.warning(
-                        "[turn %d]   Action %d/%d: SKIP upload '%s' — file not found at %s",
-                        turn_count,
-                        action_idx,
-                        len(current_ui_actions),
-                        action.file,
-                        file_path,
+                upload_result = upload_file(page, file_path)
+                if upload_result.succeeded and upload_result.effect_verified:
+                    uploaded_files.add(action.file)
+                    consecutive_failures.pop(action_key, None)
+                else:
+                    msg = f"upload '{action.file}': "
+                    if not upload_result.succeeded:
+                        msg += f"FAILED — {upload_result.error}"
+                    else:
+                        msg += "completed but file chip not visible in UI"
+                    turn_action_feedback.append(msg)
+                    consecutive_failures[action_key] = (
+                        consecutive_failures.get(action_key, 0) + 1
+                    )
+
+            elif validated.intent in (ActionIntent.click, ActionIntent.submit):
+                assert isinstance(action, ButtonClickAction)
+                action_key = f"click:{action.selector}"
+                intent_name = (
+                    "submit_form"
+                    if validated.intent == ActionIntent.submit
+                    else "click_button"
+                )
+                is_css = bool(re.search(r"[.#\[\]=:>~+]", action.selector))
+                selector = action.selector
+
+                try:
+                    guard_element(page, selector, action=intent_name)
+                except GuardFailed as exc:
+                    turn_action_feedback.append(
+                        f"click '{selector}': BLOCKED — {exc.reason}"
+                    )
+                    consecutive_failures[action_key] = (
+                        consecutive_failures.get(action_key, 0) + 1
                     )
                     continue
-                logger.info(
-                    "[turn %d]   Action %d/%d: FILE_UPLOAD '%s'",
-                    turn_count,
-                    action_idx,
-                    len(current_ui_actions),
-                    action.file,
-                )
-                await upload_file(page, file_path)
-                uploaded_files.add(action.file)
 
-            elif isinstance(action, ButtonClickAction):
-                logger.info(
-                    "[turn %d]   Action %d/%d: BUTTON_CLICK '%s'",
-                    turn_count,
-                    action_idx,
-                    len(current_ui_actions),
-                    action.selector,
-                )
-                try:
-                    is_css = bool(re.search(r"[.#\[\]=:>~+]", action.selector))
-                    if is_css:
-                        await page.locator(action.selector).first.click(timeout=5000)
-                    else:
-                        await page.get_by_text(action.selector, exact=True).first.click(
-                            timeout=5000
+                # Snapshot page text before submit to detect stale state
+                pre_click_text = ""
+                if validated.intent == ActionIntent.submit:
+                    with contextlib.suppress(Exception):
+                        pre_click_text = page.locator("main").first.inner_text(
+                            timeout=2000
                         )
-                    await page.wait_for_timeout(1000)
-                    logger.info(
-                        "[turn %d]   Action %d/%d: Click successful",
-                        turn_count,
-                        action_idx,
-                        len(current_ui_actions),
+
+                def _do_click(sel: str = selector, css: bool = is_css) -> None:
+                    if css:
+                        page.locator(sel).first.click(timeout=5000)
+                    else:
+                        page.get_by_text(sel, exact=True).first.click(timeout=5000)
+
+                result = do_action(page, intent=intent_name, act=_do_click)
+                if result.succeeded:
+                    stabilize(page, "post-click settle", 500)
+                    consecutive_failures.pop(action_key, None)
+                    if validated.intent == ActionIntent.submit:
+                        has_submit_action = True
+                        # Stale-state detection: page should change after submit
+                        try:
+                            post_click_text = page.locator("main").first.inner_text(
+                                timeout=2000
+                            )
+                        except Exception:
+                            post_click_text = ""
+                        if (
+                            pre_click_text
+                            and post_click_text
+                            and pre_click_text == post_click_text
+                        ):
+                            turn_action_feedback.append(
+                                f"submit '{selector}': clicked but page unchanged"
+                                " — form may require unfilled fields"
+                            )
+                            consecutive_failures[action_key] = (
+                                consecutive_failures.get(action_key, 0) + 1
+                            )
+                else:
+                    visible = ""
+                    if result.page_context and result.page_context.visible_elements:
+                        visible = " Visible: " + ", ".join(
+                            result.page_context.visible_elements[:5]
+                        )
+                    turn_action_feedback.append(
+                        f"click '{action.selector}': FAILED — {result.error}.{visible}"
                     )
-                except Exception as exc:
-                    logger.warning(
-                        "[turn %d]   Action %d/%d: Click FAILED: %s",
-                        turn_count,
-                        action_idx,
-                        len(current_ui_actions),
-                        exc,
+                    consecutive_failures[action_key] = (
+                        consecutive_failures.get(action_key, 0) + 1
                     )
 
-            elif isinstance(action, FormFillAction):
+            elif validated.intent == ActionIntent.fill:
+                assert isinstance(action, FormFillAction)
+                action_key = f"fill:{action.selector}"
                 fill_value = action.value
 
                 # Override AI Model selects to "Fast (Claude Haiku)"
@@ -430,52 +407,80 @@ async def run_simulation(
 
                 if is_model_select:
                     fill_value = "Fast (Claude Haiku)"
-                    logger.info(
-                        "[turn %d]   Action %d/%d: FORM_FILL (model override) '%s' = %r",
-                        turn_count,
-                        action_idx,
-                        len(current_ui_actions),
-                        action.selector,
-                        fill_value,
-                    )
-                else:
-                    logger.info(
-                        "[turn %d]   Action %d/%d: FORM_FILL '%s' = %r",
-                        turn_count,
-                        action_idx,
-                        len(current_ui_actions),
-                        action.selector,
-                        fill_value,
-                    )
 
-                try:
-                    el = page.locator(action.selector).first
-                    tag_name = await el.evaluate("e => e.tagName.toLowerCase()")
-                    logger.debug("[turn %d]   Element tag: <%s>", turn_count, tag_name)
+                _fill_selector = action.selector
+                _fill_value = fill_value
+
+                def _do_form_fill(
+                    selector: str = _fill_selector,
+                    value: str = _fill_value,
+                ) -> None:
+                    el = page.locator(selector).first
+                    tag_name = el.evaluate("e => e.tagName.toLowerCase()")
                     if tag_name == "select":
                         try:
-                            await el.select_option(label=fill_value)
+                            el.select_option(label=value)
                         except Exception:
-                            await el.select_option(fill_value)
+                            el.select_option(value)
                     elif tag_name == "input":
                         input_type = await el.evaluate("e => e.type")
                         if input_type in ("radio", "checkbox"):
-                            await el.check()
+                            # Orca hides inputs with sr-only; click wrapping label instead
+                            label = el.locator("xpath=ancestor::label")
+                            try:
+                                if label.count() > 0 and label.first.is_visible(
+                                    timeout=1000
+                                ):
+                                    label.first.click(force=True)
+                                else:
+                                    el.check(force=True)
+                            except Exception:
+                                el.check(force=True)
                         else:
-                            await el.fill(fill_value)
+                            el.fill(value)
                     elif tag_name == "textarea":
-                        await el.fill(fill_value)
+                        el.fill(value)
                     else:
-                        await el.click()
-                    await page.wait_for_timeout(500)
-                except Exception as exc:
-                    logger.warning(
-                        "[turn %d]   Action %d/%d: FORM_FILL FAILED: %s",
-                        turn_count,
-                        action_idx,
-                        len(current_ui_actions),
-                        exc,
+                        el.click()
+
+                try:
+                    guard_element(page, action.selector, action="fill_form")
+                except GuardFailed as exc:
+                    turn_action_feedback.append(
+                        f"form_fill '{action.selector}': BLOCKED — {exc.reason}"
                     )
+                    consecutive_failures[action_key] = (
+                        consecutive_failures.get(action_key, 0) + 1
+                    )
+                    continue
+
+                result = do_action(page, intent="fill_form", act=_do_form_fill)
+                if result.succeeded:
+                    stabilize(page, "form value committed", 300)
+                    consecutive_failures.pop(action_key, None)
+                else:
+                    visible = ""
+                    if result.page_context and result.page_context.visible_elements:
+                        visible = " Visible: " + ", ".join(
+                            result.page_context.visible_elements[:5]
+                        )
+                    turn_action_feedback.append(
+                        f"form_fill '{action.selector}': FAILED — {result.error}.{visible}"
+                    )
+                    consecutive_failures[action_key] = (
+                        consecutive_failures.get(action_key, 0) + 1
+                    )
+
+        # Hard-stop if any action has failed 3 consecutive turns
+        for key, count in consecutive_failures.items():
+            if count >= 3:
+                logger.info(
+                    "[turn %d] STOP: user_abandoned — action '%s' failed %d consecutive turns",
+                    turn_count,
+                    key,
+                    count,
+                )
+                return _finish("user_abandoned")
 
         # Auto-fill if the user agent didn't provide form submit actions
         if not has_form_submit:
@@ -486,74 +491,64 @@ async def run_simulation(
             form_submitted = await auto_fill_and_submit(page)
             if form_submitted:
                 has_form_submit = True
+                has_submit_action = True
+
+        # Decide: wait for form processing (submit succeeded) or send message
+        actually_awaiting = has_submit_action
+
+        # After file upload, Orca may auto-start processing. Wait for it to
+        # settle before sending the message to avoid cancelling its response.
+        if has_new_file_upload and not actually_awaiting:
+            logger.debug("[turn %d] Waiting for post-upload settle...", turn_count)
+            stabilize(page, "post-upload settle", 2000)
+            wait_until_settled(page, idle_timeout_ms=10000)
 
         # Determine response timeout
         response_timeout: int | None = None
-        if has_new_file_upload or has_form_submit:
+        if has_new_file_upload or actually_awaiting:
             response_timeout = max(config.timeouts.response_wait_ms, 180000)
-            logger.info(
-                "[turn %d] Extended timeout: %dms (file_upload=%s, form_submit=%s)",
-                turn_count,
-                response_timeout,
-                has_new_file_upload,
-                has_form_submit,
-            )
 
         # Send message or wait for form processing
-        send_start = time.time()
         try:
-            if has_form_submit:
-                logger.info(
-                    "[turn %d] Form was submitted — waiting for target to process...",
-                    turn_count,
-                )
-                processing_deadline = time.time() * 1000 + (
-                    response_timeout or config.timeouts.response_wait_ms
-                )
-                await page.wait_for_timeout(5000)
-                poll_count = 0
-                while time.time() * 1000 < processing_deadline:
-                    still_processing = await page.evaluate("""() => {
-                        const hasSpinner = document.querySelector('[class*="loading"], [class*="spinner"], [class*="animate-spin"]') !== null;
-                        const hasTyping = document.querySelector('[class*="typing"], [class*="streaming"]') !== null;
-                        const buttons = Array.from(document.querySelectorAll('button'));
-                        const hasStop = buttons.some(b => b.textContent?.includes('Stop generating'));
-                        return hasSpinner || hasTyping || hasStop;
-                    }""")
-                    if not still_processing:
-                        break
-                    poll_count += 1
-                    if poll_count % 5 == 1:
-                        logger.info(
-                            "[turn %d] Still processing after form submit (poll #%d)...",
-                            turn_count,
-                            poll_count,
-                        )
-                    await page.wait_for_timeout(3000)
-                logger.info(
-                    "[turn %d] Form processing complete (polled %d times)",
-                    turn_count,
-                    poll_count,
-                )
-                await page.wait_for_timeout(2000)
-                ui_state = await capture_ui_state(page)
+            if actually_awaiting:
+                stabilize(page, "initial form processing delay", 3000)
+                wait_result = wait_until_settled(page)
+                if not wait_result.satisfied:
+                    turn_action_feedback.append(
+                        "form processing hit hard ceiling — response may be incomplete"
+                    )
+                stabilize(page, "post-processing settle", 1000)
+                ui_state = capture_ui_state(page)
             else:
-                logger.info("[turn %d] Sending message to target...", turn_count)
-                ui_state = await send_message(
-                    page, current_message, config, timeout_override=response_timeout
+                # Dismiss modal if present before sending
+                try:
+                    has_modal = page.evaluate(
+                        "() => !!document.querySelector('[role=\"dialog\"]')"
+                    )
+                    if has_modal:
+                        dismiss_modals(page)
+                except Exception:
+                    pass
+                ui_state = send_message(
+                    page,
+                    current_message,
+                    config,
+                    timeout_override=response_timeout,
                 )
 
-            # Check artifacts panel if response hints at downloads
+            # Check artifacts panel if response contains download links/signals
             if not ui_state.artifacts:
-                response_hint = bool(
+                # Only check if there's a strong signal: actual download-related
+                # language or we just uploaded a file / submitted a form
+                has_download_signal = bool(
                     re.search(
-                        r"download|generated|ready|report|results|complete|export|file|artifact|chart|plot",
+                        r"download|export|attached|here(?:'|')s (?:the|your) file",
                         ui_state.text,
                         re.IGNORECASE,
                     )
                 )
-                had_processing = has_new_file_upload or has_form_submit
-                if response_hint or had_processing:
+                had_processing = has_new_file_upload or actually_awaiting
+                if has_download_signal or had_processing:
                     logger.info(
                         "[turn %d] Response hints at artifacts — checking panel...",
                         turn_count,
@@ -571,64 +566,10 @@ async def run_simulation(
                             "[turn %d] No artifacts found in panel", turn_count
                         )
 
-            consecutive_failures = 0  # reset on success
-
-        except PostSubmissionObservationError:
-            recovered_state = await _recover_and_check(page, config, current_message)
-            if recovered_state is not None:
-                ui_state = recovered_state
-                consecutive_failures = 0
-            else:
-                try:
-                    ui_state = await send_message(
-                        page, current_message, config, timeout_override=response_timeout
-                    )
-                    consecutive_failures = 0
-                except ResponseTimeoutError:
-                    consecutive_failures += 1
-                    if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
-                        raise ConsecutiveFailureEscalation(
-                            f"{consecutive_failures} consecutive turn failures"
-                        )
-                    ui_state = UIState(
-                        text="", errors=["Response timeout — no response received"]
-                    )
-        except TransientDOMError:
-            consecutive_failures += 1
-            if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
-                raise ConsecutiveFailureEscalation(
-                    f"{consecutive_failures} consecutive turn failures"
-                )
-            await _recover_page(page, config)
-            try:
-                ui_state = await send_message(
-                    page, current_message, config, timeout_override=response_timeout
-                )
-                consecutive_failures = 0
-            except (TurnRecoverableError, ResponseTimeoutError) as inner_exc:
-                consecutive_failures += 1
-                if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
-                    raise ConsecutiveFailureEscalation(
-                        f"{consecutive_failures} consecutive turn failures"
-                    )
-                if isinstance(inner_exc, ResponseTimeoutError):
-                    ui_state = UIState(
-                        text="", errors=["Response timeout — no response received"]
-                    )
-                else:
-                    continue
-        except ResponseTimeoutError:
-            consecutive_failures += 1
-            if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
-                raise ConsecutiveFailureEscalation(
-                    f"{consecutive_failures} consecutive turn failures"
-                )
-            ui_state = UIState(text="", errors=["Response timeout — no response received"])
-        except RunRecoverableError:
-            raise
-
-        send_elapsed = time.time() - send_start
-        logger.info("[turn %d] send+wait: %.1fs", turn_count, send_elapsed)
+        except Exception as exc:
+            # --- Stopping rule: system error ---
+            logger.info("[turn %d] STOP: system_error (%s)", turn_count, exc)
+            return _finish("system_error")
 
         # Extract target session ID from URL
         if not target_session_id:
@@ -645,7 +586,32 @@ async def run_simulation(
             except Exception:
                 pass
 
+        # Detect auth loss
+        try:
+            url = page.url
+            if "login" in url or "auth" in url:
+                logger.info(
+                    "[turn %d] STOP: system_error (auth lost — URL contains login/auth: %s)",
+                    turn_count,
+                    url,
+                )
+                return _finish("system_error")
+        except Exception:
+            logger.info(
+                "[turn %d] STOP: system_error (page crashed — cannot read URL)",
+                turn_count,
+            )
+            return _finish("system_error")
+
         turn_duration_ms = int((time.time() - turn_start) * 1000)
+        logger.info(
+            "[turn %d] Done (%.1fs) response=%d chars, artifacts=%d, errors=%d",
+            turn_count,
+            turn_duration_ms / 1000,
+            len(ui_state.text) if ui_state else 0,
+            len(ui_state.artifacts) if ui_state and ui_state.artifacts else 0,
+            len(ui_state.errors) if ui_state and ui_state.errors else 0,
+        )
 
         # Record the conversation turn
         turn = ConversationTurn(
@@ -658,20 +624,23 @@ async def run_simulation(
         )
         conversation.append(turn)
 
-        # Download artifacts detected in this turn
-        if ui_state.artifacts:
+        # Download artifacts detected in this turn (skip already-collected ones)
+        already_collected_names = {a.filename for a in artifacts_collected}
+        new_artifacts = [
+            a for a in ui_state.artifacts if a.name not in already_collected_names
+        ]
+        if new_artifacts:
             logger.info(
-                "[turn %d] Downloading %d artifact(s)...",
+                "[turn %d] Downloading %d new artifact(s) (%d already collected)...",
                 turn_count,
-                len(ui_state.artifacts),
+                len(new_artifacts),
+                len(ui_state.artifacts) - len(new_artifacts),
             )
             downloaded_files = await _download_artifacts(
                 page,
-                [
-                    {"name": a.name, "type": a.type, "url": a.url}
-                    for a in ui_state.artifacts
-                ],
+                [{"name": a.name, "type": a.type, "url": a.url} for a in new_artifacts],
                 run_dir / "artifacts",
+                turn=turn_count,
             )
             downloaded_names: set[str] = set()
             for dl in downloaded_files:
@@ -686,7 +655,7 @@ async def run_simulation(
                 logger.info("[turn %d]   Downloaded: %s", turn_count, dl["filename"])
 
             # Record artifacts we couldn't download (for reference)
-            for artifact in ui_state.artifacts:
+            for artifact in new_artifacts:
                 if artifact.name not in downloaded_names:
                     artifacts_collected.append(
                         CollectedArtifact(
@@ -702,7 +671,7 @@ async def run_simulation(
         # Capture inline charts as artifacts
         try:
             chart_dir = run_dir / "artifacts" / "charts"
-            charts = await capture_inline_charts(page, chart_dir)
+            charts = capture_inline_charts(page, chart_dir, turn=turn_count)
             for chart in charts:
                 artifacts_collected.append(
                     CollectedArtifact(
@@ -714,53 +683,6 @@ async def run_simulation(
         except Exception:
             pass
 
-        # Turn summary
-        logger.info("[turn %d] SUMMARY (%.1fs):", turn_count, turn_duration_ms / 1000)
-        logger.info("[turn %d]   Response: %r", turn_count, ui_state.text[:100])
-        if ui_state.artifacts:
-            logger.info(
-                "[turn %d]   Artifacts: %s",
-                turn_count,
-                ", ".join(a.name for a in ui_state.artifacts),
-            )
-        if ui_state.errors:
-            logger.info(
-                "[turn %d]   Errors: %s", turn_count, "; ".join(ui_state.errors)
-            )
-        if ui_state.form_elements:
-            logger.info(
-                "[turn %d]   Forms: %d element(s) detected",
-                turn_count,
-                len(ui_state.form_elements),
-            )
-        if ui_state.target_status_labels:
-            logger.info(
-                "[turn %d]   Agent labels: %s",
-                turn_count,
-                ", ".join(ui_state.target_status_labels[:5]),
-            )
-        logger.info(
-            "[turn %d]   Total artifacts collected so far: %d",
-            turn_count,
-            len(artifacts_collected),
-        )
-
-        # Re-check stopping conditions before next agent call
-        if turn_count >= run_config.max_turns:
-            logger.info(
-                "[turn %d] STOP: max_turns reached (%d)",
-                turn_count,
-                run_config.max_turns,
-            )
-            return _build_record(
-                "max_turns",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
-
         elapsed_after_turn = time.time() - start_time
         if elapsed_after_turn >= run_config.timeout_minutes * 60:
             logger.info(
@@ -769,14 +691,7 @@ async def run_simulation(
                 elapsed_after_turn,
                 run_config.timeout_minutes * 60,
             )
-            return _build_record(
-                "timeout",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
+            return _finish("timeout")
 
         # Notify TUI that we are now waiting for the LLM user agent
         if state:
@@ -826,12 +741,21 @@ async def run_simulation(
                 ui_state.errors,
             )
 
+        if turn_action_feedback:
+            logger.info(
+                "[turn %d -> %d]   Input to agent — action feedback: %s",
+                turn_count,
+                turn_count + 1,
+                turn_action_feedback,
+            )
+
         turn_payload = UserAgentInput(
             ui_state=ui_state,
             run_meta=RunMeta(
                 turn_number=turn_count,
                 elapsed_seconds=int(time.time() - start_time),
             ),
+            action_feedback=turn_action_feedback,
         )
 
         agent_start = time.time()
@@ -843,14 +767,7 @@ async def run_simulation(
                 turn_count,
                 exc,
             )
-            return _build_record(
-                "system_error",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
+            return _finish("system_error")
         agent_elapsed = time.time() - agent_start
         logger.info("[turn %d] user-agent LLM: %.1fs", turn_count, agent_elapsed)
 
@@ -901,9 +818,18 @@ async def _download_artifacts(
     page: Page,
     artifacts: list[dict],
     run_dir: Path,
+    turn: int = 0,
 ) -> list[dict]:
-    """Download detected artifacts to disk using Playwright's download handling."""
-    run_dir.mkdir(parents=True, exist_ok=True)
+    """Download detected artifacts to disk using Playwright's download handling.
+
+    :param page: The active Playwright page.
+    :param artifacts: List of dicts with keys: name, type, url (optional).
+    :param run_dir: Base directory for artifacts.
+    :param turn: Current turn number (used for subdirectory to avoid overwrites).
+    :returns: List of dicts with keys: filename, local_path.
+    """
+    dest_dir = run_dir / f"turn-{turn}" if turn > 0 else run_dir
+    dest_dir.mkdir(parents=True, exist_ok=True)
     downloaded: list[dict] = []
     download_count = sum(1 for a in artifacts if a.get("type") == "download")
     logger.info(
@@ -912,16 +838,18 @@ async def _download_artifacts(
         run_dir,
     )
 
-    for idx, artifact in enumerate(artifacts, 1):
+    dl_idx = 0
+    for artifact in artifacts:
         if artifact.get("type") != "download":
             continue
+        dl_idx += 1
 
         try:
             url = artifact.get("url")
             name = artifact.get("name", "file")
             logger.info(
                 "[download]   [%d/%d] '%s' (url=%s)",
-                idx,
+                dl_idx,
                 download_count,
                 name,
                 url[:60] if url else "none",
@@ -945,8 +873,8 @@ async def _download_artifacts(
                         await link.click()
                     download = await download_info.value
                     filename = Path(download.suggested_filename or name).name
-                    dest_path = run_dir / filename
-                    await download.save_as(str(dest_path))
+                    dest_path = dest_dir / filename
+                    download.save_as(str(dest_path))
                     downloaded.append(
                         {"filename": filename, "local_path": str(dest_path)}
                     )
@@ -971,8 +899,8 @@ async def _download_artifacts(
                         )
                     download = await download_info.value
                     filename = Path(download.suggested_filename or name).name
-                    dest_path = run_dir / filename
-                    await download.save_as(str(dest_path))
+                    dest_path = dest_dir / filename
+                    download.save_as(str(dest_path))
                     downloaded.append(
                         {"filename": filename, "local_path": str(dest_path)}
                     )
@@ -1001,8 +929,8 @@ async def _download_artifacts(
                         await btn.click()
                     download = await download_info.value
                     filename = Path(download.suggested_filename or name).name
-                    dest_path = run_dir / filename
-                    await download.save_as(str(dest_path))
+                    dest_path = dest_dir / filename
+                    download.save_as(str(dest_path))
                     downloaded.append(
                         {"filename": filename, "local_path": str(dest_path)}
                     )
