@@ -2,6 +2,19 @@
 
 This is the day-to-day playbook for collaborating on METIS via GitHub. For coding standards, testing guidelines, and dependency rules, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+## Ownership
+
+Each package and app has a designated owner responsible for release decisions and final merge of release PRs. GitHub auto-assigns reviewers based on [`.github/CODEOWNERS`](../.github/CODEOWNERS).
+
+| Component | Owner |
+|-----------|-------|
+| `metis-core` | @mqf20 |
+| `metis-library` | @mqf20 |
+| `metis-engine` | @mqf20 |
+| `metis-wizard` | @leannetan |
+| `metis-api` (app) | @mqf20 |
+| `metis-web` (app) | @mqf20 |
+
 ## For Internal Team Members
 
 ### Starting a Release Cycle
@@ -12,9 +25,40 @@ This is the day-to-day playbook for collaborating on METIS via GitHub. For codin
    make release-init PKG=core VER=0.3.0
    ```
 
-   This creates branch `release/metis-core/v0.3.0` off `main` and opens a GitHub issue to track progress.
+   This creates branch `release/metis-core/v0.3.0` off `main` and opens a GitHub issue (labelled `release`, `package`, and the package label e.g. `metis-core`) to track progress.
 
-2. All feature work for this release targets the release branch.
+2. Bump the version in the package's `pyproject.toml` and update the lockfile:
+
+   ```bash
+   # edit packages/core/pyproject.toml → version = "0.3.0"
+   uv lock
+   ```
+
+3. Add a placeholder section in the package's `CHANGELOG.md`:
+
+   ```markdown
+   ## [0.3.0] - Unreleased
+
+   ### Added
+
+   ### Changed
+
+   ### Fixed
+   ```
+
+4. Commit and push:
+
+   ```bash
+   git commit -m "chore(core): initialize release v0.3.0"
+   git push -u origin release/metis-core/v0.3.0
+   ```
+
+5. Open a PR from the release branch into `main`:
+   - Title: `metis-core/v0.3.0`
+   - Labels: `release`, `package`, the package label (e.g., `metis-core`)
+   - This PR stays open and accumulates work until the release is complete.
+
+6. All feature work for this release targets the release branch. Link the PR back to the tracking issue (e.g., "Closes #12").
 
 ### Working on a Feature or Fix
 
@@ -27,6 +71,7 @@ This is the day-to-day playbook for collaborating on METIS via GitHub. For codin
    Use the standard prefixes (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`).
 
 2. Push early and open a **Draft PR** targeting the release branch. This gives the team visibility into in-progress work.
+   - Labels: `package` or `app`, and the component label (e.g., `metis-core`).
 
 3. Reference the release tracking issue in your PR description (e.g., "Part of #12").
 
@@ -55,16 +100,19 @@ For work that doesn't belong to a specific package release (e.g., documentation 
 ### Completing a Release
 
 1. Ensure all PRs for the release are merged into the release branch.
-2. Open a PR from the release branch into `main`. Get it reviewed and approved.
-3. Merge with a **merge commit** (not squash) to preserve branch history.
-4. Tag the merge commit on `main` with an annotated tag:
+2. Open a PR from the release branch into `main`:
+   - Title: `metis-core/v0.3.0`
+   - Labels: `release`, `package`, the package label (e.g., `metis-core`)
+3. Get it reviewed and approved.
+4. The **package/app owner** merges with a **merge commit** (not squash) to preserve branch history.
+5. Tag the merge commit on `main` with an annotated tag:
 
    ```bash
    git tag -a metis-core/v0.3.0 -m "metis-core/v0.3.0"
    git push origin metis-core/v0.3.0
    ```
 
-5. Close the tracking issue.
+6. Close the tracking issue.
 
 ## For External Contributors
 
