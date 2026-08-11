@@ -60,6 +60,8 @@ For the full specification (component contracts, dependency invariants, versioni
 
 ## Development Workflow
 
+For the step-by-step GitHub collaboration playbook (branching, PRs, reviews, merging), see [docs/github-workflow.md](docs/github-workflow.md).
+
 ### Branching
 
 Branch off `main` with a descriptive prefix:
@@ -86,11 +88,33 @@ Run `make check` before pushing. CI will reject PRs that fail.
 
 ### Commit Messages
 
-Use concise, imperative-mood messages that explain **why**, not just what:
+We follow a convention for commit messages [borrowed from Deis/CoreOS/AngularJS](https://github.com/deis/deis/blob/master/CONTRIBUTING.md#commit-style-guideline). The format is:
 
 ```
-add Langfuse trace ingester for production observability
-fix score aggregation when spans have missing timestamps
+{type}({scope}): {subject}
+
+{body}
+
+{footer}
+```
+
+**Rules:**
+
+- `{type}` is one of: `feat`, `fix`, `docs`, `style`, `ref`, `test`, `chore`
+- `{scope}` is the affected package or app name (e.g., `core`, `engine`, `wizard`, `api`)
+- `{subject}` uses imperative present tense ("change", not "changed"), no capital first letter, no trailing dot
+- Subject line limited to **50 characters**; body lines limited to **72 characters**
+- `{body}` explains the motivation and contrasts with previous behavior
+- `{footer}` mentions any breaking changes with migration notes
+
+**Examples:**
+
+```
+feat(engine): add Langfuse trace ingester for production observability
+
+fix(core): handle missing timestamps in score aggregation
+
+chore(wizard): initialize release v0.4.0
 ```
 
 Avoid generic messages like "fix bug" or "update code".
@@ -161,7 +185,6 @@ When adding a new workspace package:
 
 - Adherence to the dependency DAG (no upward imports)
 - Type annotations on public APIs
-- Tests covering the change
 - Focused scope — one concern per PR
 
 ### Merging
@@ -182,15 +205,7 @@ When in doubt, check the DAG in [docs/architecture.md](docs/architecture.md).
 
 ## Versioning & Release
 
-Each package is versioned independently via a static `version` field in its `pyproject.toml`. Releases follow this flow:
-
-1. **Create a release branch** named `release/<package-name>/v<semver>` off `main` (e.g., `release/metis-engine/v0.2.0`). The version is decided upfront and the branch accumulates all commits destined for that release.
-2. **Develop on the release branch** — add features, fixes, and tests scoped to this release. Intermediate commits follow normal commit message conventions.
-3. **Merge to `main` when ready** — use a merge commit (not squash) to preserve the branch history.
-4. **Tag the merge commit on `main`** with `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`). Always tag the merge commit itself, not the last commit on the feature branch.
-5. **Open a release tracking issue** — early in development, open an issue using the `Release` template (or `make release-issue`). This gives the team and external contributors visibility into what's in flight.
-
-PRs targeting the release branch should reference the tracking issue (e.g., "Part of #12") so progress is visible from the issue page.
+Each package is versioned independently via a static `version` field in its `pyproject.toml`. For the step-by-step release procedure, see [docs/github-workflow.md](docs/github-workflow.md#completing-a-release).
 
 The naming conventions are:
 - **Branch:** `release/<package-name>/v<semver>` (e.g., `release/metis-engine/v0.2.0`)
