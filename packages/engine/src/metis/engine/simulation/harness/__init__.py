@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from pathlib import Path
 
 import structlog
@@ -19,7 +20,16 @@ from metis.core.logging import get_logger
 from metis.engine.logging import LogRouter, OrchestrationLogger
 from metis.engine.tui import SimulationState, TUIContext
 
-from ..types import Experiment, Persona, RunConfig, RunOutcome, RunRecord, Scenario
+from ..exceptions import RunRecoverableError
+from ..types import (
+    Experiment,
+    Persona,
+    RunConfig,
+    RunFailure,
+    RunOutcome,
+    RunRecord,
+    Scenario,
+)
 from ._artifact_store import _save_artifacts
 from ._auth import login
 from ._config import HarnessConfig
@@ -271,41 +281,100 @@ async def _worker(
                     tui_ctx.refresh()
                 console.print(f"  [w{worker_id}] {scenario.id} × {persona.id} ...")
 
-            try:
-                record = await run_simulation(
-                    page,
-                    config,
-                    persona,
-                    scenario,
-                    run_dir,
-                    fixtures_dir,
-                    trial=trial_index,
-                    state=state,
-                    tui_ctx=tui_ctx,
-                )
-            except Exception as exc:
-                logger.error(
-                    "[experiment] Worker w%d: run_simulation crashed for %s × %s: %s",
-                    worker_id,
-                    scenario.id,
-                    persona.id,
-                    exc,
-                )
-                record = RunRecord(
-                    config=RunConfig(
-                        persona=persona.id,
-                        scenario=scenario.id,
-                        metric_refs=scenario.metric_refs,
-                    ),
-                    target_session_id=None,
-                    outcome=RunOutcome(
-                        stop_reason="system_error",
-                        total_turns=0,
-                        duration_seconds=0.0,
-                    ),
-                    conversation=[],
-                    artifacts_collected=[],
-                )
+            run_start = time.time()
+            max_attempts = 1 + (
+                scenario.max_run_retries
+                if scenario.max_run_retries is not None
+                else config.retry.run_max_retries
+            )
+            prior_failures: list[RunFailure] = []
+            record: RunRecord | None = None
+
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    record = await run_simulation(
+                        page, config, persona, scenario, run_dir, fixtures_dir,
+                        trial=trial_index, state=state, tui_ctx=tui_ctx,
+                    )
+                    record.attempt_number = attempt
+                    record.total_attempts = max_attempts
+                    record.prior_failures = prior_failures
+                    break
+                except RunRecoverableError as exc:
+                    duration_ms = int((time.time() - run_start) * 1000)
+                    failure = RunFailure(
+                        attempt_number=attempt,
+                        failure_type=type(exc).__name__,
+                        submission_phase="unknown",
+                        turn_reached=0,
+                        error_message=str(exc),
+                        duration_ms=duration_ms,
+                    )
+                    prior_failures.append(failure)
+                    logger.warning(
+                        "[experiment] Worker w%d: %s on attempt %d/%d for %s × %s: %s",
+                        worker_id, type(exc).__name__, attempt, max_attempts,
+                        scenario.id, persona.id, exc,
+                    )
+
+                    if attempt == max_attempts:
+                        record = RunRecord(
+                            config=RunConfig(
+                                persona=persona.id,
+                                scenario=scenario.id,
+                                metric_refs=scenario.metric_refs,
+                            ),
+                            target_session_id=None,
+                            outcome=RunOutcome(
+                                stop_reason="system_error",
+                                total_turns=0,
+                                duration_seconds=(time.time() - run_start),
+                            ),
+                            conversation=[],
+                            artifacts_collected=[],
+                            attempt_number=attempt,
+                            total_attempts=max_attempts,
+                            prior_failures=prior_failures,
+                        )
+                    else:
+                        # Tear down and rebuild browser context
+                        await context.close()
+                        await asyncio.sleep(config.retry.run_retry_delay_seconds)
+                        context = await browser.new_context(
+                            viewport={"width": 1440, "height": 900},
+                            accept_downloads=True,
+                        )
+                        page = await context.new_page()
+                        await login(page, config)
+                        run_start = time.time()  # Reset timer for next attempt
+
+                except Exception as exc:
+                    # Unexpected non-recoverable error — no retry
+                    logger.error(
+                        "[experiment] Worker w%d: unexpected crash for %s × %s: %s",
+                        worker_id, scenario.id, persona.id, exc,
+                    )
+                    record = RunRecord(
+                        config=RunConfig(
+                            persona=persona.id,
+                            scenario=scenario.id,
+                            metric_refs=scenario.metric_refs,
+                        ),
+                        target_session_id=None,
+                        outcome=RunOutcome(
+                            stop_reason="system_error",
+                            total_turns=0,
+                            duration_seconds=(time.time() - run_start),
+                        ),
+                        conversation=[],
+                        artifacts_collected=[],
+                        attempt_number=attempt,
+                        total_attempts=max_attempts,
+                        prior_failures=prior_failures,
+                    )
+                    break
+
+            assert record is not None  # always set: loop runs at least once
 
             # Emit post-run orchestration events
             if state:

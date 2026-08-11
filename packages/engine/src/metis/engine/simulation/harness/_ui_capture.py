@@ -7,6 +7,8 @@ from playwright.async_api import Page
 from metis.core.logging import get_logger
 
 from ..types import Artifact, UIState
+from ._config import RetryConfig
+from ._retry import action_retry
 
 logger = get_logger()
 
@@ -220,20 +222,27 @@ _CAPTURE_UI_STATE_JS = """() => {
 }"""
 
 
-async def capture_ui_state(page: Page) -> UIState:
-    """Extract the current UI state from the page."""
-    logger.debug("[ui_capture] Evaluating UI state extraction JS...")
-    raw = await page.evaluate(_CAPTURE_UI_STATE_JS)
-    state = UIState.model_validate(raw)
-    logger.debug(
-        "[ui_capture] Captured: text=%d chars, artifacts=%d, forms=%d, errors=%d, labels=%d",
-        len(state.text),
-        len(state.artifacts) if state.artifacts else 0,
-        len(state.form_elements) if state.form_elements else 0,
-        len(state.errors) if state.errors else 0,
-        len(state.target_status_labels) if state.target_status_labels else 0,
-    )
-    return state
+async def capture_ui_state(page: Page, config: RetryConfig | None = None) -> UIState:
+    """Evaluate JS to capture UI state. Retries on transient JS errors."""
+    if config is None:
+        config = RetryConfig()
+
+    @action_retry(config)
+    async def _capture() -> UIState:
+        logger.debug("[ui_capture] Evaluating UI state extraction JS...")
+        raw = await page.evaluate(_CAPTURE_UI_STATE_JS)
+        state = UIState.model_validate(raw)
+        logger.debug(
+            "[ui_capture] Captured: text=%d chars, artifacts=%d, forms=%d, errors=%d, labels=%d",
+            len(state.text),
+            len(state.artifacts) if state.artifacts else 0,
+            len(state.form_elements) if state.form_elements else 0,
+            len(state.errors) if state.errors else 0,
+            len(state.target_status_labels) if state.target_status_labels else 0,
+        )
+        return state
+
+    return await _capture()
 
 
 async def capture_artifacts_panel(page: Page) -> list[Artifact]:

@@ -14,7 +14,7 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
 _EXPERIMENT_VERSION = 1
-_RUN_RECORD_VERSION = 1
+_RUN_RECORD_VERSION = 2
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +204,7 @@ class Scenario(BaseModel):
     persona_refs: list[str] = Field(min_length=1)
     metric_refs: list[MetricRef] = Field(default_factory=list)
     response_wait_ms: int = 300000
+    max_run_retries: int | None = None
 
 
 class Experiment(BaseModel):
@@ -279,6 +280,33 @@ class CollectedArtifact(BaseModel, extra="ignore"):
     path: str = ""
 
 
+class ActionRetry(BaseModel, extra="ignore"):
+    action: str
+    attempt: int
+    strategy_used: str
+    error: str
+    duration_ms: int
+
+
+class TurnDiagnostics(BaseModel, extra="ignore"):
+    retry_count: int = 0
+    failure_type: str | None = None
+    submission_phase: Literal["pre", "post", "n/a"] = "n/a"
+    action_retries: list[ActionRetry] = Field(default_factory=list)
+    recovered: bool = False
+    recovery_found_response: bool | None = None
+    duration_ms: int = 0
+
+
+class RunFailure(BaseModel, extra="ignore"):
+    attempt_number: int
+    failure_type: str
+    submission_phase: Literal["pre", "post", "unknown"] = "unknown"
+    turn_reached: int
+    error_message: str
+    duration_ms: int
+
+
 class ConversationTurn(BaseModel, extra="ignore"):
     turn_number: int
     user_message: str
@@ -286,17 +314,21 @@ class ConversationTurn(BaseModel, extra="ignore"):
     duration_ms: int
     timestamp: str
     user_ui_actions: list[dict] = []
+    diagnostics: TurnDiagnostics | None = None
 
 
 class RunRecord(BaseModel, extra="ignore"):
     """A complete simulation run record loaded from a JSON result file."""
 
-    schema_version: Literal[1] = _RUN_RECORD_VERSION
+    schema_version: Literal[2] = _RUN_RECORD_VERSION
     config: RunConfig
     outcome: RunOutcome
     conversation: list[ConversationTurn] = []
     artifacts_collected: list[CollectedArtifact] = []
     target_session_id: str | None = None
+    attempt_number: int = 1
+    total_attempts: int = 1
+    prior_failures: list[RunFailure] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

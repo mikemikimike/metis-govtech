@@ -5,6 +5,7 @@ from playwright.async_api import Page
 from metis.core.logging import get_logger
 
 from ._config import HarnessConfig
+from ._element_resolver import AriaStrategy, CSSStrategy, TextStrategy, resolve_element
 
 logger = get_logger()
 
@@ -121,15 +122,44 @@ async def login(page: Page, config: HarnessConfig) -> None:
 
     # Now wait for the IdP login form (username field) to appear.
     logger.info("[login] Step 5/8: Waiting for IdP login form...")
-    username_locator = page.get_by_label("username", exact=False)
-    await username_locator.wait_for(state="visible", timeout=60000)
+    await page.get_by_label("username", exact=False).wait_for(state="visible", timeout=60000)
     logger.info("[login] Step 5/8: IdP form visible — filling credentials")
-    await username_locator.fill(config.auth.username)
-    await page.get_by_label("password", exact=False).fill(config.auth.password)
+
+    username_field = await resolve_element(
+        page,
+        intent="username field",
+        strategies=[
+            CSSStrategy(selector='input[name="loginfmt"]'),
+            CSSStrategy(selector='input[name="username"]'),
+            CSSStrategy(selector='input[autocomplete="username"]'),
+            CSSStrategy(selector='input[type="text"]'),
+        ],
+    )
+    await username_field.fill(config.auth.username)
+
+    password_field = await resolve_element(
+        page,
+        intent="password field",
+        strategies=[
+            CSSStrategy(selector='input[type="password"]'),
+            CSSStrategy(selector='input[name="passwd"]'),
+            CSSStrategy(selector='input[name="password"]'),
+        ],
+    )
+    await password_field.fill(config.auth.password)
 
     # Click "Sign in"
     logger.info("[login] Step 6/8: Clicking '%s'...", config.auth.signin_button_text)
-    await page.get_by_role("button", name=config.auth.signin_button_text).click()
+    signin_button = await resolve_element(
+        page,
+        intent="sign-in button",
+        strategies=[
+            AriaStrategy(role="button", name=config.auth.signin_button_text),
+            CSSStrategy(selector='button[type="submit"], input[type="submit"]'),
+            TextStrategy(text=config.auth.signin_button_text),
+        ],
+    )
+    await signin_button.click()
 
     # Wait for app to load, then navigate to fresh chat
     logger.info("[login] Step 7/8: Waiting for app to load after sign-in...")

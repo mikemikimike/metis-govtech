@@ -89,6 +89,18 @@
           "default": 300000,
           "title": "Response Wait Ms",
           "type": "integer"
+        },
+        "max_run_retries": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Run Retries"
         }
       },
       "required": [
