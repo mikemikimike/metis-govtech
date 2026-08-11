@@ -1,0 +1,76 @@
+"""Build an engine-ready ZIP from compiled YAML and a fixture directory."""
+
+from __future__ import annotations
+
+import tempfile
+import zipfile
+from pathlib import Path
+from typing import Any
+
+from metis.wizard.application.fixtures import (
+    FixtureError,
+    normalize_fixture_name,
+    normalize_upload_name,
+)
+
+from .experiment import to_yaml
+
+
+class BundleError(ValueError):
+    """The YAML and fixture directory cannot form a runnable bundle."""
+
+
+def _referenced_names(document: dict[str, Any]) -> set[str]:
+    names: set[str] = set()
+    for scenario in document.get("scenarios", []):
+        for raw_name in scenario.get("fixtures", []) or []:
+            try:
+                names.add(normalize_fixture_name(raw_name))
+            except FixtureError as exc:
+                raise BundleError(str(exc)) from exc
+    return names
+
+
+def write_bundle(document: dict[str, Any], fixture_dir: Path, target: Path) -> Path:
+    """Write ``experiment.yaml`` and ``fixtures/`` at the root of a ZIP archive."""
+
+    fixture_root = Path(fixture_dir)
+    files: dict[str, Path] = {}
+    if fixture_root.exists():
+        if not fixture_root.is_dir():
+            raise BundleError("The fixture library is not a directory.")
+        for path in fixture_root.iterdir():
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                name = normalize_upload_name(path.name)
+            except FixtureError as exc:
+                raise BundleError(str(exc)) from exc
+            if name in files:
+                raise BundleError(f"Duplicate fixture '{name}'.")
+            files[name] = path
+
+    missing = sorted(_referenced_names(document) - files.keys())
+    if missing:
+        joined = ", ".join(missing)
+        raise BundleError(f"Missing fixture file(s): {joined}.")
+
+    destination = Path(target)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with zipfile.ZipFile(
+            destination, mode="w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
+        ) as archive:
+            archive.writestr("experiment.yaml", to_yaml(document))
+            archive.writestr("fixtures/", b"")
+            for name, path in sorted(files.items()):
+                archive.write(path, f"fixtures/{name}")
+    except OSError as exc:
+        raise BundleError(f"Could not create experiment.zip: {exc}") from exc
+    return destination
+
+
+def temporary_bundle_directory(prefix: str = "metis-bundle-") -> Path:
+    """Create a caller-owned temporary directory for a response-scoped bundle."""
+
+    return Path(tempfile.mkdtemp(prefix=prefix))
