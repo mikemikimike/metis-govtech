@@ -4,6 +4,14 @@ All notable changes to `metis-core` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-08-11
+
+### Fixed
+
+- `configure_logging()` no longer crashes when third-party libraries (e.g. deepeval) emit stdlib log messages — the `DropEvent`-raising level filter was incorrectly included in `ProcessorFormatter.foreign_pre_chain`, where structlog does not catch it
+
+---
+
 ## [0.2.0] — 2026-08-05
 
 ### Fixed
