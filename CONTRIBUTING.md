@@ -60,6 +60,8 @@ For the full specification (component contracts, dependency invariants, versioni
 
 ## Development Workflow
 
+For the step-by-step GitHub collaboration playbook (branching, PRs, reviews, merging), see [docs/github-workflow.md](docs/github-workflow.md).
+
 ### Branching
 
 Branch off `main` with a descriptive prefix:
@@ -161,7 +163,6 @@ When adding a new workspace package:
 
 - Adherence to the dependency DAG (no upward imports)
 - Type annotations on public APIs
-- Tests covering the change
 - Focused scope — one concern per PR
 
 ### Merging
@@ -182,15 +183,7 @@ When in doubt, check the DAG in [docs/architecture.md](docs/architecture.md).
 
 ## Versioning & Release
 
-Each package is versioned independently via a static `version` field in its `pyproject.toml`. Releases follow this flow:
-
-1. **Create a release branch** named `release/<package-name>/v<semver>` off `main` (e.g., `release/metis-engine/v0.2.0`). The version is decided upfront and the branch accumulates all commits destined for that release.
-2. **Develop on the release branch** — add features, fixes, and tests scoped to this release. Intermediate commits follow normal commit message conventions.
-3. **Merge to `main` when ready** — use a merge commit (not squash) to preserve the branch history.
-4. **Tag the merge commit on `main`** with `<package-name>/v<semver>` (e.g., `metis-engine/v0.2.0`). Always tag the merge commit itself, not the last commit on the feature branch.
-5. **Open a release tracking issue** — early in development, open an issue using the `Release` template (or `make release-issue`). This gives the team and external contributors visibility into what's in flight.
-
-PRs targeting the release branch should reference the tracking issue (e.g., "Part of #12") so progress is visible from the issue page.
+Each package is versioned independently via a static `version` field in its `pyproject.toml`. For the step-by-step release procedure, see [docs/github-workflow.md](docs/github-workflow.md#completing-a-release).
 
 The naming conventions are:
 - **Branch:** `release/<package-name>/v<semver>` (e.g., `release/metis-engine/v0.2.0`)
