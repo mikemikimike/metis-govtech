@@ -62,7 +62,9 @@ Each package and app has a designated owner responsible for release decisions an
 
 ### Working on a Feature or Fix
 
-1. Branch off the release branch:
+1. Open an issue for the work and add it as a **sub-issue** of the release tracking issue. This gives the team a clear view of what's in scope for the release.
+
+2. Branch off the release branch:
 
    ```bash
    git checkout -b feat/score-validation release/metis-core/v0.3.0
@@ -70,10 +72,10 @@ Each package and app has a designated owner responsible for release decisions an
 
    Use the standard prefixes (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`).
 
-2. Push early and open a **Draft PR** targeting the release branch. This gives the team visibility into in-progress work.
+3. Push early and open a **Draft PR** targeting the release branch. This gives the team visibility into in-progress work.
    - Labels: `package` or `app`, and the component label (e.g., `metis-core`).
 
-3. Reference the release tracking issue in your PR description (e.g., "Part of #12").
+4. Reference the release tracking issue in your PR description (e.g., "Part of #12").
 
 ### Changes Not Tied to a Package or App
 
