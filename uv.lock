@@ -1046,6 +1046,7 @@ version = "0.1.0"
 source = { editable = "packages/wizard" }
 dependencies = [
     { name = "jsonschema" },
+    { name = "langfuse" },
     { name = "metis-core" },
     { name = "metis-engine" },
     { name = "metis-library" },
@@ -1058,9 +1059,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-observability = [
-    { name = "langfuse" },
-]
 web = [
     { name = "fastapi" },
     { name = "httpx" },
@@ -1073,7 +1071,7 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.110" },
     { name = "httpx", marker = "extra == 'web'", specifier = ">=0.27" },
     { name = "jsonschema", specifier = ">=4.20.0" },
-    { name = "langfuse", marker = "extra == 'observability'", specifier = ">=3.0,<4.0" },
+    { name = "langfuse", specifier = ">=3.0,<4.0" },
     { name = "metis-core", editable = "packages/core" },
     { name = "metis-engine", editable = "packages/engine" },
     { name = "metis-library", editable = "packages/library" },
@@ -1086,7 +1084,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.9.0" },
     { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.27" },
 ]
-provides-extras = ["web", "observability"]
+provides-extras = ["web"]
 
 [[package]]
 name = "multidict"

@@ -517,6 +517,40 @@ def test_each_semantic_call_sends_one_complete_named_prompt() -> None:
         ]
 
 
+# ── tracing rides on the client ──────────────────────────────────────────────
+
+
+def test_an_unconfigured_interview_still_completes_a_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no Langfuse env (the conftest default), tracing self-disables and the call is
+    unaffected — the interview never depends on a trace backend being reachable."""
+    good = ClarifyResult(message="What does it do?", done=False).model_dump_json()
+    model, completions = interviewer([good])
+
+    result, _ = model._ask(simple_prompt(), ClarifyResult)
+
+    assert result.message == "What does it do?"
+    assert len(completions.calls) == 1
+
+
+def test_the_gateway_builds_its_client_from_the_langfuse_drop_in() -> None:
+    """The one wiring that carries tracing: the gateway imports its OpenAI client from
+    `langfuse.openai`, whose import patches the client so every call is traced with no tracing
+    code on the call path. Langfuse patches openai in place, so `langfuse.openai.OpenAI is
+    openai.OpenAI` — the drop-in is not a distinct class to isinstance-check. The honest signal
+    is the gateway's own import; assert on its source so the wiring can't silently regress to
+    the untraced `from openai import OpenAI`."""
+    import inspect
+
+    from metis.wizard.adapters.llm import gateway
+
+    source = inspect.getsource(gateway)
+
+    assert "from langfuse.openai import OpenAI" in source
+    assert "from openai import OpenAI" not in source
+
+
 # ── the primer ─────────────────────────────────────────────────────────────
 
 

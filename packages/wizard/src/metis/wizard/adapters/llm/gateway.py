@@ -4,6 +4,14 @@ The gateway is OpenAI-compatible, so the client is `OpenAI` with a `base_url` �
 both chat and embeddings on one endpoint and key, which is why the matcher is not a second
 integration.
 
+The client is imported from `langfuse.openai`, Langfuse's drop-in for the OpenAI client.
+Importing it patches the client so every chat and embedding call is recorded as a generation —
+input, raw reply, model, token usage and latency — with no tracing code on the call path.
+`_ask` is wrapped with `@observe`, so a call's three attempts nest under one trace named by the
+interview step and grouped by the wizard's session id. Tracing is opt-in by environment: with no
+`LANGFUSE_*` variables the drop-in disables itself and sends nothing, and it exports on a
+background thread, so it never blocks or fails the interview.
+
 Every call asks for structured output and retries twice on a validation failure, feeding the
 error back each time. Three attempts total, silent unless all three fail: a first-attempt
 schema miss is common and recoverable, and asking the user about it makes them the retry loop.
@@ -19,14 +27,13 @@ text never leaves the gateway — a code guarantee, not a prompt instruction.
 from __future__ import annotations
 
 import os
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
+from langfuse import get_client, observe
 from pydantic import BaseModel, ValidationError
 
-from metis.wizard.adapters.llm import tracing
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import (
     ClarifyPhase,
@@ -79,13 +86,13 @@ class GatewayInterviewer:
     model: str = field(default_factory=lambda: os.environ.get(MODEL_VAR, DEFAULT_MODEL))
     _client: Any = None
     session_id: str | None = None
-    _tracer: tracing.Tracer | None = None
 
     def __post_init__(self) -> None:
         check_credentials()
-        self._tracer = tracing.make_safe_tracer(self._tracer or tracing.get_tracer())
         if self._client is None:
-            from openai import OpenAI
+            # The drop-in traces every call; unconfigured it is a quiet no-op. The OpenAI client
+            # does not connect on construction, so this stays offline until a call is made.
+            from langfuse.openai import OpenAI
 
             base = os.environ[BASE_URL_VAR].rstrip("/")
             if not base.endswith(GATEWAY_SUFFIX):
@@ -94,6 +101,7 @@ class GatewayInterviewer:
 
     # ── the retry loop ─────────────────────────────────────────────────────
 
+    @observe
     def _ask(
         self,
         prompt: prompts.ModelPrompt,
@@ -108,92 +116,58 @@ class GatewayInterviewer:
         Returns the result and whether a retry was needed — a first-attempt success is `False`,
         anything that took a correction is `True`. `_step` uses the flag to decide whether the
         model's intro can be trusted in front of the user.
+
+        `@observe` opens the trace; each attempt's `create` call nests under it as a generation.
+        The trace is named by the interview step and, where known, carries the session id, so one
+        interview reads as one sequence. A call with no session id is still recorded, ungrouped.
         """
+        get_client().update_current_trace(name=prompt.name, session_id=self.session_id)
         messages = [
             {"role": "system", "content": prompt.system},
             {"role": "user", "content": prompt.user},
         ]
         last_error: Exception | None = None
-        last_output: str | None = None
-        tracer = self._tracer or tracing.NoopTracer()
-        call_trace = tracer.start_call(
-            name=prompt.name,
-            model=self.model,
-            session_id=self.session_id,
-            messages=[dict(message) for message in messages],
-        )
 
-        try:
-            for attempt in range(ATTEMPTS):
-                attempt_trace = call_trace.start_attempt(
-                    attempt=attempt + 1,
-                    messages=[dict(message) for message in messages],
-                    model=self.model,
-                )
-                started = time.perf_counter()
-                try:
-                    response = self._client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        response_format={
-                            "type": "json_schema",
-                            "json_schema": {
-                                "name": schema.__name__,
-                                "schema": schema.model_json_schema(),
-                                "strict": True,
-                            },
-                        },
-                    )
-                    text = response.choices[0].message.content or ""
-                    last_output = text
-                    usage = tracing.usage_details_from_response(response)
-                except Exception as exc:
-                    attempt_trace.finish(
-                        output="",
-                        usage=None,
-                        latency_ms=(time.perf_counter() - started) * 1000,
-                        error=str(exc),
-                    )
-                    raise
-
-                try:
-                    result = schema.model_validate_json(text)
-                    if validate is not None:
-                        validate(result)
-                except (ValidationError, PatchValueError) as exc:
-                    attempt_trace.finish(
-                        output=text,
-                        usage=usage,
-                        latency_ms=(time.perf_counter() - started) * 1000,
-                        error=str(exc),
-                    )
-                    last_error = exc
-                    if attempt < ATTEMPTS - 1:
-                        # Feed the failure back rather than re-asking blind.
-                        messages += [
-                            {"role": "assistant", "content": text},
-                            {
-                                "role": "user",
-                                "content": (
-                                    "That didn't validate against the schema:\n"
-                                    f"{exc}\n\nReturn corrected JSON only."
-                                ),
-                            },
-                        ]
-                else:
-                    attempt_trace.finish(
-                        output=text,
-                        usage=usage,
-                        latency_ms=(time.perf_counter() - started) * 1000,
-                    )
-                    return result, attempt > 0
-
-            raise ModelOutputError(
-                f"The model returned output I couldn't read, {ATTEMPTS} times running. "
-                f"Last error: {last_error}"
+        for attempt in range(ATTEMPTS):
+            response = self._client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": schema.__name__,
+                        "schema": schema.model_json_schema(),
+                        "strict": True,
+                    },
+                },
             )
-        finally:
-            call_trace.finish(output=last_output)
+            text = response.choices[0].message.content or ""
+
+            try:
+                result = schema.model_validate_json(text)
+                if validate is not None:
+                    validate(result)
+            except (ValidationError, PatchValueError) as exc:
+                last_error = exc
+                if attempt < ATTEMPTS - 1:
+                    # Feed the failure back rather than re-asking blind.
+                    messages += [
+                        {"role": "assistant", "content": text},
+                        {
+                            "role": "user",
+                            "content": (
+                                "That didn't validate against the schema:\n"
+                                f"{exc}\n\nReturn corrected JSON only."
+                            ),
+                        },
+                    ]
+            else:
+                return result, attempt > 0
+
+        raise ModelOutputError(
+            f"The model returned output I couldn't read, {ATTEMPTS} times running. "
+            f"Last error: {last_error}"
+        )
 
     def _step(self, prompt: prompts.ModelPrompt, profile: ProductProfile) -> StepResult:
         result, recovered = self._ask(

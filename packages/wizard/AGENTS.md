@@ -144,22 +144,30 @@ committing it, or it stops buying anything.
 `tests/integration/test_cli_happy_path.py` drives the actual Typer app through `CliRunner` with
 the scripted interviewer. It is the offline full happy-path check for both output files.
 
-## Optional Langfuse tracing
+## Langfuse tracing
 
-The model gateway can record prompts, raw replies, retries, token counts and latency in a
-self-hosted Langfuse server. The target server release is `v3.153.0`, using the Python SDK v3
+The model gateway records prompts, raw replies, retries, token counts and latency in a
+self-hosted Langfuse server. The target server release is `v3.153.0`, with the Python SDK v3
 line.
 
-Install the optional dependency with `uv sync --package metis-wizard --extra observability`. Set
-these three environment variables before starting the wizard:
+The gateway imports its client from `langfuse.openai`. This is a drop-in for the OpenAI client:
+the import makes every model call record a trace, with no tracing code in the retry loop. The
+gateway wraps `_ask` with `@observe`, so the three attempts of one call are in one trace. The
+trace has the name of the interview step and, when the id is known, the session id. Thus one
+interview reads as one sequence, and the CLI and web doors use the same session id.
+
+`langfuse` is a base dependency, so it installs with the wizard. To turn tracing on, set these
+three environment variables before you start the wizard:
 
 - `LANGFUSE_BASE_URL`
 - `LANGFUSE_PUBLIC_KEY`
 - `LANGFUSE_SECRET_KEY`
 
-Tracing is disabled when any variable is missing. There is no default host. The core wizard does
-not import or initialise Langfuse until the optional dependency is installed and all three values
-are present. The CLI and web doors use the same session id for all model-call traces.
+Tracing is off when a variable is missing. There is no default host, so no interview content goes
+anywhere until an operator gives their own instance. When tracing is off, the drop-in disables
+itself and sends nothing. It writes traces on a background thread, so tracing does not block or
+stop the interview. There is no wizard-owned failure-safe wrapper: the wizard uses the behaviour
+of the library.
 
 ## Things that look like bugs and are not
 

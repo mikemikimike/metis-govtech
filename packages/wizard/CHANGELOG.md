@@ -68,9 +68,14 @@ so activity wording changes without editing an adapter. Product prose reveals by
 document pane — a scaffolded Product section shows Name, Users and Details while the short
 summary stays in the header — animating only changed word runs during corrections, preserving
 line breaks and capitalisation, and resting the reveal and writing marker under reduced motion.
-- **Optional Langfuse tracing.** Model-call tracing for a self-hosted Langfuse v3 server
-(`v3.153.0`): prompts, replies, retries, usage and latency, with the root trace summary exposing
-the initial input and final output. The interview is unchanged when tracing is absent or fails.
+- **Langfuse tracing.** Model-call tracing for a self-hosted Langfuse v3 server (`v3.153.0`):
+prompts, replies, retries, usage and latency. The gateway imports its client from
+`langfuse.openai`, the drop-in for the OpenAI client, so every call is traced with no tracing
+code in the retry loop; `@observe` groups a call's three attempts into one trace named by the
+interview step and carrying the session id. `langfuse` is a base dependency; tracing turns on
+only when `LANGFUSE_BASE_URL`, `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are set, and stays
+a quiet no-op otherwise. Traces are written on a background thread, so tracing does not block or
+stop the interview.
 - **A hand-authoring door in the web UI.** A form for people who already know what to evaluate;
 it collects an id, description, personas and scenarios, creates no session, and downloads a
 one-shot `experiment.zip` containing `experiment.yaml` and any uploaded fixtures. Leaving the
