@@ -109,4 +109,7 @@ engine. It closes when the schema moves to a package both sides may depend on.
   by the engine; current wizard output uses the library FQNs.
 - **Library compatibility floor.** The fallback judge requires `metis-library` 0.1.1 or later;
 the package dependency metadata must enforce that floor before release.
+- **`api` and `web` are not yet packages.** The two applications stay under `apps/` as `api` and
+`web`. They must move to `metis-api` and `metis-web`, so that they are workspace members with the
+same layout and naming as the other packages. It closes when both apps are migrated.
 
