@@ -579,10 +579,20 @@ async def run_simulation(
                 ui_state = recovered_state
                 consecutive_failures = 0
             else:
-                ui_state = await send_message(
-                    page, current_message, config, timeout_override=response_timeout
-                )
-                consecutive_failures = 0
+                try:
+                    ui_state = await send_message(
+                        page, current_message, config, timeout_override=response_timeout
+                    )
+                    consecutive_failures = 0
+                except ResponseTimeoutError:
+                    consecutive_failures += 1
+                    if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
+                        raise ConsecutiveFailureEscalation(
+                            f"{consecutive_failures} consecutive turn failures"
+                        )
+                    ui_state = UIState(
+                        text="", errors=["Response timeout — no response received"]
+                    )
         except TransientDOMError:
             consecutive_failures += 1
             if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
@@ -595,13 +605,18 @@ async def run_simulation(
                     page, current_message, config, timeout_override=response_timeout
                 )
                 consecutive_failures = 0
-            except TurnRecoverableError:
+            except (TurnRecoverableError, ResponseTimeoutError) as inner_exc:
                 consecutive_failures += 1
                 if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
                     raise ConsecutiveFailureEscalation(
                         f"{consecutive_failures} consecutive turn failures"
                     )
-                continue
+                if isinstance(inner_exc, ResponseTimeoutError):
+                    ui_state = UIState(
+                        text="", errors=["Response timeout — no response received"]
+                    )
+                else:
+                    continue
         except ResponseTimeoutError:
             consecutive_failures += 1
             if consecutive_failures >= config.retry.consecutive_turn_failures_limit:

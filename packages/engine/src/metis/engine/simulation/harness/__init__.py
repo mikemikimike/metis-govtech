@@ -339,6 +339,7 @@ async def _worker(
                     else:
                         # Tear down and rebuild browser context
                         await context.close()
+                        context = None  # type: ignore[assignment]
                         await asyncio.sleep(config.retry.run_retry_delay_seconds)
                         context = await browser.new_context(
                             viewport={"width": 1440, "height": 900},
@@ -451,7 +452,8 @@ async def _worker(
 
         return records
     finally:
-        await context.close()
+        if context is not None:
+            await context.close()
         structlog.contextvars.unbind_contextvars("worker")
 
 

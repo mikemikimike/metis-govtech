@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
 from metis.engine.simulation.exceptions import TransientDOMError
 
@@ -24,8 +24,8 @@ class AriaStrategy:
     role: str
     name: str
 
-    def locate(self, page: Any) -> Any:
-        return page.get_by_role(self.role, name=self.name)
+    def locate(self, page: Page) -> Locator:
+        return page.get_by_role(self.role, name=self.name)  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True)

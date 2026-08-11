@@ -14,7 +14,7 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
 _EXPERIMENT_VERSION = 1
-_RUN_RECORD_VERSION = 2
+_RUN_RECORD_VERSION = 1
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +320,7 @@ class ConversationTurn(BaseModel, extra="ignore"):
 class RunRecord(BaseModel, extra="ignore"):
     """A complete simulation run record loaded from a JSON result file."""
 
-    schema_version: Literal[2] = _RUN_RECORD_VERSION
+    schema_version: Literal[1] = _RUN_RECORD_VERSION
     config: RunConfig
     outcome: RunOutcome
     conversation: list[ConversationTurn] = []

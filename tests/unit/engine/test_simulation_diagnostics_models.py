@@ -91,7 +91,7 @@ class TestConversationTurnExtension:
 class TestRunRecordExtension:
     def test_new_fields_default_backward_compatible(self) -> None:
         record = RunRecord.model_validate({
-            "schema_version": 2,
+            "schema_version": 1,
             "config": {
                 "persona": "p",
                 "scenario": "s",
@@ -106,9 +106,9 @@ class TestRunRecordExtension:
         assert record.total_attempts == 1
         assert record.prior_failures == []
 
-    def test_schema_version_is_2(self) -> None:
+    def test_schema_version_is_1(self) -> None:
         record = RunRecord.model_validate({
-            "schema_version": 2,
+            "schema_version": 1,
             "config": {"persona": "p", "scenario": "s"},
             "outcome": {
                 "stop_reason": "max_turns",
@@ -116,4 +116,4 @@ class TestRunRecordExtension:
                 "duration_seconds": 30.0,
             },
         })
-        assert record.schema_version == 2
+        assert record.schema_version == 1
