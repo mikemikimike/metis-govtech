@@ -88,11 +88,33 @@ Run `make check` before pushing. CI will reject PRs that fail.
 
 ### Commit Messages
 
-Use concise, imperative-mood messages that explain **why**, not just what:
+We follow a convention for commit messages [borrowed from Deis/CoreOS/AngularJS](https://github.com/deis/deis/blob/master/CONTRIBUTING.md#commit-style-guideline). The format is:
 
 ```
-add Langfuse trace ingester for production observability
-fix score aggregation when spans have missing timestamps
+{type}({scope}): {subject}
+
+{body}
+
+{footer}
+```
+
+**Rules:**
+
+- `{type}` is one of: `feat`, `fix`, `docs`, `style`, `ref`, `test`, `chore`
+- `{scope}` is the affected package or app name (e.g., `core`, `engine`, `wizard`, `api`)
+- `{subject}` uses imperative present tense ("change", not "changed"), no capital first letter, no trailing dot
+- Subject line limited to **50 characters**; body lines limited to **72 characters**
+- `{body}` explains the motivation and contrasts with previous behavior
+- `{footer}` mentions any breaking changes with migration notes
+
+**Examples:**
+
+```
+feat(engine): add Langfuse trace ingester for production observability
+
+fix(core): handle missing timestamps in score aggregation
+
+chore(wizard): initialize release v0.4.0
 ```
 
 Avoid generic messages like "fix bug" or "update code".
