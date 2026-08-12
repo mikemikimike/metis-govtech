@@ -18,7 +18,7 @@ _CAPTURE_UI_STATE_JS = """() => {
     let responseText = "";
 
     const messageBlocks = main.querySelectorAll(
-      '[class*="message"], [class*="Message"], [class*="response"], [class*="Response"], [class*="assistant"], [class*="Assistant"]'
+      '.message-user, .message-assistant'
     );
 
     if (messageBlocks.length > 0) {
@@ -331,7 +331,9 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
     return artifacts
 
 
-async def capture_inline_charts(page: Page, output_dir: Path) -> list[dict]:
+async def capture_inline_charts(
+    page: Page, output_dir: Path, *, turn: int = 0
+) -> list[dict]:
     """Screenshot inline chart/SVG/canvas elements as PNG files."""
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[dict] = []
@@ -353,7 +355,11 @@ async def capture_inline_charts(page: Page, output_dir: Path) -> list[dict]:
                     box = await el.bounding_box()
                     if box and box["width"] > 100 and box["height"] > 50:
                         chart_index += 1
-                        filename = f"chart-{chart_index}.png"
+                        filename = (
+                            f"turn-{turn}-chart-{chart_index}.png"
+                            if turn > 0
+                            else f"chart-{chart_index}.png"
+                        )
                         out_path = output_dir / filename
                         await el.screenshot(path=str(out_path))
                         results.append({"filename": filename, "path": str(out_path)})

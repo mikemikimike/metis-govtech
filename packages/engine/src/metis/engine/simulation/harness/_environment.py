@@ -78,13 +78,46 @@ async def _recover_and_check(
     ui_state = await capture_ui_state(page)
 
     last_user_msg = await page.evaluate("""() => {
-        const msgs = document.querySelectorAll('[class*="user"], [class*="User"]');
+        const msgs = document.querySelectorAll('.message-user');
         return msgs.length ? msgs[msgs.length - 1].innerText?.trim() || "" : "";
     }""")
 
     if sent_message[:80] in (last_user_msg or ""):
         return ui_state
     return None
+
+
+async def _wait_for_processing(page: Page, turn_count: int) -> None:
+    """Wait for Orca to finish any active processing (spinner/typing/stop button)."""
+    await page.wait_for_timeout(2000)
+    poll_count = 0
+    while poll_count < 60:
+        still_processing = await page.evaluate("""() => {
+            const hasSpinner = document.querySelector(
+              '[class*="loading"], [class*="spinner"], [class*="animate-spin"]'
+            ) !== null;
+            const hasTyping = document.querySelector(
+              '[class*="typing"], [class*="streaming"]'
+            ) !== null;
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const hasStop = buttons.some(
+              b => b.textContent?.includes('Stop generating'));
+            return hasSpinner || hasTyping || hasStop;
+        }""")
+        if not still_processing:
+            break
+        poll_count += 1
+        if poll_count % 5 == 1:
+            logger.info(
+                "[turn %d] Waiting for processing to complete (poll #%d)...",
+                turn_count,
+                poll_count,
+            )
+        await page.wait_for_timeout(2000)
+    if poll_count > 0:
+        logger.info(
+            "[turn %d] Processing settled after %d poll(s)", turn_count, poll_count
+        )
 
 
 async def run_simulation(
@@ -378,7 +411,26 @@ async def run_simulation(
                     action.file,
                 )
                 await upload_file(page, file_path)
-                uploaded_files.add(action.file)
+                # Wait for Orca to finish processing the upload before continuing
+                await _wait_for_processing(page, turn_count)
+                # Only mark as uploaded if the file is visible in the UI
+                file_visible = await page.evaluate(
+                    """(name) => {
+                        const body = document.body.innerText;
+                        const baseName = name.replace(/\\.[^.]+$/, "");
+                        return body.toLowerCase().includes(name.toLowerCase()) ||
+                               body.toLowerCase().includes(baseName.toLowerCase());
+                    }""",
+                    action.file,
+                )
+                if file_visible:
+                    uploaded_files.add(action.file)
+                else:
+                    logger.warning(
+                        "[turn %d]   Upload of '%s' not verified — will retry next turn",
+                        turn_count,
+                        action.file,
+                    )
 
             elif isinstance(action, ButtonClickAction):
                 logger.info(
@@ -397,6 +449,16 @@ async def run_simulation(
                             timeout=5000
                         )
                     await page.wait_for_timeout(1000)
+                    # After submit-type clicks, wait for processing to complete
+                    is_submit = bool(
+                        re.search(
+                            r"submit|generate|run|start|create|analyze|confirm",
+                            action.selector,
+                            re.IGNORECASE,
+                        )
+                    )
+                    if is_submit:
+                        await _wait_for_processing(page, turn_count)
                     logger.info(
                         "[turn %d]   Action %d/%d: Click successful",
                         turn_count,
@@ -693,13 +755,14 @@ async def run_simulation(
                 turn_count,
                 len(ui_state.artifacts),
             )
+            artifact_dest = run_dir / "artifacts" / f"turn-{turn_count}"
             downloaded_files = await _download_artifacts(
                 page,
                 [
                     {"name": a.name, "type": a.type, "url": a.url}
                     for a in ui_state.artifacts
                 ],
-                run_dir / "artifacts",
+                artifact_dest,
             )
             downloaded_names: set[str] = set()
             for dl in downloaded_files:
@@ -729,8 +792,8 @@ async def run_simulation(
 
         # Capture inline charts as artifacts
         try:
-            chart_dir = run_dir / "artifacts" / "charts"
-            charts = await capture_inline_charts(page, chart_dir)
+            chart_dir = run_dir / "artifacts" / f"turn-{turn_count}" / "charts"
+            charts = await capture_inline_charts(page, chart_dir, turn=turn_count)
             for chart in charts:
                 artifacts_collected.append(
                     CollectedArtifact(
@@ -773,22 +836,7 @@ async def run_simulation(
             len(artifacts_collected),
         )
 
-        # Re-check stopping conditions before next agent call
-        if turn_count >= run_config.max_turns:
-            logger.info(
-                "[turn %d] STOP: max_turns reached (%d)",
-                turn_count,
-                run_config.max_turns,
-            )
-            return _build_record(
-                "max_turns",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
-
+        # Re-check timeout before next agent call (max_turns checked at top of loop)
         elapsed_after_turn = time.time() - start_time
         if elapsed_after_turn >= run_config.timeout_minutes * 60:
             logger.info(
@@ -940,16 +988,18 @@ async def _download_artifacts(
         run_dir,
     )
 
-    for idx, artifact in enumerate(artifacts, 1):
+    dl_idx = 0
+    for artifact in artifacts:
         if artifact.get("type") != "download":
             continue
+        dl_idx += 1
 
         try:
             url = artifact.get("url")
             name = artifact.get("name", "file")
             logger.info(
                 "[download]   [%d/%d] '%s' (url=%s)",
-                idx,
+                dl_idx,
                 download_count,
                 name,
                 url[:60] if url else "none",

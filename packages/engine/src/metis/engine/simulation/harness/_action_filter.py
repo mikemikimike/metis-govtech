@@ -21,7 +21,6 @@ from metis.core.logging import get_logger
 
 from ..types import ButtonClickAction, FileUploadAction, FormFillAction, UIAction
 
-
 logger = get_logger()
 
 # ---------------------------------------------------------------------------

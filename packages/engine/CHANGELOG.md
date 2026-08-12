@@ -28,9 +28,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `run_experiment()` accepts `concurrency: int` parameter (default 1 preserves sequential behaviour)
 - CLI `simulate` command accepts `--concurrency / -c` option (min 1)
 - `log_format` CLI option typed as `Literal["text", "json"]` for pyright correctness
+- **Orca DOM selectors** — replaced fragile `[class*="message"]` / `[class*="Message"]` / `[class*="response"]` attribute-contains selectors with Orca's actual class names (`.message-user`, `.message-assistant`) across `_page_actions.py`, `_ui_capture.py`, and `_environment.py`
 
 ### Fixed
 
+- **"Response cancelled" after upload/submit** — file uploads and submit-type button clicks now wait for Orca processing to settle (spinner/typing/"Stop generating" poll) before proceeding to `send_message`; additionally, `send_message` detects "Response cancelled" in captured UI state and waits for the real response
+- **Failed uploads bypass dedup** — file only added to `uploaded_files` set after UI visibility verification, so failed uploads can be retried
+- **Chart screenshots overwrite across turns** — `capture_inline_charts` takes a `turn` parameter; filenames are now `turn-{T}-chart-{N}.png`
+- **Downloaded artifacts collide across turns** — downloads go to `run_dir/artifacts/turn-{N}/` subdirectories instead of a flat `artifacts/` folder
+- **Off-by-one kills last turn** — removed redundant `>= max_turns` check at bottom of loop; single `> max_turns` guard at top ensures all turns execute fully
+- **`fill()` + `press("Enter")` race condition** — added 200ms delay between fill and Enter to avoid keystroke being dropped when Orca's JS reacts to input events
+- **Temp directory leak on upload retry** — replaced bare `tempfile.mkdtemp()` with `TemporaryDirectory()` context manager
+- **Download counter misleading** — separate counter for download-type artifacts only
 - **Langfuse v3 observations fetch** — replaced `langfuse.api.observations.get_many(trace_id=...)` with `langfuse.api.trace.get(trace_id=...).observations` for compatibility with Langfuse v3 servers that do not expose the v2 observations-list endpoint
 
 ## [0.6.0] — 2026-08-06

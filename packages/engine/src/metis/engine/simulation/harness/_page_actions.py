@@ -2,9 +2,9 @@
 
 import re
 import shutil
-import tempfile
 import time
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -41,10 +41,8 @@ async def send_message(
         pre_state = await page.evaluate("""() => {
             const textarea = document.querySelector("textarea");
             const placeholder = textarea?.getAttribute("placeholder") || "";
-            const sel = '[class*="message"], [class*="Message"], ' +
-              '[class*="response"], [class*="Response"], ' +
-              '[class*="assistant"], [class*="Assistant"]';
-            const messages = document.querySelectorAll(sel);
+            const messages = document.querySelectorAll(
+              '.message-user, .message-assistant');
             return { placeholder, messageCount: messages.length };
         }""")
         logger.debug(
@@ -68,8 +66,9 @@ async def send_message(
             ],
         )
 
-        logger.info("[send_message] Filling textarea and pressing Enter...")
+        logger.info("[send_message] Typing message and pressing Enter...")
         await input_el.fill(message)
+        await page.wait_for_timeout(200)
         await input_el.press("Enter")
         track_submission()
 
@@ -89,10 +88,8 @@ async def send_message(
                     if (!textarea) return false;
                     const currentPlaceholder =
                       textarea.getAttribute("placeholder") || "";
-                    const sel = '[class*="message"], [class*="Message"], ' +
-                      '[class*="response"], [class*="Response"], ' +
-                      '[class*="assistant"], [class*="Assistant"]';
-                    const messages = document.querySelectorAll(sel);
+                    const messages = document.querySelectorAll(
+                      '.message-user, .message-assistant');
                     const currentCount = messages.length;
                     const placeholderChanged =
                       !alreadyReply && currentPlaceholder.includes("Reply");
@@ -146,31 +143,34 @@ async def send_message(
         logger.debug("[send_message] Final 2s buffer...")
         await page.wait_for_timeout(2000)
 
+        logger.info("[send_message] Capturing UI state...")
+        ui_state = await capture_ui_state(page)
+
         # Detect "Response cancelled" — Orca shows this when we interrupted
         # its generation. Wait for the real response that follows.
-        try:
-            last_msg = page.locator("main .message-assistant").last
-            if await last_msg.count() > 0:
-                text = (await last_msg.inner_text(timeout=2000)).strip()
-                if text.lower() in ("response cancelled", "response cancelled."):
-                    logger.info(
-                        "[send_message] Detected 'Response cancelled' — waiting for real response..."
-                    )
-                    await page.wait_for_function(
-                        """({ prevCount }) => {
-                            const sel = '[class*="message"], [class*="Message"], '
-                              + '[class*="assistant"], [class*="Assistant"]';
-                            return document.querySelectorAll(sel).length > prevCount;
-                        }""",
-                        arg={"prevCount": pre_state["messageCount"] + 1},
-                        timeout=120000,
-                    )
-                    await page.wait_for_timeout(2000)
-        except Exception:
-            pass
+        if ui_state.text.strip().lower() in (
+            "response cancelled",
+            "response cancelled.",
+        ):
+            logger.info(
+                "[send_message] Detected 'Response cancelled' — waiting for real response..."
+            )
+            try:
+                await page.wait_for_function(
+                    """({ prevCount }) => {
+                        return document.querySelectorAll(
+                          '.message-user, .message-assistant'
+                        ).length > prevCount;
+                    }""",
+                    arg={"prevCount": pre_state["messageCount"] + 1},
+                    timeout=120000,
+                )
+                await page.wait_for_timeout(2000)
+                ui_state = await capture_ui_state(page)
+            except Exception:
+                pass
 
-        logger.info("[send_message] Capturing UI state...")
-        return await capture_ui_state(page)
+        return ui_state
 
     return await _send()
 
@@ -227,10 +227,10 @@ async def upload_file(page: Page, file_path: Path, config: HarnessConfig | None 
         )
         await page.keyboard.press("Escape")
         await page.wait_for_timeout(1000)
-        tmp_dir = Path(tempfile.mkdtemp())
-        txt_path = tmp_dir / file_path.with_suffix(".txt").name
-        shutil.copy2(file_path, txt_path)
-        await upload_file(page, txt_path)
+        with TemporaryDirectory() as tmp_dir:
+            txt_path = Path(tmp_dir) / file_path.with_suffix(".txt").name
+            shutil.copy2(file_path, txt_path)
+            await upload_file(page, txt_path)
         return
 
     # Confirm the upload

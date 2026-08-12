@@ -34,7 +34,6 @@ from ._artifact_store import _save_artifacts
 from ._auth import login
 from ._config import HarnessConfig
 from ._environment import run_simulation
-from ._protocol import expect, stabilize
 
 __all__ = ["HarnessConfig", "run_experiment", "run_simulation"]
 
@@ -245,37 +244,6 @@ async def _worker(
                 else Path("results") / "runs" / run_folder_name
             )
             run_dir.mkdir(parents=True, exist_ok=True)
-
-                # Start a fresh chat (except first run — login already did it)
-                if run_index > 1:
-                    logger.info("[experiment] Starting fresh chat...")
-                    try:
-                        page.get_by_text("New chat").click(timeout=5000)
-                        logger.info("[experiment] Clicked 'New chat'")
-                    except Exception:
-                        logger.info(
-                            "[experiment] 'New chat' not found — navigating to /chat"
-                        )
-                        page.goto(
-                            config.url + "/chat",
-                            wait_until="domcontentloaded",
-                            timeout=15000,
-                        )
-                    expect(
-                        page,
-                        description="fresh chat ready",
-                        predicate="() => !!document.querySelector('textarea')",
-                        timeout_ms=10000,
-                    )
-                    # Dismiss tour modal if it reappears
-                    try:
-                        skip_btn = page.get_by_text("Skip for now")
-                        if skip_btn.is_visible(timeout=2000):
-                            logger.info("[experiment] Dismissing tour modal")
-                            skip_btn.click()
-                            stabilize(page, "tour modal dismiss", 500)
-                    except Exception:
-                        pass
 
             # Emit pre-run orchestration events (shared set — fires once across all workers)
             if scenario.id not in started_scenarios:
