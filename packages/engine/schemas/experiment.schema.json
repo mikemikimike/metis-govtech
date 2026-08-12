@@ -85,6 +85,16 @@
           "title": "Metric Refs",
           "type": "array"
         },
+        "max_turns": {
+          "default": 20,
+          "title": "Max Turns",
+          "type": "integer"
+        },
+        "timeout_minutes": {
+          "default": 15,
+          "title": "Timeout Minutes",
+          "type": "integer"
+        },
         "response_wait_ms": {
           "default": 300000,
           "title": "Response Wait Ms",
