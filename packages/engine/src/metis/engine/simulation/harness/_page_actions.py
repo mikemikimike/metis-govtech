@@ -115,19 +115,15 @@ async def send_message(
         poll_count = 0
         while time.time() * 1000 < poll_deadline:
             still_processing = await page.evaluate("""() => {
-                const spinSel = '[class*="loading"], ' +
-                  '[class*="spinner"], [class*="animate-spin"]';
-                const hasSpinner =
-                  document.querySelector(spinSel) !== null;
-                const typeSel =
-                  '[class*="typing"], [class*="streaming"]';
-                const hasTyping =
-                  document.querySelector(typeSel) !== null;
                 const buttons =
                   Array.from(document.querySelectorAll('button'));
                 const hasStop = buttons.some(
                   b => b.textContent?.includes('Stop generating'));
-                return hasSpinner || hasTyping || hasStop;
+                const lastAssistant = document.querySelector(
+                  '.message-assistant:last-of-type');
+                const isStreaming = lastAssistant
+                  && lastAssistant.innerText.trim() === '';
+                return hasStop || isStreaming;
             }""")
             if not still_processing:
                 break

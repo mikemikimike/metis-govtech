@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `run_experiment()` accepts `concurrency: int` parameter (default 1 preserves sequential behaviour)
 - CLI `simulate` command accepts `--concurrency / -c` option (min 1)
 - `log_format` CLI option typed as `Literal["text", "json"]` for pyright correctness
-- **Orca DOM selectors** — replaced fragile `[class*="message"]` / `[class*="Message"]` / `[class*="response"]` attribute-contains selectors with Orca's actual class names (`.message-user`, `.message-assistant`) across `_page_actions.py`, `_ui_capture.py`, and `_environment.py`
+- **Orca DOM selectors** — replaced all fragile `[class*="..."]` attribute-contains selectors with Orca's actual DOM structure: `.message-user`/`.message-assistant` for messages, "Stop generating" button + empty `.message-assistant` for processing detection, "Send message" text for button filtering, "Dismiss error" button for error detection, "Open files panel" for artifacts panel, structural SVG/canvas selectors for charts. Removed dead chip/suggestion selectors (don't exist in Orca)
 
 ### Fixed
 
@@ -40,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **`fill()` + `press("Enter")` race condition** — added 200ms delay between fill and Enter to avoid keystroke being dropped when Orca's JS reacts to input events
 - **Temp directory leak on upload retry** — replaced bare `tempfile.mkdtemp()` with `TemporaryDirectory()` context manager
 - **Download counter misleading** — separate counter for download-type artifacts only
+- **Stale-state detection false positive** — "page unchanged after form submit" warning fired incorrectly because the pre-submit text snapshot was captured after `_wait_for_processing` already consumed the processing time; moved snapshot to before action execution
 - **Langfuse v3 observations fetch** — replaced `langfuse.api.observations.get_many(trace_id=...)` with `langfuse.api.trace.get(trace_id=...).observations` for compatibility with Langfuse v3 servers that do not expose the v2 observations-list endpoint
 
 ## [0.6.0] — 2026-08-06

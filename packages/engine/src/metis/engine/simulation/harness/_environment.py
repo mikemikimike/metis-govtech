@@ -88,21 +88,19 @@ async def _recover_and_check(
 
 
 async def _wait_for_processing(page: Page, turn_count: int) -> None:
-    """Wait for Orca to finish any active processing (spinner/typing/stop button)."""
+    """Wait for Orca to finish any active processing."""
     await page.wait_for_timeout(2000)
     poll_count = 0
     while poll_count < 60:
         still_processing = await page.evaluate("""() => {
-            const hasSpinner = document.querySelector(
-              '[class*="loading"], [class*="spinner"], [class*="animate-spin"]'
-            ) !== null;
-            const hasTyping = document.querySelector(
-              '[class*="typing"], [class*="streaming"]'
-            ) !== null;
             const buttons = Array.from(document.querySelectorAll('button'));
             const hasStop = buttons.some(
               b => b.textContent?.includes('Stop generating'));
-            return hasSpinner || hasTyping || hasStop;
+            const lastAssistant = document.querySelector(
+              '.message-assistant:last-of-type');
+            const isStreaming = lastAssistant
+              && lastAssistant.innerText.trim() === '';
+            return hasStop || isStreaming;
         }""")
         if not still_processing:
             break
@@ -374,6 +372,16 @@ async def run_simulation(
             for a in current_ui_actions
         )
 
+        # Snapshot page text before actions (for stale-state detection after form submit)
+        pre_submit_text = ""
+        if has_form_submit:
+            try:
+                pre_submit_text = await page.locator("main").first.inner_text(
+                    timeout=2000
+                )
+            except Exception:
+                pass
+
         # Execute UI actions before sending the message
         if current_ui_actions:
             logger.info(
@@ -569,13 +577,6 @@ async def run_simulation(
                     "[turn %d] Form was submitted — waiting for target to process...",
                     turn_count,
                 )
-                # Snapshot page text before processing to detect stale state
-                try:
-                    pre_submit_text = await page.locator("main").first.inner_text(
-                        timeout=2000
-                    )
-                except Exception:
-                    pre_submit_text = ""
 
                 processing_deadline = time.time() * 1000 + (
                     response_timeout or config.timeouts.response_wait_ms
@@ -584,11 +585,11 @@ async def run_simulation(
                 poll_count = 0
                 while time.time() * 1000 < processing_deadline:
                     still_processing = await page.evaluate("""() => {
-                        const hasSpinner = document.querySelector('[class*="loading"], [class*="spinner"], [class*="animate-spin"]') !== null;
-                        const hasTyping = document.querySelector('[class*="typing"], [class*="streaming"]') !== null;
                         const buttons = Array.from(document.querySelectorAll('button'));
                         const hasStop = buttons.some(b => b.textContent?.includes('Stop generating'));
-                        return hasSpinner || hasTyping || hasStop;
+                        const lastAssistant = document.querySelector('.message-assistant:last-of-type');
+                        const isStreaming = lastAssistant && lastAssistant.innerText.trim() === '';
+                        return hasStop || isStreaming;
                     }""")
                     if not still_processing:
                         break
