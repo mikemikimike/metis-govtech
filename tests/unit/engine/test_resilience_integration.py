@@ -13,11 +13,14 @@ from metis.engine.simulation.exceptions import (
     TransientDOMError,
     TurnRecoverableError,
 )
-from metis.engine.simulation.harness._config import HarnessConfig
-from metis.engine.simulation.harness._element_resolver import (
+from metis.engine.simulation.runners.playwright._config import HarnessConfig
+from metis.engine.simulation.runners.playwright._element_resolver import (
     resolve_element,
 )
-from metis.engine.simulation.harness._retry import action_retry, track_submission
+from metis.engine.simulation.runners.playwright._retry import (
+    action_retry,
+    track_submission,
+)
 from metis.engine.simulation.types import (
     ActionRetry,
     ConversationTurn,
@@ -50,11 +53,14 @@ class TestFullImportGraph:
         assert track_submission is not None
 
     def test_no_circular_imports(self) -> None:
-        """Importing environment should not fail due to circular deps."""
+        """Importing orchestrator and runner should not fail due to circular deps."""
         import importlib
 
         importlib.reload(
-            importlib.import_module("metis.engine.simulation.harness._environment")
+            importlib.import_module("metis.engine.simulation.orchestrator")
+        )
+        importlib.reload(
+            importlib.import_module("metis.engine.simulation.runners.playwright")
         )
 
 

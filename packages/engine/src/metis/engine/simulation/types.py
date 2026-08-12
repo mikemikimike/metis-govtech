@@ -47,6 +47,27 @@ class FormFillAction(BaseModel):
 UIAction = FileUploadAction | ButtonClickAction | FormFillAction
 
 
+# ---------------------------------------------------------------------------
+# Transport-Agnostic Action Protocol
+# ---------------------------------------------------------------------------
+
+
+class ActionSlot(BaseModel):
+    """A single action the runner can execute, discovered per-turn."""
+
+    id: str
+    kind: str
+    label: str
+    options: list[str] | None = None
+
+
+class ChosenAction(BaseModel):
+    """An action the UserAgent selected from available_actions."""
+
+    id: str
+    value: str | None = None
+
+
 class UserAgentOutput(BaseModel):
     """Output of a single user-agent turn (opening or follow-up)."""
 
@@ -60,7 +81,7 @@ class UserAgentOutput(BaseModel):
     )
     message: str
     decision: Literal["continue", "goal_achieved", "giving_up"] = "continue"
-    ui_actions: list[UIAction] = Field(default_factory=list)
+    actions: list[ChosenAction] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +120,16 @@ class UIState(BaseModel):
     form_elements: list[FormElement] = Field(default_factory=list)
 
 
+class Observation(BaseModel):
+    """What the target system returned after a turn (transport-agnostic)."""
+
+    text: str = ""
+    artifacts: list[Artifact] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    available_actions: list[ActionSlot] = Field(default_factory=list)
+    status_labels: list[str] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # User Agent Input
 # ---------------------------------------------------------------------------
@@ -114,9 +145,8 @@ class RunMeta(BaseModel):
 class UserAgentInput(BaseModel):
     """Input to :pymeth:`UserAgent.generate_response`."""
 
-    ui_state: UIState = Field(default_factory=UIState)
+    observation: Observation = Field(default_factory=Observation)
     run_meta: RunMeta | None = None
-    action_feedback: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

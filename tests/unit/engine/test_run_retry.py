@@ -1,6 +1,6 @@
 """Tests for run-level retry logic in _worker."""
 
-from metis.engine.simulation.harness._config import RetryConfig
+from metis.engine.simulation.runners.playwright._config import RetryConfig
 from metis.engine.simulation.types import RunFailure, RunRecord
 
 

@@ -9,10 +9,9 @@ from pydantic import BaseModel
 from metis.core.logging import get_logger
 
 from ..types import (
-    FormElement,
+    ActionSlot,
     Persona,
     Scenario,
-    UIState,
     UserAgentInput,
     UserAgentOutput,
 )
@@ -79,10 +78,10 @@ class UserAgent:
             logger.info("[user_agent]   Reasoning: %s", response.reasoning)
         logger.info("[user_agent]   Decision: %s", response.decision)
         logger.info("[user_agent]   Message: %s", response.message[:200])
-        if response.ui_actions:
+        if response.actions:
             logger.info(
-                "[user_agent]   UI Actions: %s",
-                [a.model_dump() for a in response.ui_actions],
+                "[user_agent]   Actions: %s",
+                [a.model_dump() for a in response.actions],
             )
         return response
 
@@ -90,12 +89,11 @@ class UserAgent:
         """Given the system's response, generate the user's next message.
 
         :param turn_payload: Structured payload containing the target system's
-            UI state and optional session metadata.
+            observation and optional session metadata.
         """
-        ui_state: UIState = turn_payload.ui_state
-        target_message = ui_state.text
-        form_elements = ui_state.form_elements or None
-        action_feedback = turn_payload.action_feedback or None
+        observation = turn_payload.observation
+        target_message = observation.text
+        available_actions = observation.available_actions or None
 
         logger.info(
             "[user_agent] Generating response (turn=%d, history=%d msgs, target_text=%d chars)...",
@@ -104,11 +102,6 @@ class UserAgent:
             len(target_message),
         )
         logger.info("[user_agent]   Target said: %s", target_message[:300])
-        if action_feedback:
-            logger.info(
-                "[user_agent]   Action feedback: %s",
-                "; ".join(action_feedback),
-            )
 
         self.conversation_history.append(
             HistoryEntry(role=HistoryRole.TARGET, content=target_message)
@@ -117,8 +110,7 @@ class UserAgent:
         # Build the turn-specific prompt
         user_prompt = self._build_user_prompt(
             target_message,
-            form_elements=form_elements,
-            action_feedback=action_feedback,
+            available_actions=available_actions,
         )
 
         # Call LLM
@@ -134,10 +126,10 @@ class UserAgent:
             logger.info("[user_agent]   Reasoning: %s", response.reasoning)
         logger.info("[user_agent]   Decision: %s", response.decision)
         logger.info("[user_agent]   Message: %s", response.message[:200])
-        if response.ui_actions:
+        if response.actions:
             logger.info(
-                "[user_agent]   UI Actions: %s",
-                [a.model_dump() for a in response.ui_actions],
+                "[user_agent]   Actions: %s",
+                [a.model_dump() for a in response.actions],
             )
         return response
 
@@ -147,7 +139,7 @@ class UserAgent:
             lines = [
                 "\n## Files to Upload",
                 "The following files are staged and ready to upload. Include them "
-                "as file_upload actions in ui_actions of your **first message**. "
+                "as file_upload actions in your **first message**. "
                 "Do NOT upload any file not in this list:",
             ]
             for f in self.scenario.fixtures:
@@ -164,44 +156,25 @@ class UserAgent:
     def _build_user_prompt(
         self,
         target_message: str,
-        form_elements: list[FormElement] | None = None,
-        action_feedback: list[str] | None = None,
+        available_actions: list[ActionSlot] | None = None,
     ) -> str:
         """Build the turn-specific instruction prompt (excludes history, which
         is conveyed structurally via multi-turn contents)."""
-        form_elements_section = ""
-        if form_elements:
-            form_lines = ["Available form elements:"]
-            for el in form_elements:
-                if el.type == "select":
-                    form_lines.append(
-                        f'  - [{el.type}] "{el.label}" '
-                        f"(selector: {el.selector})"
-                        f" options: {el.options or []}"
-                        f" current: {el.value or ''}"
-                    )
-                elif el.type == "button":
-                    form_lines.append(
-                        f'  - [{el.type}] "{el.label}" (selector: {el.selector})'
-                    )
-                else:
-                    form_lines.append(
-                        f'  - [{el.type}] "{el.label}" (selector: {el.selector}) value: {el.value or ""}'
-                    )
-            form_elements_section = "\n" + "\n".join(form_lines) + "\n"
-
-        action_feedback_section = ""
-        if action_feedback:
-            lines = [
-                "[Action feedback from previous turn]",
-                *[f"- {fb}" for fb in action_feedback],
-            ]
-            action_feedback_section = "\n" + "\n".join(lines) + "\n"
+        available_actions_section = ""
+        if available_actions:
+            action_lines = ["Available actions:"]
+            for slot in available_actions:
+                parts = (
+                    f'  - id: "{slot.id}", kind: "{slot.kind}", label: "{slot.label}"'
+                )
+                if slot.options:
+                    parts += f", options: {slot.options}"
+                action_lines.append(parts)
+            available_actions_section = "\n" + "\n".join(action_lines) + "\n"
 
         return RESPONSE_TURN_PROMPT.format(
             target_message=target_message,
-            form_elements_section=form_elements_section,
-            action_feedback_section=action_feedback_section,
+            available_actions_section=available_actions_section,
             turn_number=self.turn_count + 1,
         )
 

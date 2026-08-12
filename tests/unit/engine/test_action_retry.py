@@ -8,8 +8,11 @@ from metis.engine.simulation.exceptions import (
     PostSubmissionObservationError,
     TransientDOMError,
 )
-from metis.engine.simulation.harness._config import RetryConfig
-from metis.engine.simulation.harness._retry import action_retry, track_submission
+from metis.engine.simulation.runners.playwright._config import RetryConfig
+from metis.engine.simulation.runners.playwright._retry import (
+    action_retry,
+    track_submission,
+)
 
 
 class TestActionRetry:

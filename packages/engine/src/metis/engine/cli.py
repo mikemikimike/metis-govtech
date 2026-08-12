@@ -266,7 +266,7 @@ def simulate(
     from metis.engine.evaluation import evaluate
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
     from metis.engine.reporting import generate_report
-    from metis.engine.simulation.harness import HarnessConfig, run_experiment
+    from metis.engine.simulation.experiment import HarnessConfig, run_experiment
     from metis.engine.simulation.types import Experiment, RunRecord
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
