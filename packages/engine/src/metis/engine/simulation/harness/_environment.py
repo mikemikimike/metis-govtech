@@ -363,13 +363,7 @@ async def run_simulation(
             for a in current_ui_actions
         )
         has_form_submit = any(
-            isinstance(a, ButtonClickAction)
-            and re.search(
-                r"submit|generate|run|start|create|analyze|confirm",
-                a.selector,
-                re.IGNORECASE,
-            )
-            for a in current_ui_actions
+            isinstance(a, ButtonClickAction) for a in current_ui_actions
         )
 
         # Snapshot page text before actions (for stale-state detection after form submit)
@@ -457,16 +451,7 @@ async def run_simulation(
                             timeout=5000
                         )
                     await page.wait_for_timeout(1000)
-                    # After submit-type clicks, wait for processing to complete
-                    is_submit = bool(
-                        re.search(
-                            r"submit|generate|run|start|create|analyze|confirm",
-                            action.selector,
-                            re.IGNORECASE,
-                        )
-                    )
-                    if is_submit:
-                        await _wait_for_processing(page, turn_count)
+                    await _wait_for_processing(page, turn_count)
                     logger.info(
                         "[turn %d]   Action %d/%d: Click successful",
                         turn_count,

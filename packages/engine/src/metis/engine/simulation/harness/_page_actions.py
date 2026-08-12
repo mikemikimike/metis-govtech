@@ -282,7 +282,7 @@ async def upload_file(page: Page, file_path: Path, config: HarnessConfig | None 
 async def auto_fill_and_submit(page: Page, config: HarnessConfig | None = None) -> bool:
     """Auto-fill visible forms and click Submit. Returns True if form was submitted."""
     form_submit_btn = page.locator(
-        'button:has-text("Submit"), button:has-text("Confirm Theme"), button:has-text("Confirm")'
+        'button:has-text("Submit"), button:has-text("Continue"), button:has-text("Confirm Theme"), button:has-text("Confirm")'
     ).first
     try:
         form_visible = await form_submit_btn.is_visible(timeout=3000)

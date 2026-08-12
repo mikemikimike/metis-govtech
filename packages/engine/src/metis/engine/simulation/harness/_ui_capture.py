@@ -152,18 +152,18 @@ _CAPTURE_UI_STATE_JS = """() => {
     const navButtonTexts = ["new chat", "collapse sidebar", "expand sidebar", "conversation options", "copy", "share", "send", "attach file", "upload"];
     const mainTextarea = main.querySelector("textarea");
 
-    const inputEls = main.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):not([type="hidden"])');
+    const inputEls = main.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):not([type="hidden"]):not([disabled])');
     inputEls.forEach(el => {
       formElements.push({ type: "input", label: getLabelFor(el), selector: getSelectorFor(el), value: el.value || undefined, placeholder: el.placeholder || undefined });
     });
 
-    const selectEls = main.querySelectorAll("select");
+    const selectEls = main.querySelectorAll("select:not([disabled])");
     selectEls.forEach(el => {
       const opts = Array.from(el.options).map(o => o.text.trim()).filter(Boolean);
       formElements.push({ type: "select", label: getLabelFor(el), selector: getSelectorFor(el), value: el.options[el.selectedIndex]?.text.trim() || el.value || undefined, options: opts.length > 0 ? opts : undefined });
     });
 
-    const radioEls = main.querySelectorAll('input[type="radio"]');
+    const radioEls = main.querySelectorAll('input[type="radio"]:not([disabled])');
     const radioGroups = new Map();
     radioEls.forEach(el => {
       const groupKey = el.name || el.id || getSelectorFor(el);
@@ -177,19 +177,19 @@ _CAPTURE_UI_STATE_JS = """() => {
       formElements.push({ type: "radio", label: groupName, selector: groupSelector, value: checkedRadio ? (getLabelFor(checkedRadio) || checkedRadio.value) : undefined, options: opts.length > 0 ? opts : undefined, checked: !!checkedRadio });
     });
 
-    const checkboxEls = main.querySelectorAll('input[type="checkbox"]');
+    const checkboxEls = main.querySelectorAll('input[type="checkbox"]:not([disabled])');
     checkboxEls.forEach(el => {
       formElements.push({ type: "checkbox", label: getLabelFor(el), selector: getSelectorFor(el), checked: el.checked, value: el.value || undefined });
     });
 
-    const textareaEls = main.querySelectorAll("textarea");
+    const textareaEls = main.querySelectorAll("textarea:not([disabled])");
     textareaEls.forEach(el => {
       if (el === mainTextarea) return;
       if (/ask anything|reply/i.test(el.placeholder || "")) return;
       formElements.push({ type: "textarea", label: getLabelFor(el), selector: getSelectorFor(el), value: el.value || undefined, placeholder: el.placeholder || undefined });
     });
 
-    const formButtonEls = main.querySelectorAll("button");
+    const formButtonEls = main.querySelectorAll("button:not([disabled])");
     formButtonEls.forEach(el => {
       const text = el.textContent?.trim() || "";
       const textLower = text.toLowerCase();
