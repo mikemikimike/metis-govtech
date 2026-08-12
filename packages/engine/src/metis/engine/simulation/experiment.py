@@ -253,7 +253,9 @@ async def _worker(
                     num_trials=scenario.num_trials,
                 )
             if state:
-                state.start_run(scenario.id, persona.id, trial=trial_index)
+                state.start_run(
+                    scenario.id, persona.id, trial=trial_index, worker_id=worker_id
+                )
 
             async with console_lock:
                 if tui_ctx:

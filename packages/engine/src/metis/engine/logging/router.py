@@ -134,9 +134,13 @@ class LogRouter:
     def _render_styled(self, event_dict: EventDict) -> Text:
         """Build a styled Rich Text for the TUI tail panel."""
         event = event_dict.get("event", "")
+        scenario_id = event_dict.get("scenario_id")
+        persona_id = event_dict.get("persona_id")
 
         output = Text()
         output.append(f"{self._elapsed_str()} ", style="dim")
+        if scenario_id and persona_id:
+            output.append(f"[{scenario_id}:{persona_id}] ", style="dim cyan")
         output.append(event)
         return output
 
