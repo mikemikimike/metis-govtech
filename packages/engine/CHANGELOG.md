@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Runner ABC** (`simulation/runner.py`) — transport-agnostic interface (`setup`, `send_turn`, `teardown`, `get_session_id`, `recover`)
+- **Orchestrator** (`simulation/orchestrator.py`) — turn-loop logic extracted from `_environment.py`
+- **PlaywrightRunner** (`simulation/runners/playwright/`) — first Runner implementation
+- **REST runner stub** (`simulation/runners/rest/`)
+- **Action protocol** — `ActionSlot` + `ChosenAction`; LLM picks from a closed vocabulary instead of inventing selectors
+- **`Observation` model** — replaces `UIState` at the interface boundary
+- **Per-run context isolation** — fresh `BrowserContext` per run; `setup()` logs in, `teardown()` closes
+
 - **Three-layer simulation resilience** — automatic retry/recovery so runs rarely end in `system_error`:
   - *Action layer* — intent-based element resolver with fallback strategies; tenacity-backed retry with exponential backoff and point-of-no-return tracking (no duplicate submissions)
   - *Turn layer* — typed failure classification, lightweight page recovery (`_recover_page`), check-before-resend pattern for post-submission failures, consecutive-failure escalation to run layer
@@ -26,6 +34,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **`UserAgentInput`** — removed `ui_state` and `action_feedback`; now `observation` + `run_meta` only
+- **`UserAgentOutput`** — `ui_actions: list[UIAction]` → `actions: list[ChosenAction]`
+- **`harness/` dissolved** — `__init__.py` → `experiment.py`; `_environment.py` split into `orchestrator.py` + `runners/playwright/`
+- **Prompts** — generic action vocabulary (id/kind/label/options) replaces CSS-specific instructions
 - `run_experiment()` accepts `concurrency: int` parameter (default 1 preserves sequential behaviour)
 - CLI `simulate` command accepts `--concurrency / -c` option (min 1)
 - `log_format` CLI option typed as `Literal["text", "json"]` for pyright correctness
