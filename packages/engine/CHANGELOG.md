@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Three-layer simulation resilience** — automatic retry/recovery so runs rarely end in `system_error`:
+  - *Action layer* — intent-based element resolver with fallback strategies; tenacity-backed retry with exponential backoff and point-of-no-return tracking (no duplicate submissions)
+  - *Turn layer* — typed failure classification, lightweight page recovery (`_recover_page`), check-before-resend pattern for post-submission failures, consecutive-failure escalation to run layer
+  - *Run layer* — configurable retry budget (default: 2 retries) with full browser context teardown/rebuild and re-authentication
+- **Typed exception hierarchy** (`simulation/exceptions.py`) — `SimulationError` base with `TurnRecoverableError`, `RunRecoverableError`, and `ResponseTimeoutError` branches; drives structured error routing between layers
+- **Resilience diagnostics** — `TurnDiagnostics`, `ActionRetry`, and `RunFailure` models on `ConversationTurn` and `RunRecord` for post-hoc failure analysis; `RunRecord` schema bumped to v2
+- **`RetryConfig`** — nested config block in `HarnessConfig` with tunable budgets for action attempts, turn retries, consecutive-failure limits, and run retries
+- **Per-scenario retry override** — `max_run_retries` field on `Scenario` (optional; `null` uses global default)
 - **Concurrent simulation** — `--concurrency N` flag runs N browser contexts in parallel on a single browser process; round-robin run distribution across workers
 - **Async Playwright harness** — full async conversion (`playwright.async_api`) of auth, page actions, UI capture, and environment modules
 - **Async OpenAI client** — `AsyncOpenAI` for non-blocking LLM calls across concurrent workers

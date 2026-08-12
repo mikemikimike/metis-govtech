@@ -7,12 +7,16 @@ import time
 from pathlib import Path
 
 from playwright.async_api import Page
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from metis.core.logging import get_logger
 
+from ..exceptions import ResponseTimeoutError
 from ..types import UIState
 from ._auth import dismiss_modals
 from ._config import HarnessConfig
+from ._element_resolver import AriaStrategy, CSSStrategy, TextStrategy, resolve_element
+from ._retry import action_retry, track_submission
 from ._ui_capture import capture_ui_state
 
 logger = get_logger()
@@ -26,120 +30,124 @@ async def send_message(
 ) -> UIState:
     """Send a message in the chat and wait for the full response."""
     timeout = timeout_override or config.timeouts.response_wait_ms
-    msg_preview = message[:80] + ("..." if len(message) > 80 else "")
-    logger.info("[send_message] Sending: %r (timeout=%dms)", msg_preview, timeout)
 
-    # Snapshot pre-state (placeholder + message count)
-    logger.debug("[send_message] Capturing pre-state snapshot...")
-    pre_state = await page.evaluate("""() => {
-        const textarea = document.querySelector("textarea");
-        const placeholder = textarea?.getAttribute("placeholder") || "";
-        const sel = '[class*="message"], [class*="Message"], ' +
-          '[class*="response"], [class*="Response"], ' +
-          '[class*="assistant"], [class*="Assistant"]';
-        const messages = document.querySelectorAll(sel);
-        return { placeholder, messageCount: messages.length };
-    }""")
-    logger.debug(
-        "[send_message] Pre-state: placeholder=%r, messageCount=%d",
-        pre_state["placeholder"],
-        pre_state["messageCount"],
-    )
+    @action_retry(config.retry)
+    async def _send() -> UIState:
+        msg_preview = message[:80] + ("..." if len(message) > 80 else "")
+        logger.info("[send_message] Sending: %r (timeout=%dms)", msg_preview, timeout)
 
-    # Find and fill the textarea
-    input_el = page.locator("textarea").first
-    if not await input_el.is_visible(timeout=2000):
-        logger.info(
-            "[send_message] Textarea not visible — trying fallback selectors..."
-        )
-        try:
-            await page.get_by_placeholder(
-                re.compile(r"ask anything|reply", re.IGNORECASE)
-            ).click(timeout=5000)
-        except Exception:
-            await page.locator(
-                '[class*="input"], [class*="Input"], [class*="chat"] >> visible=true'
-            ).first.click(timeout=3000)
-        await page.wait_for_timeout(1000)
-        input_el = page.locator("textarea").first
-        await input_el.wait_for(state="visible", timeout=5000)
-
-    logger.info("[send_message] Filling textarea and pressing Enter...")
-    await input_el.fill(message)
-    await input_el.press("Enter")
-
-    # Wait for response using dual-condition approach
-    logger.info("[send_message] Waiting for response (initial 3s buffer)...")
-    await page.wait_for_timeout(3000)
-    placeholder_already_reply = "Reply" in pre_state["placeholder"]
-
-    logger.info(
-        "[send_message] Waiting for new message or placeholder change (timeout=%dms)...",
-        timeout,
-    )
-    await page.wait_for_function(
-        """({ prevCount, alreadyReply }) => {
+        # Snapshot pre-state (placeholder + message count)
+        logger.debug("[send_message] Capturing pre-state snapshot...")
+        pre_state = await page.evaluate("""() => {
             const textarea = document.querySelector("textarea");
-            if (!textarea) return false;
-            const currentPlaceholder =
-              textarea.getAttribute("placeholder") || "";
+            const placeholder = textarea?.getAttribute("placeholder") || "";
             const sel = '[class*="message"], [class*="Message"], ' +
               '[class*="response"], [class*="Response"], ' +
               '[class*="assistant"], [class*="Assistant"]';
             const messages = document.querySelectorAll(sel);
-            const currentCount = messages.length;
-            const placeholderChanged =
-              !alreadyReply && currentPlaceholder.includes("Reply");
-            const newMessageAppeared = currentCount > prevCount;
-            return placeholderChanged || newMessageAppeared;
-        }""",
-        arg={
-            "prevCount": pre_state["messageCount"],
-            "alreadyReply": placeholder_already_reply,
-        },
-        timeout=timeout,
-    )
-    logger.info(
-        "[send_message] Response detected — polling for processing completion..."
-    )
-
-    # Poll for processing completion
-    poll_deadline = time.time() * 1000 + 300000
-    poll_count = 0
-    while time.time() * 1000 < poll_deadline:
-        still_processing = await page.evaluate("""() => {
-            const spinSel = '[class*="loading"], ' +
-              '[class*="spinner"], [class*="animate-spin"]';
-            const hasSpinner =
-              document.querySelector(spinSel) !== null;
-            const typeSel =
-              '[class*="typing"], [class*="streaming"]';
-            const hasTyping =
-              document.querySelector(typeSel) !== null;
-            const buttons =
-              Array.from(document.querySelectorAll('button'));
-            const hasStop = buttons.some(
-              b => b.textContent?.includes('Stop generating'));
-            return hasSpinner || hasTyping || hasStop;
+            return { placeholder, messageCount: messages.length };
         }""")
-        if not still_processing:
-            break
-        poll_count += 1
-        if poll_count % 5 == 1:
-            logger.info("[send_message] Still processing (poll #%d)...", poll_count)
+        logger.debug(
+            "[send_message] Pre-state: placeholder=%r, messageCount=%d",
+            pre_state["placeholder"],
+            pre_state["messageCount"],
+        )
+
+        # Find and fill the textarea using intent-based element resolution
+        input_el = await resolve_element(
+            page,
+            intent="chat_textarea",
+            strategies=[
+                CSSStrategy("textarea"),
+                AriaStrategy(role="textbox", name="Message"),
+                CSSStrategy('[class*="input"], [class*="Input"], [class*="chat"] textarea'),
+            ],
+        )
+
+        logger.info("[send_message] Filling textarea and pressing Enter...")
+        await input_el.fill(message)
+        await input_el.press("Enter")
+        track_submission()
+
+        # Wait for response using dual-condition approach
+        logger.info("[send_message] Waiting for response (initial 3s buffer)...")
+        await page.wait_for_timeout(3000)
+        placeholder_already_reply = "Reply" in pre_state["placeholder"]
+
+        logger.info(
+            "[send_message] Waiting for new message or placeholder change (timeout=%dms)...",
+            timeout,
+        )
+        try:
+            await page.wait_for_function(
+                """({ prevCount, alreadyReply }) => {
+                    const textarea = document.querySelector("textarea");
+                    if (!textarea) return false;
+                    const currentPlaceholder =
+                      textarea.getAttribute("placeholder") || "";
+                    const sel = '[class*="message"], [class*="Message"], ' +
+                      '[class*="response"], [class*="Response"], ' +
+                      '[class*="assistant"], [class*="Assistant"]';
+                    const messages = document.querySelectorAll(sel);
+                    const currentCount = messages.length;
+                    const placeholderChanged =
+                      !alreadyReply && currentPlaceholder.includes("Reply");
+                    const newMessageAppeared = currentCount > prevCount;
+                    return placeholderChanged || newMessageAppeared;
+                }""",
+                arg={
+                    "prevCount": pre_state["messageCount"],
+                    "alreadyReply": placeholder_already_reply,
+                },
+                timeout=timeout,
+            )
+        except PlaywrightTimeoutError:
+            raise ResponseTimeoutError(
+                f"Response polling timed out after {timeout}ms"
+            ) from None
+        logger.info(
+            "[send_message] Response detected — polling for processing completion..."
+        )
+
+        # Poll for processing completion
+        poll_deadline = time.time() * 1000 + 300000
+        poll_count = 0
+        while time.time() * 1000 < poll_deadline:
+            still_processing = await page.evaluate("""() => {
+                const spinSel = '[class*="loading"], ' +
+                  '[class*="spinner"], [class*="animate-spin"]';
+                const hasSpinner =
+                  document.querySelector(spinSel) !== null;
+                const typeSel =
+                  '[class*="typing"], [class*="streaming"]';
+                const hasTyping =
+                  document.querySelector(typeSel) !== null;
+                const buttons =
+                  Array.from(document.querySelectorAll('button'));
+                const hasStop = buttons.some(
+                  b => b.textContent?.includes('Stop generating'));
+                return hasSpinner || hasTyping || hasStop;
+            }""")
+            if not still_processing:
+                break
+            poll_count += 1
+            if poll_count % 5 == 1:
+                logger.info("[send_message] Still processing (poll #%d)...", poll_count)
+            await page.wait_for_timeout(2000)
+
+        if poll_count > 0:
+            logger.info("[send_message] Processing complete after %d poll(s)", poll_count)
+
+        # Final buffer for remaining streaming
+        logger.debug("[send_message] Final 2s buffer...")
         await page.wait_for_timeout(2000)
+        logger.info("[send_message] Capturing UI state...")
+        return await capture_ui_state(page)
 
-    if poll_count > 0:
-        logger.info("[send_message] Processing complete after %d poll(s)", poll_count)
-
-    # Final buffer for remaining streaming
-    logger.debug("[send_message] Final 2s buffer...")
-    await page.wait_for_timeout(2000)
-    logger.info("[send_message] Capturing UI state...")
-    return await capture_ui_state(page)
+    return await _send()
 
 
-async def upload_file(page: Page, file_path: Path) -> None:
+async def upload_file(page: Page, file_path: Path, config: HarnessConfig | None = None) -> None:
     """Upload a file via the target system's attach-file flow."""
     filename = file_path.name
     logger.info("[upload] Step 1/5: Starting upload of '%s' (%s)", filename, file_path)
@@ -247,7 +255,7 @@ async def upload_file(page: Page, file_path: Path) -> None:
         )
 
 
-async def auto_fill_and_submit(page: Page) -> bool:
+async def auto_fill_and_submit(page: Page, config: HarnessConfig | None = None) -> bool:
     """Auto-fill visible forms and click Submit. Returns True if form was submitted."""
     form_submit_btn = page.locator(
         'button:has-text("Submit"), button:has-text("Confirm Theme"), button:has-text("Confirm")'

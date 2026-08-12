@@ -17,6 +17,14 @@ from playwright.async_api import Page
 
 from metis.core.logging import get_logger
 
+from ..exceptions import (
+    ConsecutiveFailureEscalation,
+    PostSubmissionObservationError,
+    ResponseTimeoutError,
+    RunRecoverableError,
+    TransientDOMError,
+    TurnRecoverableError,
+)
 from ..types import (
     ButtonClickAction,
     CollectedArtifact,
@@ -30,6 +38,7 @@ from ..types import (
     RunRecord,
     Scenario,
     UIAction,
+    UIState,
     UserAgentInput,
 )
 from ..user_agent.agent import UserAgent
@@ -46,6 +55,36 @@ if TYPE_CHECKING:
     from metis.engine.tui import SimulationState, TUIContext
 
 logger = get_logger()
+
+
+async def _recover_page(page: Page, config: HarnessConfig) -> None:
+    """Lightweight page recovery: refresh + wait for chat textarea."""
+    await page.reload(wait_until="domcontentloaded", timeout=15000)
+    await dismiss_modals(page)
+    await page.wait_for_selector("textarea", timeout=10000)
+
+
+async def _recover_and_check(
+    page: Page,
+    config: HarnessConfig,
+    sent_message: str,
+) -> UIState | None:
+    """Recover page and check whether the sent message got a response.
+
+    Returns UIState if the message was already processed (don't resend),
+    or None if the message was never received (safe to resend).
+    """
+    await _recover_page(page, config)
+    ui_state = await capture_ui_state(page)
+
+    last_user_msg = await page.evaluate("""() => {
+        const msgs = document.querySelectorAll('[class*="user"], [class*="User"]');
+        return msgs.length ? msgs[msgs.length - 1].innerText?.trim() || "" : "";
+    }""")
+
+    if sent_message[:80] in (last_user_msg or ""):
+        return ui_state
+    return None
 
 
 async def run_simulation(
@@ -140,6 +179,8 @@ async def run_simulation(
     current_message: str = opening.message
     current_ui_actions: list[UIAction] = opening.ui_actions
     current_decision: str = opening.decision
+
+    consecutive_failures = 0
 
     # Turn loop
     while True:
@@ -530,17 +571,61 @@ async def run_simulation(
                             "[turn %d] No artifacts found in panel", turn_count
                         )
 
-        except Exception as exc:
-            # --- Stopping rule: system error ---
-            logger.info("[turn %d] STOP: system_error (%s)", turn_count, exc)
-            return _build_record(
-                "system_error",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
+            consecutive_failures = 0  # reset on success
+
+        except PostSubmissionObservationError:
+            recovered_state = await _recover_and_check(page, config, current_message)
+            if recovered_state is not None:
+                ui_state = recovered_state
+                consecutive_failures = 0
+            else:
+                try:
+                    ui_state = await send_message(
+                        page, current_message, config, timeout_override=response_timeout
+                    )
+                    consecutive_failures = 0
+                except ResponseTimeoutError:
+                    consecutive_failures += 1
+                    if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
+                        raise ConsecutiveFailureEscalation(
+                            f"{consecutive_failures} consecutive turn failures"
+                        )
+                    ui_state = UIState(
+                        text="", errors=["Response timeout — no response received"]
+                    )
+        except TransientDOMError:
+            consecutive_failures += 1
+            if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
+                raise ConsecutiveFailureEscalation(
+                    f"{consecutive_failures} consecutive turn failures"
+                )
+            await _recover_page(page, config)
+            try:
+                ui_state = await send_message(
+                    page, current_message, config, timeout_override=response_timeout
+                )
+                consecutive_failures = 0
+            except (TurnRecoverableError, ResponseTimeoutError) as inner_exc:
+                consecutive_failures += 1
+                if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
+                    raise ConsecutiveFailureEscalation(
+                        f"{consecutive_failures} consecutive turn failures"
+                    )
+                if isinstance(inner_exc, ResponseTimeoutError):
+                    ui_state = UIState(
+                        text="", errors=["Response timeout — no response received"]
+                    )
+                else:
+                    continue
+        except ResponseTimeoutError:
+            consecutive_failures += 1
+            if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
+                raise ConsecutiveFailureEscalation(
+                    f"{consecutive_failures} consecutive turn failures"
+                )
+            ui_state = UIState(text="", errors=["Response timeout — no response received"])
+        except RunRecoverableError:
+            raise
 
         send_elapsed = time.time() - send_start
         logger.info("[turn %d] send+wait: %.1fs", turn_count, send_elapsed)
@@ -559,37 +644,6 @@ async def run_simulation(
                     )
             except Exception:
                 pass
-
-        # Detect auth loss
-        try:
-            url = page.url
-            if "login" in url or "auth" in url:
-                logger.info(
-                    "[turn %d] STOP: system_error (auth lost — URL contains login/auth: %s)",
-                    turn_count,
-                    url,
-                )
-                return _build_record(
-                    "system_error",
-                    run_config,
-                    conversation,
-                    artifacts_collected,
-                    start_time,
-                    target_session_id,
-                )
-        except Exception:
-            logger.info(
-                "[turn %d] STOP: system_error (page crashed — cannot read URL)",
-                turn_count,
-            )
-            return _build_record(
-                "system_error",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
 
         turn_duration_ms = int((time.time() - turn_start) * 1000)
 
