@@ -19,7 +19,6 @@ from rich.text import Text
 from structlog.types import EventDict, Processor
 
 _stderr_console = Console(stderr=True)
-_force_color = False
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
@@ -63,19 +62,9 @@ def configure_logging(
     pretty: bool | None = None,
     show_caller: bool = True,
 ) -> None:
-    """Configure logging for the entire process. Call once at startup.
-
-    show_caller only adds module/lineno in JSON mode (too noisy for pretty).
-    """
-    global _stderr_console, _force_color  # noqa: PLW0603
-
+    """Configure logging for the entire process. Call once at startup."""
     resolved_level = _resolve_level(level)
     use_json = _resolve_format(json=json, pretty=pretty)
-
-    # When pretty is explicitly requested, force color output even when piped
-    if pretty is True:
-        _force_color = True
-        _stderr_console = Console(stderr=True, force_terminal=True)
 
     shared_processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
@@ -87,7 +76,7 @@ def configure_logging(
         structlog.processors.TimeStamper(fmt="iso"),
     ]
 
-# foreign_pre_chain must NOT include _make_level_filter because
+    # foreign_pre_chain must NOT include _make_level_filter because
     # DropEvent crashes inside ProcessorFormatter. Stdlib's root logger
     # level gate (set below) handles filtering for third-party loggers.
     foreign_processors: list[Processor] = [
@@ -150,34 +139,6 @@ _LEVEL_STYLES = {
     "critical": "bold white on red",
 }
 
-_PREFIX_STYLES = {
-    "[action]": "bold cyan",
-    "[expect]": "bold magenta",
-    "[stabilize]": "dim blue",
-    "[turn": "bold white",
-    "[user_agent]": "bold green",
-    "[login]": "blue",
-    "[sim]": "bold yellow",
-    "[experiment]": "bold",
-    "[send_message]": "cyan",
-    "[modal]": "dim",
-}
-
-_LOGGER_NAME_STRIP = "metis.engine.simulation."
-
-
-def _style_event(event: str) -> Text:
-    """Apply prefix-aware styling to a log event string."""
-    text = Text()
-    for prefix, style in _PREFIX_STYLES.items():
-        if event.startswith(prefix):
-            end = event.index("]") + 1
-            text.append(event[:end], style=style)
-            text.append(event[end:])
-            return text
-    text.append(event, style="bold")
-    return text
-
 
 def _rich_console_renderer(_logger: Any, _name: str, event_dict: EventDict) -> str:
     """Render a log event to stderr using Rich."""
@@ -186,19 +147,14 @@ def _rich_console_renderer(_logger: Any, _name: str, event_dict: EventDict) -> s
     timestamp = event_dict.pop("timestamp", "")
     logger_name = event_dict.pop("logger_name", "")
 
-    # Shorten verbose logger names for readability
-    if logger_name.startswith(_LOGGER_NAME_STRIP):
-        logger_name = logger_name[len(_LOGGER_NAME_STRIP) :]
-
     output = Text()
     output.append(f"{timestamp} ", style="dim")
     output.append(f"[{level.upper():<8}]", style=_LEVEL_STYLES.get(level, ""))
     output.append(f" {logger_name}  ", style="dim cyan")
-    output.append_text(_style_event(event))
+    output.append(f"{event}", style="bold")
 
-    # Remove internal/noisy keys from pretty output
-    for k in ("_record", "_from_stdlib", "module", "lineno"):
-        event_dict.pop(k, None)
+    event_dict.pop("_record", None)
+    event_dict.pop("_from_stdlib", None)
     if event_dict:
         pairs = " ".join(f"{k}={v}" for k, v in event_dict.items())
         output.append(f"  {pairs}", style="dim")

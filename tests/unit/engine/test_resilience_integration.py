@@ -13,18 +13,14 @@ from metis.engine.simulation.exceptions import (
     TransientDOMError,
     TurnRecoverableError,
 )
-from metis.engine.simulation.harness._config import HarnessConfig, RetryConfig
+from metis.engine.simulation.harness._config import HarnessConfig
 from metis.engine.simulation.harness._element_resolver import (
-    AriaStrategy,
-    CSSStrategy,
-    TextStrategy,
     resolve_element,
 )
 from metis.engine.simulation.harness._retry import action_retry, track_submission
 from metis.engine.simulation.types import (
     ActionRetry,
     ConversationTurn,
-    RunFailure,
     RunRecord,
     TurnDiagnostics,
 )
@@ -45,17 +41,10 @@ class TestFullImportGraph:
         assert hasattr(exceptions, "ResponseTimeoutError")
 
     def test_element_resolver_importable(self) -> None:
-        from metis.engine.simulation.harness._element_resolver import (
-            AriaStrategy,
-            CSSStrategy,
-            TextStrategy,
-            resolve_element,
-        )
 
         assert resolve_element is not None
 
     def test_retry_importable(self) -> None:
-        from metis.engine.simulation.harness._retry import action_retry, track_submission
 
         assert action_retry is not None
         assert track_submission is not None

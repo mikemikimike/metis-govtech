@@ -1,15 +1,13 @@
 """Tests that page actions module integrates retry infrastructure."""
 
-import pytest
 
-from metis.engine.simulation.harness._config import HarnessConfig, RetryConfig
+from metis.engine.simulation.harness._element_resolver import resolve_element
 from metis.engine.simulation.harness._page_actions import (
     auto_fill_and_submit,
     send_message,
     upload_file,
 )
 from metis.engine.simulation.harness._retry import action_retry, track_submission
-from metis.engine.simulation.harness._element_resolver import resolve_element
 
 
 class TestPageActionsImports:

@@ -8,8 +8,8 @@ import pytest
 class TestRecoverPage:
     @pytest.mark.asyncio
     async def test_recover_page_reloads_and_waits_for_textarea(self) -> None:
-        from metis.engine.simulation.harness._environment import _recover_page
         from metis.engine.simulation.harness._config import HarnessConfig
+        from metis.engine.simulation.harness._environment import _recover_page
 
         page = MagicMock()
         page.reload = AsyncMock()
@@ -33,8 +33,8 @@ class TestRecoverPage:
 class TestRecoverAndCheck:
     @pytest.mark.asyncio
     async def test_returns_ui_state_when_message_found(self) -> None:
-        from metis.engine.simulation.harness._environment import _recover_and_check
         from metis.engine.simulation.harness._config import HarnessConfig
+        from metis.engine.simulation.harness._environment import _recover_and_check
         from metis.engine.simulation.types import UIState
 
         page = MagicMock()
@@ -68,8 +68,8 @@ class TestRecoverAndCheck:
 
     @pytest.mark.asyncio
     async def test_returns_none_when_message_not_found(self) -> None:
-        from metis.engine.simulation.harness._environment import _recover_and_check
         from metis.engine.simulation.harness._config import HarnessConfig
+        from metis.engine.simulation.harness._environment import _recover_and_check
         from metis.engine.simulation.types import UIState
 
         page = MagicMock()

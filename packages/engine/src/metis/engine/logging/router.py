@@ -57,12 +57,12 @@ class LogRouter:
         self,
         log_dir: Path,
         log_format: Literal["text", "json"] = "text",
-        tail_buffer: TailBuffer | None = None,
+        tail_buffers: dict[str, TailBuffer] | None = None,
         fallback_renderer: Any = None,
     ) -> None:
         self._log_dir = log_dir
         self._log_format = log_format
-        self._tail_buffer = tail_buffer
+        self._tail_buffers = tail_buffers or {}
         self._fallback_renderer = fallback_renderer
         self._handles: dict[str, IO[str]] = {}
         self._start_time = time.monotonic()
@@ -156,15 +156,15 @@ class LogRouter:
 def setup_engine_logging(
     log_dir: Path,
     log_format: Literal["text", "json"] = "text",
-    tail_buffer: TailBuffer | None = None,
+    tail_buffers: dict[str, TailBuffer] | None = None,
     use_tui: bool = True,
 ) -> LogRouter:
     """Create a LogRouter and install it as structlog's renderer.
 
     Replaces the last processor (core's _rich_console_renderer) with the
     router, which handles both file output and TUI tail rendering.
-    When use_tui=False, the original renderer is kept as a fallback so
-    events still appear on stderr.
+    When use_tui=False, core's renderer is kept as fallback so events
+    still appear on stderr.
     Must be called AFTER configure_logging().
     """
     import structlog
@@ -180,7 +180,7 @@ def setup_engine_logging(
     router = LogRouter(
         log_dir=log_dir,
         log_format=log_format,
-        tail_buffer=tail_buffer,
+        tail_buffers=tail_buffers,
         fallback_renderer=fallback,
     )
 

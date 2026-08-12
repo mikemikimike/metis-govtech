@@ -1,14 +1,7 @@
 """Tests for run-level retry logic in _worker."""
 
-import pytest
 
-from metis.engine.simulation.exceptions import (
-    AuthLossError,
-    ConsecutiveFailureEscalation,
-    PageCrashError,
-    RunRecoverableError,
-)
-from metis.engine.simulation.harness._config import HarnessConfig, RetryConfig
+from metis.engine.simulation.harness._config import RetryConfig
 from metis.engine.simulation.types import RunFailure, RunRecord
 
 

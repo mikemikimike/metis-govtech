@@ -1,6 +1,5 @@
 """Tests for diagnostics models added to simulation types."""
 
-from typing import Literal
 
 from metis.engine.simulation.types import (
     ActionRetry,

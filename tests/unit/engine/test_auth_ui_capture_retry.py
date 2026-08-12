@@ -1,10 +1,10 @@
 """Tests that auth and UI capture use retry infrastructure."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from metis.engine.simulation.harness._config import HarnessConfig, RetryConfig
+from metis.engine.simulation.harness._config import RetryConfig
 
 
 class TestCaptureUIStateRetry:
@@ -38,9 +38,9 @@ class TestCaptureUIStateRetry:
 
     @pytest.mark.asyncio
     async def test_capture_ui_state_accepts_config_parameter(self) -> None:
-        from metis.engine.simulation.harness._ui_capture import capture_ui_state
-
         import inspect
+
+        from metis.engine.simulation.harness._ui_capture import capture_ui_state
 
         sig = inspect.signature(capture_ui_state)
         params = list(sig.parameters.keys())
@@ -50,8 +50,8 @@ class TestCaptureUIStateRetry:
 
     @pytest.mark.asyncio
     async def test_capture_ui_state_retries_and_succeeds(self) -> None:
-        from metis.engine.simulation.harness._ui_capture import capture_ui_state
         from metis.engine.simulation.harness._config import RetryConfig
+        from metis.engine.simulation.harness._ui_capture import capture_ui_state
 
         page = MagicMock()
         call_count = 0
