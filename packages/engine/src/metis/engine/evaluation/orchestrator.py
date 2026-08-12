@@ -18,6 +18,8 @@ from metis.engine.extractor.types import (
 )
 from metis.engine.simulation.types import MetricRef
 
+MAX_CONCURRENCY=5
+
 
 def _resolve_metrics(metric_refs: list[MetricRef]) -> list[BaseMetric]:
     """Instantiate metric classes from :class:`MetricRef` objects."""
@@ -73,7 +75,7 @@ def evaluate(
     ]
 
     async_config = AsyncConfig(
-        max_concurrent=min(concurrency, 5), throttle_value=throttle
+        max_concurrent=min(concurrency, MAX_CONCURRENCY), throttle_value=throttle
     )
     phase_timings: dict[str, float] = {}
 
