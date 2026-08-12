@@ -1,6 +1,5 @@
 """Tests for diagnostics models added to simulation types."""
 
-
 from metis.engine.simulation.types import (
     ActionRetry,
     ConversationTurn,
@@ -89,30 +88,34 @@ class TestConversationTurnExtension:
 
 class TestRunRecordExtension:
     def test_new_fields_default_backward_compatible(self) -> None:
-        record = RunRecord.model_validate({
-            "schema_version": 1,
-            "config": {
-                "persona": "p",
-                "scenario": "s",
-            },
-            "outcome": {
-                "stop_reason": "max_turns",
-                "total_turns": 10,
-                "duration_seconds": 60.0,
-            },
-        })
+        record = RunRecord.model_validate(
+            {
+                "schema_version": 1,
+                "config": {
+                    "persona": "p",
+                    "scenario": "s",
+                },
+                "outcome": {
+                    "stop_reason": "max_turns",
+                    "total_turns": 10,
+                    "duration_seconds": 60.0,
+                },
+            }
+        )
         assert record.attempt_number == 1
         assert record.total_attempts == 1
         assert record.prior_failures == []
 
     def test_schema_version_is_1(self) -> None:
-        record = RunRecord.model_validate({
-            "schema_version": 1,
-            "config": {"persona": "p", "scenario": "s"},
-            "outcome": {
-                "stop_reason": "max_turns",
-                "total_turns": 5,
-                "duration_seconds": 30.0,
-            },
-        })
+        record = RunRecord.model_validate(
+            {
+                "schema_version": 1,
+                "config": {"persona": "p", "scenario": "s"},
+                "outcome": {
+                    "stop_reason": "max_turns",
+                    "total_turns": 5,
+                    "duration_seconds": 30.0,
+                },
+            }
+        )
         assert record.schema_version == 1

@@ -139,27 +139,29 @@ class TestDiagnosticsWiring:
             ),
         )
 
-        record = RunRecord.model_validate({
-            "schema_version": 1,
-            "config": {"persona": "p", "scenario": "s"},
-            "outcome": {
-                "stop_reason": "max_turns",
-                "total_turns": 1,
-                "duration_seconds": 3.0,
-            },
-            "conversation": [turn.model_dump()],
-            "attempt_number": 2,
-            "total_attempts": 3,
-            "prior_failures": [
-                {
-                    "attempt_number": 1,
-                    "failure_type": "auth_loss",
-                    "turn_reached": 5,
-                    "error_message": "redirected",
-                    "duration_ms": 20000,
-                }
-            ],
-        })
+        record = RunRecord.model_validate(
+            {
+                "schema_version": 1,
+                "config": {"persona": "p", "scenario": "s"},
+                "outcome": {
+                    "stop_reason": "max_turns",
+                    "total_turns": 1,
+                    "duration_seconds": 3.0,
+                },
+                "conversation": [turn.model_dump()],
+                "attempt_number": 2,
+                "total_attempts": 3,
+                "prior_failures": [
+                    {
+                        "attempt_number": 1,
+                        "failure_type": "auth_loss",
+                        "turn_reached": 5,
+                        "error_message": "redirected",
+                        "duration_ms": 20000,
+                    }
+                ],
+            }
+        )
 
         assert record.conversation[0].diagnostics is not None
         assert record.conversation[0].diagnostics.retry_count == 1

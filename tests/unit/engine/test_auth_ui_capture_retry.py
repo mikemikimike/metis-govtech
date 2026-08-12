@@ -31,10 +31,9 @@ class TestCaptureUIStateRetry:
 
         page.evaluate = flaky_evaluate
 
-        config = RetryConfig(action_max_attempts=3, action_backoff_base_seconds=0.01)
-        # After the refactoring, capture_ui_state should accept config and retry
-        # For now, validate it's importable and the pattern makes sense
+        _config = RetryConfig(action_max_attempts=3, action_backoff_base_seconds=0.01)
         assert capture_ui_state is not None
+        assert _config.action_max_attempts == 3
 
     @pytest.mark.asyncio
     async def test_capture_ui_state_accepts_config_parameter(self) -> None:

@@ -7,6 +7,7 @@ RunRecord.
 
 from __future__ import annotations
 
+import contextlib
 import re
 import time
 from datetime import UTC, datetime
@@ -369,12 +370,10 @@ async def run_simulation(
         # Snapshot page text before actions (for stale-state detection after form submit)
         pre_submit_text = ""
         if has_form_submit:
-            try:
+            with contextlib.suppress(Exception):
                 pre_submit_text = await page.locator("main").first.inner_text(
                     timeout=2000
                 )
-            except Exception:
-                pass
 
         # Execute UI actions before sending the message
         if current_ui_actions:
@@ -662,10 +661,13 @@ async def run_simulation(
                     consecutive_failures = 0
                 except ResponseTimeoutError:
                     consecutive_failures += 1
-                    if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
+                    if (
+                        consecutive_failures
+                        >= config.retry.consecutive_turn_failures_limit
+                    ):
                         raise ConsecutiveFailureEscalation(
                             f"{consecutive_failures} consecutive turn failures"
-                        )
+                        ) from None
                     ui_state = UIState(
                         text="", errors=["Response timeout — no response received"]
                     )
@@ -674,7 +676,7 @@ async def run_simulation(
             if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
                 raise ConsecutiveFailureEscalation(
                     f"{consecutive_failures} consecutive turn failures"
-                )
+                ) from None
             await _recover_page(page, config)
             try:
                 ui_state = await send_message(
@@ -686,7 +688,7 @@ async def run_simulation(
                 if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
                     raise ConsecutiveFailureEscalation(
                         f"{consecutive_failures} consecutive turn failures"
-                    )
+                    ) from None
                 if isinstance(inner_exc, ResponseTimeoutError):
                     ui_state = UIState(
                         text="", errors=["Response timeout — no response received"]
@@ -698,8 +700,10 @@ async def run_simulation(
             if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
                 raise ConsecutiveFailureEscalation(
                     f"{consecutive_failures} consecutive turn failures"
-                )
-            ui_state = UIState(text="", errors=["Response timeout — no response received"])
+                ) from None
+            ui_state = UIState(
+                text="", errors=["Response timeout — no response received"]
+            )
         except RunRecoverableError:
             raise
 

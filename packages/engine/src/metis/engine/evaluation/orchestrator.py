@@ -18,7 +18,7 @@ from metis.engine.extractor.types import (
 )
 from metis.engine.simulation.types import MetricRef
 
-MAX_CONCURRENCY=5
+MAX_CONCURRENCY = 5
 
 
 def _resolve_metrics(metric_refs: list[MetricRef]) -> list[BaseMetric]:

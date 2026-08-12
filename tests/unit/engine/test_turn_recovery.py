@@ -26,7 +26,9 @@ class TestRecoverPage:
         ):
             await _recover_page(page, config)
 
-        page.reload.assert_called_once_with(wait_until="domcontentloaded", timeout=15000)
+        page.reload.assert_called_once_with(
+            wait_until="domcontentloaded", timeout=15000
+        )
         page.wait_for_selector.assert_called_once_with("textarea", timeout=10000)
 
 
@@ -93,9 +95,7 @@ class TestRecoverAndCheck:
                 return_value=UIState(text="whatever"),
             ),
         ):
-            result = await _recover_and_check(
-                page, config, "My actual sent message"
-            )
+            result = await _recover_and_check(page, config, "My actual sent message")
 
         assert result is None
 

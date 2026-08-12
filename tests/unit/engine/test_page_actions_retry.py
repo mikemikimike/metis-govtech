@@ -1,6 +1,5 @@
 """Tests that page actions module integrates retry infrastructure."""
 
-
 from metis.engine.simulation.harness._element_resolver import resolve_element
 from metis.engine.simulation.harness._page_actions import (
     auto_fill_and_submit,

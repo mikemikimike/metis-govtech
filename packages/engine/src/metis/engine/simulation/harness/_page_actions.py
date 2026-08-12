@@ -133,7 +133,9 @@ async def send_message(
             await page.wait_for_timeout(2000)
 
         if poll_count > 0:
-            logger.info("[send_message] Processing complete after %d poll(s)", poll_count)
+            logger.info(
+                "[send_message] Processing complete after %d poll(s)", poll_count
+            )
 
         # Final buffer for remaining streaming
         logger.debug("[send_message] Final 2s buffer...")
@@ -171,7 +173,9 @@ async def send_message(
     return await _send()
 
 
-async def upload_file(page: Page, file_path: Path, config: HarnessConfig | None = None) -> None:
+async def upload_file(
+    page: Page, file_path: Path, config: HarnessConfig | None = None
+) -> None:
     """Upload a file via the target system's attach-file flow."""
     filename = file_path.name
     logger.info("[upload] Step 1/5: Starting upload of '%s' (%s)", filename, file_path)

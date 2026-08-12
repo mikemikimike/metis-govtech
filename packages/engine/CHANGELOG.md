@@ -41,6 +41,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Temp directory leak on upload retry** — replaced bare `tempfile.mkdtemp()` with `TemporaryDirectory()` context manager
 - **Download counter misleading** — separate counter for download-type artifacts only
 - **Stale-state detection false positive** — "page unchanged after form submit" warning fired incorrectly because the pre-submit text snapshot was captured after `_wait_for_processing` already consumed the processing time; moved snapshot to before action execution
+- **Disabled form elements reported to LLM** — `capture_ui_state` now excludes disabled inputs/selects/buttons (`:not([disabled])`), preventing the LLM from attempting to fill elements Orca has locked after form submission
+- **Button clicks always wait for processing** — removed brittle submit-keyword regex; all `ButtonClickAction` clicks now trigger `_wait_for_processing` and the form processing branch, eliminating timeouts from unrecognized button labels like "Continue"
 - **Langfuse v3 observations fetch** — replaced `langfuse.api.observations.get_many(trace_id=...)` with `langfuse.api.trace.get(trace_id=...).observations` for compatibility with Langfuse v3 servers that do not expose the v2 observations-list endpoint
 
 ## [0.6.0] — 2026-08-06
