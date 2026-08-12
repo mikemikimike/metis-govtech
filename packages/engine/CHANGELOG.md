@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **User guide** — `docs/guide/engine.md` covering prerequisites, quick start, experiment configuration, CLI reference, writing custom metrics, and troubleshooting
+
 - **Three-layer simulation resilience** — automatic retry/recovery so runs rarely end in `system_error`:
   - *Action layer* — intent-based element resolver with fallback strategies; tenacity-backed retry with exponential backoff and point-of-no-return tracking (no duplicate submissions)
   - *Turn layer* — typed failure classification, lightweight page recovery (`_recover_page`), check-before-resend pattern for post-submission failures, consecutive-failure escalation to run layer
