@@ -66,8 +66,6 @@ class _LiveDashboardRenderable:
         yield render_dashboard(self._state)
 
 
-
-
 class TUIContext:
     """Context manager that owns the Rich Live display."""
 

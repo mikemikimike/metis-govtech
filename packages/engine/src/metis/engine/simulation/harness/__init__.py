@@ -245,14 +245,6 @@ async def _worker(
             )
             run_dir.mkdir(parents=True, exist_ok=True)
 
-            # Bind structlog contextvars for per-run log routing
-            structlog.contextvars.bind_contextvars(
-                worker=f"w{worker_id}",
-                scenario_id=scenario.id,
-                persona_id=persona.id,
-                trial=trial_index,
-            )
-
             # Emit pre-run orchestration events (shared set — fires once across all workers)
             if scenario.id not in started_scenarios:
                 started_scenarios.add(scenario.id)
@@ -293,8 +285,15 @@ async def _worker(
             for attempt in range(1, max_attempts + 1):
                 try:
                     record = await run_simulation(
-                        page, config, persona, scenario, run_dir, fixtures_dir,
-                        trial=trial_index, state=state, tui_ctx=tui_ctx,
+                        page,
+                        config,
+                        persona,
+                        scenario,
+                        run_dir,
+                        fixtures_dir,
+                        trial=trial_index,
+                        state=state,
+                        tui_ctx=tui_ctx,
                     )
                     record.attempt_number = attempt
                     record.total_attempts = max_attempts
@@ -313,8 +312,13 @@ async def _worker(
                     prior_failures.append(failure)
                     logger.warning(
                         "[experiment] Worker w%d: %s on attempt %d/%d for %s × %s: %s",
-                        worker_id, type(exc).__name__, attempt, max_attempts,
-                        scenario.id, persona.id, exc,
+                        worker_id,
+                        type(exc).__name__,
+                        attempt,
+                        max_attempts,
+                        scenario.id,
+                        persona.id,
+                        exc,
                     )
 
                     if attempt == max_attempts:
@@ -353,7 +357,10 @@ async def _worker(
                     # Unexpected non-recoverable error — no retry
                     logger.error(
                         "[experiment] Worker w%d: unexpected crash for %s × %s: %s",
-                        worker_id, scenario.id, persona.id, exc,
+                        worker_id,
+                        scenario.id,
+                        persona.id,
+                        exc,
                     )
                     record = RunRecord(
                         config=RunConfig(

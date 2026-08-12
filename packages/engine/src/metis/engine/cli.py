@@ -230,11 +230,7 @@ def simulate(
         help="Override log directory (default: co-located with results)",
     ),
     concurrency: int = typer.Option(
-        1,
-        "--concurrency",
-        "-c",
-        help="Number of parallel browser contexts (workers)",
-        min=1,
+        5, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
 ) -> None:
     """Run end-to-end simulation, evaluation, and report."""
@@ -353,6 +349,7 @@ def simulate(
         log_dir=resolved_log_dir,
         log_format=log_format,
         tail_buffers=tail_buffers,
+        use_tui=use_tui,
     )
     orchestration_logger = OrchestrationLogger(
         log_dir=resolved_log_dir, log_format=log_format

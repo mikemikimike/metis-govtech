@@ -18,7 +18,7 @@ _CAPTURE_UI_STATE_JS = """() => {
     let responseText = "";
 
     const messageBlocks = main.querySelectorAll(
-      '[class*="message"], [class*="Message"], [class*="response"], [class*="Response"], [class*="assistant"], [class*="Assistant"]'
+      '.message-user, .message-assistant'
     );
 
     if (messageBlocks.length > 0) {
@@ -85,32 +85,25 @@ _CAPTURE_UI_STATE_JS = """() => {
     const uniqueLabels = [...new Set(agentLabels)];
 
     const errors = [];
-    const errorElements = main.querySelectorAll('[class*="error"], [class*="Error"], [role="alert"], [class*="alert"], [class*="Alert"]');
-    errorElements.forEach(el => {
-      const text = el.innerText?.trim();
-      if (text && text.length > 0 && text.length < 500) { errors.push(text); }
-    });
-    const redElements = main.querySelectorAll('[style*="color: red"], [style*="color:red"], [style*="color: #f"], [style*="color:#f"]');
-    redElements.forEach(el => {
-      const text = el.innerText?.trim();
-      if (text && text.length > 0 && text.length < 500 && !errors.includes(text)) { errors.push(text); }
+    const errorButtons = main.querySelectorAll('button');
+    errorButtons.forEach(btn => {
+      const text = btn.textContent?.trim().toLowerCase() || "";
+      if (text.includes("dismiss error") || text.includes("error")) {
+        errors.push(btn.textContent.trim());
+      }
     });
 
     const interactiveElements = [];
-    const interactiveButtons = main.querySelectorAll('button:not([class*="send"]):not([class*="Send"])');
+    const interactiveButtons = main.querySelectorAll('button');
     interactiveButtons.forEach(btn => {
       const text = btn.textContent?.trim();
       if (text && text.length > 0 && text.length < 100
           && !text.toLowerCase().includes("new chat")
+          && !text.toLowerCase().includes("send message")
           && !text.toLowerCase().includes("copy")
           && !text.toLowerCase().includes("share")) {
         interactiveElements.push(text);
       }
-    });
-    const chips = main.querySelectorAll('[class*="chip"], [class*="Chip"], [class*="suggestion"], [class*="Suggestion"], [class*="option"], [class*="Option"]');
-    chips.forEach(chip => {
-      const text = chip.textContent?.trim();
-      if (text && text.length > 0 && text.length < 200) { interactiveElements.push(text); }
     });
 
     const formElements = [];
@@ -159,18 +152,18 @@ _CAPTURE_UI_STATE_JS = """() => {
     const navButtonTexts = ["new chat", "collapse sidebar", "expand sidebar", "conversation options", "copy", "share", "send", "attach file", "upload"];
     const mainTextarea = main.querySelector("textarea");
 
-    const inputEls = main.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):not([type="hidden"])');
+    const inputEls = main.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):not([type="hidden"]):not([disabled])');
     inputEls.forEach(el => {
       formElements.push({ type: "input", label: getLabelFor(el), selector: getSelectorFor(el), value: el.value || undefined, placeholder: el.placeholder || undefined });
     });
 
-    const selectEls = main.querySelectorAll("select");
+    const selectEls = main.querySelectorAll("select:not([disabled])");
     selectEls.forEach(el => {
       const opts = Array.from(el.options).map(o => o.text.trim()).filter(Boolean);
       formElements.push({ type: "select", label: getLabelFor(el), selector: getSelectorFor(el), value: el.options[el.selectedIndex]?.text.trim() || el.value || undefined, options: opts.length > 0 ? opts : undefined });
     });
 
-    const radioEls = main.querySelectorAll('input[type="radio"]');
+    const radioEls = main.querySelectorAll('input[type="radio"]:not([disabled])');
     const radioGroups = new Map();
     radioEls.forEach(el => {
       const groupKey = el.name || el.id || getSelectorFor(el);
@@ -184,19 +177,19 @@ _CAPTURE_UI_STATE_JS = """() => {
       formElements.push({ type: "radio", label: groupName, selector: groupSelector, value: checkedRadio ? (getLabelFor(checkedRadio) || checkedRadio.value) : undefined, options: opts.length > 0 ? opts : undefined, checked: !!checkedRadio });
     });
 
-    const checkboxEls = main.querySelectorAll('input[type="checkbox"]');
+    const checkboxEls = main.querySelectorAll('input[type="checkbox"]:not([disabled])');
     checkboxEls.forEach(el => {
       formElements.push({ type: "checkbox", label: getLabelFor(el), selector: getSelectorFor(el), checked: el.checked, value: el.value || undefined });
     });
 
-    const textareaEls = main.querySelectorAll("textarea");
+    const textareaEls = main.querySelectorAll("textarea:not([disabled])");
     textareaEls.forEach(el => {
       if (el === mainTextarea) return;
       if (/ask anything|reply/i.test(el.placeholder || "")) return;
       formElements.push({ type: "textarea", label: getLabelFor(el), selector: getSelectorFor(el), value: el.value || undefined, placeholder: el.placeholder || undefined });
     });
 
-    const formButtonEls = main.querySelectorAll("button");
+    const formButtonEls = main.querySelectorAll("button:not([disabled])");
     formButtonEls.forEach(el => {
       const text = el.textContent?.trim() || "";
       const textLower = text.toLowerCase();
@@ -268,12 +261,12 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
         except Exception:
             continue
 
-    # Strategy 2: Try to open the artifacts sidebar via header icons
+    # Strategy 2: Try to open the artifacts sidebar
     sidebar_triggers = [
+        page.locator('button:has-text("Open files panel")').first,
         page.locator('button[aria-label*="artifact" i]').first,
         page.locator('button[aria-label*="panel" i]').first,
         page.locator('button[aria-label*="file" i]').first,
-        page.locator('header button, [class*="header"] button').last,
     ]
     for trigger in sidebar_triggers:
         try:
@@ -303,7 +296,7 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
             found.push({ name, type: "download", url: link.href });
           }
         });
-        const allClickables = body.querySelectorAll('button, [role="menuitem"], [class*="menu"] a, [class*="dropdown"] a');
+        const allClickables = body.querySelectorAll('button, [role="menuitem"]');
         allClickables.forEach(el => {
           const text = el.textContent?.trim() || "";
           if (/download/i.test(text) && text.length < 60) {
@@ -331,15 +324,16 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
     return artifacts
 
 
-async def capture_inline_charts(page: Page, output_dir: Path) -> list[dict]:
+async def capture_inline_charts(
+    page: Page, output_dir: Path, *, turn: int = 0
+) -> list[dict]:
     """Screenshot inline chart/SVG/canvas elements as PNG files."""
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[dict] = []
     chart_index = 0
 
     locator_specs = [
-        '[class*="chart"], [class*="visualization"], [class*="plot"], [class*="recharts"], [class*="vega"]',
-        'svg:has(rect):has(text), svg:has(path):has(g[class*="axis"])',
+        "svg:has(rect):has(text), svg:has(path):has(g)",
         "canvas",
     ]
 
@@ -353,7 +347,11 @@ async def capture_inline_charts(page: Page, output_dir: Path) -> list[dict]:
                     box = await el.bounding_box()
                     if box and box["width"] > 100 and box["height"] > 50:
                         chart_index += 1
-                        filename = f"chart-{chart_index}.png"
+                        filename = (
+                            f"turn-{turn}-chart-{chart_index}.png"
+                            if turn > 0
+                            else f"chart-{chart_index}.png"
+                        )
                         out_path = output_dir / filename
                         await el.screenshot(path=str(out_path))
                         results.append({"filename": filename, "path": str(out_path)})

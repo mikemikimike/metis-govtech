@@ -7,6 +7,7 @@ RunRecord.
 
 from __future__ import annotations
 
+import contextlib
 import re
 import time
 from datetime import UTC, datetime
@@ -78,13 +79,44 @@ async def _recover_and_check(
     ui_state = await capture_ui_state(page)
 
     last_user_msg = await page.evaluate("""() => {
-        const msgs = document.querySelectorAll('[class*="user"], [class*="User"]');
+        const msgs = document.querySelectorAll('.message-user');
         return msgs.length ? msgs[msgs.length - 1].innerText?.trim() || "" : "";
     }""")
 
     if sent_message[:80] in (last_user_msg or ""):
         return ui_state
     return None
+
+
+async def _wait_for_processing(page: Page, turn_count: int) -> None:
+    """Wait for Orca to finish any active processing."""
+    await page.wait_for_timeout(2000)
+    poll_count = 0
+    while poll_count < 60:
+        still_processing = await page.evaluate("""() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const hasStop = buttons.some(
+              b => b.textContent?.includes('Stop generating'));
+            const lastAssistant = document.querySelector(
+              '.message-assistant:last-of-type');
+            const isStreaming = lastAssistant
+              && lastAssistant.innerText.trim() === '';
+            return hasStop || isStreaming;
+        }""")
+        if not still_processing:
+            break
+        poll_count += 1
+        if poll_count % 5 == 1:
+            logger.info(
+                "[turn %d] Waiting for processing to complete (poll #%d)...",
+                turn_count,
+                poll_count,
+            )
+        await page.wait_for_timeout(2000)
+    if poll_count > 0:
+        logger.info(
+            "[turn %d] Processing settled after %d poll(s)", turn_count, poll_count
+        )
 
 
 async def run_simulation(
@@ -332,14 +364,16 @@ async def run_simulation(
             for a in current_ui_actions
         )
         has_form_submit = any(
-            isinstance(a, ButtonClickAction)
-            and re.search(
-                r"submit|generate|run|start|create|analyze|confirm",
-                a.selector,
-                re.IGNORECASE,
-            )
-            for a in current_ui_actions
+            isinstance(a, ButtonClickAction) for a in current_ui_actions
         )
+
+        # Snapshot page text before actions (for stale-state detection after form submit)
+        pre_submit_text = ""
+        if has_form_submit:
+            with contextlib.suppress(Exception):
+                pre_submit_text = await page.locator("main").first.inner_text(
+                    timeout=2000
+                )
 
         # Execute UI actions before sending the message
         if current_ui_actions:
@@ -378,7 +412,26 @@ async def run_simulation(
                     action.file,
                 )
                 await upload_file(page, file_path)
-                uploaded_files.add(action.file)
+                # Wait for Orca to finish processing the upload before continuing
+                await _wait_for_processing(page, turn_count)
+                # Only mark as uploaded if the file is visible in the UI
+                file_visible = await page.evaluate(
+                    """(name) => {
+                        const body = document.body.innerText;
+                        const baseName = name.replace(/\\.[^.]+$/, "");
+                        return body.toLowerCase().includes(name.toLowerCase()) ||
+                               body.toLowerCase().includes(baseName.toLowerCase());
+                    }""",
+                    action.file,
+                )
+                if file_visible:
+                    uploaded_files.add(action.file)
+                else:
+                    logger.warning(
+                        "[turn %d]   Upload of '%s' not verified — will retry next turn",
+                        turn_count,
+                        action.file,
+                    )
 
             elif isinstance(action, ButtonClickAction):
                 logger.info(
@@ -397,6 +450,7 @@ async def run_simulation(
                             timeout=5000
                         )
                     await page.wait_for_timeout(1000)
+                    await _wait_for_processing(page, turn_count)
                     logger.info(
                         "[turn %d]   Action %d/%d: Click successful",
                         turn_count,
@@ -507,6 +561,7 @@ async def run_simulation(
                     "[turn %d] Form was submitted — waiting for target to process...",
                     turn_count,
                 )
+
                 processing_deadline = time.time() * 1000 + (
                     response_timeout or config.timeouts.response_wait_ms
                 )
@@ -514,11 +569,11 @@ async def run_simulation(
                 poll_count = 0
                 while time.time() * 1000 < processing_deadline:
                     still_processing = await page.evaluate("""() => {
-                        const hasSpinner = document.querySelector('[class*="loading"], [class*="spinner"], [class*="animate-spin"]') !== null;
-                        const hasTyping = document.querySelector('[class*="typing"], [class*="streaming"]') !== null;
                         const buttons = Array.from(document.querySelectorAll('button'));
                         const hasStop = buttons.some(b => b.textContent?.includes('Stop generating'));
-                        return hasSpinner || hasTyping || hasStop;
+                        const lastAssistant = document.querySelector('.message-assistant:last-of-type');
+                        const isStreaming = lastAssistant && lastAssistant.innerText.trim() === '';
+                        return hasStop || isStreaming;
                     }""")
                     if not still_processing:
                         break
@@ -536,6 +591,26 @@ async def run_simulation(
                     poll_count,
                 )
                 await page.wait_for_timeout(2000)
+
+                # Stale-state detection: if page unchanged after submit,
+                # the form likely requires unfilled fields
+                try:
+                    post_submit_text = await page.locator("main").first.inner_text(
+                        timeout=2000
+                    )
+                except Exception:
+                    post_submit_text = ""
+                if (
+                    pre_submit_text
+                    and post_submit_text
+                    and pre_submit_text == post_submit_text
+                ):
+                    logger.warning(
+                        "[turn %d] Page unchanged after form submit — "
+                        "form may require unfilled fields",
+                        turn_count,
+                    )
+
                 ui_state = await capture_ui_state(page)
             else:
                 logger.info("[turn %d] Sending message to target...", turn_count)
@@ -586,10 +661,13 @@ async def run_simulation(
                     consecutive_failures = 0
                 except ResponseTimeoutError:
                     consecutive_failures += 1
-                    if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
+                    if (
+                        consecutive_failures
+                        >= config.retry.consecutive_turn_failures_limit
+                    ):
                         raise ConsecutiveFailureEscalation(
                             f"{consecutive_failures} consecutive turn failures"
-                        )
+                        ) from None
                     ui_state = UIState(
                         text="", errors=["Response timeout — no response received"]
                     )
@@ -598,7 +676,7 @@ async def run_simulation(
             if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
                 raise ConsecutiveFailureEscalation(
                     f"{consecutive_failures} consecutive turn failures"
-                )
+                ) from None
             await _recover_page(page, config)
             try:
                 ui_state = await send_message(
@@ -610,7 +688,7 @@ async def run_simulation(
                 if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
                     raise ConsecutiveFailureEscalation(
                         f"{consecutive_failures} consecutive turn failures"
-                    )
+                    ) from None
                 if isinstance(inner_exc, ResponseTimeoutError):
                     ui_state = UIState(
                         text="", errors=["Response timeout — no response received"]
@@ -622,8 +700,10 @@ async def run_simulation(
             if consecutive_failures >= config.retry.consecutive_turn_failures_limit:
                 raise ConsecutiveFailureEscalation(
                     f"{consecutive_failures} consecutive turn failures"
-                )
-            ui_state = UIState(text="", errors=["Response timeout — no response received"])
+                ) from None
+            ui_state = UIState(
+                text="", errors=["Response timeout — no response received"]
+            )
         except RunRecoverableError:
             raise
 
@@ -665,13 +745,14 @@ async def run_simulation(
                 turn_count,
                 len(ui_state.artifacts),
             )
+            artifact_dest = run_dir / "artifacts" / f"turn-{turn_count}"
             downloaded_files = await _download_artifacts(
                 page,
                 [
                     {"name": a.name, "type": a.type, "url": a.url}
                     for a in ui_state.artifacts
                 ],
-                run_dir / "artifacts",
+                artifact_dest,
             )
             downloaded_names: set[str] = set()
             for dl in downloaded_files:
@@ -701,8 +782,8 @@ async def run_simulation(
 
         # Capture inline charts as artifacts
         try:
-            chart_dir = run_dir / "artifacts" / "charts"
-            charts = await capture_inline_charts(page, chart_dir)
+            chart_dir = run_dir / "artifacts" / f"turn-{turn_count}" / "charts"
+            charts = await capture_inline_charts(page, chart_dir, turn=turn_count)
             for chart in charts:
                 artifacts_collected.append(
                     CollectedArtifact(
@@ -745,22 +826,7 @@ async def run_simulation(
             len(artifacts_collected),
         )
 
-        # Re-check stopping conditions before next agent call
-        if turn_count >= run_config.max_turns:
-            logger.info(
-                "[turn %d] STOP: max_turns reached (%d)",
-                turn_count,
-                run_config.max_turns,
-            )
-            return _build_record(
-                "max_turns",
-                run_config,
-                conversation,
-                artifacts_collected,
-                start_time,
-                target_session_id,
-            )
-
+        # Re-check timeout before next agent call (max_turns checked at top of loop)
         elapsed_after_turn = time.time() - start_time
         if elapsed_after_turn >= run_config.timeout_minutes * 60:
             logger.info(
@@ -912,16 +978,18 @@ async def _download_artifacts(
         run_dir,
     )
 
-    for idx, artifact in enumerate(artifacts, 1):
+    dl_idx = 0
+    for artifact in artifacts:
         if artifact.get("type") != "download":
             continue
+        dl_idx += 1
 
         try:
             url = artifact.get("url")
             name = artifact.get("name", "file")
             logger.info(
                 "[download]   [%d/%d] '%s' (url=%s)",
-                idx,
+                dl_idx,
                 download_count,
                 name,
                 url[:60] if url else "none",

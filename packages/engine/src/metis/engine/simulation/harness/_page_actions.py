@@ -2,9 +2,9 @@
 
 import re
 import shutil
-import tempfile
 import time
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from playwright.async_api import Page
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -15,7 +15,7 @@ from ..exceptions import ResponseTimeoutError
 from ..types import UIState
 from ._auth import dismiss_modals
 from ._config import HarnessConfig
-from ._element_resolver import AriaStrategy, CSSStrategy, TextStrategy, resolve_element
+from ._element_resolver import AriaStrategy, CSSStrategy, resolve_element
 from ._retry import action_retry, track_submission
 from ._ui_capture import capture_ui_state
 
@@ -41,10 +41,8 @@ async def send_message(
         pre_state = await page.evaluate("""() => {
             const textarea = document.querySelector("textarea");
             const placeholder = textarea?.getAttribute("placeholder") || "";
-            const sel = '[class*="message"], [class*="Message"], ' +
-              '[class*="response"], [class*="Response"], ' +
-              '[class*="assistant"], [class*="Assistant"]';
-            const messages = document.querySelectorAll(sel);
+            const messages = document.querySelectorAll(
+              '.message-user, .message-assistant');
             return { placeholder, messageCount: messages.length };
         }""")
         logger.debug(
@@ -53,19 +51,24 @@ async def send_message(
             pre_state["messageCount"],
         )
 
-        # Find and fill the textarea using intent-based element resolution
+        # Find the CHAT textarea — not form textareas that may appear above it.
+        # Primary strategy: match by Orca's known placeholder patterns.
         input_el = await resolve_element(
             page,
             intent="chat_textarea",
             strategies=[
-                CSSStrategy("textarea"),
+                CSSStrategy(
+                    'textarea[placeholder*="Ask anything"], '
+                    'textarea[placeholder*="Reply"]'
+                ),
                 AriaStrategy(role="textbox", name="Message"),
-                CSSStrategy('[class*="input"], [class*="Input"], [class*="chat"] textarea'),
+                CSSStrategy("textarea"),
             ],
         )
 
-        logger.info("[send_message] Filling textarea and pressing Enter...")
+        logger.info("[send_message] Typing message and pressing Enter...")
         await input_el.fill(message)
+        await page.wait_for_timeout(200)
         await input_el.press("Enter")
         track_submission()
 
@@ -85,10 +88,8 @@ async def send_message(
                     if (!textarea) return false;
                     const currentPlaceholder =
                       textarea.getAttribute("placeholder") || "";
-                    const sel = '[class*="message"], [class*="Message"], ' +
-                      '[class*="response"], [class*="Response"], ' +
-                      '[class*="assistant"], [class*="Assistant"]';
-                    const messages = document.querySelectorAll(sel);
+                    const messages = document.querySelectorAll(
+                      '.message-user, .message-assistant');
                     const currentCount = messages.length;
                     const placeholderChanged =
                       !alreadyReply && currentPlaceholder.includes("Reply");
@@ -114,19 +115,15 @@ async def send_message(
         poll_count = 0
         while time.time() * 1000 < poll_deadline:
             still_processing = await page.evaluate("""() => {
-                const spinSel = '[class*="loading"], ' +
-                  '[class*="spinner"], [class*="animate-spin"]';
-                const hasSpinner =
-                  document.querySelector(spinSel) !== null;
-                const typeSel =
-                  '[class*="typing"], [class*="streaming"]';
-                const hasTyping =
-                  document.querySelector(typeSel) !== null;
                 const buttons =
                   Array.from(document.querySelectorAll('button'));
                 const hasStop = buttons.some(
                   b => b.textContent?.includes('Stop generating'));
-                return hasSpinner || hasTyping || hasStop;
+                const lastAssistant = document.querySelector(
+                  '.message-assistant:last-of-type');
+                const isStreaming = lastAssistant
+                  && lastAssistant.innerText.trim() === '';
+                return hasStop || isStreaming;
             }""")
             if not still_processing:
                 break
@@ -136,18 +133,49 @@ async def send_message(
             await page.wait_for_timeout(2000)
 
         if poll_count > 0:
-            logger.info("[send_message] Processing complete after %d poll(s)", poll_count)
+            logger.info(
+                "[send_message] Processing complete after %d poll(s)", poll_count
+            )
 
         # Final buffer for remaining streaming
         logger.debug("[send_message] Final 2s buffer...")
         await page.wait_for_timeout(2000)
+
         logger.info("[send_message] Capturing UI state...")
-        return await capture_ui_state(page)
+        ui_state = await capture_ui_state(page)
+
+        # Detect "Response cancelled" — Orca shows this when we interrupted
+        # its generation. Wait for the real response that follows.
+        if ui_state.text.strip().lower() in (
+            "response cancelled",
+            "response cancelled.",
+        ):
+            logger.info(
+                "[send_message] Detected 'Response cancelled' — waiting for real response..."
+            )
+            try:
+                await page.wait_for_function(
+                    """({ prevCount }) => {
+                        return document.querySelectorAll(
+                          '.message-user, .message-assistant'
+                        ).length > prevCount;
+                    }""",
+                    arg={"prevCount": pre_state["messageCount"] + 1},
+                    timeout=120000,
+                )
+                await page.wait_for_timeout(2000)
+                ui_state = await capture_ui_state(page)
+            except Exception:
+                pass
+
+        return ui_state
 
     return await _send()
 
 
-async def upload_file(page: Page, file_path: Path, config: HarnessConfig | None = None) -> None:
+async def upload_file(
+    page: Page, file_path: Path, config: HarnessConfig | None = None
+) -> None:
     """Upload a file via the target system's attach-file flow."""
     filename = file_path.name
     logger.info("[upload] Step 1/5: Starting upload of '%s' (%s)", filename, file_path)
@@ -199,10 +227,10 @@ async def upload_file(page: Page, file_path: Path, config: HarnessConfig | None 
         )
         await page.keyboard.press("Escape")
         await page.wait_for_timeout(1000)
-        tmp_dir = Path(tempfile.mkdtemp())
-        txt_path = tmp_dir / file_path.with_suffix(".txt").name
-        shutil.copy2(file_path, txt_path)
-        await upload_file(page, txt_path)
+        with TemporaryDirectory() as tmp_dir:
+            txt_path = Path(tmp_dir) / file_path.with_suffix(".txt").name
+            shutil.copy2(file_path, txt_path)
+            await upload_file(page, txt_path)
         return
 
     # Confirm the upload
@@ -258,7 +286,7 @@ async def upload_file(page: Page, file_path: Path, config: HarnessConfig | None 
 async def auto_fill_and_submit(page: Page, config: HarnessConfig | None = None) -> bool:
     """Auto-fill visible forms and click Submit. Returns True if form was submitted."""
     form_submit_btn = page.locator(
-        'button:has-text("Submit"), button:has-text("Confirm Theme"), button:has-text("Confirm")'
+        'button:has-text("Submit"), button:has-text("Continue"), button:has-text("Confirm Theme"), button:has-text("Confirm")'
     ).first
     try:
         form_visible = await form_submit_btn.is_visible(timeout=3000)

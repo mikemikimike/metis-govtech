@@ -28,9 +28,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `run_experiment()` accepts `concurrency: int` parameter (default 1 preserves sequential behaviour)
 - CLI `simulate` command accepts `--concurrency / -c` option (min 1)
 - `log_format` CLI option typed as `Literal["text", "json"]` for pyright correctness
+- **Orca DOM selectors** — replaced all fragile `[class*="..."]` attribute-contains selectors with Orca's actual DOM structure: `.message-user`/`.message-assistant` for messages, "Stop generating" button + empty `.message-assistant` for processing detection, "Send message" text for button filtering, "Dismiss error" button for error detection, "Open files panel" for artifacts panel, structural SVG/canvas selectors for charts. Removed dead chip/suggestion selectors (don't exist in Orca)
 
 ### Fixed
 
+- **"Response cancelled" after upload/submit** — file uploads and submit-type button clicks now wait for Orca processing to settle (spinner/typing/"Stop generating" poll) before proceeding to `send_message`; additionally, `send_message` detects "Response cancelled" in captured UI state and waits for the real response
+- **Failed uploads bypass dedup** — file only added to `uploaded_files` set after UI visibility verification, so failed uploads can be retried
+- **Chart screenshots overwrite across turns** — `capture_inline_charts` takes a `turn` parameter; filenames are now `turn-{T}-chart-{N}.png`
+- **Downloaded artifacts collide across turns** — downloads go to `run_dir/artifacts/turn-{N}/` subdirectories instead of a flat `artifacts/` folder
+- **Off-by-one kills last turn** — removed redundant `>= max_turns` check at bottom of loop; single `> max_turns` guard at top ensures all turns execute fully
+- **`fill()` + `press("Enter")` race condition** — added 200ms delay between fill and Enter to avoid keystroke being dropped when Orca's JS reacts to input events
+- **Temp directory leak on upload retry** — replaced bare `tempfile.mkdtemp()` with `TemporaryDirectory()` context manager
+- **Download counter misleading** — separate counter for download-type artifacts only
+- **Stale-state detection false positive** — "page unchanged after form submit" warning fired incorrectly because the pre-submit text snapshot was captured after `_wait_for_processing` already consumed the processing time; moved snapshot to before action execution
+- **Disabled form elements reported to LLM** — `capture_ui_state` now excludes disabled inputs/selects/buttons (`:not([disabled])`), preventing the LLM from attempting to fill elements Orca has locked after form submission
+- **Button clicks always wait for processing** — removed brittle submit-keyword regex; all `ButtonClickAction` clicks now trigger `_wait_for_processing` and the form processing branch, eliminating timeouts from unrecognized button labels like "Continue"
 - **Langfuse v3 observations fetch** — replaced `langfuse.api.observations.get_many(trace_id=...)` with `langfuse.api.trace.get(trace_id=...).observations` for compatibility with Langfuse v3 servers that do not expose the v2 observations-list endpoint
 
 ## [0.6.0] — 2026-08-06

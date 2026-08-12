@@ -95,6 +95,7 @@ class UserAgent:
         ui_state: UIState = turn_payload.ui_state
         target_message = ui_state.text
         form_elements = ui_state.form_elements or None
+        action_feedback = turn_payload.action_feedback or None
 
         logger.info(
             "[user_agent] Generating response (turn=%d, history=%d msgs, target_text=%d chars)...",
@@ -103,6 +104,11 @@ class UserAgent:
             len(target_message),
         )
         logger.info("[user_agent]   Target said: %s", target_message[:300])
+        if action_feedback:
+            logger.info(
+                "[user_agent]   Action feedback: %s",
+                "; ".join(action_feedback),
+            )
 
         self.conversation_history.append(
             HistoryEntry(role=HistoryRole.TARGET, content=target_message)
@@ -110,7 +116,9 @@ class UserAgent:
 
         # Build the turn-specific prompt
         user_prompt = self._build_user_prompt(
-            target_message, form_elements=form_elements
+            target_message,
+            form_elements=form_elements,
+            action_feedback=action_feedback,
         )
 
         # Call LLM
@@ -157,6 +165,7 @@ class UserAgent:
         self,
         target_message: str,
         form_elements: list[FormElement] | None = None,
+        action_feedback: list[str] | None = None,
     ) -> str:
         """Build the turn-specific instruction prompt (excludes history, which
         is conveyed structurally via multi-turn contents)."""
@@ -181,9 +190,18 @@ class UserAgent:
                     )
             form_elements_section = "\n" + "\n".join(form_lines) + "\n"
 
+        action_feedback_section = ""
+        if action_feedback:
+            lines = [
+                "[Action feedback from previous turn]",
+                *[f"- {fb}" for fb in action_feedback],
+            ]
+            action_feedback_section = "\n" + "\n".join(lines) + "\n"
+
         return RESPONSE_TURN_PROMPT.format(
             target_message=target_message,
             form_elements_section=form_elements_section,
+            action_feedback_section=action_feedback_section,
             turn_number=self.turn_count + 1,
         )
 

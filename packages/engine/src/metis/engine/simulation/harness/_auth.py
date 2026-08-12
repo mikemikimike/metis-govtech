@@ -122,7 +122,9 @@ async def login(page: Page, config: HarnessConfig) -> None:
 
     # Now wait for the IdP login form (username field) to appear.
     logger.info("[login] Step 5/8: Waiting for IdP login form...")
-    await page.get_by_label("username", exact=False).wait_for(state="visible", timeout=60000)
+    await page.get_by_label("username", exact=False).wait_for(
+        state="visible", timeout=60000
+    )
     logger.info("[login] Step 5/8: IdP form visible — filling credentials")
 
     username_field = await resolve_element(
