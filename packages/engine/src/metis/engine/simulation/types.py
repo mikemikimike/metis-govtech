@@ -204,6 +204,8 @@ class Scenario(BaseModel):
     fixtures: list[str] = Field(default_factory=list)
     persona_refs: list[str] = Field(min_length=1)
     metric_refs: list[MetricRef] = Field(default_factory=list)
+    max_turns: int = 20
+    timeout_minutes: int = 15
     response_wait_ms: int = 300000
     max_run_retries: int | None = None
 

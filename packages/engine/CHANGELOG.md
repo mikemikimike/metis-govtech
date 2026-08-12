@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Resilience diagnostics** — `TurnDiagnostics`, `ActionRetry`, and `RunFailure` models on `ConversationTurn` and `RunRecord` for post-hoc failure analysis; `RunRecord` schema bumped to v2
 - **`RetryConfig`** — nested config block in `HarnessConfig` with tunable budgets for action attempts, turn retries, consecutive-failure limits, and run retries
 - **Per-scenario retry override** — `max_run_retries` field on `Scenario` (optional; `null` uses global default)
+- **Per-scenario simulation limits** — `Scenario` now accepts `max_turns` (default: 20) and `timeout_minutes` (default: 15) to cap how many conversation turns and how long each scenario's simulation run is allowed to take; `response_wait_ms` (already on `Scenario`) is now the authoritative runtime timeout for waiting on the target's response (previously only recorded in output; runtime used `HarnessConfig.timeouts.response_wait_ms`)
 - **Concurrent simulation** — `--concurrency N` flag runs N browser contexts in parallel on a single browser process; round-robin run distribution across workers
 - **Async Playwright harness** — full async conversion (`playwright.async_api`) of auth, page actions, UI capture, and environment modules
 - **Async OpenAI client** — `AsyncOpenAI` for non-blocking LLM calls across concurrent workers

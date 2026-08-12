@@ -148,6 +148,8 @@ async def run_simulation(
         persona=persona.id,
         scenario=scenario.id,
         metric_refs=scenario.metric_refs,
+        max_turns=scenario.max_turns,
+        timeout_minutes=scenario.timeout_minutes,
         response_wait_ms=scenario.response_wait_ms,
     )
 
@@ -162,7 +164,7 @@ async def run_simulation(
         "[sim] Config: max_turns=%d, timeout=%d min, response_wait=%dms",
         run_config.max_turns,
         run_config.timeout_minutes,
-        run_config.response_wait_ms or config.timeouts.response_wait_ms,
+        run_config.response_wait_ms,
     )
     logger.info("[sim] Scenario goal: %s", scenario.description[:120])
     logger.info("=" * 60)
@@ -542,9 +544,9 @@ async def run_simulation(
                 has_form_submit = True
 
         # Determine response timeout
-        response_timeout: int | None = None
+        response_timeout = run_config.response_wait_ms
         if has_new_file_upload or has_form_submit:
-            response_timeout = max(config.timeouts.response_wait_ms, 180000)
+            response_timeout = max(run_config.response_wait_ms, 180000)
             logger.info(
                 "[turn %d] Extended timeout: %dms (file_upload=%s, form_submit=%s)",
                 turn_count,
@@ -563,7 +565,7 @@ async def run_simulation(
                 )
 
                 processing_deadline = time.time() * 1000 + (
-                    response_timeout or config.timeouts.response_wait_ms
+                    response_timeout or run_config.response_wait_ms
                 )
                 await page.wait_for_timeout(5000)
                 poll_count = 0
