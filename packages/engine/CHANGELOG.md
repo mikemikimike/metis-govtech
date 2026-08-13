@@ -6,10 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **Reporting module refactored for readability** — split 1033-line `generator.py` into 4 focused modules: `_aggregation.py` (single source of truth for metric pass/fail/skip counts), `_styles.py` (CSS constant), `_html_sections.py` (5 composable section renderers), and a slimmed-down `generator.py` (orchestration only). Removed dead code (`render_failure_cards` — computed but never rendered in original), relocated misplaced logic (`_extract_failures` → `_html_sections.py`), and pruned 7 orphaned CSS classes. Public API unchanged. ([#107](https://github.com/govtech-responsibleai/metis/issues/107))
+
 ### Fixed
 
 - **Response extraction returns user's own message** — narrowed selector from `.message-user, .message-assistant` to `.message-assistant` only; previously, if the user's message was the last match, the LLM user-agent saw its own input echoed as the "assistant response"
 - **Nav buttons leak into LLM action space** — expanded the button denylist from 4 inline checks to 13 entries in a named array (`buttonDenylist`); buttons like "reasoning", "dismiss error", "/agents" no longer appear as interactive elements
+- **HTML report missing task descriptions and persona context** — CLI now builds `task_contexts` from experiment scenarios and run records and passes it to `generate_report()`; each task section renders scenario description, fixtures, and all personas with per-persona outcome (stop reason, turns, duration). Added `PersonaContext` type and multi-persona rendering support.
+- **Python 3.14 evaluation compatibility** — disable DeepEval's async execution via `AsyncConfig(run_async=False)` to work around event-loop re-entrancy failure (likely `nest_asyncio` incompatibility with Python 3.14's stricter task state). Previously crashed all sessions with 2+ metrics per test case.
 - **TUI dashboard missing worker attribution** — active runs now display their worker ID (`[w0]`, `[w1]`, …) so concurrent scenarios are immediately identifiable
 - **Log tail missing run context** — tail lines now include a `[scenario:persona]` prefix when those keys are present, making interleaved errors attributable without cross-referencing per-run files
 - **structlog contextvars not bound per-run** — concurrent workers now bind `scenario_id`, `persona_id`, and `trial` to structlog context before each run (previously only `worker` was bound)
@@ -18,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **User guide** — `docs/guide/engine.md` covering prerequisites, quick start, experiment configuration, CLI reference, writing custom metrics, and troubleshooting
 - **Runner ABC** (`simulation/runner.py`) — transport-agnostic interface (`setup`, `send_turn`, `teardown`, `get_session_id`, `recover`)
 - **Orchestrator** (`simulation/orchestrator.py`) — turn-loop logic extracted from `_environment.py`
 - **PlaywrightRunner** (`simulation/runners/playwright/`) — first Runner implementation
