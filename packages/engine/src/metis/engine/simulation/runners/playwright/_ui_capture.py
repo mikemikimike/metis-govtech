@@ -6,7 +6,7 @@ from playwright.async_api import Page
 
 from metis.core.logging import get_logger
 
-from ..types import Artifact, UIState
+from ...types import Artifact, UIState
 from ._config import RetryConfig
 from ._retry import action_retry
 

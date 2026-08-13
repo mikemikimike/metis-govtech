@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from metis.engine.simulation.exceptions import TransientDOMError
-from metis.engine.simulation.harness._element_resolver import (
+from metis.engine.simulation.runners.playwright._element_resolver import (
     AriaStrategy,
     CSSStrategy,
     TextStrategy,

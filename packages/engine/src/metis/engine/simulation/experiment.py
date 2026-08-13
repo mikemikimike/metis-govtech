@@ -1,7 +1,7 @@
-"""Python Playwright harness for target system simulation.
+"""Experiment runner — concurrent execution of scenario x persona runs.
 
-The auth flow, page selectors, and session-ID extraction are currently
-coupled to Orca (the default target).
+Manages worker concurrency, retry logic, and result persistence.
+Transport-specific concerns are delegated to Runner implementations.
 """
 
 from __future__ import annotations
@@ -13,15 +13,18 @@ from pathlib import Path
 
 import structlog
 from playwright.async_api import Browser, async_playwright
-from playwright.async_api import Page as AsyncPage
 
 from metis.core.console import console
 from metis.core.logging import get_logger
 from metis.engine.logging import LogRouter, OrchestrationLogger
 from metis.engine.tui import SimulationState, TUIContext
 
-from ..exceptions import RunRecoverableError
-from ..types import (
+from .exceptions import RunRecoverableError
+from .orchestrator import Orchestrator
+from .runners.playwright import PlaywrightRunner
+from .runners.playwright._artifact_store import _save_artifacts
+from .runners.playwright._config import HarnessConfig
+from .types import (
     Experiment,
     Persona,
     RunConfig,
@@ -30,12 +33,9 @@ from ..types import (
     RunRecord,
     Scenario,
 )
-from ._artifact_store import _save_artifacts
-from ._auth import login
-from ._config import HarnessConfig
-from ._environment import run_simulation
+from .user_agent.agent import UserAgent
 
-__all__ = ["HarnessConfig", "run_experiment", "run_simulation"]
+__all__ = ["HarnessConfig", "run_experiment"]
 
 logger = get_logger()
 
@@ -199,7 +199,7 @@ async def _worker(
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
 ) -> list[RunRecord]:
-    """One concurrent worker: own context, own page, own login session."""
+    """One concurrent worker: creates a fresh browser context per run for isolation."""
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(worker=f"w{worker_id}")
 
@@ -207,18 +207,9 @@ async def _worker(
         "[experiment] Worker w%d starting with %d run(s)", worker_id, len(run_slice)
     )
 
-    context = await browser.new_context(
-        viewport={"width": 1440, "height": 900},
-        accept_downloads=True,
-    )
-    page = await context.new_page()
-
     try:
-        logger.info("[experiment] Worker w%d: logging in...", worker_id)
-        await login(page, config)
-
         records: list[RunRecord] = []
-        for idx, (scenario, persona, trial) in enumerate(run_slice):
+        for _idx, (scenario, persona, trial) in enumerate(run_slice):
             trial_index = trial + 1
             trial_label = (
                 f" (trial {trial_index}/{scenario.num_trials})"
@@ -231,10 +222,6 @@ async def _worker(
                 scenario.id,
                 trial_label,
             )
-
-            # Start a fresh chat (except first run — login already did it)
-            if idx > 0:
-                await _navigate_new_chat(page, config)
 
             pad = len(str(scenario.num_trials))
             run_folder_name = f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
@@ -283,18 +270,39 @@ async def _worker(
             record: RunRecord | None = None
 
             for attempt in range(1, max_attempts + 1):
+                # Fresh browser context per attempt for full isolation
+                context = await browser.new_context(
+                    viewport={"width": 1440, "height": 900},
+                    accept_downloads=True,
+                )
+                page = await context.new_page()
+
                 try:
-                    record = await run_simulation(
-                        page,
-                        config,
-                        persona,
-                        scenario,
-                        run_dir,
-                        fixtures_dir,
+                    run_config = RunConfig(
+                        persona=persona.id,
+                        scenario=scenario.id,
+                        metric_refs=scenario.metric_refs,
+                        response_wait_ms=scenario.response_wait_ms,
+                    )
+                    runner = PlaywrightRunner(
+                        page=page,
+                        config=config,
+                        fixtures_dir=fixtures_dir,
+                        run_dir=run_dir,
+                    )
+                    agent = UserAgent(persona=persona, scenario=scenario)
+                    orchestrator = Orchestrator(
+                        runner=runner,
+                        agent=agent,
+                        run_config=run_config,
+                        scenario=scenario,
+                        run_dir=run_dir,
+                        fixtures_dir=fixtures_dir,
                         trial=trial_index,
                         state=state,
                         tui_ctx=tui_ctx,
                     )
+                    record = await orchestrator.run()
                     record.attempt_number = attempt
                     record.total_attempts = max_attempts
                     record.prior_failures = prior_failures
@@ -341,17 +349,8 @@ async def _worker(
                             prior_failures=prior_failures,
                         )
                     else:
-                        # Tear down and rebuild browser context
-                        await context.close()
-                        context = None  # type: ignore[assignment]
                         await asyncio.sleep(config.retry.run_retry_delay_seconds)
-                        context = await browser.new_context(
-                            viewport={"width": 1440, "height": 900},
-                            accept_downloads=True,
-                        )
-                        page = await context.new_page()
-                        await login(page, config)
-                        run_start = time.time()  # Reset timer for next attempt
+                        run_start = time.time()
 
                 except Exception as exc:
                     # Unexpected non-recoverable error — no retry
@@ -459,35 +458,7 @@ async def _worker(
 
         return records
     finally:
-        if context is not None:
-            await context.close()
         structlog.contextvars.unbind_contextvars("worker")
-
-
-async def _navigate_new_chat(page: AsyncPage, config: HarnessConfig) -> None:
-    """Navigate to a fresh chat session between runs."""
-    logger.info("[experiment] Starting fresh chat...")
-    try:
-        await page.get_by_text("New chat").click(timeout=5000)
-        await page.wait_for_timeout(2000)
-        logger.info("[experiment] Clicked 'New chat'")
-    except Exception:
-        logger.info("[experiment] 'New chat' not found — navigating to /chat")
-        await page.goto(
-            config.url + "/chat",
-            wait_until="domcontentloaded",
-            timeout=15000,
-        )
-        await page.wait_for_timeout(2000)
-    # Dismiss tour modal if it reappears
-    try:
-        skip_btn = page.get_by_text("Skip for now")
-        if await skip_btn.is_visible(timeout=2000):
-            logger.info("[experiment] Dismissing tour modal")
-            await skip_btn.click()
-            await page.wait_for_timeout(1000)
-    except Exception:
-        pass
 
 
 def _distribute_runs(

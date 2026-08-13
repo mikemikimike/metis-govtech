@@ -11,8 +11,8 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from metis.core.logging import get_logger
 
-from ..exceptions import ResponseTimeoutError
-from ..types import UIState
+from ...exceptions import ResponseTimeoutError
+from ...types import UIState
 from ._auth import dismiss_modals
 from ._config import HarnessConfig
 from ._element_resolver import AriaStrategy, CSSStrategy, resolve_element

@@ -17,7 +17,7 @@ from metis.engine.simulation.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from metis.engine.simulation.harness._config import RetryConfig
+    from ._config import RetryConfig
 
 _submission_committed: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "_submission_committed", default=False
