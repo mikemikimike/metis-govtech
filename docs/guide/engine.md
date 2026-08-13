@@ -200,6 +200,8 @@ scenarios:
       using the median (not the mean), exclude outliers, and produce a report
       with charts.
     num_trials: 1
+    max_turns: 20
+    timeout_minutes: 15
     fixtures:
       - q3_sales.csv
     persona_refs:
@@ -276,7 +278,7 @@ metis engine simulate --input-dir <path> [options]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--input-dir` | (required) | Directory containing `experiment.yaml` and `fixtures/` |
-| `--concurrency N` / `-c N` | `1` | Number of parallel browser contexts |
+| `--concurrency N` / `-c N` | `5` | Max parallel simulation workers |
 | `--langfuse-timeout` | `90` | Seconds to wait for Langfuse traces to appear |
 | `-v` / `-vv` | WARNING | Increase verbosity: `-v` for INFO, `-vv` for DEBUG |
 | `--quiet` | `false` | Suppress all output below ERROR |
@@ -286,9 +288,9 @@ metis engine simulate --input-dir <path> [options]
 
 ### Concurrency
 
-The `--concurrency N` flag runs N browser contexts in parallel on a single browser process. Each worker gets its own isolated login session and page — no shared state between workers.
+The `--concurrency N` flag runs N simulation workers in parallel. Each worker gets its own isolated login session and page — no shared state between workers.
 
-Start with `--concurrency 2` and increase based on your target system's capacity. The default (`1`) runs scenarios sequentially.
+The default is `5`. Reduce to `1` for sequential execution or increase based on your target system's capacity.
 
 ### Verbosity
 
