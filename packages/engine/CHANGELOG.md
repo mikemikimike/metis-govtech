@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **Response extraction returns user's own message** — narrowed selector from `.message-user, .message-assistant` to `.message-assistant` only; previously, if the user's message was the last match, the LLM user-agent saw its own input echoed as the "assistant response"
+- **Nav buttons leak into LLM action space** — expanded the button denylist from 4 inline checks to 13 entries in a named array (`buttonDenylist`); buttons like "reasoning", "dismiss error", "/agents" no longer appear as interactive elements
 - **TUI dashboard missing worker attribution** — active runs now display their worker ID (`[w0]`, `[w1]`, …) so concurrent scenarios are immediately identifiable
 - **Log tail missing run context** — tail lines now include a `[scenario:persona]` prefix when those keys are present, making interleaved errors attributable without cross-referencing per-run files
 - **structlog contextvars not bound per-run** — concurrent workers now bind `scenario_id`, `persona_id`, and `trial` to structlog context before each run (previously only `worker` was bound)

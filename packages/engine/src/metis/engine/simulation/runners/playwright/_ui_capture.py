@@ -17,9 +17,7 @@ _CAPTURE_UI_STATE_JS = """() => {
     const allText = main.innerText;
     let responseText = "";
 
-    const messageBlocks = main.querySelectorAll(
-      '.message-user, .message-assistant'
-    );
+    const messageBlocks = main.querySelectorAll('.message-assistant');
 
     if (messageBlocks.length > 0) {
       const lastBlock = messageBlocks[messageBlocks.length - 1];
@@ -94,14 +92,15 @@ _CAPTURE_UI_STATE_JS = """() => {
     });
 
     const interactiveElements = [];
+    const buttonDenylist = ["new chat", "collapse sidebar", "expand sidebar",
+      "conversation options", "copy", "share", "send", "send message",
+      "attach file", "upload", "reasoning", "dismiss error", "/agents"];
     const interactiveButtons = main.querySelectorAll('button');
     interactiveButtons.forEach(btn => {
       const text = btn.textContent?.trim();
-      if (text && text.length > 0 && text.length < 100
-          && !text.toLowerCase().includes("new chat")
-          && !text.toLowerCase().includes("send message")
-          && !text.toLowerCase().includes("copy")
-          && !text.toLowerCase().includes("share")) {
+      if (text && text.length > 0 && text.length < 100) {
+        const lower = text.toLowerCase();
+        if (buttonDenylist.some(nav => lower.includes(nav))) return;
         interactiveElements.push(text);
       }
     });
@@ -149,7 +148,9 @@ _CAPTURE_UI_STATE_JS = """() => {
       return "";
     };
 
-    const navButtonTexts = ["new chat", "collapse sidebar", "expand sidebar", "conversation options", "copy", "share", "send", "attach file", "upload"];
+    const navButtonTexts = ["new chat", "collapse sidebar", "expand sidebar",
+      "conversation options", "copy", "share", "send", "send message",
+      "attach file", "upload", "reasoning", "dismiss error", "/agents"];
     const mainTextarea = main.querySelector("textarea");
 
     const inputEls = main.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):not([type="hidden"]):not([disabled])');
