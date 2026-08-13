@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **Reporting module refactored for readability** — split 1033-line `generator.py` into 4 focused modules: `_aggregation.py` (single source of truth for metric pass/fail/skip counts), `_styles.py` (CSS constant), `_html_sections.py` (5 composable section renderers), and a slimmed-down `generator.py` (orchestration only). Removed dead code (`render_failure_cards` — computed but never rendered in original), relocated misplaced logic (`_extract_failures` → `_html_sections.py`), and pruned 7 orphaned CSS classes. Public API unchanged. ([#107](https://github.com/govtech-responsibleai/metis/issues/107))
+
 ### Fixed
 
 - **TUI dashboard missing worker attribution** — active runs now display their worker ID (`[w0]`, `[w1]`, …) so concurrent scenarios are immediately identifiable
