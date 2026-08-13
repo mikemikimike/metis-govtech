@@ -265,7 +265,7 @@ def simulate(
     # which are expensive to load. Keeping them here avoids penalising --help/--version.
     from metis.engine.evaluation import evaluate
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
-    from metis.engine.reporting import generate_report
+    from metis.engine.reporting import TaskContext, generate_report
     from metis.engine.simulation.experiment import HarnessConfig, run_experiment
     from metis.engine.simulation.types import Experiment, RunRecord
 
@@ -473,11 +473,35 @@ def simulate(
         merged = EvalResult.merge(eval_results)
         reports_dir = experiment_dir / "reports"
         reports_dir.mkdir(exist_ok=True)
+
+        scenarios_by_id = {s.id: s for s in experiment.scenarios}
+        task_contexts: dict[str, TaskContext] = {}
+        for record in records:
+            sid = record.config.scenario
+            if sid not in task_contexts:
+                ctx: TaskContext = {"personas": []}
+                scenario_obj = scenarios_by_id.get(sid)
+                if scenario_obj:
+                    ctx["description"] = scenario_obj.description
+                    ctx["fixtures"] = scenario_obj.fixtures
+                task_contexts[sid] = ctx
+            persona_entry = {
+                "id": record.config.persona,
+                "stop_reason": record.outcome.stop_reason,
+                "total_turns": record.outcome.total_turns,
+                "duration_seconds": record.outcome.duration_seconds,
+            }
+            persona_obj = personas_by_id.get(record.config.persona)
+            if persona_obj:
+                persona_entry["description"] = persona_obj.description
+            task_contexts[sid]["personas"].append(persona_entry)
+
         generate_report(
             merged,
             run_id="report",
             output_dir=reports_dir,
             experiment_description=experiment.description,
+            task_contexts=task_contexts,
         )
 
     console.print(f"\n\n{'=' * 60}")
