@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **User guide** — `docs/guide/engine.md` covering prerequisites, quick start, experiment configuration, CLI reference, writing custom metrics, and troubleshooting
 - **Runner ABC** (`simulation/runner.py`) — transport-agnostic interface (`setup`, `send_turn`, `teardown`, `get_session_id`, `recover`)
 - **Orchestrator** (`simulation/orchestrator.py`) — turn-loop logic extracted from `_environment.py`
 - **PlaywrightRunner** (`simulation/runners/playwright/`) — first Runner implementation
