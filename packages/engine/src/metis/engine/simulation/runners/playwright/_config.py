@@ -26,12 +26,25 @@ class TimeoutConfig(BaseModel):
     page_load_ms: int = 10_000
 
 
+class RetryConfig(BaseModel):
+    """Retry configuration for simulation resilience."""
+
+    action_max_attempts: int = 3
+    action_backoff_base_seconds: float = 1.0
+    action_backoff_max_seconds: float = 10.0
+    turn_max_retries: int = 1
+    consecutive_turn_failures_limit: int = 2
+    run_max_retries: int = 2
+    run_retry_delay_seconds: float = 5.0
+
+
 class HarnessConfig(BaseModel):
     """Top-level harness config combining YAML file + env vars."""
 
     url: str
     auth: AuthConfig
     timeouts: TimeoutConfig = Field(default_factory=TimeoutConfig)
+    retry: RetryConfig = Field(default_factory=RetryConfig)
 
     @classmethod
     def load(cls, path: Path | None = None) -> HarnessConfig:

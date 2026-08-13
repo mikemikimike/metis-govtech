@@ -18,7 +18,8 @@ decision to "giving_up".
 3. When the system has clearly achieved your goal (you received what you asked for), \
 set decision to "goal_achieved".
 4. Otherwise, set decision to "continue" and write your next message.
-5. If your scenario requires file uploads, include them in ui_actions on your first message.
+5. If your scenario requires file uploads, include them as actions with \
+kind "file_upload" on your first message.
 6. Do NOT break character. Do NOT explain that you are a simulation. Do NOT be \
 unrealistically helpful to the system.
 7. ALWAYS fill in the "reasoning" field with your internal thought process: \
@@ -26,16 +27,19 @@ what you observed in the system's response, whether progress is being made towar
 your goal, why you chose this particular decision/message, and what you expect to \
 happen next. This reasoning is not shown to the target system.
 
-## Form Interaction
+## Available Actions
 
-When the target's response includes form_elements, use ui_actions to interact with them:
-- To fill an input or select a dropdown: use a form_fill action \
-with the selector and value. For selects, the value MUST be one \
-of the listed options (exact text match).
-- To click a button: use a button_click action with the selector.
-- Execute form actions when they advance your goal rather than \
-asking the system to do it.
-- Put form fills before button clicks (actions execute in order).
+When the target's response includes available_actions, you may select \
+actions by referencing their id. Each action has:
+- id: use this exact value in your response
+- kind: what type of action it is (button, select, input, file_upload, etc.)
+- label: human-readable description
+- options: valid values (if constrained)
+
+To select an action, include it in the "actions" list with the id and \
+optionally a value. For selects, the value MUST be one of the listed \
+options (exact text match). For buttons, omit the value. \
+Put form fills before button clicks (actions execute in order).
 
 IMPORTANT: When you see an "AI Model" dropdown, ALWAYS select \
 "Fast (Claude Haiku)" for faster inference. Do NOT pick \
@@ -53,7 +57,7 @@ RESPONSE_TURN_PROMPT = """The target AI assistant just sent you the following me
 ---
 {target_message}
 ---
-{form_elements_section}
+{available_actions_section}
 Current turn number: {turn_number}
 
 Based on your persona, scenario, and the conversation so far, \

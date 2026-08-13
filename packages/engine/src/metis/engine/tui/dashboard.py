@@ -56,36 +56,38 @@ def render_dashboard(state: SimulationState) -> RenderableType:
     parts.append(scenarios_table)
     parts.append(Text(""))
 
-    # Active scenario
-    active = state.active_scenario
-    if active:
+    # Active scenarios (may be multiple with concurrent workers)
+    active_scenarios = [sc for sc in state.scenarios if sc.phase == "active"]
+    for active in active_scenarios:
         active_text = Text()
         active_text.append(f"Ongoing scenario: {active.scenario_id}\n", style="bold")
         for run in active.runs:
+            worker_tag = f"[w{run.worker_id}] " if run.worker_id is not None else ""
             if run.phase == "simulating":
                 turn_info = ""
                 if run.current_turn is not None:
                     turn_info = f"[turn {run.current_turn}/{run.max_turns}]"
                 detail = run.turn_detail or ""
                 active_text.append(
-                    f"  ● persona: {run.persona_id} simulating {turn_info} {detail}\n",
+                    f"  ● {worker_tag}{run.persona_id} simulating "
+                    f"{turn_info} {detail}\n",
                     style="yellow",
                 )
             elif run.phase == "completed":
                 dur = _format_duration(run.duration_seconds or 0)
                 active_text.append(
-                    f"  ✓ persona: {run.persona_id} "
+                    f"  ✓ {worker_tag}{run.persona_id} "
                     f"[completed trial {run.trial}/{run.num_trials}]  {dur}\n",
                     style="green",
                 )
             elif run.phase == "failed":
                 active_text.append(
-                    f"  ✗ persona: {run.persona_id} [failed: {run.stop_reason}]\n",
+                    f"  ✗ {worker_tag}{run.persona_id} [failed: {run.stop_reason}]\n",
                     style="red",
                 )
             elif run.phase == "pending":
                 active_text.append(
-                    f"  ○ persona: {run.persona_id} [pending]\n",
+                    f"  ○ {run.persona_id} [pending]\n",
                     style="dim",
                 )
         parts.append(active_text)

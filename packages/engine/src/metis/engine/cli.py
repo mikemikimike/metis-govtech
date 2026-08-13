@@ -9,7 +9,7 @@ import threading
 from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import typer
 from dotenv import load_dotenv
@@ -221,13 +221,16 @@ def simulate(
     no_tui: bool = typer.Option(
         False, "--no-tui", help="Disable TUI even in a terminal"
     ),
-    log_format: str = typer.Option(
+    log_format: Literal["text", "json"] = typer.Option(
         "text", "--log-format", help="Log file format: text or json"
     ),
     log_dir: Path | None = typer.Option(
         None,
         "--log-dir",
         help="Override log directory (default: co-located with results)",
+    ),
+    concurrency: int = typer.Option(
+        5, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
 ) -> None:
     """Run end-to-end simulation, evaluation, and report."""
@@ -263,7 +266,7 @@ def simulate(
     from metis.engine.evaluation import evaluate
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
     from metis.engine.reporting import generate_report
-    from metis.engine.simulation.harness import HarnessConfig, run_experiment
+    from metis.engine.simulation.experiment import HarnessConfig, run_experiment
     from metis.engine.simulation.types import Experiment, RunRecord
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
@@ -338,11 +341,15 @@ def simulate(
 
     display_level = getattr(logging, log_level)
 
-    tail_buffer = TailBuffer(max_lines=15, min_level=display_level)
+    tail_buffers = {
+        f"w{i}": TailBuffer(max_lines=15, min_level=display_level)
+        for i in range(concurrency)
+    }
     log_router = setup_engine_logging(
         log_dir=resolved_log_dir,
         log_format=log_format,
-        tail_buffer=tail_buffer,
+        tail_buffers=tail_buffers,
+        use_tui=use_tui,
     )
     orchestration_logger = OrchestrationLogger(
         log_dir=resolved_log_dir, log_format=log_format
@@ -350,7 +357,7 @@ def simulate(
 
     tui_ctx: TUIContext | None = None
     if use_tui:
-        tui_ctx = TUIContext(state=sim_state, tail_buffer=tail_buffer)
+        tui_ctx = TUIContext(state=sim_state, tail_buffers=tail_buffers)
 
     _interrupt_count = 0
     _interrupt_lock = threading.Lock()
@@ -377,6 +384,7 @@ def simulate(
                 output_dir=experiment_dir,
                 fixtures_dir=fixtures_dir,
                 headed=headed,
+                concurrency=concurrency,
                 state=sim_state,
                 orchestration_logger=orchestration_logger,
                 log_router=log_router,

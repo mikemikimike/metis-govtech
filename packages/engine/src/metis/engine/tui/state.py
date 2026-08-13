@@ -21,6 +21,7 @@ class RunState:
     turn_detail: str
     duration_seconds: float | None
     stop_reason: str | None
+    worker_id: int | None = None
 
 
 @dataclass
@@ -52,9 +53,16 @@ class SimulationState:
                         return sc, run
         raise KeyError(f"Run not found: {scenario_id} x {persona_id} trial {trial}")
 
-    def start_run(self, scenario_id: str, persona_id: str, trial: int) -> None:
+    def start_run(
+        self,
+        scenario_id: str,
+        persona_id: str,
+        trial: int,
+        worker_id: int | None = None,
+    ) -> None:
         sc, run = self._find_run(scenario_id, persona_id, trial)
         run.phase = "simulating"
+        run.worker_id = worker_id
         if sc.phase == "pending":
             sc.phase = "active"
 
