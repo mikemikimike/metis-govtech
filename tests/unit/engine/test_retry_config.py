@@ -1,6 +1,9 @@
 """Tests for RetryConfig and HarnessConfig.retry field."""
 
-from metis.engine.simulation.harness._config import HarnessConfig, RetryConfig
+from metis.engine.simulation.runners.playwright._config import (
+    HarnessConfig,
+    RetryConfig,
+)
 
 
 class TestRetryConfig:

@@ -230,11 +230,7 @@ def simulate(
         help="Override log directory (default: co-located with results)",
     ),
     concurrency: int = typer.Option(
-        1,
-        "--concurrency",
-        "-c",
-        help="Number of parallel browser contexts (workers)",
-        min=1,
+        5, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
 ) -> None:
     """Run end-to-end simulation, evaluation, and report."""
@@ -270,7 +266,7 @@ def simulate(
     from metis.engine.evaluation import evaluate
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
     from metis.engine.reporting import generate_report
-    from metis.engine.simulation.harness import HarnessConfig, run_experiment
+    from metis.engine.simulation.experiment import HarnessConfig, run_experiment
     from metis.engine.simulation.types import Experiment, RunRecord
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
@@ -353,6 +349,7 @@ def simulate(
         log_dir=resolved_log_dir,
         log_format=log_format,
         tail_buffers=tail_buffers,
+        use_tui=use_tui,
     )
     orchestration_logger = OrchestrationLogger(
         log_dir=resolved_log_dir, log_format=log_format

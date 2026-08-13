@@ -8,8 +8,8 @@ import pytest
 class TestRecoverPage:
     @pytest.mark.asyncio
     async def test_recover_page_reloads_and_waits_for_textarea(self) -> None:
-        from metis.engine.simulation.harness._environment import _recover_page
-        from metis.engine.simulation.harness._config import HarnessConfig
+        from metis.engine.simulation.runners.playwright._config import HarnessConfig
+        from metis.engine.simulation.runners.playwright._recovery import _recover_page
 
         page = MagicMock()
         page.reload = AsyncMock()
@@ -21,20 +21,24 @@ class TestRecoverPage:
         )
 
         with patch(
-            "metis.engine.simulation.harness._environment.dismiss_modals",
+            "metis.engine.simulation.runners.playwright._recovery.dismiss_modals",
             new_callable=AsyncMock,
         ):
             await _recover_page(page, config)
 
-        page.reload.assert_called_once_with(wait_until="domcontentloaded", timeout=15000)
+        page.reload.assert_called_once_with(
+            wait_until="domcontentloaded", timeout=15000
+        )
         page.wait_for_selector.assert_called_once_with("textarea", timeout=10000)
 
 
 class TestRecoverAndCheck:
     @pytest.mark.asyncio
     async def test_returns_ui_state_when_message_found(self) -> None:
-        from metis.engine.simulation.harness._environment import _recover_and_check
-        from metis.engine.simulation.harness._config import HarnessConfig
+        from metis.engine.simulation.runners.playwright._config import HarnessConfig
+        from metis.engine.simulation.runners.playwright._recovery import (
+            _recover_and_check,
+        )
         from metis.engine.simulation.types import UIState
 
         page = MagicMock()
@@ -51,11 +55,11 @@ class TestRecoverAndCheck:
 
         with (
             patch(
-                "metis.engine.simulation.harness._environment.dismiss_modals",
+                "metis.engine.simulation.runners.playwright._recovery.dismiss_modals",
                 new_callable=AsyncMock,
             ),
             patch(
-                "metis.engine.simulation.harness._environment.capture_ui_state",
+                "metis.engine.simulation.runners.playwright._recovery.capture_ui_state",
                 new_callable=AsyncMock,
                 return_value=mock_ui_state,
             ),
@@ -68,8 +72,10 @@ class TestRecoverAndCheck:
 
     @pytest.mark.asyncio
     async def test_returns_none_when_message_not_found(self) -> None:
-        from metis.engine.simulation.harness._environment import _recover_and_check
-        from metis.engine.simulation.harness._config import HarnessConfig
+        from metis.engine.simulation.runners.playwright._config import HarnessConfig
+        from metis.engine.simulation.runners.playwright._recovery import (
+            _recover_and_check,
+        )
         from metis.engine.simulation.types import UIState
 
         page = MagicMock()
@@ -84,18 +90,16 @@ class TestRecoverAndCheck:
 
         with (
             patch(
-                "metis.engine.simulation.harness._environment.dismiss_modals",
+                "metis.engine.simulation.runners.playwright._recovery.dismiss_modals",
                 new_callable=AsyncMock,
             ),
             patch(
-                "metis.engine.simulation.harness._environment.capture_ui_state",
+                "metis.engine.simulation.runners.playwright._recovery.capture_ui_state",
                 new_callable=AsyncMock,
                 return_value=UIState(text="whatever"),
             ),
         ):
-            result = await _recover_and_check(
-                page, config, "My actual sent message"
-            )
+            result = await _recover_and_check(page, config, "My actual sent message")
 
         assert result is None
 

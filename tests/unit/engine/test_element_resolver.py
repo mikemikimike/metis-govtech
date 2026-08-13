@@ -1,11 +1,11 @@
 """Tests for the intent-based element resolver."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from metis.engine.simulation.exceptions import TransientDOMError
-from metis.engine.simulation.harness._element_resolver import (
+from metis.engine.simulation.runners.playwright._element_resolver import (
     AriaStrategy,
     CSSStrategy,
     TextStrategy,
@@ -58,7 +58,9 @@ class TestResolveElement:
         mock_page.locator.return_value = locator
 
         strategy = CSSStrategy("textarea")
-        result = await resolve_element(mock_page, intent="chat_textarea", strategies=[strategy])
+        result = await resolve_element(
+            mock_page, intent="chat_textarea", strategies=[strategy]
+        )
         assert result == locator
 
     @pytest.mark.asyncio
@@ -111,7 +113,5 @@ class TestResolveElement:
         mock_page.locator.return_value = locator
 
         strategies = [CSSStrategy("div"), AriaStrategy(role="textbox", name="Message")]
-        result = await resolve_element(
-            mock_page, intent="input", strategies=strategies
-        )
+        result = await resolve_element(mock_page, intent="input", strategies=strategies)
         assert result == visible_locator

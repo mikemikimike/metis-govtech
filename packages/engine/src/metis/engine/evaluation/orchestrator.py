@@ -18,6 +18,8 @@ from metis.engine.extractor.types import (
 )
 from metis.engine.simulation.types import MetricRef
 
+MAX_CONCURRENCY = 5
+
 
 def _resolve_metrics(metric_refs: list[MetricRef]) -> list[BaseMetric]:
     """Instantiate metric classes from :class:`MetricRef` objects."""
@@ -72,7 +74,9 @@ def evaluate(
         m for m in all_metrics if isinstance(m, BaseConversationalMetric)
     ]
 
-    async_config = AsyncConfig(max_concurrent=concurrency, throttle_value=throttle)
+    async_config = AsyncConfig(
+        max_concurrent=min(concurrency, MAX_CONCURRENCY), throttle_value=throttle
+    )
     phase_timings: dict[str, float] = {}
 
     # Per-turn evaluation
@@ -89,14 +93,15 @@ def evaluate(
         )
         phase_timings["per_turn"] = round(time.time() - t0, 1)
 
-    # Session evaluation
+    # Session evaluation (serialize to avoid asyncio re-entrancy on Python 3.14)
     session_eval_results = None
     if session_metrics and session_test_cases:
         t0 = time.time()
+        session_async_config = AsyncConfig(max_concurrent=1, throttle_value=throttle)
         session_eval_results = deepeval_evaluate(
             test_cases=session_test_cases,
             metrics=session_metrics,
-            async_config=async_config,
+            async_config=session_async_config,
             display_config=DisplayConfig(
                 print_results=False, show_indicator=False, inspect_after_run=False
             ),

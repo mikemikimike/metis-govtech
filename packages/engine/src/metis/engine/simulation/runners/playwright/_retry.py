@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import functools
-from typing import TYPE_CHECKING, Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
 from metis.engine.simulation.exceptions import (
     AuthLossError,
@@ -16,7 +17,7 @@ from metis.engine.simulation.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from metis.engine.simulation.harness._config import RetryConfig
+    from ._config import RetryConfig
 
 _submission_committed: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "_submission_committed", default=False

@@ -13,18 +13,17 @@ from metis.engine.simulation.exceptions import (
     TransientDOMError,
     TurnRecoverableError,
 )
-from metis.engine.simulation.harness._config import HarnessConfig, RetryConfig
-from metis.engine.simulation.harness._element_resolver import (
-    AriaStrategy,
-    CSSStrategy,
-    TextStrategy,
+from metis.engine.simulation.runners.playwright._config import HarnessConfig
+from metis.engine.simulation.runners.playwright._element_resolver import (
     resolve_element,
 )
-from metis.engine.simulation.harness._retry import action_retry, track_submission
+from metis.engine.simulation.runners.playwright._retry import (
+    action_retry,
+    track_submission,
+)
 from metis.engine.simulation.types import (
     ActionRetry,
     ConversationTurn,
-    RunFailure,
     RunRecord,
     TurnDiagnostics,
 )
@@ -45,27 +44,23 @@ class TestFullImportGraph:
         assert hasattr(exceptions, "ResponseTimeoutError")
 
     def test_element_resolver_importable(self) -> None:
-        from metis.engine.simulation.harness._element_resolver import (
-            AriaStrategy,
-            CSSStrategy,
-            TextStrategy,
-            resolve_element,
-        )
 
         assert resolve_element is not None
 
     def test_retry_importable(self) -> None:
-        from metis.engine.simulation.harness._retry import action_retry, track_submission
 
         assert action_retry is not None
         assert track_submission is not None
 
     def test_no_circular_imports(self) -> None:
-        """Importing environment should not fail due to circular deps."""
+        """Importing orchestrator and runner should not fail due to circular deps."""
         import importlib
 
         importlib.reload(
-            importlib.import_module("metis.engine.simulation.harness._environment")
+            importlib.import_module("metis.engine.simulation.orchestrator")
+        )
+        importlib.reload(
+            importlib.import_module("metis.engine.simulation.runners.playwright")
         )
 
 
@@ -150,27 +145,29 @@ class TestDiagnosticsWiring:
             ),
         )
 
-        record = RunRecord.model_validate({
-            "schema_version": 1,
-            "config": {"persona": "p", "scenario": "s"},
-            "outcome": {
-                "stop_reason": "max_turns",
-                "total_turns": 1,
-                "duration_seconds": 3.0,
-            },
-            "conversation": [turn.model_dump()],
-            "attempt_number": 2,
-            "total_attempts": 3,
-            "prior_failures": [
-                {
-                    "attempt_number": 1,
-                    "failure_type": "auth_loss",
-                    "turn_reached": 5,
-                    "error_message": "redirected",
-                    "duration_ms": 20000,
-                }
-            ],
-        })
+        record = RunRecord.model_validate(
+            {
+                "schema_version": 1,
+                "config": {"persona": "p", "scenario": "s"},
+                "outcome": {
+                    "stop_reason": "max_turns",
+                    "total_turns": 1,
+                    "duration_seconds": 3.0,
+                },
+                "conversation": [turn.model_dump()],
+                "attempt_number": 2,
+                "total_attempts": 3,
+                "prior_failures": [
+                    {
+                        "attempt_number": 1,
+                        "failure_type": "auth_loss",
+                        "turn_reached": 5,
+                        "error_message": "redirected",
+                        "duration_ms": 20000,
+                    }
+                ],
+            }
+        )
 
         assert record.conversation[0].diagnostics is not None
         assert record.conversation[0].diagnostics.retry_count == 1
