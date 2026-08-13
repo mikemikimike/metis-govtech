@@ -45,10 +45,10 @@ openspec/
 .codex/
 
 # Simulation output (generated at runtime)
-experiments/
+/experiments/
 
 # Wizard session output (generated at runtime)
-evaluation/
+/evaluation/
 
 # Wizard internal docs
 packages/wizard/docs/
