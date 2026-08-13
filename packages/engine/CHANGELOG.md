@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **HTML report missing task descriptions and persona context** — CLI now builds `task_contexts` from experiment scenarios and run records and passes it to `generate_report()`; each task section renders scenario description, fixtures, and all personas with per-persona outcome (stop reason, turns, duration). Added `PersonaContext` type and multi-persona rendering support.
 - **TUI dashboard missing worker attribution** — active runs now display their worker ID (`[w0]`, `[w1]`, …) so concurrent scenarios are immediately identifiable
 - **Log tail missing run context** — tail lines now include a `[scenario:persona]` prefix when those keys are present, making interleaved errors attributable without cross-referencing per-run files
 - **structlog contextvars not bound per-run** — concurrent workers now bind `scenario_id`, `persona_id`, and `trial` to structlog context before each run (previously only `worker` was bound)
