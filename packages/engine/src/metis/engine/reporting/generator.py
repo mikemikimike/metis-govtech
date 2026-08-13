@@ -33,6 +33,14 @@ from ._html_sections import (
 from ._styles import REPORT_CSS
 
 
+class PersonaContext(TypedDict, total=False):
+    id: str
+    description: str
+    stop_reason: str
+    total_turns: int
+    duration_seconds: float
+
+
 class TaskContext(TypedDict, total=False):
     description: str
     persona_id: str
@@ -41,6 +49,7 @@ class TaskContext(TypedDict, total=False):
     stop_reason: str
     total_turns: int
     duration_seconds: float
+    personas: list[PersonaContext]
 
 
 RESULTS_DIR = Path.cwd() / "results"

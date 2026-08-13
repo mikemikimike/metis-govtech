@@ -304,9 +304,40 @@ def _render_task_context(
         )
 
     meta_spans: list[str] = []
-    persona_id = ctx.get("persona_id")
-    if persona_id:
-        persona_label = persona_id.replace("-", " ").title()
+
+    personas = ctx.get("personas", [])
+    if personas:
+        persona_items: list[str] = []
+        for p in personas:
+            label = p["id"].replace("-", " ").title()
+            snippet = (p.get("description") or "")[:120]
+            outcome_bits: list[str] = []
+            if p.get("stop_reason"):
+                outcome_bits.append(p["stop_reason"].replace("_", " "))
+            if p.get("total_turns"):
+                outcome_bits.append(f"{p['total_turns']} turns")
+            if p.get("duration_seconds"):
+                outcome_bits.append(f"{p['duration_seconds']:.0f}s")
+            suffix = f" ({' · '.join(outcome_bits)})" if outcome_bits else ""
+            if snippet:
+                persona_items.append(
+                    f"{html_mod.escape(label)} — {html_mod.escape(snippet)}{html_mod.escape(suffix)}"
+                )
+            else:
+                persona_items.append(
+                    f"{html_mod.escape(label)}{html_mod.escape(suffix)}"
+                )
+        if len(persona_items) == 1:
+            meta_spans.append(
+                f'<span class="task-meta-item"><strong>Persona:</strong> {persona_items[0]}</span>'
+            )
+        else:
+            items_html = "".join(f"<li>{item}</li>" for item in persona_items)
+            meta_spans.append(
+                f'<span class="task-meta-item"><strong>Personas:</strong><ul style="margin:2px 0 0 16px;padding:0">{items_html}</ul></span>'
+            )
+    elif ctx.get("persona_id"):
+        persona_label = ctx["persona_id"].replace("-", " ").title()
         desc_snippet = (ctx.get("persona_description") or "")[:120]
         if desc_snippet:
             meta_spans.append(
@@ -316,27 +347,29 @@ def _render_task_context(
             meta_spans.append(
                 f'<span class="task-meta-item"><strong>Persona:</strong> {html_mod.escape(persona_label)}</span>'
             )
+
     fixtures = ctx.get("fixtures")
     if fixtures:
         meta_spans.append(
             f'<span class="task-meta-item"><strong>Fixtures:</strong> {html_mod.escape(", ".join(fixtures))}</span>'
         )
 
-    outcome_parts: list[str] = []
-    stop_reason = ctx.get("stop_reason")
-    if stop_reason:
-        outcome_parts.append(stop_reason.replace("_", " "))
-    total_turns = ctx.get("total_turns")
-    if total_turns:
-        outcome_parts.append(f"{total_turns} turns")
-    duration = ctx.get("duration_seconds")
-    if duration:
-        outcome_parts.append(f"{duration:.0f}s")
-    if outcome_parts:
-        outcome_text = html_mod.escape(" \xb7 ".join(outcome_parts))
-        meta_spans.append(
-            f'<span class="task-meta-item"><strong>Outcome:</strong> {outcome_text}</span>'
-        )
+    if not personas:
+        outcome_parts: list[str] = []
+        stop_reason = ctx.get("stop_reason")
+        if stop_reason:
+            outcome_parts.append(stop_reason.replace("_", " "))
+        total_turns = ctx.get("total_turns")
+        if total_turns:
+            outcome_parts.append(f"{total_turns} turns")
+        duration = ctx.get("duration_seconds")
+        if duration:
+            outcome_parts.append(f"{duration:.0f}s")
+        if outcome_parts:
+            outcome_text = html_mod.escape(" · ".join(outcome_parts))
+            meta_spans.append(
+                f'<span class="task-meta-item"><strong>Outcome:</strong> {outcome_text}</span>'
+            )
 
     if meta_spans:
         ctx_parts.append(f'<div class="task-meta">{"".join(meta_spans)}</div>')
