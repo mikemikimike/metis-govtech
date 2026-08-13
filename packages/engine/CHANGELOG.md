@@ -4,6 +4,12 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Python 3.14 evaluation compatibility** — disable DeepEval's async execution via `AsyncConfig(run_async=False)` to work around event-loop re-entrancy failure (likely `nest_asyncio` incompatibility with Python 3.14's stricter task state). Previously crashed all sessions with 2+ metrics per test case.
+
 ## [0.6.0] — 2026-08-06
 
 ### Added
