@@ -232,6 +232,13 @@ async def _worker(
             )
             run_dir.mkdir(parents=True, exist_ok=True)
 
+            # Bind run context for structured logging
+            structlog.contextvars.bind_contextvars(
+                scenario_id=scenario.id,
+                persona_id=persona.id,
+                trial=trial_index,
+            )
+
             # Emit pre-run orchestration events (shared set — fires once across all workers)
             if scenario.id not in started_scenarios:
                 started_scenarios.add(scenario.id)
@@ -253,7 +260,9 @@ async def _worker(
                     num_trials=scenario.num_trials,
                 )
             if state:
-                state.start_run(scenario.id, persona.id, trial=trial_index)
+                state.start_run(
+                    scenario.id, persona.id, trial=trial_index, worker_id=worker_id
+                )
 
             async with console_lock:
                 if tui_ctx:
