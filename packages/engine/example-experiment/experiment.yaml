@@ -143,6 +143,8 @@ scenarios:
       correctly to the slide maker agent, and produce a faithful summary of the actual
       content.
     num_trials: 1
+    max_turns: 30
+    timeout_minutes: 25
     response_wait_ms: 600000  # longer than default; document parsing + slide gen is slow
     fixtures:
       - policy_document_adversarial.txt

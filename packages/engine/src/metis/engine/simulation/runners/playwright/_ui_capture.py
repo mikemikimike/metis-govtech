@@ -2,11 +2,13 @@
 
 from pathlib import Path
 
-from playwright.sync_api import Page
+from playwright.async_api import Page
 
 from metis.core.logging import get_logger
 
-from ..types import Artifact, UIState
+from ...types import Artifact, UIState
+from ._config import RetryConfig
+from ._retry import action_retry
 
 logger = get_logger()
 
@@ -15,9 +17,7 @@ _CAPTURE_UI_STATE_JS = """() => {
     const allText = main.innerText;
     let responseText = "";
 
-    const messageBlocks = main.querySelectorAll(
-      '[class*="message"], [class*="Message"], [class*="response"], [class*="Response"], [class*="assistant"], [class*="Assistant"]'
-    );
+    const messageBlocks = main.querySelectorAll('.message-assistant');
 
     if (messageBlocks.length > 0) {
       const lastBlock = messageBlocks[messageBlocks.length - 1];
@@ -83,32 +83,26 @@ _CAPTURE_UI_STATE_JS = """() => {
     const uniqueLabels = [...new Set(agentLabels)];
 
     const errors = [];
-    const errorElements = main.querySelectorAll('[class*="error"], [class*="Error"], [role="alert"], [class*="alert"], [class*="Alert"]');
-    errorElements.forEach(el => {
-      const text = el.innerText?.trim();
-      if (text && text.length > 0 && text.length < 500) { errors.push(text); }
-    });
-    const redElements = main.querySelectorAll('[style*="color: red"], [style*="color:red"], [style*="color: #f"], [style*="color:#f"]');
-    redElements.forEach(el => {
-      const text = el.innerText?.trim();
-      if (text && text.length > 0 && text.length < 500 && !errors.includes(text)) { errors.push(text); }
+    const errorButtons = main.querySelectorAll('button');
+    errorButtons.forEach(btn => {
+      const text = btn.textContent?.trim().toLowerCase() || "";
+      if (text.includes("dismiss error") || text.includes("error")) {
+        errors.push(btn.textContent.trim());
+      }
     });
 
     const interactiveElements = [];
-    const interactiveButtons = main.querySelectorAll('button:not([class*="send"]):not([class*="Send"])');
+    const buttonDenylist = ["new chat", "collapse sidebar", "expand sidebar",
+      "conversation options", "copy", "share", "send", "send message",
+      "attach file", "upload", "reasoning", "dismiss error", "/agents"];
+    const interactiveButtons = main.querySelectorAll('button');
     interactiveButtons.forEach(btn => {
       const text = btn.textContent?.trim();
-      if (text && text.length > 0 && text.length < 100
-          && !text.toLowerCase().includes("new chat")
-          && !text.toLowerCase().includes("copy")
-          && !text.toLowerCase().includes("share")) {
+      if (text && text.length > 0 && text.length < 100) {
+        const lower = text.toLowerCase();
+        if (buttonDenylist.some(nav => lower.includes(nav))) return;
         interactiveElements.push(text);
       }
-    });
-    const chips = main.querySelectorAll('[class*="chip"], [class*="Chip"], [class*="suggestion"], [class*="Suggestion"], [class*="option"], [class*="Option"]');
-    chips.forEach(chip => {
-      const text = chip.textContent?.trim();
-      if (text && text.length > 0 && text.length < 200) { interactiveElements.push(text); }
     });
 
     const formElements = [];
@@ -154,21 +148,23 @@ _CAPTURE_UI_STATE_JS = """() => {
       return "";
     };
 
-    const navButtonTexts = ["new chat", "collapse sidebar", "expand sidebar", "conversation options", "copy", "share", "send", "attach file", "upload"];
+    const navButtonTexts = ["new chat", "collapse sidebar", "expand sidebar",
+      "conversation options", "copy", "share", "send", "send message",
+      "attach file", "upload", "reasoning", "dismiss error", "/agents"];
     const mainTextarea = main.querySelector("textarea");
 
-    const inputEls = main.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):not([type="hidden"])');
+    const inputEls = main.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):not([type="hidden"]):not([disabled])');
     inputEls.forEach(el => {
       formElements.push({ type: "input", label: getLabelFor(el), selector: getSelectorFor(el), value: el.value || undefined, placeholder: el.placeholder || undefined });
     });
 
-    const selectEls = main.querySelectorAll("select");
+    const selectEls = main.querySelectorAll("select:not([disabled])");
     selectEls.forEach(el => {
       const opts = Array.from(el.options).map(o => o.text.trim()).filter(Boolean);
       formElements.push({ type: "select", label: getLabelFor(el), selector: getSelectorFor(el), value: el.options[el.selectedIndex]?.text.trim() || el.value || undefined, options: opts.length > 0 ? opts : undefined });
     });
 
-    const radioEls = main.querySelectorAll('input[type="radio"]');
+    const radioEls = main.querySelectorAll('input[type="radio"]:not([disabled])');
     const radioGroups = new Map();
     radioEls.forEach(el => {
       const groupKey = el.name || el.id || getSelectorFor(el);
@@ -182,19 +178,19 @@ _CAPTURE_UI_STATE_JS = """() => {
       formElements.push({ type: "radio", label: groupName, selector: groupSelector, value: checkedRadio ? (getLabelFor(checkedRadio) || checkedRadio.value) : undefined, options: opts.length > 0 ? opts : undefined, checked: !!checkedRadio });
     });
 
-    const checkboxEls = main.querySelectorAll('input[type="checkbox"]');
+    const checkboxEls = main.querySelectorAll('input[type="checkbox"]:not([disabled])');
     checkboxEls.forEach(el => {
       formElements.push({ type: "checkbox", label: getLabelFor(el), selector: getSelectorFor(el), checked: el.checked, value: el.value || undefined });
     });
 
-    const textareaEls = main.querySelectorAll("textarea");
+    const textareaEls = main.querySelectorAll("textarea:not([disabled])");
     textareaEls.forEach(el => {
       if (el === mainTextarea) return;
       if (/ask anything|reply/i.test(el.placeholder || "")) return;
       formElements.push({ type: "textarea", label: getLabelFor(el), selector: getSelectorFor(el), value: el.value || undefined, placeholder: el.placeholder || undefined });
     });
 
-    const formButtonEls = main.querySelectorAll("button");
+    const formButtonEls = main.querySelectorAll("button:not([disabled])");
     formButtonEls.forEach(el => {
       const text = el.textContent?.trim() || "";
       const textLower = text.toLowerCase();
@@ -220,29 +216,36 @@ _CAPTURE_UI_STATE_JS = """() => {
 }"""
 
 
-def capture_ui_state(page: Page) -> UIState:
-    """Extract the current UI state from the page."""
-    logger.debug("[ui_capture] Evaluating UI state extraction JS...")
-    raw = page.evaluate(_CAPTURE_UI_STATE_JS)
-    state = UIState.model_validate(raw)
-    logger.debug(
-        "[ui_capture] Captured: text=%d chars, artifacts=%d, forms=%d, errors=%d, labels=%d",
-        len(state.text),
-        len(state.artifacts) if state.artifacts else 0,
-        len(state.form_elements) if state.form_elements else 0,
-        len(state.errors) if state.errors else 0,
-        len(state.target_status_labels) if state.target_status_labels else 0,
-    )
-    return state
+async def capture_ui_state(page: Page, config: RetryConfig | None = None) -> UIState:
+    """Evaluate JS to capture UI state. Retries on transient JS errors."""
+    if config is None:
+        config = RetryConfig()
+
+    @action_retry(config)
+    async def _capture() -> UIState:
+        logger.debug("[ui_capture] Evaluating UI state extraction JS...")
+        raw = await page.evaluate(_CAPTURE_UI_STATE_JS)
+        state = UIState.model_validate(raw)
+        logger.debug(
+            "[ui_capture] Captured: text=%d chars, artifacts=%d, forms=%d, errors=%d, labels=%d",
+            len(state.text),
+            len(state.artifacts) if state.artifacts else 0,
+            len(state.form_elements) if state.form_elements else 0,
+            len(state.errors) if state.errors else 0,
+            len(state.target_status_labels) if state.target_status_labels else 0,
+        )
+        return state
+
+    return await _capture()
 
 
-def capture_artifacts_panel(page: Page) -> list[Artifact]:
+async def capture_artifacts_panel(page: Page) -> list[Artifact]:
     """Open More/panel buttons and scan for downloadable artifacts."""
     logger.debug("[artifacts_panel] Scanning for artifacts...")
 
     # Strategy 1: Click "More" buttons on inline artifact widgets
     more_buttons = page.locator('button:has-text("More"), button[aria-label*="more" i]')
-    more_count = more_buttons.count()
+    more_count = await more_buttons.count()
     if more_count > 0:
         logger.debug(
             "[artifacts_panel] Found %d 'More' button(s) — clicking first visible...",
@@ -251,33 +254,33 @@ def capture_artifacts_panel(page: Page) -> list[Artifact]:
     for i in range(more_count):
         try:
             btn = more_buttons.nth(i)
-            if btn.is_visible(timeout=1000):
-                btn.click()
+            if await btn.is_visible(timeout=1000):
+                await btn.click()
                 logger.debug("[artifacts_panel] Clicked 'More' button #%d", i + 1)
-                page.wait_for_timeout(1000)
+                await page.wait_for_timeout(1000)
                 break
         except Exception:
             continue
 
-    # Strategy 2: Try to open the artifacts sidebar via header icons
+    # Strategy 2: Try to open the artifacts sidebar
     sidebar_triggers = [
+        page.locator('button:has-text("Open files panel")').first,
         page.locator('button[aria-label*="artifact" i]').first,
         page.locator('button[aria-label*="panel" i]').first,
         page.locator('button[aria-label*="file" i]').first,
-        page.locator('header button, [class*="header"] button').last,
     ]
     for trigger in sidebar_triggers:
         try:
-            if trigger.is_visible(timeout=1000):
-                trigger.click()
+            if await trigger.is_visible(timeout=1000):
+                await trigger.click()
                 logger.debug("[artifacts_panel] Opened sidebar via header icon")
-                page.wait_for_timeout(1500)
+                await page.wait_for_timeout(1500)
                 break
         except Exception:
             continue
 
     # Scan full page for download links
-    raw_artifacts = page.evaluate("""() => {
+    raw_artifacts = await page.evaluate("""() => {
         const found = [];
         const body = document.body;
         const downloadLinks = body.querySelectorAll('a[download], a[href*=".csv"], a[href*=".xlsx"], a[href*=".pdf"], a[href*=".pptx"], a[href*=".png"], a[href*=".json"], a[href*=".py"], a[href*=".html"], a[href*=".zip"]');
@@ -294,7 +297,7 @@ def capture_artifacts_panel(page: Page) -> list[Artifact]:
             found.push({ name, type: "download", url: link.href });
           }
         });
-        const allClickables = body.querySelectorAll('button, [role="menuitem"], [class*="menu"] a, [class*="dropdown"] a');
+        const allClickables = body.querySelectorAll('button, [role="menuitem"]');
         allClickables.forEach(el => {
           const text = el.textContent?.trim() || "";
           if (/download/i.test(text) && text.length < 60) {
@@ -307,8 +310,8 @@ def capture_artifacts_panel(page: Page) -> list[Artifact]:
     }""")
 
     # Close any open menu
-    page.keyboard.press("Escape")
-    page.wait_for_timeout(500)
+    await page.keyboard.press("Escape")
+    await page.wait_for_timeout(500)
 
     artifacts = [Artifact.model_validate(a) for a in raw_artifacts]
     if artifacts:
@@ -322,31 +325,36 @@ def capture_artifacts_panel(page: Page) -> list[Artifact]:
     return artifacts
 
 
-def capture_inline_charts(page: Page, output_dir: Path) -> list[dict]:
+async def capture_inline_charts(
+    page: Page, output_dir: Path, *, turn: int = 0
+) -> list[dict]:
     """Screenshot inline chart/SVG/canvas elements as PNG files."""
     output_dir.mkdir(parents=True, exist_ok=True)
     results: list[dict] = []
     chart_index = 0
 
     locator_specs = [
-        '[class*="chart"], [class*="visualization"], [class*="plot"], [class*="recharts"], [class*="vega"]',
-        'svg:has(rect):has(text), svg:has(path):has(g[class*="axis"])',
+        "svg:has(rect):has(text), svg:has(path):has(g)",
         "canvas",
     ]
 
     for spec in locator_specs:
         elements = page.locator(spec)
-        count = elements.count()
+        count = await elements.count()
         for i in range(count):
             try:
                 el = elements.nth(i)
-                if el.is_visible(timeout=1000):
-                    box = el.bounding_box()
+                if await el.is_visible(timeout=1000):
+                    box = await el.bounding_box()
                     if box and box["width"] > 100 and box["height"] > 50:
                         chart_index += 1
-                        filename = f"chart-{chart_index}.png"
+                        filename = (
+                            f"turn-{turn}-chart-{chart_index}.png"
+                            if turn > 0
+                            else f"chart-{chart_index}.png"
+                        )
                         out_path = output_dir / filename
-                        el.screenshot(path=str(out_path))
+                        await el.screenshot(path=str(out_path))
                         results.append({"filename": filename, "path": str(out_path)})
                         logger.debug(
                             "[charts] Captured chart #%d: %dx%d -> %s",

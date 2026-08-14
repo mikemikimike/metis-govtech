@@ -10,7 +10,7 @@ The JSON files here are **auto-generated**. Do not edit them directly; they will
 |---|---|---|
 | `experiment.schema.json` | `Experiment` | `_EXPERIMENT_VERSION` |
 
-`SessionRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. Its version constant is `_SESSION_RECORD_VERSION`.
+`RunRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. Its version constant is `_RUN_RECORD_VERSION`.
 
 ## How to modify a schema
 
@@ -44,8 +44,8 @@ A change requires a version bump if data valid under version N would **fail `mod
 | Breaking change in nested model | New required field in `ExperimentTask` | **Yes** — bump root | Old data fails nested model validation |
 
 A breaking change to a nested model bumps the version of the root model that contains it:
-- `ExperimentTask`, `MetricRef`, `Persona` → bump `Experiment`
-- `SessionConfig`, `SessionOutcome`, `CollectedArtifact`, `ConversationTurn` → bump `SessionRecord`
+- `Scenario`, `MetricRef`, `Persona` → bump `Experiment`
+- `RunConfig`, `RunOutcome`, `CollectedArtifact`, `ConversationTurn` → bump `RunRecord`
 
 The common trap is giving a breaking field a default to avoid a bump. That's fine for genuinely optional fields, but if the field is semantically required and you're using a default as a workaround, you're hiding a real schema change. Use a bump and a migration instead.
 
