@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json as json_mod
 import logging
+import time
 from pathlib import Path
 from typing import IO, Any, Literal
 
@@ -47,20 +48,24 @@ def _run_log_filename(
 class LogRouter:
     """Final structlog processor that replaces the default renderer.
 
-    Routes every event to per-run files and the tail buffer, then returns ""
-    so nothing hits stderr (Rich Live owns the terminal when TUI is active).
+    Routes every event to per-run files and the tail buffer. When TUI is
+    active, returns "" to suppress stderr (Rich Live owns the terminal).
+    When no TUI, falls through to the original renderer for stderr output.
     """
 
     def __init__(
         self,
         log_dir: Path,
         log_format: Literal["text", "json"] = "text",
-        tail_buffer: TailBuffer | None = None,
+        tail_buffers: dict[str, TailBuffer] | None = None,
+        fallback_renderer: Any = None,
     ) -> None:
         self._log_dir = log_dir
         self._log_format = log_format
-        self._tail_buffer = tail_buffer
+        self._tail_buffers = tail_buffers or {}
+        self._fallback_renderer = fallback_renderer
         self._handles: dict[str, IO[str]] = {}
+        self._start_time = time.monotonic()
         log_dir.mkdir(parents=True, exist_ok=True)
 
     def _run_key(self, scenario_id: str, persona_id: str, trial: int) -> str:
@@ -88,7 +93,7 @@ class LogRouter:
         self._handles.clear()
 
     def process(self, logger: Any, method_name: str, event_dict: EventDict) -> str:
-        """Structlog renderer: routes to files + tail, returns "" to suppress stderr."""
+        """Structlog renderer: routes to files + tail, optionally to stderr."""
         scenario_id = event_dict.get("scenario_id")
         persona_id = event_dict.get("persona_id")
         trial = event_dict.get("trial")
@@ -100,28 +105,43 @@ class LogRouter:
             if handle:
                 handle.write(self._format_file_line(event_dict) + "\n")
 
-        # Route to tail buffer — styled the same way as core's renderer
-        if self._tail_buffer is not None:
+        # Route to per-worker tail buffer (or broadcast if no worker key)
+        if self._tail_buffers:
             level_name = event_dict.get("level", "debug")
             level_num = _LEVEL_MAP.get(level_name, logging.DEBUG)
             styled = self._render_styled(event_dict)
-            self._tail_buffer.append(styled, level=level_num)
+            worker = event_dict.get("worker")
+            if worker and worker in self._tail_buffers:
+                self._tail_buffers[worker].append(styled, level=level_num)
+            else:
+                for buf in self._tail_buffers.values():
+                    buf.append(styled, level=level_num)
+
+        # When no TUI, fall through to the original renderer for stderr output
+        if self._fallback_renderer is not None:
+            return self._fallback_renderer(logger, method_name, event_dict)
 
         return ""
 
+    def _elapsed_str(self) -> str:
+        """Format elapsed time since router creation as HH:MM:SS."""
+        elapsed = time.monotonic() - self._start_time
+        h = int(elapsed) // 3600
+        m = (int(elapsed) % 3600) // 60
+        s = int(elapsed) % 60
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
     def _render_styled(self, event_dict: EventDict) -> Text:
-        """Build a styled Rich Text — same format as core's _rich_console_renderer."""
-        level = event_dict.get("level", "info")
+        """Build a styled Rich Text for the TUI tail panel."""
         event = event_dict.get("event", "")
-        timestamp = event_dict.get("timestamp", "")
-        logger_name = event_dict.get("logger_name", "")
+        scenario_id = event_dict.get("scenario_id")
+        persona_id = event_dict.get("persona_id")
 
         output = Text()
-        output.append(f"{timestamp} ", style="dim")
-        output.append(f"[{level.upper():<8}]", style=_LEVEL_STYLES.get(level, ""))
-        if logger_name:
-            output.append(f" {logger_name}  ", style="dim cyan")
-        output.append(f" {event}")
+        output.append(f"{self._elapsed_str()} ", style="dim")
+        if scenario_id and persona_id:
+            output.append(f"[{scenario_id}:{persona_id}] ", style="dim cyan")
+        output.append(event)
         return output
 
     def _format_file_line(self, event_dict: EventDict) -> str:
@@ -140,20 +160,34 @@ class LogRouter:
 def setup_engine_logging(
     log_dir: Path,
     log_format: Literal["text", "json"] = "text",
-    tail_buffer: TailBuffer | None = None,
+    tail_buffers: dict[str, TailBuffer] | None = None,
+    use_tui: bool = True,
 ) -> LogRouter:
     """Create a LogRouter and install it as structlog's renderer.
 
     Replaces the last processor (core's _rich_console_renderer) with the
     router, which handles both file output and TUI tail rendering.
+    When use_tui=False, core's renderer is kept as fallback so events
+    still appear on stderr.
     Must be called AFTER configure_logging().
     """
     import structlog
 
-    router = LogRouter(log_dir=log_dir, log_format=log_format, tail_buffer=tail_buffer)
-
     config = structlog.get_config()
     current_processors = list(config.get("processors", []))
+
+    # Capture the current renderer to use as fallback when no TUI
+    fallback = None
+    if not use_tui and current_processors:
+        fallback = current_processors[-1]
+
+    router = LogRouter(
+        log_dir=log_dir,
+        log_format=log_format,
+        tail_buffers=tail_buffers,
+        fallback_renderer=fallback,
+    )
+
     # Replace the last processor (the renderer) with our router
     if current_processors:
         current_processors[-1] = router.process
