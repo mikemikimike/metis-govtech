@@ -83,6 +83,20 @@ class SessionMetricsEntry(TypedDict):
     metrics: list
 
 
+class Delegation(TypedDict):
+    """A subagent delegation extracted from trace observations."""
+
+    target: str
+    task: str
+
+
+class ChatMessage(TypedDict):
+    """A chat message with role and content."""
+
+    role: str
+    content: str
+
+
 @dataclass
 class SessionContext:
     """Session-level context for a trace within a multi-turn conversation."""

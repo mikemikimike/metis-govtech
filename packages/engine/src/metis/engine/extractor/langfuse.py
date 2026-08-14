@@ -23,9 +23,9 @@ from deepeval.test_case.conversational_test_case import (
 )
 from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
-from langfuse.api import ObservationsView
+from langfuse.api import ObservationsView, TraceWithFullDetails
 
-from metis.engine.extractor.types import SessionContext
+from metis.engine.extractor.types import ChatMessage, Delegation, SessionContext
 from metis.engine.simulation.types import CollectedArtifact, Persona, Scenario
 from metis.library.metrics._types import (
     ClarificationRequest,
@@ -98,7 +98,7 @@ def get_langfuse_client() -> Langfuse:
 # ---------------------------------------------------------------------------
 
 
-def _extract_tool_calls(observations: list) -> list:
+def _extract_tool_calls(observations: list[ObservationsView]) -> list[ObservationsView]:
     """Extract tool/function calls from observations.
 
     :param observations: List of Langfuse observation objects.
@@ -107,7 +107,7 @@ def _extract_tool_calls(observations: list) -> list:
     return [obs for obs in observations if obs.type == "TOOL"]
 
 
-def _extract_delegation(observations: list) -> dict | None:
+def _extract_delegation(observations: list[ObservationsView]) -> Delegation | None:
     """Find the subagent delegation from observations.
 
     Returns a dict with:
@@ -157,7 +157,9 @@ def _extract_delegation(observations: list) -> dict | None:
     return None
 
 
-def _extract_spoke_context(observations: list) -> dict | None:
+def _extract_spoke_context(
+    observations: list[ObservationsView],
+) -> dict[str, Any] | None:
     """Extract spoke_context from the trace (cached parameters from prior turns).
 
     Looks for save_spoke_context tool calls or session_state in agent input.
@@ -188,7 +190,9 @@ def _extract_spoke_context(observations: list) -> dict | None:
     return None
 
 
-def _extract_assistant_messages(observations: list) -> list:
+def _extract_assistant_messages(
+    observations: list[ObservationsView],
+) -> list[ChatMessage]:
     """Extract assistant GENERATION outputs from the trace (LLM responses).
 
     :param observations: List of Langfuse observation objects.
@@ -202,13 +206,13 @@ def _extract_assistant_messages(observations: list) -> list:
                 out_messages = output.get("messages", [])
                 for msg in out_messages:
                     if msg.get("role") == "assistant":
-                        messages.append(msg)
+                        messages.append(ChatMessage(role="assistant", content=msg.get("content", "")))
             elif isinstance(output, str):
-                messages.append({"role": "assistant", "content": output})
+                messages.append(ChatMessage(role="assistant", content=output))
     return messages
 
 
-def _extract_subagent_output(observations: list) -> str | None:
+def _extract_subagent_output(observations: list[ObservationsView]) -> str | None:
     """Extract the subagent's response (before Orca synthesis).
 
     Priority order:
@@ -261,7 +265,9 @@ def _extract_subagent_output(observations: list) -> str | None:
     return None
 
 
-def _extract_clarification_requests(observations: list) -> list:
+def _extract_clarification_requests(
+    observations: list[ObservationsView],
+) -> list[ClarificationRequest]:
     """Extract request_user_input tool calls (clarification questions).
 
     :param observations: List of Langfuse observation objects.
@@ -276,7 +282,9 @@ def _extract_clarification_requests(observations: list) -> list:
     ]
 
 
-def _extract_orca_chat_metadata(observations: list) -> OrcaChatMetadata:
+def _extract_orca_chat_metadata(
+    observations: list[ObservationsView],
+) -> OrcaChatMetadata:
     """Extract metadata from the ``orca-chat`` observation span.
 
     Looks for the first observation named ``"orca-chat"`` and reads its
@@ -325,18 +333,18 @@ class _TraceExtraction:
     avoid redundant extraction and API calls.
     """
 
-    trace: Any
-    observations: list
-    tool_calls: list
-    delegation: dict | None
+    trace: TraceWithFullDetails
+    observations: list[ObservationsView]
+    tool_calls: list[ObservationsView]
+    delegation: Delegation | None
     subagent_output: str | None
-    spoke_context: dict | None
-    assistant_messages: list
-    clarification_requests: list
+    spoke_context: dict[str, Any] | None
+    assistant_messages: list[ChatMessage]
+    clarification_requests: list[ClarificationRequest]
     chat_metadata: OrcaChatMetadata
 
 
-def _extract_all(trace: Any, observations: list) -> _TraceExtraction:
+def _extract_all(trace: TraceWithFullDetails, observations: list[ObservationsView]) -> _TraceExtraction:
     """Run all extraction helpers once and return a bundled result."""
     return _TraceExtraction(
         trace=trace,
@@ -361,6 +369,13 @@ def _trace_to_test_case(
     session_context: SessionContext,
 ) -> LLMTestCase:
     """Convert pre-extracted trace data into a DeepEval LLMTestCase.
+
+    This conversion is lossy. Per-observation fields NOT carried over:
+    model identity, model_parameters, token usage/cost, latency,
+    time_to_first_token, level/status_message, completion_start_time,
+    prompt_id/name/version, and environment. Trace-level metadata, tags,
+    user_id, and total_cost are also dropped. Expand the serialization
+    below if a new metric needs any of these.
 
     :param ext: Pre-extracted data bundle for this trace.
     :param session_context: Session-level positioning info.
@@ -401,7 +416,7 @@ def _trace_to_test_case(
             }
             for obs in ext.tool_calls
         ],
-        delegation=ext.delegation,
+        delegation=ext.delegation,  # type: ignore[arg-type]  # Delegation TypedDict; TraceMetadata uses bare dict to avoid SDK dep
         spoke_context=ext.spoke_context,
         assistant_messages=ext.assistant_messages,
         clarification_requests=ext.clarification_requests,
@@ -517,9 +532,9 @@ class FetchLangfuseResult:
     :param skipped: Number of traces skipped (no output).
     """
 
-    test_cases: list = field(default_factory=list)
-    session_test_cases: list = field(default_factory=list)
-    sessions: dict = field(default_factory=dict)
+    test_cases: list[LLMTestCase] = field(default_factory=list)
+    session_test_cases: list[ConversationalTestCase] = field(default_factory=list)
+    sessions: dict[str, list[TraceWithFullDetails]] = field(default_factory=dict)
     skipped: int = 0
 
 
@@ -548,7 +563,7 @@ def fetch_by_session_id(
     :returns: :class:`FetchLangfuseResult` with test cases ready for evaluation.
     """
     deadline = time.time() + retry_timeout
-    traces: list = []
+    traces: list[TraceWithFullDetails] = []
 
     while True:
         traces = langfuse.api.trace.list(session_id=session_id, limit=limit).data
@@ -563,9 +578,9 @@ def fetch_by_session_id(
     traces.sort(key=lambda t: t.timestamp or "")
 
     session_artifacts: list[CollectedArtifact] = artifacts or []
-    test_cases: list = []
+    test_cases: list[LLMTestCase] = []
     skipped: int = 0
-    prior_turns: list = []
+    prior_turns: list[dict[str, str]] = []
     extractions: list[_TraceExtraction] = []
 
     for turn_idx, trace in enumerate(traces):
@@ -573,7 +588,9 @@ def fetch_by_session_id(
             skipped += 1
             continue
 
-        observations: list[ObservationsView] = langfuse.api.observations.get_many(trace_id=trace.id).data
+        observations: list[ObservationsView] = langfuse.api.observations.get_many(
+            trace_id=trace.id
+        ).data
         ext = _extract_all(trace, observations)
         extractions.append(ext)
 
@@ -616,7 +633,7 @@ def fetch_by_session_id(
             }
         )
 
-    session_test_cases: list = []
+    session_test_cases: list[ConversationalTestCase] = []
     ctc: ConversationalTestCase | None = _session_to_conversational_test_case(
         extractions
     )
