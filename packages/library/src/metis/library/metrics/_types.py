@@ -145,7 +145,7 @@ class TraceMetadata(TypedDict):
     # Added at runtime when available:
     artifacts: NotRequired[list[ArtifactSummary]]
     # Reserved for future ground-truth annotation source:
-    annotations: NotRequired[dict]
+    annotations: NotRequired[dict[str, Any]]
     # Injected from experiment configuration at fetch time:
     persona: NotRequired[object]
     scenario: NotRequired[object]
