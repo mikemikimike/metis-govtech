@@ -1025,7 +1025,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-library"
-version = "0.1.3"
+version = "0.1.4"
 source = { editable = "packages/library" }
 dependencies = [
     { name = "deepeval" },

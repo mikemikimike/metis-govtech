@@ -10,6 +10,28 @@ from typing import NotRequired
 
 from typing_extensions import TypedDict
 
+from metis.library.metrics._types import (
+    ChatMessage,
+    Delegation,
+    ObservationSummary,
+    PriorTurn,
+    ToolCallSummary,
+)
+
+__all__ = [
+    "ChatMessage",
+    "Delegation",
+    "ObservationSummary",
+    "PriorTurn",
+    "RoutingSummary",
+    "SessionContext",
+    "SessionMetricResult",
+    "SessionMetricsEntry",
+    "SessionToolCallData",
+    "SessionTurnData",
+    "ToolCallSummary",
+]
+
 
 class RoutingSummary(TypedDict):
     """Aggregate routing statistics for an evaluation run.
@@ -83,6 +105,7 @@ class SessionMetricsEntry(TypedDict):
     metrics: list
 
 
+
 @dataclass
 class SessionContext:
     """Session-level context for a trace within a multi-turn conversation."""
@@ -90,4 +113,4 @@ class SessionContext:
     session_id: str
     turn_index: int
     total_turns: int
-    prior_turns: list = field(default_factory=list)
+    prior_turns: list[PriorTurn] = field(default_factory=list)
