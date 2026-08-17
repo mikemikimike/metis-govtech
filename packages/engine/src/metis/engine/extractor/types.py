@@ -6,7 +6,8 @@ extracted from Langfuse observations and passed to DeepEval metrics.
 """
 
 from dataclasses import dataclass, field
-from typing import NotRequired
+from datetime import datetime
+from typing import Any, NotRequired
 
 from typing_extensions import TypedDict
 
@@ -82,27 +83,6 @@ class SessionMetricsEntry(TypedDict):
     turns: list
     metrics: list
 
-
-class PriorTurn(TypedDict):
-    """A summarised prior conversation turn for session context."""
-
-    input: str
-    output: str
-    routed_to: str
-
-
-class Delegation(TypedDict):
-    """A subagent delegation extracted from trace observations."""
-
-    target: str
-    task: str
-
-
-class ChatMessage(TypedDict):
-    """A chat message with role and content."""
-
-    role: str
-    content: str
 
 
 @dataclass

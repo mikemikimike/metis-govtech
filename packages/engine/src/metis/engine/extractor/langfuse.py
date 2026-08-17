@@ -606,7 +606,7 @@ def fetch_by_session_id(
         tc: LLMTestCase = _trace_to_test_case(ext, session_ctx)
 
         if session_artifacts and tc.metadata is not None:
-            tc.metadata["artifacts"] = session_artifacts
+            tc.metadata["artifacts"] = [a.model_dump() for a in session_artifacts]
         if task is not None and tc.metadata is not None:
             tc.metadata["task"] = task
             tc.metadata["task_id"] = task.id
