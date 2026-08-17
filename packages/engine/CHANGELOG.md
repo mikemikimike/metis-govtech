@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **Deprecated `task`/`task_id` metadata replaced with `scenario`/`scenario_id`** — the Langfuse extractor now writes `scenario` and `scenario_id` into trace metadata (previously `task` and `task_id`); the reporting pipeline reads `scenario_id` throughout. The `fetch_by_session_id` parameter was renamed from `task` to `scenario`. Delegation extraction's `"task"` field (sub-agent instruction) is unrelated and unchanged.
 - **Reporting module refactored for readability** — split 1033-line `generator.py` into 4 focused modules: `_aggregation.py` (single source of truth for metric pass/fail/skip counts), `_styles.py` (CSS constant), `_html_sections.py` (5 composable section renderers), and a slimmed-down `generator.py` (orchestration only). Removed dead code (`render_failure_cards` — computed but never rendered in original), relocated misplaced logic (`_extract_failures` → `_html_sections.py`), and pruned 7 orphaned CSS classes. Public API unchanged. ([#107](https://github.com/govtech-responsibleai/metis/issues/107))
 
 ### Fixed
