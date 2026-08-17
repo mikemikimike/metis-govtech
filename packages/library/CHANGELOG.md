@@ -4,6 +4,12 @@ All notable changes to `metis-library` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] — 2026-08-17
+
+### Changed
+
+- 
+
 ## [0.1.3] — 2026-08-05
 
 ### Changed
