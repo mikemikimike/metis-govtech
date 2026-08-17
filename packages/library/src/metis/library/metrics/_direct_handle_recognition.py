@@ -57,7 +57,7 @@ class DirectHandleRecognitionMetric(SyncBaseMetric):
             self.reason = "Correctly handled directly without delegation"
         else:
             self.score = 0.0
-            self.reason = f"Should have handled directly but delegated to '{delegation.get('target', '?')}'"
+            self.reason = f"Should have handled directly but delegated to '{delegation['target']}'"
 
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

@@ -12,8 +12,8 @@ from ._types import OrcaChatMetadata, TraceMetadata
 def _is_data_analyst_trace(test_case: LLMTestCase) -> bool:
     """Check if this trace was routed to the data analyst subagent."""
     metadata = cast(TraceMetadata, test_case.metadata)
-    delegation = metadata.get("delegation") or {}
-    target = delegation.get("target", "") if isinstance(delegation, dict) else ""
+    delegation = metadata.get("delegation")
+    target = delegation["target"] if delegation else ""
     if "data" in target.lower():
         return True
     chat_meta: OrcaChatMetadata = metadata.get("chat_metadata") or OrcaChatMetadata()
