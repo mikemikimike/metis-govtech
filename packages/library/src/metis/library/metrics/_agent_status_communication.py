@@ -32,7 +32,7 @@ class AgentStatusCommunicationMetric(SyncBaseMetric):
         delegation = metadata.get("delegation")
         metadata.get("chat_metadata") or OrcaChatMetadata()
 
-        if not delegation or not delegation.get("target"):
+        if not delegation or not delegation["target"]:
             self.score = 1.0
             self.skipped = True
             self.reason = "No delegation occurred — SKIPPED"

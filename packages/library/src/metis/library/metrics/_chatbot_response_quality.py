@@ -66,7 +66,7 @@ class ChatbotResponseQualityMetric(SyncBaseMetric):
         metadata = cast(TraceMetadata, test_case.metadata)
         delegation = metadata.get("delegation")
 
-        if delegation and delegation.get("target"):
+        if delegation and delegation["target"]:
             self.score = 1.0
             self.skipped = True
             self.reason = "Delegation occurred (not a direct-handle case) — SKIPPED"
@@ -85,7 +85,7 @@ class ChatbotResponseQualityMetric(SyncBaseMetric):
         metadata = cast(TraceMetadata, test_case.metadata)
         delegation = metadata.get("delegation")
 
-        if delegation and delegation.get("target"):
+        if delegation and delegation["target"]:
             self.score = 1.0
             self.skipped = True
             self.reason = "Delegation occurred (not a direct-handle case) — SKIPPED"
