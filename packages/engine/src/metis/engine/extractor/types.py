@@ -6,10 +6,31 @@ extracted from Langfuse observations and passed to DeepEval metrics.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, NotRequired
+from typing import NotRequired
 
 from typing_extensions import TypedDict
+
+from metis.library.metrics._types import (
+    ChatMessage,
+    Delegation,
+    ObservationSummary,
+    PriorTurn,
+    ToolCallSummary,
+)
+
+__all__ = [
+    "ChatMessage",
+    "Delegation",
+    "ObservationSummary",
+    "PriorTurn",
+    "RoutingSummary",
+    "SessionContext",
+    "SessionMetricResult",
+    "SessionMetricsEntry",
+    "SessionToolCallData",
+    "SessionTurnData",
+    "ToolCallSummary",
+]
 
 
 class RoutingSummary(TypedDict):
@@ -83,50 +104,6 @@ class SessionMetricsEntry(TypedDict):
     turns: list
     metrics: list
 
-
-class PriorTurn(TypedDict):
-    """A summarised prior conversation turn for session context."""
-
-    input: str
-    output: str
-    routed_to: str
-
-
-class Delegation(TypedDict):
-    """A subagent delegation extracted from trace observations."""
-
-    target: str
-    task: str
-
-
-class ChatMessage(TypedDict):
-    """A chat message with role and content."""
-
-    role: str
-    content: str
-
-
-class ObservationSummary(TypedDict):
-    """Serialised subset of a Langfuse observation carried in TraceMetadata."""
-
-    id: str
-    name: str | None
-    type: str | None
-    input: Any
-    output: Any
-    metadata: Any
-    start_time: datetime | None
-    end_time: datetime | None
-    parent_observation_id: str | None
-
-
-class ToolCallSummary(TypedDict):
-    """Serialised subset of a TOOL observation carried in TraceMetadata."""
-
-    name: str | None
-    type: str | None
-    input: Any
-    output: Any
 
 
 @dataclass

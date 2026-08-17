@@ -134,10 +134,10 @@ def _extract_delegation(observations: list[ObservationsView]) -> Delegation | No
     for obs in observations:
         if obs.name == "delegate_task_to_member" and obs.type == "TOOL":
             inp = obs.input or {}
-            return {
-                "target": inp.get("member_id", "") if isinstance(inp, dict) else "",
-                "task": inp.get("task", "") if isinstance(inp, dict) else "",
-            }
+            return Delegation(
+                target=inp.get("member_id", "") if isinstance(inp, dict) else "",
+                task=inp.get("task", "") if isinstance(inp, dict) else "",
+            )
 
     # Fallback 1: orca-chat span metadata (older routing pattern)
     for obs in observations:
@@ -146,20 +146,14 @@ def _extract_delegation(observations: list[ObservationsView]) -> Delegation | No
             routed = meta.get("routed_to_agents", []) if isinstance(meta, dict) else []
             if routed:
                 target = routed[0] if isinstance(routed, list) else str(routed)
-                return {
-                    "target": target,
-                    "task": "",
-                }
+                return Delegation(target=target, task="")
 
     # Fallback 2: orca-data-analysis / orca-slide SPAN (direct workflow delegation).
     for obs in observations:
         span_name = obs.name or ""
         for prefix, agent_target in _WORKFLOW_SPAN_TO_AGENT.items():
             if span_name.startswith(prefix) and obs.type == "SPAN":
-                return {
-                    "target": agent_target,
-                    "task": "",
-                }
+                return Delegation(target=agent_target, task="")
 
     return None
 
