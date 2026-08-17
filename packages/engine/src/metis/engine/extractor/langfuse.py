@@ -25,13 +25,18 @@ from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
 from langfuse.api import ObservationsView, TraceWithDetails
 
-from metis.engine.extractor.types import ChatMessage, Delegation, PriorTurn, SessionContext
+from metis.engine.extractor.types import (
+    ChatMessage,
+    Delegation,
+    ObservationSummary,
+    PriorTurn,
+    SessionContext,
+    ToolCallSummary,
+)
 from metis.engine.simulation.types import CollectedArtifact, Persona, Scenario
 from metis.library.metrics._types import (
     ClarificationRequest,
-    ObservationSummary,
     OrcaChatMetadata,
-    ToolCallSummary,
     TraceMetadata,
 )
 

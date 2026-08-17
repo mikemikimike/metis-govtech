@@ -84,6 +84,50 @@ class SessionMetricsEntry(TypedDict):
     metrics: list
 
 
+class PriorTurn(TypedDict):
+    """A summarised prior conversation turn for session context."""
+
+    input: str
+    output: str
+    routed_to: str
+
+
+class Delegation(TypedDict):
+    """A subagent delegation extracted from trace observations."""
+
+    target: str
+    task: str
+
+
+class ChatMessage(TypedDict):
+    """A chat message with role and content."""
+
+    role: str
+    content: str
+
+
+class ObservationSummary(TypedDict):
+    """Serialised subset of a Langfuse observation carried in TraceMetadata."""
+
+    id: str
+    name: str | None
+    type: str | None
+    input: Any
+    output: Any
+    metadata: Any
+    start_time: datetime | None
+    end_time: datetime | None
+    parent_observation_id: str | None
+
+
+class ToolCallSummary(TypedDict):
+    """Serialised subset of a TOOL observation carried in TraceMetadata."""
+
+    name: str | None
+    type: str | None
+    input: Any
+    output: Any
+
 
 @dataclass
 class SessionContext:
