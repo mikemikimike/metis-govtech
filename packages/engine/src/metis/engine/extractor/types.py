@@ -83,6 +83,14 @@ class SessionMetricsEntry(TypedDict):
     metrics: list
 
 
+class PriorTurn(TypedDict):
+    """A summarised prior conversation turn for session context."""
+
+    input: str
+    output: str
+    routed_to: str
+
+
 class Delegation(TypedDict):
     """A subagent delegation extracted from trace observations."""
 
@@ -104,4 +112,4 @@ class SessionContext:
     session_id: str
     turn_index: int
     total_turns: int
-    prior_turns: list = field(default_factory=list)
+    prior_turns: list[PriorTurn] = field(default_factory=list)

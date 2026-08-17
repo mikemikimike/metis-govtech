@@ -23,13 +23,15 @@ from deepeval.test_case.conversational_test_case import (
 )
 from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
-from langfuse.api import ObservationsView, TraceWithFullDetails
+from langfuse.api import ObservationsView, TraceWithDetails
 
-from metis.engine.extractor.types import ChatMessage, Delegation, SessionContext
+from metis.engine.extractor.types import ChatMessage, Delegation, PriorTurn, SessionContext
 from metis.engine.simulation.types import CollectedArtifact, Persona, Scenario
 from metis.library.metrics._types import (
     ClarificationRequest,
+    ObservationSummary,
     OrcaChatMetadata,
+    ToolCallSummary,
     TraceMetadata,
 )
 
@@ -333,7 +335,7 @@ class _TraceExtraction:
     avoid redundant extraction and API calls.
     """
 
-    trace: TraceWithFullDetails
+    trace: TraceWithDetails
     observations: list[ObservationsView]
     tool_calls: list[ObservationsView]
     delegation: Delegation | None
@@ -344,7 +346,7 @@ class _TraceExtraction:
     chat_metadata: OrcaChatMetadata
 
 
-def _extract_all(trace: TraceWithFullDetails, observations: list[ObservationsView]) -> _TraceExtraction:
+def _extract_all(trace: TraceWithDetails, observations: list[ObservationsView]) -> _TraceExtraction:
     """Run all extraction helpers once and return a bundled result."""
     return _TraceExtraction(
         trace=trace,
@@ -394,29 +396,29 @@ def _trace_to_test_case(
         total_turns=session_context.total_turns,
         prior_turns=session_context.prior_turns,
         observations=[
-            {
-                "id": obs.id,
-                "name": obs.name,
-                "type": obs.type,
-                "input": obs.input,
-                "output": obs.output,
-                "metadata": obs.metadata,
-                "start_time": obs.start_time,
-                "end_time": obs.end_time,
-                "parent_observation_id": obs.parent_observation_id,
-            }
+            ObservationSummary(
+                id=obs.id,
+                name=obs.name,
+                type=obs.type,
+                input=obs.input,
+                output=obs.output,
+                metadata=obs.metadata,
+                start_time=obs.start_time,
+                end_time=obs.end_time,
+                parent_observation_id=obs.parent_observation_id,
+            )
             for obs in ext.observations
         ],
         tool_calls=[
-            {
-                "name": obs.name,
-                "type": obs.type,
-                "input": obs.input,
-                "output": obs.output,
-            }
+            ToolCallSummary(
+                name=obs.name,
+                type=obs.type,
+                input=obs.input,
+                output=obs.output,
+            )
             for obs in ext.tool_calls
         ],
-        delegation=ext.delegation,  # type: ignore[arg-type]  # Delegation TypedDict; TraceMetadata uses bare dict to avoid SDK dep
+        delegation=ext.delegation,
         spoke_context=ext.spoke_context,
         assistant_messages=ext.assistant_messages,
         clarification_requests=ext.clarification_requests,
@@ -534,7 +536,7 @@ class FetchLangfuseResult:
 
     test_cases: list[LLMTestCase] = field(default_factory=list)
     session_test_cases: list[ConversationalTestCase] = field(default_factory=list)
-    sessions: dict[str, list[TraceWithFullDetails]] = field(default_factory=dict)
+    sessions: dict[str, list[TraceWithDetails]] = field(default_factory=dict)
     skipped: int = 0
 
 
@@ -563,7 +565,7 @@ def fetch_by_session_id(
     :returns: :class:`FetchLangfuseResult` with test cases ready for evaluation.
     """
     deadline = time.time() + retry_timeout
-    traces: list[TraceWithFullDetails] = []
+    traces: list[TraceWithDetails] = []
 
     while True:
         traces = langfuse.api.trace.list(session_id=session_id, limit=limit).data
@@ -580,7 +582,7 @@ def fetch_by_session_id(
     session_artifacts: list[CollectedArtifact] = artifacts or []
     test_cases: list[LLMTestCase] = []
     skipped: int = 0
-    prior_turns: list[dict[str, str]] = []
+    prior_turns: list[PriorTurn] = []
     extractions: list[_TraceExtraction] = []
 
     for turn_idx, trace in enumerate(traces):
@@ -618,19 +620,19 @@ def fetch_by_session_id(
             routed_to = ext.chat_metadata.routed_to_agents[0]
 
         prior_turns.append(
-            {
-                "input": (
+            PriorTurn(
+                input=(
                     trace.input
                     if isinstance(trace.input, str)
                     else str(trace.input or "")
                 )[:500],
-                "output": (
+                output=(
                     trace.output
                     if isinstance(trace.output, str)
                     else str(trace.output or "")
                 )[:500],
-                "routed_to": routed_to,
-            }
+                routed_to=routed_to,
+            )
         )
 
     session_test_cases: list[ConversationalTestCase] = []
