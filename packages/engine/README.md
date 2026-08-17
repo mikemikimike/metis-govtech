@@ -45,9 +45,18 @@ metis engine simulate --input-dir packages/engine/example-experiment/ --log-form
 # Override log directory (default: co-located with results)
 metis engine simulate --input-dir packages/engine/example-experiment/ --log-dir /tmp/my-logs
 
+# Concurrent simulation (2 parallel browser contexts)
+metis engine simulate --input-dir packages/engine/example-experiment/ --concurrency 2
+
 # Custom Langfuse timeout (default: 90s)
 metis engine simulate --input-dir packages/engine/example-experiment/ --langfuse-timeout 120
 ```
+
+### Concurrency
+
+The `--concurrency N` flag runs N browser contexts in parallel on a single browser process. Each worker gets its own isolated login session and page — no shared state, no cookie leakage between workers.
+
+Runs are distributed round-robin across workers for balanced load. Start with `--concurrency 2` and increase based on target system capacity. The default (`1`) preserves sequential behaviour.
 
 ## Experiments
 

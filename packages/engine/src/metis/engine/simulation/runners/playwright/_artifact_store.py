@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ..types import RunRecord
+from ...types import RunRecord
 
 _TYPE_MAP = {
     "pdf": "report",

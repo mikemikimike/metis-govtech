@@ -51,7 +51,7 @@ class DelegationArgumentCorrectnessMetric(SyncBaseMetric):
         metadata = cast(TraceMetadata, test_case.metadata)
         delegation = metadata.get("delegation")
 
-        if not delegation or not delegation.get("task"):
+        if not delegation or not delegation["task"]:
             self.score = 1.0
             self.skipped = True
             self.reason = "No delegation occurred — SKIPPED"
@@ -61,8 +61,8 @@ class DelegationArgumentCorrectnessMetric(SyncBaseMetric):
         tool_call = ToolCall(
             name="delegate_task_to_member",
             input_parameters={
-                "target": delegation.get("target", ""),
-                "task": delegation.get("task", ""),
+                "target": delegation["target"],
+                "task": delegation["task"],
             },
         )
 

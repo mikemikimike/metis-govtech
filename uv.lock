@@ -990,7 +990,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-engine"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "packages/engine" }
 dependencies = [
     { name = "deepeval" },
@@ -1003,6 +1003,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "rich" },
+    { name = "tenacity" },
     { name = "typer" },
 ]
 
@@ -1018,6 +1019,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0.0" },
+    { name = "tenacity", specifier = ">=8.0.0" },
     { name = "typer", specifier = ">=0.9.0" },
 ]
 

@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Removed
 
+## [0.1.4] — 2026-08-17
+
+### Changed
+
+- Added concrete TypedDicts (`ArtifactSummary`, `ObservationSummary`, `ToolCallSummary`, `ChatMessage`, `Delegation`, `PriorTurn`) describing the serialized shapes in `TraceMetadata`. Fields narrowed from bare `list`/`dict` to parameterized types for static type-checking and IDE autocomplete.
+
 ## [0.1.3] — 2026-08-05
 
 ### Changed

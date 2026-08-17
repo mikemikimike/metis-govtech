@@ -4,6 +4,76 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **Reporting module refactored for readability** — split 1033-line `generator.py` into 4 focused modules: `_aggregation.py` (single source of truth for metric pass/fail/skip counts), `_styles.py` (CSS constant), `_html_sections.py` (5 composable section renderers), and a slimmed-down `generator.py` (orchestration only). Removed dead code (`render_failure_cards` — computed but never rendered in original), relocated misplaced logic (`_extract_failures` → `_html_sections.py`), and pruned 7 orphaned CSS classes. Public API unchanged. ([#107](https://github.com/govtech-responsibleai/metis/issues/107))
+
+### Fixed
+
+- **Response extraction returns user's own message** — narrowed selector from `.message-user, .message-assistant` to `.message-assistant` only; previously, if the user's message was the last match, the LLM user-agent saw its own input echoed as the "assistant response"
+- **Nav buttons leak into LLM action space** — expanded the button denylist from 4 inline checks to 13 entries in a named array (`buttonDenylist`); buttons like "reasoning", "dismiss error", "/agents" no longer appear as interactive elements
+- **HTML report missing task descriptions and persona context** — CLI now builds `task_contexts` from experiment scenarios and run records and passes it to `generate_report()`; each task section renders scenario description, fixtures, and all personas with per-persona outcome (stop reason, turns, duration). Added `PersonaContext` type and multi-persona rendering support.
+- **Python 3.14 evaluation compatibility** — disable DeepEval's async execution via `AsyncConfig(run_async=False)` to work around event-loop re-entrancy failure (likely `nest_asyncio` incompatibility with Python 3.14's stricter task state). Previously crashed all sessions with 2+ metrics per test case.
+- **TUI dashboard missing worker attribution** — active runs now display their worker ID (`[w0]`, `[w1]`, …) so concurrent scenarios are immediately identifiable
+- **Log tail missing run context** — tail lines now include a `[scenario:persona]` prefix when those keys are present, making interleaved errors attributable without cross-referencing per-run files
+- **structlog contextvars not bound per-run** — concurrent workers now bind `scenario_id`, `persona_id`, and `trial` to structlog context before each run (previously only `worker` was bound)
+
+## [0.7.0] — 2026-08-07
+
+### Added
+
+- **User guide** — `docs/guide/engine.md` covering prerequisites, quick start, experiment configuration, CLI reference, writing custom metrics, and troubleshooting
+- **Runner ABC** (`simulation/runner.py`) — transport-agnostic interface (`setup`, `send_turn`, `teardown`, `get_session_id`, `recover`)
+- **Orchestrator** (`simulation/orchestrator.py`) — turn-loop logic extracted from `_environment.py`
+- **PlaywrightRunner** (`simulation/runners/playwright/`) — first Runner implementation
+- **REST runner stub** (`simulation/runners/rest/`)
+- **Action protocol** — `ActionSlot` + `ChosenAction`; LLM picks from a closed vocabulary instead of inventing selectors
+- **`Observation` model** — replaces `UIState` at the interface boundary
+- **Per-run context isolation** — fresh `BrowserContext` per run; `setup()` logs in, `teardown()` closes
+
+- **Three-layer simulation resilience** — automatic retry/recovery so runs rarely end in `system_error`:
+  - *Action layer* — intent-based element resolver with fallback strategies; tenacity-backed retry with exponential backoff and point-of-no-return tracking (no duplicate submissions)
+  - *Turn layer* — typed failure classification, lightweight page recovery (`_recover_page`), check-before-resend pattern for post-submission failures, consecutive-failure escalation to run layer
+  - *Run layer* — configurable retry budget (default: 2 retries) with full browser context teardown/rebuild and re-authentication
+- **Typed exception hierarchy** (`simulation/exceptions.py`) — `SimulationError` base with `TurnRecoverableError`, `RunRecoverableError`, and `ResponseTimeoutError` branches; drives structured error routing between layers
+- **Resilience diagnostics** — `TurnDiagnostics`, `ActionRetry`, and `RunFailure` models on `ConversationTurn` and `RunRecord` for post-hoc failure analysis; `RunRecord` schema bumped to v2
+- **`RetryConfig`** — nested config block in `HarnessConfig` with tunable budgets for action attempts, turn retries, consecutive-failure limits, and run retries
+- **Per-scenario retry override** — `max_run_retries` field on `Scenario` (optional; `null` uses global default)
+- **Per-scenario simulation limits** — `Scenario` now accepts `max_turns` (default: 20) and `timeout_minutes` (default: 15) to cap how many conversation turns and how long each scenario's simulation run is allowed to take; `response_wait_ms` (already on `Scenario`) is now the authoritative runtime timeout for waiting on the target's response (previously only recorded in output; runtime used `HarnessConfig.timeouts.response_wait_ms`)
+- **Concurrent simulation** — `--concurrency N` flag runs N browser contexts in parallel on a single browser process; round-robin run distribution across workers
+- **Async Playwright harness** — full async conversion (`playwright.async_api`) of auth, page actions, UI capture, and environment modules
+- **Async OpenAI client** — `AsyncOpenAI` for non-blocking LLM calls across concurrent workers
+- **Worker isolation** — each worker gets its own BrowserContext, page, login session, and `structlog.contextvars` binding (`worker=w0`, `worker=w1`, …)
+- **Crash resilience** — individual `run_simulation()` failures are caught per-run (worker continues remaining runs); `generate_opening()` failures produce a `system_error` record instead of crashing
+- **Per-worker log tail panels** — TUI splits the log tail into N vertically-stacked panels (one per worker) so each shows a clean sequential narrative; events without a worker key broadcast to all panels
+
+### Changed
+
+- **`UserAgentInput`** — removed `ui_state` and `action_feedback`; now `observation` + `run_meta` only
+- **`UserAgentOutput`** — `ui_actions: list[UIAction]` → `actions: list[ChosenAction]`
+- **`harness/` dissolved** — `__init__.py` → `experiment.py`; `_environment.py` split into `orchestrator.py` + `runners/playwright/`
+- **Prompts** — generic action vocabulary (id/kind/label/options) replaces CSS-specific instructions
+- `run_experiment()` accepts `concurrency: int` parameter (default 1 preserves sequential behaviour)
+- CLI `simulate` command accepts `--concurrency / -c` option (min 1)
+- `log_format` CLI option typed as `Literal["text", "json"]` for pyright correctness
+- **Orca DOM selectors** — replaced all fragile `[class*="..."]` attribute-contains selectors with Orca's actual DOM structure: `.message-user`/`.message-assistant` for messages, "Stop generating" button + empty `.message-assistant` for processing detection, "Send message" text for button filtering, "Dismiss error" button for error detection, "Open files panel" for artifacts panel, structural SVG/canvas selectors for charts. Removed dead chip/suggestion selectors (don't exist in Orca)
+
+### Fixed
+
+- **"Response cancelled" after upload/submit** — file uploads and submit-type button clicks now wait for Orca processing to settle (spinner/typing/"Stop generating" poll) before proceeding to `send_message`; additionally, `send_message` detects "Response cancelled" in captured UI state and waits for the real response
+- **Failed uploads bypass dedup** — file only added to `uploaded_files` set after UI visibility verification, so failed uploads can be retried
+- **Chart screenshots overwrite across turns** — `capture_inline_charts` takes a `turn` parameter; filenames are now `turn-{T}-chart-{N}.png`
+- **Downloaded artifacts collide across turns** — downloads go to `run_dir/artifacts/turn-{N}/` subdirectories instead of a flat `artifacts/` folder
+- **Off-by-one kills last turn** — removed redundant `>= max_turns` check at bottom of loop; single `> max_turns` guard at top ensures all turns execute fully
+- **`fill()` + `press("Enter")` race condition** — added 200ms delay between fill and Enter to avoid keystroke being dropped when Orca's JS reacts to input events
+- **Temp directory leak on upload retry** — replaced bare `tempfile.mkdtemp()` with `TemporaryDirectory()` context manager
+- **Download counter misleading** — separate counter for download-type artifacts only
+- **Stale-state detection false positive** — "page unchanged after form submit" warning fired incorrectly because the pre-submit text snapshot was captured after `_wait_for_processing` already consumed the processing time; moved snapshot to before action execution
+- **Disabled form elements reported to LLM** — `capture_ui_state` now excludes disabled inputs/selects/buttons (`:not([disabled])`), preventing the LLM from attempting to fill elements Orca has locked after form submission
+- **Button clicks always wait for processing** — removed brittle submit-keyword regex; all `ButtonClickAction` clicks now trigger `_wait_for_processing` and the form processing branch, eliminating timeouts from unrecognized button labels like "Continue"
+
 ## [0.6.0] — 2026-08-06
 
 ### Added
