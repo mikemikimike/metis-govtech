@@ -451,7 +451,7 @@ def simulate(
                 langfuse,
                 retry_timeout=langfuse_timeout,
                 artifacts=record.artifacts_collected,
-                task=scenario_obj,
+                scenario=scenario_obj,
                 persona=persona_obj,
             )
 

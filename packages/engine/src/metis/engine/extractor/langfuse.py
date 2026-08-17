@@ -530,7 +530,7 @@ def fetch_by_session_id(
     limit: int = 50,
     retry_timeout: int = 0,
     artifacts: list[CollectedArtifact] | None = None,
-    task: Scenario | None = None,
+    scenario: Scenario | None = None,
     persona: Persona | None = None,
 ) -> FetchLangfuseResult:
     """Fetch traces for a specific session and build test cases.
@@ -541,7 +541,7 @@ def fetch_by_session_id(
     :param retry_timeout: Seconds to poll if no traces found (0 = no retry).
     :param artifacts: Collected artifacts from the session record, injected into
         each test case's metadata.
-    :param task: Scenario object from experiment.yaml (passed through to
+    :param scenario: Scenario object from experiment.yaml (passed through to
         metric metadata).
     :param persona: Persona object from experiment.yaml (passed through to
         metric metadata).
@@ -588,9 +588,9 @@ def fetch_by_session_id(
 
         if session_artifacts and tc.metadata is not None:
             tc.metadata["artifacts"] = session_artifacts
-        if task is not None and tc.metadata is not None:
-            tc.metadata["task"] = task
-            tc.metadata["task_id"] = task.id
+        if scenario is not None and tc.metadata is not None:
+            tc.metadata["scenario"] = scenario
+            tc.metadata["scenario_id"] = scenario.id
         if persona is not None and tc.metadata is not None:
             tc.metadata["persona"] = persona
 
@@ -621,8 +621,8 @@ def fetch_by_session_id(
         extractions
     )
     if ctc:
-        if task is not None and ctc.metadata is not None:
-            ctc.metadata["task"] = task
+        if scenario is not None and ctc.metadata is not None:
+            ctc.metadata["scenario"] = scenario
         if persona is not None and ctc.metadata is not None:
             ctc.metadata["persona"] = persona
         session_test_cases.append(ctc)
