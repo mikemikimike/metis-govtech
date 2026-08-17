@@ -2,15 +2,85 @@
 Type definitions for the shared metric catalog.
 
 Contains the TypedDicts and dataclasses used to represent structured data
-passed to DeepEval metrics. These are standalone copies of the types from
-metis.engine.extractor.types, adapted so that metis-library has no dependency
-on metis-engine.
+passed to DeepEval metrics. These are standalone copies of the serialized
+shapes produced by metis.engine, adapted so that metis-library has no
+dependency on metis-engine.
 """
 
 from dataclasses import dataclass, field
-from typing import NotRequired
+from datetime import datetime
+from typing import Any, NotRequired
 
 from typing_extensions import TypedDict
+
+
+# ---------------------------------------------------------------------------
+# Serialized shape TypedDicts (match what the engine writes)
+# ---------------------------------------------------------------------------
+
+
+class ArtifactSummary(TypedDict):
+    """Serialized CollectedArtifact from the engine simulation layer."""
+
+    filename: str
+    collected_at_turn: int
+    path: str
+
+
+class ObservationSummary(TypedDict):
+    """Serialized Langfuse ObservationsView.
+
+    Mirrors Langfuse's observation shape directly — input/output are
+    untyped because the SDK returns arbitrary JSON per observation kind.
+    If a second trace backend is added, define a METIS-native span model
+    in metis-core and map from each backend into it.
+    """
+
+    id: str
+    name: str | None
+    type: str | None
+    input: Any
+    output: Any
+    metadata: Any
+    start_time: datetime | None
+    end_time: datetime | None
+    parent_observation_id: str | None
+
+
+class ToolCallSummary(TypedDict):
+    """Subset of ObservationSummary for TOOL-type spans."""
+
+    name: str | None
+    type: str | None
+    input: Any
+    output: Any
+
+
+class ChatMessage(TypedDict):
+    """Assistant message extracted from generation outputs."""
+
+    role: str
+    content: str
+
+
+class Delegation(TypedDict):
+    """Subagent delegation info (target agent + task description)."""
+
+    target: str
+    task: str
+
+
+class PriorTurn(TypedDict):
+    """Truncated prior conversation turn for session context."""
+
+    input: str
+    output: str
+    routed_to: str
+
+
+# ---------------------------------------------------------------------------
+# Dataclasses
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -43,29 +113,39 @@ class OrcaChatMetadata:
     prompt_version: str = ""
 
 
+# ---------------------------------------------------------------------------
+# TraceMetadata
+# ---------------------------------------------------------------------------
+
+
 class TraceMetadata(TypedDict):
     """Shape of the metadata dict attached to each LLMTestCase.
 
-    Populated by trace-to-test-case adapters.  Metrics should read fields
-    from this dict via ``test_case.metadata``.
+    This is a TypedDict (not a Pydantic model or dataclass) because
+    DeepEval's ``LLMTestCase.metadata`` is typed as ``dict | None``.
+    A TypedDict instance passes through without requiring ``.model_dump()``
+    or ``dataclasses.asdict()``.
+
+    Populated by trace-to-test-case adapters in metis-engine.
+    Metrics should read fields from this dict via ``test_case.metadata``.
     """
 
     trace_id: str
     session_id: str
     turn_index: int
     total_turns: int
-    prior_turns: list
-    observations: list
-    tool_calls: list
-    delegation: dict | None
-    spoke_context: dict | None
-    assistant_messages: list
-    clarification_requests: list
+    prior_turns: list[PriorTurn]
+    observations: list[ObservationSummary]
+    tool_calls: list[ToolCallSummary]
+    delegation: Delegation | None
+    spoke_context: dict[str, Any] | None
+    assistant_messages: list[ChatMessage]
+    clarification_requests: list[ClarificationRequest]
     chat_metadata: OrcaChatMetadata
     # Added at runtime when available:
-    artifacts: NotRequired[dict]
+    artifacts: NotRequired[list[ArtifactSummary]]
     # Reserved for future ground-truth annotation source:
-    annotations: NotRequired[dict]
+    annotations: NotRequired[dict[str, Any]]
     # Injected from experiment configuration at fetch time:
     persona: NotRequired[object]
     scenario: NotRequired[object]

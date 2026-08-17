@@ -70,7 +70,7 @@ class DelegationQualityMetric(SyncBaseMetric):
         metadata = cast(TraceMetadata, test_case.metadata)
         delegation = metadata.get("delegation")
 
-        if not delegation or not delegation.get("task"):
+        if not delegation or not delegation["task"]:
             self.score = 1.0
             self.skipped = True
             self.reason = "No delegation occurred or no task message found — SKIPPED"
@@ -95,7 +95,7 @@ class DelegationQualityMetric(SyncBaseMetric):
         metadata = cast(TraceMetadata, test_case.metadata)
         delegation = metadata.get("delegation")
 
-        if not delegation or not delegation.get("task"):
+        if not delegation or not delegation["task"]:
             self.score = 1.0
             self.skipped = True
             self.reason = "No delegation occurred or no task message found — SKIPPED"
