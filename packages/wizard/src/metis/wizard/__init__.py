@@ -8,7 +8,6 @@ from importlib.metadata import PackageNotFoundError, version
 
 from metis.core import Status
 from metis.core import __version__ as core_version
-from metis.library import DemoMetric
 from metis.wizard.application import Session, SessionState, SessionVersionError
 from metis.wizard.application.compile import (
     CompilationError,
@@ -34,7 +33,6 @@ __all__ = [
     "AnyRequest",
     "AnyResponse",
     "CompilationError",
-    "DemoMetric",
     "ProductProfile",
     "Session",
     "SessionState",

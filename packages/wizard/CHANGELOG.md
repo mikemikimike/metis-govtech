@@ -6,9 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.1.1] — Unreleased
 
+### Removed
+
+- `DemoMetric` re-export from the package facade — use `metis.library.metrics` for real metrics.
+
 ### Changed
 
-- _Nothing yet._
+- Workspace-sibling dependency floors now enforced in `pyproject.toml`:
+  `metis-core>=0.3.0`, `metis-library>=0.1.4`, `metis-engine>=0.7.0`.
+  These only matter when the package is installed from a registry; the local
+  workspace override continues to resolve to the checked-out code.
+
+### Known debt closed
+
+- **Library compatibility floor** — enforced.
 
 ## [0.1.0] — 2026-08-07
 
