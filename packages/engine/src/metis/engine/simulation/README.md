@@ -32,6 +32,8 @@ User Agent (Python/AsyncOpenAI)  →  Environment (Python/async Playwright)  →
 | `USER_AGENT_MODEL` | No | OpenAI model name (default: `gpt-4o-mini`) |
 | `USER_AGENT_MAX_TOKENS` | No | Max output tokens per turn (default: `1024`) |
 | `USER_AGENT_TEMPERATURE` | No | Sampling temperature (default: `0.7`) |
+| `USER_AGENT_API_KEY` | No | User-agent API key; falls back to `OPENAI_API_KEY` |
+| `USER_AGENT_BASE_URL` | No | User-agent endpoint override; unset → default OpenAI endpoint |
 
 ## Running
 
