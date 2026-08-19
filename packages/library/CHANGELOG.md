@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- LLM-judge model (shared by all GEval-based metrics) is now configurable via environment variables in `_get_judge_model()`: `JUDGE_MODEL` (default `gpt-4.1-mini`), `JUDGE_API_KEY` (falls back to `OPENAI_API_KEY`), and `JUDGE_BASE_URL` (unset → default OpenAI endpoint). Lets the judge point at any OpenAI-wire-compatible provider (e.g. Platform AI) without code changes.
+
 ### Changed
 
 ### Removed
