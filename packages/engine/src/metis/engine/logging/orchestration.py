@@ -20,13 +20,17 @@ class OrchestrationLogger:
     """
 
     def __init__(
-        self, log_dir: Path, log_format: Literal["text", "json"] = "text"
+        self,
+        log_dir: Path,
+        log_format: Literal["text", "json"] = "text",
+        *,
+        append: bool = False,
     ) -> None:
         self._log_dir = log_dir
         self._log_format = log_format
         log_dir.mkdir(parents=True, exist_ok=True)
         self._handle: IO[str] = open(  # noqa: SIM115
-            log_dir / "simulate.log", "w", encoding="utf-8"
+            log_dir / "simulate.log", "a" if append else "w", encoding="utf-8"
         )
 
     def _timestamp(self) -> str:
@@ -48,6 +52,22 @@ class OrchestrationLogger:
             )
         else:
             self._write_text(f"SCENARIO {scenario_id} STARTED")
+
+    def resume_started(self, redo_count: int, complete_count: int) -> None:
+        """Record the start and plan of a resumed simulation session."""
+        if self._log_format == "json":
+            self._write_json(
+                {
+                    "event_type": "RESUME_STARTED",
+                    "redo_count": redo_count,
+                    "complete_count": complete_count,
+                }
+            )
+        else:
+            self._write_text(
+                f"RESUME STARTED ({redo_count} runs to redo, "
+                f"{complete_count} already complete)"
+            )
 
     def run_started(
         self, scenario_id: str, persona_id: str, trial: int, num_trials: int

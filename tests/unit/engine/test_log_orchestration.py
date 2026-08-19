@@ -60,3 +60,16 @@ class TestOrchestrationLogger:
         parsed = json.loads(content)
         assert parsed["event_type"] == "SCENARIO_STARTED"
         assert parsed["scenario_id"] == "scn"
+
+    def test_resume_appends_and_records_plan(self, tmp_path: Path) -> None:
+        first = OrchestrationLogger(log_dir=tmp_path)
+        first.scenario_started("old")
+        first.close()
+
+        resumed = OrchestrationLogger(log_dir=tmp_path, append=True)
+        resumed.resume_started(redo_count=2, complete_count=3)
+        resumed.close()
+
+        content = (tmp_path / "simulate.log").read_text()
+        assert "SCENARIO old STARTED" in content
+        assert "RESUME STARTED (2 runs to redo, 3 already complete)" in content

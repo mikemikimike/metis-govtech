@@ -101,6 +101,16 @@ metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 
 `experiments/orca-eval-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
 
+If simulation stops before all runs finish, continue the newest output with:
+
+```bash
+metis engine simulate --input-dir packages/engine/example-experiment/ --resume
+# or run the remaining simulation and then evaluate everything:
+metis engine run --input-dir packages/engine/example-experiment/ --resume
+```
+
+Resume checks that `experiment.yaml` and every file in `fixtures/` are byte-identical to the frozen input snapshot. If either changes, resume stops with an error. Resume uses the frozen fixtures, retries only missing, invalid, or `system_error` records, and preserves the experiment-level simulation log. Extra run folders are ignored. A valid record is complete even if an artifact file is missing.
+
 ### What You'll See
 
 The engine launches a Simulation TUI for simulation:
@@ -306,6 +316,7 @@ metis engine run --input-dir <source path> [simulation and evaluation options]
 | `--no-tui` | `false` | Disable TUI dashboard (force linear log output) |
 | `--log-format` | `text` | Log file format: `text` or `json` |
 | `--log-dir` | co-located with results | Override the log output directory |
+| `--resume` | `false` | Continue the newest existing output; requires an unchanged YAML and fixture snapshot |
 
 ### Evaluation options
 

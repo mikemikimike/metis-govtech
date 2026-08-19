@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Added
 
 - **Observable execution metadata for metrics** — the Langfuse extractor now writes three fields into per-trace and session metadata for use by library metrics: `stop_reason` (why the session stopped), `cancellation_available` (whether the user could cancel the run), and `slide_image_refs` (paths of image/slide artifacts, in turn order, for multimodal metrics). `fetch_by_session_id` accepts new `stop_reason` and `cancellation_available` parameters; the CLI passes `record.outcome.stop_reason` and `cancellation_available=True`. Fields are marked unavailable (never invented) when a trace source does not supply them. Covered by `tests/unit/engine/test_extractor_metadata.py`. ([#150](https://github.com/govtech-responsibleai/metis/issues/150))
+- **Resumable simulation** — `metis engine simulate --resume` and `metis engine run --resume` continue the newest partial output, retry only missing, invalid, or `system_error` records, validate the frozen experiment and fixture snapshot, and preserve simulation logs.
 
 ### Changed
 

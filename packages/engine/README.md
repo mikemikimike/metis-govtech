@@ -32,6 +32,10 @@ metis engine run --input-dir packages/engine/example-experiment/
 metis engine simulate --input-dir packages/engine/example-experiment/
 metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 
+# Resume an interrupted simulation (YAML and fixtures must be unchanged)
+metis engine simulate --input-dir packages/engine/example-experiment/ --resume
+metis engine run --input-dir packages/engine/example-experiment/ --resume
+
 # Headed mode (visible browser)
 HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/
 
@@ -68,6 +72,8 @@ The two commands take different paths. `simulate` takes the source experiment as
 `experiments/orca-eval-20260820-143000/` in the examples above is only a sample name. `simulate` makes the real name from the experiment `id` and the start time of the run. Use the path that `simulate` printed.
 
 Evaluation has no TUI option. It uses a normal progress bar in a terminal and linear per-record progress in a non-interactive environment.
+
+Resume selects the newest output for the experiment. It compares `experiment.yaml` and the complete `fixtures/` tree with the frozen input snapshot, uses the frozen fixtures, retries only missing, invalid, or `system_error` records, and appends to `logs/simulate.log`. A changed snapshot stops resume with an error.
 
 ### Concurrency
 

@@ -23,6 +23,36 @@ class TestLogRouter:
         expected = tmp_path / "simulate-direct-question_cooperative-01.log"
         assert expected.exists()
 
+    def test_reopened_run_replaces_old_log(self, tmp_path: Path) -> None:
+        router = LogRouter(log_dir=tmp_path, log_format="text")
+        router.open_run("scn", "per", trial=1, num_trials=1)
+        self._process(
+            router,
+            {
+                "event": "old attempt",
+                "level": "info",
+                "scenario_id": "scn",
+                "persona_id": "per",
+                "trial": 1,
+            },
+        )
+        router.close_run("scn", "per", trial=1)
+        router.open_run("scn", "per", trial=1, num_trials=1)
+        self._process(
+            router,
+            {
+                "event": "new attempt",
+                "level": "info",
+                "scenario_id": "scn",
+                "persona_id": "per",
+                "trial": 1,
+            },
+        )
+        router.close_run("scn", "per", trial=1)
+        content = (tmp_path / "simulate-scn_per-01.log").read_text()
+        assert "old attempt" not in content
+        assert "new attempt" in content
+
     def test_trial_zero_padding_multi(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
         router.open_run("scenario", "persona", trial=1, num_trials=10)

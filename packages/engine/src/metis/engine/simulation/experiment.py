@@ -36,9 +36,43 @@ from .types import (
 )
 from .user_agent.agent import UserAgent
 
-__all__ = ["HarnessConfig", "run_experiment"]
+RunPlanItem = tuple[Scenario, Persona, int]
+
+__all__ = [
+    "HarnessConfig",
+    "RunPlanItem",
+    "expand_run_plan",
+    "run_experiment",
+    "run_folder_name",
+]
 
 logger = get_logger()
+
+
+def expand_run_plan(
+    experiment: Experiment, personas_by_id: dict[str, Persona]
+) -> list[RunPlanItem]:
+    """Expand an experiment into scenario, persona, and zero-based trial items."""
+    runs: list[RunPlanItem] = []
+    for scenario in experiment.scenarios:
+        for persona_ref in scenario.persona_refs:
+            persona = personas_by_id.get(persona_ref)
+            if not persona:
+                available = ", ".join(personas_by_id.keys())
+                raise ValueError(
+                    f"Scenario '{scenario.id}': unknown persona_ref '{persona_ref}'. "
+                    f"Available: {available}"
+                )
+            for trial in range(scenario.num_trials):
+                runs.append((scenario, persona, trial))
+    return runs
+
+
+def run_folder_name(scenario: Scenario, persona: Persona, trial: int) -> str:
+    """Return the stable folder name for a zero-based plan item."""
+    trial_index = trial + 1
+    pad = len(str(scenario.num_trials))
+    return f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
 
 
 def run_experiment(
@@ -49,6 +83,7 @@ def run_experiment(
     output_dir: Path | None = None,
     headed: bool = False,
     concurrency: int = 1,
+    run_plan: list[RunPlanItem] | None = None,
     # Optional hooks for TUI / structured-logging integration
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
@@ -69,6 +104,7 @@ def run_experiment(
             output_dir=output_dir,
             headed=headed,
             concurrency=concurrency,
+            run_plan=run_plan,
             state=state,
             orchestration_logger=orchestration_logger,
             log_router=log_router,
@@ -86,6 +122,7 @@ async def _run_experiment_async(
     output_dir: Path | None = None,
     headed: bool = False,
     concurrency: int = 1,
+    run_plan: list[RunPlanItem] | None = None,
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
@@ -93,19 +130,11 @@ async def _run_experiment_async(
     shutdown_event: threading.Event | None = None,
 ) -> None:
     """Async experiment orchestrator with concurrent browser contexts."""
-    # Expand scenarios into individual runs
-    runs: list[tuple[Scenario, Persona, int]] = []
-    for scenario in experiment.scenarios:
-        for persona_ref in scenario.persona_refs:
-            persona = personas_by_id.get(persona_ref)
-            if not persona:
-                available = ", ".join(personas_by_id.keys())
-                raise ValueError(
-                    f"Scenario '{scenario.id}': unknown persona_ref '{persona_ref}'. "
-                    f"Available: {available}"
-                )
-            for trial in range(scenario.num_trials):
-                runs.append((scenario, persona, trial))
+    runs = (
+        run_plan
+        if run_plan is not None
+        else expand_run_plan(experiment, personas_by_id)
+    )
 
     total_runs = len(runs)
 
@@ -221,8 +250,11 @@ async def _worker(
         records: list[RunRecord] = []
         for _idx, (scenario, persona, trial) in enumerate(run_slice):
             if shutdown_event and shutdown_event.is_set():
-                logger.info("[experiment] Worker w%d stopping (shutdown requested)", worker_id)
+                logger.info(
+                    "[experiment] Worker w%d stopping (shutdown requested)", worker_id
+                )
                 break
+
 
             trial_index = trial + 1
             trial_label = (
@@ -237,12 +269,11 @@ async def _worker(
                 trial_label,
             )
 
-            pad = len(str(scenario.num_trials))
-            run_folder_name = f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
+            folder_name = run_folder_name(scenario, persona, trial)
             run_dir = (
-                (output_dir / "runs" / run_folder_name)
+                (output_dir / "runs" / folder_name)
                 if output_dir
-                else Path("results") / "runs" / run_folder_name
+                else Path("results") / "runs" / folder_name
             )
             run_dir.mkdir(parents=True, exist_ok=True)
 

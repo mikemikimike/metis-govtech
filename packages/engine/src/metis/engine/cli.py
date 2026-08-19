@@ -372,6 +372,79 @@ def _print_evaluation_summary(
     console.print(f"{'=' * 60}")
 
 
+def _tree_snapshot(root: Path) -> dict[str, bytes | None]:
+    """Return a byte snapshot of a directory tree, including directories."""
+    if not root.exists():
+        return {}
+    snapshot: dict[str, bytes | None] = {}
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if path.is_dir():
+            snapshot[relative] = None
+        elif path.is_file():
+            snapshot[relative] = path.read_bytes()
+        else:
+            snapshot[relative] = b"<unsupported-file-type>"
+    return snapshot
+
+
+def _validate_resume_snapshot(input_dir: Path, experiment_dir: Path) -> None:
+    """Require source YAML and fixtures to match the frozen snapshot."""
+    current_yaml = input_dir / "experiment.yaml"
+    frozen_yaml = experiment_dir / "inputs" / "experiment.yaml"
+    try:
+        yaml_matches = current_yaml.read_bytes() == frozen_yaml.read_bytes()
+    except OSError:
+        yaml_matches = False
+    if not yaml_matches:
+        console.print(
+            "Error: experiment.yaml differs from the frozen resume snapshot; "
+            "start a new simulation if the change was intentional.",
+            style="bold red",
+        )
+        raise EvaluationInputError("experiment snapshot differs")
+
+    current_fixtures = _tree_snapshot(input_dir / "fixtures")
+    frozen_fixtures = _tree_snapshot(experiment_dir / "inputs" / "fixtures")
+    if current_fixtures != frozen_fixtures:
+        console.print(
+            "Error: fixtures differ from the frozen resume snapshot; "
+            "start a new simulation if the change was intentional.",
+            style="bold red",
+        )
+        raise EvaluationInputError("fixture snapshot differs")
+
+
+def _classify_resume_runs(
+    experiment_dir: Path,
+    run_plan: list[Any],
+) -> tuple[list[Any], dict[tuple[str, str, int], Any]]:
+    """Return redo items and valid existing records keyed by plan identity."""
+    from metis.engine.simulation.experiment import run_folder_name
+    from metis.engine.simulation.types import RunRecord
+
+    redo: list[Any] = []
+    complete: dict[tuple[str, str, int], Any] = {}
+    for scenario, persona, trial in run_plan:
+        record_path = (
+            experiment_dir
+            / "runs"
+            / run_folder_name(scenario, persona, trial)
+            / "record.json"
+        )
+        try:
+            record = RunRecord.load_file(record_path)
+        except Exception:
+            redo.append((scenario, persona, trial))
+            continue
+        key = (scenario.id, persona.id, trial + 1)
+        if record.outcome.stop_reason == "system_error":
+            redo.append((scenario, persona, trial))
+        else:
+            complete[key] = record
+    return redo, complete
+
+
 def _run_simulation(
     input_dir: Path,
     *,
@@ -381,6 +454,7 @@ def _run_simulation(
     log_format: Literal["text", "json"],
     log_dir: Path | None,
     concurrency: int,
+    resume: bool = False,
 ) -> Path:
     """Run simulation and return its experiment directory."""
     load_dotenv()
@@ -391,7 +465,11 @@ def _run_simulation(
     # module-level loggers that cache the processor chain.
     _configure_process_logging(log_level, use_tui=use_tui)
 
-    from metis.engine.simulation.experiment import HarnessConfig, run_experiment
+    from metis.engine.simulation.experiment import (
+        HarnessConfig,
+        expand_run_plan,
+        run_experiment,
+    )
     from metis.engine.simulation.types import Experiment
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
@@ -402,15 +480,42 @@ def _run_simulation(
     _validate_inputs(resolved_input_dir)
 
     experiment_path = resolved_input_dir / "experiment.yaml"
-    fixtures_dir = resolved_input_dir / "fixtures"
-    experiment = Experiment.load_file(experiment_path)
+    source_experiment = Experiment.load_file(experiment_path)
 
-    suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
-    experiment_dir = project_root / "experiments" / f"{experiment.id}-{suffix}"
-    experiment_dir.mkdir(parents=True)
-    shutil.copytree(resolved_input_dir, experiment_dir / "inputs")
+    if resume:
+        try:
+            experiment_dir = _resolve_latest_experiment(resolved_input_dir)
+        except EvaluationInputError:
+            raise typer.Exit(code=1) from None
+        try:
+            _validate_resume_snapshot(resolved_input_dir, experiment_dir)
+        except EvaluationInputError:
+            raise typer.Exit(code=1) from None
+        experiment = Experiment.load_file(experiment_dir / "inputs" / "experiment.yaml")
+        fixtures_dir = experiment_dir / "inputs" / "fixtures"
+    else:
+        experiment = source_experiment
+        fixtures_dir = resolved_input_dir / "fixtures"
+        suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
+        experiment_dir = project_root / "experiments" / f"{experiment.id}-{suffix}"
+        experiment_dir.mkdir(parents=True)
+        shutil.copytree(resolved_input_dir, experiment_dir / "inputs")
 
     personas_by_id = {persona.id: persona for persona in experiment.personas}
+    run_plan = expand_run_plan(experiment, personas_by_id)
+    if resume:
+        redo_plan, complete_records = _classify_resume_runs(experiment_dir, run_plan)
+        console.print(
+            f"Resume plan: {experiment_dir} — {len(redo_plan)} runs to redo, "
+            f"{len(complete_records)} already complete"
+        )
+        if not redo_plan:
+            console.print("nothing to resume")
+            return experiment_dir
+    else:
+        redo_plan = run_plan
+        complete_records = {}
+
     config = HarnessConfig.load()
     headed = os.environ.get("HEADED", "").lower() == "true"
 
@@ -459,6 +564,15 @@ def _run_simulation(
         total_runs=total_run_count,
     )
 
+    for (scenario_id, persona_id, trial), record in complete_records.items():
+        sim_state.complete_run(
+            scenario_id,
+            persona_id,
+            trial=trial,
+            stop_reason=record.outcome.stop_reason,
+            duration_seconds=record.outcome.duration_seconds,
+        )
+
     display_level = getattr(logging, log_level)
     tail_buffers = {
         f"w{i}": TailBuffer(max_lines=15, min_level=display_level)
@@ -471,8 +585,10 @@ def _run_simulation(
         use_tui=use_tui,
     )
     orchestration_logger = OrchestrationLogger(
-        log_dir=resolved_log_dir, log_format=log_format
+        log_dir=resolved_log_dir, log_format=log_format, append=resume
     )
+    if resume:
+        orchestration_logger.resume_started(len(redo_plan), len(complete_records))
 
     tui_ctx: TUIContext | None = None
     if use_tui:
@@ -494,7 +610,7 @@ def _run_simulation(
             if not use_tui:
                 console.print(
                     "\nInterrupt received — finishing current run. "
-                    "Press Ctrl+C again to force abort.",
+                    "No new runs will start. Press Ctrl+C again to force abort.",
                     style="yellow",
                 )
 
@@ -509,6 +625,7 @@ def _run_simulation(
                 fixtures_dir=fixtures_dir,
                 headed=headed,
                 concurrency=concurrency,
+                run_plan=redo_plan,
                 state=sim_state,
                 orchestration_logger=orchestration_logger,
                 log_router=log_router,
@@ -527,6 +644,8 @@ def _run_simulation(
             str(resolved_log_dir),
         )
     )
+    if shutdown_event.is_set():
+        raise typer.Exit(code=130)
     return experiment_dir
 
 
@@ -912,6 +1031,9 @@ def simulate(
     concurrency: int = typer.Option(
         5, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
+    resume: bool = typer.Option(
+        False, "--resume", help="Resume the newest existing simulation output"
+    ),
 ) -> None:
     """Run simulation only and prepare the evaluation handoff."""
     experiment_dir = _run_simulation(
@@ -922,6 +1044,7 @@ def simulate(
         log_format=log_format,
         log_dir=log_dir,
         concurrency=concurrency,
+        resume=resume,
     )
     if not _record_files(experiment_dir):
         console.print("No run records found.", style="bold red")
@@ -994,6 +1117,9 @@ def run(
     concurrency: int = typer.Option(
         5, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
+    resume: bool = typer.Option(
+        False, "--resume", help="Resume the newest existing simulation output"
+    ),
 ) -> None:
     """Run simulation followed by evaluation and report generation."""
     experiment_dir = _run_simulation(
@@ -1004,6 +1130,7 @@ def run(
         log_format=log_format,
         log_dir=log_dir,
         concurrency=concurrency,
+        resume=resume,
     )
     if not _record_files(experiment_dir):
         console.print("No run records found.", style="bold red")

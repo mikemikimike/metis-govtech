@@ -73,12 +73,14 @@ def test_run_composes_phases_and_prints_recovery_command(
             "--langfuse-timeout",
             "120",
             "-v",
+            "--resume",
         ],
     )
 
     assert result.exit_code == 0
     assert phases == ["simulation", "evaluation"]
     assert simulation_options["no_tui"] is True
+    assert simulation_options["resume"] is True
     assert evaluation_paths == [experiment_dir]
     assert evaluation_options == {
         "langfuse_timeout": 120,
