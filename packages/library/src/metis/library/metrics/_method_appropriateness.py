@@ -4,11 +4,11 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval
 from ._judge import _get_judge_model
 
 
-class MethodAppropriatenessMetric(MetisMetric):
+class MethodAppropriatenessMetric(MetisTurnMetric):
     """Statistical method suited to data distribution?"""
 
     tags: ClassVar[tuple[str, ...]] = ("analysis", "per-turn", "judge-graded")

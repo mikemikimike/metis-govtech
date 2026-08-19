@@ -1,4 +1,4 @@
-"""Tests for MetisMetric base class and mark_skipped utility."""
+"""Tests for MetisTurnMetric base class and mark_skipped utility."""
 
 import pytest
 from deepeval.metrics import BaseMetric
@@ -6,29 +6,29 @@ from deepeval.metrics import BaseMetric
 
 def test_metis_metric_requires_tags():
     """Subclass without tags raises TypeError at definition time."""
-    from metis.library.metrics._base import MetisMetric
+    from metis.library.metrics._base import MetisTurnMetric
 
     with pytest.raises(TypeError, match="must define a 'tags' class variable"):
 
-        class BadMetric(MetisMetric):
+        class BadMetric(MetisTurnMetric):
             pass
 
 
 def test_metis_metric_rejects_non_tuple_tags():
     """Subclass with list tags raises TypeError."""
-    from metis.library.metrics._base import MetisMetric
+    from metis.library.metrics._base import MetisTurnMetric
 
     with pytest.raises(TypeError, match="must define a 'tags' class variable"):
 
-        class BadMetric(MetisMetric):
+        class BadMetric(MetisTurnMetric):
             tags = ["not", "a", "tuple"]
 
 
 def test_metis_metric_accepts_valid_tags():
     """Subclass with tuple tags is accepted."""
-    from metis.library.metrics._base import MetisMetric
+    from metis.library.metrics._base import MetisTurnMetric
 
-    class GoodMetric(MetisMetric):
+    class GoodMetric(MetisTurnMetric):
         tags = ("test", "per-turn", "code-graded")
 
         def measure(self, test_case):
@@ -42,21 +42,21 @@ def test_metis_metric_accepts_valid_tags():
             return "Good Metric"
 
     assert issubclass(GoodMetric, BaseMetric)
-    assert issubclass(GoodMetric, MetisMetric)
+    assert issubclass(GoodMetric, MetisTurnMetric)
 
 
 def test_metis_metric_inherits_base_metric():
-    """MetisMetric is a subclass of BaseMetric."""
-    from metis.library.metrics._base import MetisMetric
+    """MetisTurnMetric is a subclass of BaseMetric."""
+    from metis.library.metrics._base import MetisTurnMetric
 
-    assert issubclass(MetisMetric, BaseMetric)
+    assert issubclass(MetisTurnMetric, BaseMetric)
 
 
 def test_mark_skipped_sets_fields():
     """mark_skipped sets skipped, score, reason, success."""
-    from metis.library.metrics._base import MetisMetric, mark_skipped
+    from metis.library.metrics._base import MetisTurnMetric, mark_skipped
 
-    class TestMetric(MetisMetric):
+    class TestMetric(MetisTurnMetric):
         tags = ("test",)
 
         def __init__(self):

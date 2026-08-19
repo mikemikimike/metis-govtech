@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class StepEfficiencyMetric(MetisMetric):
+class StepEfficiencyMetric(MetisTurnMetric):
     """Task completed in near-minimum tool calls?
 
     Uses actual TOOL observations from the span tree. Without annotations,

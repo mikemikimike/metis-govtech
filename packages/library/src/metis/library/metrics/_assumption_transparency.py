@@ -4,11 +4,11 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval
 from ._judge import _get_judge_model
 
 
-class AssumptionTransparencyMetric(MetisMetric):
+class AssumptionTransparencyMetric(MetisTurnMetric):
     """Assumptions explicitly stated to user?
 
     Full judge: evaluates whether the agent makes its assumptions visible.

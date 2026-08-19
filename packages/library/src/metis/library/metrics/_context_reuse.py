@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class ContextReuseMetric(MetisMetric):
+class ContextReuseMetric(MetisTurnMetric):
     """Uses cached context instead of re-asking?
 
     Detects request_user_input calls that ask for information already present

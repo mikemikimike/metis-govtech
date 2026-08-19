@@ -5,11 +5,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class ChartFormatComplianceMetric(MetisMetric):
+class ChartFormatComplianceMetric(MetisTurnMetric):
     """Chart saved in correct format (PNG/SVG/etc.)?
 
     Checks that the output file format matches what was requested or

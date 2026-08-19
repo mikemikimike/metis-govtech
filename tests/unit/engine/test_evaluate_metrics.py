@@ -5,10 +5,10 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase
 
-from metis.library.metrics._base import MetisMetric, mark_skipped
+from metis.library.metrics._base import MetisTurnMetric, mark_skipped
 
 
-class FakeCodeMetric(MetisMetric):
+class FakeCodeMetric(MetisTurnMetric):
     """A fake sync metric for testing."""
 
     tags: ClassVar[tuple[str, ...]] = ("test", "per-turn", "code-graded")
@@ -34,7 +34,7 @@ class FakeCodeMetric(MetisMetric):
         return "Fake Code Metric"
 
 
-class FakeSkipMetric(MetisMetric):
+class FakeSkipMetric(MetisTurnMetric):
     """A fake metric that always skips."""
 
     tags: ClassVar[tuple[str, ...]] = ("test", "per-turn", "code-graded")
@@ -57,7 +57,7 @@ class FakeSkipMetric(MetisMetric):
         return "Fake Skip Metric"
 
 
-class FakeAsyncMetric(MetisMetric):
+class FakeAsyncMetric(MetisTurnMetric):
     """A fake async metric for testing."""
 
     tags: ClassVar[tuple[str, ...]] = ("test", "per-turn", "judge-graded")

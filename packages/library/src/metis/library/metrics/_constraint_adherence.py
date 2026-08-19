@@ -4,11 +4,11 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval
 from ._judge import _get_judge_model
 
 
-class ConstraintAdherenceMetric(MetisMetric):
+class ConstraintAdherenceMetric(MetisTurnMetric):
     """All explicit constraints and negative instructions respected?
 
     Extract+judge: checks whether user-specified constraints are honored.

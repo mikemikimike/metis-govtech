@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class ChartTypeFitnessMetric(MetisMetric):
+class ChartTypeFitnessMetric(MetisTurnMetric):
     """Chart type matches the data pattern?
 
     Code grader: given an annotation of the data pattern and acceptable chart types,

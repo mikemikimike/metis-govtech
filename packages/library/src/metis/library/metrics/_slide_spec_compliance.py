@@ -4,7 +4,7 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -50,7 +50,7 @@ def _extract_deck_properties(test_case: LLMTestCase) -> dict:
     return deck_props
 
 
-class SlideSpecComplianceMetric(MetisMetric):
+class SlideSpecComplianceMetric(MetisTurnMetric):
     """AC-SM-11 — Slide spec compliance.
 
     Checks whether the generated deck meets explicit user specifications:

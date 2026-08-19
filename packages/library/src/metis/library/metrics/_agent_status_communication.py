@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class AgentStatusCommunicationMetric(MetisMetric):
+class AgentStatusCommunicationMetric(MetisTurnMetric):
     """User informed which agent is handling their request?
 
     Code grader: checks that when delegation occurs, the output mentions

@@ -4,12 +4,12 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval
 from ._constants import SYSTEM_PROMPT_SUMMARY, TOOL_MANIFEST
 from ._judge import _get_judge_model
 
 
-class CapabilityHonestyMetric(MetisMetric):
+class CapabilityHonestyMetric(MetisTurnMetric):
     """Acknowledges limitations rather than fabricating capabilities?
 
     Full judge: checks that Orca doesn't claim it can do things beyond

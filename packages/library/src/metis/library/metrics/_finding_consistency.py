@@ -4,12 +4,12 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._finding_deduplication import _is_multi_agent_trace
 from ._judge import _get_judge_model
 
 
-class FindingConsistencyMetric(MetisMetric):
+class FindingConsistencyMetric(MetisTurnMetric):
     """No contradictions in multi-agent synthesis?
 
     Extract+judge: checks whether the final response contains conflicting statements.

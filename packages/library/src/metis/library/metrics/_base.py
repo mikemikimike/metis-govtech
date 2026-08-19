@@ -117,18 +117,46 @@ class _ContextAwareConversationalGEval(ConversationalGEval):
             self.criteria = original_criteria
 
 
-class MetisMetric(BaseMetric):
-    """Base class for all METIS metrics.
+class MetisTurnMetric(BaseMetric):
+    """Base class for per-turn METIS metrics (evaluated per LLMTestCase).
 
-    Adds one requirement beyond BaseMetric: subclasses must define a
-    `tags` ClassVar. Everything else (measure/a_measure, async_mode,
-    score, reason, success, skipped) comes from BaseMetric.
+    Each per-turn metric is evaluated against a single trace/turn. The
+    orchestrator routes metrics here when they are NOT subclasses of
+    BaseConversationalMetric.
 
-    Metrics implement either:
-    - measure() + async_mode = False — for sync/code-graded metrics
-    - a_measure() — for async/judge-graded metrics (async_mode defaults to True)
+    Subclasses must:
+    - Define ``tags: ClassVar[tuple[str, ...]]`` (enforced at class definition)
+    - Implement either:
+      - ``measure()`` + set ``async_mode = False`` (code-graded, synchronous)
+      - ``async def a_measure()`` (judge-graded, async; async_mode defaults True)
 
-    The orchestrator dispatches based on async_mode.
+    The orchestrator dispatches based on ``async_mode``:
+    - False → ``measure()`` called via ``asyncio.to_thread``
+    - True → ``await a_measure()``
+    """
+
+    tags: ClassVar[tuple[str, ...]]
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not hasattr(cls, "tags") or not isinstance(
+            getattr(cls, "tags", None), tuple
+        ):
+            raise TypeError(
+                f"{cls.__name__} must define a 'tags' class variable as a tuple of strings"
+            )
+
+    def _accrue_cost(self, cost: float | None) -> None:
+        """Override BaseMetric._accrue_cost to handle None initial state."""
+        if cost is not None:
+            self.evaluation_cost = (self.evaluation_cost or 0) + cost
+
+
+class MetisSessionMetric(BaseConversationalMetric):
+    """Base class for session-level METIS metrics.
+
+    Subclasses must define a `tags` ClassVar. Session metrics evaluate
+    full ConversationalTestCase objects (multi-turn conversations).
     """
 
     tags: ClassVar[tuple[str, ...]]

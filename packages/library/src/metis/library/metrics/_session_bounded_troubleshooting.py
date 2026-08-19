@@ -2,13 +2,13 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric
+from ._base import MetisSessionMetric
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
 )
 
 
-class SessionBoundedTroubleshootingMetric(BaseConversationalMetric):
+class SessionBoundedTroubleshootingMetric(MetisSessionMetric):
     """Stops retrying after N failed attempts?
 
     Detects RETRY loops: consecutive calls to the same tool where the output

@@ -4,11 +4,11 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 
 
-class FollowUpRelevanceMetric(MetisMetric):
+class FollowUpRelevanceMetric(MetisTurnMetric):
     """Follow-up suggestions relevant and actionable?
 
     Full judge: evaluates the quality of follow-up suggestions offered

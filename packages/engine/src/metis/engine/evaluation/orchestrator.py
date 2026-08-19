@@ -27,8 +27,6 @@ from metis.engine.extractor.types import (
 )
 from metis.engine.simulation.types import MetricRef
 
-MAX_CONCURRENCY = 5
-
 
 def _resolve_metrics(metric_refs: list[MetricRef]) -> list[BaseMetric]:
     """Instantiate metric classes from :class:`MetricRef` objects."""
@@ -48,10 +46,15 @@ async def _run_metric(
     """Evaluate a single metric against a test case."""
     async with semaphore:
         metric_copy = copy.deepcopy(metric)
-        if metric_copy.async_mode:
-            await metric_copy.a_measure(test_case)  # type: ignore[arg-type]
-        else:
-            await asyncio.to_thread(metric_copy.measure, test_case)  # type: ignore[arg-type]
+        try:
+            if metric_copy.async_mode:
+                await metric_copy.a_measure(test_case)  # type: ignore[arg-type]
+            else:
+                await asyncio.to_thread(metric_copy.measure, test_case)  # type: ignore[arg-type]
+        except Exception as exc:
+            metric_copy.score = 0.0
+            metric_copy.reason = f"Metric raised: {type(exc).__name__}: {exc}"
+            metric_copy.success = False
         return MetricResult(
             name=metric_copy.__name__,
             score=metric_copy.score,

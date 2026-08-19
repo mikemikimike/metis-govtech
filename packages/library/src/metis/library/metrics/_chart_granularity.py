@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class ChartGranularityMetric(MetisMetric):
+class ChartGranularityMetric(MetisTurnMetric):
     """Chart not too crowded (<=12 categories) nor too sparse (>=3 points)?
 
     Parses chart metadata from trace observations.

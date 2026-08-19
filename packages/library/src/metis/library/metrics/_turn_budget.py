@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class TurnBudgetMetric(MetisMetric):
+class TurnBudgetMetric(MetisTurnMetric):
     """Session completed within the allowed turn budget.
 
     Checks that the total number of conversation turns did not exceed

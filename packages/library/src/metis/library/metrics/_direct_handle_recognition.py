@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class DirectHandleRecognitionMetric(MetisMetric):
+class DirectHandleRecognitionMetric(MetisTurnMetric):
     """Handles directly when no subagent fits?
 
     For queries annotated as direct-handle (expected_subagent=None),

@@ -5,12 +5,12 @@ from typing import ClassVar, cast
 from deepeval.metrics import FaithfulnessMetric
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, _with_eval_context, mark_skipped
+from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
 
-class SynthesisFaithfulnessMetric(MetisMetric):
+class SynthesisFaithfulnessMetric(MetisTurnMetric):
     """Synthesis faithfulness — AC-ORCA-6.
 
     Does the orchestrator's response faithfully represent what the subagent

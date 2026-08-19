@@ -4,7 +4,7 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import OrcaChatMetadata, TraceMetadata
 
@@ -63,7 +63,7 @@ def _is_multi_agent_trace(test_case: LLMTestCase) -> bool:
     return len(seen_types) > 1
 
 
-class FindingDeduplicationMetric(MetisMetric):
+class FindingDeduplicationMetric(MetisTurnMetric):
     """No finding redundantly stated across multi-agent synthesis?
 
     Extract+judge: checks whether the final response contains redundant

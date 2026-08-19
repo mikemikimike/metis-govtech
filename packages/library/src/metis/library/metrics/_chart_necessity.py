@@ -4,7 +4,7 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -27,7 +27,7 @@ def _has_chart_observations(test_case: LLMTestCase) -> bool:
     return False
 
 
-class ChartNecessityMetric(MetisMetric):
+class ChartNecessityMetric(MetisTurnMetric):
     """Chart adds value beyond a simple number/table?
 
     Skips when no chart content is present in the output.

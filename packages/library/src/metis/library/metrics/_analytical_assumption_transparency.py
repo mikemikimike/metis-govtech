@@ -4,7 +4,7 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import OrcaChatMetadata, TraceMetadata
 
@@ -27,7 +27,7 @@ def _has_report_content(test_case: LLMTestCase) -> bool:
     return len(output) > 500 and _is_data_analyst_trace(test_case)
 
 
-class AnalyticalAssumptionTransparencyMetric(MetisMetric):
+class AnalyticalAssumptionTransparencyMetric(MetisTurnMetric):
     """Analytical/methodological assumptions explicitly stated?
 
     Skips when trace is not from data analyst or output is too short.

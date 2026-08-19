@@ -2,15 +2,13 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric
+from ._base import MetisSessionMetric, mark_skipped
+
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
 )
 
-from ._base import mark_skipped
-
-
-class SessionStepEfficiencyMetric(BaseConversationalMetric):
+class SessionStepEfficiencyMetric(MetisSessionMetric):
     """Task completed in near-minimum tool calls across session?
 
     Counts total tool calls across all assistant turns. Without an annotation

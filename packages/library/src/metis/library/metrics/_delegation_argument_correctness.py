@@ -7,12 +7,12 @@ from deepeval.metrics import (
 )
 from deepeval.test_case import LLMTestCase, ToolCall
 
-from ._base import MetisMetric, _with_eval_context, mark_skipped
+from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
 
-class DelegationArgumentCorrectnessMetric(MetisMetric):
+class DelegationArgumentCorrectnessMetric(MetisTurnMetric):
     """Delegation argument correctness — new metric.
 
     Uses DeepEval's built-in ArgumentCorrectnessMetric (referenceless LLM judge)

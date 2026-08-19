@@ -4,11 +4,11 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval
 from ._judge import _get_judge_model
 
 
-class DecompositionQualityMetric(MetisMetric):
+class DecompositionQualityMetric(MetisTurnMetric):
     """Multi-intent request correctly decomposed into sub-tasks?
 
     Extract+judge: evaluates whether Orca correctly identifies and orders

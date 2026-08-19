@@ -5,11 +5,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class AnalyticalCorrectnessMetric(MetisMetric):
+class AnalyticalCorrectnessMetric(MetisTurnMetric):
     """Numerical results correct within tolerance?
 
     Compares computed numerical results against pre-computed ground truth.

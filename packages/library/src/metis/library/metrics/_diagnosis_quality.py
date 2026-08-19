@@ -4,12 +4,12 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class DiagnosisQualityMetric(MetisMetric):
+class DiagnosisQualityMetric(MetisTurnMetric):
     """Root cause identified before fix attempted?
 
     Extract+judge: extracts error observations and the agent's response,

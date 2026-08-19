@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, mark_skipped
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class CrossAgentContextRetentionMetric(MetisMetric):
+class CrossAgentContextRetentionMetric(MetisTurnMetric):
     """Context preserved across subagent invocations?
 
     Code grader: checks that multi-turn conversations maintain context

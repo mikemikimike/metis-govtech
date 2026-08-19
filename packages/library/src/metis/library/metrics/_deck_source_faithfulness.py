@@ -5,7 +5,7 @@ from typing import ClassVar, cast
 from deepeval.metrics import FaithfulnessMetric
 from deepeval.test_case import LLMTestCase
 
-from ._base import MetisMetric, _with_eval_context, mark_skipped
+from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -30,7 +30,7 @@ def _extract_source_facts(test_case: LLMTestCase) -> list:
     return source_texts
 
 
-class DeckSourceFaithfulnessMetric(MetisMetric):
+class DeckSourceFaithfulnessMetric(MetisTurnMetric):
     """AC-SM-18 — Deck source faithfulness.
 
     Does the deck contradict or misrepresent facts from the source material?

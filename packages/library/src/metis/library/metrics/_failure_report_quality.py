@@ -4,12 +4,12 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class FailureReportQualityMetric(MetisMetric):
+class FailureReportQualityMetric(MetisTurnMetric):
     """Report includes what failed, what was attempted, and next steps?
 
     Full judge: evaluates the agent's failure report when it stops on an error.

@@ -4,12 +4,12 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
 
-class DelegationQualityMetric(MetisMetric):
+class DelegationQualityMetric(MetisTurnMetric):
     """Delegation Quality (span-aware wrapper for GEval).
 
     Extracts the delegation task message from the span tree and evaluates

@@ -2,15 +2,14 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric
+from ._base import EVIDENCE_INSTRUCTION, MetisSessionMetric, _ContextAwareConversationalGEval, mark_skipped
+
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
     MultiTurnParams,
 )
 
-from ._base import EVIDENCE_INSTRUCTION, _ContextAwareConversationalGEval, mark_skipped
 from ._judge import _get_judge_model
-
 
 def _has_delegation(test_case: ConversationalTestCase) -> bool:
     """Check whether any assistant turn has a delegate_task_to_member tool call."""
@@ -21,8 +20,7 @@ def _has_delegation(test_case: ConversationalTestCase) -> bool:
                     return True
     return False
 
-
-class SessionSynthesisFaithfulnessMetric(BaseConversationalMetric):
+class SessionSynthesisFaithfulnessMetric(MetisSessionMetric):
     """Key facts from subagent output preserved without distortion.
 
     Wraps ConversationalGEval with a pre-flight check: skips if no
