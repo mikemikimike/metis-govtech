@@ -4,12 +4,21 @@ All notable changes to `metis-library` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — Unreleased
+
+### Added
+
+- LLM-judge model (shared by all GEval-based metrics) is now configurable via environment variables in `_get_judge_model()`: `JUDGE_MODEL` (default `gpt-4.1-mini`), `JUDGE_API_KEY` (falls back to `OPENAI_API_KEY`), and `JUDGE_BASE_URL` (unset → default OpenAI endpoint). Lets the judge point at any OpenAI-wire-compatible provider (e.g. Platform AI) without code changes.
+
+### Changed
+
+### Removed
+
 ## [0.1.4] — 2026-08-17
 
 ### Changed
 
 - Added concrete TypedDicts (`ArtifactSummary`, `ObservationSummary`, `ToolCallSummary`, `ChatMessage`, `Delegation`, `PriorTurn`) describing the serialized shapes in `TraceMetadata`. Fields narrowed from bare `list`/`dict` to parameterized types for static type-checking and IDE autocomplete.
-
 
 ## [0.1.3] — 2026-08-05
 
