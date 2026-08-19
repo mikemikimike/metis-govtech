@@ -4,11 +4,17 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.8.0] — Unreleased
+
+### Added
+
+- **Simulation user-agent LLM is now configurable via environment variables** — the user agent built its OpenAI client with no arguments (`AsyncOpenAI()`), so the API key came only from the implicit `OPENAI_API_KEY` and the endpoint could not be overridden. Added `USER_AGENT_API_KEY` (falls back to `OPENAI_API_KEY`) and `USER_AGENT_BASE_URL` (unset → default OpenAI endpoint), mirroring the judge model's `JUDGE_*` variables. Lets the simulation LLM target any OpenAI-wire-compatible provider (e.g. Platform AI) without code changes. ([#151](https://github.com/govtech-responsibleai/metis/issues/151))
 
 ### Changed
 
+- **Deprecated `task`/`task_id` metadata replaced with `scenario`/`scenario_id`** — the Langfuse extractor now writes `scenario` and `scenario_id` into trace metadata (previously `task` and `task_id`); the reporting pipeline reads `scenario_id` throughout. The `fetch_by_session_id` parameter was renamed from `task` to `scenario`. Delegation extraction's `"task"` field (sub-agent instruction) is unrelated and unchanged.
 - **Reporting module refactored for readability** — split 1033-line `generator.py` into 4 focused modules: `_aggregation.py` (single source of truth for metric pass/fail/skip counts), `_styles.py` (CSS constant), `_html_sections.py` (5 composable section renderers), and a slimmed-down `generator.py` (orchestration only). Removed dead code (`render_failure_cards` — computed but never rendered in original), relocated misplaced logic (`_extract_failures` → `_html_sections.py`), and pruned 7 orphaned CSS classes. Public API unchanged. ([#107](https://github.com/govtech-responsibleai/metis/issues/107))
+- **Extractor type annotations** — added explicit type annotations to all Langfuse observation extraction helpers (`_extract_tool_calls`, `_extract_delegation`, `_extract_spoke_context`, `_extract_assistant_messages`, `_extract_subagent_output`, `_extract_clarification_requests`, `_extract_orca_chat_metadata`), the `_TraceExtraction` dataclass, `FetchLangfuseResult`, and local variables in `fetch_by_session_id`; replaced bare `list`/`dict`/`Any` with concrete SDK types (`ObservationsView`, `TraceWithDetails`, `LLMTestCase`, `ConversationalTestCase`) and shared TypedDicts from `metis-library` (`PriorTurn`, `Delegation`, `ChatMessage`, `ObservationSummary`, `ToolCallSummary`); construction sites now use typed constructors (`PriorTurn(...)`, `Delegation(...)`, `ObservationSummary(...)`, `ToolCallSummary(...)`)
 
 ### Fixed
 
@@ -73,7 +79,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Stale-state detection false positive** — "page unchanged after form submit" warning fired incorrectly because the pre-submit text snapshot was captured after `_wait_for_processing` already consumed the processing time; moved snapshot to before action execution
 - **Disabled form elements reported to LLM** — `capture_ui_state` now excludes disabled inputs/selects/buttons (`:not([disabled])`), preventing the LLM from attempting to fill elements Orca has locked after form submission
 - **Button clicks always wait for processing** — removed brittle submit-keyword regex; all `ButtonClickAction` clicks now trigger `_wait_for_processing` and the form processing branch, eliminating timeouts from unrecognized button labels like "Continue"
-
 ## [0.6.0] — 2026-08-06
 
 ### Added

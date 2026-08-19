@@ -990,7 +990,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-engine"
-version = "0.7.0"
+version = "0.8.0"
 source = { editable = "packages/engine" }
 dependencies = [
     { name = "deepeval" },
