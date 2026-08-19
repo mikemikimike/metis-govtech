@@ -16,6 +16,8 @@ from ..types import (
     UserAgentOutput,
 )
 from .config import (
+    USER_AGENT_API_KEY,
+    USER_AGENT_BASE_URL,
     USER_AGENT_MAX_TOKENS,
     USER_AGENT_MODEL,
     USER_AGENT_TEMPERATURE,
@@ -58,7 +60,10 @@ class UserAgent:
         self.scenario = scenario
         self.conversation_history: list[HistoryEntry] = []
         self.turn_count = 0
-        self.client = AsyncOpenAI()
+        self.client = AsyncOpenAI(
+            api_key=USER_AGENT_API_KEY,
+            base_url=USER_AGENT_BASE_URL,
+        )
         self._system_prompt = self._build_system_prompt()
 
     async def generate_opening(self) -> UserAgentOutput:

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **Simulation user-agent LLM is now configurable via environment variables** — the user agent built its OpenAI client with no arguments (`AsyncOpenAI()`), so the API key came only from the implicit `OPENAI_API_KEY` and the endpoint could not be overridden. Added `USER_AGENT_API_KEY` (falls back to `OPENAI_API_KEY`) and `USER_AGENT_BASE_URL` (unset → default OpenAI endpoint), mirroring the judge model's `JUDGE_*` variables. Lets the simulation LLM target any OpenAI-wire-compatible provider (e.g. Platform AI) without code changes. ([#151](https://github.com/govtech-responsibleai/metis/issues/151))
+
 ### Changed
 
 - **Deprecated `task`/`task_id` metadata replaced with `scenario`/`scenario_id`** — the Langfuse extractor now writes `scenario` and `scenario_id` into trace metadata (previously `task` and `task_id`); the reporting pipeline reads `scenario_id` throughout. The `fetch_by_session_id` parameter was renamed from `task` to `scenario`. Delegation extraction's `"task"` field (sub-agent instruction) is unrelated and unchanged.
