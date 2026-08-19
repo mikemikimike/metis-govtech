@@ -2,7 +2,7 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseMetric, ConversationalGEval, GEval
+from deepeval.metrics import BaseConversationalMetric, BaseMetric, ConversationalGEval, GEval
 from deepeval.test_case import LLMTestCase
 from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
@@ -117,22 +117,20 @@ class _ContextAwareConversationalGEval(ConversationalGEval):
             self.criteria = original_criteria
 
 
-class SyncBaseMetric(BaseMetric):
-    """BaseMetric subclass that implements a_measure synchronously.
+class MetisMetric(BaseMetric):
+    """Base class for all METIS metrics.
 
-    Adds a `skipped` flag so reporters can distinguish "passed"
-    from "not evaluated due to missing data." Skipped metrics
-    still return success=True (so assert_test doesn't fail), but
-    reporters should exclude them from pass-rate aggregation.
+    Adds one requirement beyond BaseMetric: subclasses must define a
+    `tags` ClassVar. Everything else (measure/a_measure, async_mode,
+    score, reason, success, skipped) comes from BaseMetric.
 
-    Exposes evaluation_cost/input_tokens/output_tokens from inner
-    GEval so DeepEval's framework can pick them up.
+    Metrics implement either:
+    - measure() + async_mode = False — for sync/code-graded metrics
+    - a_measure() — for async/judge-graded metrics (async_mode defaults to True)
 
-    All subclasses MUST define a `tags` ClassVar.
+    The orchestrator dispatches based on async_mode.
     """
 
-    async_mode = False
-    skipped: bool = False
     tags: ClassVar[tuple[str, ...]]
 
     def __init_subclass__(cls, **kwargs):
@@ -141,17 +139,18 @@ class SyncBaseMetric(BaseMetric):
             getattr(cls, "tags", None), tuple
         ):
             raise TypeError(
-                f"{cls.__name__} must define a 'tags' ClassVar as a tuple of strings"
+                f"{cls.__name__} must define a 'tags' class variable as a tuple of strings"
             )
 
-    def _absorb_geval_cost(self, geval):
-        """Copy cost/token info from an inner GEval after it evaluates."""
-        if hasattr(geval, "evaluation_cost") and geval.evaluation_cost:
-            self.evaluation_cost = (self.evaluation_cost or 0) + geval.evaluation_cost
-        if hasattr(geval, "input_tokens") and geval.input_tokens:
-            self.input_tokens = (self.input_tokens or 0) + geval.input_tokens
-        if hasattr(geval, "output_tokens") and geval.output_tokens:
-            self.output_tokens = (self.output_tokens or 0) + geval.output_tokens
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        return self.measure(test_case)
+def mark_skipped(metric: BaseMetric | BaseConversationalMetric, reason: str) -> float:
+    """Mark a metric as skipped (not evaluated due to missing/irrelevant data).
+
+    Sets metric.skipped = True so the orchestrator can read it directly.
+    Sets score=1.0 and success=True so any DeepEval assert_test won't fail.
+    """
+    metric.skipped = True
+    metric.score = 1.0
+    metric.reason = reason
+    metric.success = True
+    return 1.0

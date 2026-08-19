@@ -4,7 +4,7 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -50,7 +50,7 @@ def _extract_deck_properties(test_case: LLMTestCase) -> dict:
     return deck_props
 
 
-class SlideSpecComplianceMetric(SyncBaseMetric):
+class SlideSpecComplianceMetric(MetisMetric):
     """AC-SM-11 — Slide spec compliance.
 
     Checks whether the generated deck meets explicit user specifications:
@@ -65,7 +65,6 @@ class SlideSpecComplianceMetric(SyncBaseMetric):
         "per-turn",
         "judge-graded",
     )
-    async_mode = False
 
     def __init__(self):
         self.threshold = 0.6
@@ -121,7 +120,7 @@ class SlideSpecComplianceMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
+    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         deck_props = _extract_deck_properties(test_case)
 
         context_parts = []
@@ -136,11 +135,7 @@ class SlideSpecComplianceMetric(SyncBaseMetric):
             context_parts.append(f"Slide titles:\n{titles_str}")
 
         if not context_parts:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No deck properties extractable from trace — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No deck properties extractable from trace")
 
         context_str = "\n".join(context_parts)
         spec_tc = LLMTestCase(
@@ -151,15 +146,13 @@ class SlideSpecComplianceMetric(SyncBaseMetric):
         )
 
         geval = self._get_geval()
-        geval.measure(spec_tc)
+        await geval.a_measure(spec_tc)
         self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0
-
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        return self.measure(test_case)
 
     @property
     def __name__(self) -> str:

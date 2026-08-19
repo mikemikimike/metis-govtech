@@ -1,13 +1,22 @@
-"""DeepEval evaluation orchestrator."""
+"""Evaluation orchestrator with custom metric execution loop."""
 
+import asyncio
+import copy
 import importlib
 import time
+from collections.abc import Sequence
 
-from deepeval import evaluate as deepeval_evaluate
-from deepeval.evaluate import AsyncConfig, DisplayConfig
 from deepeval.metrics import BaseMetric
+from deepeval.metrics.base_metric import BaseConversationalMetric
+from deepeval.test_case import LLMTestCase
+from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
-from metis.engine.evaluation.types import EvalResult
+from metis.engine.evaluation.types import (
+    EvalResult,
+    MetricResult,
+    SessionResult,
+    TurnResult,
+)
 from metis.engine.extractor.langfuse import FetchLangfuseResult
 from metis.engine.extractor.types import (
     RoutingSummary,
@@ -31,6 +40,70 @@ def _resolve_metrics(metric_refs: list[MetricRef]) -> list[BaseMetric]:
     return metrics
 
 
+async def _run_metric(
+    metric: BaseMetric | BaseConversationalMetric,
+    test_case: LLMTestCase | ConversationalTestCase,
+    semaphore: asyncio.Semaphore,
+) -> MetricResult:
+    """Evaluate a single metric against a test case."""
+    async with semaphore:
+        metric_copy = copy.deepcopy(metric)
+        if metric_copy.async_mode:
+            await metric_copy.a_measure(test_case)  # type: ignore[arg-type]
+        else:
+            await asyncio.to_thread(metric_copy.measure, test_case)  # type: ignore[arg-type]
+        return MetricResult(
+            name=metric_copy.__name__,
+            score=metric_copy.score,
+            reason=metric_copy.reason or "",
+            success=metric_copy.is_successful() or False,
+            skipped=metric_copy.skipped,
+            evaluation_cost=getattr(metric_copy, "evaluation_cost", None),
+            input_tokens=getattr(metric_copy, "input_tokens", None),
+            output_tokens=getattr(metric_copy, "output_tokens", None),
+        )
+
+
+async def _evaluate_turn_metrics(
+    test_cases: list[LLMTestCase],
+    metrics: list[BaseMetric],
+    *,
+    concurrency: int = 50,
+) -> list[TurnResult]:
+    """Run per-turn metrics against LLMTestCase objects."""
+    semaphore = asyncio.Semaphore(concurrency)
+    results: list[TurnResult] = []
+
+    for test_case in test_cases:
+        tasks = [_run_metric(m, test_case, semaphore) for m in metrics]
+        metric_results = await asyncio.gather(*tasks)
+        results.append(
+            TurnResult(test_case=test_case, metrics=list(metric_results))
+        )
+
+    return results
+
+
+async def _evaluate_session_metrics(
+    test_cases: list[ConversationalTestCase],
+    metrics: Sequence[BaseConversationalMetric],
+    *,
+    concurrency: int = 50,
+) -> list[SessionResult]:
+    """Run session metrics against ConversationalTestCase objects."""
+    semaphore = asyncio.Semaphore(concurrency)
+    results: list[SessionResult] = []
+
+    for test_case in test_cases:
+        tasks = [_run_metric(m, test_case, semaphore) for m in metrics]
+        metric_results = await asyncio.gather(*tasks)
+        results.append(
+            SessionResult(test_case=test_case, metrics=list(metric_results))
+        )
+
+    return results
+
+
 def evaluate(
     fetch_result: FetchLangfuseResult,
     metric_refs: list[MetricRef],
@@ -51,12 +124,10 @@ def evaluate(
 
     :param fetch_result: Output of :func:`metis.engine.extractor.langfuse.fetch_by_session_id`.
     :param metric_refs: List of :class:`~metis.engine.simulation.types.MetricRef` objects.
-    :param concurrency: Max parallel DeepEval judge calls.
-    :param throttle: Seconds between DeepEval judge call batches.
+    :param concurrency: Max parallel metric judge calls.
+    :param throttle: Unused; retained for API compatibility.
     :returns: :class:`EvalResult` with per-turn and session results merged.
     """
-    from deepeval.metrics.base_metric import BaseConversationalMetric
-
     test_cases = fetch_result.test_cases
     session_test_cases = fetch_result.session_test_cases
 
@@ -74,81 +145,68 @@ def evaluate(
         m for m in all_metrics if isinstance(m, BaseConversationalMetric)
     ]
 
-    # Disable async execution to work around Python 3.14 incompatibility.
-    # DeepEval's async path triggers illegal event-loop re-entrancy (likely
-    # via nest_asyncio) which Python 3.14's stricter task state rejects.
-    async_config = AsyncConfig(run_async=False)
-    display_config = DisplayConfig(
-        print_results=False, show_indicator=False, inspect_after_run=False
-    )
     phase_timings: dict[str, float] = {}
 
     # Per-turn evaluation
-    per_turn_results = None
+    per_turn_results: list[TurnResult] = []
     if per_turn_metrics:
         t0 = time.time()
-        per_turn_results = deepeval_evaluate(
-            test_cases=test_cases,
-            metrics=per_turn_metrics,
-            async_config=async_config,
-            display_config=display_config,
+        per_turn_results = asyncio.run(
+            _evaluate_turn_metrics(
+                test_cases, per_turn_metrics, concurrency=concurrency
+            )
         )
         phase_timings["per_turn"] = round(time.time() - t0, 1)
 
-    # Session evaluation (serialize to avoid asyncio re-entrancy on Python 3.14)
-    session_eval_results = None
+    # Session evaluation
+    session_results: list[SessionResult] = []
     if session_metrics and session_test_cases:
         t0 = time.time()
-        session_async_config = AsyncConfig(max_concurrent=1, throttle_value=throttle)
-        session_eval_results = deepeval_evaluate(
-            test_cases=session_test_cases,
-            metrics=session_metrics,
-            async_config=async_config,
-            display_config=display_config,
+        session_results = asyncio.run(
+            _evaluate_session_metrics(
+                session_test_cases, session_metrics, concurrency=concurrency
+            )
         )
         phase_timings["session"] = round(time.time() - t0, 1)
 
     # Build structured session_metrics list for the report
     session_metrics_data: list[SessionMetricsEntry] = []
-    if session_eval_results:
-        for ctc, sr in zip(
-            session_test_cases, session_eval_results.test_results, strict=False
-        ):
-            sid = (ctc.metadata or {}).get("session_id", "unknown")
-            metrics_out: list[SessionMetricResult] = []
-            for md in sr.metrics_data or []:
-                skipped = md.reason.endswith("— SKIPPED") if md.reason else False
-                metrics_out.append(
-                    SessionMetricResult(
-                        name=md.name,
-                        score=md.score,
-                        reason=md.reason or "",
-                        success=md.success,
-                        skipped=skipped,
-                    )
-                )
-            turns_data: list[SessionTurnData] = []
-            for t in ctc.turns:
-                turn_entry = SessionTurnData(role=t.role, content=t.content[:2000])
-                if t.tools_called:
-                    turn_entry["tools"] = [
-                        SessionToolCallData(
-                            name=tc_tool.name,
-                            input=str(tc_tool.input_parameters or "")[:300],
-                            output=str(tc_tool.output or "")[:300],
-                        )
-                        for tc_tool in t.tools_called
-                    ]
-                turns_data.append(turn_entry)
-
-            session_metrics_data.append(
-                SessionMetricsEntry(
-                    session_id=sid,
-                    num_turns=len(ctc.turns) // 2,
-                    turns=turns_data,
-                    metrics=metrics_out,
+    for scr in session_results:
+        ctc = scr.test_case
+        sid = (ctc.metadata or {}).get("session_id", "unknown")
+        metrics_out: list[SessionMetricResult] = []
+        for mr in scr.metrics:
+            metrics_out.append(
+                SessionMetricResult(
+                    name=mr.name,
+                    score=mr.score,
+                    reason=mr.reason,
+                    success=mr.success,
+                    skipped=mr.skipped,
                 )
             )
+        turns_data: list[SessionTurnData] = []
+        for t in ctc.turns:
+            turn_entry = SessionTurnData(role=t.role, content=t.content[:2000])
+            if t.tools_called:
+                turn_entry["tools"] = [
+                    SessionToolCallData(
+                        name=tc_tool.name,
+                        input=str(tc_tool.input_parameters or "")[:300],
+                        output=str(tc_tool.output or "")[:300],
+                    )
+                    for tc_tool in t.tools_called
+                ]
+            turns_data.append(turn_entry)
+
+        session_metrics_data.append(
+            SessionMetricsEntry(
+                session_id=sid,
+                num_turns=len(ctc.turns) // 2,
+                turns=turns_data,
+                metrics=metrics_out,
+            )
+        )
 
     routing_summary = RoutingSummary(
         total_traces=len(test_cases),
@@ -159,8 +217,7 @@ def evaluate(
     )
 
     return EvalResult(
-        test_results=per_turn_results.test_results if per_turn_results else [],
-        session_results=session_eval_results,
+        test_results=per_turn_results,
         test_cases=test_cases,
         routing_summary=routing_summary,
         trace_routing={},

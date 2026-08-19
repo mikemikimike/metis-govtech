@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class ContextReuseMetric(SyncBaseMetric):
+class ContextReuseMetric(MetisMetric):
     """Uses cached context instead of re-asking?
 
     Detects request_user_input calls that ask for information already present
@@ -30,11 +30,7 @@ class ContextReuseMetric(SyncBaseMetric):
         spoke_context = metadata.get("spoke_context") or {}
 
         if not spoke_context:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No spoke_context present (first interaction) — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No spoke_context present (first interaction)")
 
         cached_keys = set(spoke_context.keys())
         redundant_asks = 0

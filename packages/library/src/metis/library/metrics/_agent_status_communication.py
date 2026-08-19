@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisMetric, mark_skipped
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class AgentStatusCommunicationMetric(SyncBaseMetric):
+class AgentStatusCommunicationMetric(MetisMetric):
     """User informed which agent is handling their request?
 
     Code grader: checks that when delegation occurs, the output mentions
@@ -20,6 +20,8 @@ class AgentStatusCommunicationMetric(SyncBaseMetric):
         "per-turn",
         "code-graded",
     )
+
+    async_mode = False
 
     def __init__(self, threshold: float = 1.0):
         self.threshold = threshold
@@ -33,11 +35,7 @@ class AgentStatusCommunicationMetric(SyncBaseMetric):
         metadata.get("chat_metadata") or OrcaChatMetadata()
 
         if not delegation or not delegation["target"]:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No delegation occurred — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No delegation occurred")
 
         target = delegation["target"]
         output_lower = (test_case.actual_output or "").lower()

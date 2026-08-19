@@ -1,16 +1,15 @@
 """Finding Consistency metric (M-ORCA-*)."""
 
-from typing import ClassVar, cast
+from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
 from ._finding_deduplication import _is_multi_agent_trace
 from ._judge import _get_judge_model
-from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class FindingConsistencyMetric(SyncBaseMetric):
+class FindingConsistencyMetric(MetisMetric):
     """No contradictions in multi-agent synthesis?
 
     Extract+judge: checks whether the final response contains conflicting statements.
@@ -62,38 +61,17 @@ class FindingConsistencyMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        if not _is_multi_agent_trace(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "Single-agent or direct response (consistency N/A) — SKIPPED"
-            self.success = True
-            return self.score or 0.0
-
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        metadata.get("chat_metadata") or OrcaChatMetadata()
-        metadata.get("delegation")
-
         if not _is_multi_agent_trace(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "Single-agent or direct response (consistency N/A) — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(
+                self, "Single-agent or direct response (consistency N/A)"
+            )
 
         geval = self._get_geval()
         await geval.a_measure(test_case)
         self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

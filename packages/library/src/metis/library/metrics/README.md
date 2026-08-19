@@ -28,7 +28,7 @@ Each metric class carries a `tags: ClassVar[tuple[str, ...]]` for multi-dimensio
 Example:
 
 ```python
-class RoutingAccuracyMetric(SyncBaseMetric):
+class RoutingAccuracyMetric(MetisMetric):
     tags: ClassVar[tuple[str, ...]] = ("orchestration", "per-turn", "judge-graded")
 ```
 
@@ -45,7 +45,7 @@ Both can be listed together in `experiment.yaml` — no annotation needed.
 
 One file per metric, named `_<snake_case>.py`. Shared infrastructure lives in:
 
-- `_base.py` — `SyncBaseMetric`, `_ContextAwareGEval`, `_ContextAwareConversationalGEval`, helpers
+- `_base.py` — `MetisMetric`, `mark_skipped`, `_ContextAwareGEval`, `_ContextAwareConversationalGEval`, helpers
 - `_types.py` — `TraceMetadata`, `OrcaChatMetadata`, `ClarificationRequest`
 - `_judge.py` — `_get_judge_model()`
 - `_constants.py` — `SYSTEM_PROMPT_SUMMARY`, `TOOL_MANIFEST`

@@ -4,12 +4,12 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
 
-class ClarificationPrecisionMetric(SyncBaseMetric):
+class ClarificationPrecisionMetric(MetisMetric):
     """All questions necessary and no needed question omitted?
 
     Extract+judge: extracts clarification questions from the trace and judges
@@ -66,44 +66,12 @@ class ClarificationPrecisionMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        clarifications = metadata.get("clarification_requests", [])
-
-        if not clarifications:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No clarification questions asked — SKIPPED"
-            self.success = True
-            return self.score or 0.0
-
-        questions_text = "\n".join(
-            str(c.output or c.input or c) for c in clarifications
-        )
-        judge_tc = LLMTestCase(
-            input=test_case.input,
-            actual_output=questions_text,
-            metadata=test_case.metadata,
-        )
-
-        geval = self._get_geval()
-        geval.measure(judge_tc)
-        self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         metadata = cast(TraceMetadata, test_case.metadata)
         clarifications = metadata.get("clarification_requests", [])
 
         if not clarifications:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No clarification questions asked — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No clarification questions asked")
 
         questions_text = "\n".join(
             str(c.output or c.input or c) for c in clarifications
@@ -117,7 +85,8 @@ class ClarificationPrecisionMetric(SyncBaseMetric):
         geval = self._get_geval()
         await geval.a_measure(judge_tc)
         self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

@@ -7,12 +7,12 @@ from deepeval.metrics import (
 )
 from deepeval.test_case import LLMTestCase, ToolCall
 
-from ._base import SyncBaseMetric, _with_eval_context
+from ._base import MetisMetric, _with_eval_context, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
 
-class DelegationArgumentCorrectnessMetric(SyncBaseMetric):
+class DelegationArgumentCorrectnessMetric(MetisMetric):
     """Delegation argument correctness — new metric.
 
     Uses DeepEval's built-in ArgumentCorrectnessMetric (referenceless LLM judge)
@@ -52,11 +52,7 @@ class DelegationArgumentCorrectnessMetric(SyncBaseMetric):
         delegation = metadata.get("delegation")
 
         if not delegation or not delegation["task"]:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No delegation occurred — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No delegation occurred")
 
         tool_call = ToolCall(
             name="delegate_task_to_member",
@@ -78,7 +74,8 @@ class DelegationArgumentCorrectnessMetric(SyncBaseMetric):
         metric = self._get_metric()
         metric.measure(arg_tc)
         self.score = metric.score
-        self.evaluation_cost = getattr(metric, "evaluation_cost", None)
+        self._accrue_cost(metric.evaluation_cost)
+        self._accrue_tokens(metric.input_tokens, metric.output_tokens)
         self.reason = metric.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

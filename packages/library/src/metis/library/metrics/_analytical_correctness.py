@@ -5,11 +5,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class AnalyticalCorrectnessMetric(SyncBaseMetric):
+class AnalyticalCorrectnessMetric(MetisMetric):
     """Numerical results correct within tolerance?
 
     Compares computed numerical results against pre-computed ground truth.
@@ -36,11 +36,7 @@ class AnalyticalCorrectnessMetric(SyncBaseMetric):
         expected_values = annotations.get("expected_values")
 
         if expected_values is None:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No expected values annotated — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No expected values annotated")
 
         observations = metadata.get("observations", [])
         actual_numbers = self._extract_numbers_from_output(

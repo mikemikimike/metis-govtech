@@ -291,30 +291,25 @@ def generate_report(
 def _convert_eval_result(eval_result: EvalResult) -> list[dict]:
     """Convert EvalResult into the dict-based format used by report internals."""
     test_results = []
-    for tc, test_result in zip(
-        eval_result.test_cases, eval_result.test_results, strict=False
-    ):
+    for tcr in eval_result.test_results:
+        tc = tcr.test_case
         metadata = tc.metadata or {}
         trace_id = metadata.get("trace_id", "unknown")
         metrics_data = []
-        for md in test_result.metrics_data:
-            skipped = md.reason.endswith("— SKIPPED") if md.reason else False
+        for mr in tcr.metrics:
             metric_entry = {
-                "name": md.name,
-                "score": md.score,
-                "reason": md.reason or "",
-                "success": md.success,
-                "skipped": skipped,
+                "name": mr.name,
+                "score": mr.score,
+                "reason": mr.reason,
+                "success": mr.success,
+                "skipped": mr.skipped,
             }
-            cost = getattr(md, "evaluation_cost", None)
-            in_tok = getattr(md, "input_tokens", None)
-            out_tok = getattr(md, "output_tokens", None)
-            if cost is not None:
-                metric_entry["cost"] = cost
-            if in_tok is not None:
-                metric_entry["input_tokens"] = in_tok
-            if out_tok is not None:
-                metric_entry["output_tokens"] = out_tok
+            if mr.evaluation_cost is not None:
+                metric_entry["cost"] = mr.evaluation_cost
+            if mr.input_tokens is not None:
+                metric_entry["input_tokens"] = mr.input_tokens
+            if mr.output_tokens is not None:
+                metric_entry["output_tokens"] = mr.output_tokens
             metrics_data.append(metric_entry)
         test_results.append(
             {

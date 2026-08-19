@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisMetric
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class TurnsToTaskStartMetric(SyncBaseMetric):
+class TurnsToTaskStartMetric(MetisMetric):
     """How many turns before work begins?
 
     Uses the num_history_messages from orca-chat span and counts

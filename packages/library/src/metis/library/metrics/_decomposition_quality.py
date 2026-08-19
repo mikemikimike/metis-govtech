@@ -4,11 +4,11 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval
 from ._judge import _get_judge_model
 
 
-class DecompositionQualityMetric(SyncBaseMetric):
+class DecompositionQualityMetric(MetisMetric):
     """Multi-intent request correctly decomposed into sub-tasks?
 
     Extract+judge: evaluates whether Orca correctly identifies and orders
@@ -67,20 +67,12 @@ class DecompositionQualityMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         geval = self._get_geval()
         await geval.a_measure(test_case)
         self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

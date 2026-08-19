@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class ChartGranularityMetric(SyncBaseMetric):
+class ChartGranularityMetric(MetisMetric):
     """Chart not too crowded (<=12 categories) nor too sparse (>=3 points)?
 
     Parses chart metadata from trace observations.
@@ -40,11 +40,7 @@ class ChartGranularityMetric(SyncBaseMetric):
         chart_meta = self._extract_chart_metadata(observations)
 
         if chart_meta is None:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No chart generated in this trace — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No chart generated in this trace")
 
         num_categories = chart_meta.get("num_categories", 0)
         num_data_points = chart_meta.get("num_data_points", 0)

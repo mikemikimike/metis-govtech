@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class ReportFormatComplianceMetric(SyncBaseMetric):
+class ReportFormatComplianceMetric(MetisMetric):
     """Correct file format and consistent formatting?
 
     Code grader: checks that generated report matches requested format
@@ -20,6 +20,8 @@ class ReportFormatComplianceMetric(SyncBaseMetric):
         "per-turn",
         "code-graded",
     )
+
+    async_mode = False
 
     def __init__(self, threshold: float = 1.0):
         self.threshold = threshold
@@ -35,11 +37,7 @@ class ReportFormatComplianceMetric(SyncBaseMetric):
         expected_format = annotations.get("expected_report_format")
 
         if expected_format is None:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No expected_report_format annotation — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No expected_report_format annotation")
 
         actual_format = self._extract_report_format(observations)
         if actual_format is None:

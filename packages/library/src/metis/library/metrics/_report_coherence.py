@@ -4,7 +4,7 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import OrcaChatMetadata, TraceMetadata
 
@@ -27,7 +27,7 @@ def _has_report_content(test_case: LLMTestCase) -> bool:
     return len(output) > 500 and _is_data_analyst_trace(test_case)
 
 
-class ReportCoherenceMetric(SyncBaseMetric):
+class ReportCoherenceMetric(MetisMetric):
     """Report sections follow a logical structure?
 
     Skips when output is too short to be a report or not from data analyst.
@@ -88,38 +88,17 @@ class ReportCoherenceMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        if not _has_report_content(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = (
-                "Output too short or not from data analyst — not a report — SKIPPED"
-            )
-            self.success = True
-            return self.score or 0.0
-
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self._absorb_geval_cost(geval)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         if not _has_report_content(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = (
-                "Output too short or not from data analyst — not a report — SKIPPED"
+            return mark_skipped(
+                self, "Output too short or not from data analyst — not a report"
             )
-            self.success = True
-            return self.score or 0.0
 
         geval = self._get_geval()
         await geval.a_measure(test_case)
         self.score = geval.score
-        self._absorb_geval_cost(geval)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

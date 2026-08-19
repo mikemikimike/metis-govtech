@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from deepeval.evaluate.types import EvaluationResult
 from deepeval.test_case import LLMTestCase
+from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
 from metis.engine.extractor.types import (
     RoutingSummary,
@@ -16,25 +16,48 @@ from metis.engine.extractor.types import (
 
 
 @dataclass
-class EvalResult:
-    """Result of a three-phase evaluation run.
+class MetricResult:
+    """Result of a single metric evaluation."""
 
-    :param test_results: Per-trace merged metrics (all phases combined).
-    :param session_results: Raw Phase 0 result (None if no session metrics ran).
+    name: str
+    score: float | None
+    reason: str
+    success: bool
+    skipped: bool
+    evaluation_cost: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+@dataclass
+class TurnResult:
+    """Result of evaluating per-turn metrics against a single LLMTestCase."""
+
+    test_case: LLMTestCase
+    metrics: list[MetricResult]
+
+
+@dataclass
+class SessionResult:
+    """Result of evaluating session metrics against a ConversationalTestCase."""
+
+    test_case: ConversationalTestCase
+    metrics: list[MetricResult]
+
+
+@dataclass
+class EvalResult:
+    """Result of an evaluation run.
+
+    :param test_results: Per-trace metric results (each contains the test case and its metrics).
     :param test_cases: The LLMTestCase objects that were evaluated.
     :param routing_summary: Aggregate routing statistics.
     :param trace_routing: Mapping of trace_id → agent_key or ``"direct"``.
     :param session_metrics: Per-session metric results.
     :param timings: Phase durations in seconds.
-
-    Example::
-
-        result = evaluate(fetch_result, metric_refs)
-        print(result.routing_summary["total_traces"])
     """
 
-    test_results: list = field(default_factory=list)
-    session_results: EvaluationResult | None = None
+    test_results: list[TurnResult] = field(default_factory=list)
     test_cases: list[LLMTestCase] = field(default_factory=list)
     routing_summary: RoutingSummary = field(
         default_factory=lambda: RoutingSummary(

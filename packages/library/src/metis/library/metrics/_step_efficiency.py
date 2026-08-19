@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisMetric, mark_skipped
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class StepEfficiencyMetric(SyncBaseMetric):
+class StepEfficiencyMetric(MetisMetric):
     """Task completed in near-minimum tool calls?
 
     Uses actual TOOL observations from the span tree. Without annotations,
@@ -43,16 +43,11 @@ class StepEfficiencyMetric(SyncBaseMetric):
         expected_minimum = annotations.get("expected_minimum_steps")
 
         if expected_minimum is None:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = (
-                f"{actual_count} tool call(s) in "
-                f"observation tree (orca-chat reports "
-                f"{reported_count}), no minimum "
-                f"annotated — SKIPPED"
+            return mark_skipped(
+                self,
+                f"{actual_count} tool call(s) in observation tree "
+                f"(orca-chat reports {reported_count}), no minimum annotated",
             )
-            self.success = True
-            return self.score or 0.0
 
         if expected_minimum == 0:
             self.score = 1.0 if actual_count == 0 else 0.0

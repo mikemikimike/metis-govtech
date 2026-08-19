@@ -4,7 +4,7 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import OrcaChatMetadata, TraceMetadata
 
@@ -63,7 +63,7 @@ def _is_multi_agent_trace(test_case: LLMTestCase) -> bool:
     return len(seen_types) > 1
 
 
-class FindingDeduplicationMetric(SyncBaseMetric):
+class FindingDeduplicationMetric(MetisMetric):
     """No finding redundantly stated across multi-agent synthesis?
 
     Extract+judge: checks whether the final response contains redundant
@@ -135,36 +135,16 @@ class FindingDeduplicationMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        skip_reason = self._should_skip(test_case)
-        if skip_reason:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = f"{skip_reason} — SKIPPED"
-            self.success = True
-            return self.score or 0.0
-
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self._absorb_geval_cost(geval)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         skip_reason = self._should_skip(test_case)
         if skip_reason:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = f"{skip_reason} — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, skip_reason)
 
         geval = self._get_geval()
         await geval.a_measure(test_case)
         self.score = geval.score
-        self._absorb_geval_cost(geval)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class DirectHandleRecognitionMetric(SyncBaseMetric):
+class DirectHandleRecognitionMetric(MetisMetric):
     """Handles directly when no subagent fits?
 
     For queries annotated as direct-handle (expected_subagent=None),
@@ -35,20 +35,12 @@ class DirectHandleRecognitionMetric(SyncBaseMetric):
         annotations = metadata.get("annotations", {})
 
         if "expected_subagent" not in annotations:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No expected_subagent annotated — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No expected_subagent annotated")
 
         expected = annotations["expected_subagent"]
 
         if expected is not None:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "Not a direct-handle case — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "Not a direct-handle case")
 
         delegation = metadata.get("delegation")
 

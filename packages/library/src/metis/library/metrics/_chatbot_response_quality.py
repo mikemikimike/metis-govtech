@@ -4,12 +4,12 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
 
-class ChatbotResponseQualityMetric(SyncBaseMetric):
+class ChatbotResponseQualityMetric(MetisMetric):
     """Direct response helpful, appropriate tone, and concise?
 
     Full judge: evaluates Orca's quality when handling requests directly
@@ -62,40 +62,18 @@ class ChatbotResponseQualityMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        delegation = metadata.get("delegation")
-
-        if delegation and delegation["target"]:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "Delegation occurred (not a direct-handle case) — SKIPPED"
-            self.success = True
-            return self.score or 0.0
-
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         metadata = cast(TraceMetadata, test_case.metadata)
         delegation = metadata.get("delegation")
 
         if delegation and delegation["target"]:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "Delegation occurred (not a direct-handle case) — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "Delegation occurred (not a direct-handle case)")
 
         geval = self._get_geval()
         await geval.a_measure(test_case)
         self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

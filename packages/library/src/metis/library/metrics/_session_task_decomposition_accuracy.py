@@ -8,7 +8,7 @@ from deepeval.test_case.conversational_test_case import (
     MultiTurnParams,
 )
 
-from ._base import EVIDENCE_INSTRUCTION, _ContextAwareConversationalGEval
+from ._base import EVIDENCE_INSTRUCTION, _ContextAwareConversationalGEval, mark_skipped
 from ._judge import _get_judge_model
 
 
@@ -90,11 +90,7 @@ class SessionTaskDecompositionAccuracyMetric(BaseConversationalMetric):
 
     def measure(self, test_case: ConversationalTestCase) -> float:
         if not _has_delegation(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No delegation in this session — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No delegation in this session")
 
         geval = self._get_geval()
         geval.measure(test_case)
@@ -107,11 +103,7 @@ class SessionTaskDecompositionAccuracyMetric(BaseConversationalMetric):
         self, test_case: ConversationalTestCase, *args, **kwargs
     ) -> float:
         if not _has_delegation(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No delegation in this session — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No delegation in this session")
 
         geval = self._get_geval()
         await geval.a_measure(test_case)
