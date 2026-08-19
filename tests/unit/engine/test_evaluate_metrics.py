@@ -9,7 +9,7 @@ from metis.library.metrics._base import MetisTurnMetric, mark_skipped
 
 
 class FakeCodeMetric(MetisTurnMetric):
-    """A fake sync metric for testing."""
+    """A fake code-graded turn metric for testing."""
 
     tags: ClassVar[tuple[str, ...]] = ("test", "per-turn", "code-graded")
     async_mode = False
