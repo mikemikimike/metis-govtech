@@ -126,7 +126,7 @@ def render_task_sections(
 ) -> str:
     tasks_map: dict[str, list[dict]] = {}
     for tr in test_results:
-        task_id = tr.get("task_id") or "unknown"
+        task_id = tr.get("scenario_id") or "unknown"
         tasks_map.setdefault(task_id, []).append(tr)
 
     failures = _extract_failures(test_results)
@@ -168,7 +168,7 @@ def _render_single_task(
                 task_metric_agg[name]["fail"] += 1
 
     task_failures = [
-        f for f in failures if f.get("task_id") == task_id or task_id == "unknown"
+        f for f in failures if f.get("scenario_id") == task_id or task_id == "unknown"
     ]
     failures_by_metric_name: dict[str, list[dict]] = {}
     for f in task_failures:
@@ -532,7 +532,7 @@ def _extract_failures(test_results: list[dict]) -> list[dict]:
                     {
                         "trace_id": result["trace_id"],
                         "session_id": result.get("session_id", ""),
-                        "task_id": result.get("task_id", ""),
+                        "scenario_id": result.get("scenario_id", ""),
                         "turn_index": result.get("turn_index", 0),
                         "total_turns": result.get("total_turns", 1),
                         "routed_to": result.get("routed_to", ""),

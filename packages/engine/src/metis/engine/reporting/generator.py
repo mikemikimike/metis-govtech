@@ -320,7 +320,7 @@ def _convert_eval_result(eval_result: EvalResult) -> list[dict]:
             {
                 "trace_id": trace_id,
                 "session_id": metadata.get("session_id", ""),
-                "task_id": metadata.get("task_id", ""),
+                "scenario_id": metadata.get("scenario_id", ""),
                 "turn_index": metadata.get("turn_index", 0),
                 "total_turns": metadata.get("total_turns", 1),
                 "input": tc.input or "",
