@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "metis-wizard"
-version = "0.1.0"
+version = "0.1.1"
 description = "Interactive evaluation setup wizard and CLI generator"
 requires-python = ">=3.11"
 dependencies = [
-    "metis-core",
-    "metis-library",
+    "metis-core>=0.3.0",
+    "metis-library>=0.1.4",
     # Here for `schemas/experiment.schema.json`, which the compiler validates against and
     # locates relative to the installed module. Nothing is imported from the engine.
-    "metis-engine",
+    "metis-engine>=0.7.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
     "pydantic>=2.0",

@@ -990,7 +990,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-engine"
-version = "0.8.0"
+version = "0.9.0"
 source = { editable = "packages/engine" }
 dependencies = [
     { name = "deepeval" },
@@ -1025,7 +1025,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-library"
-version = "0.1.4"
+version = "0.3.0"
 source = { editable = "packages/library" }
 dependencies = [
     { name = "deepeval" },
@@ -1044,7 +1044,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-wizard"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "packages/wizard" }
 dependencies = [
     { name = "jsonschema" },

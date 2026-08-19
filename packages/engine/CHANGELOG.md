@@ -4,9 +4,19 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.8.0] — Unreleased
+## [0.9.0] — Unreleased
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.8.0] — 2026-08-19
+
+### Added
+
+- **Simulation user-agent LLM is now configurable via environment variables** — the user agent built its OpenAI client with no arguments (`AsyncOpenAI()`), so the API key came only from the implicit `OPENAI_API_KEY` and the endpoint could not be overridden. Added `USER_AGENT_API_KEY` (falls back to `OPENAI_API_KEY`) and `USER_AGENT_BASE_URL` (unset → default OpenAI endpoint), mirroring the judge model's `JUDGE_*` variables. Lets the simulation LLM target any OpenAI-wire-compatible provider (e.g. Platform AI) without code changes. ([#151](https://github.com/govtech-responsibleai/metis/issues/151))
 
 ### Changed
 
