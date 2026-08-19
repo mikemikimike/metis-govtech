@@ -153,10 +153,18 @@ class MetisTurnMetric(BaseMetric):
 
 
 class MetisSessionMetric(BaseConversationalMetric):
-    """Base class for session-level METIS metrics.
+    """Base class for session-level METIS metrics (evaluated per ConversationalTestCase).
 
-    Subclasses must define a `tags` ClassVar. Session metrics evaluate
-    full ConversationalTestCase objects (multi-turn conversations).
+    Each session metric is evaluated against a full multi-turn conversation.
+    The orchestrator routes metrics here when they ARE subclasses of
+    BaseConversationalMetric.
+
+    Subclasses must:
+    - Define ``tags: ClassVar[tuple[str, ...]]`` (enforced at class definition)
+    - Implement ``measure()`` and/or ``async def a_measure()``
+
+    Unlike MetisTurnMetric, session metrics receive the entire conversation
+    (all turns, tool calls, and metadata) rather than a single turn.
     """
 
     tags: ClassVar[tuple[str, ...]]
