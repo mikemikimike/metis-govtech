@@ -453,6 +453,8 @@ def simulate(
                 artifacts=record.artifacts_collected,
                 scenario=scenario_obj,
                 persona=persona_obj,
+                stop_reason=record.outcome.stop_reason,
+                cancellation_available=True,
             )
 
             if not fetch_result.test_cases:
