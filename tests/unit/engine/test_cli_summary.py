@@ -1,6 +1,10 @@
 """Tests for final summary output."""
 
-from metis.engine.tui.state import RunState, ScenarioState, SimulationState
+from metis.engine.tui.state import (
+    SimulationRunState,
+    SimulationScenarioState,
+    SimulationState,
+)
 
 
 def _print_final_summary(
@@ -17,10 +21,10 @@ class TestFinalSummary:
         from metis.engine.cli import _format_final_summary
 
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="scn",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
                         trial=1,
@@ -48,10 +52,10 @@ class TestFinalSummary:
         from metis.engine.cli import _format_final_summary
 
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="scn",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="scn",
                         persona_id="per1",
                         trial=1,
@@ -63,7 +67,7 @@ class TestFinalSummary:
                         duration_seconds=50.0,
                         stop_reason="goal_achieved",
                     ),
-                    RunState(
+                    SimulationRunState(
                         scenario_id="scn",
                         persona_id="per2",
                         trial=1,
@@ -91,10 +95,10 @@ class TestFinalSummary:
         from metis.engine.cli import _format_final_summary
 
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="scn",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
                         trial=1,
@@ -121,10 +125,10 @@ class TestFinalSummary:
         from metis.engine.cli import _format_final_summary
 
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="scn",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
                         trial=1,

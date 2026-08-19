@@ -24,19 +24,22 @@ cp packages/engine/.env.example .env
 ## Running
 
 ```bash
-# Run the example experiment (TUI auto-enabled in a terminal)
+# Run end-to-end (Simulation TUI, then evaluation progress bar)
+metis engine run --input-dir packages/engine/example-experiment/
+
+# Or run the phases separately. simulate prints the evaluate command.
 metis engine simulate --input-dir packages/engine/example-experiment/
+metis engine evaluate --input-dir packages/engine/example-experiment/
 
 # Headed mode (visible browser)
 HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/
 
-# Verbosity — controls the TUI log tail and non-TUI stderr output.
-# The TUI dashboard (progress bars, scenario status) is always visible regardless.
+# Verbosity controls log detail, not progress displays.
 metis engine simulate --input-dir packages/engine/example-experiment/ -v    # INFO
 metis engine simulate --input-dir packages/engine/example-experiment/ -vv   # DEBUG
 metis engine simulate --input-dir packages/engine/example-experiment/ --quiet  # ERROR only
 
-# Disable TUI (force linear output)
+# Disable the Simulation TUI (force linear simulation output)
 metis engine simulate --input-dir packages/engine/example-experiment/ --no-tui
 
 # Structured log files (JSON lines)
@@ -48,9 +51,11 @@ metis engine simulate --input-dir packages/engine/example-experiment/ --log-dir 
 # Concurrent simulation (2 parallel browser contexts)
 metis engine simulate --input-dir packages/engine/example-experiment/ --concurrency 2
 
-# Custom Langfuse timeout (default: 90s)
-metis engine simulate --input-dir packages/engine/example-experiment/ --langfuse-timeout 120
+# Custom Langfuse timeout for evaluation (default: 90s)
+metis engine evaluate --input-dir packages/engine/example-experiment/ --langfuse-timeout 120
 ```
+
+Evaluation has no TUI option. It uses a normal progress bar in a terminal and linear per-record progress in a non-interactive environment.
 
 ### Concurrency
 
@@ -71,7 +76,7 @@ my-experiment/
 
 See [`example-experiment/`](example-experiment/) for a working reference.
 
-Each run produces output in `experiments/<id>-<timestamp>/`:
+Each run produces output in `experiments/<id>-<timestamp>/`. Reports appear after `evaluate` or `run`:
 
 ```
 experiments/orca-eval-20260730-143022/
@@ -79,10 +84,11 @@ experiments/orca-eval-20260730-143022/
 ├── runs/                # Per-run conversation records
 ├── logs/
 │   ├── simulate.log                                  # Orchestration timeline (index)
+│   ├── evaluate.log                                  # Models, metrics, outputs, timeline
 │   ├── simulate-direct-question_cooperative-01.log   # Per-run detail (always DEBUG)
 │   ├── simulate-constrained-analysis_impatient-01.log
 │   └── ...
-└── reports/
+└── reports/             # created by evaluate or run
     ├── report.json      # Machine-readable results
     └── report.html      # Visual report (open in browser)
 ```

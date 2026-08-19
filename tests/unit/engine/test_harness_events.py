@@ -1,6 +1,10 @@
 """Tests that harness emits structured events for TUI/logging integration."""
 
-from metis.engine.tui.state import RunState, ScenarioState, SimulationState
+from metis.engine.tui.state import (
+    SimulationRunState,
+    SimulationScenarioState,
+    SimulationState,
+)
 
 
 class TestHarnessEventEmission:
@@ -21,10 +25,10 @@ class TestHarnessEventEmission:
     def test_state_transitions_on_run_lifecycle(self) -> None:
         """Simulate the state transitions the harness would make."""
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="scn",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
                         trial=1,

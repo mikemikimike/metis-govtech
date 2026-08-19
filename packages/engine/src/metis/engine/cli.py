@@ -1,33 +1,44 @@
 """Command-line interface for metis-engine."""
 
+from __future__ import annotations
+
+import json
 import logging
 import os
+import re
+import shlex
 import shutil
 import signal
 import sys
 import threading
 from contextlib import nullcontext
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import typer
 from dotenv import load_dotenv
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskID, TextColumn
 
 from metis.core.console import console
 from metis.engine import __version__
 from metis.engine.logging import (
+    EvaluationLogger,
     OrchestrationLogger,
     setup_engine_logging,
     teardown_engine_logging,
 )
 from metis.engine.tui import (
-    RunState,
-    ScenarioState,
+    SimulationRunState,
+    SimulationScenarioState,
     SimulationState,
     TailBuffer,
     TUIContext,
 )
+
+if TYPE_CHECKING:
+    from metis.engine.evaluation.types import EvalResult
 
 app = typer.Typer(help="Run METIS evaluations against traces.")
 
@@ -181,7 +192,7 @@ def _validate_inputs(input_dir: Path) -> None:
                 sys.exit(1)
 
 
-def _format_final_summary(state: "Any", experiment_dir: str, log_dir: str) -> str:
+def _format_final_summary(state: Any, experiment_dir: str, log_dir: str) -> str:
     """Build the static final summary printed after TUI exits."""
     total = state.total_runs
     completed = state.completed_runs
@@ -204,8 +215,723 @@ def _format_final_summary(state: "Any", experiment_dir: str, log_dir: str) -> st
     return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class EvaluationOutcome:
+    """Summary returned by the evaluation phase."""
+
+    total_records: int
+    successful_records: int
+    failed_records: int
+    report_written: bool
+
+
+class EvaluationInputError(RuntimeError):
+    """Raised when an experiment snapshot or run record is invalid."""
+
+
+def _resolve_log_level(verbose: int, quiet: bool) -> str:
+    """Resolve the CLI log level."""
+    if quiet:
+        return "ERROR"
+    if verbose >= 2:
+        return "DEBUG"
+    if verbose >= 1:
+        return "INFO"
+    return "WARNING"
+
+
+def _configure_process_logging(log_level: str, *, use_tui: bool = False) -> None:
+    """Configure structured logging before importing engine modules."""
+    from metis.core.logging import configure_logging
+
+    configure_logging(level="DEBUG" if use_tui else log_level)
+
+    # Module-level loggers cache their processor chain. Disable that cache so
+    # the simulation log router can be installed after these imports.
+    import structlog
+
+    structlog.configure(cache_logger_on_first_use=False)
+
+
+def _record_files(experiment_dir: Path) -> list[Path]:
+    """Return run records in the same order used by the old CLI."""
+    return sorted(
+        experiment_dir.glob("runs/*/record.json"), key=lambda path: path.stat().st_mtime
+    )
+
+
+def _resolve_latest_experiment(input_dir: Path) -> Path:
+    """Resolve the newest output for the experiment in ``input_dir``."""
+    from metis.engine.simulation.types import Experiment
+
+    resolved_input_dir = input_dir.resolve()
+    if not resolved_input_dir.is_dir():
+        console.print(
+            f"Error: input directory '{resolved_input_dir}' does not exist",
+            style="bold red",
+        )
+        raise EvaluationInputError("invalid input directory")
+    experiment_path = resolved_input_dir / "experiment.yaml"
+    if not experiment_path.exists():
+        console.print(
+            f"Error: missing required file 'experiment.yaml' in {resolved_input_dir}",
+            style="bold red",
+        )
+        raise EvaluationInputError("invalid input directory")
+    try:
+        experiment = Experiment.load_file(experiment_path)
+    except Exception as exc:
+        console.print(f"Error: failed to load experiment.yaml: {exc}", style="bold red")
+        raise EvaluationInputError("failed to load input experiment") from exc
+
+    experiments_root = _find_project_root() / "experiments"
+    pattern = re.compile(
+        rf"^{re.escape(experiment.id)}-(?P<timestamp>\d{{8}}-\d{{6}})$"
+    )
+    candidates: list[tuple[datetime, Path]] = []
+    if experiments_root.is_dir():
+        for candidate in experiments_root.iterdir():
+            if not candidate.is_dir():
+                continue
+            match = pattern.fullmatch(candidate.name)
+            if not match:
+                continue
+            try:
+                timestamp = datetime.strptime(match.group("timestamp"), "%Y%m%d-%H%M%S")
+            except ValueError:
+                continue
+            candidates.append((timestamp, candidate))
+
+    if not candidates:
+        console.print(
+            f"Error: no simulation output found for experiment '{experiment.id}' "
+            f"under {experiments_root}",
+            style="bold red",
+        )
+        raise EvaluationInputError("no matching experiment output")
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[-1][1].resolve()
+
+
+def _evaluate_command(input_dir: Path) -> str:
+    """Build the shell-safe command for evaluating an input directory."""
+    return shlex.join(["metis", "engine", "evaluate", "--input-dir", str(input_dir)])
+
+
+def _print_evaluate_handoff(experiment_dir: Path, input_dir: Path) -> None:
+    """Print the command that evaluates a completed simulation."""
+    console.print(f"Experiment: {experiment_dir}")
+    console.print(
+        f"Next: {_evaluate_command(input_dir.resolve())}",
+        no_wrap=True,
+        overflow="ignore",
+        crop=False,
+        soft_wrap=True,
+    )
+
+
+def _print_evaluation_summary(
+    experiment_dir: Path, outcome: EvaluationOutcome, *, pipeline: bool
+) -> None:
+    """Print the final summary for standalone evaluation or the combined run."""
+    label = "PIPELINE COMPLETE" if pipeline else "EVALUATION COMPLETE"
+    console.print(f"\n\n{'=' * 60}")
+    console.print(
+        f"  {label} — {outcome.total_records} run(s), {outcome.failed_records} failed"
+    )
+    console.print(f"  Experiment: {experiment_dir}")
+    console.print(f"  Log: {experiment_dir / 'logs' / 'evaluate.log'}")
+    console.print(f"{'=' * 60}")
+
+
+def _run_simulation(
+    input_dir: Path,
+    *,
+    verbose: int,
+    quiet: bool,
+    no_tui: bool,
+    log_format: Literal["text", "json"],
+    log_dir: Path | None,
+    concurrency: int,
+) -> Path:
+    """Run simulation and return its experiment directory."""
+    load_dotenv()
+    use_tui = not no_tui and sys.stderr.isatty()
+    log_level = _resolve_log_level(verbose, quiet)
+
+    # Configure logging before importing harness modules. They create
+    # module-level loggers that cache the processor chain.
+    _configure_process_logging(log_level, use_tui=use_tui)
+
+    from metis.engine.simulation.experiment import HarnessConfig, run_experiment
+    from metis.engine.simulation.types import Experiment
+
+    if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
+        os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
+
+    project_root = _find_project_root()
+    resolved_input_dir = input_dir.resolve()
+    _validate_inputs(resolved_input_dir)
+
+    experiment_path = resolved_input_dir / "experiment.yaml"
+    fixtures_dir = resolved_input_dir / "fixtures"
+    experiment = Experiment.load_file(experiment_path)
+
+    suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
+    experiment_dir = project_root / "experiments" / f"{experiment.id}-{suffix}"
+    experiment_dir.mkdir(parents=True)
+    shutil.copytree(resolved_input_dir, experiment_dir / "inputs")
+
+    personas_by_id = {persona.id: persona for persona in experiment.personas}
+    config = HarnessConfig.load()
+    headed = os.environ.get("HEADED", "").lower() == "true"
+
+    console.print(f"\n{'=' * 60}")
+    console.print("  SIMULATION")
+    console.print(f"{'=' * 60}")
+    console.print(f"  Experiment: {experiment_dir}")
+    console.print(f"  Input: {resolved_input_dir}")
+    console.print(f"  Mode: {'headed' if headed else 'headless'}\n")
+
+    resolved_log_dir = log_dir or (experiment_dir / "logs")
+    resolved_log_dir.mkdir(parents=True, exist_ok=True)
+
+    scenarios_state: list[SimulationScenarioState] = []
+    total_run_count = 0
+    for scenario in experiment.scenarios:
+        run_states: list[SimulationRunState] = []
+        for persona_ref in scenario.persona_refs:
+            for trial_idx in range(scenario.num_trials):
+                total_run_count += 1
+                run_states.append(
+                    SimulationRunState(
+                        scenario_id=scenario.id,
+                        persona_id=persona_ref,
+                        trial=trial_idx + 1,
+                        num_trials=scenario.num_trials,
+                        phase="pending",
+                        current_turn=None,
+                        max_turns=20,
+                        turn_detail="",
+                        duration_seconds=None,
+                        stop_reason=None,
+                    )
+                )
+        scenarios_state.append(
+            SimulationScenarioState(
+                scenario_id=scenario.id,
+                runs=run_states,
+                phase="pending",
+            )
+        )
+
+    sim_state = SimulationState(
+        experiment_id=experiment.id,
+        scenarios=scenarios_state,
+        total_runs=total_run_count,
+    )
+
+    display_level = getattr(logging, log_level)
+    tail_buffers = {
+        f"w{i}": TailBuffer(max_lines=15, min_level=display_level)
+        for i in range(concurrency)
+    }
+    log_router = setup_engine_logging(
+        log_dir=resolved_log_dir,
+        log_format=log_format,
+        tail_buffers=tail_buffers,
+        use_tui=use_tui,
+    )
+    orchestration_logger = OrchestrationLogger(
+        log_dir=resolved_log_dir, log_format=log_format
+    )
+
+    tui_ctx: TUIContext | None = None
+    if use_tui:
+        tui_ctx = TUIContext(state=sim_state, tail_buffers=tail_buffers)
+
+    interrupt_count = 0
+    interrupt_lock = threading.Lock()
+
+    def _handle_sigint(_signum: int, _frame: Any) -> None:
+        nonlocal interrupt_count
+        with interrupt_lock:
+            interrupt_count += 1
+            if interrupt_count >= 2:
+                console.print("\nForce abort.", style="bold red")
+                sys.exit(130)
+            console.print(
+                "\nInterrupt received — finishing current turn. "
+                "Press Ctrl+C again to abort.",
+                style="yellow",
+            )
+
+    prev_handler = signal.signal(signal.SIGINT, _handle_sigint)
+    try:
+        with tui_ctx if tui_ctx else nullcontext():
+            run_experiment(
+                config=config,
+                experiment=experiment,
+                personas_by_id=personas_by_id,
+                output_dir=experiment_dir,
+                fixtures_dir=fixtures_dir,
+                headed=headed,
+                concurrency=concurrency,
+                state=sim_state,
+                orchestration_logger=orchestration_logger,
+                log_router=log_router,
+                tui_ctx=tui_ctx,
+            )
+    finally:
+        signal.signal(signal.SIGINT, prev_handler)
+        teardown_engine_logging(log_router)
+        orchestration_logger.close()
+
+    console.print(
+        _format_final_summary(
+            sim_state,
+            str(experiment_dir),
+            str(resolved_log_dir),
+        )
+    )
+    return experiment_dir
+
+
+def _load_evaluation_experiment(experiment_dir: Path) -> Any:
+    """Validate and load the frozen experiment snapshot."""
+    from metis.engine.simulation.types import Experiment
+
+    inputs_dir = experiment_dir / "inputs"
+    if not inputs_dir.is_dir():
+        console.print(
+            f"Error: missing required file 'experiment.yaml' in {inputs_dir}",
+            style="bold red",
+        )
+        raise EvaluationInputError("missing experiment snapshot")
+
+    try:
+        _validate_inputs(inputs_dir)
+    except SystemExit as exc:
+        raise EvaluationInputError(
+            f"invalid experiment snapshot in {inputs_dir}"
+        ) from exc
+
+    try:
+        return Experiment.load_file(inputs_dir / "experiment.yaml")
+    except Exception as exc:
+        console.print(
+            f"Error: failed to load experiment snapshot: {exc}", style="bold red"
+        )
+        raise EvaluationInputError("failed to load experiment snapshot") from exc
+
+
+def _create_evaluation_progress() -> Progress:
+    """Create the standard, non-full-screen evaluation progress bar."""
+    return Progress(
+        TextColumn("{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        console=console,
+    )
+
+
+def _update_evaluation_progress(
+    progress: Progress | None,
+    task_id: TaskID | None,
+    *,
+    record_number: int,
+    total_records: int,
+    label: str,
+    phase: str,
+    advance: int = 0,
+) -> None:
+    """Update the progress bar or print one linear progress message."""
+    description = f"{label} — {phase}"
+    if progress and task_id is not None:
+        progress.update(task_id, description=description, advance=advance)
+    else:
+        console.print(f"Evaluation {record_number}/{total_records}: {description}")
+
+
+def _log_metric_results(
+    evaluation_log: EvaluationLogger,
+    eval_result: EvalResult,
+    *,
+    record_label: str,
+) -> None:
+    """Write complete metric outputs for every evaluated test case."""
+    metric_outputs: list[dict[str, object]] = []
+
+    def _collect(scope: str, test_case: object, metric_results: list) -> None:
+        test_case_name = getattr(test_case, "name", None)
+        for metric_result in metric_results:
+            metric_outputs.append(
+                {
+                    "record": record_label,
+                    "scope": scope,
+                    "test_case": test_case_name,
+                    "metric": metric_result.name,
+                    "score": metric_result.score,
+                    "success": metric_result.success,
+                    "skipped": metric_result.skipped,
+                    "reason": metric_result.reason,
+                    "evaluation_cost": metric_result.evaluation_cost,
+                    "input_tokens": metric_result.input_tokens,
+                    "output_tokens": metric_result.output_tokens,
+                }
+            )
+
+    for turn_result in eval_result.turn_results:
+        _collect("turn", turn_result.llm_test_case, turn_result.metric_results)
+    for session_result in eval_result.session_results:
+        _collect(
+            "session",
+            session_result.conversational_test_case,
+            session_result.metric_results,
+        )
+
+    for metric_output in metric_outputs:
+        evaluation_log.write(
+            "METRIC RESULT — "
+            + json.dumps(metric_output, ensure_ascii=False, default=str)
+        )
+    evaluation_log.write(
+        f"METRIC RESULTS — record={record_label} count={len(metric_outputs)}"
+    )
+
+
+def _run_evaluation(
+    experiment_dir: Path,
+    *,
+    langfuse_timeout: int,
+    verbose: int,
+    quiet: bool,
+) -> EvaluationOutcome:
+    """Evaluate records in an existing experiment directory."""
+    load_dotenv()
+    log_level = _resolve_log_level(verbose, quiet)
+    _configure_process_logging(log_level)
+    evaluation_log = EvaluationLogger(experiment_dir / "logs")
+    evaluation_log.write(f"EVALUATION STARTED — {experiment_dir}")
+
+    from metis.engine.evaluation import evaluate as evaluate_metrics
+    from metis.engine.evaluation.types import EvalResult
+    from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
+    from metis.engine.reporting import PersonaContext, TaskContext, generate_report
+    from metis.engine.simulation.types import RunRecord
+
+    if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
+        os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
+
+    experiment = _load_evaluation_experiment(experiment_dir)
+    files = _record_files(experiment_dir)
+    if not files:
+        evaluation_log.write("EVALUATION COMPLETED — 0 records")
+        return EvaluationOutcome(0, 0, 0, False)
+
+    try:
+        records: list[RunRecord] = [RunRecord.load_file(path) for path in files]
+    except Exception as exc:
+        console.print(f"Error: failed to load run record: {exc}", style="bold red")
+        raise EvaluationInputError("failed to load run record") from exc
+
+    console.print(f"  Loaded {len(records)} run record(s)")
+    evaluation_log.write(f"LOADED {len(records)} run record(s)")
+    langfuse = get_langfuse_client()
+    personas_by_id = {persona.id: persona for persona in experiment.personas}
+    scenarios_by_id = {scenario.id: scenario for scenario in experiment.scenarios}
+    eval_results: list[EvalResult] = []
+    failed = 0
+    interactive_progress = sys.stderr.isatty()
+    progress = _create_evaluation_progress() if interactive_progress else None
+
+    with progress if progress else nullcontext():
+        task_id = (
+            progress.add_task("Evaluation", total=len(records)) if progress else None
+        )
+        for index, record in enumerate(records):
+            session_id = record.target_session_id
+            persona_id = record.config.persona
+            scenario_id = record.config.scenario
+            metric_refs = record.config.metric_refs
+            label = f"{persona_id} x {scenario_id}"
+            record_failed = False
+            failure_reason: str | None = None
+
+            evaluation_log.write(
+                f"RECORD {index + 1}/{len(records)} {label} — EXTRACTING"
+            )
+            _update_evaluation_progress(
+                progress,
+                task_id,
+                record_number=index + 1,
+                total_records=len(records),
+                label=label,
+                phase="extracting",
+            )
+
+            console.print(f"\n\n{'#' * 60}")
+            console.print(f"  SESSION {index + 1}/{len(records)}: {label}")
+            console.print(f"{'#' * 60}")
+
+            try:
+                if not session_id:
+                    console.print(
+                        "  WARNING: No target_session_id — cannot evaluate",
+                        style="yellow",
+                    )
+                    failed += 1
+                    record_failed = True
+                    failure_reason = "No target_session_id"
+                    continue
+
+                if not metric_refs:
+                    console.print(
+                        "  WARNING: No metric_refs in run config — skipping evaluation",
+                        style="yellow",
+                    )
+                    failed += 1
+                    record_failed = True
+                    failure_reason = "No metric_refs in run config"
+                    continue
+
+                try:
+                    fetch_result = fetch_by_session_id(
+                        session_id,
+                        langfuse,
+                        retry_timeout=langfuse_timeout,
+                        artifacts=record.artifacts_collected,
+                        scenario=scenarios_by_id.get(scenario_id),
+                        persona=personas_by_id.get(persona_id),
+                        stop_reason=record.outcome.stop_reason,
+                        cancellation_available=True,
+                    )
+
+                    if not fetch_result.test_cases:
+                        console.print(
+                            "  WARNING: No evaluable test cases", style="yellow"
+                        )
+                        failed += 1
+                        record_failed = True
+                        failure_reason = "No evaluable test cases"
+                        continue
+
+                    evaluation_log.write(
+                        f"RECORD {index + 1}/{len(records)} {label} — EVALUATING"
+                    )
+                    for metric_ref in metric_refs:
+                        evaluation_log.write(
+                            "METRIC CONFIG — "
+                            + json.dumps(
+                                {
+                                    "record": label,
+                                    "fqn": metric_ref.fqn,
+                                    "args": metric_ref.args,
+                                },
+                                ensure_ascii=False,
+                                default=str,
+                                sort_keys=True,
+                            )
+                        )
+                    _update_evaluation_progress(
+                        progress,
+                        task_id,
+                        record_number=index + 1,
+                        total_records=len(records),
+                        label=label,
+                        phase="evaluating",
+                    )
+                    eval_result = evaluate_metrics(fetch_result, metric_refs)
+                    eval_results.append(eval_result)
+                    _log_metric_results(
+                        evaluation_log,
+                        eval_result,
+                        record_label=label,
+                    )
+                except Exception as exc:
+                    console.print(
+                        f"  WARNING: Evaluation failed: {exc}", style="yellow"
+                    )
+                    failed += 1
+                    record_failed = True
+                    failure_reason = str(exc)
+            finally:
+                terminal_phase = "failed" if record_failed else "done"
+                log_suffix = f"FAILED — {failure_reason}" if record_failed else "DONE"
+                evaluation_log.write(
+                    f"RECORD {index + 1}/{len(records)} {label} — {log_suffix}"
+                )
+                _update_evaluation_progress(
+                    progress,
+                    task_id,
+                    record_number=index + 1,
+                    total_records=len(records),
+                    label=label,
+                    phase=terminal_phase,
+                    advance=1,
+                )
+
+        if progress and task_id is not None:
+            progress.update(task_id, description="Evaluation complete")
+
+    report_written = False
+    if eval_results:
+        merged = EvalResult.merge(eval_results)
+        reports_dir = experiment_dir / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        task_contexts: dict[str, TaskContext] = {}
+        for record in records:
+            scenario_id = record.config.scenario
+            if scenario_id not in task_contexts:
+                context: TaskContext = {"personas": []}
+                scenario_obj = scenarios_by_id.get(scenario_id)
+                if scenario_obj:
+                    context["description"] = scenario_obj.description
+                    context["fixtures"] = scenario_obj.fixtures
+                task_contexts[scenario_id] = context
+
+            persona_entry: PersonaContext = {
+                "id": record.config.persona,
+                "stop_reason": record.outcome.stop_reason,
+                "total_turns": record.outcome.total_turns,
+                "duration_seconds": record.outcome.duration_seconds,
+            }
+            persona_obj = personas_by_id.get(record.config.persona)
+            if persona_obj:
+                persona_entry["description"] = persona_obj.description
+            task_contexts[scenario_id].setdefault("personas", []).append(persona_entry)
+
+        generate_report(
+            merged,
+            run_id="report",
+            output_dir=reports_dir,
+            experiment_description=experiment.description,
+            task_contexts=task_contexts,
+        )
+        report_written = True
+        evaluation_log.write(f"REPORT WRITTEN — {reports_dir}")
+
+    outcome = EvaluationOutcome(
+        total_records=len(records),
+        successful_records=len(eval_results),
+        failed_records=failed,
+        report_written=report_written,
+    )
+    evaluation_log.write(
+        "EVALUATION COMPLETED — "
+        f"{outcome.successful_records}/{outcome.total_records} records succeeded, "
+        f"{outcome.failed_records} failed"
+    )
+    return outcome
+
+
+def _run_evaluation_command(
+    experiment_dir: Path,
+    *,
+    langfuse_timeout: int,
+    verbose: int,
+    quiet: bool,
+) -> EvaluationOutcome:
+    """Run evaluation and convert expected input errors to a CLI exit."""
+    try:
+        return _run_evaluation(
+            experiment_dir,
+            langfuse_timeout=langfuse_timeout,
+            verbose=verbose,
+            quiet=quiet,
+        )
+    except EvaluationInputError as exc:
+        EvaluationLogger(experiment_dir / "logs", reset=False).write(
+            f"EVALUATION FAILED — {exc}"
+        )
+        raise typer.Exit(code=1) from None
+    except Exception as exc:
+        EvaluationLogger(experiment_dir / "logs", reset=False).write(
+            f"EVALUATION FAILED — {exc}"
+        )
+        console.print(f"Error: evaluation failed: {exc}", style="bold red")
+        raise typer.Exit(code=1) from exc
+
+
 @app.command()
 def simulate(
+    input_dir: Path = typer.Option(
+        ..., "--input-dir", help="Directory containing experiment.yaml and fixtures/"
+    ),
+    verbose: int = typer.Option(
+        0, "--verbose", "-v", count=True, help="Increase logging verbosity"
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", help="Suppress output below ERROR level"
+    ),
+    no_tui: bool = typer.Option(
+        False, "--no-tui", help="Disable TUI even in a terminal"
+    ),
+    log_format: Literal["text", "json"] = typer.Option(
+        "text", "--log-format", help="Log file format: text or json"
+    ),
+    log_dir: Path | None = typer.Option(
+        None,
+        "--log-dir",
+        help="Override log directory (default: co-located with results)",
+    ),
+    concurrency: int = typer.Option(
+        5, "--concurrency", "-c", help="Max parallel simulation workers"
+    ),
+) -> None:
+    """Run simulation only and prepare the evaluation handoff."""
+    experiment_dir = _run_simulation(
+        input_dir,
+        verbose=verbose,
+        quiet=quiet,
+        no_tui=no_tui,
+        log_format=log_format,
+        log_dir=log_dir,
+        concurrency=concurrency,
+    )
+    if not _record_files(experiment_dir):
+        console.print("No run records found.", style="bold red")
+        raise typer.Exit(code=1)
+    _print_evaluate_handoff(experiment_dir, input_dir)
+
+
+@app.command()
+def evaluate(
+    input_dir: Path = typer.Option(
+        ..., "--input-dir", help="Directory containing experiment.yaml and fixtures/"
+    ),
+    langfuse_timeout: int = typer.Option(
+        90, "--langfuse-timeout", help="Seconds to wait for Langfuse traces"
+    ),
+    verbose: int = typer.Option(
+        0, "--verbose", "-v", count=True, help="Increase logging verbosity"
+    ),
+    quiet: bool = typer.Option(
+        False, "--quiet", help="Suppress output below ERROR level"
+    ),
+) -> None:
+    """Evaluate the latest simulation output for an input directory."""
+    resolved_input_dir = input_dir.resolve()
+    try:
+        resolved_experiment_dir = _resolve_latest_experiment(resolved_input_dir)
+    except EvaluationInputError:
+        raise typer.Exit(code=1) from None
+    console.print(f"Selected experiment: {resolved_experiment_dir}")
+    outcome = _run_evaluation_command(
+        resolved_experiment_dir,
+        langfuse_timeout=langfuse_timeout,
+        verbose=verbose,
+        quiet=quiet,
+    )
+    if outcome.total_records == 0:
+        console.print("nothing to evaluate")
+    _print_evaluation_summary(resolved_experiment_dir, outcome, pipeline=False)
+
+
+@app.command()
+def run(
     input_dir: Path = typer.Option(
         ..., "--input-dir", help="Directory containing experiment.yaml and fixtures/"
     ),
@@ -233,280 +959,31 @@ def simulate(
         5, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
 ) -> None:
-    """Run end-to-end simulation, evaluation, and report."""
-    load_dotenv()
-
-    use_tui = not no_tui and sys.stderr.isatty()
-
-    if quiet:
-        log_level = "ERROR"
-    elif verbose >= 2:
-        log_level = "DEBUG"
-    elif verbose >= 1:
-        log_level = "INFO"
-    else:
-        log_level = "WARNING"
-
-    # Configure logging BEFORE importing harness modules — they create
-    # module-level loggers that cache the processor chain.
-    # When TUI is active, set DEBUG so all events flow through the router.
-    from metis.core.logging import configure_logging
-
-    configure_logging(level="DEBUG" if use_tui else log_level)
-
-    # Disable structlog's per-proxy bind caching so that module-level loggers
-    # (created at import time below) always use the latest processor chain —
-    # required for setup_engine_logging to inject the router after import.
-    import structlog
-
-    structlog.configure(cache_logger_on_first_use=False)
-
-    # Deferred imports: these pull in playwright, deepeval, langfuse, and openai
-    # which are expensive to load. Keeping them here avoids penalising --help/--version.
-    from metis.engine.evaluation import evaluate
-    from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
-    from metis.engine.reporting import TaskContext, generate_report
-    from metis.engine.simulation.experiment import HarnessConfig, run_experiment
-    from metis.engine.simulation.types import Experiment, RunRecord
-
-    if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
-        os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
-
-    project_root = _find_project_root()
-
-    resolved_input_dir = input_dir.resolve()
-    _validate_inputs(resolved_input_dir)
-
-    experiment_path = resolved_input_dir / "experiment.yaml"
-    fixtures_dir = resolved_input_dir / "fixtures"
-    experiment = Experiment.load_file(experiment_path)
-
-    suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
-    experiment_dir = project_root / "experiments" / f"{experiment.id}-{suffix}"
-    experiment_dir.mkdir(parents=True)
-
-    shutil.copytree(resolved_input_dir, experiment_dir / "inputs")
-
-    personas_by_id = {p.id: p for p in experiment.personas}
-
-    config = HarnessConfig.load()
-    headed = os.environ.get("HEADED", "").lower() == "true"
-
-    console.print(f"\n{'=' * 60}")
-    console.print("  SIMULATION")
-    console.print(f"{'=' * 60}")
-    console.print(f"  Experiment: {experiment_dir}")
-    console.print(f"  Input: {resolved_input_dir}")
-    console.print(f"  Mode: {'headed' if headed else 'headless'}\n")
-
-    # --- Set up logging and TUI ---
-    resolved_log_dir = log_dir or (experiment_dir / "logs")
-    resolved_log_dir.mkdir(parents=True, exist_ok=True)
-
-    # Build initial SimulationState from the experiment config
-    scenarios_state: list[ScenarioState] = []
-    total_run_count = 0
-    for scenario in experiment.scenarios:
-        run_states: list[RunState] = []
-        for persona_ref in scenario.persona_refs:
-            for trial_idx in range(scenario.num_trials):
-                total_run_count += 1
-                run_states.append(
-                    RunState(
-                        scenario_id=scenario.id,
-                        persona_id=persona_ref,
-                        trial=trial_idx + 1,
-                        num_trials=scenario.num_trials,
-                        phase="pending",
-                        current_turn=None,
-                        max_turns=20,  # RunConfig default; overwritten by update_run_turn() during simulation
-                        turn_detail="",
-                        duration_seconds=None,
-                        stop_reason=None,
-                    )
-                )
-        scenarios_state.append(
-            ScenarioState(
-                scenario_id=scenario.id,
-                runs=run_states,
-                phase="pending",
-            )
-        )
-
-    sim_state = SimulationState(
-        experiment_id=experiment.id,
-        scenarios=scenarios_state,
-        total_runs=total_run_count,
-    )
-
-    display_level = getattr(logging, log_level)
-
-    tail_buffers = {
-        f"w{i}": TailBuffer(max_lines=15, min_level=display_level)
-        for i in range(concurrency)
-    }
-    log_router = setup_engine_logging(
-        log_dir=resolved_log_dir,
+    """Run simulation followed by evaluation and report generation."""
+    experiment_dir = _run_simulation(
+        input_dir,
+        verbose=verbose,
+        quiet=quiet,
+        no_tui=no_tui,
         log_format=log_format,
-        tail_buffers=tail_buffers,
-        use_tui=use_tui,
+        log_dir=log_dir,
+        concurrency=concurrency,
     )
-    orchestration_logger = OrchestrationLogger(
-        log_dir=resolved_log_dir, log_format=log_format
-    )
+    if not _record_files(experiment_dir):
+        console.print("No run records found.", style="bold red")
+        raise typer.Exit(code=1)
 
-    tui_ctx: TUIContext | None = None
-    if use_tui:
-        tui_ctx = TUIContext(state=sim_state, tail_buffers=tail_buffers)
-
-    _interrupt_count = 0
-    _interrupt_lock = threading.Lock()
-
-    def _handle_sigint(signum: int, frame: Any) -> None:
-        nonlocal _interrupt_count
-        with _interrupt_lock:
-            _interrupt_count += 1
-            if _interrupt_count >= 2:
-                console.print("\nForce abort.", style="bold red")
-                sys.exit(130)
-            console.print(
-                "\nInterrupt received — finishing current turn. Press Ctrl+C again to abort.",
-                style="yellow",
-            )
-
-    prev_handler = signal.signal(signal.SIGINT, _handle_sigint)
     try:
-        with tui_ctx if tui_ctx else nullcontext():
-            run_experiment(
-                config=config,
-                experiment=experiment,
-                personas_by_id=personas_by_id,
-                output_dir=experiment_dir,
-                fixtures_dir=fixtures_dir,
-                headed=headed,
-                concurrency=concurrency,
-                state=sim_state,
-                orchestration_logger=orchestration_logger,
-                log_router=log_router,
-                tui_ctx=tui_ctx,
-            )
-    finally:
-        signal.signal(signal.SIGINT, prev_handler)
-        teardown_engine_logging(log_router)
-        orchestration_logger.close()
-
-    summary = _format_final_summary(
-        sim_state,
-        str(experiment_dir),
-        str(resolved_log_dir),
-    )
-    console.print(summary)
-
-    files = sorted(
-        experiment_dir.glob("runs/*/record.json"), key=lambda p: p.stat().st_mtime
-    )
-    records: list[RunRecord] = [RunRecord.load_file(f) for f in files]
-
-    if not records:
-        console.print("No run records found.")
-        sys.exit(1)
-
-    console.print(f"  Loaded {len(records)} run record(s)")
-
-    langfuse = get_langfuse_client()
-    eval_results = []
-    failed = 0
-
-    for i, record in enumerate(records):
-        session_id = record.target_session_id
-        persona = record.config.persona
-        task = record.config.scenario
-        metric_refs = record.config.metric_refs
-
-        console.print(f"\n\n{'#' * 60}")
-        console.print(f"  SESSION {i + 1}/{len(records)}: {persona} x {task}")
-        console.print(f"{'#' * 60}")
-
-        if not session_id:
-            console.print(
-                "  WARNING: No target_session_id — cannot evaluate", style="yellow"
-            )
-            failed += 1
-            continue
-
-        if not metric_refs:
-            console.print(
-                "  WARNING: No metric_refs in run config — skipping evaluation",
-                style="yellow",
-            )
-            failed += 1
-            continue
-
-        try:
-            scenarios_by_id = {s.id: s for s in experiment.scenarios}
-            scenario_obj = scenarios_by_id.get(task)
-            persona_obj = personas_by_id.get(persona)
-            fetch_result = fetch_by_session_id(
-                session_id,
-                langfuse,
-                retry_timeout=langfuse_timeout,
-                artifacts=record.artifacts_collected,
-                scenario=scenario_obj,
-                persona=persona_obj,
-                stop_reason=record.outcome.stop_reason,
-                cancellation_available=True,
-            )
-
-            if not fetch_result.test_cases:
-                console.print("  WARNING: No evaluable test cases", style="yellow")
-                failed += 1
-                continue
-
-            eval_result = evaluate(fetch_result, metric_refs)
-            eval_results.append(eval_result)
-
-        except Exception as e:
-            console.print(f"  WARNING: Evaluation failed: {e}", style="yellow")
-            failed += 1
-
-    if eval_results:
-        from metis.engine.evaluation.types import EvalResult
-
-        merged = EvalResult.merge(eval_results)
-        reports_dir = experiment_dir / "reports"
-        reports_dir.mkdir(exist_ok=True)
-
-        scenarios_by_id = {s.id: s for s in experiment.scenarios}
-        task_contexts: dict[str, TaskContext] = {}
-        for record in records:
-            sid = record.config.scenario
-            if sid not in task_contexts:
-                ctx: TaskContext = {"personas": []}
-                scenario_obj = scenarios_by_id.get(sid)
-                if scenario_obj:
-                    ctx["description"] = scenario_obj.description
-                    ctx["fixtures"] = scenario_obj.fixtures
-                task_contexts[sid] = ctx
-            persona_entry = {
-                "id": record.config.persona,
-                "stop_reason": record.outcome.stop_reason,
-                "total_turns": record.outcome.total_turns,
-                "duration_seconds": record.outcome.duration_seconds,
-            }
-            persona_obj = personas_by_id.get(record.config.persona)
-            if persona_obj:
-                persona_entry["description"] = persona_obj.description
-            task_contexts[sid]["personas"].append(persona_entry)
-
-        generate_report(
-            merged,
-            run_id="report",
-            output_dir=reports_dir,
-            experiment_description=experiment.description,
-            task_contexts=task_contexts,
+        outcome = _run_evaluation_command(
+            experiment_dir,
+            langfuse_timeout=langfuse_timeout,
+            verbose=verbose,
+            quiet=quiet,
         )
+    except Exception:
+        _print_evaluate_handoff(experiment_dir, input_dir)
+        raise
 
-    console.print(f"\n\n{'=' * 60}")
-    console.print(f"  PIPELINE COMPLETE — {len(records)} run(s), {failed} failed")
-    console.print(f"  Experiment: {experiment_dir}")
-    console.print(f"{'=' * 60}")
+    if outcome.failed_records:
+        _print_evaluate_handoff(experiment_dir, input_dir)
+    _print_evaluation_summary(experiment_dir, outcome, pipeline=True)

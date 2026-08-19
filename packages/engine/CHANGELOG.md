@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **BREAKING: Split simulation and evaluation commands** — `metis engine simulate` now writes simulation records only. Use `metis engine evaluate --input-dir <dir>` to score the latest output for an input directory, or `metis engine run --input-dir <dir>` for the combined flow. Simulation keeps its live TUI, while evaluation uses a normal progress bar and writes one complete `logs/evaluate.log`. `--langfuse-timeout` moved from `simulate` to `evaluate` and `run`; `--no-tui` controls simulation only.
+
 ### Fixed
 
 ## [0.9.0] — 2026-08-20

@@ -1,6 +1,6 @@
 # Example Experiment
 
-This directory is a ready-to-run experiment input for `metis engine simulate`.
+This directory is a ready-to-run experiment input for `metis engine simulate` and `metis engine run`.
 
 **Everything here is written for Orca** — the personas, task descriptions, fixture
 files, and metric selections assume Orca's specific multi-agent architecture
@@ -23,8 +23,15 @@ example-experiment/
 ## Running
 
 ```bash
+# One command: simulate, evaluate, and write the report.
+metis engine run --input-dir example-experiment/
+
+# Separate phases: evaluate selects the latest simulation output.
 metis engine simulate --input-dir example-experiment/
+metis engine evaluate --input-dir example-experiment/
 ```
+
+Simulation uses the live TUI in a terminal. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file in the selected output.
 
 ## What it covers
 
