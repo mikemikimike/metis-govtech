@@ -6,6 +6,7 @@ from deepeval.metrics import FaithfulnessMetric
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
+from ._extraction import extract_deck_slides, extract_source_texts
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -65,17 +66,27 @@ class DeckSourceFaithfulnessMetric(MetisTurnMetric):
     def measure(self, test_case: LLMTestCase) -> float:
         source_texts = _extract_source_facts(test_case)
 
+        if not source_texts:
+            source_texts = extract_source_texts(test_case)
+
         if not source_texts and test_case.context:
             source_texts = list(test_case.context)
 
         if not source_texts:
             return mark_skipped(self, "No source material found in trace")
 
+        # The faithfulness claim is the deck's own content when a deck is
+        # extractable; otherwise fall back to the agent's response text.
+        slides = extract_deck_slides(test_case)
+        deck_claim = (
+            "\n\n".join(s.text for s in slides) if slides else test_case.actual_output
+        )
+
         combined_source = "\n\n---\n\n".join(source_texts)
         faith_tc = _with_eval_context(
             LLMTestCase(
                 input=test_case.input,
-                actual_output=test_case.actual_output,
+                actual_output=deck_claim,
                 retrieval_context=[combined_source],
                 metadata=test_case.metadata,
             )

@@ -50,7 +50,9 @@ class ChartTypeFitnessMetric(MetisTurnMetric):
             acceptable_types = list(self.PATTERN_ACCEPTABLE_TYPES.get(data_pattern, []))
 
         if not acceptable_types:
-            return mark_skipped(self, "No data_pattern or acceptable_chart_types annotated")
+            return mark_skipped(
+                self, "No data_pattern or acceptable_chart_types annotated"
+            )
 
         actual_type = self._extract_chart_type(observations)
         if actual_type is None:

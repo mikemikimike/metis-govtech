@@ -2,7 +2,12 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric, BaseMetric, ConversationalGEval, GEval
+from deepeval.metrics import (
+    BaseConversationalMetric,
+    BaseMetric,
+    ConversationalGEval,
+    GEval,
+)
 from deepeval.test_case import LLMTestCase
 from deepeval.test_case.conversational_test_case import ConversationalTestCase
 

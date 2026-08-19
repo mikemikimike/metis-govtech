@@ -41,7 +41,9 @@ class CrossAgentContextRetentionMetric(MetisTurnMetric):
         num_history = chat_meta.num_history_messages
 
         if num_history == 0:
-            return mark_skipped(self, "First message in session (no prior context to retain)")
+            return mark_skipped(
+                self, "First message in session (no prior context to retain)"
+            )
 
         if spoke_context:
             cached_values = set(str(v).lower() for v in spoke_context.values() if v)

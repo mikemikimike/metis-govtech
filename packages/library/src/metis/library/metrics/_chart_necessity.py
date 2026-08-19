@@ -1,10 +1,15 @@
-"""Chart Necessity metric (M-DA-9)."""
+"""Chart Necessity / gating metric (M-DA-22)."""
 
 from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
+from ._base import (
+    EVIDENCE_INSTRUCTION,
+    MetisTurnMetric,
+    _ContextAwareGEval,
+    mark_skipped,
+)
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -30,7 +35,10 @@ def _has_chart_observations(test_case: LLMTestCase) -> bool:
 class ChartNecessityMetric(MetisTurnMetric):
     """Chart adds value beyond a simple number/table?
 
-    Skips when no chart content is present in the output.
+    Chart gating / restraint: a produced chart must be warranted — the agent
+    should default to text/tables for non-chart or ambiguous asks and never
+    produce unrequested dashboards or 2x2 grids. Skips when no chart content
+    is present (the restraint decision to not chart is not penalised here).
     """
 
     tags: ClassVar[tuple[str, ...]] = (
@@ -52,24 +60,26 @@ class ChartNecessityMetric(MetisTurnMetric):
                 name="Chart Necessity",
                 model=_get_judge_model(),
                 criteria=(
-                    "Evaluate whether the chart adds value over a "
-                    "simple number or table.\n\n"
+                    "Evaluate whether producing this chart was warranted — "
+                    "i.e. whether the agent showed appropriate charting "
+                    "restraint.\n\n"
                     "The 'input' is the user's request.\n"
                     "The 'actual_output' describes the chart and the "
                     "data it visualises.\n\n"
                     "Check:\n"
-                    "1. Could the insight be conveyed equally well "
-                    "as a single number or 2-row table?\n"
-                    "2. Does the visual representation reveal "
-                    "patterns not obvious from raw numbers?\n"
-                    "3. Is there enough data complexity to warrant "
-                    "a chart?\n\n"
-                    "Score 1.0 if chart reveals patterns that "
-                    "numbers alone wouldn't show. "
-                    "Score 0.5 if chart is helpful but a table "
-                    "would also work. "
-                    "Score 0.0 if chart is unnecessary — a single "
-                    "number would suffice." + EVIDENCE_INSTRUCTION
+                    "1. Was a chart warranted — either explicitly requested, "
+                    "or revealing a non-obvious insight that text/a table "
+                    "would not convey as well?\n"
+                    "2. For a non-chart or ambiguous ask, would text or a "
+                    "table have been the more appropriate default?\n"
+                    "3. Is this an unrequested dashboard, 2x2 grid, or "
+                    "exploratory chart produced without being asked?\n\n"
+                    "Score 1.0 when the chart was clearly warranted. "
+                    "Score 0.5 when a chart is defensible but text/a table "
+                    "would have served as well. "
+                    "Score 0.0 when the chart was unwarranted — an unrequested "
+                    "dashboard/grid, or a case where a single number or table "
+                    "should have been the default." + EVIDENCE_INSTRUCTION
                 ),
                 evaluation_params=[
                     SingleTurnParams.INPUT,
