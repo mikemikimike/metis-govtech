@@ -8,13 +8,9 @@ from __future__ import annotations
 
 import html as html_mod
 from collections import OrderedDict
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from metis.engine.extractor.types import RoutingSummary
-    from metis.engine.reporting._types import TurnMetricsEntry
-
-    from .generator import TaskContext
+from metis.engine.extractor.types import RoutingSummary
+from metis.engine.reporting._types import TaskContext, TurnReport
 
 
 def render_summary_cards(
@@ -122,7 +118,7 @@ def render_routing_section(routing_summary: RoutingSummary | None) -> str:
 
 
 def render_task_sections(
-    turn_results: list[TurnMetricsEntry],
+    turn_results: list[TurnReport],
     task_contexts: dict[str, TaskContext] | None = None,
 ) -> str:
     tasks_map: dict[str, list[dict]] = {}
@@ -415,7 +411,7 @@ def render_metric_table(metric_agg: dict) -> str:
     </div>"""
 
 
-def render_trace_details(turn_results: list[TurnMetricsEntry]) -> str:
+def render_trace_details(turn_results: list[TurnReport]) -> str:
     sessions: OrderedDict[str, list[dict]] = OrderedDict()
     for result in turn_results:
         sid = result.get("session_id") or result["trace_id"]
@@ -524,7 +520,7 @@ def _render_trace_turn(turn_idx: int, result: dict) -> str:
             </div>"""
 
 
-def _extract_failures(turn_results: list[TurnMetricsEntry]) -> list[dict]:
+def _extract_failures(turn_results: list[TurnReport]) -> list[dict]:
     failures = []
     for result in turn_results:
         for metric in result["metrics"]:

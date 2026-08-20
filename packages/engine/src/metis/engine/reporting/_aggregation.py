@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, TypedDict
 
-from metis.engine.reporting._types import SessionMetricsEntry, TurnMetricsEntry
+from metis.engine.reporting._types import SessionReport, TurnReport
 
 
 class MetricAggregate(TypedDict):
@@ -18,8 +18,8 @@ class MetricAggregate(TypedDict):
 
 
 def aggregate_metrics(
-    turn_results: list[TurnMetricsEntry],
-    session_results: list[SessionMetricsEntry] | None = None,
+    turn_results: list[TurnReport],
+    session_results: list[SessionReport] | None = None,
 ) -> dict[str, MetricAggregate]:
     """Aggregate pass/fail/skip counts and scores by metric name.
 

@@ -13,18 +13,17 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TypedDict
 
 from metis.core.console import console
 from metis.engine.evaluation.types import EvalDurations, EvalResult, SessionResult
 from metis.engine.extractor.types import RoutingSummary
 from metis.engine.reporting._types import (
+    PersonaContext,
     SessionMetricResult,
-    SessionMetricsEntry,
-    SessionToolCallData,
-    SessionTurnData,
+    SessionReport,
+    TaskContext,
     TurnMetricResult,
-    TurnMetricsEntry,
+    TurnReport,
 )
 
 from ._aggregation import aggregate_metrics
@@ -36,25 +35,6 @@ from ._html_sections import (
     render_trace_details,
 )
 from ._styles import REPORT_CSS
-
-
-class PersonaContext(TypedDict, total=False):
-    id: str
-    description: str
-    stop_reason: str
-    total_turns: int
-    duration_seconds: float
-
-
-class TaskContext(TypedDict, total=False):
-    description: str
-    persona_id: str
-    persona_description: str
-    fixtures: list[str]
-    stop_reason: str
-    total_turns: int
-    duration_seconds: float
-    personas: list[PersonaContext]
 
 
 RESULTS_DIR = Path.cwd() / "results"
@@ -75,10 +55,10 @@ class ReportResult:
 
 
 def format_terminal_summary(
-    turn_results: list[TurnMetricsEntry],
+    turn_results: list[TurnReport],
     run_id: str,
     routing_summary: RoutingSummary | None = None,
-    session_results: list[SessionMetricsEntry] | None = None,
+    session_results: list[SessionReport] | None = None,
 ) -> str:
     """Print a compact terminal summary of all metric results."""
     lines = []
@@ -128,10 +108,10 @@ def format_terminal_summary(
 
 
 def save_json_results(
-    turn_results: list[TurnMetricsEntry],
+    turn_results: list[TurnReport],
     run_id: str,
     routing_summary: RoutingSummary | None = None,
-    session_results: list[SessionMetricsEntry] | None = None,
+    session_results: list[SessionReport] | None = None,
     durations: EvalDurations | None = None,
     output_dir: Path | None = None,
 ) -> Path:
@@ -189,10 +169,10 @@ def save_json_results(
 
 
 def save_html_report(
-    turn_results: list[TurnMetricsEntry],
+    turn_results: list[TurnReport],
     run_id: str,
     routing_summary: RoutingSummary | None = None,
-    session_results: list[SessionMetricsEntry] | None = None,
+    session_results: list[SessionReport] | None = None,
     durations: EvalDurations | None = None,
     output_dir: Path | None = None,
     experiment_description: str | None = None,
@@ -253,8 +233,8 @@ def generate_report(
     if run_id is None:
         run_id = f"langfuse-eval-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
-    turn_results: list[TurnMetricsEntry] = _convert_turn_results(eval_result)
-    session_results: list[SessionMetricsEntry] = _convert_session_results(
+    turn_results: list[TurnReport] = _convert_turn_results(eval_result)
+    session_results: list[SessionReport] = _convert_session_results(
         eval_result.session_results
     )
 
@@ -301,9 +281,9 @@ def generate_report(
 # ---------------------------------------------------------------------------
 
 
-def _convert_turn_results(eval_result: EvalResult) -> list[TurnMetricsEntry]:
+def _convert_turn_results(eval_result: EvalResult) -> list[TurnReport]:
     """Convert turn results into the report-ready format."""
-    results: list[TurnMetricsEntry] = []
+    results: list[TurnReport] = []
     for tcr in eval_result.turn_results:
         tc = tcr.llm_test_case
         metadata = tc.metadata or {}
@@ -327,7 +307,7 @@ def _convert_turn_results(eval_result: EvalResult) -> list[TurnMetricsEntry]:
         delegation = metadata.get("delegation") or {}
         routed_to = delegation.get("target", "") if isinstance(delegation, dict) else ""
         results.append(
-            TurnMetricsEntry(
+            TurnReport(
                 trace_id=trace_id,
                 session_id=metadata.get("session_id", ""),
                 scenario_id=metadata.get("scenario_id", ""),
@@ -344,9 +324,9 @@ def _convert_turn_results(eval_result: EvalResult) -> list[TurnMetricsEntry]:
 
 def _convert_session_results(
     session_results: list[SessionResult],
-) -> list[SessionMetricsEntry]:
+) -> list[SessionReport]:
     """Convert session results into the report-ready format."""
-    entries: list[SessionMetricsEntry] = []
+    entries: list[SessionReport] = []
     for scr in session_results:
         ctc = scr.conversational_test_case
         sid = (ctc.metadata or {}).get("session_id", "unknown")
@@ -361,25 +341,9 @@ def _convert_session_results(
                     skipped=mr.skipped,
                 )
             )
-        turns_data: list[SessionTurnData] = []
-        for t in ctc.turns:
-            turn_entry = SessionTurnData(role=t.role, content=t.content[:2000])
-            if t.tools_called:
-                turn_entry["tools"] = [
-                    SessionToolCallData(
-                        name=tc_tool.name,
-                        input=str(tc_tool.input_parameters or "")[:300],
-                        output=str(tc_tool.output or "")[:300],
-                    )
-                    for tc_tool in t.tools_called
-                ]
-            turns_data.append(turn_entry)
-
         entries.append(
-            SessionMetricsEntry(
+            SessionReport(
                 session_id=sid,
-                num_turns=len(ctc.turns) // 2,
-                turns=turns_data,
                 metrics=metrics_out,
             )
         )
@@ -389,7 +353,7 @@ def _convert_session_results(
 def _render_html(
     run_id: str,
     metric_agg: dict,
-    turn_results: list[TurnMetricsEntry],
+    turn_results: list[TurnReport],
     routing_summary: RoutingSummary | None = None,
     total_cost: float = 0,
     total_latency: float = 0,

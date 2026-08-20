@@ -1,17 +1,15 @@
 """Report generation (terminal, JSON, HTML)."""
 
 from metis.engine.reporting._types import (
+    PersonaContext,
     SessionMetricResult,
-    SessionMetricsEntry,
-    SessionToolCallData,
-    SessionTurnData,
+    SessionReport,
+    TaskContext,
     TurnMetricResult,
-    TurnMetricsEntry,
+    TurnReport,
 )
 from metis.engine.reporting.generator import (
-    PersonaContext,
     ReportResult,
-    TaskContext,
     generate_report,
 )
 
@@ -19,11 +17,9 @@ __all__ = [
     "PersonaContext",
     "ReportResult",
     "SessionMetricResult",
-    "SessionMetricsEntry",
-    "SessionToolCallData",
-    "SessionTurnData",
+    "SessionReport",
     "TaskContext",
     "TurnMetricResult",
-    "TurnMetricsEntry",
+    "TurnReport",
     "generate_report",
 ]
