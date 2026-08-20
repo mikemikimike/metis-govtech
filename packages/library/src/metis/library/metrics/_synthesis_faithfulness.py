@@ -5,12 +5,12 @@ from typing import ClassVar, cast
 from deepeval.metrics import FaithfulnessMetric
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric, _with_eval_context
+from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
 
-class SynthesisFaithfulnessMetric(SyncBaseMetric):
+class SynthesisFaithfulnessMetric(MetisTurnMetric):
     """Synthesis faithfulness — AC-ORCA-6.
 
     Does the orchestrator's response faithfully represent what the subagent
@@ -52,20 +52,14 @@ class SynthesisFaithfulnessMetric(SyncBaseMetric):
             subagent_output = test_case.context[0]
 
         if not subagent_output:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = (
-                "No subagent output available for faithfulness check — SKIPPED"
+            return mark_skipped(
+                self, "No subagent output available for faithfulness check"
             )
-            self.success = True
-            return self.score or 0.0
 
         if not test_case.actual_output or not test_case.actual_output.strip():
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "Empty actual_output — no Orca response to evaluate — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(
+                self, "Empty actual_output — no Orca response to evaluate"
+            )
 
         synthesis_tc = _with_eval_context(
             LLMTestCase(
@@ -79,7 +73,8 @@ class SynthesisFaithfulnessMetric(SyncBaseMetric):
         metric = self._get_metric()
         metric.measure(synthesis_tc)
         self.score = metric.score
-        self.evaluation_cost = getattr(metric, "evaluation_cost", None)
+        self._accrue_cost(metric.evaluation_cost)
+        self._accrue_tokens(metric.input_tokens, metric.output_tokens)
         self.reason = metric.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

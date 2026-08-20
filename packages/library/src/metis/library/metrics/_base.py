@@ -2,7 +2,7 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseMetric, ConversationalGEval, GEval
+from deepeval.metrics import BaseConversationalMetric, BaseMetric, ConversationalGEval, GEval
 from deepeval.test_case import LLMTestCase
 from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
@@ -117,22 +117,24 @@ class _ContextAwareConversationalGEval(ConversationalGEval):
             self.criteria = original_criteria
 
 
-class SyncBaseMetric(BaseMetric):
-    """BaseMetric subclass that implements a_measure synchronously.
+class MetisTurnMetric(BaseMetric):
+    """Base class for per-turn METIS metrics (evaluated per LLMTestCase).
 
-    Adds a `skipped` flag so reporters can distinguish "passed"
-    from "not evaluated due to missing data." Skipped metrics
-    still return success=True (so assert_test doesn't fail), but
-    reporters should exclude them from pass-rate aggregation.
+    Each per-turn metric is evaluated against a single trace/turn. The
+    orchestrator routes metrics here when they are NOT subclasses of
+    BaseConversationalMetric.
 
-    Exposes evaluation_cost/input_tokens/output_tokens from inner
-    GEval so DeepEval's framework can pick them up.
+    Subclasses must:
+    - Define ``tags: ClassVar[tuple[str, ...]]`` (enforced at class definition)
+    - Implement either:
+      - ``measure()`` + set ``async_mode = False`` (code-graded, synchronous)
+      - ``async def a_measure()`` (judge-graded, async; async_mode defaults True)
 
-    All subclasses MUST define a `tags` ClassVar.
+    The orchestrator dispatches based on ``async_mode``:
+    - False → ``measure()`` called via ``asyncio.to_thread``
+    - True → ``await a_measure()``
     """
 
-    async_mode = False
-    skipped: bool = False
     tags: ClassVar[tuple[str, ...]]
 
     def __init_subclass__(cls, **kwargs):
@@ -141,17 +143,50 @@ class SyncBaseMetric(BaseMetric):
             getattr(cls, "tags", None), tuple
         ):
             raise TypeError(
-                f"{cls.__name__} must define a 'tags' ClassVar as a tuple of strings"
+                f"{cls.__name__} must define a 'tags' class variable as a tuple of strings"
             )
 
-    def _absorb_geval_cost(self, geval):
-        """Copy cost/token info from an inner GEval after it evaluates."""
-        if hasattr(geval, "evaluation_cost") and geval.evaluation_cost:
-            self.evaluation_cost = (self.evaluation_cost or 0) + geval.evaluation_cost
-        if hasattr(geval, "input_tokens") and geval.input_tokens:
-            self.input_tokens = (self.input_tokens or 0) + geval.input_tokens
-        if hasattr(geval, "output_tokens") and geval.output_tokens:
-            self.output_tokens = (self.output_tokens or 0) + geval.output_tokens
+    def _accrue_cost(self, cost: float | None) -> None:
+        """Override BaseMetric._accrue_cost to handle None initial state."""
+        if cost is not None:
+            self.evaluation_cost = (self.evaluation_cost or 0) + cost
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        return self.measure(test_case)
+
+class MetisSessionMetric(BaseConversationalMetric):
+    """Base class for session-level METIS metrics (evaluated per ConversationalTestCase).
+
+    Each session metric is evaluated against a full multi-turn conversation.
+    The orchestrator routes metrics here when they ARE subclasses of
+    BaseConversationalMetric.
+
+    Subclasses must:
+    - Define ``tags: ClassVar[tuple[str, ...]]`` (enforced at class definition)
+    - Implement ``measure()`` and/or ``async def a_measure()``
+
+    Unlike MetisTurnMetric, session metrics receive the entire conversation
+    (all turns, tool calls, and metadata) rather than a single turn.
+    """
+
+    tags: ClassVar[tuple[str, ...]]
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not hasattr(cls, "tags") or not isinstance(
+            getattr(cls, "tags", None), tuple
+        ):
+            raise TypeError(
+                f"{cls.__name__} must define a 'tags' class variable as a tuple of strings"
+            )
+
+
+def mark_skipped(metric: BaseMetric | BaseConversationalMetric, reason: str) -> float:
+    """Mark a metric as skipped (not evaluated due to missing/irrelevant data).
+
+    Sets metric.skipped = True so the orchestrator can read it directly.
+    Sets score=1.0 and success=True so any DeepEval assert_test won't fail.
+    """
+    metric.skipped = True
+    metric.score = 1.0
+    metric.reason = reason
+    metric.success = True
+    return 1.0

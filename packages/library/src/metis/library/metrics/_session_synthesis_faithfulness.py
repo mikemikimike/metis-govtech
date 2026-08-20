@@ -2,15 +2,14 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric
+from ._base import EVIDENCE_INSTRUCTION, MetisSessionMetric, _ContextAwareConversationalGEval, mark_skipped
+
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
     MultiTurnParams,
 )
 
-from ._base import EVIDENCE_INSTRUCTION, _ContextAwareConversationalGEval
 from ._judge import _get_judge_model
-
 
 def _has_delegation(test_case: ConversationalTestCase) -> bool:
     """Check whether any assistant turn has a delegate_task_to_member tool call."""
@@ -21,8 +20,7 @@ def _has_delegation(test_case: ConversationalTestCase) -> bool:
                     return True
     return False
 
-
-class SessionSynthesisFaithfulnessMetric(BaseConversationalMetric):
+class SessionSynthesisFaithfulnessMetric(MetisSessionMetric):
     """Key facts from subagent output preserved without distortion.
 
     Wraps ConversationalGEval with a pre-flight check: skips if no
@@ -100,11 +98,7 @@ class SessionSynthesisFaithfulnessMetric(BaseConversationalMetric):
 
     def measure(self, test_case: ConversationalTestCase) -> float:
         if not _has_delegation(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No delegation in this session — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No delegation in this session")
 
         geval = self._get_geval()
         geval.measure(test_case)
@@ -117,11 +111,7 @@ class SessionSynthesisFaithfulnessMetric(BaseConversationalMetric):
         self, test_case: ConversationalTestCase, *args, **kwargs
     ) -> float:
         if not _has_delegation(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No delegation in this session — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No delegation in this session")
 
         geval = self._get_geval()
         await geval.a_measure(test_case)

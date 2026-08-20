@@ -5,7 +5,7 @@ from typing import ClassVar, cast
 from deepeval.metrics import FaithfulnessMetric
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric, _with_eval_context
+from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -30,7 +30,7 @@ def _extract_source_facts(test_case: LLMTestCase) -> list:
     return source_texts
 
 
-class DeckSourceFaithfulnessMetric(SyncBaseMetric):
+class DeckSourceFaithfulnessMetric(MetisTurnMetric):
     """AC-SM-18 — Deck source faithfulness.
 
     Does the deck contradict or misrepresent facts from the source material?
@@ -69,11 +69,7 @@ class DeckSourceFaithfulnessMetric(SyncBaseMetric):
             source_texts = list(test_case.context)
 
         if not source_texts:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No source material found in trace — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No source material found in trace")
 
         combined_source = "\n\n---\n\n".join(source_texts)
         faith_tc = _with_eval_context(
@@ -88,7 +84,8 @@ class DeckSourceFaithfulnessMetric(SyncBaseMetric):
         metric = self._get_metric()
         metric.measure(faith_tc)
         self.score = metric.score
-        self.evaluation_cost = getattr(metric, "evaluation_cost", None)
+        self._accrue_cost(metric.evaluation_cost)
+        self._accrue_tokens(metric.input_tokens, metric.output_tokens)
         self.reason = metric.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0
