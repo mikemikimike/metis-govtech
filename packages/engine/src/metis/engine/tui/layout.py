@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import time
 from types import TracebackType
 
 from rich.console import Console, ConsoleOptions, RenderResult
@@ -16,7 +18,14 @@ from .tail import TailBuffer
 
 
 class _LiveTailRenderable:
-    """Renderable for a single worker's tail buffer."""
+    """Renderable for a single worker's tail buffer.
+
+    Renders exactly the allocated row count with entries top-anchored: new
+    entries appear at the next available row below existing content, empty
+    padding fills the bottom. Entries never shift position until the buffer
+    is full and scrolling begins (oldest drops off the top, everything moves
+    up by exactly 1 row). Each entry is truncated to 1 visual row.
+    """
 
     def __init__(self, tail_buffer: TailBuffer) -> None:
         self._buf = tail_buffer
@@ -24,22 +33,32 @@ class _LiveTailRenderable:
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
-        entries = self._buf.get_entries()
-        max_lines = max(1, (options.height or 10) - 1)
-        entries = entries[-max_lines:]
+        total_rows = max(1, (options.height or 10) - 1)
+        width = options.max_width or 80
+        entries = self._buf.get_entries()[-total_rows:]
 
+        content_lines: list[Text] = []
         if not entries:
-            yield Text("(waiting for output)", style="dim")
-            return
+            content_lines.append(Text("(waiting for output)", style="dim"))
+        else:
+            for entry in entries:
+                text = (
+                    entry.content.copy()
+                    if isinstance(entry.content, Text)
+                    else Text(entry.content)
+                )
+                text.truncate(width - 1, overflow="ellipsis")
+                content_lines.append(text)
+
+        pad_count = total_rows - len(content_lines)
 
         output = Text()
-        for i, entry in enumerate(entries):
+        for i, line in enumerate(content_lines):
             if i > 0:
                 output.append("\n")
-            if isinstance(entry.content, Text):
-                output.append_text(entry.content)
-            else:
-                output.append(entry.content)
+            output.append_text(line)
+        for _ in range(pad_count):
+            output.append("\n")
         yield output
 
 
@@ -66,6 +85,15 @@ class _LiveDashboardRenderable:
         yield render_dashboard(self._state)
 
 
+_REFRESH_DEBOUNCE_SECONDS = 0.2
+
+
+def _compute_tail_max_lines(terminal_rows: int, tail_ratio: int, total_ratio: int) -> int:
+    """Derive tail buffer capacity from terminal height and layout ratios."""
+    tail_rows = (terminal_rows * tail_ratio) // total_ratio
+    return max(5, tail_rows - 2)
+
+
 class TUIContext:
     """Context manager that owns the Rich Live display."""
 
@@ -75,6 +103,16 @@ class TUIContext:
         self._state = state
         self._tail_buffers = tail_buffers
         self._console = Console(stderr=True)
+        self._last_refresh: float = 0.0
+
+        try:
+            terminal_rows = os.get_terminal_size().lines
+        except OSError:
+            terminal_rows = 24
+
+        tail_max = _compute_tail_max_lines(terminal_rows, tail_ratio=3, total_ratio=5)
+        for buf in tail_buffers.values():
+            buf.resize(tail_max)
 
         self._layout = Layout()
 
@@ -137,6 +175,11 @@ class TUIContext:
             self._live = None
 
     def refresh(self) -> None:
-        """Force an immediate refresh of the Live display."""
-        if self._live:
-            self._live.refresh()
+        """Refresh the Live display, debounced to avoid burst redraws."""
+        if not self._live:
+            return
+        now = time.monotonic()
+        if (now - self._last_refresh) < _REFRESH_DEBOUNCE_SECONDS:
+            return
+        self._last_refresh = now
+        self._live.refresh()

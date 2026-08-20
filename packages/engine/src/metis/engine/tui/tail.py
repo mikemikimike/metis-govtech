@@ -43,5 +43,10 @@ class TailBuffer:
         """Return entries for rendering."""
         return list(self._entries)
 
+    def resize(self, max_lines: int) -> None:
+        """Change buffer capacity, discarding oldest entries if shrinking."""
+        self._max_lines = max_lines
+        self._entries = deque(self._entries, maxlen=max_lines)
+
     def clear(self) -> None:
         self._entries.clear()
