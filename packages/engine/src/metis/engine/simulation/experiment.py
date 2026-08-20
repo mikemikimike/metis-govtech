@@ -174,19 +174,23 @@ async def _run_experiment_async(
             logger.info("[experiment] Closing browser...")
             await browser.close()
 
-    # Print summary
-    console.print("\n\n========== SIMULATION SUMMARY ==========\n")
-    for r in all_records:
-        status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
-        console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
-        console.print(
-            f"         Turns: {r.outcome.total_turns}, "
-            f"Duration: {r.outcome.duration_seconds}s, "
-            f"Reason: {r.outcome.stop_reason}"
+    # Print summary (only in non-TUI mode; TUI mode prints via CLI after exiting)
+    if not tui_ctx:
+        console.print("\n\n========== SIMULATION SUMMARY ==========\n")
+        for r in all_records:
+            status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
+            console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
+            console.print(
+                f"         Turns: {r.outcome.total_turns}, "
+                f"Duration: {r.outcome.duration_seconds}s, "
+                f"Reason: {r.outcome.stop_reason}"
+            )
+    if not tui_ctx:
+        console.print()
+        achieved = sum(
+            1 for r in all_records if r.outcome.stop_reason == "goal_achieved"
         )
-    console.print()
-    achieved = sum(1 for r in all_records if r.outcome.stop_reason == "goal_achieved")
-    console.print(f"Goals achieved: {achieved}/{len(all_records)}")
+        console.print(f"Goals achieved: {achieved}/{len(all_records)}")
 
 
 async def _worker(
@@ -321,6 +325,7 @@ async def _worker(
                         trial=trial_index,
                         state=state,
                         tui_ctx=tui_ctx,
+                        shutdown_event=shutdown_event,
                     )
                     record = await orchestrator.run()
                     record.attempt_number = attempt

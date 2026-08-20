@@ -7,6 +7,7 @@ RunRecord assembly without knowing anything about the transport layer.
 
 from __future__ import annotations
 
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -57,6 +58,7 @@ class Orchestrator:
         trial: int = 1,
         state: SimulationState | None = None,
         tui_ctx: TUIContext | None = None,
+        shutdown_event: threading.Event | None = None,
     ) -> None:
         self._runner = runner
         self._agent = agent
@@ -67,6 +69,7 @@ class Orchestrator:
         self._trial = trial
         self._state = state
         self._tui_ctx = tui_ctx
+        self._shutdown_event = shutdown_event
 
     async def run(self) -> RunRecord:
         """Execute the full simulation run."""
@@ -117,6 +120,16 @@ class Orchestrator:
             await self._runner.setup(run_config)
 
             while True:
+                if self._shutdown_event and self._shutdown_event.is_set():
+                    logger.info("[turn %d] STOP: shutdown requested", turn_count)
+                    return self._build_record(
+                        "interrupted",
+                        conversation,
+                        artifacts_collected,
+                        start_time,
+                        target_session_id,
+                    )
+
                 turn_count += 1
                 turn_start = time.time()
                 elapsed_s = time.time() - start_time

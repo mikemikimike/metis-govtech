@@ -401,12 +401,12 @@ def simulate(
         teardown_engine_logging(log_router)
         orchestration_logger.close()
 
-    summary = _format_final_summary(
-        sim_state,
-        str(experiment_dir),
-        str(resolved_log_dir),
-    )
-    console.print(summary)
+        summary = _format_final_summary(
+            sim_state,
+            str(experiment_dir),
+            str(resolved_log_dir),
+        )
+        console.print(summary)
 
     files = sorted(
         experiment_dir.glob("runs/*/record.json"), key=lambda p: p.stat().st_mtime
