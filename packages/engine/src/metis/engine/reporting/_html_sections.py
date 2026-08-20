@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from metis.engine.extractor.types import RoutingSummary
+    from metis.engine.reporting._types import TurnMetricsEntry
 
     from .generator import TaskContext
 
@@ -121,15 +122,15 @@ def render_routing_section(routing_summary: RoutingSummary | None) -> str:
 
 
 def render_task_sections(
-    test_results: list[dict],
+    turn_results: list[TurnMetricsEntry],
     task_contexts: dict[str, TaskContext] | None = None,
 ) -> str:
     tasks_map: dict[str, list[dict]] = {}
-    for tr in test_results:
+    for tr in turn_results:
         task_id = tr.get("scenario_id") or "unknown"
         tasks_map.setdefault(task_id, []).append(tr)
 
-    failures = _extract_failures(test_results)
+    failures = _extract_failures(turn_results)
 
     if not tasks_map:
         return ""
@@ -414,9 +415,9 @@ def render_metric_table(metric_agg: dict) -> str:
     </div>"""
 
 
-def render_trace_details(test_results: list[dict]) -> str:
+def render_trace_details(turn_results: list[TurnMetricsEntry]) -> str:
     sessions: OrderedDict[str, list[dict]] = OrderedDict()
-    for result in test_results:
+    for result in turn_results:
         sid = result.get("session_id") or result["trace_id"]
         if sid not in sessions:
             sessions[sid] = []
@@ -523,9 +524,9 @@ def _render_trace_turn(turn_idx: int, result: dict) -> str:
             </div>"""
 
 
-def _extract_failures(test_results: list[dict]) -> list[dict]:
+def _extract_failures(turn_results: list[TurnMetricsEntry]) -> list[dict]:
     failures = []
-    for result in test_results:
+    for result in turn_results:
         for metric in result["metrics"]:
             if not metric["success"] and not metric.get("skipped"):
                 failures.append(

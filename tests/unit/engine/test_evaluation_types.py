@@ -32,6 +32,6 @@ def test_metric_result_with_cost():
 def test_test_case_result():
     tc = LLMTestCase(input="hello", actual_output="world")
     mr = MetricResult(name="M", score=1.0, reason="", success=True, skipped=False)
-    tcr = TurnResult(test_case=tc, metrics=[mr])
-    assert len(tcr.metrics) == 1
-    assert tcr.test_case.input == "hello"
+    tcr = TurnResult(llm_test_case=tc, metric_results=[mr])
+    assert len(tcr.metric_results) == 1
+    assert tcr.llm_test_case.input == "hello"

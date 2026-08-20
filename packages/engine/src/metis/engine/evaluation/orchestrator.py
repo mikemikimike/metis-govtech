@@ -12,19 +12,14 @@ from deepeval.test_case import LLMTestCase
 from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
 from metis.engine.evaluation.types import (
+    EvalDurations,
     EvalResult,
     MetricResult,
     SessionResult,
     TurnResult,
 )
 from metis.engine.extractor.langfuse import FetchLangfuseResult
-from metis.engine.extractor.types import (
-    RoutingSummary,
-    SessionMetricResult,
-    SessionMetricsEntry,
-    SessionToolCallData,
-    SessionTurnData,
-)
+from metis.engine.extractor.types import RoutingSummary
 from metis.engine.simulation.types import MetricRef
 
 
@@ -81,7 +76,7 @@ async def _evaluate_turn_metrics(
         tasks = [_run_metric(m, test_case, semaphore) for m in metrics]
         metric_results = await asyncio.gather(*tasks)
         results.append(
-            TurnResult(test_case=test_case, metrics=list(metric_results))
+            TurnResult(llm_test_case=test_case, metric_results=list(metric_results))
         )
 
     return results
@@ -101,7 +96,7 @@ async def _evaluate_session_metrics(
         tasks = [_run_metric(m, test_case, semaphore) for m in metrics]
         metric_results = await asyncio.gather(*tasks)
         results.append(
-            SessionResult(test_case=test_case, metrics=list(metric_results))
+            SessionResult(conversational_test_case=test_case, metric_results=list(metric_results))
         )
 
     return results
@@ -148,7 +143,7 @@ def evaluate(
         m for m in all_metrics if isinstance(m, BaseConversationalMetric)
     ]
 
-    phase_timings: dict[str, float] = {}
+    durations = EvalDurations()
 
     # Per-turn evaluation
     per_turn_results: list[TurnResult] = []
@@ -159,7 +154,7 @@ def evaluate(
                 test_cases, per_turn_metrics, concurrency=concurrency
             )
         )
-        phase_timings["per_turn"] = round(time.time() - t0, 1)
+        durations.turn_metrics_seconds = round(time.time() - t0, 1)
 
     # Session evaluation
     session_results: list[SessionResult] = []
@@ -170,46 +165,7 @@ def evaluate(
                 session_test_cases, session_metrics, concurrency=concurrency
             )
         )
-        phase_timings["session"] = round(time.time() - t0, 1)
-
-    # Build structured session_metrics list for the report
-    session_metrics_data: list[SessionMetricsEntry] = []
-    for scr in session_results:
-        ctc = scr.test_case
-        sid = (ctc.metadata or {}).get("session_id", "unknown")
-        metrics_out: list[SessionMetricResult] = []
-        for mr in scr.metrics:
-            metrics_out.append(
-                SessionMetricResult(
-                    name=mr.name,
-                    score=mr.score,
-                    reason=mr.reason,
-                    success=mr.success,
-                    skipped=mr.skipped,
-                )
-            )
-        turns_data: list[SessionTurnData] = []
-        for t in ctc.turns:
-            turn_entry = SessionTurnData(role=t.role, content=t.content[:2000])
-            if t.tools_called:
-                turn_entry["tools"] = [
-                    SessionToolCallData(
-                        name=tc_tool.name,
-                        input=str(tc_tool.input_parameters or "")[:300],
-                        output=str(tc_tool.output or "")[:300],
-                    )
-                    for tc_tool in t.tools_called
-                ]
-            turns_data.append(turn_entry)
-
-        session_metrics_data.append(
-            SessionMetricsEntry(
-                session_id=sid,
-                num_turns=len(ctc.turns) // 2,
-                turns=turns_data,
-                metrics=metrics_out,
-            )
-        )
+        durations.session_metrics_seconds = round(time.time() - t0, 1)
 
     routing_summary = RoutingSummary(
         total_traces=len(test_cases),
@@ -220,10 +176,8 @@ def evaluate(
     )
 
     return EvalResult(
-        test_results=per_turn_results,
-        test_cases=test_cases,
+        turn_results=per_turn_results,
+        session_results=session_results,
         routing_summary=routing_summary,
-        trace_routing={},
-        session_metrics=session_metrics_data,
-        timings=phase_timings,
+        durations=durations,
     )

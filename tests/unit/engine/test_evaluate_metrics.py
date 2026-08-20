@@ -89,8 +89,8 @@ def test_evaluate_turn_metrics_sync():
     results = asyncio.run(_evaluate_turn_metrics([tc], [FakeCodeMetric()]))
 
     assert len(results) == 1
-    assert len(results[0].metrics) == 1
-    mr = results[0].metrics[0]
+    assert len(results[0].metric_results) == 1
+    mr = results[0].metric_results[0]
     assert mr.name == "Fake Code Metric"
     assert mr.score == 0.9
     assert mr.skipped is False
@@ -102,7 +102,7 @@ def test_evaluate_turn_metrics_skipped():
     tc = LLMTestCase(input="hi", actual_output="hello")
     results = asyncio.run(_evaluate_turn_metrics([tc], [FakeSkipMetric()]))
 
-    mr = results[0].metrics[0]
+    mr = results[0].metric_results[0]
     assert mr.skipped is True
     assert mr.score == 1.0
     assert mr.reason == "not applicable"
@@ -114,7 +114,7 @@ def test_evaluate_turn_metrics_async():
     tc = LLMTestCase(input="hi", actual_output="hello")
     results = asyncio.run(_evaluate_turn_metrics([tc], [FakeAsyncMetric()]))
 
-    mr = results[0].metrics[0]
+    mr = results[0].metric_results[0]
     assert mr.name == "Fake Async Metric"
     assert mr.score == 0.7
     assert mr.skipped is False
@@ -127,4 +127,4 @@ def test_evaluate_turn_metrics_multiple():
     metrics = [FakeCodeMetric(), FakeSkipMetric(), FakeAsyncMetric()]
     results = asyncio.run(_evaluate_turn_metrics([tc], metrics))
 
-    assert len(results[0].metrics) == 3
+    assert len(results[0].metric_results) == 3
