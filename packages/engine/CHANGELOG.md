@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **Restored example experiment scenarios** — uncommented all scenarios and metric refs in `example-experiment/experiment.yaml` that were temporarily disabled during the v0.8.0 library rollback (97cee19)
+
 ### Fixed
 
 ## [0.8.0] — 2026-08-19
