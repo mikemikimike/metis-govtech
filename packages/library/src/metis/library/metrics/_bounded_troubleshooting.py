@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisTurnMetric
 from ._types import TraceMetadata
 
 
-class BoundedTroubleshootingMetric(SyncBaseMetric):
+class BoundedTroubleshootingMetric(MetisTurnMetric):
     """Stops retrying after N attempts?
 
     Counts repeated calls to the same tool name in TOOL observations.

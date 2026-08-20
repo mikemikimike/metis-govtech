@@ -8,7 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **`EvalDurations` dataclass** — typed replacement for the untyped `dict[str, float]` timings field; carries `turn_metrics_seconds` and `session_metrics_seconds` for clear phase-level profiling
+- **`EvalResult.session_results`** — structured `list[SessionResult]` field symmetric with `turn_results`; session→report conversion now happens in the reporting layer, not the orchestrator
+- **Report-ready types** (`reporting/_types.py`) — `TurnReport`, `SessionReport`, `TurnMetricResult`, `SessionMetricResult`, `PersonaContext`, `TaskContext` moved from extractor and generator into a dedicated module; eliminates `TYPE_CHECKING` circular-import workaround in `_html_sections.py`
+
 ### Changed
+
+- **BREAKING: Evaluation result type renames** — `TurnResult.test_case` → `.llm_test_case`, `SessionResult.test_case` → `.conversational_test_case`, `.metrics` → `.metric_results` on both; `EvalResult.test_results` → `.turn_results`, `.timings` → `.durations` (now `EvalDurations`)
+- **BREAKING: Removed `EvalResult.test_cases` and `EvalResult.trace_routing`** — `test_cases` was redundant (same objects live in each `TurnResult.llm_test_case`); `trace_routing` was unused scaffolding (always `{}`). Routing info is now derived from test case metadata in the report converter.
+- **BREAKING: JSON report schema** — output keys renamed: `"test_cases"` → `"turn_results"`, `"session_metrics"` → `"session_results"`, `"timings"` / `"phase_timings"` → `"durations"` (object with `turn_metrics_seconds`, `session_metrics_seconds`); `"routed_to"` field now derived from trace metadata
+- **Reporting module naming** — `test_results` parameter/variables → `turn_results`, `session_metrics` → `session_results` across `generator.py`, `_aggregation.py`, `_html_sections.py`; `TurnMetricsEntry` → `TurnReport`, `SessionMetricsEntry` → `SessionReport`
+- **Session conversion moved to report generator** — orchestrator now returns only structured results; `_convert_session_results()` in `generator.py` handles the projection (symmetric with `_convert_turn_results()`)
+- **`SessionReport` trimmed** — removed `num_turns` and `turns` fields (conversation content was never rendered; available via `SessionResult.conversational_test_case` if needed)
+- **Extractor `__init__` exports pruned** — removed re-exports of report-format types (`SessionMetricResult`, `SessionMetricsEntry`, `SessionToolCallData`, `SessionTurnData`) that now live in `reporting._types`
 
 ### Fixed
 

@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class ChartTypeFitnessMetric(SyncBaseMetric):
+class ChartTypeFitnessMetric(MetisTurnMetric):
     """Chart type matches the data pattern?
 
     Code grader: given an annotation of the data pattern and acceptable chart types,
@@ -30,6 +30,8 @@ class ChartTypeFitnessMetric(SyncBaseMetric):
         "composition": {"stacked_bar", "stacked_area", "waterfall"},
     }
 
+    async_mode = False
+
     def __init__(self, threshold: float = 1.0):
         self.threshold = threshold
         self.score = 0.0
@@ -48,13 +50,7 @@ class ChartTypeFitnessMetric(SyncBaseMetric):
             acceptable_types = list(self.PATTERN_ACCEPTABLE_TYPES.get(data_pattern, []))
 
         if not acceptable_types:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = (
-                "No data_pattern or acceptable_chart_types annotated — SKIPPED"
-            )
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No data_pattern or acceptable_chart_types annotated")
 
         actual_type = self._extract_chart_type(observations)
         if actual_type is None:

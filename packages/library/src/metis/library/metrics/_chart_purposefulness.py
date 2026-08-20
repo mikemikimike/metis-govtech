@@ -4,7 +4,7 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -27,7 +27,7 @@ def _has_chart_observations(test_case: LLMTestCase) -> bool:
     return False
 
 
-class ChartPurposefulnessMetric(SyncBaseMetric):
+class ChartPurposefulnessMetric(MetisTurnMetric):
     """Chart answers a specific question in its title?
 
     Skips when no chart content is present in the output.
@@ -81,34 +81,15 @@ class ChartPurposefulnessMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        if not _has_chart_observations(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No chart content in output — SKIPPED"
-            self.success = True
-            return self.score or 0.0
-
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self._absorb_geval_cost(geval)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         if not _has_chart_observations(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No chart content in output — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No chart content in output")
 
         geval = self._get_geval()
         await geval.a_measure(test_case)
         self.score = geval.score
-        self._absorb_geval_cost(geval)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

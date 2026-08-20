@@ -2,7 +2,7 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric
+from ._base import MetisSessionMetric
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
     MultiTurnParams,
@@ -12,7 +12,7 @@ from ._base import EVIDENCE_INSTRUCTION, _ContextAwareConversationalGEval
 from ._judge import _get_judge_model
 
 
-class SessionCrossAgentContextRetentionMetric(BaseConversationalMetric):
+class SessionCrossAgentContextRetentionMetric(MetisSessionMetric):
     """Context from earlier agent turns preserved across agent switches.
 
     Judge-graded session variant. Scores 1.0 automatically when only one agent

@@ -4,12 +4,12 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class FailureReportQualityMetric(SyncBaseMetric):
+class FailureReportQualityMetric(MetisTurnMetric):
     """Report includes what failed, what was attempted, and next steps?
 
     Full judge: evaluates the agent's failure report when it stops on an error.
@@ -62,27 +62,6 @@ class FailureReportQualityMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        chat_meta: OrcaChatMetadata = (
-            metadata.get("chat_metadata") or OrcaChatMetadata()
-        )
-
-        if not chat_meta.had_error:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No error in this trace — SKIPPED"
-            self.success = True
-            return self.score or 0.0
-
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         metadata = cast(TraceMetadata, test_case.metadata)
         chat_meta: OrcaChatMetadata = (
@@ -90,16 +69,13 @@ class FailureReportQualityMetric(SyncBaseMetric):
         )
 
         if not chat_meta.had_error:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No error in this trace — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No error in this trace")
 
         geval = self._get_geval()
         await geval.a_measure(test_case)
         self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

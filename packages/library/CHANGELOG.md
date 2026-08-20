@@ -8,7 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **`MetisSessionMetric` base class** (`_base.py`) — new base for session-level metrics that extends `BaseConversationalMetric`; enforces `tags` ClassVar like `MetisTurnMetric`; session metrics now have an explicit, documented base class rather than inheriting directly from DeepEval's `BaseConversationalMetric`
+- **`mark_skipped()` helper** (`_base.py`) — standalone function to mark a metric as skipped with a reason; sets `skipped=True`, `score=1.0`, `success=True` so DeepEval assertions pass while reporters exclude the metric from pass-rate aggregation
+
 ### Changed
+
+- **BREAKING: `SyncBaseMetric` renamed to `MetisTurnMetric`** — all per-turn metric classes now inherit from `MetisTurnMetric` instead of `SyncBaseMetric`; the class is no longer "sync-only" (supports both sync `measure()` and async `a_measure()` dispatch based on `async_mode`)
+- **`_absorb_geval_cost()` replaced by `_accrue_cost()`** — simplified to a single `cost: float | None` parameter; no longer manually copies `input_tokens`/`output_tokens` (DeepEval's framework handles token tracking)
+- Removed hardcoded `async_mode = False` and `skipped: bool = False` from the base class; `async_mode` now defaults to DeepEval's default (True), and skip state is managed via `mark_skipped()`
 
 ### Removed
 

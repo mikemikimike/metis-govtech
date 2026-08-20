@@ -2,7 +2,7 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric
+from ._base import MetisSessionMetric
 from deepeval.metrics import (
     ConversationCompletenessMetric as _ConversationCompletenessMetric,
 )
@@ -14,7 +14,7 @@ from deepeval.test_case.conversational_test_case import (
 from ._judge import _get_judge_model
 
 
-class SessionCompletenessMetric(BaseConversationalMetric):
+class SessionCompletenessMetric(MetisSessionMetric):
     """Did the session deliver what the user came for?
 
     Wraps DeepEval's built-in ConversationCompletenessMetric. Evaluates

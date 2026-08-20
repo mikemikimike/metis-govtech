@@ -4,12 +4,12 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class DiagnosisQualityMetric(SyncBaseMetric):
+class DiagnosisQualityMetric(MetisTurnMetric):
     """Root cause identified before fix attempted?
 
     Extract+judge: extracts error observations and the agent's response,
@@ -90,34 +90,15 @@ class DiagnosisQualityMetric(SyncBaseMetric):
                 return True
         return False
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        if not self._has_error(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No error observed in trace — SKIPPED"
-            self.success = True
-            return self.score or 0.0
-
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self._absorb_geval_cost(geval)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         if not self._has_error(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No error observed in trace — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No error observed in trace")
 
         geval = self._get_geval()
         await geval.a_measure(test_case)
         self.score = geval.score
-        self._absorb_geval_cost(geval)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0
