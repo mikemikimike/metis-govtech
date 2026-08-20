@@ -4,7 +4,7 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.9.0] — Unreleased
+## [0.9.0] — 2026-08-20
 
 ### Added
 
@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Session conversion moved to report generator** — orchestrator now returns only structured results; `_convert_session_results()` in `generator.py` handles the projection (symmetric with `_convert_turn_results()`)
 - **`SessionReport` trimmed** — removed `num_turns` and `turns` fields (conversation content was never rendered; available via `SessionResult.conversational_test_case` if needed)
 - **Extractor `__init__` exports pruned** — removed re-exports of report-format types (`SessionMetricResult`, `SessionMetricsEntry`, `SessionToolCallData`, `SessionTurnData`) that now live in `reporting._types`
+- **Restored example experiment scenarios** — uncommented all scenarios and metric refs in `example-experiment/experiment.yaml` that were temporarily disabled during the v0.8.0 library rollback (97cee19)
 
 ### Fixed
 
