@@ -205,7 +205,7 @@ When in doubt, check the DAG in [docs/architecture.md](docs/architecture.md).
 
 ## Versioning & Release
 
-Each package is versioned independently via a static `version` field in its `pyproject.toml`. For the step-by-step release procedure, see [docs/github-workflow.md](docs/github-workflow.md#completing-a-release).
+Each package is versioned independently via a static `version` field in its `pyproject.toml`. For the step-by-step release procedure, see [docs/github-workflow.md](docs/github-workflow.md#completing-a-release). For coordinated major version bumps and maintenance branches, see [docs/version-maintenance.md](docs/version-maintenance.md).
 
 The naming conventions are:
 - **Branch:** `release/<package-name>/v<semver>` (e.g., `release/metis-engine/v0.2.0`)

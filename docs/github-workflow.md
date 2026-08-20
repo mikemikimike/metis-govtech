@@ -136,6 +136,3 @@ For work that doesn't belong to a specific package release (e.g., documentation 
 | Merge | PR author merges after approval |
 | Tag release | `git tag -a <pkg>/v<ver> -m "<pkg>/v<ver>"` on `main` |
 
-## Major Version Maintenance
-
-See [docs/version-maintenance.md](version-maintenance.md) for the full strategy on maintaining previous major versions (branching, cherry-picks, EOL).
