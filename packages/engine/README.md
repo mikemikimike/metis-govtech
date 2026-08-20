@@ -27,7 +27,7 @@ cp packages/engine/.env.example .env
 # Run end-to-end (Simulation TUI, then evaluation progress bar)
 metis engine run --input-dir packages/engine/example-experiment/
 
-# Or run the phases separately. simulate prints the evaluate command.
+# Or run the phases separately, in this order. simulate prints the evaluate command.
 metis engine simulate --input-dir packages/engine/example-experiment/
 metis engine evaluate --input-dir packages/engine/example-experiment/
 
@@ -54,6 +54,15 @@ metis engine simulate --input-dir packages/engine/example-experiment/ --concurre
 # Custom Langfuse timeout for evaluation (default: 90s)
 metis engine evaluate --input-dir packages/engine/example-experiment/ --langfuse-timeout 120
 ```
+
+| Command | Reads | Writes |
+|---------|-------|--------|
+| `simulate` | `experiment.yaml` and `fixtures/` from `--input-dir` | `experiments/<id>-<timestamp>/runs/` |
+| `evaluate` | `runs/` from the newest `experiments/<id>-*`, plus the Langfuse traces it points to | `reports/` in that same output directory |
+
+> **Important:** `evaluate` must only be run after `simulate`. It scores an existing simulation output rather than producing one, so if no output exists for the experiment id it exits 1 with `no simulation output found for experiment '<id>'`.
+
+Both take the input experiment as `--input-dir`, not the output directory — `evaluate` resolves the newest matching output itself.
 
 Evaluation has no TUI option. It uses a normal progress bar in a terminal and linear per-record progress in a non-interactive environment.
 
