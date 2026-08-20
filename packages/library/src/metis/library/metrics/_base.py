@@ -16,7 +16,7 @@ EVIDENCE_INSTRUCTION = (
 
 def _build_context_block(metadata: dict) -> str:
     """Build an [EVALUATION CONTEXT] block from metadata, or return empty string."""
-    task = metadata.get("scenario") or metadata.get("task")
+    task = metadata.get("scenario")
     persona = metadata.get("persona")
 
     scenario_desc = getattr(task, "description", "") or ""

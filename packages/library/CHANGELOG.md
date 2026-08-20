@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Removed
 
+- **Deprecated `task`/`task_id` aliases** from `TraceMetadata` and the fallback read path in `_build_context_block`; callers must use `scenario`/`scenario_id` exclusively
+
 ## [0.3.0] — 2026-08-20
 
 ### Added
