@@ -33,6 +33,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **TUI panels jump and flicker during simulation** — stray writes to stderr (structlog `print("")` newlines, stdlib handler leaks, direct `console.print()` calls) corrupted the alternate screen buffer; now fully isolated via `DropEvent`, muted stdlib handler, and TUI-guarded console output
+- **TUI tail content shifts unpredictably** — long log entries wrapped to variable row counts causing multi-row jumps; entries are now truncated to 1 visual row and rendered top-anchored with bottom padding
+- **Ctrl+C requires pressing twice to stop** — first Ctrl+C now sets a `shutdown_event` checked by workers between runs for graceful stop; second Ctrl+C force-exits
+
 ## [0.8.0] — 2026-08-19
 
 ### Added

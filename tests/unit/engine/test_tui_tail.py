@@ -38,6 +38,22 @@ class TestTailBuffer:
         buf.append("info msg 2", level=logging.INFO)
         assert buf.get_lines() == ["info msg 2"]
 
+    def test_resize_grows(self) -> None:
+        buf = TailBuffer(max_lines=3, min_level=logging.DEBUG)
+        for i in range(3):
+            buf.append(f"line {i}", level=logging.DEBUG)
+        buf.resize(5)
+        buf.append("line 3", level=logging.DEBUG)
+        buf.append("line 4", level=logging.DEBUG)
+        assert buf.get_lines() == ["line 0", "line 1", "line 2", "line 3", "line 4"]
+
+    def test_resize_shrinks(self) -> None:
+        buf = TailBuffer(max_lines=5, min_level=logging.DEBUG)
+        for i in range(5):
+            buf.append(f"line {i}", level=logging.DEBUG)
+        buf.resize(3)
+        assert buf.get_lines() == ["line 2", "line 3", "line 4"]
+
     def test_clear(self) -> None:
         buf = TailBuffer(max_lines=5, min_level=logging.DEBUG)
         buf.append("line 1", level=logging.DEBUG)

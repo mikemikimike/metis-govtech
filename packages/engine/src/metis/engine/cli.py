@@ -361,18 +361,23 @@ def simulate(
 
     _interrupt_count = 0
     _interrupt_lock = threading.Lock()
+    shutdown_event = threading.Event()
 
     def _handle_sigint(signum: int, frame: Any) -> None:
         nonlocal _interrupt_count
         with _interrupt_lock:
             _interrupt_count += 1
             if _interrupt_count >= 2:
-                console.print("\nForce abort.", style="bold red")
+                if not use_tui:
+                    console.print("\nForce abort.", style="bold red")
                 sys.exit(130)
-            console.print(
-                "\nInterrupt received — finishing current turn. Press Ctrl+C again to abort.",
-                style="yellow",
-            )
+            shutdown_event.set()
+            if not use_tui:
+                console.print(
+                    "\nInterrupt received — finishing current run. "
+                    "Press Ctrl+C again to force abort.",
+                    style="yellow",
+                )
 
     prev_handler = signal.signal(signal.SIGINT, _handle_sigint)
     try:
@@ -389,18 +394,19 @@ def simulate(
                 orchestration_logger=orchestration_logger,
                 log_router=log_router,
                 tui_ctx=tui_ctx,
+                shutdown_event=shutdown_event,
             )
     finally:
         signal.signal(signal.SIGINT, prev_handler)
         teardown_engine_logging(log_router)
         orchestration_logger.close()
 
-    summary = _format_final_summary(
-        sim_state,
-        str(experiment_dir),
-        str(resolved_log_dir),
-    )
-    console.print(summary)
+        summary = _format_final_summary(
+            sim_state,
+            str(experiment_dir),
+            str(resolved_log_dir),
+        )
+        console.print(summary)
 
     files = sorted(
         experiment_dir.glob("runs/*/record.json"), key=lambda p: p.stat().st_mtime
