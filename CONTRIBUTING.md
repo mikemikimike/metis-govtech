@@ -240,8 +240,6 @@ Platform detection is automatic (GitHub/GitLab via remote URL). Override with `P
 > ```bash
 > # GitHub
 > gh label create release --description "Release tracking" --color 0E8A16
-> gh label create package --description "Workspace package" --color BFD4F2
-> gh label create app --description "Deployable app" --color D4C5F9
 > gh label create metis-core --description "" --color C5DEF5
 > gh label create metis-library --description "" --color C5DEF5
 > gh label create metis-engine --description "" --color C5DEF5
@@ -251,8 +249,6 @@ Platform detection is automatic (GitHub/GitLab via remote URL). Override with `P
 >
 > # GitLab
 > glab label create release --description "Release tracking" --color 0E8A16
-> glab label create package --color BFD4F2
-> glab label create app --color D4C5F9
 > glab label create metis-core --color C5DEF5
 > glab label create metis-library --color C5DEF5
 > glab label create metis-engine --color C5DEF5
