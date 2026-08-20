@@ -4,11 +4,11 @@ from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 
 
-class FollowUpRelevanceMetric(SyncBaseMetric):
+class FollowUpRelevanceMetric(MetisTurnMetric):
     """Follow-up suggestions relevant and actionable?
 
     Full judge: evaluates the quality of follow-up suggestions offered
@@ -86,34 +86,18 @@ class FollowUpRelevanceMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        if self._is_midflow_response(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "Mid-flow response (form/status/job submission) — follow-ups not expected — SKIPPED"
-            self.success = True
-            return self.score or 0.0
-
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self._absorb_geval_cost(geval)
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         if self._is_midflow_response(test_case):
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "Mid-flow response (form/status/job submission) — follow-ups not expected — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(
+                self,
+                "Mid-flow response (form/status/job submission) — follow-ups not expected",
+            )
 
         geval = self._get_geval()
         await geval.a_measure(test_case)
         self.score = geval.score
-        self._absorb_geval_cost(geval)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

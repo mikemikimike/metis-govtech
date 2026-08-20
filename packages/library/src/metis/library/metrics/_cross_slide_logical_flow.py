@@ -4,7 +4,7 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -50,7 +50,7 @@ def _extract_deck_properties(test_case: LLMTestCase) -> dict:
     return deck_props
 
 
-class CrossSlideLogicalFlowMetric(SyncBaseMetric):
+class CrossSlideLogicalFlowMetric(MetisTurnMetric):
     """AC-SM-14 — Cross-slide logical flow.
 
     Evaluates narrative coherence across slides: does slide N+1 logically
@@ -64,7 +64,6 @@ class CrossSlideLogicalFlowMetric(SyncBaseMetric):
         "per-turn",
         "judge-graded",
     )
-    async_mode = False
 
     def __init__(self):
         self.threshold = 0.6
@@ -111,15 +110,11 @@ class CrossSlideLogicalFlowMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
+    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         deck_props = _extract_deck_properties(test_case)
 
         if not deck_props["slide_titles"]:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No slide titles extractable from trace — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No slide titles extractable from trace")
 
         titles_str = "\n".join(
             f"{i + 1}. {t}" for i, t in enumerate(deck_props["slide_titles"])
@@ -136,15 +131,13 @@ class CrossSlideLogicalFlowMetric(SyncBaseMetric):
         )
 
         geval = self._get_geval()
-        geval.measure(flow_tc)
+        await geval.a_measure(flow_tc)
         self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0
-
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        return self.measure(test_case)
 
     @property
     def __name__(self) -> str:

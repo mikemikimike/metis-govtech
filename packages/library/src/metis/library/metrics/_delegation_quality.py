@@ -4,12 +4,12 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, SyncBaseMetric, _ContextAwareGEval
+from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
 
-class DelegationQualityMetric(SyncBaseMetric):
+class DelegationQualityMetric(MetisTurnMetric):
     """Delegation Quality (span-aware wrapper for GEval).
 
     Extracts the delegation task message from the span tree and evaluates
@@ -21,8 +21,6 @@ class DelegationQualityMetric(SyncBaseMetric):
         "per-turn",
         "judge-graded",
     )
-
-    async_mode = False
 
     def __init__(self):
         self.threshold = 0.6
@@ -66,41 +64,14 @@ class DelegationQualityMetric(SyncBaseMetric):
             )
         return self._geval
 
-    def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
-        delegation = metadata.get("delegation")
-
-        if not delegation or not delegation["task"]:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No delegation occurred or no task message found — SKIPPED"
-            self.success = True
-            return self.score or 0.0
-
-        delegation_tc = LLMTestCase(
-            input=test_case.input,
-            actual_output=delegation["task"],
-            metadata=test_case.metadata,
-        )
-
-        geval = self._get_geval()
-        geval.measure(delegation_tc)
-        self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
-        self.reason = f"[→ {delegation['target']}] {geval.reason}"
-        self.success = (self.score or 0) >= self.threshold
-        return self.score or 0.0
-
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
         metadata = cast(TraceMetadata, test_case.metadata)
         delegation = metadata.get("delegation")
 
         if not delegation or not delegation["task"]:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No delegation occurred or no task message found — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(
+                self, "No delegation occurred or no task message found"
+            )
 
         delegation_tc = LLMTestCase(
             input=test_case.input,
@@ -111,7 +82,8 @@ class DelegationQualityMetric(SyncBaseMetric):
         geval = self._get_geval()
         await geval.a_measure(delegation_tc)
         self.score = geval.score
-        self.evaluation_cost = getattr(geval, "evaluation_cost", None)
+        self._accrue_cost(geval.evaluation_cost)
+        self._accrue_tokens(geval.input_tokens, geval.output_tokens)
         self.reason = f"[→ {delegation['target']}] {geval.reason}"
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0

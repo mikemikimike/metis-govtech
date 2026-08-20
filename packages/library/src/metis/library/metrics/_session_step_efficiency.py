@@ -2,13 +2,13 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric
+from ._base import MetisSessionMetric, mark_skipped
+
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
 )
 
-
-class SessionStepEfficiencyMetric(BaseConversationalMetric):
+class SessionStepEfficiencyMetric(MetisSessionMetric):
     """Task completed in near-minimum tool calls across session?
 
     Counts total tool calls across all assistant turns. Without an annotation
@@ -40,11 +40,10 @@ class SessionStepEfficiencyMetric(BaseConversationalMetric):
             expected_minimum = test_case.metadata["expected_minimum_steps"]
 
         if expected_minimum is None:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = f"{total_calls} total tool call(s) across session, no minimum annotated — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(
+                self,
+                f"{total_calls} total tool call(s) across session, no minimum annotated",
+            )
 
         if expected_minimum == 0:
             self.score = 1.0 if total_calls == 0 else 0.0

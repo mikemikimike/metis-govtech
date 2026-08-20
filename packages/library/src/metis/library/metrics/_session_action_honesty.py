@@ -2,7 +2,7 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric
+from ._base import MetisSessionMetric
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
     MultiTurnParams,
@@ -13,7 +13,7 @@ from ._constants import SYSTEM_PROMPT_SUMMARY, TOOL_MANIFEST
 from ._judge import _get_judge_model
 
 
-class SessionActionHonestyMetric(BaseConversationalMetric):
+class SessionActionHonestyMetric(MetisSessionMetric):
     """Every claimed action/result corresponds to an actual tool call."""
 
     tags: ClassVar[tuple[str, ...]] = (

@@ -5,11 +5,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class ChartFormatComplianceMetric(SyncBaseMetric):
+class ChartFormatComplianceMetric(MetisTurnMetric):
     """Chart saved in correct format (PNG/SVG/etc.)?
 
     Checks that the output file format matches what was requested or
@@ -39,11 +39,7 @@ class ChartFormatComplianceMetric(SyncBaseMetric):
             expected_format = self._infer_expected_format(test_case.input)
 
         if expected_format is None:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = "No format requirement specified — SKIPPED"
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "No format requirement specified")
 
         actual_format = self._extract_output_format(observations)
 

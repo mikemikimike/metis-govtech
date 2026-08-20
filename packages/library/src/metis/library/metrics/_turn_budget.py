@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import TraceMetadata
 
 
-class TurnBudgetMetric(SyncBaseMetric):
+class TurnBudgetMetric(MetisTurnMetric):
     """Session completed within the allowed turn budget.
 
     Checks that the total number of conversation turns did not exceed
@@ -29,11 +29,7 @@ class TurnBudgetMetric(SyncBaseMetric):
         metadata = cast(TraceMetadata, test_case.metadata or {})
         total_turns = metadata.get("total_turns")
         if total_turns is None:
-            self.skipped = True
-            self.score = 1.0
-            self.reason = "total_turns not present in metadata — skipped"
-            self.success = True
-            return self.score
+            return mark_skipped(self, "total_turns not present in metadata")
 
         self.score = 1.0 if total_turns <= self.max_turns else 0.0
         self.reason = f"Session used {total_turns} turn(s) (budget: {self.max_turns})"

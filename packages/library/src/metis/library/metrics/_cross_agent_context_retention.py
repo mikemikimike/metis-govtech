@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisTurnMetric, mark_skipped
 from ._types import OrcaChatMetadata, TraceMetadata
 
 
-class CrossAgentContextRetentionMetric(SyncBaseMetric):
+class CrossAgentContextRetentionMetric(MetisTurnMetric):
     """Context preserved across subagent invocations?
 
     Code grader: checks that multi-turn conversations maintain context
@@ -21,6 +21,8 @@ class CrossAgentContextRetentionMetric(SyncBaseMetric):
         "per-turn",
         "code-graded",
     )
+
+    async_mode = False
 
     def __init__(self, threshold: float = 1.0):
         self.threshold = threshold
@@ -39,13 +41,7 @@ class CrossAgentContextRetentionMetric(SyncBaseMetric):
         num_history = chat_meta.num_history_messages
 
         if num_history == 0:
-            self.score = 1.0
-            self.skipped = True
-            self.reason = (
-                "First message in session (no prior context to retain) — SKIPPED"
-            )
-            self.success = True
-            return self.score or 0.0
+            return mark_skipped(self, "First message in session (no prior context to retain)")
 
         if spoke_context:
             cached_values = set(str(v).lower() for v in spoke_context.values() if v)

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, TypedDict
 
-from metis.engine.extractor.types import SessionMetricsEntry
+from metis.engine.reporting._types import SessionReport, TurnReport
 
 
 class MetricAggregate(TypedDict):
@@ -17,22 +18,22 @@ class MetricAggregate(TypedDict):
 
 
 def aggregate_metrics(
-    test_results: list[dict[str, Any]],
-    session_metrics: list[SessionMetricsEntry] | None = None,
+    turn_results: list[TurnReport],
+    session_results: list[SessionReport] | None = None,
 ) -> dict[str, MetricAggregate]:
     """Aggregate pass/fail/skip counts and scores by metric name.
 
-    Processes both per-trace metrics (from test_results) and session-level
-    metrics (from session_metrics) into a single unified summary.
+    Processes both per-trace metrics (from turn_results) and session-level
+    metrics (from session_results) into a single unified summary.
     """
     agg: dict[str, MetricAggregate] = {}
 
-    for result in test_results:
+    for result in turn_results:
         for metric in result.get("metrics", []):
             _accumulate(agg, metric)
 
-    if session_metrics:
-        for sess in session_metrics:
+    if session_results:
+        for sess in session_results:
             for metric in sess.get("metrics", []):
                 _accumulate(agg, metric)
 
@@ -46,7 +47,7 @@ def aggregate_metrics(
     return agg
 
 
-def _accumulate(agg: dict[str, MetricAggregate], metric: dict) -> None:
+def _accumulate(agg: dict[str, MetricAggregate], metric: Mapping[str, Any]) -> None:
     name = metric["name"]
     if name not in agg:
         agg[name] = MetricAggregate(

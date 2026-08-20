@@ -4,11 +4,11 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from ._base import SyncBaseMetric
+from ._base import MetisTurnMetric
 from ._types import TraceMetadata
 
 
-class SinglePromptClarificationMetric(SyncBaseMetric):
+class SinglePromptClarificationMetric(MetisTurnMetric):
     """All clarifications should be asked in a single message.
 
     Uses request_user_input TOOL observations from the span tree.

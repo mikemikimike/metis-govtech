@@ -13,13 +13,17 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TypedDict
 
 from metis.core.console import console
-from metis.engine.evaluation.types import EvalResult
-from metis.engine.extractor.types import (
-    RoutingSummary,
-    SessionMetricsEntry,
+from metis.engine.evaluation.types import EvalDurations, EvalResult, SessionResult
+from metis.engine.extractor.types import RoutingSummary
+from metis.engine.reporting._types import (
+    PersonaContext,
+    SessionMetricResult,
+    SessionReport,
+    TaskContext,
+    TurnMetricResult,
+    TurnReport,
 )
 
 from ._aggregation import aggregate_metrics
@@ -31,25 +35,6 @@ from ._html_sections import (
     render_trace_details,
 )
 from ._styles import REPORT_CSS
-
-
-class PersonaContext(TypedDict, total=False):
-    id: str
-    description: str
-    stop_reason: str
-    total_turns: int
-    duration_seconds: float
-
-
-class TaskContext(TypedDict, total=False):
-    description: str
-    persona_id: str
-    persona_description: str
-    fixtures: list[str]
-    stop_reason: str
-    total_turns: int
-    duration_seconds: float
-    personas: list[PersonaContext]
 
 
 RESULTS_DIR = Path.cwd() / "results"
@@ -70,10 +55,10 @@ class ReportResult:
 
 
 def format_terminal_summary(
-    test_results: list[dict],
+    turn_results: list[TurnReport],
     run_id: str,
     routing_summary: RoutingSummary | None = None,
-    session_metrics: list[SessionMetricsEntry] | None = None,
+    session_results: list[SessionReport] | None = None,
 ) -> str:
     """Print a compact terminal summary of all metric results."""
     lines = []
@@ -93,7 +78,7 @@ def format_terminal_summary(
             lines.append(f"  -> {agent:<20} {count}")
         lines.append("")
 
-    metric_agg = aggregate_metrics(test_results, session_metrics)
+    metric_agg = aggregate_metrics(turn_results, session_results)
 
     lines.append(f"  {'Metric':<40} {'Pass':>6} {'Fail':>6} {'Skip':>6} {'Rate':>7}")
     lines.append(f"  {'-' * 40} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 7}")
@@ -123,11 +108,11 @@ def format_terminal_summary(
 
 
 def save_json_results(
-    test_results: list[dict],
+    turn_results: list[TurnReport],
     run_id: str,
     routing_summary: RoutingSummary | None = None,
-    session_metrics: list[SessionMetricsEntry] | None = None,
-    timings: dict | None = None,
+    session_results: list[SessionReport] | None = None,
+    durations: EvalDurations | None = None,
     output_dir: Path | None = None,
 ) -> Path:
     """Save detailed results as JSON for programmatic access."""
@@ -138,14 +123,15 @@ def save_json_results(
     total_cost = 0.0
     total_input_tokens = 0
     total_output_tokens = 0
-    for tc in test_results:
+    for tc in turn_results:
         for m in tc["metrics"]:
             total_cost += m.get("cost") or 0
             total_input_tokens += m.get("input_tokens") or 0
             total_output_tokens += m.get("output_tokens") or 0
 
-    total_latency = sum((timings or {}).values())
-    metric_agg = aggregate_metrics(test_results, session_metrics)
+    d = durations or EvalDurations()
+    total_latency = d.turn_metrics_seconds + d.session_metrics_seconds
+    metric_agg = aggregate_metrics(turn_results, session_results)
 
     summary = {
         name: {
@@ -168,11 +154,14 @@ def save_json_results(
             "output_tokens": total_output_tokens or None,
         },
         "latency_seconds": round(total_latency, 1),
-        "timings": timings or {},
+        "durations": {
+            "turn_metrics_seconds": d.turn_metrics_seconds,
+            "session_metrics_seconds": d.session_metrics_seconds,
+        },
         "routing": routing_summary or {},
         "summary": summary,
-        "session_metrics": session_metrics or [],
-        "test_cases": test_results,
+        "session_results": session_results or [],
+        "turn_results": turn_results,
     }
     with open(filepath, "w") as f:
         json.dump(output, f, indent=2, default=str)
@@ -180,11 +169,11 @@ def save_json_results(
 
 
 def save_html_report(
-    test_results: list[dict],
+    turn_results: list[TurnReport],
     run_id: str,
     routing_summary: RoutingSummary | None = None,
-    session_metrics: list[SessionMetricsEntry] | None = None,
-    timings: dict | None = None,
+    session_results: list[SessionReport] | None = None,
+    durations: EvalDurations | None = None,
     output_dir: Path | None = None,
     experiment_description: str | None = None,
     task_contexts: dict[str, TaskContext] | None = None,
@@ -194,15 +183,16 @@ def save_html_report(
     target_dir.mkdir(parents=True, exist_ok=True)
     filepath = target_dir / f"{run_id}.html"
 
-    metric_agg = aggregate_metrics(test_results, session_metrics)
+    metric_agg = aggregate_metrics(turn_results, session_results)
 
-    total_cost = sum(m.get("cost") or 0 for tc in test_results for m in tc["metrics"])
-    total_latency = sum((timings or {}).values())
+    d = durations or EvalDurations()
+    total_cost = sum(m.get("cost") or 0 for tc in turn_results for m in tc["metrics"])
+    total_latency = d.turn_metrics_seconds + d.session_metrics_seconds
 
     html = _render_html(
         run_id,
         metric_agg,
-        test_results,
+        turn_results,
         routing_summary,
         total_cost,
         total_latency,
@@ -243,32 +233,35 @@ def generate_report(
     if run_id is None:
         run_id = f"langfuse-eval-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
-    test_results = _convert_eval_result(eval_result)
+    turn_results: list[TurnReport] = _convert_turn_results(eval_result)
+    session_results: list[SessionReport] = _convert_session_results(
+        eval_result.session_results
+    )
 
     terminal_summary = format_terminal_summary(
-        test_results,
+        turn_results,
         run_id,
         eval_result.routing_summary,
-        eval_result.session_metrics,
+        session_results,
     )
     console.print(terminal_summary)
 
     json_path = save_json_results(
-        test_results,
+        turn_results,
         run_id,
         eval_result.routing_summary,
-        eval_result.session_metrics,
-        eval_result.timings,
+        session_results,
+        eval_result.durations,
         output_dir=output_dir,
     )
     console.print(f"  JSON results: {json_path}")
 
     html_path = save_html_report(
-        test_results,
+        turn_results,
         run_id,
         eval_result.routing_summary,
-        eval_result.session_metrics,
-        eval_result.timings,
+        session_results,
+        eval_result.durations,
         output_dir=output_dir,
         experiment_description=experiment_description,
         task_contexts=task_contexts,
@@ -288,54 +281,79 @@ def generate_report(
 # ---------------------------------------------------------------------------
 
 
-def _convert_eval_result(eval_result: EvalResult) -> list[dict]:
-    """Convert EvalResult into the dict-based format used by report internals."""
-    test_results = []
-    for tc, test_result in zip(
-        eval_result.test_cases, eval_result.test_results, strict=False
-    ):
+def _convert_turn_results(eval_result: EvalResult) -> list[TurnReport]:
+    """Convert turn results into the report-ready format."""
+    results: list[TurnReport] = []
+    for tcr in eval_result.turn_results:
+        tc = tcr.llm_test_case
         metadata = tc.metadata or {}
         trace_id = metadata.get("trace_id", "unknown")
-        metrics_data = []
-        for md in test_result.metrics_data:
-            skipped = md.reason.endswith("— SKIPPED") if md.reason else False
-            metric_entry = {
-                "name": md.name,
-                "score": md.score,
-                "reason": md.reason or "",
-                "success": md.success,
-                "skipped": skipped,
-            }
-            cost = getattr(md, "evaluation_cost", None)
-            in_tok = getattr(md, "input_tokens", None)
-            out_tok = getattr(md, "output_tokens", None)
-            if cost is not None:
-                metric_entry["cost"] = cost
-            if in_tok is not None:
-                metric_entry["input_tokens"] = in_tok
-            if out_tok is not None:
-                metric_entry["output_tokens"] = out_tok
+        metrics_data: list[TurnMetricResult] = []
+        for mr in tcr.metric_results:
+            metric_entry = TurnMetricResult(
+                name=mr.name,
+                score=mr.score,
+                reason=mr.reason,
+                success=mr.success,
+                skipped=mr.skipped,
+            )
+            if mr.evaluation_cost is not None:
+                metric_entry["cost"] = mr.evaluation_cost
+            if mr.input_tokens is not None:
+                metric_entry["input_tokens"] = mr.input_tokens
+            if mr.output_tokens is not None:
+                metric_entry["output_tokens"] = mr.output_tokens
             metrics_data.append(metric_entry)
-        test_results.append(
-            {
-                "trace_id": trace_id,
-                "session_id": metadata.get("session_id", ""),
-                "scenario_id": metadata.get("scenario_id", ""),
-                "turn_index": metadata.get("turn_index", 0),
-                "total_turns": metadata.get("total_turns", 1),
-                "input": tc.input or "",
-                "output": tc.actual_output or "",
-                "routed_to": eval_result.trace_routing.get(trace_id, "direct"),
-                "metrics": metrics_data,
-            }
+        delegation = metadata.get("delegation") or {}
+        routed_to = delegation.get("target", "") if isinstance(delegation, dict) else ""
+        results.append(
+            TurnReport(
+                trace_id=trace_id,
+                session_id=metadata.get("session_id", ""),
+                scenario_id=metadata.get("scenario_id", ""),
+                turn_index=metadata.get("turn_index", 0),
+                total_turns=metadata.get("total_turns", 1),
+                input=tc.input or "",
+                output=tc.actual_output or "",
+                routed_to=routed_to or "direct",
+                metrics=metrics_data,
+            )
         )
-    return test_results
+    return results
+
+
+def _convert_session_results(
+    session_results: list[SessionResult],
+) -> list[SessionReport]:
+    """Convert session results into the report-ready format."""
+    entries: list[SessionReport] = []
+    for scr in session_results:
+        ctc = scr.conversational_test_case
+        sid = (ctc.metadata or {}).get("session_id", "unknown")
+        metrics_out: list[SessionMetricResult] = []
+        for mr in scr.metric_results:
+            metrics_out.append(
+                SessionMetricResult(
+                    name=mr.name,
+                    score=mr.score,
+                    reason=mr.reason,
+                    success=mr.success,
+                    skipped=mr.skipped,
+                )
+            )
+        entries.append(
+            SessionReport(
+                session_id=sid,
+                metrics=metrics_out,
+            )
+        )
+    return entries
 
 
 def _render_html(
     run_id: str,
     metric_agg: dict,
-    test_results: list[dict],
+    turn_results: list[TurnReport],
     routing_summary: RoutingSummary | None = None,
     total_cost: float = 0,
     total_latency: float = 0,
@@ -358,7 +376,7 @@ def _render_html(
     overall_rate = total_pass / evaluated * 100 if evaluated else 0
 
     summary_cards = render_summary_cards(
-        num_traces=len(test_results),
+        num_traces=len(turn_results),
         num_metrics=len(metric_agg),
         overall_rate=overall_rate,
         total_fail=total_fail,
@@ -367,9 +385,9 @@ def _render_html(
         total_cost=total_cost,
     )
     routing_html = render_routing_section(routing_summary)
-    tasks_html = render_task_sections(test_results, task_contexts)
+    tasks_html = render_task_sections(turn_results, task_contexts)
     metric_table_html = render_metric_table(metric_agg)
-    trace_details_html = render_trace_details(test_results)
+    trace_details_html = render_trace_details(turn_results)
 
     return f"""<!DOCTYPE html>
 <html>
