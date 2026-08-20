@@ -150,5 +150,3 @@ class TraceMetadata(TypedDict):
     persona: NotRequired[object]
     scenario: NotRequired[object]
     scenario_id: NotRequired[str]
-    task: NotRequired[object]  # deprecated alias for scenario
-    task_id: NotRequired[str]  # deprecated alias for scenario_id
