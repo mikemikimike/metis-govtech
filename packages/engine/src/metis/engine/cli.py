@@ -196,10 +196,12 @@ def _format_final_summary(state: Any, experiment_dir: str, log_dir: str) -> str:
     """Build the static final summary printed after TUI exits."""
     total = state.total_runs
     completed = state.completed_runs
-    passed = sum(
-        1 for sc in state.scenarios for r in sc.runs if r.stop_reason == "goal_achieved"
-    )
-    failed = completed - passed
+    reasons = [r.stop_reason for sc in state.scenarios for r in sc.runs]
+    achieved = sum(1 for r in reasons if r == "goal_achieved")
+    abandoned = sum(1 for r in reasons if r == "user_abandoned")
+    timed_out = sum(1 for r in reasons if r == "timeout")
+    # Remaining completed runs (e.g. system_error, max_turns) count as errors.
+    errored = completed - achieved - abandoned - timed_out
 
     elapsed = state.elapsed_seconds
     h = int(elapsed) // 3600
@@ -209,7 +211,9 @@ def _format_final_summary(state: Any, experiment_dir: str, log_dir: str) -> str:
 
     lines = [
         f"METIS {state.experiment_id} — completed in {elapsed_str}",
-        f"Simulation: {completed}/{total} runs ({passed} passed, {failed} failed)",
+        f"Simulation: {completed}/{total} runs "
+        f"({achieved} goal achieved, {abandoned} abandoned, "
+        f"{timed_out} timeout, {errored} error)",
         f"Logs:   {log_dir}/",
     ]
     return "\n".join(lines)

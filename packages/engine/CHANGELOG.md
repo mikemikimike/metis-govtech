@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Changed
 
 - **BREAKING: Split simulation and evaluation commands** — `metis engine simulate --input-dir <dir>` now writes simulation records only, and prints the exact `evaluate` command for the output directory it created. Use `metis engine evaluate --experiment-dir <output dir>` to score one simulation output, or `metis engine run --input-dir <dir>` for the combined flow. `evaluate` names its target directly, so the scored result never depends on timestamps; it exits 1 with a clear message when the path is absent or holds no `inputs/` snapshot. Simulation keeps its live TUI, while evaluation uses a normal progress bar and writes one complete `logs/evaluate.log`. `--langfuse-timeout` moved from `simulate` to `evaluate` and `run`; `--no-tui` controls simulation only.
+- **Simulation summary reports outcome categories** — the final summary line now breaks runs down by `stop_reason` (`N goal achieved, N abandoned, N timeout, N error`) instead of a binary `passed`/`failed` split, so abandoned and timed-out runs are no longer conflated with errors. ([#160](https://github.com/govtech-responsibleai/metis/issues/160))
 
 ### Fixed
 
