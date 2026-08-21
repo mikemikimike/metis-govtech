@@ -43,7 +43,7 @@ def _compact(value: str) -> str:
     return "".join(value.split())
 
 
-def test_simulate_prints_input_handoff(monkeypatch, tmp_path: Path) -> None:
+def test_simulate_prints_experiment_dir_handoff(monkeypatch, tmp_path: Path) -> None:
     input_dir = _write_source(tmp_path)
     experiment_dir = _write_record_marker(tmp_path / "output")
 
@@ -56,8 +56,11 @@ def test_simulate_prints_input_handoff(monkeypatch, tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     compact_output = _compact(result.output)
-    assert "metisengineevaluate--input-dir" in compact_output
-    assert _compact(str(input_dir.resolve())) in compact_output
+    assert f"Experiment:{_compact(str(experiment_dir))}" in compact_output
+    assert (
+        "Next:metisengineevaluate--experiment-dir"
+        f"{_compact(str(experiment_dir.resolve()))}" in compact_output
+    )
 
 
 def test_simulate_zero_records_exits_one(monkeypatch, tmp_path: Path) -> None:

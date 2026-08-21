@@ -92,12 +92,14 @@ example-experiment/
 metis engine run --input-dir packages/engine/example-experiment/
 ```
 
-To run the phases separately, use `simulate` first. It prints the exact `evaluate` command for the same input directory. `evaluate` selects the latest output for that experiment:
+To run the phases separately, use `simulate` first. It prints the exact `evaluate` command for the output directory it created. `evaluate` scores the directory that you name:
 
 ```bash
 metis engine simulate --input-dir packages/engine/example-experiment/
-metis engine evaluate --input-dir packages/engine/example-experiment/
+metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 ```
+
+`experiments/orca-eval-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
 
 ### What You'll See
 
@@ -286,12 +288,12 @@ For a complete working example with personas, scenarios, fixtures, and metrics a
 The engine exposes three commands:
 
 ```bash
-metis engine simulate --input-dir <path> [simulation options]
-metis engine evaluate --input-dir <path> [evaluation options]
-metis engine run --input-dir <path> [simulation and evaluation options]
+metis engine simulate --input-dir <source path> [simulation options]
+metis engine evaluate --experiment-dir <output path> [evaluation options]
+metis engine run --input-dir <source path> [simulation and evaluation options]
 ```
 
-`simulate` writes run records only. It prints the command needed to evaluate the same input directory. `evaluate` selects the latest timestamped output for that experiment, uses its frozen input snapshot, and overwrites `logs/evaluate.log`, `reports/report.json`, and `reports/report.html`. `run` performs both phases.
+`simulate` writes run records only. It prints the exact command needed to evaluate the output directory it created. `evaluate` scores the output directory that you name, uses its frozen input snapshot, and overwrites `logs/evaluate.log`, `reports/report.json`, and `reports/report.html`. `run` performs both phases.
 
 ### Simulation options
 
@@ -309,7 +311,7 @@ metis engine run --input-dir <path> [simulation and evaluation options]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--input-dir` | (required) | Directory containing `experiment.yaml`; evaluation selects its latest output |
+| `--experiment-dir` | (required) | One output directory that `simulate` created, for example `experiments/orca-eval-20260820-143000/`. It must hold an `inputs/` snapshot |
 | `--langfuse-timeout` | `90` | Seconds to wait for Langfuse traces to appear |
 | `-v` / `-vv` | WARNING | Increase evaluation logging verbosity |
 | `--quiet` | `false` | Suppress all output below ERROR |

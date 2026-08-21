@@ -26,12 +26,14 @@ example-experiment/
 # One command: simulate, evaluate, and write the report.
 metis engine run --input-dir example-experiment/
 
-# Separate phases: evaluate selects the latest simulation output.
+# Separate phases: simulate prints the evaluate command for the output it wrote.
+# The --experiment-dir value is that output directory. Its real name holds the
+# experiment id and the start time of the run.
 metis engine simulate --input-dir example-experiment/
-metis engine evaluate --input-dir example-experiment/
+metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 ```
 
-Simulation uses the live TUI in a terminal. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file in the selected output.
+Simulation uses the live TUI in a terminal. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file in the named output.
 
 ## What it covers
 

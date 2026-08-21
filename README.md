@@ -106,7 +106,7 @@ Verbosity is controlled via CLI flags:
 
 ```bash
 metis engine simulate --input-dir ./exp       # simulation only; writes run records
-metis engine evaluate --input-dir ./exp     # score the latest records and write a report
+metis engine evaluate --experiment-dir ./experiments/exp-20260820-143000  # score the output that simulate wrote
 metis engine run --input-dir ./exp            # simulation + evaluation + report
 metis engine run --input-dir ./exp -v         # INFO: operational progress
 metis engine run --input-dir ./exp -vv        # DEBUG: full diagnostics

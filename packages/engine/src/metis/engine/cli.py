@@ -261,7 +261,13 @@ def _record_files(experiment_dir: Path) -> list[Path]:
 
 
 def _resolve_latest_experiment(input_dir: Path) -> Path:
-    """Resolve the newest output for the experiment in ``input_dir``."""
+    """Resolve the newest output for the experiment in ``input_dir``.
+
+    Used by ``simulate --resume``, which continues the last run for an
+    experiment. ``evaluate`` deliberately does not use this: it takes an
+    explicit ``--experiment-dir`` so the scored output never depends on
+    timestamps.
+    """
     from metis.engine.simulation.types import Experiment
 
     resolved_input_dir = input_dir.resolve()
@@ -314,16 +320,37 @@ def _resolve_latest_experiment(input_dir: Path) -> Path:
     return candidates[-1][1].resolve()
 
 
-def _evaluate_command(input_dir: Path) -> str:
-    """Build the shell-safe command for evaluating an input directory."""
-    return shlex.join(["metis", "engine", "evaluate", "--input-dir", str(input_dir)])
+def _resolve_experiment_dir(experiment_dir: Path) -> Path:
+    """Validate an explicit simulation output directory."""
+    resolved = experiment_dir.resolve()
+    if not resolved.is_dir():
+        console.print(
+            f"Error: experiment directory '{resolved}' does not exist",
+            style="bold red",
+        )
+        raise EvaluationInputError("invalid experiment directory")
+    if not (resolved / "inputs").is_dir():
+        console.print(
+            f"Error: '{resolved}' is not a simulation output directory "
+            "(no 'inputs/' snapshot). Run 'metis engine simulate' first.",
+            style="bold red",
+        )
+        raise EvaluationInputError("invalid experiment directory")
+    return resolved
 
 
-def _print_evaluate_handoff(experiment_dir: Path, input_dir: Path) -> None:
+def _evaluate_command(experiment_dir: Path) -> str:
+    """Build the shell-safe command for evaluating a simulation output."""
+    return shlex.join(
+        ["metis", "engine", "evaluate", "--experiment-dir", str(experiment_dir)]
+    )
+
+
+def _print_evaluate_handoff(experiment_dir: Path) -> None:
     """Print the command that evaluates a completed simulation."""
     console.print(f"Experiment: {experiment_dir}")
     console.print(
-        f"Next: {_evaluate_command(input_dir.resolve())}",
+        f"Next: {_evaluate_command(experiment_dir.resolve())}",
         no_wrap=True,
         overflow="ignore",
         crop=False,
@@ -894,13 +921,18 @@ def simulate(
     if not _record_files(experiment_dir):
         console.print("No run records found.", style="bold red")
         raise typer.Exit(code=1)
-    _print_evaluate_handoff(experiment_dir, input_dir)
+    _print_evaluate_handoff(experiment_dir)
 
 
 @app.command()
 def evaluate(
-    input_dir: Path = typer.Option(
-        ..., "--input-dir", help="Directory containing experiment.yaml and fixtures/"
+    experiment_dir: Path = typer.Option(
+        ...,
+        "--experiment-dir",
+        help=(
+            "Output directory that simulate created, "
+            "e.g. experiments/my-eval-20260820-143000/"
+        ),
     ),
     langfuse_timeout: int = typer.Option(
         90, "--langfuse-timeout", help="Seconds to wait for Langfuse traces"
@@ -912,10 +944,9 @@ def evaluate(
         False, "--quiet", help="Suppress output below ERROR level"
     ),
 ) -> None:
-    """Evaluate the latest simulation output for an input directory."""
-    resolved_input_dir = input_dir.resolve()
+    """Evaluate one simulation output directory."""
     try:
-        resolved_experiment_dir = _resolve_latest_experiment(resolved_input_dir)
+        resolved_experiment_dir = _resolve_experiment_dir(experiment_dir)
     except EvaluationInputError:
         raise typer.Exit(code=1) from None
     console.print(f"Selected experiment: {resolved_experiment_dir}")
@@ -981,9 +1012,9 @@ def run(
             quiet=quiet,
         )
     except Exception:
-        _print_evaluate_handoff(experiment_dir, input_dir)
+        _print_evaluate_handoff(experiment_dir)
         raise
 
     if outcome.failed_records:
-        _print_evaluate_handoff(experiment_dir, input_dir)
+        _print_evaluate_handoff(experiment_dir)
     _print_evaluation_summary(experiment_dir, outcome, pipeline=True)

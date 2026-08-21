@@ -36,13 +36,6 @@ scenarios:
 """
 
 
-def _write_source(tmp_path: Path, content: str = MINIMAL_EXPERIMENT) -> Path:
-    input_dir = tmp_path / "input"
-    input_dir.mkdir()
-    (input_dir / "experiment.yaml").write_text(content)
-    return input_dir
-
-
 def _write_snapshot(experiment_dir: Path, content: str = MINIMAL_EXPERIMENT) -> Path:
     inputs_dir = experiment_dir / "inputs"
     inputs_dir.mkdir(parents=True)
@@ -122,33 +115,30 @@ def _metric_eval_result() -> EvalResult:
     )
 
 
-def _project_root(monkeypatch, tmp_path: Path) -> Path:
-    root = tmp_path / "project"
-    root.mkdir()
-    (root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    monkeypatch.setattr(cli, "_find_project_root", lambda: root)
-    return root
-
-
-def _write_output(root: Path, timestamp: str, *, snapshot: bool = True) -> Path:
-    output = root / "experiments" / f"test-exp-{timestamp}"
-    output.mkdir(parents=True)
-    if snapshot:
-        _write_snapshot(output)
-    return output
+def _write_experiment_dir(
+    root: Path,
+    *,
+    name: str = "test-exp-20260101-010101",
+    content: str = MINIMAL_EXPERIMENT,
+) -> Path:
+    """Write a simulation output directory with its frozen input snapshot."""
+    experiment_dir = root / "experiments" / name
+    experiment_dir.mkdir(parents=True)
+    _write_snapshot(experiment_dir, content)
+    return experiment_dir
 
 
 def _compact(value: str) -> str:
     return "".join(value.split())
 
 
-def test_latest_output_is_selected(monkeypatch, tmp_path: Path) -> None:
-    root = _project_root(monkeypatch, tmp_path)
-    input_dir = _write_source(tmp_path)
-    older = _write_output(root, "20260101-010101")
-    newer = _write_output(root, "20260102-010101")
-    _write_output(root, "20260199-010101")
-    (root / "experiments" / "other-exp-20260103-010101").mkdir(parents=True)
+def test_evaluate_scores_the_named_experiment_directory(
+    monkeypatch, tmp_path: Path
+) -> None:
+    target = _write_experiment_dir(tmp_path, name="test-exp-20260101-010101")
+    # A second output exists for the same experiment id. The command must use the
+    # path it is given, and must not choose one by timestamp.
+    _write_experiment_dir(tmp_path, name="test-exp-20260102-010101")
 
     calls: list[Path] = []
 
@@ -170,8 +160,8 @@ def test_latest_output_is_selected(monkeypatch, tmp_path: Path) -> None:
         app,
         [
             "evaluate",
-            "--input-dir",
-            str(input_dir),
+            "--experiment-dir",
+            str(target),
             "--langfuse-timeout",
             "120",
             "-v",
@@ -179,77 +169,91 @@ def test_latest_output_is_selected(monkeypatch, tmp_path: Path) -> None:
     )
 
     assert result.exit_code == 0
-    assert calls == [newer.resolve()]
-    assert older.exists()
-    assert "Selected experiment:" in result.output
-
-
-def test_evaluate_fails_for_missing_or_invalid_latest_output(
-    monkeypatch, tmp_path: Path
-) -> None:
-    root = _project_root(monkeypatch, tmp_path)
-
-    invalid_input_result = runner.invoke(
-        app, ["evaluate", "--input-dir", str(tmp_path / "missing")]
+    assert calls == [target.resolve()]
+    assert f"Selectedexperiment:{_compact(str(target.resolve()))}" in _compact(
+        result.output
     )
-    assert invalid_input_result.exit_code != 0
-    assert "input directory" in invalid_input_result.output
 
-    input_dir = _write_source(tmp_path)
 
-    missing_result = runner.invoke(app, ["evaluate", "--input-dir", str(input_dir)])
+def test_evaluate_rejects_a_path_that_does_not_exist(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["evaluate", "--experiment-dir", str(tmp_path / "missing")]
+    )
 
-    assert missing_result.exit_code != 0
-    assert "no simulation output found" in missing_result.output
+    assert result.exit_code == 1
+    assert "doesnotexist" in _compact(result.output)
 
-    _write_output(root, "20260101-010101")
-    newer = _write_output(root, "20260102-010101", snapshot=False)
 
-    invalid_result = runner.invoke(app, ["evaluate", "--input-dir", str(input_dir)])
+def test_evaluate_rejects_a_path_that_is_not_a_directory(tmp_path: Path) -> None:
+    not_a_directory = tmp_path / "record.json"
+    not_a_directory.write_text("{}")
 
-    assert invalid_result.exit_code != 0
-    assert _compact(str(newer.resolve())) in _compact(invalid_result.output)
-    assert "experiment.yaml" in invalid_result.output
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(not_a_directory)])
 
-    _write_snapshot(newer)
-    malformed_record = newer / "runs" / "run-1" / "record.json"
+    assert result.exit_code == 1
+    assert "doesnotexist" in _compact(result.output)
+
+
+def test_evaluate_rejects_a_directory_without_an_input_snapshot(tmp_path: Path) -> None:
+    unrelated_dir = tmp_path / "not-an-experiment"
+    unrelated_dir.mkdir()
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(unrelated_dir)])
+
+    assert result.exit_code == 1
+    assert "isnotasimulationoutputdirectory" in _compact(result.output)
+    assert "metisenginesimulate" in _compact(result.output)
+
+
+def test_evaluate_fails_when_the_input_snapshot_has_no_experiment_file(
+    tmp_path: Path,
+) -> None:
+    experiment_dir = tmp_path / "experiments" / "test-exp-20260101-010101"
+    (experiment_dir / "inputs").mkdir(parents=True)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(experiment_dir)])
+
+    assert result.exit_code != 0
+    assert _compact(str(experiment_dir.resolve())) in _compact(result.output)
+    assert "experiment.yaml" in result.output
+
+
+def test_evaluate_fails_for_a_malformed_run_record(tmp_path: Path) -> None:
+    experiment_dir = _write_experiment_dir(tmp_path)
+    malformed_record = experiment_dir / "runs" / "run-1" / "record.json"
     malformed_record.parent.mkdir(parents=True)
     malformed_record.write_text("{}")
-    malformed_result = runner.invoke(app, ["evaluate", "--input-dir", str(input_dir)])
-    assert malformed_result.exit_code != 0
-    assert "run record" in malformed_result.output
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(experiment_dir)])
+
+    assert result.exit_code != 0
+    assert "run record" in result.output
     assert (
         "EVALUATION FAILED — failed to load run record"
-        in (newer / "logs" / "evaluate.log").read_text()
+        in (experiment_dir / "logs" / "evaluate.log").read_text()
     )
 
 
-def test_evaluate_valid_empty_snapshot_is_noop(monkeypatch, tmp_path: Path) -> None:
-    root = _project_root(monkeypatch, tmp_path)
-    input_dir = _write_source(tmp_path)
-    _write_output(root, "20260101-010101")
+def test_evaluate_with_no_run_records_is_a_noop(tmp_path: Path) -> None:
+    experiment_dir = _write_experiment_dir(tmp_path)
 
-    result = runner.invoke(app, ["evaluate", "--input-dir", str(input_dir)])
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(experiment_dir)])
 
     assert result.exit_code == 0
     assert "nothing to evaluate" in result.output
     assert (
         "EVALUATION COMPLETED — 0 records"
-        in (
-            root / "experiments" / "test-exp-20260101-010101" / "logs" / "evaluate.log"
-        ).read_text()
+        in (experiment_dir / "logs" / "evaluate.log").read_text()
     )
 
 
-def test_evaluation_uses_frozen_snapshot_and_overwrites_report(
+def test_evaluation_reads_the_input_snapshot_and_overwrites_the_report(
     monkeypatch, tmp_path: Path
 ) -> None:
-    root = _project_root(monkeypatch, tmp_path)
-    source = _write_source(
+    output = _write_experiment_dir(
         tmp_path,
-        MINIMAL_EXPERIMENT.replace("test persona", "changed source persona"),
+        content=MINIMAL_EXPERIMENT.replace("test persona", "snapshot persona"),
     )
-    output = _write_output(root, "20260101-010101")
     _write_record(output)
 
     monkeypatch.setattr("metis.engine.extractor.get_langfuse_client", lambda: object())
@@ -277,15 +281,16 @@ def test_evaluation_uses_frozen_snapshot_and_overwrites_report(
 
     monkeypatch.setattr("metis.engine.reporting.generate_report", write_report)
 
-    first = runner.invoke(app, ["evaluate", "--input-dir", str(source)])
-    second = runner.invoke(app, ["evaluate", "--input-dir", str(source)])
+    first = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+    second = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert first.exit_code == 0
     assert second.exit_code == 0
     assert (output / "reports" / "report.json").read_text() == "second"
+    assert (output / "reports" / "report.html").exists()
     assert [
         context["task-1"]["personas"][0]["description"] for context in report_contexts
-    ] == ["test persona", "test persona"]
+    ] == ["snapshot persona", "snapshot persona"]
     evaluation_log = (output / "logs" / "evaluate.log").read_text()
     assert evaluation_log.count("EVALUATION STARTED") == 1
     assert "REPORT WRITTEN" in evaluation_log

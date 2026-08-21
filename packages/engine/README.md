@@ -28,8 +28,9 @@ cp packages/engine/.env.example .env
 metis engine run --input-dir packages/engine/example-experiment/
 
 # Or run the phases separately, in this order. simulate prints the evaluate command.
+# The --experiment-dir value is the output directory that simulate created.
 metis engine simulate --input-dir packages/engine/example-experiment/
-metis engine evaluate --input-dir packages/engine/example-experiment/
+metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 
 # Headed mode (visible browser)
 HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/
@@ -52,17 +53,19 @@ metis engine simulate --input-dir packages/engine/example-experiment/ --log-dir 
 metis engine simulate --input-dir packages/engine/example-experiment/ --concurrency 2
 
 # Custom Langfuse timeout for evaluation (default: 90s)
-metis engine evaluate --input-dir packages/engine/example-experiment/ --langfuse-timeout 120
+metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/ --langfuse-timeout 120
 ```
 
 | Command | Reads | Writes |
 |---------|-------|--------|
 | `simulate` | `experiment.yaml` and `fixtures/` from `--input-dir` | `experiments/<id>-<timestamp>/runs/` |
-| `evaluate` | `runs/` from the newest `experiments/<id>-*`, plus the Langfuse traces it points to | `reports/` in that same output directory |
+| `evaluate` | `runs/` from the `--experiment-dir` output directory, plus the Langfuse traces it points to | `reports/` in that same output directory |
 
-> **Important:** `evaluate` must only be run after `simulate`. It scores an existing simulation output rather than producing one, so if no output exists for the experiment id it exits 1 with `no simulation output found for experiment '<id>'`.
+> **Important:** `evaluate` must only be run after `simulate`. It scores an existing simulation output rather than producing one, so if the directory holds no `inputs/` snapshot it exits 1 and tells you to run `simulate` first.
 
-Both take the input experiment as `--input-dir`, not the output directory — `evaluate` resolves the newest matching output itself.
+The two commands take different paths. `simulate` takes the source experiment as `--input-dir`. `evaluate` takes one simulation output directory as `--experiment-dir`, so the scored output never depends on timestamps. `simulate` prints the exact `evaluate` command for the directory it created.
+
+`experiments/orca-eval-20260820-143000/` in the examples above is only a sample name. `simulate` makes the real name from the experiment `id` and the start time of the run. Use the path that `simulate` printed.
 
 Evaluation has no TUI option. It uses a normal progress bar in a terminal and linear per-record progress in a non-interactive environment.
 

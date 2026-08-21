@@ -39,7 +39,7 @@ def _write_record_marker(experiment_dir: Path) -> Path:
     return experiment_dir
 
 
-def test_run_composes_phases_and_prints_input_recovery(
+def test_run_composes_phases_and_prints_recovery_command(
     monkeypatch, tmp_path: Path
 ) -> None:
     input_dir = _write_source(tmp_path)
@@ -85,7 +85,10 @@ def test_run_composes_phases_and_prints_input_recovery(
         "verbose": 1,
         "quiet": False,
     }
-    assert "Next: metis engine evaluate --input-dir" in result.output
+    assert (
+        f"Next: metis engine evaluate --experiment-dir {experiment_dir.resolve()}"
+        in result.output
+    )
     assert "PIPELINE COMPLETE" in result.output
 
 
@@ -111,7 +114,7 @@ def test_run_zero_simulation_records_exits_one(monkeypatch, tmp_path: Path) -> N
     assert not evaluation_called
 
 
-def test_run_infrastructure_failure_prints_input_recovery(
+def test_run_infrastructure_failure_prints_recovery_command(
     monkeypatch, tmp_path: Path
 ) -> None:
     input_dir = _write_source(tmp_path)
@@ -128,4 +131,7 @@ def test_run_infrastructure_failure_prints_input_recovery(
     result = runner.invoke(app, ["run", "--input-dir", str(input_dir)])
 
     assert result.exit_code != 0
-    assert "Next: metis engine evaluate --input-dir" in result.output
+    assert (
+        f"Next: metis engine evaluate --experiment-dir {experiment_dir.resolve()}"
+        in result.output
+    )
