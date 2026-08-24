@@ -4,7 +4,12 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
+from ._base import (
+    EVIDENCE_INSTRUCTION,
+    MetisTurnMetric,
+    _ContextAwareGEval,
+    mark_skipped,
+)
 from ._judge import _get_judge_model
 from ._types import TraceMetadata
 
@@ -69,9 +74,7 @@ class DelegationQualityMetric(MetisTurnMetric):
         delegation = metadata.get("delegation")
 
         if not delegation or not delegation["task"]:
-            return mark_skipped(
-                self, "No delegation occurred or no task message found"
-            )
+            return mark_skipped(self, "No delegation occurred or no task message found")
 
         delegation_tc = LLMTestCase(
             input=test_case.input,

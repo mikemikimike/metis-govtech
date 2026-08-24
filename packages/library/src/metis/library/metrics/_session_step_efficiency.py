@@ -2,11 +2,12 @@
 
 from typing import ClassVar
 
-from ._base import MetisSessionMetric, mark_skipped
-
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
 )
+
+from ._base import MetisSessionMetric, mark_skipped
+
 
 class SessionStepEfficiencyMetric(MetisSessionMetric):
     """Task completed in near-minimum tool calls across session?

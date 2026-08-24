@@ -2,7 +2,12 @@
 
 from typing import ClassVar
 
-from deepeval.metrics import BaseConversationalMetric, BaseMetric, ConversationalGEval, GEval
+from deepeval.metrics import (
+    BaseConversationalMetric,
+    BaseMetric,
+    ConversationalGEval,
+    GEval,
+)
 from deepeval.test_case import LLMTestCase
 from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
@@ -16,7 +21,7 @@ EVIDENCE_INSTRUCTION = (
 
 def _build_context_block(metadata: dict) -> str:
     """Build an [EVALUATION CONTEXT] block from metadata, or return empty string."""
-    task = metadata.get("scenario") or metadata.get("task")
+    task = metadata.get("scenario")
     persona = metadata.get("persona")
 
     scenario_desc = getattr(task, "description", "") or ""

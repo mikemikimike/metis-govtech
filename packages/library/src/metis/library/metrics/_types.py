@@ -13,7 +13,6 @@ from typing import Any, NotRequired
 
 from typing_extensions import TypedDict
 
-
 # ---------------------------------------------------------------------------
 # Serialized shape TypedDicts (match what the engine writes)
 # ---------------------------------------------------------------------------
@@ -146,9 +145,11 @@ class TraceMetadata(TypedDict):
     artifacts: NotRequired[list[ArtifactSummary]]
     # Reserved for future ground-truth annotation source:
     annotations: NotRequired[dict[str, Any]]
+    # Observable execution metadata (engine-supplied):
+    stop_reason: NotRequired[str | None]
+    cancellation_available: NotRequired[bool | None]
+    slide_image_refs: NotRequired[list[str] | None]
     # Injected from experiment configuration at fetch time:
     persona: NotRequired[object]
     scenario: NotRequired[object]
     scenario_id: NotRequired[str]
-    task: NotRequired[object]  # deprecated alias for scenario
-    task_id: NotRequired[str]  # deprecated alias for scenario_id

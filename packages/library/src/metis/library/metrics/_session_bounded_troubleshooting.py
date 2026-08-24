@@ -2,10 +2,11 @@
 
 from typing import ClassVar
 
-from ._base import MetisSessionMetric
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
 )
+
+from ._base import MetisSessionMetric
 
 
 class SessionBoundedTroubleshootingMetric(MetisSessionMetric):
