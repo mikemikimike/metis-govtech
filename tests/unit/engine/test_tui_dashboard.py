@@ -3,15 +3,19 @@
 from rich.console import Console
 
 from metis.engine.tui.dashboard import render_dashboard
-from metis.engine.tui.state import RunState, ScenarioState, SimulationState
+from metis.engine.tui.state import (
+    SimulationRunState,
+    SimulationScenarioState,
+    SimulationState,
+)
 
 
 def _make_state_with_active_run() -> SimulationState:
     scenarios = [
-        ScenarioState(
+        SimulationScenarioState(
             scenario_id="direct-question",
             runs=[
-                RunState(
+                SimulationRunState(
                     scenario_id="direct-question",
                     persona_id="cooperative",
                     trial=1,
@@ -26,10 +30,10 @@ def _make_state_with_active_run() -> SimulationState:
             ],
             phase="completed",
         ),
-        ScenarioState(
+        SimulationScenarioState(
             scenario_id="constrained-analysis",
             runs=[
-                RunState(
+                SimulationRunState(
                     scenario_id="constrained-analysis",
                     persona_id="impatient",
                     trial=1,

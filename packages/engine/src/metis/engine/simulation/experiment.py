@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -35,9 +36,43 @@ from .types import (
 )
 from .user_agent.agent import UserAgent
 
-__all__ = ["HarnessConfig", "run_experiment"]
+RunPlanItem = tuple[Scenario, Persona, int]
+
+__all__ = [
+    "HarnessConfig",
+    "RunPlanItem",
+    "expand_run_plan",
+    "run_experiment",
+    "run_folder_name",
+]
 
 logger = get_logger()
+
+
+def expand_run_plan(
+    experiment: Experiment, personas_by_id: dict[str, Persona]
+) -> list[RunPlanItem]:
+    """Expand an experiment into scenario, persona, and zero-based trial items."""
+    runs: list[RunPlanItem] = []
+    for scenario in experiment.scenarios:
+        for persona_ref in scenario.persona_refs:
+            persona = personas_by_id.get(persona_ref)
+            if not persona:
+                available = ", ".join(personas_by_id.keys())
+                raise ValueError(
+                    f"Scenario '{scenario.id}': unknown persona_ref '{persona_ref}'. "
+                    f"Available: {available}"
+                )
+            for trial in range(scenario.num_trials):
+                runs.append((scenario, persona, trial))
+    return runs
+
+
+def run_folder_name(scenario: Scenario, persona: Persona, trial: int) -> str:
+    """Return the stable folder name for a zero-based plan item."""
+    trial_index = trial + 1
+    pad = len(str(scenario.num_trials))
+    return f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
 
 
 def run_experiment(
@@ -48,11 +83,13 @@ def run_experiment(
     output_dir: Path | None = None,
     headed: bool = False,
     concurrency: int = 1,
+    run_plan: list[RunPlanItem] | None = None,
     # Optional hooks for TUI / structured-logging integration
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
+    shutdown_event: threading.Event | None = None,
 ) -> None:
     """Run a full experiment (all scenario x persona pairs).
 
@@ -67,10 +104,12 @@ def run_experiment(
             output_dir=output_dir,
             headed=headed,
             concurrency=concurrency,
+            run_plan=run_plan,
             state=state,
             orchestration_logger=orchestration_logger,
             log_router=log_router,
             tui_ctx=tui_ctx,
+            shutdown_event=shutdown_event,
         )
     )
 
@@ -83,25 +122,19 @@ async def _run_experiment_async(
     output_dir: Path | None = None,
     headed: bool = False,
     concurrency: int = 1,
+    run_plan: list[RunPlanItem] | None = None,
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
+    shutdown_event: threading.Event | None = None,
 ) -> None:
     """Async experiment orchestrator with concurrent browser contexts."""
-    # Expand scenarios into individual runs
-    runs: list[tuple[Scenario, Persona, int]] = []
-    for scenario in experiment.scenarios:
-        for persona_ref in scenario.persona_refs:
-            persona = personas_by_id.get(persona_ref)
-            if not persona:
-                available = ", ".join(personas_by_id.keys())
-                raise ValueError(
-                    f"Scenario '{scenario.id}': unknown persona_ref '{persona_ref}'. "
-                    f"Available: {available}"
-                )
-            for trial in range(scenario.num_trials):
-                runs.append((scenario, persona, trial))
+    runs = (
+        run_plan
+        if run_plan is not None
+        else expand_run_plan(experiment, personas_by_id)
+    )
 
     total_runs = len(runs)
 
@@ -153,6 +186,7 @@ async def _run_experiment_async(
                             orchestration_logger=orchestration_logger,
                             log_router=log_router,
                             tui_ctx=tui_ctx,
+                            shutdown_event=shutdown_event,
                         )
                     )
 
@@ -169,19 +203,23 @@ async def _run_experiment_async(
             logger.info("[experiment] Closing browser...")
             await browser.close()
 
-    # Print summary
-    console.print("\n\n========== SIMULATION SUMMARY ==========\n")
-    for r in all_records:
-        status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
-        console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
-        console.print(
-            f"         Turns: {r.outcome.total_turns}, "
-            f"Duration: {r.outcome.duration_seconds}s, "
-            f"Reason: {r.outcome.stop_reason}"
+    # Print summary (only in non-TUI mode; TUI mode prints via CLI after exiting)
+    if not tui_ctx:
+        console.print("\n\n========== SIMULATION SUMMARY ==========\n")
+        for r in all_records:
+            status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
+            console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
+            console.print(
+                f"         Turns: {r.outcome.total_turns}, "
+                f"Duration: {r.outcome.duration_seconds}s, "
+                f"Reason: {r.outcome.stop_reason}"
+            )
+    if not tui_ctx:
+        console.print()
+        achieved = sum(
+            1 for r in all_records if r.outcome.stop_reason == "goal_achieved"
         )
-    console.print()
-    achieved = sum(1 for r in all_records if r.outcome.stop_reason == "goal_achieved")
-    console.print(f"Goals achieved: {achieved}/{len(all_records)}")
+        console.print(f"Goals achieved: {achieved}/{len(all_records)}")
 
 
 async def _worker(
@@ -198,6 +236,7 @@ async def _worker(
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
+    shutdown_event: threading.Event | None = None,
 ) -> list[RunRecord]:
     """One concurrent worker: creates a fresh browser context per run for isolation."""
     structlog.contextvars.clear_contextvars()
@@ -210,6 +249,13 @@ async def _worker(
     try:
         records: list[RunRecord] = []
         for _idx, (scenario, persona, trial) in enumerate(run_slice):
+            if shutdown_event and shutdown_event.is_set():
+                logger.info(
+                    "[experiment] Worker w%d stopping (shutdown requested)", worker_id
+                )
+                break
+
+
             trial_index = trial + 1
             trial_label = (
                 f" (trial {trial_index}/{scenario.num_trials})"
@@ -223,12 +269,11 @@ async def _worker(
                 trial_label,
             )
 
-            pad = len(str(scenario.num_trials))
-            run_folder_name = f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
+            folder_name = run_folder_name(scenario, persona, trial)
             run_dir = (
-                (output_dir / "runs" / run_folder_name)
+                (output_dir / "runs" / folder_name)
                 if output_dir
-                else Path("results") / "runs" / run_folder_name
+                else Path("results") / "runs" / folder_name
             )
             run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -267,7 +312,8 @@ async def _worker(
             async with console_lock:
                 if tui_ctx:
                     tui_ctx.refresh()
-                console.print(f"  [w{worker_id}] {scenario.id} × {persona.id} ...")
+                else:
+                    console.print(f"  [w{worker_id}] {scenario.id} × {persona.id} ...")
 
             run_start = time.time()
             max_attempts = 1 + (
@@ -310,6 +356,7 @@ async def _worker(
                         trial=trial_index,
                         state=state,
                         tui_ctx=tui_ctx,
+                        shutdown_event=shutdown_event,
                     )
                     record = await orchestrator.run()
                     record.attempt_number = attempt
@@ -440,13 +487,14 @@ async def _worker(
                 timing_parts.append(f"t{t.turn_number}={t.duration_ms / 1000:.0f}s")
             timing_str = f" [{', '.join(timing_parts)}]" if timing_parts else ""
 
-            async with console_lock:
-                console.print(
-                    f"  [w{worker_id}] {scenario.id} × {persona.id} — "
-                    f"{record.outcome.stop_reason}, "
-                    f"{record.outcome.total_turns} turns, "
-                    f"{record.outcome.duration_seconds:.0f}s{timing_str}"
-                )
+            if not tui_ctx:
+                async with console_lock:
+                    console.print(
+                        f"  [w{worker_id}] {scenario.id} × {persona.id} — "
+                        f"{record.outcome.stop_reason}, "
+                        f"{record.outcome.total_turns} turns, "
+                        f"{record.outcome.duration_seconds:.0f}s{timing_str}"
+                    )
 
             logger.info(
                 "[experiment] Result: stop_reason=%s, turns=%d, duration=%.1fs",

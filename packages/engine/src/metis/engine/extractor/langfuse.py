@@ -548,6 +548,8 @@ def fetch_by_session_id(
     artifacts: list[CollectedArtifact] | None = None,
     scenario: Scenario | None = None,
     persona: Persona | None = None,
+    stop_reason: str | None = None,
+    cancellation_available: bool | None = None,
 ) -> FetchLangfuseResult:
     """Fetch traces for a specific session and build test cases.
 
@@ -561,6 +563,10 @@ def fetch_by_session_id(
         metric metadata).
     :param persona: Persona object from experiment.yaml (passed through to
         metric metadata).
+    :param stop_reason: Why the session stopped (passed through to metric
+        metadata as observable execution state).
+    :param cancellation_available: Whether the user could cancel the run
+        (passed through to metric metadata as observable execution state).
     :returns: :class:`FetchLangfuseResult` with test cases ready for evaluation.
     """
     deadline = time.time() + retry_timeout
@@ -579,6 +585,19 @@ def fetch_by_session_id(
     traces.sort(key=lambda t: t.timestamp or "")
 
     session_artifacts: list[CollectedArtifact] = artifacts or []
+    # Collect slide/image artifact paths in turn order for multimodal metrics.
+    _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+    slide_images = sorted(
+        [
+            a
+            for a in session_artifacts
+            if a.path and a.filename.lower().endswith(_IMAGE_EXTS)
+        ],
+        key=lambda a: (a.collected_at_turn, a.filename),
+    )
+    slide_image_refs: list[str] | None = (
+        [a.path for a in slide_images] if slide_images else None
+    )
     test_cases: list[LLMTestCase] = []
     skipped: int = 0
     prior_turns: list[PriorTurn] = []
@@ -611,6 +630,10 @@ def fetch_by_session_id(
             tc.metadata["scenario_id"] = scenario.id
         if persona is not None and tc.metadata is not None:
             tc.metadata["persona"] = persona
+        if tc.metadata is not None:
+            tc.metadata["stop_reason"] = stop_reason
+            tc.metadata["cancellation_available"] = cancellation_available
+            tc.metadata["slide_image_refs"] = slide_image_refs
 
         test_cases.append(tc)
 
@@ -643,6 +666,10 @@ def fetch_by_session_id(
             ctc.metadata["scenario"] = scenario
         if persona is not None and ctc.metadata is not None:
             ctc.metadata["persona"] = persona
+        if ctc.metadata is not None:
+            ctc.metadata["stop_reason"] = stop_reason
+            ctc.metadata["cancellation_available"] = cancellation_available
+            ctc.metadata["slide_image_refs"] = slide_image_refs
         session_test_cases.append(ctc)
 
     return FetchLangfuseResult(

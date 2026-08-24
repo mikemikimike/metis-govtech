@@ -4,6 +4,24 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.10.0] — 2026-08-20
+
+### Added
+
+- **Observable execution metadata for metrics** — the Langfuse extractor now writes three fields into per-trace and session metadata for use by library metrics: `stop_reason` (why the session stopped), `cancellation_available` (whether the user could cancel the run), and `slide_image_refs` (paths of image/slide artifacts, in turn order, for multimodal metrics). `fetch_by_session_id` accepts new `stop_reason` and `cancellation_available` parameters; the CLI passes `record.outcome.stop_reason` and `cancellation_available=True`. Fields are marked unavailable (never invented) when a trace source does not supply them. Covered by `tests/unit/engine/test_extractor_metadata.py`. ([#150](https://github.com/govtech-responsibleai/metis/issues/150))
+- **Resumable simulation** — `metis engine simulate --resume --experiment-dir <output dir>` and `metis engine run --resume --experiment-dir <output dir>` continue one named simulation output. Resume reads the experiment and fixtures from that directory's frozen `inputs/` snapshot, retries only missing, invalid, or `system_error` records, and appends to the simulation log. `simulate` and `run` print the exact resume command next to the evaluate command, so continuing an interrupted run never depends on a timestamp. `--resume` with `--input-dir` exits 1 and lists the outputs that exist for the experiment `id`.
+
+### Changed
+
+- **BREAKING: Split simulation and evaluation commands** — `metis engine simulate --input-dir <dir>` now writes simulation records only, and prints the exact `evaluate` command for the output directory it created. Use `metis engine evaluate --experiment-dir <output dir>` to score one simulation output, or `metis engine run --input-dir <dir>` for the combined flow. `evaluate` names its target directly, so the scored result never depends on timestamps; it exits 1 with a clear message when the path is absent or holds no `inputs/` snapshot. Simulation keeps its live TUI, while evaluation uses a normal progress bar and writes one complete `logs/evaluate.log`. `--langfuse-timeout` moved from `simulate` to `evaluate` and `run`; `--no-tui` controls simulation only.
+- **Simulation summary reports outcome categories** — the final summary line now breaks runs down by `stop_reason` (`N goal achieved, N abandoned, N timeout, N error`) instead of a binary `passed`/`failed` split, so abandoned and timed-out runs are no longer conflated with errors. ([#160](https://github.com/govtech-responsibleai/metis/issues/160))
+
+### Fixed
+
+- **TUI panels jump and flicker during simulation** — stray writes to stderr (structlog `print("")` newlines, stdlib handler leaks, direct `console.print()` calls) corrupted the alternate screen buffer; now fully isolated via `DropEvent`, muted stdlib handler, and TUI-guarded console output
+- **TUI tail content shifts unpredictably** — long log entries wrapped to variable row counts causing multi-row jumps; entries are now truncated to 1 visual row and rendered top-anchored with bottom padding
+- **Ctrl+C requires pressing twice to stop** — first Ctrl+C now sets a `shutdown_event` checked by workers between runs for graceful stop; second Ctrl+C force-exits
+
 ## [0.9.0] — 2026-08-20
 
 ### Added
@@ -22,8 +40,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **`SessionReport` trimmed** — removed `num_turns` and `turns` fields (conversation content was never rendered; available via `SessionResult.conversational_test_case` if needed)
 - **Extractor `__init__` exports pruned** — removed re-exports of report-format types (`SessionMetricResult`, `SessionMetricsEntry`, `SessionToolCallData`, `SessionTurnData`) that now live in `reporting._types`
 - **Restored example experiment scenarios** — uncommented all scenarios and metric refs in `example-experiment/experiment.yaml` that were temporarily disabled during the v0.8.0 library rollback (97cee19)
-
-### Fixed
 
 ## [0.8.0] — 2026-08-19
 

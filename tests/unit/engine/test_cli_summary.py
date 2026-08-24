@@ -1,6 +1,10 @@
 """Tests for final summary output."""
 
-from metis.engine.tui.state import RunState, ScenarioState, SimulationState
+from metis.engine.tui.state import (
+    SimulationRunState,
+    SimulationScenarioState,
+    SimulationState,
+)
 
 
 def _print_final_summary(
@@ -17,10 +21,10 @@ class TestFinalSummary:
         from metis.engine.cli import _format_final_summary
 
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="scn",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
                         trial=1,
@@ -44,57 +48,53 @@ class TestFinalSummary:
         assert "1/1" in summary
         assert "/path/to/exp/logs" in summary
 
-    def test_summary_counts_passed_and_failed(self) -> None:
+    def test_summary_counts_outcome_categories(self) -> None:
         from metis.engine.cli import _format_final_summary
 
+        def _run(persona: str, phase: str, stop_reason: str) -> SimulationRunState:
+            return SimulationRunState(
+                scenario_id="scn",
+                persona_id=persona,
+                trial=1,
+                num_trials=1,
+                phase=phase,
+                current_turn=None,
+                max_turns=20,
+                turn_detail="",
+                duration_seconds=30.0,
+                stop_reason=stop_reason,
+            )
+
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="scn",
                 runs=[
-                    RunState(
-                        scenario_id="scn",
-                        persona_id="per1",
-                        trial=1,
-                        num_trials=1,
-                        phase="completed",
-                        current_turn=None,
-                        max_turns=20,
-                        turn_detail="",
-                        duration_seconds=50.0,
-                        stop_reason="goal_achieved",
-                    ),
-                    RunState(
-                        scenario_id="scn",
-                        persona_id="per2",
-                        trial=1,
-                        num_trials=1,
-                        phase="failed",
-                        current_turn=None,
-                        max_turns=20,
-                        turn_detail="",
-                        duration_seconds=30.0,
-                        stop_reason="max_turns_reached",
-                    ),
+                    _run("per1", "completed", "goal_achieved"),
+                    _run("per2", "completed", "user_abandoned"),
+                    _run("per3", "completed", "timeout"),
+                    _run("per4", "failed", "system_error"),
                 ],
                 phase="completed",
             ),
         ]
         state = SimulationState(
-            experiment_id="test-exp", scenarios=scenarios, total_runs=2
+            experiment_id="test-exp", scenarios=scenarios, total_runs=4
         )
         summary = _format_final_summary(state, "/exp", "/exp/logs")
-        assert "2/2" in summary
-        assert "1 passed" in summary
-        assert "1 failed" in summary
+        assert "4/4" in summary
+        assert "1 goal achieved" in summary
+        assert "1 abandoned" in summary
+        assert "1 timeout" in summary
+        assert "1 error" in summary
 
     def test_summary_elapsed_time_minutes(self) -> None:
         from metis.engine.cli import _format_final_summary
 
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="scn",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
                         trial=1,
@@ -121,10 +121,10 @@ class TestFinalSummary:
         from metis.engine.cli import _format_final_summary
 
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="scn",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
                         trial=1,

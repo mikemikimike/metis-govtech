@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import structlog
+
 from metis.engine.logging.router import LogRouter
 from metis.engine.tui.tail import TailBuffer
 
@@ -21,6 +23,36 @@ class TestLogRouter:
         expected = tmp_path / "simulate-direct-question_cooperative-01.log"
         assert expected.exists()
 
+    def test_reopened_run_replaces_old_log(self, tmp_path: Path) -> None:
+        router = LogRouter(log_dir=tmp_path, log_format="text")
+        router.open_run("scn", "per", trial=1, num_trials=1)
+        self._process(
+            router,
+            {
+                "event": "old attempt",
+                "level": "info",
+                "scenario_id": "scn",
+                "persona_id": "per",
+                "trial": 1,
+            },
+        )
+        router.close_run("scn", "per", trial=1)
+        router.open_run("scn", "per", trial=1, num_trials=1)
+        self._process(
+            router,
+            {
+                "event": "new attempt",
+                "level": "info",
+                "scenario_id": "scn",
+                "persona_id": "per",
+                "trial": 1,
+            },
+        )
+        router.close_run("scn", "per", trial=1)
+        content = (tmp_path / "simulate-scn_per-01.log").read_text()
+        assert "old attempt" not in content
+        assert "new attempt" in content
+
     def test_trial_zero_padding_multi(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
         router.open_run("scenario", "persona", trial=1, num_trials=10)
@@ -29,6 +61,13 @@ class TestLogRouter:
         router.open_run("scenario", "persona", trial=10, num_trials=10)
         expected2 = tmp_path / "simulate-scenario_persona-10.log"
         assert expected2.exists()
+
+    def _process(self, router: LogRouter, event_dict: dict) -> None:
+        """Call router.process, expecting DropEvent when no fallback renderer."""
+        import pytest
+
+        with pytest.raises(structlog.DropEvent):
+            router.process(None, event_dict.get("level", "info"), event_dict.copy())
 
     def test_process_routes_to_active_run_file(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
@@ -41,7 +80,7 @@ class TestLogRouter:
             "persona_id": "per",
             "trial": 1,
         }
-        router.process(None, "info", event_dict.copy())
+        self._process(router, event_dict)
         router.close_all()
         log_file = tmp_path / "simulate-scn_per-01.log"
         content = log_file.read_text()
@@ -62,7 +101,7 @@ class TestLogRouter:
             "trial": 1,
             "worker": "w0",
         }
-        router.process(None, "warning", event_dict.copy())
+        self._process(router, event_dict)
         lines = tail.get_lines()
         assert any("tail test" in line for line in lines)
 
@@ -77,7 +116,7 @@ class TestLogRouter:
             "persona_id": "per",
             "trial": 1,
         }
-        router.process(None, "debug", event_dict.copy())
+        self._process(router, event_dict)
         router.close_run("scn", "per", trial=1)
         log_file = tmp_path / "simulate-scn_per-01.log"
         content = log_file.read_text()
@@ -96,7 +135,7 @@ class TestLogRouter:
             "persona_id": "per",
             "trial": 1,
         }
-        router.process(None, "info", event_dict.copy())
+        self._process(router, event_dict)
         router.close_all()
         log_file = tmp_path / "simulate-scn_per-01.log"
         line = log_file.read_text().strip()
