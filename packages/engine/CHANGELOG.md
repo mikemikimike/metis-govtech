@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **Standardised LLM credentials on `OPENAI_API_KEY` / `OPENAI_BASE_URL`** — the
+  simulation user agent now reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL` instead of
+  `USER_AGENT_API_KEY` and `USER_AGENT_BASE_URL`. The user-agent model stays selectable via
+  `USER_AGENT_MODEL`. ([#153](https://github.com/govtech-responsibleai/metis/issues/153))
+- Default user-agent model is now `gpt-5.6-luna` (was `gpt-4o-mini`);
+  override with `USER_AGENT_MODEL`.
+
 ### Fixed
 
 ## [0.10.0] — 2026-08-20

@@ -52,7 +52,7 @@ Optional tuning variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `USER_AGENT_MODEL` | `gpt-4o-mini` | Model used for the simulated user persona |
+| `USER_AGENT_MODEL` | `gpt-5.6-luna` | Model used for the simulated user persona |
 | `USER_AGENT_MAX_TOKENS` | `1024` | Max tokens per user agent response |
 | `USER_AGENT_TEMPERATURE` | `0.7` | Sampling temperature for the user agent |
 | `HEADED` | `false` | Set to `true` to show the browser window |
@@ -60,10 +60,10 @@ Optional tuning variables:
 ### Verify Installation
 
 ```bash
-metis engine simulate --help
+metis engine run --help
 ```
 
-You should see the simulate command's help text with all available flags.
+You should see the run command's help text with all available flags.
 
 ---
 
