@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import IO, Any, Literal
 
+import structlog
 from rich.text import Text
 from structlog.types import EventDict
 
@@ -121,7 +122,8 @@ class LogRouter:
         if self._fallback_renderer is not None:
             return self._fallback_renderer(logger, method_name, event_dict)
 
-        return ""
+        # TUI mode: suppress stderr output entirely (Live owns the terminal)
+        raise structlog.DropEvent()
 
     def _elapsed_str(self) -> str:
         """Format elapsed time since router creation as HH:MM:SS."""
@@ -171,8 +173,6 @@ def setup_engine_logging(
     still appear on stderr.
     Must be called AFTER configure_logging().
     """
-    import structlog
-
     config = structlog.get_config()
     current_processors = list(config.get("processors", []))
 
@@ -201,6 +201,16 @@ def setup_engine_logging(
         logger_factory=config.get("logger_factory"),
         cache_logger_on_first_use=False,
     )
+
+    # In TUI mode, suppress the stdlib root handler's stderr output.
+    # Third-party libraries (Playwright, httpx) use stdlib logging which
+    # writes to stderr via the StreamHandler installed by configure_logging().
+    # These writes corrupt the alternate screen that Rich Live owns.
+    if use_tui:
+        root = logging.getLogger()
+        for handler in root.handlers:
+            if isinstance(handler, logging.StreamHandler):
+                handler.setLevel(logging.CRITICAL + 1)
 
     return router
 

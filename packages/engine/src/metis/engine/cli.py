@@ -480,19 +480,23 @@ def _run_simulation(
 
     interrupt_count = 0
     interrupt_lock = threading.Lock()
+    shutdown_event = threading.Event()
 
     def _handle_sigint(_signum: int, _frame: Any) -> None:
         nonlocal interrupt_count
         with interrupt_lock:
             interrupt_count += 1
             if interrupt_count >= 2:
-                console.print("\nForce abort.", style="bold red")
+                if not use_tui:
+                    console.print("\nForce abort.", style="bold red")
                 sys.exit(130)
-            console.print(
-                "\nInterrupt received — finishing current turn. "
-                "Press Ctrl+C again to abort.",
-                style="yellow",
-            )
+            shutdown_event.set()
+            if not use_tui:
+                console.print(
+                    "\nInterrupt received — finishing current run. "
+                    "Press Ctrl+C again to force abort.",
+                    style="yellow",
+                )
 
     prev_handler = signal.signal(signal.SIGINT, _handle_sigint)
     try:
@@ -509,6 +513,7 @@ def _run_simulation(
                 orchestration_logger=orchestration_logger,
                 log_router=log_router,
                 tui_ctx=tui_ctx,
+                shutdown_event=shutdown_event,
             )
     finally:
         signal.signal(signal.SIGINT, prev_handler)

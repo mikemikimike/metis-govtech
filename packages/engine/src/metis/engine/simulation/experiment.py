@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -53,6 +54,7 @@ def run_experiment(
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
+    shutdown_event: threading.Event | None = None,
 ) -> None:
     """Run a full experiment (all scenario x persona pairs).
 
@@ -71,6 +73,7 @@ def run_experiment(
             orchestration_logger=orchestration_logger,
             log_router=log_router,
             tui_ctx=tui_ctx,
+            shutdown_event=shutdown_event,
         )
     )
 
@@ -87,6 +90,7 @@ async def _run_experiment_async(
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
+    shutdown_event: threading.Event | None = None,
 ) -> None:
     """Async experiment orchestrator with concurrent browser contexts."""
     # Expand scenarios into individual runs
@@ -153,6 +157,7 @@ async def _run_experiment_async(
                             orchestration_logger=orchestration_logger,
                             log_router=log_router,
                             tui_ctx=tui_ctx,
+                            shutdown_event=shutdown_event,
                         )
                     )
 
@@ -169,19 +174,23 @@ async def _run_experiment_async(
             logger.info("[experiment] Closing browser...")
             await browser.close()
 
-    # Print summary
-    console.print("\n\n========== SIMULATION SUMMARY ==========\n")
-    for r in all_records:
-        status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
-        console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
-        console.print(
-            f"         Turns: {r.outcome.total_turns}, "
-            f"Duration: {r.outcome.duration_seconds}s, "
-            f"Reason: {r.outcome.stop_reason}"
+    # Print summary (only in non-TUI mode; TUI mode prints via CLI after exiting)
+    if not tui_ctx:
+        console.print("\n\n========== SIMULATION SUMMARY ==========\n")
+        for r in all_records:
+            status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
+            console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
+            console.print(
+                f"         Turns: {r.outcome.total_turns}, "
+                f"Duration: {r.outcome.duration_seconds}s, "
+                f"Reason: {r.outcome.stop_reason}"
+            )
+    if not tui_ctx:
+        console.print()
+        achieved = sum(
+            1 for r in all_records if r.outcome.stop_reason == "goal_achieved"
         )
-    console.print()
-    achieved = sum(1 for r in all_records if r.outcome.stop_reason == "goal_achieved")
-    console.print(f"Goals achieved: {achieved}/{len(all_records)}")
+        console.print(f"Goals achieved: {achieved}/{len(all_records)}")
 
 
 async def _worker(
@@ -198,6 +207,7 @@ async def _worker(
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
+    shutdown_event: threading.Event | None = None,
 ) -> list[RunRecord]:
     """One concurrent worker: creates a fresh browser context per run for isolation."""
     structlog.contextvars.clear_contextvars()
@@ -210,6 +220,10 @@ async def _worker(
     try:
         records: list[RunRecord] = []
         for _idx, (scenario, persona, trial) in enumerate(run_slice):
+            if shutdown_event and shutdown_event.is_set():
+                logger.info("[experiment] Worker w%d stopping (shutdown requested)", worker_id)
+                break
+
             trial_index = trial + 1
             trial_label = (
                 f" (trial {trial_index}/{scenario.num_trials})"
@@ -267,7 +281,8 @@ async def _worker(
             async with console_lock:
                 if tui_ctx:
                     tui_ctx.refresh()
-                console.print(f"  [w{worker_id}] {scenario.id} × {persona.id} ...")
+                else:
+                    console.print(f"  [w{worker_id}] {scenario.id} × {persona.id} ...")
 
             run_start = time.time()
             max_attempts = 1 + (
@@ -310,6 +325,7 @@ async def _worker(
                         trial=trial_index,
                         state=state,
                         tui_ctx=tui_ctx,
+                        shutdown_event=shutdown_event,
                     )
                     record = await orchestrator.run()
                     record.attempt_number = attempt
@@ -440,13 +456,14 @@ async def _worker(
                 timing_parts.append(f"t{t.turn_number}={t.duration_ms / 1000:.0f}s")
             timing_str = f" [{', '.join(timing_parts)}]" if timing_parts else ""
 
-            async with console_lock:
-                console.print(
-                    f"  [w{worker_id}] {scenario.id} × {persona.id} — "
-                    f"{record.outcome.stop_reason}, "
-                    f"{record.outcome.total_turns} turns, "
-                    f"{record.outcome.duration_seconds:.0f}s{timing_str}"
-                )
+            if not tui_ctx:
+                async with console_lock:
+                    console.print(
+                        f"  [w{worker_id}] {scenario.id} × {persona.id} — "
+                        f"{record.outcome.stop_reason}, "
+                        f"{record.outcome.total_turns} turns, "
+                        f"{record.outcome.duration_seconds:.0f}s{timing_str}"
+                    )
 
             logger.info(
                 "[experiment] Result: stop_reason=%s, turns=%d, duration=%.1fs",
