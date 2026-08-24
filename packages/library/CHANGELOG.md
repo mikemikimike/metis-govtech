@@ -6,11 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.5.0] — 2026-08-25
 
-### Added
-
 ### Changed
 
-### Fixed
+- **Standardised LLM-judge credentials on `OPENAI_API_KEY` / `OPENAI_BASE_URL`** —
+  `_get_judge_model()` now reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL` instead of
+  `JUDGE_API_KEY` and `JUDGE_BASE_URL`. The judge model stays selectable via `JUDGE_MODEL`.
+  ([#153](https://github.com/govtech-responsibleai/metis/issues/153))
+- Default judge model is now `gemini-3.5-flash-lite` (was `gpt-4.1-mini`);
+  override with `JUDGE_MODEL`.
 
 ## [0.4.0] — 2026-08-20
 
