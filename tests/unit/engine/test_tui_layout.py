@@ -7,20 +7,24 @@ from rich.console import Console
 
 from metis.engine.tui.layout import (
     TUIContext,
-    _LiveTailRenderable,
     _compute_tail_max_lines,
+    _LiveTailRenderable,
     is_tui_active,
 )
-from metis.engine.tui.state import RunState, ScenarioState, SimulationState
+from metis.engine.tui.state import (
+    SimulationRunState,
+    SimulationScenarioState,
+    SimulationState,
+)
 from metis.engine.tui.tail import TailBuffer
 
 
 def _make_state() -> SimulationState:
     scenarios = [
-        ScenarioState(
+        SimulationScenarioState(
             scenario_id="test-scn",
             runs=[
-                RunState(
+                SimulationRunState(
                     scenario_id="test-scn",
                     persona_id="test-per",
                     trial=1,

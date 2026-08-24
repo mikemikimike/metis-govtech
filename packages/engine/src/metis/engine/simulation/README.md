@@ -1,6 +1,6 @@
 # Simulation Framework
 
-LLM-driven persona simulation for end-to-end testing of an AI assistant. Drives real conversations through the target UI via Playwright, then evaluates the resulting traces and artifacts.
+LLM-driven persona simulation for end-to-end testing of an AI assistant. Drives real conversations through the target UI via Playwright and writes frozen run records for later evaluation.
 
 > **Note:** The harness (auth flow, page selectors, session ID extraction) is currently
 > tightly coupled to Orca. Adapting to a different target requires changes in
@@ -41,7 +41,14 @@ Run from the project root. Use `uv run metis engine simulate` or activate the en
 
 ```bash
 metis engine simulate --input-dir path/to/my-experiment/
+# Evaluate the output directory that simulate wrote. It prints this command.
+# The name holds the experiment id and the start time of the run.
+metis engine evaluate --experiment-dir experiments/my-experiment-20260820-143000/
 ```
+
+Use `metis engine run --input-dir path/to/my-experiment/` for the combined simulation and evaluation flow.
+
+Simulation uses the live TUI in a terminal. Evaluation uses a normal progress bar, reports linear per-record progress outside a terminal, and writes one complete `logs/evaluate.log` file.
 
 ## Input directory structure
 

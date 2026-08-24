@@ -1,18 +1,24 @@
-"""Tests for SimulationState data model."""
+"""Tests for the simulation TUI state model."""
+
+from __future__ import annotations
 
 import time
 
-from metis.engine.tui.state import RunState, ScenarioState, SimulationState
+from metis.engine.tui import (
+    SimulationRunState,
+    SimulationScenarioState,
+    SimulationState,
+)
 
 
 class TestSimulationState:
     def _make_state(self) -> SimulationState:
         """Build a state with 2 scenarios, 3 total runs."""
         scenarios = [
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="direct-question",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="direct-question",
                         persona_id="cooperative",
                         trial=1,
@@ -27,10 +33,10 @@ class TestSimulationState:
                 ],
                 phase="pending",
             ),
-            ScenarioState(
+            SimulationScenarioState(
                 scenario_id="constrained-analysis",
                 runs=[
-                    RunState(
+                    SimulationRunState(
                         scenario_id="constrained-analysis",
                         persona_id="impatient",
                         trial=1,
@@ -42,7 +48,7 @@ class TestSimulationState:
                         duration_seconds=None,
                         stop_reason=None,
                     ),
-                    RunState(
+                    SimulationRunState(
                         scenario_id="constrained-analysis",
                         persona_id="impatient",
                         trial=2,

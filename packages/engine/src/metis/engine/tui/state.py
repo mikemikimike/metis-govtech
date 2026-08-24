@@ -6,16 +6,16 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
-RunPhase = Literal["pending", "simulating", "completed", "failed"]
+SimulationRunPhase = Literal["pending", "simulating", "completed", "failed"]
 
 
 @dataclass
-class RunState:
+class SimulationRunState:
     scenario_id: str
     persona_id: str
     trial: int
     num_trials: int
-    phase: RunPhase
+    phase: SimulationRunPhase
     current_turn: int | None
     max_turns: int
     turn_detail: str
@@ -25,9 +25,9 @@ class RunState:
 
 
 @dataclass
-class ScenarioState:
+class SimulationScenarioState:
     scenario_id: str
-    runs: list[RunState]
+    runs: list[SimulationRunState]
     phase: Literal["pending", "active", "completed"]
 
 
@@ -35,7 +35,7 @@ class SimulationState:
     def __init__(
         self,
         experiment_id: str,
-        scenarios: list[ScenarioState],
+        scenarios: list[SimulationScenarioState],
         total_runs: int,
     ) -> None:
         self.experiment_id = experiment_id
@@ -45,7 +45,7 @@ class SimulationState:
 
     def _find_run(
         self, scenario_id: str, persona_id: str, trial: int
-    ) -> tuple[ScenarioState, RunState]:
+    ) -> tuple[SimulationScenarioState, SimulationRunState]:
         for sc in self.scenarios:
             if sc.scenario_id == scenario_id:
                 for run in sc.runs:
@@ -108,7 +108,7 @@ class SimulationState:
         run.duration_seconds = duration_seconds
         self._check_scenario_complete(sc)
 
-    def _check_scenario_complete(self, sc: ScenarioState) -> None:
+    def _check_scenario_complete(self, sc: SimulationScenarioState) -> None:
         if all(r.phase in ("completed", "failed") for r in sc.runs):
             sc.phase = "completed"
 
@@ -126,7 +126,7 @@ class SimulationState:
         return sum(1 for sc in self.scenarios if sc.phase == "completed")
 
     @property
-    def active_scenario(self) -> ScenarioState | None:
+    def active_scenario(self) -> SimulationScenarioState | None:
         for sc in self.scenarios:
             if sc.phase == "active":
                 return sc

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-metis-engine is the evaluation runtime for METIS. It drives a target system's web UI via Playwright using LLM-powered simulated user personas, extracts the resulting traces from Langfuse, runs configurable evaluation metrics against them, and generates reports.
+metis-engine is the evaluation runtime for METIS. It drives a target system's web UI via Playwright using LLM-powered simulated user personas. It then extracts the resulting traces from Langfuse, runs configurable evaluation metrics, and generates reports. Simulation and evaluation are separate commands, with `run` available for the combined flow.
 
 This guide is for anyone setting up evaluations against a web-based agentic system. By the end, you will have:
 
@@ -89,18 +89,33 @@ example-experiment/
 ### Run It
 
 ```bash
-metis engine simulate --input-dir packages/engine/example-experiment/
+metis engine run --input-dir packages/engine/example-experiment/
 ```
+
+To run the phases separately, use `simulate` first. It prints the exact `evaluate` command for the output directory it created. `evaluate` scores the directory that you name:
+
+```bash
+metis engine simulate --input-dir packages/engine/example-experiment/
+metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
+```
+
+`experiments/orca-eval-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
 
 ### What You'll See
 
-The engine launches a TUI dashboard showing:
+The engine launches a Simulation TUI for simulation:
 
 - Progress bars for each scenario
-- Per-run status (pending → simulating → extracting → evaluating → done)
+- Per-run status (`pending → simulating → done/failed`)
 - A scrolling log tail with recent events
 
-The pipeline runs four phases sequentially for each run:
+Evaluation uses a normal, non-full-screen progress bar:
+
+- One completed/total count for run records
+- The current record and phase (`extracting` or `evaluating`)
+- Failed records advance the bar after the warning is shown
+
+The combined `run` command closes the Simulation TUI before it starts the evaluation progress bar. It performs four phases:
 
 1. **Simulate** — the user agent interacts with Orca via Playwright
 2. **Extract** — traces are fetched from Langfuse
@@ -109,7 +124,7 @@ The pipeline runs four phases sequentially for each run:
 
 ### Where Results Land
 
-Each run produces output in `experiments/<id>-<timestamp>/`:
+Each run produces output in `experiments/<id>-<timestamp>/`. The `reports/` directory is created by `evaluate` or `run`; simulation-only runs stop after `runs/` and `logs/`:
 
 ```
 experiments/orca-eval-20260730-143022/
@@ -117,12 +132,15 @@ experiments/orca-eval-20260730-143022/
 ├── runs/                # Per-run conversation records
 ├── logs/
 │   ├── simulate.log                                  # Orchestration timeline
+│   ├── evaluate.log                                  # Complete evaluation timeline
 │   ├── simulate-direct-question_cooperative-01.log   # Per-run detail
 │   └── ...
-└── reports/
+└── reports/             # created by evaluate or run
     ├── report.json      # Machine-readable results
     └── report.html      # Visual report (open in browser)
 ```
+
+Use `logs/evaluate.log` to review extraction, each configured metric, the actual judge model reported by DeepEval, metric scores, pass or fail results, reasons, errors, cost, token counts, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
 ### Debugging Tip
 
@@ -267,24 +285,38 @@ For a complete working example with personas, scenarios, fixtures, and metrics a
 
 ## CLI Reference
 
-The engine exposes a single command: `metis engine simulate`.
+The engine exposes three commands:
 
 ```bash
-metis engine simulate --input-dir <path> [options]
+metis engine simulate --input-dir <source path> [simulation options]
+metis engine evaluate --experiment-dir <output path> [evaluation options]
+metis engine run --input-dir <source path> [simulation and evaluation options]
 ```
 
-### Flags
+`simulate` writes run records only. It prints the exact command needed to evaluate the output directory it created. `evaluate` scores the output directory that you name, uses its frozen input snapshot, and overwrites `logs/evaluate.log`, `reports/report.json`, and `reports/report.html`. `run` performs both phases.
+
+### Simulation options
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--input-dir` | (required) | Directory containing `experiment.yaml` and `fixtures/` |
 | `--concurrency N` / `-c N` | `5` | Max parallel simulation workers |
-| `--langfuse-timeout` | `90` | Seconds to wait for Langfuse traces to appear |
 | `-v` / `-vv` | WARNING | Increase verbosity: `-v` for INFO, `-vv` for DEBUG |
 | `--quiet` | `false` | Suppress all output below ERROR |
 | `--no-tui` | `false` | Disable TUI dashboard (force linear log output) |
 | `--log-format` | `text` | Log file format: `text` or `json` |
 | `--log-dir` | co-located with results | Override the log output directory |
+
+### Evaluation options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--experiment-dir` | (required) | One output directory that `simulate` created, for example `experiments/orca-eval-20260820-143000/`. It must hold an `inputs/` snapshot |
+| `--langfuse-timeout` | `90` | Seconds to wait for Langfuse traces to appear |
+| `-v` / `-vv` | WARNING | Increase evaluation logging verbosity |
+| `--quiet` | `false` | Suppress all output below ERROR |
+
+The `run` command accepts the union of the simulation and evaluation options. Its `--no-tui` option controls only the Simulation TUI. Evaluation always uses normal progress output.
 
 ### Concurrency
 
@@ -301,7 +333,7 @@ The default is `5`. Reduce to `1` for sequential execution or increase based on 
 | INFO | `-v` | Operational progress (scenario starts, phase transitions) |
 | DEBUG | `-vv` | Full diagnostics (every LLM call, page action, trace fetch) |
 
-The TUI dashboard (progress bars, scenario status) is always visible regardless of verbosity level. Verbosity controls the log tail content and log file detail.
+The Simulation TUI and evaluation progress are visible regardless of verbosity level in an interactive terminal. Verbosity controls log detail. `--no-tui` changes simulation to linear output; it does not suppress evaluation progress.
 
 ### Environment Variables
 
@@ -317,7 +349,7 @@ The TUI dashboard (progress bars, scenario status) is always visible regardless 
 
 ### Non-TTY Environments
 
-The TUI auto-disables when stderr is not a terminal (e.g., in CI pipelines or when output is piped). Use `--no-tui` explicitly if you want linear output in an interactive terminal.
+The Simulation TUI auto-disables when stderr is not a terminal, such as in CI or when output is piped. Evaluation reports linear per-record progress in this case. Use `--no-tui` if you want linear simulation output in an interactive terminal.
 
 ---
 
@@ -468,7 +500,7 @@ metric_refs:
   - my_package.metrics.ResponseQualityMetric
 ```
 
-The module must be importable from the environment where `metis engine simulate` runs. If it's part of the METIS workspace, place it under `packages/library/src/metis/library/metrics/` and re-export from `__init__.py`.
+The module must be importable from the environment where `metis engine evaluate` runs. If it's part of the METIS workspace, place it under `packages/library/src/metis/library/metrics/` and re-export from `__init__.py`.
 
 ### Accepting Parameters from YAML
 
@@ -527,7 +559,7 @@ The `test_case.metadata` dict (typed as `TraceMetadata`) provides:
 | "Fixture not found" error | Path is absolute or has a typo | Use the filename only (relative to `fixtures/`), verify the file exists in the fixtures directory |
 | "Metric import failed" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the metric is installed in your venv |
 | Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase `response_wait_ms` in the scenario config |
-| TUI not appearing | Running in a non-TTY environment | Expected — the TUI requires an interactive terminal. Use `--no-tui` or run in a real terminal |
+| Simulation TUI not appearing | Running in a non-TTY environment | Expected — the Simulation TUI requires an interactive terminal. Use linear output or run in a real terminal |
 | Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current turn | Press Ctrl+C a second time to force-abort |
 | "Metric is not a subclass of BaseMetric" | Class doesn't inherit from the correct base | Ensure your metric extends `SyncBaseMetric` or `deepeval.metrics.BaseMetric` |
 | Duplicate persona/scenario ID error | Two entries share the same `id` | Use unique IDs for every persona and scenario |

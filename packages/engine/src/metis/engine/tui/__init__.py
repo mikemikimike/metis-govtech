@@ -1,12 +1,16 @@
-"""TUI control plane for metis-engine simulate."""
+"""TUI control plane for metis-engine simulation."""
 
 from .layout import TUIContext, is_tui_active
-from .state import RunState, ScenarioState, SimulationState
+from .state import (
+    SimulationRunState,
+    SimulationScenarioState,
+    SimulationState,
+)
 from .tail import TailBuffer
 
 __all__ = [
-    "RunState",
-    "ScenarioState",
+    "SimulationRunState",
+    "SimulationScenarioState",
     "SimulationState",
     "TUIContext",
     "TailBuffer",

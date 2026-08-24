@@ -1,4 +1,4 @@
-"""Writes the orchestration index log (simulate.log)."""
+"""Writes experiment-level simulation and evaluation logs."""
 
 from __future__ import annotations
 
@@ -121,3 +121,19 @@ class OrchestrationLogger:
     def close(self) -> None:
         self._handle.flush()
         self._handle.close()
+
+
+class EvaluationLogger:
+    """Write the complete evaluation timeline to one text log."""
+
+    def __init__(self, log_dir: Path, *, reset: bool = True) -> None:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        self.path = log_dir / "evaluate.log"
+        if reset:
+            self.path.write_text("", encoding="utf-8")
+
+    def write(self, message: str) -> None:
+        """Append one timestamped evaluation event."""
+        timestamp = datetime.now(tz=UTC).strftime("%H:%M:%S")
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(f"[{timestamp}] {message}\n")

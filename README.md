@@ -105,10 +105,14 @@ console.print("[bold]Results:[/bold] 4 passed, 1 failed")
 Verbosity is controlled via CLI flags:
 
 ```bash
-metis engine simulate --input-dir ./exp    # default: only warnings/errors
-metis -v engine simulate --input-dir ./exp  # INFO: operational progress
-metis -vv engine simulate --input-dir ./exp # DEBUG: full diagnostics
+metis engine simulate --input-dir ./exp       # simulation only; writes run records
+metis engine evaluate --experiment-dir ./experiments/exp-20260820-143000  # score the output that simulate wrote
+metis engine run --input-dir ./exp            # simulation + evaluation + report
+metis engine run --input-dir ./exp -v         # INFO: operational progress
+metis engine run --input-dir ./exp -vv        # DEBUG: full diagnostics
 ```
+
+Simulation uses the live TUI in a terminal. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file.
 
 ## Project Layout
 
