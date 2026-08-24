@@ -73,14 +73,13 @@ def test_run_composes_phases_and_prints_recovery_command(
             "--langfuse-timeout",
             "120",
             "-v",
-            "--resume",
         ],
     )
 
     assert result.exit_code == 0
     assert phases == ["simulation", "evaluation"]
     assert simulation_options["no_tui"] is True
-    assert simulation_options["resume"] is True
+    assert simulation_options["resume"] is False
     assert evaluation_paths == [experiment_dir]
     assert evaluation_options == {
         "langfuse_timeout": 120,
@@ -88,9 +87,42 @@ def test_run_composes_phases_and_prints_recovery_command(
         "quiet": False,
     }
     assert (
-        f"Next: metis engine evaluate --experiment-dir {experiment_dir.resolve()}"
+        f"Evaluate: metis engine evaluate --experiment-dir {experiment_dir.resolve()}"
         in result.output
     )
+    assert (
+        f"Resume: metis engine run --resume --experiment-dir {experiment_dir.resolve()}"
+        in result.output
+    )
+    assert "PIPELINE COMPLETE" in result.output
+
+
+def test_run_resume_evaluates_the_resumed_directory(
+    monkeypatch, tmp_path: Path
+) -> None:
+    experiment_dir = _write_record_marker(tmp_path / "experiment")
+    simulation_options: dict[str, object] = {}
+    evaluation_paths: list[Path] = []
+
+    def fake_simulation(*_args: object, **kwargs: object) -> Path:
+        simulation_options.update(kwargs)
+        return experiment_dir
+
+    def fake_evaluation(path: Path, **_kwargs: object) -> EvaluationOutcome:
+        evaluation_paths.append(path)
+        return EvaluationOutcome(1, 1, 0, True)
+
+    monkeypatch.setattr(cli, "_run_simulation", fake_simulation)
+    monkeypatch.setattr(cli, "_run_evaluation", fake_evaluation)
+
+    result = runner.invoke(
+        app,
+        ["run", "--resume", "--experiment-dir", str(experiment_dir), "--no-tui"],
+    )
+
+    assert result.exit_code == 0
+    assert simulation_options["resume"] is True
+    assert evaluation_paths == [experiment_dir]
     assert "PIPELINE COMPLETE" in result.output
 
 
@@ -105,9 +137,7 @@ def test_run_zero_simulation_records_exits_one(monkeypatch, tmp_path: Path) -> N
         evaluation_called = True
         raise AssertionError("evaluation should not run")
 
-    monkeypatch.setattr(
-        cli, "_run_simulation", lambda *_args, **_kwargs: experiment_dir
-    )
+    monkeypatch.setattr(cli, "_run_simulation", lambda *_a, **_k: experiment_dir)
     monkeypatch.setattr(cli, "_run_evaluation", fail_if_evaluated)
 
     result = runner.invoke(app, ["run", "--input-dir", str(input_dir)])
@@ -121,9 +151,7 @@ def test_run_infrastructure_failure_prints_recovery_command(
 ) -> None:
     input_dir = _write_source(tmp_path)
     experiment_dir = _write_record_marker(tmp_path / "experiment")
-    monkeypatch.setattr(
-        cli, "_run_simulation", lambda *_args, **_kwargs: experiment_dir
-    )
+    monkeypatch.setattr(cli, "_run_simulation", lambda *_a, **_k: experiment_dir)
 
     def fail_evaluation(*_args: object, **_kwargs: object) -> EvaluationOutcome:
         raise RuntimeError("Langfuse unavailable")
@@ -134,6 +162,6 @@ def test_run_infrastructure_failure_prints_recovery_command(
 
     assert result.exit_code != 0
     assert (
-        f"Next: metis engine evaluate --experiment-dir {experiment_dir.resolve()}"
+        f"Evaluate: metis engine evaluate --experiment-dir {experiment_dir.resolve()}"
         in result.output
     )

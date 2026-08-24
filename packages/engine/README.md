@@ -32,9 +32,10 @@ metis engine run --input-dir packages/engine/example-experiment/
 metis engine simulate --input-dir packages/engine/example-experiment/
 metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 
-# Resume an interrupted simulation (YAML and fixtures must be unchanged)
-metis engine simulate --input-dir packages/engine/example-experiment/ --resume
-metis engine run --input-dir packages/engine/example-experiment/ --resume
+# Resume an interrupted simulation. simulate prints this exact command;
+# --experiment-dir is the output directory to continue.
+metis engine simulate --resume --experiment-dir experiments/orca-eval-20260820-143000/
+metis engine run --resume --experiment-dir experiments/orca-eval-20260820-143000/
 
 # Headed mode (visible browser)
 HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/
@@ -73,7 +74,7 @@ The two commands take different paths. `simulate` takes the source experiment as
 
 Evaluation has no TUI option. It uses a normal progress bar in a terminal and linear per-record progress in a non-interactive environment.
 
-Resume selects the newest output for the experiment. It compares `experiment.yaml` and the complete `fixtures/` tree with the frozen input snapshot, uses the frozen fixtures, retries only missing, invalid, or `system_error` records, and appends to `logs/simulate.log`. A changed snapshot stops resume with an error.
+Resume continues the output directory named by `--experiment-dir`. It reads the experiment and fixtures from that directory's frozen `inputs/` snapshot, retries only missing, invalid, or `system_error` records, and appends to `logs/simulate.log`. `simulate` and `run` print the exact resume command. Passing `--resume` with `--input-dir` is an error; the message lists the outputs that exist for the experiment `id`.
 
 ### Concurrency
 

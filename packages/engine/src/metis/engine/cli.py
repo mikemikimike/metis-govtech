@@ -264,64 +264,117 @@ def _record_files(experiment_dir: Path) -> list[Path]:
     )
 
 
-def _resolve_latest_experiment(input_dir: Path) -> Path:
-    """Resolve the newest output for the experiment in ``input_dir``.
-
-    Used by ``simulate --resume``, which continues the last run for an
-    experiment. ``evaluate`` deliberately does not use this: it takes an
-    explicit ``--experiment-dir`` so the scored output never depends on
-    timestamps.
-    """
+def _experiment_id(input_dir: Path) -> str | None:
+    """Return the experiment id in ``input_dir``, or None if it cannot be read."""
     from metis.engine.simulation.types import Experiment
 
-    resolved_input_dir = input_dir.resolve()
-    if not resolved_input_dir.is_dir():
-        console.print(
-            f"Error: input directory '{resolved_input_dir}' does not exist",
-            style="bold red",
-        )
-        raise EvaluationInputError("invalid input directory")
-    experiment_path = resolved_input_dir / "experiment.yaml"
-    if not experiment_path.exists():
-        console.print(
-            f"Error: missing required file 'experiment.yaml' in {resolved_input_dir}",
-            style="bold red",
-        )
-        raise EvaluationInputError("invalid input directory")
     try:
-        experiment = Experiment.load_file(experiment_path)
-    except Exception as exc:
-        console.print(f"Error: failed to load experiment.yaml: {exc}", style="bold red")
-        raise EvaluationInputError("failed to load input experiment") from exc
+        return Experiment.load_file(input_dir.resolve() / "experiment.yaml").id
+    except Exception:
+        return None
 
+
+def _existing_outputs(input_dir: Path) -> list[Path]:
+    """Return every simulation output for the experiment named in ``input_dir``.
+
+    Globs ``experiments/`` for directories named ``<id>-<timestamp>``. Returns
+    an empty list when the id cannot be read or no output exists. It lists the
+    outputs; it never reduces the list to one.
+    """
+    experiment_id = _experiment_id(input_dir)
+    if experiment_id is None:
+        return []
     experiments_root = _find_project_root() / "experiments"
-    pattern = re.compile(
-        rf"^{re.escape(experiment.id)}-(?P<timestamp>\d{{8}}-\d{{6}})$"
+    if not experiments_root.is_dir():
+        return []
+    pattern = re.compile(rf"^{re.escape(experiment_id)}-\d{{8}}-\d{{6}}$")
+    return sorted(
+        candidate.resolve()
+        for candidate in experiments_root.iterdir()
+        if candidate.is_dir() and pattern.fullmatch(candidate.name)
     )
-    candidates: list[tuple[datetime, Path]] = []
-    if experiments_root.is_dir():
-        for candidate in experiments_root.iterdir():
-            if not candidate.is_dir():
-                continue
-            match = pattern.fullmatch(candidate.name)
-            if not match:
-                continue
-            try:
-                timestamp = datetime.strptime(match.group("timestamp"), "%Y%m%d-%H%M%S")
-            except ValueError:
-                continue
-            candidates.append((timestamp, candidate))
 
-    if not candidates:
+
+def _print_resume_flag_error(input_dir: Path, command: str) -> None:
+    """Report that ``--resume`` needs ``--experiment-dir``, and list candidates."""
+    experiment_id = _experiment_id(input_dir)
+    outputs = _existing_outputs(input_dir)
+
+    if not outputs:
+        if experiment_id is None:
+            console.print(
+                "Error: --resume needs --experiment-dir, not --input-dir.",
+                style="bold red",
+            )
+        else:
+            console.print(
+                f"Error: no simulation output exists for experiment "
+                f"'{experiment_id}'.\n"
+                f"Run 'metis engine {command} --input-dir {input_dir}' first "
+                "to create one.",
+                style="bold red",
+            )
+        return
+
+    lines = [
+        "Error: --resume needs --experiment-dir, not --input-dir.",
+        "Resume continues an output directory that simulate already created.",
+        "",
+        f"Outputs for experiment '{experiment_id}':",
+        *(f"  {output}" for output in outputs),
+        "",
+        "Then run:",
+        f"  metis engine {command} --resume --experiment-dir <one of the above>",
+    ]
+    console.print("\n".join(lines), style="bold red")
+
+
+def _resolve_simulation_target(
+    input_dir: Path | None,
+    experiment_dir: Path | None,
+    *,
+    resume: bool,
+    command: str,
+) -> Path:
+    """Decide which directory ``simulate`` or ``run`` works on.
+
+    Returns the source directory for a new run, or the validated output
+    directory for a resume. Exits with code 1 on any invalid combination of
+    ``--input-dir`` and ``--experiment-dir``.
+    """
+    if input_dir is not None and experiment_dir is not None:
         console.print(
-            f"Error: no simulation output found for experiment '{experiment.id}' "
-            f"under {experiments_root}",
+            "Error: pass either --input-dir or --experiment-dir, not both.",
             style="bold red",
         )
-        raise EvaluationInputError("no matching experiment output")
+        raise typer.Exit(code=1)
 
-    candidates.sort(key=lambda item: item[0])
-    return candidates[-1][1].resolve()
+    if resume:
+        if input_dir is not None:
+            _print_resume_flag_error(input_dir, command)
+            raise typer.Exit(code=1)
+        if experiment_dir is None:
+            console.print("Error: --resume needs --experiment-dir.", style="bold red")
+            raise typer.Exit(code=1)
+        try:
+            return _resolve_experiment_dir(experiment_dir)
+        except EvaluationInputError:
+            raise typer.Exit(code=1) from None
+
+    if experiment_dir is not None:
+        console.print(
+            "Error: --experiment-dir needs --resume. Start a new run with --input-dir.",
+            style="bold red",
+        )
+        raise typer.Exit(code=1)
+    if input_dir is None:
+        console.print(
+            "Error: pass --input-dir to start a new run, or "
+            "--resume --experiment-dir to continue one.",
+            style="bold red",
+        )
+        raise typer.Exit(code=1)
+    return input_dir.resolve()
 
 
 def _resolve_experiment_dir(experiment_dir: Path) -> Path:
@@ -350,11 +403,33 @@ def _evaluate_command(experiment_dir: Path) -> str:
     )
 
 
-def _print_evaluate_handoff(experiment_dir: Path) -> None:
-    """Print the command that evaluates a completed simulation."""
-    console.print(f"Experiment: {experiment_dir}")
+def _resume_command(experiment_dir: Path, command: str) -> str:
+    """Build the shell-safe command for resuming a simulation output."""
+    return shlex.join(
+        [
+            "metis",
+            "engine",
+            command,
+            "--resume",
+            "--experiment-dir",
+            str(experiment_dir),
+        ]
+    )
+
+
+def _print_handoff(experiment_dir: Path, *, command: str) -> None:
+    """Print the evaluate and resume commands for a simulation output."""
+    resolved = experiment_dir.resolve()
+    console.print(f"Experiment: {resolved}")
     console.print(
-        f"Next: {_evaluate_command(experiment_dir.resolve())}",
+        f"Evaluate: {_evaluate_command(resolved)}",
+        no_wrap=True,
+        overflow="ignore",
+        crop=False,
+        soft_wrap=True,
+    )
+    console.print(
+        f"Resume: {_resume_command(resolved, command)}",
         no_wrap=True,
         overflow="ignore",
         crop=False,
@@ -374,49 +449,6 @@ def _print_evaluation_summary(
     console.print(f"  Experiment: {experiment_dir}")
     console.print(f"  Log: {experiment_dir / 'logs' / 'evaluate.log'}")
     console.print(f"{'=' * 60}")
-
-
-def _tree_snapshot(root: Path) -> dict[str, bytes | None]:
-    """Return a byte snapshot of a directory tree, including directories."""
-    if not root.exists():
-        return {}
-    snapshot: dict[str, bytes | None] = {}
-    for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root).as_posix()
-        if path.is_dir():
-            snapshot[relative] = None
-        elif path.is_file():
-            snapshot[relative] = path.read_bytes()
-        else:
-            snapshot[relative] = b"<unsupported-file-type>"
-    return snapshot
-
-
-def _validate_resume_snapshot(input_dir: Path, experiment_dir: Path) -> None:
-    """Require source YAML and fixtures to match the frozen snapshot."""
-    current_yaml = input_dir / "experiment.yaml"
-    frozen_yaml = experiment_dir / "inputs" / "experiment.yaml"
-    try:
-        yaml_matches = current_yaml.read_bytes() == frozen_yaml.read_bytes()
-    except OSError:
-        yaml_matches = False
-    if not yaml_matches:
-        console.print(
-            "Error: experiment.yaml differs from the frozen resume snapshot; "
-            "start a new simulation if the change was intentional.",
-            style="bold red",
-        )
-        raise EvaluationInputError("experiment snapshot differs")
-
-    current_fixtures = _tree_snapshot(input_dir / "fixtures")
-    frozen_fixtures = _tree_snapshot(experiment_dir / "inputs" / "fixtures")
-    if current_fixtures != frozen_fixtures:
-        console.print(
-            "Error: fixtures differ from the frozen resume snapshot; "
-            "start a new simulation if the change was intentional.",
-            style="bold red",
-        )
-        raise EvaluationInputError("fixture snapshot differs")
 
 
 def _classify_resume_runs(
@@ -450,8 +482,10 @@ def _classify_resume_runs(
 
 
 def _run_simulation(
-    input_dir: Path,
+    input_dir: Path | None,
+    experiment_dir: Path | None,
     *,
+    command: str,
     verbose: int,
     quiet: bool,
     no_tui: bool,
@@ -461,6 +495,9 @@ def _run_simulation(
     resume: bool = False,
 ) -> Path:
     """Run simulation and return its experiment directory."""
+    target = _resolve_simulation_target(
+        input_dir, experiment_dir, resume=resume, command=command
+    )
     load_dotenv()
     use_tui = not no_tui and sys.stderr.isatty()
     log_level = _resolve_log_level(verbose, quiet)
@@ -480,30 +517,19 @@ def _run_simulation(
         os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
 
     project_root = _find_project_root()
-    resolved_input_dir = input_dir.resolve()
-    _validate_inputs(resolved_input_dir)
-
-    experiment_path = resolved_input_dir / "experiment.yaml"
-    source_experiment = Experiment.load_file(experiment_path)
 
     if resume:
-        try:
-            experiment_dir = _resolve_latest_experiment(resolved_input_dir)
-        except EvaluationInputError:
-            raise typer.Exit(code=1) from None
-        try:
-            _validate_resume_snapshot(resolved_input_dir, experiment_dir)
-        except EvaluationInputError:
-            raise typer.Exit(code=1) from None
+        experiment_dir = target
         experiment = Experiment.load_file(experiment_dir / "inputs" / "experiment.yaml")
         fixtures_dir = experiment_dir / "inputs" / "fixtures"
     else:
-        experiment = source_experiment
-        fixtures_dir = resolved_input_dir / "fixtures"
+        _validate_inputs(target)
+        experiment = Experiment.load_file(target / "experiment.yaml")
+        fixtures_dir = target / "fixtures"
         suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
         experiment_dir = project_root / "experiments" / f"{experiment.id}-{suffix}"
         experiment_dir.mkdir(parents=True)
-        shutil.copytree(resolved_input_dir, experiment_dir / "inputs")
+        shutil.copytree(target, experiment_dir / "inputs")
 
     personas_by_id = {persona.id: persona for persona in experiment.personas}
     run_plan = expand_run_plan(experiment, personas_by_id)
@@ -527,7 +553,7 @@ def _run_simulation(
     console.print("  SIMULATION")
     console.print(f"{'=' * 60}")
     console.print(f"  Experiment: {experiment_dir}")
-    console.print(f"  Input: {resolved_input_dir}")
+    console.print(f"  Input: {fixtures_dir.parent}")
     console.print(f"  Mode: {'headed' if headed else 'headless'}\n")
 
     resolved_log_dir = log_dir or (experiment_dir / "logs")
@@ -1012,8 +1038,15 @@ def _run_evaluation_command(
 
 @app.command()
 def simulate(
-    input_dir: Path = typer.Option(
-        ..., "--input-dir", help="Directory containing experiment.yaml and fixtures/"
+    input_dir: Path | None = typer.Option(
+        None,
+        "--input-dir",
+        help="Source experiment directory (experiment.yaml and fixtures/) for a new run",
+    ),
+    experiment_dir: Path | None = typer.Option(
+        None,
+        "--experiment-dir",
+        help="Simulation output directory to resume; needs --resume",
     ),
     verbose: int = typer.Option(
         0, "--verbose", "-v", count=True, help="Increase logging verbosity"
@@ -1036,12 +1069,16 @@ def simulate(
         5, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
     resume: bool = typer.Option(
-        False, "--resume", help="Resume the newest existing simulation output"
+        False,
+        "--resume",
+        help="Continue the output named by --experiment-dir instead of starting a run",
     ),
 ) -> None:
     """Run simulation only and prepare the evaluation handoff."""
-    experiment_dir = _run_simulation(
+    output_dir = _run_simulation(
         input_dir,
+        experiment_dir,
+        command="simulate",
         verbose=verbose,
         quiet=quiet,
         no_tui=no_tui,
@@ -1050,10 +1087,10 @@ def simulate(
         concurrency=concurrency,
         resume=resume,
     )
-    if not _record_files(experiment_dir):
+    if not _record_files(output_dir):
         console.print("No run records found.", style="bold red")
         raise typer.Exit(code=1)
-    _print_evaluate_handoff(experiment_dir)
+    _print_handoff(output_dir, command="simulate")
 
 
 @app.command()
@@ -1095,8 +1132,15 @@ def evaluate(
 
 @app.command()
 def run(
-    input_dir: Path = typer.Option(
-        ..., "--input-dir", help="Directory containing experiment.yaml and fixtures/"
+    input_dir: Path | None = typer.Option(
+        None,
+        "--input-dir",
+        help="Source experiment directory (experiment.yaml and fixtures/) for a new run",
+    ),
+    experiment_dir: Path | None = typer.Option(
+        None,
+        "--experiment-dir",
+        help="Simulation output directory to resume; needs --resume",
     ),
     langfuse_timeout: int = typer.Option(
         90, "--langfuse-timeout", help="Seconds to wait for Langfuse traces"
@@ -1122,12 +1166,16 @@ def run(
         5, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
     resume: bool = typer.Option(
-        False, "--resume", help="Resume the newest existing simulation output"
+        False,
+        "--resume",
+        help="Continue the output named by --experiment-dir instead of starting a run",
     ),
 ) -> None:
     """Run simulation followed by evaluation and report generation."""
-    experiment_dir = _run_simulation(
+    output_dir = _run_simulation(
         input_dir,
+        experiment_dir,
+        command="run",
         verbose=verbose,
         quiet=quiet,
         no_tui=no_tui,
@@ -1136,21 +1184,21 @@ def run(
         concurrency=concurrency,
         resume=resume,
     )
-    if not _record_files(experiment_dir):
+    if not _record_files(output_dir):
         console.print("No run records found.", style="bold red")
         raise typer.Exit(code=1)
 
     try:
         outcome = _run_evaluation_command(
-            experiment_dir,
+            output_dir,
             langfuse_timeout=langfuse_timeout,
             verbose=verbose,
             quiet=quiet,
         )
     except Exception:
-        _print_evaluate_handoff(experiment_dir)
+        _print_handoff(output_dir, command="run")
         raise
 
     if outcome.failed_records:
-        _print_evaluate_handoff(experiment_dir)
-    _print_evaluation_summary(experiment_dir, outcome, pipeline=True)
+        _print_handoff(output_dir, command="run")
+    _print_evaluation_summary(output_dir, outcome, pipeline=True)

@@ -101,15 +101,15 @@ metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 
 `experiments/orca-eval-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
 
-If simulation stops before all runs finish, continue the newest output with:
+If simulation stops before all runs finish, continue the output directory that you name. `simulate` prints this exact command, so you never retype a timestamp:
 
 ```bash
-metis engine simulate --input-dir packages/engine/example-experiment/ --resume
+metis engine simulate --resume --experiment-dir experiments/orca-eval-20260820-143000/
 # or run the remaining simulation and then evaluate everything:
-metis engine run --input-dir packages/engine/example-experiment/ --resume
+metis engine run --resume --experiment-dir experiments/orca-eval-20260820-143000/
 ```
 
-Resume checks that `experiment.yaml` and every file in `fixtures/` are byte-identical to the frozen input snapshot. If either changes, resume stops with an error. Resume uses the frozen fixtures, retries only missing, invalid, or `system_error` records, and preserves the experiment-level simulation log. Extra run folders are ignored. A valid record is complete even if an artifact file is missing.
+Resume reads the experiment and the fixtures from the frozen `inputs/` snapshot in the named directory, not from the source directory. It retries only missing, invalid, or `system_error` records, and appends to the experiment-level simulation log. Extra run folders are ignored. A valid record is complete even if an artifact file is missing. Passing `--resume` with `--input-dir` is an error: the message lists the outputs that exist for the experiment `id` and names the correct flag.
 
 ### What You'll See
 
@@ -299,24 +299,31 @@ The engine exposes three commands:
 
 ```bash
 metis engine simulate --input-dir <source path> [simulation options]
+metis engine simulate --resume --experiment-dir <output path> [simulation options]
 metis engine evaluate --experiment-dir <output path> [evaluation options]
 metis engine run --input-dir <source path> [simulation and evaluation options]
+metis engine run --resume --experiment-dir <output path> [simulation and evaluation options]
 ```
 
 `simulate` writes run records only. It prints the exact command needed to evaluate the output directory it created. `evaluate` scores the output directory that you name, uses its frozen input snapshot, and overwrites `logs/evaluate.log`, `reports/report.json`, and `reports/report.html`. `run` performs both phases.
 
 ### Simulation options
 
+`simulate` and `run` work in one of two modes. Give the flags for exactly one mode:
+
+- **New run:** `--input-dir <source>` — the directory with `experiment.yaml` and `fixtures/`.
+- **Resume:** `--resume --experiment-dir <output>` — an output directory that a previous `simulate` created. Both flags are needed together: `--experiment-dir` without `--resume` is an error, and `--resume` without `--experiment-dir` is an error.
+
+The flags below are optional and apply to both modes:
+
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--input-dir` | (required) | Directory containing `experiment.yaml` and `fixtures/` |
 | `--concurrency N` / `-c N` | `5` | Max parallel simulation workers |
 | `-v` / `-vv` | WARNING | Increase verbosity: `-v` for INFO, `-vv` for DEBUG |
 | `--quiet` | `false` | Suppress all output below ERROR |
 | `--no-tui` | `false` | Disable TUI dashboard (force linear log output) |
 | `--log-format` | `text` | Log file format: `text` or `json` |
 | `--log-dir` | co-located with results | Override the log output directory |
-| `--resume` | `false` | Continue the newest existing output; requires an unchanged YAML and fixture snapshot |
 
 ### Evaluation options
 
