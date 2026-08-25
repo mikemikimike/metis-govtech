@@ -152,6 +152,9 @@ experiments/orca-eval-20260730-143022/
 
 Use `logs/evaluate.log` to review extraction, each configured metric, the actual judge model reported by DeepEval, metric scores, pass or fail results, reasons, errors, cost, token counts, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
+See the [report contract](report.md) for the report's scoring,
+status, failure-evidence, and information-architecture rules.
+
 ### Debugging Tip
 
 If a simulation behaves unexpectedly, run with a visible browser:

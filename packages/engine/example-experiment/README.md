@@ -1,6 +1,6 @@
 # Example Experiment
 
-This directory is a ready-to-run experiment input for `metis engine simulate` and `metis engine run`.
+This directory is a ready-to-run experiment input for `metis engine run`.
 
 **Everything here is written for Orca** — the personas, task descriptions, fixture
 files, and metric selections assume Orca's specific multi-agent architecture

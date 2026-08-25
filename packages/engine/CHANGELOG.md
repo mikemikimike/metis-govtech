@@ -4,18 +4,25 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.11.0] — 2026-08-24
+## [0.11.0] - Unreleased
 
 ### Added
 
+- **Product evaluation report** — the report joins each metric result onto the product profile
+in `inputs/profile.yaml`, so pass rates roll up per criterion, behaviour, and task, and split
+by persona and scenario. 
+
 ### Changed
 
+- The report now holds the profile-joined data shape. The previous metric-only HTML report and
+its raw per-turn `report.json` (cost and token dump) are removed; no code consumed the old
+JSON shape.
 - **Standardised LLM credentials on `OPENAI_API_KEY` / `OPENAI_BASE_URL`** — the
-  simulation user agent now reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL` instead of
-  `USER_AGENT_API_KEY` and `USER_AGENT_BASE_URL`. The user-agent model stays selectable via
-  `USER_AGENT_MODEL`. ([#153](https://github.com/govtech-responsibleai/metis/issues/153))
+simulation user agent now reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL` instead of
+`USER_AGENT_API_KEY` and `USER_AGENT_BASE_URL`. The user-agent model stays selectable via
+`USER_AGENT_MODEL`. ([#153](https://github.com/govtech-responsibleai/metis/issues/153))
 - Default user-agent model is now `gpt-5.6-luna` (was `gpt-4o-mini`);
-  override with `USER_AGENT_MODEL`.
+override with `USER_AGENT_MODEL`.
 
 ### Fixed
 
@@ -41,8 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
-- **`EvalDurations` dataclass** — typed replacement for the untyped `dict[str, float]` timings field; carries `turn_metrics_seconds` and `session_metrics_seconds` for clear phase-level profiling
-- **`EvalResult.session_results`** — structured `list[SessionResult]` field symmetric with `turn_results`; session→report conversion now happens in the reporting layer, not the orchestrator
+- `**EvalDurations` dataclass** — typed replacement for the untyped `dict[str, float]` timings field; carries `turn_metrics_seconds` and `session_metrics_seconds` for clear phase-level profiling
+- `**EvalResult.session_results**` — structured `list[SessionResult]` field symmetric with `turn_results`; session→report conversion now happens in the reporting layer, not the orchestrator
 - **Report-ready types** (`reporting/_types.py`) — `TurnReport`, `SessionReport`, `TurnMetricResult`, `SessionMetricResult`, `PersonaContext`, `TaskContext` moved from extractor and generator into a dedicated module; eliminates `TYPE_CHECKING` circular-import workaround in `_html_sections.py`
 
 ### Changed
@@ -52,7 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **BREAKING: JSON report schema** — output keys renamed: `"test_cases"` → `"turn_results"`, `"session_metrics"` → `"session_results"`, `"timings"` / `"phase_timings"` → `"durations"` (object with `turn_metrics_seconds`, `session_metrics_seconds`); `"routed_to"` field now derived from trace metadata
 - **Reporting module naming** — `test_results` parameter/variables → `turn_results`, `session_metrics` → `session_results` across `generator.py`, `_aggregation.py`, `_html_sections.py`; `TurnMetricsEntry` → `TurnReport`, `SessionMetricsEntry` → `SessionReport`
 - **Session conversion moved to report generator** — orchestrator now returns only structured results; `_convert_session_results()` in `generator.py` handles the projection (symmetric with `_convert_turn_results()`)
-- **`SessionReport` trimmed** — removed `num_turns` and `turns` fields (conversation content was never rendered; available via `SessionResult.conversational_test_case` if needed)
+- `**SessionReport` trimmed** — removed `num_turns` and `turns` fields (conversation content was never rendered; available via `SessionResult.conversational_test_case` if needed)
 - **Extractor `__init__` exports pruned** — removed re-exports of report-format types (`SessionMetricResult`, `SessionMetricsEntry`, `SessionToolCallData`, `SessionTurnData`) that now live in `reporting._types`
 - **Restored example experiment scenarios** — uncommented all scenarios and metric refs in `example-experiment/experiment.yaml` that were temporarily disabled during the v0.8.0 library rollback (97cee19)
 
@@ -88,16 +95,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **PlaywrightRunner** (`simulation/runners/playwright/`) — first Runner implementation
 - **REST runner stub** (`simulation/runners/rest/`)
 - **Action protocol** — `ActionSlot` + `ChosenAction`; LLM picks from a closed vocabulary instead of inventing selectors
-- **`Observation` model** — replaces `UIState` at the interface boundary
+- `**Observation` model** — replaces `UIState` at the interface boundary
 - **Per-run context isolation** — fresh `BrowserContext` per run; `setup()` logs in, `teardown()` closes
-
 - **Three-layer simulation resilience** — automatic retry/recovery so runs rarely end in `system_error`:
   - *Action layer* — intent-based element resolver with fallback strategies; tenacity-backed retry with exponential backoff and point-of-no-return tracking (no duplicate submissions)
   - *Turn layer* — typed failure classification, lightweight page recovery (`_recover_page`), check-before-resend pattern for post-submission failures, consecutive-failure escalation to run layer
   - *Run layer* — configurable retry budget (default: 2 retries) with full browser context teardown/rebuild and re-authentication
 - **Typed exception hierarchy** (`simulation/exceptions.py`) — `SimulationError` base with `TurnRecoverableError`, `RunRecoverableError`, and `ResponseTimeoutError` branches; drives structured error routing between layers
 - **Resilience diagnostics** — `TurnDiagnostics`, `ActionRetry`, and `RunFailure` models on `ConversationTurn` and `RunRecord` for post-hoc failure analysis; `RunRecord` schema bumped to v2
-- **`RetryConfig`** — nested config block in `HarnessConfig` with tunable budgets for action attempts, turn retries, consecutive-failure limits, and run retries
+- `**RetryConfig**` — nested config block in `HarnessConfig` with tunable budgets for action attempts, turn retries, consecutive-failure limits, and run retries
 - **Per-scenario retry override** — `max_run_retries` field on `Scenario` (optional; `null` uses global default)
 - **Per-scenario simulation limits** — `Scenario` now accepts `max_turns` (default: 20) and `timeout_minutes` (default: 15) to cap how many conversation turns and how long each scenario's simulation run is allowed to take; `response_wait_ms` (already on `Scenario`) is now the authoritative runtime timeout for waiting on the target's response (previously only recorded in output; runtime used `HarnessConfig.timeouts.response_wait_ms`)
 - **Concurrent simulation** — `--concurrency N` flag runs N browser contexts in parallel on a single browser process; round-robin run distribution across workers
@@ -109,9 +115,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
-- **`UserAgentInput`** — removed `ui_state` and `action_feedback`; now `observation` + `run_meta` only
-- **`UserAgentOutput`** — `ui_actions: list[UIAction]` → `actions: list[ChosenAction]`
-- **`harness/` dissolved** — `__init__.py` → `experiment.py`; `_environment.py` split into `orchestrator.py` + `runners/playwright/`
+- `**UserAgentInput**` — removed `ui_state` and `action_feedback`; now `observation` + `run_meta` only
+- `**UserAgentOutput**` — `ui_actions: list[UIAction]` → `actions: list[ChosenAction]`
+- `**harness/` dissolved** — `__init__.py` → `experiment.py`; `_environment.py` split into `orchestrator.py` + `runners/playwright/`
 - **Prompts** — generic action vocabulary (id/kind/label/options) replaces CSS-specific instructions
 - `run_experiment()` accepts `concurrency: int` parameter (default 1 preserves sequential behaviour)
 - CLI `simulate` command accepts `--concurrency / -c` option (min 1)
@@ -125,12 +131,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Chart screenshots overwrite across turns** — `capture_inline_charts` takes a `turn` parameter; filenames are now `turn-{T}-chart-{N}.png`
 - **Downloaded artifacts collide across turns** — downloads go to `run_dir/artifacts/turn-{N}/` subdirectories instead of a flat `artifacts/` folder
 - **Off-by-one kills last turn** — removed redundant `>= max_turns` check at bottom of loop; single `> max_turns` guard at top ensures all turns execute fully
-- **`fill()` + `press("Enter")` race condition** — added 200ms delay between fill and Enter to avoid keystroke being dropped when Orca's JS reacts to input events
+- `**fill()` + `press("Enter")` race condition** — added 200ms delay between fill and Enter to avoid keystroke being dropped when Orca's JS reacts to input events
 - **Temp directory leak on upload retry** — replaced bare `tempfile.mkdtemp()` with `TemporaryDirectory()` context manager
 - **Download counter misleading** — separate counter for download-type artifacts only
 - **Stale-state detection false positive** — "page unchanged after form submit" warning fired incorrectly because the pre-submit text snapshot was captured after `_wait_for_processing` already consumed the processing time; moved snapshot to before action execution
 - **Disabled form elements reported to LLM** — `capture_ui_state` now excludes disabled inputs/selects/buttons (`:not([disabled])`), preventing the LLM from attempting to fill elements Orca has locked after form submission
 - **Button clicks always wait for processing** — removed brittle submit-keyword regex; all `ButtonClickAction` clicks now trigger `_wait_for_processing` and the form processing branch, eliminating timeouts from unrecognized button labels like "Continue"
+
 ## [0.6.0] — 2026-08-06
 
 ### Added
@@ -157,6 +164,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **BREAKING: `ExperimentTask` renamed to `Scenario`** — the experiment schema field `tasks` is now `scenarios`; `RunConfig.task` is now `RunConfig.scenario`; all CLI error messages, prompts, and log lines updated to use "scenario" terminology
 - Updated metric FQNs in `experiment.yaml`, README, and orchestrator docstring to use package-level paths (`metis.library.metrics.X` instead of `metis.library.metrics.<module>.X`)
+
 ## [0.4.0] — 2026-08-04
 
 ### Changed
@@ -247,3 +255,4 @@ Initial release. Corresponds to `orca-agentic-evals` v0.1.0 — evaluation frame
 - Langfuse client refactored: top-level import, required keyword-only arg, typed return values
 - Removed legacy TypeScript runner (`runner.ts`, `chat.ts`, `test-cases/`)
 - Removed dead code: `check_routing_passed`, `--dedup` flag, `deduplicate_traces`, `build_test_cases_from_langfuse`, `artifact_registry` references
+
