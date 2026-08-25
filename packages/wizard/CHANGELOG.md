@@ -8,9 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- `.env.example` documenting the interview environment: `OPENAI_API_KEY`, `OPENAI_BASE_URL`,
+  optional `INTERVIEW_MODEL`, and optional `LANGFUSE_*`.
+
 ### Changed
 
-### Fixed
+- **Standardised LLM credentials on `OPENAI_API_KEY` / `OPENAI_BASE_URL`** — the
+  interview gateway reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL`. Set
+  `OPENAI_BASE_URL` to the full OpenAI-compatible endpoint.
+  ([#153](https://github.com/govtech-responsibleai/metis/issues/153))
+- **Renamed `PLATFORM_INTERVIEW_MODEL` to `INTERVIEW_MODEL`** — selects the
+  interview model on the shared provider.
+- Default interview model is now `gpt-5.6-luna` (was `gemini-3.5-flash-lite`);
+  override with `INTERVIEW_MODEL`.
 
 ## [0.1.1] — 2026-08-19
 
