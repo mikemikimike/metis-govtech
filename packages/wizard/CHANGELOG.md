@@ -4,7 +4,15 @@ All notable changes to `metis-wizard` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.1.1] — Unreleased
+## [0.2.0] — 2026-08-25
+
+### Added
+
+### Changed
+
+### Fixed
+
+## [0.1.1] — 2026-08-19
 
 ### Removed
 
