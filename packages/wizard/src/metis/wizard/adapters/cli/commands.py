@@ -100,11 +100,16 @@ def _run(session, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     experiment = out_dir / "experiment.yaml"
     review = out_dir / "review.md"
+    profile = out_dir / "profile.yaml"
     write_experiment(session.profile(), session.state.id, experiment)
     write_review(session.profile(), session.state.id, review)
+    # The profile is the spec the engine's verdict report joins results onto; it rides
+    # beside the experiment so `simulate` freezes it into the run's inputs/.
+    session.profile().save(profile)
 
     typer.echo(f"\nWrote {experiment}")
     typer.echo(f"Wrote {review}")
+    typer.echo(f"Wrote {profile}")
     typer.echo(f"\n{format_runs(session.profile().run_count())} when you run this.")
 
 
