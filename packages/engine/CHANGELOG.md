@@ -23,6 +23,15 @@ simulation user agent now reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL
 `USER_AGENT_MODEL`. ([#153](https://github.com/govtech-responsibleai/metis/issues/153))
 - Default user-agent model is now `gpt-5.6-luna` (was `gpt-4o-mini`);
 override with `USER_AGENT_MODEL`.
+- **Typed session metadata construction** — `_session_to_conversational_test_case` now builds a
+`ConversationalTestCaseMetadata`-typed dict at construction time (was untyped `dict` with post-hoc
+field injection); `_trace_to_test_case` uses `LlmTestCaseMetadata` (replacing the deprecated
+`TraceMetadata` alias). Required-nullable fields (`stop_reason`, `cancellation_available`,
+`slide_image_refs`) are passed as keyword parameters and set at construction. No runtime behavior
+change — purely static typing for Pyright validation.
+- **Extractor re-exports pruned** — removed `OrcaChatMetadata` and `TraceMetadata` from
+`metis.engine.extractor.__init__`; these types are owned by metis-library and should be imported
+from `metis.library.metrics` directly.
 
 ### Fixed
 
