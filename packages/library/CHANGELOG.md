@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
-
+- **Exported metadata TypedDicts from `metis.library.metrics`** — `ConversationalTestCaseMetadata`, `LlmTestCaseMetadata`, `OrcaChatMetadata`, and the deprecated `TraceMetadata` alias are now importable from the public `metis.library.metrics` path instead of only the private `_types` module.
 
 ### Fixed
 
