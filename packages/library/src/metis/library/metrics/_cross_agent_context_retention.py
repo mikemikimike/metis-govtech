@@ -5,7 +5,7 @@ from typing import ClassVar, cast
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, mark_skipped
-from ._types import OrcaChatMetadata, TraceMetadata
+from ._types import LlmTestCaseMetadata, OrcaChatMetadata
 
 
 class CrossAgentContextRetentionMetric(MetisTurnMetric):
@@ -31,7 +31,7 @@ class CrossAgentContextRetentionMetric(MetisTurnMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         chat_meta: OrcaChatMetadata = (
             metadata.get("chat_metadata") or OrcaChatMetadata()
         )
@@ -41,7 +41,9 @@ class CrossAgentContextRetentionMetric(MetisTurnMetric):
         num_history = chat_meta.num_history_messages
 
         if num_history == 0:
-            return mark_skipped(self, "First message in session (no prior context to retain)")
+            return mark_skipped(
+                self, "First message in session (no prior context to retain)"
+            )
 
         if spoke_context:
             cached_values = set(str(v).lower() for v in spoke_context.values() if v)

@@ -1,12 +1,14 @@
 """Session Step Efficiency metric (M-UNI-6)."""
 
-from typing import ClassVar
-
-from ._base import MetisSessionMetric, mark_skipped
+from typing import ClassVar, cast
 
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
 )
+
+from ._base import MetisSessionMetric, mark_skipped
+from ._types import ConversationalTestCaseMetadata
+
 
 class SessionStepEfficiencyMetric(MetisSessionMetric):
     """Task completed in near-minimum tool calls across session?
@@ -36,8 +38,10 @@ class SessionStepEfficiencyMetric(MetisSessionMetric):
                 total_calls += len(turn.tools_called)
 
         expected_minimum = None
-        if test_case.metadata and "expected_minimum_steps" in test_case.metadata:
-            expected_minimum = test_case.metadata["expected_minimum_steps"]
+        if test_case.metadata:
+            meta = cast(ConversationalTestCaseMetadata, test_case.metadata)
+            if "expected_minimum_steps" in meta:
+                expected_minimum = meta["expected_minimum_steps"]
 
         if expected_minimum is None:
             return mark_skipped(

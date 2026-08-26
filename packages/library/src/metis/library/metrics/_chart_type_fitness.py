@@ -5,7 +5,7 @@ from typing import ClassVar, cast
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, mark_skipped
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 class ChartTypeFitnessMetric(MetisTurnMetric):
@@ -39,7 +39,7 @@ class ChartTypeFitnessMetric(MetisTurnMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         annotations = metadata.get("annotations", {})
         observations = metadata.get("observations", [])
 
@@ -50,7 +50,9 @@ class ChartTypeFitnessMetric(MetisTurnMetric):
             acceptable_types = list(self.PATTERN_ACCEPTABLE_TYPES.get(data_pattern, []))
 
         if not acceptable_types:
-            return mark_skipped(self, "No data_pattern or acceptable_chart_types annotated")
+            return mark_skipped(
+                self, "No data_pattern or acceptable_chart_types annotated"
+            )
 
         actual_type = self._extract_chart_type(observations)
         if actual_type is None:

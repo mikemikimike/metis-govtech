@@ -3,7 +3,7 @@
 
 # Packages
 packages/core/    @mqf20
-packages/library/ @mqf20
+packages/library/ @leannetan
 packages/engine/  @mqf20
 packages/wizard/  @leannetan
 

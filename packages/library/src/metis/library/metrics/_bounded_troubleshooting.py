@@ -5,7 +5,7 @@ from typing import ClassVar, cast
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 class BoundedTroubleshootingMetric(MetisTurnMetric):
@@ -27,7 +27,7 @@ class BoundedTroubleshootingMetric(MetisTurnMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         retry_counts = metadata.get("retry_counts", {})
         tool_calls = metadata.get("tool_calls", [])
 

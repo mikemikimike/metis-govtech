@@ -7,7 +7,7 @@ from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 class SynthesisFaithfulnessMetric(MetisTurnMetric):
@@ -44,7 +44,7 @@ class SynthesisFaithfulnessMetric(MetisTurnMetric):
         return self._metric
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         delegation = metadata.get("delegation")
 
         subagent_output = delegation.get("response", "") if delegation else ""

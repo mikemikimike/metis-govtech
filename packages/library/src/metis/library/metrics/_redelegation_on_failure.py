@@ -4,9 +4,14 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
+from ._base import (
+    EVIDENCE_INSTRUCTION,
+    MetisTurnMetric,
+    _ContextAwareGEval,
+    mark_skipped,
+)
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 class RedelegationOnFailureMetric(MetisTurnMetric):
@@ -72,7 +77,7 @@ class RedelegationOnFailureMetric(MetisTurnMetric):
         return self._geval
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         delegation = metadata.get("delegation")
 
         subagent_output = delegation.get("response", "") if delegation else ""

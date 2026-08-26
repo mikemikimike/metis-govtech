@@ -6,14 +6,21 @@ from typing import ClassVar, cast
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, mark_skipped
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 class AnalyticalCorrectnessMetric(MetisTurnMetric):
     """Numerical results correct within tolerance?
 
     Compares computed numerical results against pre-computed ground truth.
-    Uses relative tolerance for large numbers, absolute for small.
+    Uses relative tolerance for large numbers, absolute for small. This is the
+    numerical-correctness half of the M-DA-3 2-dimension rubric; method
+    appropriateness is scored by ``MethodAppropriatenessMetric``.
+
+    Expected ground-truth values may be supplied either through the
+    ``expected_values`` constructor argument (scenario-specific, e.g.
+    constrained-analysis regional medians) or through the trace's
+    ``annotations.expected_values``. The constructor argument takes priority.
     """
 
     tags: ClassVar[tuple[str, ...]] = (
@@ -23,20 +30,32 @@ class AnalyticalCorrectnessMetric(MetisTurnMetric):
     )
     async_mode = False
 
-    def __init__(self, threshold: float = 1.0, relative_tolerance: float = 0.01):
+    def __init__(
+        self,
+        threshold: float = 1.0,
+        relative_tolerance: float = 0.01,
+        expected_values: dict | None = None,
+    ):
         self.threshold = threshold
         self.relative_tolerance = relative_tolerance
+        self.expected_values = expected_values
         self.score = 0.0
         self.reason = ""
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         annotations = metadata.get("annotations", {})
-        expected_values = annotations.get("expected_values")
+        expected_values = self.expected_values
+        if expected_values is None:
+            expected_values = annotations.get("expected_values")
 
         if expected_values is None:
-            return mark_skipped(self, "No expected values annotated")
+            return mark_skipped(
+                self,
+                "No expected values supplied (metric argument or annotation); "
+                "numerical correctness cannot be checked.",
+            )
 
         observations = metadata.get("observations", [])
         actual_numbers = self._extract_numbers_from_output(
@@ -45,14 +64,21 @@ class AnalyticalCorrectnessMetric(MetisTurnMetric):
 
         if not actual_numbers:
             self.score = 0.0
-            self.reason = "No numerical results found in output"
             self.success = False
+            self.reason = (
+                "No numerical results found in the analysis output "
+                f"(expected {expected_values})."
+            )
             return self.score or 0.0
 
         correct, total = self._check_numbers(expected_values, actual_numbers)
         self.score = correct / total if total > 0 else 0.0
-        self.reason = f"{correct}/{total} numerical results within tolerance ({self.relative_tolerance * 100}%)"
         self.success = (self.score or 0) >= self.threshold
+        self.reason = (
+            f"{correct}/{total} numerical results within "
+            f"{self.relative_tolerance * 100}% tolerance "
+            f"(expected {expected_values})."
+        )
         return self.score or 0.0
 
     def _extract_numbers_from_output(self, observations: list, output: str) -> dict:

@@ -4,14 +4,28 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
+from ._base import (
+    EVIDENCE_INSTRUCTION,
+    MetisTurnMetric,
+    _ContextAwareGEval,
+    mark_skipped,
+)
+from ._extraction import DeckSlide, extract_deck_slides
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
+
+
+def _render_slides(slides: list[DeckSlide]) -> str:
+    parts = []
+    for s in slides:
+        body = "\n".join(f"    - {line}" for line in s.body)
+        parts.append(f"{s.index + 1}. {s.title}\n{body}".rstrip())
+    return "\n".join(parts)
 
 
 def _extract_deck_properties(test_case: LLMTestCase) -> dict:
     """Pull slide count, theme, and titles from trace metadata or observations."""
-    metadata = cast(TraceMetadata, test_case.metadata)
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     observations = metadata.get("observations", [])
 
     deck_props = {
@@ -111,17 +125,22 @@ class CrossSlideLogicalFlowMetric(MetisTurnMetric):
         return self._geval
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        deck_props = _extract_deck_properties(test_case)
-
-        if not deck_props["slide_titles"]:
-            return mark_skipped(self, "No slide titles extractable from trace")
-
-        titles_str = "\n".join(
-            f"{i + 1}. {t}" for i, t in enumerate(deck_props["slide_titles"])
-        )
-        context_str = (
-            f"Slide sequence ({len(deck_props['slide_titles'])} slides):\n{titles_str}"
-        )
+        slides = extract_deck_slides(test_case)
+        if slides:
+            context_str = f"Slide sequence ({len(slides)} slides):\n" + _render_slides(
+                slides
+            )
+        else:
+            deck_props = _extract_deck_properties(test_case)
+            if not deck_props["slide_titles"]:
+                return mark_skipped(self, "No slide titles extractable from trace")
+            titles_str = "\n".join(
+                f"{i + 1}. {t}" for i, t in enumerate(deck_props["slide_titles"])
+            )
+            context_str = (
+                f"Slide sequence ({len(deck_props['slide_titles'])} slides):\n"
+                f"{titles_str}"
+            )
 
         flow_tc = LLMTestCase(
             input=test_case.input,

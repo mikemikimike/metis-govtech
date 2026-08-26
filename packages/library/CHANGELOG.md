@@ -4,6 +4,53 @@ All notable changes to `metis-library` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] — 2026-08-26
+
+### Added
+
+- `ConversationalTestCaseMetadata` TypedDict — typed contract for `ConversationalTestCase.metadata` fields consumed by session-level metrics (`session_id`, `trace_ids`, `stop_reason`, `cancellation_available`, `slide_image_refs`, plus `NotRequired` fields `scenario`, `persona`, `expected_minimum_steps`).
+
+### Changed
+
+- **Renamed `TraceMetadata` → `LlmTestCaseMetadata`** — the TypedDict is now named after the test case type it annotates. `TraceMetadata` remains importable as a deprecated alias.
+- All 38 metric modules updated to import and cast `LlmTestCaseMetadata` instead of `TraceMetadata`.
+- `SessionStepEfficiencyMetric` now uses a typed `cast(ConversationalTestCaseMetadata, ...)` for type-safe metadata access.
+
+### Fixed
+
+## [0.5.0] — 2026-08-25
+
+### Changed
+
+- **Standardised LLM-judge credentials on `OPENAI_API_KEY` / `OPENAI_BASE_URL`** —
+  `_get_judge_model()` now reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL` instead of
+  `JUDGE_API_KEY` and `JUDGE_BASE_URL`. The judge model stays selectable via `JUDGE_MODEL`.
+  ([#153](https://github.com/govtech-responsibleai/metis/issues/153))
+- Default judge model is now `gemini-3.5-flash-lite` (was `gpt-4.1-mini`);
+  override with `JUDGE_MODEL`.
+
+## [0.4.0] — 2026-08-20
+
+### Changed (BREAKING)
+
+- Renamed `DataIngestionAccuracyMetric` to `FirstLookInspectionCleaningMetric` (M-DA-20). No compatibility alias — update imports.
+- Renamed `OpenEndedScopeQualityMetric` to `ProceedWithDefaultsMetric` (M-DA-28). No compatibility alias — update imports.
+
+### Added
+
+- New analysis metrics: `ReproducibleAnalysisScriptMetric` (M-DA-23), `DataAnalysisRecoveryMetric` (M-DA-26), `OutputVerificationMetric` (M-DA-27), `ChartTechnicalCorrectnessMetric`, and `ReportFormatAndLengthMetric`.
+- New universal metrics: `CorrectionMetric` (M-UNI-19), `AbandonmentMetric` (M-UNI-20), `CancellationMetric` (M-UNI-21), `HarmfulContentRefusalMetric`, and `DirectModeEscapeMetric`.
+- New presentation metrics: `SlideProtocolOrderingMetric` (M-SM-1), `BriefGoalDetailsMetric` (M-SM-2), `BriefGoalNonPrescriptiveMetric` (M-SM-6), `BriefSourceFaithfulnessMetric` (M-SM-7), `BriefCompletenessMetric` (M-SM-8), `BriefAudienceAppropriatenessMetric` (M-SM-9), `DeckBriefCoverageMetric` (M-SM-11), `SlideVisualQualityMetric` (M-SM-13), `SlideTitleQualityMetric` (M-SM-15), and `DeckAudienceCalibrationMetric` (M-SM-19).
+- `SlideVisualQualityMetric` (M-SM-13) grades rendered slide images. It builds a multimodal judge case from `slide_image_refs`.
+- Shared extraction helpers in `_extraction.py`: portable PPTX slide-text extraction (stdlib ZIP/XML, no presentation library), deck-slide access, and session-turn normalization.
+- Three observable-execution fields on the `TraceMetadata` TypedDict: `stop_reason`, `cancellation_available`, and `slide_image_refs`. The engine supplies these values.
+
+### Changed
+
+- `CrossSlideLogicalFlowMetric` (M-SM-14), `SlideSpecComplianceMetric` (M-SM-10), and `DeckSourceFaithfulnessMetric` (M-SM-20) now read deck content through the PPTX artifact when trace observations do not contain deck properties.
+
+- **Deprecated `task`/`task_id` aliases** from `TraceMetadata` and the fallback read path in `_build_context_block`; callers must use `scenario`/`scenario_id` exclusively
+
 ## [0.3.0] — 2026-08-20
 
 ### Added

@@ -13,7 +13,6 @@ from typing import Any, NotRequired
 
 from typing_extensions import TypedDict
 
-
 # ---------------------------------------------------------------------------
 # Serialized shape TypedDicts (match what the engine writes)
 # ---------------------------------------------------------------------------
@@ -114,11 +113,11 @@ class OrcaChatMetadata:
 
 
 # ---------------------------------------------------------------------------
-# TraceMetadata
+# LlmTestCaseMetadata (formerly TraceMetadata)
 # ---------------------------------------------------------------------------
 
 
-class TraceMetadata(TypedDict):
+class LlmTestCaseMetadata(TypedDict):
     """Shape of the metadata dict attached to each LLMTestCase.
 
     This is a TypedDict (not a Pydantic model or dataclass) because
@@ -146,9 +145,50 @@ class TraceMetadata(TypedDict):
     artifacts: NotRequired[list[ArtifactSummary]]
     # Reserved for future ground-truth annotation source:
     annotations: NotRequired[dict[str, Any]]
+    # Observable execution metadata (engine-supplied):
+    stop_reason: NotRequired[str | None]
+    cancellation_available: NotRequired[bool | None]
+    slide_image_refs: NotRequired[list[str] | None]
     # Injected from experiment configuration at fetch time:
     persona: NotRequired[object]
     scenario: NotRequired[object]
     scenario_id: NotRequired[str]
-    task: NotRequired[object]  # deprecated alias for scenario
-    task_id: NotRequired[str]  # deprecated alias for scenario_id
+
+
+TraceMetadata = LlmTestCaseMetadata
+"""Deprecated alias — use :class:`LlmTestCaseMetadata`."""
+
+
+# ---------------------------------------------------------------------------
+# ConversationalTestCaseMetadata
+# ---------------------------------------------------------------------------
+
+
+class ConversationalTestCaseMetadata(TypedDict):
+    """Shape of the metadata dict attached to each ConversationalTestCase.
+
+    This is a TypedDict (not a Pydantic model or dataclass) because
+    DeepEval's ``ConversationalTestCase.metadata`` is typed as
+    ``dict | None``.  A TypedDict instance passes through without
+    requiring ``.model_dump()`` or ``dataclasses.asdict()``.
+
+    Populated by session-to-test-case adapters in metis-engine.
+    Session metrics should read fields from this dict via
+    ``test_case.metadata``.
+    """
+
+    # --- Always present (set in _session_to_conversational_test_case) ---
+    session_id: str
+    trace_ids: list[str]
+
+    # --- Observable execution state (set in fetch_by_session_id) ---
+    stop_reason: str | None
+    cancellation_available: bool | None
+    slide_image_refs: list[str] | None
+
+    # --- Injected from experiment configuration when available ---
+    scenario: NotRequired[object]
+    persona: NotRequired[object]
+
+    # --- Metric annotations (injected at runtime) ---
+    expected_minimum_steps: NotRequired[int]

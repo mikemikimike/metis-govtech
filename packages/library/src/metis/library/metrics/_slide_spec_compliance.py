@@ -4,14 +4,25 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
+from ._base import (
+    EVIDENCE_INSTRUCTION,
+    MetisTurnMetric,
+    _ContextAwareGEval,
+    mark_skipped,
+)
+from ._extraction import extract_deck_slides
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 def _extract_deck_properties(test_case: LLMTestCase) -> dict:
-    """Pull slide count, theme, and titles from trace metadata or observations."""
-    metadata = cast(TraceMetadata, test_case.metadata)
+    """Pull slide count, theme, and titles from trace metadata or observations.
+
+    When the observations do not carry deck metadata, the slide count and
+    titles fall back to the produced ``.pptx`` artifact read by
+    ``extract_deck_slides``, which is the more reliable source of truth.
+    """
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     observations = metadata.get("observations", [])
 
     deck_props = {
@@ -46,6 +57,13 @@ def _extract_deck_properties(test_case: LLMTestCase) -> dict:
 
         if isinstance(output, str) and "pptx" in output.lower():
             deck_props["deck_content_summary"] = output
+
+    if not deck_props["slide_titles"]:
+        slides = extract_deck_slides(test_case)
+        if slides:
+            deck_props["slide_titles"] = [s.title for s in slides]
+            if deck_props["slide_count"] is None:
+                deck_props["slide_count"] = len(slides)
 
     return deck_props
 

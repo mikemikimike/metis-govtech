@@ -2,13 +2,16 @@
 
 from typing import ClassVar
 
-from ._base import MetisSessionMetric
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
     MultiTurnParams,
 )
 
-from ._base import EVIDENCE_INSTRUCTION, _ContextAwareConversationalGEval
+from ._base import (
+    EVIDENCE_INSTRUCTION,
+    MetisSessionMetric,
+    _ContextAwareConversationalGEval,
+)
 from ._constants import SYSTEM_PROMPT_SUMMARY, TOOL_MANIFEST
 from ._judge import _get_judge_model
 

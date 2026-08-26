@@ -4,9 +4,14 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
+from ._base import (
+    EVIDENCE_INSTRUCTION,
+    MetisTurnMetric,
+    _ContextAwareGEval,
+    mark_skipped,
+)
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 class RoutingAccuracyMetric(MetisTurnMetric):
@@ -74,7 +79,7 @@ class RoutingAccuracyMetric(MetisTurnMetric):
         routing decision to evaluate — the agent just responded directly without
         invoking anything.
         """
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         if metadata.get("delegation"):
             return True
         return bool(metadata.get("tool_calls"))

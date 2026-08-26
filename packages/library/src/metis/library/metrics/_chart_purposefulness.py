@@ -4,14 +4,19 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from ._base import EVIDENCE_INSTRUCTION, MetisTurnMetric, _ContextAwareGEval, mark_skipped
+from ._base import (
+    EVIDENCE_INSTRUCTION,
+    MetisTurnMetric,
+    _ContextAwareGEval,
+    mark_skipped,
+)
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 def _has_chart_observations(test_case: LLMTestCase) -> bool:
     """Check if the trace has actual chart generation observations."""
-    metadata = cast(TraceMetadata, test_case.metadata)
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     observations = metadata.get("observations", [])
     for obs in observations:
         obs_meta = obs.get("metadata") or {}
@@ -52,26 +57,26 @@ class ChartPurposefulnessMetric(MetisTurnMetric):
                 name="Chart Purposefulness",
                 model=_get_judge_model(),
                 criteria=(
-                    "Evaluate whether a generated chart answers a "
-                    "specific analytical question.\n\n"
+                    "Evaluate the two purposefulness dimensions of a generated "
+                    "chart (M-DA-8).\n\n"
                     "The 'input' is the user's analytical request.\n"
                     "The 'actual_output' describes the chart "
                     "generated (title, type, data shown).\n\n"
-                    "Check:\n"
-                    "1. Does the chart title state a specific "
-                    "analytical question or finding?\n"
-                    "   (Good: 'Revenue growth by quarter "
-                    "2023-2024'. Bad: 'Revenue chart')\n"
-                    "2. Does the chart answer that question "
-                    "visually?\n"
-                    "3. Is the chart purposeful — not just showing "
-                    "data for the sake of it?\n\n"
-                    "Score 1.0 if chart clearly answers a question "
-                    "stated in its title. "
-                    "Score 0.5 if chart is useful but title is "
-                    "generic. "
-                    "Score 0.0 if chart appears purposeless or title "
-                    "is just a variable name." + EVIDENCE_INSTRUCTION
+                    "Assess two dimensions:\n"
+                    "1. Specific question in title: Does the chart title state "
+                    "a specific analytical question or finding?\n"
+                    "   (Good: 'Revenue growth by quarter 2023-2024'. "
+                    "Bad: 'Revenue chart')\n"
+                    "2. Adds value beyond a number/table: Does the chart add "
+                    "value over a simple number or table by answering that "
+                    "question visually, rather than showing data for its own "
+                    "sake?\n\n"
+                    "Score 1.0 when the title states a specific question and "
+                    "the chart adds visual value beyond a number/table. "
+                    "Score 0.5 when only one dimension holds (e.g. useful chart "
+                    "but generic title). "
+                    "Score 0.0 when the chart is purposeless or its title is "
+                    "just a variable name." + EVIDENCE_INSTRUCTION
                 ),
                 evaluation_params=[
                     SingleTurnParams.INPUT,
