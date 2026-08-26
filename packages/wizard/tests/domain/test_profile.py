@@ -20,7 +20,7 @@ def test_round_trips_through_json_unchanged() -> None:
 
 def test_save_and_load_round_trip(tmp_path: Path) -> None:
     original = research_assistant()
-    path = tmp_path / "profile.json"
+    path = tmp_path / "profile.yaml"
     original.save(path)
 
     assert ProductProfile.load(path) == original
