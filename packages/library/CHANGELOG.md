@@ -8,11 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.8.0] — 2026-08-26
 
-### Added
+### Removed (BREAKING)
 
-### Changed
-
-### Fixed
+- **`TraceMetadata` alias removed** — `metis.library.metrics` and `metis.library.metrics._types` no longer export `TraceMetadata`. Use `LlmTestCaseMetadata` directly. The engine's extractor module no longer re-exports this alias either (pruned in engine v0.11.0).
 
 
 

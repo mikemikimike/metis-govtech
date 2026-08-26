@@ -163,7 +163,7 @@ def test_resume_directory_without_inputs_snapshot_exits_one(tmp_path: Path) -> N
     )
 
     assert result.exit_code == 1
-    assert "not a simulation output directory" in result.output
+    assert "not a simulation output directory" in " ".join(result.output.split())
 
 
 def test_resume_with_input_dir_lists_outputs_and_chooses_none(

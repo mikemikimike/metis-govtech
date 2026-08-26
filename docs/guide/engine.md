@@ -401,7 +401,7 @@ from typing import ClassVar, cast
 from deepeval.test_case import LLMTestCase
 
 from metis.library.metrics._base import SyncBaseMetric
-from metis.library.metrics._types import TraceMetadata
+from metis.library.metrics._types import LlmTestCaseMetadata
 
 
 class TurnBudgetMetric(SyncBaseMetric):
@@ -417,7 +417,7 @@ class TurnBudgetMetric(SyncBaseMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata or {})
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata or {})
         total_turns = metadata.get("total_turns")
 
         if total_turns is None:
@@ -457,7 +457,7 @@ from metis.library.metrics._base import (
     _ContextAwareGEval,
 )
 from metis.library.metrics._judge import _get_judge_model
-from metis.library.metrics._types import TraceMetadata
+from metis.library.metrics._types import LlmTestCaseMetadata
 
 
 class ResponseQualityMetric(SyncBaseMetric):
@@ -553,7 +553,7 @@ tags: ClassVar[tuple[str, ...]] = ("orchestration", "per-turn", "code-graded")
 
 ### Available Metadata
 
-The `test_case.metadata` dict (typed as `TraceMetadata`) provides:
+The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 
 | Field | Type | Description |
 |-------|------|-------------|

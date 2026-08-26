@@ -113,7 +113,7 @@ class OrcaChatMetadata:
 
 
 # ---------------------------------------------------------------------------
-# LlmTestCaseMetadata (formerly TraceMetadata)
+# LlmTestCaseMetadata
 # ---------------------------------------------------------------------------
 
 
@@ -153,10 +153,6 @@ class LlmTestCaseMetadata(TypedDict):
     persona: NotRequired[object]
     scenario: NotRequired[object]
     scenario_id: NotRequired[str]
-
-
-TraceMetadata = LlmTestCaseMetadata
-"""Deprecated alias — use :class:`LlmTestCaseMetadata`."""
 
 
 # ---------------------------------------------------------------------------

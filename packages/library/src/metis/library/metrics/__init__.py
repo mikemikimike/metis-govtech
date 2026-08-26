@@ -182,5 +182,4 @@ from ._turns_to_task_start import TurnsToTaskStartMetric as TurnsToTaskStartMetr
 from ._types import ConversationalTestCaseMetadata as ConversationalTestCaseMetadata
 from ._types import LlmTestCaseMetadata as LlmTestCaseMetadata
 from ._types import OrcaChatMetadata as OrcaChatMetadata
-from ._types import TraceMetadata as TraceMetadata
 from .default import CriterionGEvalMetric as CriterionGEvalMetric
