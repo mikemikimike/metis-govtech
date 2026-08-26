@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 
 
+## [0.8.0] — 2026-08-26
+
+### Added
+
+### Changed
+
+### Fixed
+
+
+
 ## [0.7.0] — 2026-08-26
 
 ### Added
