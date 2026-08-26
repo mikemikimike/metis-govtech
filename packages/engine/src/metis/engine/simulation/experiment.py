@@ -255,7 +255,6 @@ async def _worker(
                 )
                 break
 
-
             trial_index = trial + 1
             trial_label = (
                 f" (trial {trial_index}/{scenario.num_trials})"
