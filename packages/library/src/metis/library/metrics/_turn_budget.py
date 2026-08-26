@@ -5,7 +5,7 @@ from typing import ClassVar, cast
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, mark_skipped
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 class TurnBudgetMetric(MetisTurnMetric):
@@ -26,7 +26,7 @@ class TurnBudgetMetric(MetisTurnMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata or {})
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata or {})
         total_turns = metadata.get("total_turns")
         if total_turns is None:
             return mark_skipped(self, "total_turns not present in metadata")

@@ -11,7 +11,7 @@ from ._base import (
     mark_skipped,
 )
 from ._judge import _get_judge_model
-from ._types import OrcaChatMetadata, TraceMetadata
+from ._types import LlmTestCaseMetadata, OrcaChatMetadata
 
 
 class DiagnosisQualityMetric(MetisTurnMetric):
@@ -75,7 +75,7 @@ class DiagnosisQualityMetric(MetisTurnMetric):
         return self._geval
 
     def _has_error(self, test_case: LLMTestCase) -> bool:
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         if metadata.get("had_error"):
             return True
         chat_meta: OrcaChatMetadata = (

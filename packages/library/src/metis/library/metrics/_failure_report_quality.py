@@ -11,7 +11,7 @@ from ._base import (
     mark_skipped,
 )
 from ._judge import _get_judge_model
-from ._types import OrcaChatMetadata, TraceMetadata
+from ._types import LlmTestCaseMetadata, OrcaChatMetadata
 
 
 class FailureReportQualityMetric(MetisTurnMetric):
@@ -68,7 +68,7 @@ class FailureReportQualityMetric(MetisTurnMetric):
         return self._geval
 
     async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         chat_meta: OrcaChatMetadata = (
             metadata.get("chat_metadata") or OrcaChatMetadata()
         )

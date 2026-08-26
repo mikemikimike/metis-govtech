@@ -5,7 +5,7 @@ from typing import ClassVar, cast
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, mark_skipped
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 class ChartTypeFitnessMetric(MetisTurnMetric):
@@ -39,7 +39,7 @@ class ChartTypeFitnessMetric(MetisTurnMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(TraceMetadata, test_case.metadata)
+        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
         annotations = metadata.get("annotations", {})
         observations = metadata.get("observations", [])
 

@@ -12,7 +12,7 @@ from ._base import (
 )
 from ._extraction import DeckSlide, extract_deck_slides
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 def _render_slides(slides: list[DeckSlide]) -> str:
@@ -25,7 +25,7 @@ def _render_slides(slides: list[DeckSlide]) -> str:
 
 def _extract_deck_properties(test_case: LLMTestCase) -> dict:
     """Pull slide count, theme, and titles from trace metadata or observations."""
-    metadata = cast(TraceMetadata, test_case.metadata)
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     observations = metadata.get("observations", [])
 
     deck_props = {

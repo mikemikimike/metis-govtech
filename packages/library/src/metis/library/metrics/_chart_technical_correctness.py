@@ -11,12 +11,12 @@ from ._base import (
     mark_skipped,
 )
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 def _extract_chart_evidence(test_case: LLMTestCase) -> dict | None:
     """Collect chart type/granularity/format facts from observations."""
-    metadata = cast(TraceMetadata, test_case.metadata)
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     observations = metadata.get("observations") or []
     evidence: dict = {}
     for obs in observations:

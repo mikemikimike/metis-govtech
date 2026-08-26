@@ -11,7 +11,7 @@ from ._base import (
     mark_skipped,
 )
 from ._judge import _get_judge_model
-from ._types import OrcaChatMetadata, TraceMetadata
+from ._types import LlmTestCaseMetadata, OrcaChatMetadata
 
 # Canonical agent type fragments and the key they map to.
 _AGENT_TYPE_MAP = [
@@ -44,7 +44,7 @@ def _is_multi_agent_trace(test_case: LLMTestCase) -> bool:
     3. More than one distinct canonical agent type in AGENT spans
        (Data_Analysis_Agent.arun + Data_Analyst.arun = one type, not two)
     """
-    metadata = cast(TraceMetadata, test_case.metadata)
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     chat_meta: OrcaChatMetadata = metadata.get("chat_metadata") or OrcaChatMetadata()
 
     # Signal 1: explicit count from orca-chat span

@@ -46,7 +46,7 @@ Both can be listed together in `experiment.yaml` — no annotation needed.
 One file per metric, named `_<snake_case>.py`. Shared infrastructure lives in:
 
 - `_base.py` — `MetisTurnMetric`, `mark_skipped`, `_ContextAwareGEval`, `_ContextAwareConversationalGEval`, helpers
-- `_types.py` — `TraceMetadata`, `OrcaChatMetadata`, `ClarificationRequest`
+- `_types.py` — `LlmTestCaseMetadata`, `OrcaChatMetadata`, `ClarificationRequest`
 - `_judge.py` — `_get_judge_model()`
 - `_constants.py` — `SYSTEM_PROMPT_SUMMARY`, `TOOL_MANIFEST`
 

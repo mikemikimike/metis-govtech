@@ -15,7 +15,7 @@ Design rules (see the change proposal):
 - No new third-party dependency: PPTX text/structure is read through the
   standard-library ZIP/XML representation, not a presentation parser.
 
-Both per-turn metrics (``LLMTestCase`` + ``TraceMetadata``) and session
+Both per-turn metrics (``LLMTestCase`` + ``LlmTestCaseMetadata``) and session
 metrics (``ConversationalTestCase`` + ``Turn`` list) are supported; each
 helper documents which shape it accepts.
 """
@@ -33,10 +33,10 @@ from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
 from ._types import (
     ArtifactSummary,
+    LlmTestCaseMetadata,
     ObservationSummary,
     OrcaChatMetadata,
     ToolCallSummary,
-    TraceMetadata,
 )
 
 # ---------------------------------------------------------------------------
@@ -44,9 +44,9 @@ from ._types import (
 # ---------------------------------------------------------------------------
 
 
-def get_metadata(test_case: LLMTestCase) -> TraceMetadata:
-    """Return the TraceMetadata dict for a per-turn test case (never None)."""
-    return cast(TraceMetadata, test_case.metadata or {})
+def get_metadata(test_case: LLMTestCase) -> LlmTestCaseMetadata:
+    """Return the LlmTestCaseMetadata dict for a per-turn test case (never None)."""
+    return cast(LlmTestCaseMetadata, test_case.metadata or {})
 
 
 def get_observations(test_case: LLMTestCase) -> list[ObservationSummary]:

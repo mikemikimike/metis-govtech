@@ -8,12 +8,12 @@ from deepeval.test_case import LLMTestCase
 from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
 from ._extraction import extract_deck_slides, extract_source_texts
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 def _extract_source_facts(test_case: LLMTestCase) -> list:
     """Pull source file contents from read_source_file tool call outputs."""
-    metadata = cast(TraceMetadata, test_case.metadata)
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     observations = metadata.get("observations", [])
     source_texts = []
 

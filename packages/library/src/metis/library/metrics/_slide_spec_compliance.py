@@ -12,7 +12,7 @@ from ._base import (
 )
 from ._extraction import extract_deck_slides
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 def _extract_deck_properties(test_case: LLMTestCase) -> dict:
@@ -22,7 +22,7 @@ def _extract_deck_properties(test_case: LLMTestCase) -> dict:
     titles fall back to the produced ``.pptx`` artifact read by
     ``extract_deck_slides``, which is the more reliable source of truth.
     """
-    metadata = cast(TraceMetadata, test_case.metadata)
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     observations = metadata.get("observations", [])
 
     deck_props = {

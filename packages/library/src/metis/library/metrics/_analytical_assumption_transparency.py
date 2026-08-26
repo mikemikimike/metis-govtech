@@ -11,12 +11,12 @@ from ._base import (
     mark_skipped,
 )
 from ._judge import _get_judge_model
-from ._types import OrcaChatMetadata, TraceMetadata
+from ._types import LlmTestCaseMetadata, OrcaChatMetadata
 
 
 def _is_data_analyst_trace(test_case: LLMTestCase) -> bool:
     """Check if this trace was routed to the data analyst subagent."""
-    metadata = cast(TraceMetadata, test_case.metadata)
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     delegation = metadata.get("delegation")
     target = delegation["target"] if delegation else ""
     if "data" in target.lower():

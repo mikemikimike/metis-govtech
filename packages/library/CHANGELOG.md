@@ -8,7 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- `ConversationalTestCaseMetadata` TypedDict — typed contract for `ConversationalTestCase.metadata` fields consumed by session-level metrics (`session_id`, `trace_ids`, `stop_reason`, `cancellation_available`, `slide_image_refs`, plus `NotRequired` fields `scenario`, `persona`, `expected_minimum_steps`).
+
 ### Changed
+
+- **Renamed `TraceMetadata` → `LlmTestCaseMetadata`** — the TypedDict is now named after the test case type it annotates. `TraceMetadata` remains importable as a deprecated alias.
+- All 38 metric modules updated to import and cast `LlmTestCaseMetadata` instead of `TraceMetadata`.
+- `SessionStepEfficiencyMetric` now uses a typed `cast(ConversationalTestCaseMetadata, ...)` for type-safe metadata access.
 
 ### Fixed
 

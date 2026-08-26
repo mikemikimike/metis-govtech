@@ -11,12 +11,12 @@ from ._base import (
     mark_skipped,
 )
 from ._judge import _get_judge_model
-from ._types import TraceMetadata
+from ._types import LlmTestCaseMetadata
 
 
 def _has_chart_observations(test_case: LLMTestCase) -> bool:
     """Check if the trace has actual chart generation observations."""
-    metadata = cast(TraceMetadata, test_case.metadata)
+    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
     observations = metadata.get("observations", [])
     for obs in observations:
         obs_meta = obs.get("metadata") or {}
