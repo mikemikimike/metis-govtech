@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Default interview model is now `gpt-5.6-luna` (was `gemini-3.5-flash-lite`);
   override with `INTERVIEW_MODEL`.
 
-## [0.1.1] — Unreleased
+## [0.1.1] — 2026-08-19
 
 ### Removed
 
