@@ -78,6 +78,7 @@ The directory `packages/engine/example-experiment/` contains a complete experime
 ```
 example-experiment/
 ├── experiment.yaml      # Personas, scenarios, and metrics
+├── profile.yaml         # Tasks, behaviours, criteria, and metrics
 └── fixtures/            # Files uploaded during simulation
     ├── q3_sales.csv
     ├── q3_sales_corrupted.csv
@@ -172,6 +173,7 @@ An experiment is defined by a single `experiment.yaml` file placed alongside a `
 ```
 my-experiment/
 ├── experiment.yaml
+├── profile.yaml
 └── fixtures/
     └── my-data.csv
 ```
@@ -314,7 +316,7 @@ metis engine run --resume --experiment-dir <output path> [simulation and evaluat
 
 `simulate` and `run` work in one of two modes. Give the flags for exactly one mode:
 
-- **New run:** `--input-dir <source>` — the directory with `experiment.yaml` and `fixtures/`.
+- **New run:** `--input-dir <source>` — the directory with `experiment.yaml`, `profile.yaml` and `fixtures/`.
 - **Resume:** `--resume --experiment-dir <output>` — an output directory that a previous `simulate` created. Both flags are needed together: `--experiment-dir` without `--resume` is an error, and `--resume` without `--experiment-dir` is an error.
 
 The flags below are optional and apply to both modes:

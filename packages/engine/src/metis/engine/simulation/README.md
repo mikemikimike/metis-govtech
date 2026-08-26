@@ -57,6 +57,7 @@ All inputs for an experiment live in a single flat directory:
 ```
 my-experiment/
 ├── experiment.yaml   — personas, tasks, metric refs, fixtures
+├── profile.yaml      - tasks, behaviours, criteria, and metrics
 └── fixtures/
     └── *.csv / *.txt — fixture files referenced by tasks
 ```
