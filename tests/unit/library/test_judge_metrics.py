@@ -159,7 +159,9 @@ def test_slide_visual_quality_scored_path(image_factory):
     metric = SlideVisualQualityMetric()
     metric._geval = _FakeGeval(score=0.9, reason="slides look consistent")
     refs = [str(image_factory("slide1.png"))]
-    score = asyncio.run(metric.a_measure(make_case(metadata={"slide_image_refs": refs})))
+    score = asyncio.run(
+        metric.a_measure(make_case(metadata={"slide_image_refs": refs}))
+    )
     assert score == 0.9
     assert metric.success is True
     assert metric.reason == "slides look consistent"
