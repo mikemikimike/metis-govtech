@@ -96,7 +96,9 @@ async def _evaluate_session_metrics(
         tasks = [_run_metric(m, test_case, semaphore) for m in metrics]
         metric_results = await asyncio.gather(*tasks)
         results.append(
-            SessionResult(conversational_test_case=test_case, metric_results=list(metric_results))
+            SessionResult(
+                conversational_test_case=test_case, metric_results=list(metric_results)
+            )
         )
 
     return results

@@ -88,7 +88,9 @@ class _LiveDashboardRenderable:
 _REFRESH_DEBOUNCE_SECONDS = 0.2
 
 
-def _compute_tail_max_lines(terminal_rows: int, tail_ratio: int, total_ratio: int) -> int:
+def _compute_tail_max_lines(
+    terminal_rows: int, tail_ratio: int, total_ratio: int
+) -> int:
     """Derive tail buffer capacity from terminal height and layout ratios."""
     tail_rows = (terminal_rows * tail_ratio) // total_ratio
     return max(5, tail_rows - 2)

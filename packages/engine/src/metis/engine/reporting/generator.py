@@ -35,7 +35,6 @@ from ._report_page import render_report_page
 
 logger = get_logger(__name__)
 
-
 RESULTS_DIR = Path.cwd() / "results"
 
 

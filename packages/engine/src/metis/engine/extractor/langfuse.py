@@ -207,7 +207,11 @@ def _extract_assistant_messages(
                 out_messages = output.get("messages", [])
                 for msg in out_messages:
                     if msg.get("role") == "assistant":
-                        messages.append(ChatMessage(role="assistant", content=msg.get("content", "")))
+                        messages.append(
+                            ChatMessage(
+                                role="assistant", content=msg.get("content", "")
+                            )
+                        )
             elif isinstance(output, str):
                 messages.append(ChatMessage(role="assistant", content=output))
     return messages
@@ -345,7 +349,9 @@ class _TraceExtraction:
     chat_metadata: OrcaChatMetadata
 
 
-def _extract_all(trace: TraceWithDetails, observations: list[ObservationsView]) -> _TraceExtraction:
+def _extract_all(
+    trace: TraceWithDetails, observations: list[ObservationsView]
+) -> _TraceExtraction:
     """Run all extraction helpers once and return a bundled result."""
     return _TraceExtraction(
         trace=trace,
