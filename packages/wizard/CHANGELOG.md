@@ -4,7 +4,26 @@ All notable changes to `metis-wizard` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.1.1] — Unreleased
+## [0.2.0] — 2026-08-25
+
+### Added
+
+- The CLI now writes the YAML-serialised `ProductProfile` as `profile.yaml` alongside `experiment.yaml` .
+- `.env.example` documenting the interview environment: `OPENAI_API_KEY`, `OPENAI_BASE_URL`,
+optional `INTERVIEW_MODEL`, and optional `LANGFUSE_*`.
+
+### Changed
+
+- **Standardised LLM credentials on `OPENAI_API_KEY` / `OPENAI_BASE_URL`** — the
+interview gateway reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL`. Set
+`OPENAI_BASE_URL` to the full OpenAI-compatible endpoint.
+([#153](https://github.com/govtech-responsibleai/metis/issues/153))
+- **Renamed `PLATFORM_INTERVIEW_MODEL` to `INTERVIEW_MODEL`** — selects the
+interview model on the shared provider.
+- Default interview model is now `gpt-5.6-luna` (was `gemini-3.5-flash-lite`);
+override with `INTERVIEW_MODEL`.
+
+## [0.1.1] — 2026-08-19
 
 ### Removed
 
@@ -13,9 +32,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Changed
 
 - Workspace-sibling dependency floors now enforced in `pyproject.toml`:
-  `metis-core>=0.3.0`, `metis-library>=0.1.4`, `metis-engine>=0.7.0`.
-  These only matter when the package is installed from a registry; the local
-  workspace override continues to resolve to the checked-out code.
+`metis-core>=0.3.0`, `metis-library>=0.1.4`, `metis-engine>=0.7.0`.
+These only matter when the package is installed from a registry; the local
+workspace override continues to resolve to the checked-out code.
 
 ### Known debt closed
 
@@ -126,7 +145,7 @@ engine. It closes when the schema moves to a package both sides may depend on.
   by the engine; current wizard output uses the library FQNs.
 - **Library compatibility floor.** The fallback judge requires `metis-library` 0.1.1 or later;
 the package dependency metadata must enforce that floor before release.
-- **`api` and `web` are not yet packages.** The two applications stay under `apps/` as `api` and
+- `**api` and `web` are not yet packages.** The two applications stay under `apps/` as `api` and
 `web`. They must move to `metis-api` and `metis-web`, so that they are workspace members with the
 same layout and naming as the other packages. It closes when both apps are migrated.
 

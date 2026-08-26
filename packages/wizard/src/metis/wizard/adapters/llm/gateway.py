@@ -45,12 +45,11 @@ from metis.wizard.contracts.session_state import Turn
 from metis.wizard.domain.applier import PatchValueError, validate_model_patches
 from metis.wizard.domain.profile import ProductProfile
 
-BASE_URL_VAR = "PLATFORM_API_BASE_URL"
-API_KEY_VAR = "PLATFORM_API_KEY"
-MODEL_VAR = "PLATFORM_INTERVIEW_MODEL"
+BASE_URL_VAR = "OPENAI_BASE_URL"
+API_KEY_VAR = "OPENAI_API_KEY"
+MODEL_VAR = "INTERVIEW_MODEL"
 
-DEFAULT_MODEL = "gemini-3.5-flash-lite"
-GATEWAY_SUFFIX = "/platform/models/v1"
+DEFAULT_MODEL = "gpt-5.6-luna"
 
 ATTEMPTS = 3
 
@@ -94,10 +93,11 @@ class GatewayInterviewer:
             # does not connect on construction, so this stays offline until a call is made.
             from langfuse.openai import OpenAI
 
-            base = os.environ[BASE_URL_VAR].rstrip("/")
-            if not base.endswith(GATEWAY_SUFFIX):
-                base += GATEWAY_SUFFIX
-            self._client = OpenAI(base_url=base, api_key=os.environ[API_KEY_VAR])
+            # OPENAI_BASE_URL is the full OpenAI-compatible endpoint; the client uses it as given.
+            self._client = OpenAI(
+                base_url=os.environ[BASE_URL_VAR].rstrip("/"),
+                api_key=os.environ[API_KEY_VAR],
+            )
 
     # ── the retry loop ─────────────────────────────────────────────────────
 

@@ -12,9 +12,9 @@ having happened. Where the interview got to is `SessionState.step`, deliberately
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
+import yaml
 from pydantic import BaseModel, Field
 
 from metis.wizard.domain.types import InteractionType
@@ -151,7 +151,14 @@ class ProductProfile(BaseModel):
 
     @classmethod
     def load(cls, path: Path) -> ProductProfile:
-        return cls.model_validate_json(Path(path).read_text())
+        return cls.model_validate(yaml.safe_load(Path(path).read_text()))
 
     def save(self, path: Path) -> None:
-        Path(path).write_text(json.dumps(self.model_dump(mode="json"), indent=2) + "\n")
+        Path(path).write_text(
+            yaml.dump(
+                self.model_dump(mode="json"),
+                sort_keys=False,
+                default_flow_style=False,
+                allow_unicode=True,
+            )
+        )
