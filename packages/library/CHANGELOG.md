@@ -4,6 +4,22 @@ All notable changes to `metis-library` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+
+
+## [0.7.0] — 2026-08-26
+
+### Added
+
+
+
+### Changed
+
+
+
+### Fixed
+
+
+
 ## [0.6.0] — 2026-08-26
 
 ### Added
@@ -23,11 +39,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Changed
 
 - **Standardised LLM-judge credentials on `OPENAI_API_KEY` / `OPENAI_BASE_URL`** —
-  `_get_judge_model()` now reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL` instead of
-  `JUDGE_API_KEY` and `JUDGE_BASE_URL`. The judge model stays selectable via `JUDGE_MODEL`.
-  ([#153](https://github.com/govtech-responsibleai/metis/issues/153))
+`_get_judge_model()` now reads the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL` instead of
+`JUDGE_API_KEY` and `JUDGE_BASE_URL`. The judge model stays selectable via `JUDGE_MODEL`.
+([#153](https://github.com/govtech-responsibleai/metis/issues/153))
 - Default judge model is now `gemini-3.5-flash-lite` (was `gpt-4.1-mini`);
-  override with `JUDGE_MODEL`.
+override with `JUDGE_MODEL`.
 
 ## [0.4.0] — 2026-08-20
 
@@ -48,20 +64,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Changed
 
 - `CrossSlideLogicalFlowMetric` (M-SM-14), `SlideSpecComplianceMetric` (M-SM-10), and `DeckSourceFaithfulnessMetric` (M-SM-20) now read deck content through the PPTX artifact when trace observations do not contain deck properties.
-
 - **Deprecated `task`/`task_id` aliases** from `TraceMetadata` and the fallback read path in `_build_context_block`; callers must use `scenario`/`scenario_id` exclusively
 
 ## [0.3.0] — 2026-08-20
 
 ### Added
 
-- **`MetisSessionMetric` base class** (`_base.py`) — new base for session-level metrics that extends `BaseConversationalMetric`; enforces `tags` ClassVar like `MetisTurnMetric`; session metrics now have an explicit, documented base class rather than inheriting directly from DeepEval's `BaseConversationalMetric`
-- **`mark_skipped()` helper** (`_base.py`) — standalone function to mark a metric as skipped with a reason; sets `skipped=True`, `score=1.0`, `success=True` so DeepEval assertions pass while reporters exclude the metric from pass-rate aggregation
+- `**MetisSessionMetric` base class** (`_base.py`) — new base for session-level metrics that extends `BaseConversationalMetric`; enforces `tags` ClassVar like `MetisTurnMetric`; session metrics now have an explicit, documented base class rather than inheriting directly from DeepEval's `BaseConversationalMetric`
+- `**mark_skipped()` helper** (`_base.py`) — standalone function to mark a metric as skipped with a reason; sets `skipped=True`, `score=1.0`, `success=True` so DeepEval assertions pass while reporters exclude the metric from pass-rate aggregation
 
 ### Changed
 
 - **BREAKING: `SyncBaseMetric` renamed to `MetisTurnMetric`** — all per-turn metric classes now inherit from `MetisTurnMetric` instead of `SyncBaseMetric`; the class is no longer "sync-only" (supports both sync `measure()` and async `a_measure()` dispatch based on `async_mode`)
-- **`_absorb_geval_cost()` replaced by `_accrue_cost()`** — simplified to a single `cost: float | None` parameter; no longer manually copies `input_tokens`/`output_tokens` (DeepEval's framework handles token tracking)
+- `**_absorb_geval_cost()` replaced by `_accrue_cost()`** — simplified to a single `cost: float | None` parameter; no longer manually copies `input_tokens`/`output_tokens` (DeepEval's framework handles token tracking)
 - Removed hardcoded `async_mode = False` and `skipped: bool = False` from the base class; `async_mode` now defaults to DeepEval's default (True), and skip state is managed via `mark_skipped()`
 
 ### Removed
@@ -113,3 +128,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - Shared metric catalog: 53 metric classes across 5 modules (universal, orchestration, analysis, presentation, session)
 - Supporting types (`TraceMetadata`, `OrcaChatMetadata`, `ClarificationRequest`) in `metrics._types`
 - DeepEval and OpenAI as runtime dependencies
+
