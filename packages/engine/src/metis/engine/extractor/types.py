@@ -46,8 +46,6 @@ class RoutingSummary(TypedDict):
     subagent_counts: dict
 
 
-
-
 @dataclass
 class SessionContext:
     """Session-level context for a trace within a multi-turn conversation."""

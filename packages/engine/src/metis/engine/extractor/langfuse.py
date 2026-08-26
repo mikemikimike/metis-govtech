@@ -36,8 +36,9 @@ from metis.engine.extractor.types import (
 from metis.engine.simulation.types import CollectedArtifact, Persona, Scenario
 from metis.library.metrics._types import (
     ClarificationRequest,
+    ConversationalTestCaseMetadata,
+    LlmTestCaseMetadata,
     OrcaChatMetadata,
-    TraceMetadata,
 )
 
 # ---------------------------------------------------------------------------
@@ -207,7 +208,11 @@ def _extract_assistant_messages(
                 out_messages = output.get("messages", [])
                 for msg in out_messages:
                     if msg.get("role") == "assistant":
-                        messages.append(ChatMessage(role="assistant", content=msg.get("content", "")))
+                        messages.append(
+                            ChatMessage(
+                                role="assistant", content=msg.get("content", "")
+                            )
+                        )
             elif isinstance(output, str):
                 messages.append(ChatMessage(role="assistant", content=output))
     return messages
@@ -345,7 +350,9 @@ class _TraceExtraction:
     chat_metadata: OrcaChatMetadata
 
 
-def _extract_all(trace: TraceWithDetails, observations: list[ObservationsView]) -> _TraceExtraction:
+def _extract_all(
+    trace: TraceWithDetails, observations: list[ObservationsView]
+) -> _TraceExtraction:
     """Run all extraction helpers once and return a bundled result."""
     return _TraceExtraction(
         trace=trace,
@@ -388,7 +395,7 @@ def _trace_to_test_case(
 
     context = [ext.subagent_output] if ext.subagent_output else None
 
-    meta = TraceMetadata(
+    meta = LlmTestCaseMetadata(
         trace_id=trace.id,
         session_id=session_context.session_id,
         turn_index=session_context.turn_index,
@@ -434,6 +441,10 @@ def _trace_to_test_case(
 
 def _session_to_conversational_test_case(
     extractions: list[_TraceExtraction],
+    *,
+    stop_reason: str | None = None,
+    cancellation_available: bool | None = None,
+    slide_image_refs: list[str] | None = None,
 ) -> ConversationalTestCase | None:
     """Convert pre-extracted trace data into a ConversationalTestCase.
 
@@ -450,10 +461,13 @@ def _session_to_conversational_test_case(
         return None
 
     turns = []
-    session_metadata: dict = {
-        "session_id": extractions[0].trace.session_id,
-        "trace_ids": [],
-    }
+    session_metadata = ConversationalTestCaseMetadata(
+        session_id=extractions[0].trace.session_id,
+        trace_ids=[],
+        stop_reason=stop_reason,
+        cancellation_available=cancellation_available,
+        slide_image_refs=slide_image_refs,
+    )
 
     for ext in extractions:
         trace = ext.trace
@@ -659,17 +673,16 @@ def fetch_by_session_id(
 
     session_test_cases: list[ConversationalTestCase] = []
     ctc: ConversationalTestCase | None = _session_to_conversational_test_case(
-        extractions
+        extractions,
+        stop_reason=stop_reason,
+        cancellation_available=cancellation_available,
+        slide_image_refs=slide_image_refs,
     )
     if ctc:
         if scenario is not None and ctc.metadata is not None:
             ctc.metadata["scenario"] = scenario
         if persona is not None and ctc.metadata is not None:
             ctc.metadata["persona"] = persona
-        if ctc.metadata is not None:
-            ctc.metadata["stop_reason"] = stop_reason
-            ctc.metadata["cancellation_available"] = cancellation_available
-            ctc.metadata["slide_image_refs"] = slide_image_refs
         session_test_cases.append(ctc)
 
     return FetchLangfuseResult(

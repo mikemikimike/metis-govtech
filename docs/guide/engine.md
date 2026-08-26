@@ -52,7 +52,7 @@ Optional tuning variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `USER_AGENT_MODEL` | `gpt-4o-mini` | Model used for the simulated user persona |
+| `USER_AGENT_MODEL` | `gpt-5.6-luna` | Model used for the simulated user persona |
 | `USER_AGENT_MAX_TOKENS` | `1024` | Max tokens per user agent response |
 | `USER_AGENT_TEMPERATURE` | `0.7` | Sampling temperature for the user agent |
 | `HEADED` | `false` | Set to `true` to show the browser window |
@@ -60,10 +60,10 @@ Optional tuning variables:
 ### Verify Installation
 
 ```bash
-metis engine simulate --help
+metis engine run --help
 ```
 
-You should see the simulate command's help text with all available flags.
+You should see the run command's help text with all available flags.
 
 ---
 
@@ -78,6 +78,7 @@ The directory `packages/engine/example-experiment/` contains a complete experime
 ```
 example-experiment/
 ├── experiment.yaml      # Personas, scenarios, and metrics
+├── profile.yaml         # Tasks, behaviours, criteria, and metrics
 └── fixtures/            # Files uploaded during simulation
     ├── q3_sales.csv
     ├── q3_sales_corrupted.csv
@@ -152,6 +153,9 @@ experiments/orca-eval-20260730-143022/
 
 Use `logs/evaluate.log` to review extraction, each configured metric, the actual judge model reported by DeepEval, metric scores, pass or fail results, reasons, errors, cost, token counts, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
+See the [report contract](report.md) for the report's scoring,
+status, failure-evidence, and information-architecture rules.
+
 ### Debugging Tip
 
 If a simulation behaves unexpectedly, run with a visible browser:
@@ -169,6 +173,7 @@ An experiment is defined by a single `experiment.yaml` file placed alongside a `
 ```
 my-experiment/
 ├── experiment.yaml
+├── profile.yaml
 └── fixtures/
     └── my-data.csv
 ```
@@ -311,7 +316,7 @@ metis engine run --resume --experiment-dir <output path> [simulation and evaluat
 
 `simulate` and `run` work in one of two modes. Give the flags for exactly one mode:
 
-- **New run:** `--input-dir <source>` — the directory with `experiment.yaml` and `fixtures/`.
+- **New run:** `--input-dir <source>` — the directory with `experiment.yaml`, `profile.yaml` and `fixtures/`.
 - **Resume:** `--resume --experiment-dir <output>` — an output directory that a previous `simulate` created. Both flags are needed together: `--experiment-dir` without `--resume` is an error, and `--resume` without `--experiment-dir` is an error.
 
 The flags below are optional and apply to both modes:

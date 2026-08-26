@@ -28,12 +28,12 @@ User Agent (Python/AsyncOpenAI)  →  Environment (Python/async Playwright)  →
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENAI_API_KEY` | Yes | Used by the user agent and DeepEval judge metrics |
-| `USER_AGENT_MODEL` | No | OpenAI model name (default: `gpt-4o-mini`) |
+| `OPENAI_API_KEY` | Yes | Shared API key for the user agent and DeepEval judge metrics |
+| `OPENAI_BASE_URL` | No | Shared endpoint override for both; unset → default OpenAI endpoint |
+| `USER_AGENT_MODEL` | No | User-agent model name (default: `gpt-5.6-luna`) |
 | `USER_AGENT_MAX_TOKENS` | No | Max output tokens per turn (default: `1024`) |
 | `USER_AGENT_TEMPERATURE` | No | Sampling temperature (default: `0.7`) |
-| `USER_AGENT_API_KEY` | No | User-agent API key; falls back to `OPENAI_API_KEY` |
-| `USER_AGENT_BASE_URL` | No | User-agent endpoint override; unset → default OpenAI endpoint |
+| `JUDGE_MODEL` | No | Judge model name (default: `gemini-3.5-flash-lite`) |
 
 ## Running
 
@@ -57,6 +57,7 @@ All inputs for an experiment live in a single flat directory:
 ```
 my-experiment/
 ├── experiment.yaml   — personas, tasks, metric refs, fixtures
+├── profile.yaml      - tasks, behaviours, criteria, and metrics
 └── fixtures/
     └── *.csv / *.txt — fixture files referenced by tasks
 ```

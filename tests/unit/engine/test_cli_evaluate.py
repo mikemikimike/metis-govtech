@@ -247,13 +247,8 @@ def test_evaluate_with_no_run_records_is_a_noop(tmp_path: Path) -> None:
     )
 
 
-def test_evaluation_reads_the_input_snapshot_and_overwrites_the_report(
-    monkeypatch, tmp_path: Path
-) -> None:
-    output = _write_experiment_dir(
-        tmp_path,
-        content=MINIMAL_EXPERIMENT.replace("test persona", "snapshot persona"),
-    )
+def test_evaluation_overwrites_the_report_on_rerun(monkeypatch, tmp_path: Path) -> None:
+    output = _write_experiment_dir(tmp_path)
     _write_record(output)
 
     monkeypatch.setattr("metis.engine.extractor.get_langfuse_client", lambda: object())
@@ -266,15 +261,8 @@ def test_evaluation_reads_the_input_snapshot_and_overwrites_the_report(
         lambda *_args, **_kwargs: _metric_eval_result(),
     )
     report_versions = iter(("first", "second"))
-    report_contexts: list[dict[str, Any]] = []
 
-    def write_report(
-        *_args: object,
-        output_dir: Path,
-        task_contexts: dict[str, Any],
-        **_kwargs: object,
-    ) -> None:
-        report_contexts.append(task_contexts)
+    def write_report(*_args: object, output_dir: Path, **_kwargs: object) -> None:
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "report.json").write_text(next(report_versions))
         (output_dir / "report.html").write_text("report")
@@ -288,9 +276,6 @@ def test_evaluation_reads_the_input_snapshot_and_overwrites_the_report(
     assert second.exit_code == 0
     assert (output / "reports" / "report.json").read_text() == "second"
     assert (output / "reports" / "report.html").exists()
-    assert [
-        context["task-1"]["personas"][0]["description"] for context in report_contexts
-    ] == ["snapshot persona", "snapshot persona"]
     evaluation_log = (output / "logs" / "evaluate.log").read_text()
     assert evaluation_log.count("EVALUATION STARTED") == 1
     assert "REPORT WRITTEN" in evaluation_log

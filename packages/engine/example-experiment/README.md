@@ -1,10 +1,10 @@
 # Example Experiment
 
-This directory is a ready-to-run experiment input for `metis engine simulate` and `metis engine run`.
+This directory is a ready-to-run experiment input for `metis engine run`.
 
 **Everything here is written for Orca** — the personas, task descriptions, fixture
 files, and metric selections assume Orca's specific multi-agent architecture
-(orchestrator → data-analyst / slide-maker subagents).Evaluating a
+(orchestrator → data-analyst / slide-maker subagents). Evaluating a
 different system will require writing your own experiment from scratch.
 
 ## Structure
@@ -12,6 +12,7 @@ different system will require writing your own experiment from scratch.
 ```
 example-experiment/
 ├── experiment.yaml      # Personas, tasks, metrics, and configuration
+├── profile.yaml         # Tasks, behaviours, criteria, and metrics
 └── fixtures/            # Files uploaded to Orca during simulation
     ├── q3_sales.csv
     ├── q3_sales_corrupted.csv
@@ -37,32 +38,39 @@ Simulation uses the live TUI in a terminal. Evaluation uses a normal progress ba
 
 ## What it covers
 
-| Task | Tests |
+| Scenario | Tests |
 |------|-------|
 | direct-question | Direct-handle routing, response quality |
-| ambiguous-request | Clarification behaviour, routing |
-| constrained-analysis | Constraint adherence, analytical correctness |
-| multi-agent-pipeline | Decomposition, synthesis, cross-agent handoff |
-| adversarial-slides | Injection resistance, source faithfulness |
-| corrupted-data | Error diagnosis, bounded retries, failure reporting |
+| constrained-analysis | Constraint adherence, analytical correctness, chart & report quality |
+| multi-agent-pipeline | Decomposition, synthesis, cross-agent handoff, full Slide Maker suite |
+| corrupted-data | Error diagnosis, bounded retries, failure reporting, data recovery |
 | impossible-request | Capability honesty, limitation acknowledgement |
-| harmful-request | Safety refusal |
+| harmful-request | Safety refusal (dedicated refusal metric) |
 | conflicting-sources | Contradiction flagging, gap acknowledgement |
-| evolving-brief | Context retention across agent switches |
+| evolving-brief | Context retention across agent switches, full Slide Maker suite |
 
-## Persona × task matrix
+## Metrics not yet in the library
 
-Each task runs once per listed persona (total sessions = sum of checkmarks).
+The following framework metrics have no implementation yet and are omitted:
 
-| Task | cooperative | impatient | uncertain | skeptical | perfectionist | scope-creeper | boundary |
-|------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| direct-question | ✓ | | | | | | |
-| ambiguous-request | | | ✓ | | | | |
-| constrained-analysis | ✓ | ✓ | | | | | |
-| multi-agent-pipeline | ✓ | ✓ | | | | | |
-| adversarial-slides | ✓ | | | | | | |
-| corrupted-data | ✓ | | | | | | |
-| impossible-request | ✓ | | | ✓ | | | |
-| harmful-request | | ✓ | | | | | ✓ |
-| conflicting-sources | ✓ | | | ✓ | | | |
-| evolving-brief | | | | | ✓ | ✓ | |
+- Universal: `M-UNI-12` (prompt-injection resistance).
+- Data Analyst: `M-DA-21` (ML rigour), `M-DA-24` (uploaded-data injection), `M-DA-25` (egress & filesystem containment).
+
+## Persona × Scenario matrix
+
+Rather than a full 5 × 8 cross-product, each scenario selects the 2–3 personas that
+best stress its metrics (every persona is used at least once). The number of test
+cases is the sum of `personas × num_trials` over all scenarios.
+
+| Scenario | Personas |
+|------|-------|
+| direct-question | cooperative-delegator, impatient-executive, uncertain-explorer |
+| constrained-analysis | domain-expert-perfectionist, skeptical-auditor |
+| multi-agent-pipeline | cooperative-delegator, impatient-executive, skeptical-auditor |
+| corrupted-data | impatient-executive, uncertain-explorer |
+| impossible-request | skeptical-auditor, impatient-executive |
+| harmful-request | cooperative-delegator, domain-expert-perfectionist |
+| conflicting-sources | skeptical-auditor, domain-expert-perfectionist |
+| evolving-brief | cooperative-delegator, domain-expert-perfectionist |
+
+With `num_trials: 3` throughout (18 persona × scenario pairs), this is 54 runs.

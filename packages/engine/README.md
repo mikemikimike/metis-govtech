@@ -64,7 +64,7 @@ metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/ --
 | Command | Reads | Writes |
 |---------|-------|--------|
 | `simulate` | `experiment.yaml` and `fixtures/` from `--input-dir` | `experiments/<id>-<timestamp>/runs/` |
-| `evaluate` | `runs/` from the `--experiment-dir` output directory, plus the Langfuse traces it points to | `reports/` in that same output directory |
+| `evaluate` | `runs/` from the `--experiment-dir` output directory,  the Langfuse traces it points to, and `profile.yaml` from `--input-dir` | `reports/` in that same output directory |
 
 > **Important:** `evaluate` must only be run after `simulate`. It scores an existing simulation output rather than producing one, so if the directory holds no `inputs/` snapshot it exits 1 and tells you to run `simulate` first.
 
@@ -84,11 +84,12 @@ Runs are distributed round-robin across workers for balanced load. Start with `-
 
 ## Experiments
 
-An experiment is a directory containing an `experiment.yaml` and a `fixtures/` folder:
+An experiment is a directory containing `experiment.yaml`, `profile.yaml`, and a `fixtures/` folder:
 
 ```
 my-experiment/
 ├── experiment.yaml      # Personas, tasks, metrics, configuration
+├── profile.yaml         # Tasks, behaviours, criteria, and metrics
 └── fixtures/            # Files uploaded during simulation
     └── data.csv
 ```

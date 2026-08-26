@@ -9,9 +9,8 @@ TypedDicts are the serializable projection used by the reporting layer:
 
 The conversion happens in generator._convert_turn_results and
 generator._convert_session_results. Downstream, these dicts are:
-  • aggregated for pass/fail/skip counts (_aggregation.py)
-  • rendered into HTML tables and trace detail views (_html_sections.py)
-  • serialized directly to the JSON report file (generator.py)
+  • aggregated for pass/fail/skip counts in the terminal summary (_aggregation.py)
+  • joined onto the product profile to build the report (_report.py)
 """
 
 from __future__ import annotations
@@ -70,26 +69,3 @@ class TurnReport(TypedDict):
     output: str
     routed_to: str
     metrics: list[TurnMetricResult]
-
-
-class PersonaContext(TypedDict, total=False):
-    """Per-persona outcome data attached to a task context."""
-
-    id: str
-    description: str
-    stop_reason: str
-    total_turns: int
-    duration_seconds: float
-
-
-class TaskContext(TypedDict, total=False):
-    """Contextual metadata for a scenario/task in the report."""
-
-    description: str
-    persona_id: str
-    persona_description: str
-    fixtures: list[str]
-    stop_reason: str
-    total_turns: int
-    duration_seconds: float
-    personas: list[PersonaContext]

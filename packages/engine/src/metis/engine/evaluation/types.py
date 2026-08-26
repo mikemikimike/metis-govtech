@@ -89,7 +89,9 @@ class EvalResult:
             merged_turn_results.extend(r.turn_results)
             merged_session_results.extend(r.session_results)
             merged_durations.turn_metrics_seconds += r.durations.turn_metrics_seconds
-            merged_durations.session_metrics_seconds += r.durations.session_metrics_seconds
+            merged_durations.session_metrics_seconds += (
+                r.durations.session_metrics_seconds
+            )
             total_traces += r.routing_summary["total_traces"]
             total_sessions += r.routing_summary["total_sessions"]
             direct_handle += r.routing_summary["direct_handle"]

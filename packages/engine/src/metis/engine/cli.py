@@ -799,7 +799,7 @@ def _run_evaluation(
     from metis.engine.evaluation import evaluate as evaluate_metrics
     from metis.engine.evaluation.types import EvalResult
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
-    from metis.engine.reporting import PersonaContext, TaskContext, generate_report
+    from metis.engine.reporting import generate_report
     from metis.engine.simulation.types import RunRecord
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
@@ -962,34 +962,10 @@ def _run_evaluation(
         reports_dir = experiment_dir / "reports"
         reports_dir.mkdir(parents=True, exist_ok=True)
 
-        task_contexts: dict[str, TaskContext] = {}
-        for record in records:
-            scenario_id = record.config.scenario
-            if scenario_id not in task_contexts:
-                context: TaskContext = {"personas": []}
-                scenario_obj = scenarios_by_id.get(scenario_id)
-                if scenario_obj:
-                    context["description"] = scenario_obj.description
-                    context["fixtures"] = scenario_obj.fixtures
-                task_contexts[scenario_id] = context
-
-            persona_entry: PersonaContext = {
-                "id": record.config.persona,
-                "stop_reason": record.outcome.stop_reason,
-                "total_turns": record.outcome.total_turns,
-                "duration_seconds": record.outcome.duration_seconds,
-            }
-            persona_obj = personas_by_id.get(record.config.persona)
-            if persona_obj:
-                persona_entry["description"] = persona_obj.description
-            task_contexts[scenario_id].setdefault("personas", []).append(persona_entry)
-
         generate_report(
             merged,
             run_id="report",
             output_dir=reports_dir,
-            experiment_description=experiment.description,
-            task_contexts=task_contexts,
         )
         report_written = True
         evaluation_log.write(f"REPORT WRITTEN — {reports_dir}")
