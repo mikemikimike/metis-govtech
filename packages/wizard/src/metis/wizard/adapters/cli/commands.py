@@ -8,14 +8,23 @@ from __future__ import annotations
 
 import inspect
 import uuid
-from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
 from metis.wizard import __version__, core_version
 from metis.wizard.application.interviewer import Interviewer, InterviewerUnavailable
 from metis.wizard.application.runs import format_runs
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from rich.console import Console
+
+    from metis.wizard.application.driver import StepDriver
+    from metis.wizard.application.session import Session
+    from metis.wizard.contracts.conversation import AnyRequest, AnyResponse
 
 app = typer.Typer(help="Generate METIS evaluation configurations.")
 _interviewer_factory: Callable[..., Interviewer] | None = None
@@ -63,7 +72,7 @@ def _bind_session_id(interviewer: Interviewer, session_id: str) -> None:
         object.__setattr__(interviewer, "session_id", session_id)
 
 
-def version_callback(value: bool):
+def version_callback(value: bool) -> None:
     if value:
         typer.echo(f"metis-wizard {__version__} (core {core_version})")
         raise typer.Exit()
@@ -74,11 +83,11 @@ def main(
     version: bool = typer.Option(
         False, "--version", "-V", callback=version_callback, is_eager=True
     ),
-):
+) -> None:
     """Turn a description of your product into a runnable evaluation."""
 
 
-def _run(session, out_dir: Path) -> None:
+def _run(session: Session, out_dir: Path) -> None:
     """The corridor. Two lines, then write what it produced."""
     from rich.console import Console
 
@@ -113,7 +122,7 @@ def _run(session, out_dir: Path) -> None:
     typer.echo(f"\n{format_runs(session.profile().run_count())} when you run this.")
 
 
-def _next_with_status(session, console):
+def _next_with_status(session: Session, console: Console) -> AnyRequest | None:
     """Compose the next screen behind a spinner.
 
     Some model calls happen inside `session.next()`, before a request exists — so without this
@@ -129,7 +138,9 @@ def _next_with_status(session, console):
         return session.next()
 
 
-def _respond_with_status(session, response, console) -> None:
+def _respond_with_status(
+    session: Session, response: AnyResponse, console: Console
+) -> None:
     """Apply a response behind the same package-authored status as the web door.
 
     Criteria generation and model-assisted edits happen during `respond()`, not `next()`.
@@ -169,7 +180,7 @@ def _session_path(out_dir: Path) -> Path:
     return out_dir / "session.json"
 
 
-def _driver(interviewer):
+def _driver(interviewer: Interviewer) -> StepDriver:
     """The driver, with the matcher wired to the same gateway.
 
     The matcher is not optional in a real run. Without it every criterion keeps
@@ -183,7 +194,8 @@ def _driver(interviewer):
     from metis.wizard.application.matching import EmbeddingMatcher
 
     return StepDriver(
-        interviewer=interviewer, matcher=EmbeddingMatcher(embedder=interviewer)
+        interviewer=interviewer,
+        matcher=EmbeddingMatcher(embedder=interviewer),  # type: ignore[arg-type]
     )
 
 

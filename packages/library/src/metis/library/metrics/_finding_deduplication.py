@@ -1,6 +1,6 @@
 """Finding Deduplication metric (M-ORCA-*)."""
 
-from typing import ClassVar, cast
+from typing import Any, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
@@ -44,7 +44,7 @@ def _is_multi_agent_trace(test_case: LLMTestCase) -> bool:
     3. More than one distinct canonical agent type in AGENT spans
        (Data_Analysis_Agent.arun + Data_Analyst.arun = one type, not two)
     """
-    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+    metadata = cast("LlmTestCaseMetadata", test_case.metadata)
     chat_meta: OrcaChatMetadata = metadata.get("chat_metadata") or OrcaChatMetadata()
 
     # Signal 1: explicit count from orca-chat span
@@ -83,14 +83,14 @@ class FindingDeduplicationMetric(MetisTurnMetric):
 
     MIN_OUTPUT_LENGTH = 400
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._geval = None
 
-    def _should_skip(self, test_case: LLMTestCase):
+    def _should_skip(self, test_case: LLMTestCase) -> str | None:
         output_len = len(test_case.actual_output or "")
         if not _is_multi_agent_trace(test_case):
             return "Single-agent or direct response (dedup N/A)"
@@ -98,7 +98,7 @@ class FindingDeduplicationMetric(MetisTurnMetric):
             return f"Response too short ({output_len} chars) for meaningful dedup check"
         return None
 
-    def _get_geval(self):
+    def _get_geval(self) -> _ContextAwareGEval:
         if self._geval is None:
             self._geval = _ContextAwareGEval(
                 name="Finding Deduplication",
@@ -140,7 +140,9 @@ class FindingDeduplicationMetric(MetisTurnMetric):
             )
         return self._geval
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         skip_reason = self._should_skip(test_case)
         if skip_reason:
             return mark_skipped(self, skip_reason)

@@ -5,11 +5,13 @@ Result types for the three-phase evaluation orchestrator.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
-from deepeval.test_case import LLMTestCase
-from deepeval.test_case.conversational_test_case import ConversationalTestCase
+from typing import TYPE_CHECKING, Self
 
 from metis.engine.extractor.types import RoutingSummary
+
+if TYPE_CHECKING:
+    from deepeval.test_case import LLMTestCase
+    from deepeval.test_case.conversational_test_case import ConversationalTestCase
 
 
 @dataclass
@@ -74,7 +76,7 @@ class EvalResult:
     durations: EvalDurations = field(default_factory=EvalDurations)
 
     @classmethod
-    def merge(cls, results: list[EvalResult]) -> EvalResult:
+    def merge(cls, results: list[EvalResult]) -> Self:
         """Merge multiple EvalResults into a single aggregate."""
         merged_turn_results: list[TurnResult] = []
         merged_session_results: list[SessionResult] = []
@@ -83,7 +85,7 @@ class EvalResult:
         total_sessions = 0
         direct_handle = 0
         routing_failed = 0
-        subagent_counts: dict = {}
+        subagent_counts: dict[str, int] = {}
 
         for r in results:
             merged_turn_results.extend(r.turn_results)

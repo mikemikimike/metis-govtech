@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from metis.wizard.domain.profile import ProductProfile
+if TYPE_CHECKING:
+    from metis.wizard.domain.profile import ProductProfile
 
 # Bracket contents are opaque. Ids are not supposed to contain a dot — `AC-1-1`, not
 # `AC-1.1` — precisely because a dot separates path segments. But ids are written by a model,

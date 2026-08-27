@@ -1,6 +1,6 @@
 """Outlier Handling Quality metric (M-DA-19)."""
 
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
@@ -11,12 +11,14 @@ from ._base import (
     mark_skipped,
 )
 from ._judge import _get_judge_model
-from ._types import LlmTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import LlmTestCaseMetadata
 
 
 def _has_chart_observations(test_case: LLMTestCase) -> bool:
     """Check if the trace has actual chart generation observations."""
-    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+    metadata = cast("LlmTestCaseMetadata", test_case.metadata)
     observations = metadata.get("observations", [])
     for obs in observations:
         obs_meta = obs.get("metadata") or {}
@@ -44,14 +46,14 @@ class OutlierHandlingQualityMetric(MetisTurnMetric):
         "judge-graded",
     )
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._geval = None
 
-    def _get_geval(self):
+    def _get_geval(self) -> _ContextAwareGEval:
         if self._geval is None:
             self._geval = _ContextAwareGEval(
                 name="Outlier Handling Quality",
@@ -84,7 +86,9 @@ class OutlierHandlingQualityMetric(MetisTurnMetric):
             )
         return self._geval
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         if not _has_chart_observations(test_case):
             return mark_skipped(self, "No chart content in output")
 

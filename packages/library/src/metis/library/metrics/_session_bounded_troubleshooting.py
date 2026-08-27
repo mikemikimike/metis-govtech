@@ -1,6 +1,6 @@
 """Session Bounded Troubleshooting metric (M-UNI-16)."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
@@ -33,7 +33,7 @@ class SessionBoundedTroubleshootingMetric(MetisSessionMetric):
         "permission denied",
     ]
 
-    def __init__(self, threshold: float = 1.0, max_retries: int = 3):
+    def __init__(self, threshold: float = 1.0, max_retries: int = 3) -> None:
         self.threshold = threshold
         self.max_retries = max_retries
         self.score = 0.0
@@ -41,7 +41,7 @@ class SessionBoundedTroubleshootingMetric(MetisSessionMetric):
         self.success = False
         self.skipped = False
 
-    def _is_error_output(self, output) -> bool:
+    def _is_error_output(self, output: str) -> bool:
         if not output:
             return False
         text = str(output).lower()
@@ -106,7 +106,7 @@ class SessionBoundedTroubleshootingMetric(MetisSessionMetric):
         return self.score or 0.0
 
     async def a_measure(
-        self, test_case: ConversationalTestCase, *args, **kwargs
+        self, test_case: ConversationalTestCase, *args: Any, **kwargs: Any
     ) -> float:
         return self.measure(test_case)
 

@@ -11,6 +11,7 @@ model is called at five points only — clarify, and the four drafting steps.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from metis.wizard.application import cascade, interview, screens
 from metis.wizard.application.interviewer import Interviewer, InterviewerOutputError
@@ -36,12 +37,16 @@ from metis.wizard.contracts.output import (
     ScenarioDraft,
     StepResult,
 )
-from metis.wizard.contracts.session_state import SessionState
 from metis.wizard.domain import materializer
 from metis.wizard.domain.applier import apply, sanitise
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import SessionStep
-from metis.wizard.domain.profile import Behaviour
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from metis.wizard.contracts.session_state import SessionState, Turn
+    from metis.wizard.domain.profile import Behaviour
 
 _NEXT_STEP = {
     SessionStep.CLARIFY: SessionStep.BEHAVIOURS,
@@ -78,7 +83,7 @@ _CLARIFY_PRODUCT_PATHS = frozenset(
 )
 
 
-def _clarify_questions_asked(history) -> int:
+def _clarify_questions_asked(history: list[Turn]) -> int:
     """Count only questions composed by the model, not the package opening line."""
     count = sum(1 for turn in history if turn.role == "assistant")
     if history and history[0].role == "assistant":
@@ -570,7 +575,9 @@ class StepDriver:
         screens.stamp_step(form, state.step)
         state.pending = form
 
-    def _targeted_behaviour(self, state: SessionState, target: str | None):
+    def _targeted_behaviour(
+        self, state: SessionState, target: str | None
+    ) -> Behaviour | None:
         """The behaviour a criteria action names, or None if it names nothing writable.
 
         A missing id, or an id no behaviour has, resolves to None — the two ways a criteria
@@ -674,7 +681,7 @@ class StepDriver:
 
     # ── applying model output ──────────────────────────────────────────────
 
-    def _try(self, call, state: SessionState) -> bool:
+    def _try(self, call: Callable[[], StepResult], state: SessionState) -> bool:
         """Run a model call, turning a total failure into a warning rather than a crash.
 
         Three attempts have already happened inside the client. Reaching here means all of

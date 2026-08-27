@@ -6,5 +6,5 @@ app = FastAPI(title="METIS API", version=__version__)
 
 
 @app.get("/health")
-def health():
+def health() -> dict[str, str]:
     return {"status": "ok", "version": __version__, "core_version": core_version}

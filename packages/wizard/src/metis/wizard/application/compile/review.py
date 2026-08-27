@@ -11,9 +11,12 @@ Like the compiler, this is a pure function of the profile — no session, no ste
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from metis.wizard.application.runs import format_runs
-from metis.wizard.domain.profile import Behaviour, Criterion, ProductProfile
+
+if TYPE_CHECKING:
+    from metis.wizard.domain.profile import Behaviour, Criterion, ProductProfile
 
 
 def _criterion_lines(criterion: Criterion) -> list[str]:

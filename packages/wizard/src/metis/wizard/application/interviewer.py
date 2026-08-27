@@ -9,11 +9,12 @@ Every method returns structured output. Nothing here returns prose the caller ha
 
 from __future__ import annotations
 
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol, TypeAlias
 
-from metis.wizard.contracts.output import ClarifyResult, StepResult
-from metis.wizard.contracts.session_state import Turn
-from metis.wizard.domain.profile import ProductProfile
+if TYPE_CHECKING:
+    from metis.wizard.contracts.output import ClarifyResult, StepResult
+    from metis.wizard.contracts.session_state import Turn
+    from metis.wizard.domain.profile import ProductProfile
 
 
 class InterviewerUnavailable(RuntimeError):
@@ -24,7 +25,7 @@ class InterviewerOutputError(RuntimeError):
     """An interviewer could not return a valid structured result after its retries."""
 
 
-ClarifyPhase = Literal["product", "machinery"]
+ClarifyPhase: TypeAlias = Literal["product", "machinery"]
 
 
 class Interviewer(Protocol):

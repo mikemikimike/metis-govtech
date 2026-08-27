@@ -1,6 +1,6 @@
 """Session Completeness metric."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.metrics import (
     ConversationCompletenessMetric as _ConversationCompletenessMetric,
@@ -31,7 +31,7 @@ class SessionCompletenessMetric(MetisSessionMetric):
         "judge-graded",
     )
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
@@ -39,7 +39,7 @@ class SessionCompletenessMetric(MetisSessionMetric):
         self.skipped = False
         self._metric = None
 
-    def _get_metric(self):
+    def _get_metric(self) -> _ConversationCompletenessMetric:
         if self._metric is None:
             self._metric = _ConversationCompletenessMetric(
                 threshold=self.threshold,
@@ -69,7 +69,7 @@ class SessionCompletenessMetric(MetisSessionMetric):
         return self.score or 0.0
 
     async def a_measure(
-        self, test_case: ConversationalTestCase, *args, **kwargs
+        self, test_case: ConversationalTestCase, *args: Any, **kwargs: Any
     ) -> float:
         return self.measure(test_case)
 

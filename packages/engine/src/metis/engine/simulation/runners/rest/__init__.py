@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ...runner import Runner
-from ...types import ChosenAction, Observation, RunConfig
+
+if TYPE_CHECKING:
+    from ...types import ChosenAction, Observation, RunConfig
 
 
 class RestRunner(Runner):

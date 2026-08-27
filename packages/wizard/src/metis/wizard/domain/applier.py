@@ -21,9 +21,8 @@ to say *I chose not to*, rather than *you did something wrong* or *something bro
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
@@ -38,6 +37,9 @@ from metis.wizard.domain.profile import (
     Scenario,
     Task,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # What a list of each name holds, so an ADD patch can build the right object from a dict.
 _LIST_TYPES: dict[str, type] = {

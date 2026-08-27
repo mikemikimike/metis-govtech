@@ -23,7 +23,7 @@ class StepEfficiencyMetric(MetisTurnMetric):
     )
     async_mode = False
 
-    def __init__(self, threshold: float = 1.0, max_ratio: float = 1.3):
+    def __init__(self, threshold: float = 1.0, max_ratio: float = 1.3) -> None:
         self.threshold = threshold
         self.max_ratio = max_ratio
         self.score = 0.0
@@ -31,7 +31,7 @@ class StepEfficiencyMetric(MetisTurnMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         tool_calls = metadata.get("tool_calls", [])
         chat_meta: OrcaChatMetadata = (
             metadata.get("chat_metadata") or OrcaChatMetadata()

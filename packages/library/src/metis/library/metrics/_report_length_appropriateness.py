@@ -1,6 +1,6 @@
 """Report Length Appropriateness metric (M-DA-20)."""
 
-from typing import ClassVar, cast
+from typing import Any, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
@@ -16,7 +16,7 @@ from ._types import LlmTestCaseMetadata, OrcaChatMetadata
 
 def _is_data_analyst_trace(test_case: LLMTestCase) -> bool:
     """Check if this trace was routed to the data analyst subagent."""
-    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+    metadata = cast("LlmTestCaseMetadata", test_case.metadata)
     delegation = metadata.get("delegation")
     target = delegation["target"] if delegation else ""
     if "data" in target.lower():
@@ -41,14 +41,14 @@ class ReportLengthAppropriatenessMetric(MetisTurnMetric):
         "judge-graded",
     )
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._geval = None
 
-    def _get_geval(self):
+    def _get_geval(self) -> _ContextAwareGEval:
         if self._geval is None:
             self._geval = _ContextAwareGEval(
                 name="Report Length Appropriateness",
@@ -85,7 +85,9 @@ class ReportLengthAppropriatenessMetric(MetisTurnMetric):
             )
         return self._geval
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         if not _has_report_content(test_case):
             return mark_skipped(self, "Judge did not receive report/analysis content")
 

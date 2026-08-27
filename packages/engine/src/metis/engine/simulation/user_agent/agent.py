@@ -50,7 +50,7 @@ class HistoryEntry(BaseModel, frozen=True):
 class UserAgent:
     """Simulates a user persona interacting with an AI assistant."""
 
-    def __init__(self, persona: Persona, scenario: Scenario):
+    def __init__(self, persona: Persona, scenario: Scenario) -> None:
         """Initialize with persona definition and scenario description.
 
         :param persona: The persona driving the simulated user.

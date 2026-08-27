@@ -11,7 +11,7 @@ except PackageNotFoundError:
     __version__ = "0.0.0.dev0"
 
 
-def version_callback(value: bool):
+def version_callback(value: bool) -> None:
     if value:
         typer.echo(f"metis {__version__}")
         raise typer.Exit()
@@ -28,7 +28,7 @@ def main(
     version: bool = typer.Option(
         False, "--version", "-V", callback=version_callback, is_eager=True
     ),
-):
+) -> None:
     pass
 
 

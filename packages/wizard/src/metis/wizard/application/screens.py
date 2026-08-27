@@ -14,6 +14,8 @@ wanting different phrasing changes this file, rather than two doors quietly disa
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from metis.wizard.application.runs import format_runs
 from metis.wizard.contracts.conversation import (
     AnyCardComponent,
@@ -33,7 +35,9 @@ from metis.wizard.contracts.conversation import (
 )
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import SessionStep
-from metis.wizard.domain.profile import Behaviour, ProductProfile, Scenario, Task
+
+if TYPE_CHECKING:
+    from metis.wizard.domain.profile import Behaviour, ProductProfile, Scenario, Task
 
 TRIALS_MIN = 1
 TRIALS_MAX = 20

@@ -1,6 +1,6 @@
 """M-UNI-9: Failure Report Quality metric."""
 
-from typing import ClassVar, cast
+from typing import Any, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
@@ -26,14 +26,14 @@ class FailureReportQualityMetric(MetisTurnMetric):
         "judge-graded",
     )
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._geval = None
 
-    def _get_geval(self):
+    def _get_geval(self) -> _ContextAwareGEval:
         if self._geval is None:
             self._geval = _ContextAwareGEval(
                 name="Failure Report Quality",
@@ -67,8 +67,10 @@ class FailureReportQualityMetric(MetisTurnMetric):
             )
         return self._geval
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         chat_meta: OrcaChatMetadata = (
             metadata.get("chat_metadata") or OrcaChatMetadata()
         )

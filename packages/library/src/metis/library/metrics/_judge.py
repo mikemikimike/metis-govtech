@@ -1,7 +1,13 @@
+from __future__ import annotations
+
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from deepeval.models import GPTModel
 
 
-def _get_judge_model():
+def _get_judge_model() -> GPTModel:
     """Build the LLM-judge model shared by all GEval-based metrics.
 
     Configurable via environment so the judge can point at any

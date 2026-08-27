@@ -19,12 +19,14 @@ saying different things.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Literal, TypeAlias
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
 
 from pydantic import BaseModel, Field, StrictInt, StrictStr, field_validator
 
-from metis.wizard.domain.patch import Patch
 from metis.wizard.domain.types import InteractionType
+
+if TYPE_CHECKING:
+    from metis.wizard.domain.patch import Patch
 
 # ── what the user clicked ──────────────────────────────────────────────────
 
@@ -141,7 +143,7 @@ class CardDivider(CardComponent):
 CardFieldValue: TypeAlias = StrictInt | list[StrictStr]
 
 
-AnyCardComponent = Annotated[
+AnyCardComponent: TypeAlias = Annotated[
     CardText | CardOptionGroup | CardNumberField | CardUploadField | CardDivider,
     Field(discriminator="type"),
 ]
@@ -313,7 +315,7 @@ class FormRequest(WizardRequest):
 # `Literal[InteractionType.CHAT]` rather than the bare enum is Pydantic machinery: for it to
 # rebuild the right subclass when loading a session file, each subclass's `type` must be a
 # *distinct* type. Annotating all three as `InteractionType` makes them indistinguishable.
-AnyRequest = Annotated[
+AnyRequest: TypeAlias = Annotated[
     ChatRequest | ChoiceRequest | FormRequest,
     Field(discriminator="type"),
 ]
@@ -391,7 +393,7 @@ class FormResponse(UserResponse):
     values: dict[str, str] = Field(default_factory=dict)  # field id → what was typed
 
 
-AnyResponse = Annotated[
+AnyResponse: TypeAlias = Annotated[
     ChatResponse | ChoiceResponse | FormResponse,
     Field(discriminator="type"),
 ]

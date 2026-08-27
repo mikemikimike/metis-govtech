@@ -1,6 +1,6 @@
 """Brief Audience Appropriateness metric (M-SM-9)."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
@@ -24,14 +24,14 @@ class BriefAudienceAppropriatenessMetric(MetisTurnMetric):
 
     tags: ClassVar[tuple[str, ...]] = ("presentation", "per-turn", "judge-graded")
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._geval = None
 
-    def _get_geval(self):
+    def _get_geval(self) -> _ContextAwareGEval:
         if self._geval is None:
             self._geval = _ContextAwareGEval(
                 name="Brief Audience Appropriateness",
@@ -72,7 +72,9 @@ class BriefAudienceAppropriatenessMetric(MetisTurnMetric):
             metadata=test_case.metadata,
         )
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         brief = extract_brief(test_case)
         if not brief:
             return mark_skipped(

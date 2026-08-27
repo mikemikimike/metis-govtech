@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from rich.console import Group, RenderableType
 from rich.progress_bar import ProgressBar
 from rich.table import Table
 from rich.text import Text
 
-from .state import SimulationState
+if TYPE_CHECKING:
+    from .state import SimulationState
 
 
 def _format_elapsed(seconds: float) -> str:

@@ -30,7 +30,7 @@ class CriterionGEvalMetric(GEval):
         criterion: str,
         name: str = "Acceptance criterion",
         threshold: float = 0.6,
-    ):
+    ) -> None:
         super().__init__(
             name=name,
             model=_get_judge_model(),
@@ -46,7 +46,7 @@ class CriterionGEvalMetric(GEval):
                 "the response, however good or bad."
             ),
             evaluation_params=cast(
-                list[SingleTurnParams],
+                "list[SingleTurnParams]",
                 [LLMTestCase.INPUT, LLMTestCase.ACTUAL_OUTPUT],
             ),
             threshold=threshold,

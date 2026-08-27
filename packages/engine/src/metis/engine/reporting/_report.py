@@ -27,10 +27,12 @@ import importlib
 import json
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from metis.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 

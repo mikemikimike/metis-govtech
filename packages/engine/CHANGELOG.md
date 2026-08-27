@@ -4,6 +4,19 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.11.1] — 2026-08-27
+
+### Changed
+
+- **Typing modernization** — replaced `typing_extensions.TypedDict` with `typing.TypedDict`; adopted `Self` for classmethod/validator returns in `simulation/types.py` and `evaluation/types.py`; narrowed `Any` to concrete types in `cli.py` (removed `Any` import entirely); fixed bare `dict` → `dict[str, int]` in `RoutingSummary` and `EvalResult.merge`.
+- Moved annotation-only imports into `TYPE_CHECKING` blocks (ruff TCH compliance).
+
+### Added
+
+- `py.typed` marker file (PEP 561).
+
+---
+
 ## [0.11.0] — 2026-08-26
 
 ### Added

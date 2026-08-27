@@ -15,7 +15,7 @@ generator._convert_session_results. Downstream, these dicts are:
 
 from __future__ import annotations
 
-from typing_extensions import TypedDict
+from typing import TypedDict
 
 
 class SessionMetricResult(TypedDict):

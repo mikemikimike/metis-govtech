@@ -11,12 +11,14 @@ import inspect
 import logging
 import os
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from rich.console import Console
 from rich.text import Text
-from structlog.types import EventDict, Processor
+
+if TYPE_CHECKING:
+    from structlog.types import EventDict, Processor
 
 _stderr_console = Console(stderr=True)
 

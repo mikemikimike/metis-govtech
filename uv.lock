@@ -973,7 +973,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-core"
-version = "0.3.0"
+version = "0.3.1"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "pydantic" },
@@ -990,7 +990,7 @@ requires-dist = [
 
 [[package]]
 name = "metis-engine"
-version = "0.11.0"
+version = "0.11.1"
 source = { editable = "packages/engine" }
 dependencies = [
     { name = "deepeval" },
@@ -1025,13 +1025,12 @@ requires-dist = [
 
 [[package]]
 name = "metis-library"
-version = "0.8.0"
+version = "0.8.1"
 source = { editable = "packages/library" }
 dependencies = [
     { name = "deepeval" },
     { name = "metis-core" },
     { name = "openai" },
-    { name = "typing-extensions" },
 ]
 
 [package.metadata]
@@ -1039,12 +1038,11 @@ requires-dist = [
     { name = "deepeval", specifier = ">=2.0.0" },
     { name = "metis-core", editable = "packages/core" },
     { name = "openai", specifier = ">=1.0.0" },
-    { name = "typing-extensions" },
 ]
 
 [[package]]
 name = "metis-wizard"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "packages/wizard" }
 dependencies = [
     { name = "jsonschema" },

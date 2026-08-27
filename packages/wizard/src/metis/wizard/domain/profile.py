@@ -13,6 +13,7 @@ having happened. Where the interview got to is `SessionState.step`, deliberately
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Self
 
 import yaml
 from pydantic import BaseModel, Field
@@ -150,7 +151,7 @@ class ProductProfile(BaseModel):
     # ── persistence ────────────────────────────────────────────────────────
 
     @classmethod
-    def load(cls, path: Path) -> ProductProfile:
+    def load(cls, path: Path) -> Self:
         return cls.model_validate(yaml.safe_load(Path(path).read_text()))
 
     def save(self, path: Path) -> None:

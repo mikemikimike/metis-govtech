@@ -24,14 +24,14 @@ class CrossAgentContextRetentionMetric(MetisTurnMetric):
 
     async_mode = False
 
-    def __init__(self, threshold: float = 1.0):
+    def __init__(self, threshold: float = 1.0) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         chat_meta: OrcaChatMetadata = (
             metadata.get("chat_metadata") or OrcaChatMetadata()
         )

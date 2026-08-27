@@ -17,6 +17,7 @@ own choices freely.**
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from metis.wizard.contracts.conversation import ChoiceRequest, Option, OptionId
 from metis.wizard.domain.cascade import (
@@ -26,8 +27,10 @@ from metis.wizard.domain.cascade import (
 from metis.wizard.domain.cascade import (
     clear_for_regeneration as clear_impact,
 )
-from metis.wizard.domain.patch import Patch
-from metis.wizard.domain.profile import ProductProfile
+
+if TYPE_CHECKING:
+    from metis.wizard.domain.patch import Patch
+    from metis.wizard.domain.profile import ProductProfile
 
 
 @dataclass
