@@ -1,6 +1,6 @@
 """Deck Source Faithfulness metric (AC-SM-18)."""
 
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from deepeval.metrics import FaithfulnessMetric
 from deepeval.test_case import LLMTestCase
@@ -8,12 +8,14 @@ from deepeval.test_case import LLMTestCase
 from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
 from ._extraction import extract_deck_slides, extract_source_texts
 from ._judge import _get_judge_model
-from ._types import LlmTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import LlmTestCaseMetadata
 
 
 def _extract_source_facts(test_case: LLMTestCase) -> list:
     """Pull source file contents from read_source_file tool call outputs."""
-    metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+    metadata = cast("LlmTestCaseMetadata", test_case.metadata)
     observations = metadata.get("observations", [])
     source_texts = []
 
@@ -47,14 +49,14 @@ class DeckSourceFaithfulnessMetric(MetisTurnMetric):
     )
     async_mode = False
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.threshold = 0.6
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._metric = None
 
-    def _get_metric(self):
+    def _get_metric(self) -> FaithfulnessMetric:
         if self._metric is None:
             self._metric = FaithfulnessMetric(
                 threshold=0.6,
@@ -101,7 +103,9 @@ class DeckSourceFaithfulnessMetric(MetisTurnMetric):
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         return self.measure(test_case)
 
     @property

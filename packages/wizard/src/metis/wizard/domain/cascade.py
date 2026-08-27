@@ -8,9 +8,11 @@ derived state can be discarded when a user asks for regeneration?
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from metis.wizard.domain.patch import Patch
-from metis.wizard.domain.profile import ProductProfile
+if TYPE_CHECKING:
+    from metis.wizard.domain.patch import Patch
+    from metis.wizard.domain.profile import ProductProfile
 
 BEHAVIOUR_STATEMENT = "statement"
 PRODUCT_WIDE = ("product.summary", "product.detail")

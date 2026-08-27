@@ -1,12 +1,14 @@
 """Analytical Correctness metric (M-DA-3)."""
 
 import re
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, mark_skipped
-from ._types import LlmTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import LlmTestCaseMetadata
 
 
 class AnalyticalCorrectnessMetric(MetisTurnMetric):
@@ -35,7 +37,7 @@ class AnalyticalCorrectnessMetric(MetisTurnMetric):
         threshold: float = 1.0,
         relative_tolerance: float = 0.01,
         expected_values: dict | None = None,
-    ):
+    ) -> None:
         self.threshold = threshold
         self.relative_tolerance = relative_tolerance
         self.expected_values = expected_values
@@ -44,7 +46,7 @@ class AnalyticalCorrectnessMetric(MetisTurnMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         annotations = metadata.get("annotations", {})
         expected_values = self.expected_values
         if expected_values is None:
@@ -94,7 +96,7 @@ class AnalyticalCorrectnessMetric(MetisTurnMetric):
         correct = 0
         total = 0
 
-        def _flatten(d, prefix=""):
+        def _flatten(d: dict[str, Any], prefix: str = "") -> dict[str, int | float]:
             items = {}
             for k, v in d.items():
                 if isinstance(v, dict):

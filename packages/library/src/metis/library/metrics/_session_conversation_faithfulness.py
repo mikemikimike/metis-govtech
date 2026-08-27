@@ -1,6 +1,6 @@
 """Session Conversation Faithfulness metric (M-UNI-18)."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
@@ -24,7 +24,7 @@ class SessionConversationFaithfulnessMetric(MetisSessionMetric):
         "judge-graded",
     )
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
@@ -32,7 +32,7 @@ class SessionConversationFaithfulnessMetric(MetisSessionMetric):
         self.skipped = False
         self._geval = None
 
-    def _get_geval(self):
+    def _get_geval(self) -> _ContextAwareConversationalGEval:
         if self._geval is None:
             self._geval = _ContextAwareConversationalGEval(
                 name="Conversation Faithfulness",
@@ -68,7 +68,7 @@ class SessionConversationFaithfulnessMetric(MetisSessionMetric):
         return self.score or 0.0
 
     async def a_measure(
-        self, test_case: ConversationalTestCase, *args, **kwargs
+        self, test_case: ConversationalTestCase, *args: Any, **kwargs: Any
     ) -> float:
         geval = self._get_geval()
         await geval.a_measure(test_case)

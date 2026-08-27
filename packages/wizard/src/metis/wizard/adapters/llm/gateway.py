@@ -27,9 +27,8 @@ text never leaves the gateway — a code guarantee, not a prompt instruction.
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from langfuse import get_client, observe
 from pydantic import BaseModel, ValidationError
@@ -41,9 +40,13 @@ from metis.wizard.application.interviewer import (
     InterviewerUnavailable,
 )
 from metis.wizard.contracts.output import ClarifyResult, StepResult
-from metis.wizard.contracts.session_state import Turn
 from metis.wizard.domain.applier import PatchValueError, validate_model_patches
-from metis.wizard.domain.profile import ProductProfile
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from metis.wizard.contracts.session_state import Turn
+    from metis.wizard.domain.profile import ProductProfile
 
 BASE_URL_VAR = "OPENAI_BASE_URL"
 API_KEY_VAR = "OPENAI_API_KEY"

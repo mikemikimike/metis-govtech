@@ -1,13 +1,15 @@
 """Session Step Efficiency metric (M-UNI-6)."""
 
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from deepeval.test_case.conversational_test_case import (
     ConversationalTestCase,
 )
 
 from ._base import MetisSessionMetric, mark_skipped
-from ._types import ConversationalTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import ConversationalTestCaseMetadata
 
 
 class SessionStepEfficiencyMetric(MetisSessionMetric):
@@ -23,7 +25,7 @@ class SessionStepEfficiencyMetric(MetisSessionMetric):
         "code-graded",
     )
 
-    def __init__(self, threshold: float = 1.0, max_ratio: float = 1.3):
+    def __init__(self, threshold: float = 1.0, max_ratio: float = 1.3) -> None:
         self.threshold = threshold
         self.max_ratio = max_ratio
         self.score = 0.0
@@ -39,7 +41,7 @@ class SessionStepEfficiencyMetric(MetisSessionMetric):
 
         expected_minimum = None
         if test_case.metadata:
-            meta = cast(ConversationalTestCaseMetadata, test_case.metadata)
+            meta = cast("ConversationalTestCaseMetadata", test_case.metadata)
             if "expected_minimum_steps" in meta:
                 expected_minimum = meta["expected_minimum_steps"]
 
@@ -61,7 +63,7 @@ class SessionStepEfficiencyMetric(MetisSessionMetric):
         return self.score or 0.0
 
     async def a_measure(
-        self, test_case: ConversationalTestCase, *args, **kwargs
+        self, test_case: ConversationalTestCase, *args: Any, **kwargs: Any
     ) -> float:
         return self.measure(test_case)
 

@@ -12,13 +12,15 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 from pydantic import BaseModel, Field
 
 from metis.wizard.contracts.conversation import AnyRequest, WizardRequestState
 from metis.wizard.domain.permissions import SessionStep
-from metis.wizard.domain.profile import ProductProfile
+
+if TYPE_CHECKING:
+    from metis.wizard.domain.profile import ProductProfile
 
 SESSION_FORMAT_VERSION = 5
 
@@ -84,7 +86,7 @@ class SessionState(BaseModel):
     # ── persistence ────────────────────────────────────────────────────────
 
     @classmethod
-    def load(cls, path: Path) -> SessionState:
+    def load(cls, path: Path) -> Self:
         """Load a session, checking the format version before anything else parses.
 
         These models change daily during development and `resume` was promised to be safe.

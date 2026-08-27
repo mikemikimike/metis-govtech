@@ -1,13 +1,15 @@
 """Synthesis Faithfulness metric (M-ORCA-*)."""
 
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from deepeval.metrics import FaithfulnessMetric
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, _with_eval_context, mark_skipped
 from ._judge import _get_judge_model
-from ._types import LlmTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import LlmTestCaseMetadata
 
 
 class SynthesisFaithfulnessMetric(MetisTurnMetric):
@@ -27,14 +29,14 @@ class SynthesisFaithfulnessMetric(MetisTurnMetric):
 
     async_mode = False
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.threshold = 0.6
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._metric = None
 
-    def _get_metric(self):
+    def _get_metric(self) -> FaithfulnessMetric:
         if self._metric is None:
             self._metric = FaithfulnessMetric(
                 threshold=0.6,
@@ -44,7 +46,7 @@ class SynthesisFaithfulnessMetric(MetisTurnMetric):
         return self._metric
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         delegation = metadata.get("delegation")
 
         subagent_output = delegation.get("response", "") if delegation else ""
@@ -79,7 +81,9 @@ class SynthesisFaithfulnessMetric(MetisTurnMetric):
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         return self.measure(test_case)
 
     @property

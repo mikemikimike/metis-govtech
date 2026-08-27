@@ -1,6 +1,6 @@
 """Report Format and Length metric (M-DA-12)."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
@@ -25,14 +25,14 @@ class ReportFormatAndLengthMetric(MetisTurnMetric):
 
     tags: ClassVar[tuple[str, ...]] = ("analysis", "per-turn", "judge-graded")
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._geval = None
 
-    def _get_geval(self):
+    def _get_geval(self) -> _ContextAwareGEval:
         if self._geval is None:
             self._geval = _ContextAwareGEval(
                 name="Report Format and Length",
@@ -79,7 +79,9 @@ class ReportFormatAndLengthMetric(MetisTurnMetric):
             metadata=test_case.metadata,
         )
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         geval = self._get_geval()
         await geval.a_measure(self._augmented(test_case))
         self.score = geval.score

@@ -6,12 +6,19 @@ CLI adapter depend on protocols; this module supplies the PlatformAI implementat
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from metis.wizard.adapters.cli import commands
 from metis.wizard.adapters.llm.gateway import GatewayInterviewer
-from metis.wizard.application.interviewer import Interviewer
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import typer
+    from fastapi import FastAPI
+
+    from metis.wizard.application.interviewer import Interviewer
 
 
 def platform_interviewer(session_id: str | None = None) -> Interviewer:
@@ -21,7 +28,7 @@ def platform_interviewer(session_id: str | None = None) -> Interviewer:
 
 def create_cli_app(
     interviewer_factory: Callable[..., Interviewer] = platform_interviewer,
-):
+) -> typer.Typer:
     """Compose the CLI with an interviewer provider.
 
     The optional factory is the test seam: the same Typer app and terminal loop can be driven
@@ -35,7 +42,7 @@ def create_web_app(
     interviewer_factory: Callable[..., Interviewer] = platform_interviewer,
     *,
     root: Path = Path("evaluation"),
-):
+) -> FastAPI:
     """Compose the web door.
 
     FastAPI is imported here rather than at module scope because the web door is an optional

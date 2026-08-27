@@ -1,11 +1,13 @@
 """M-UNI-6: Bounded Troubleshooting metric."""
 
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric
-from ._types import LlmTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import LlmTestCaseMetadata
 
 
 class BoundedTroubleshootingMetric(MetisTurnMetric):
@@ -19,7 +21,7 @@ class BoundedTroubleshootingMetric(MetisTurnMetric):
     tags: ClassVar[tuple[str, ...]] = ("universal", "per-turn", "code-graded")
     async_mode = False
 
-    def __init__(self, threshold: float = 1.0, max_retries: int = 5):
+    def __init__(self, threshold: float = 1.0, max_retries: int = 5) -> None:
         self.threshold = threshold
         self.max_retries = max_retries
         self.score = 0.0
@@ -27,7 +29,7 @@ class BoundedTroubleshootingMetric(MetisTurnMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         retry_counts = metadata.get("retry_counts", {})
         tool_calls = metadata.get("tool_calls", [])
 

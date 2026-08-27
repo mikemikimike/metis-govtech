@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
-from metis.engine.reporting._types import SessionReport, TurnReport
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from metis.engine.reporting._types import SessionReport, TurnReport
 
 
 class MetricAggregate(TypedDict):

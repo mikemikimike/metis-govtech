@@ -1,11 +1,13 @@
 """M-UNI-1: Single-Prompt Clarification metric."""
 
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric
-from ._types import LlmTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import LlmTestCaseMetadata
 
 
 class SinglePromptClarificationMetric(MetisTurnMetric):
@@ -19,14 +21,14 @@ class SinglePromptClarificationMetric(MetisTurnMetric):
     tags: ClassVar[tuple[str, ...]] = ("universal", "per-turn", "code-graded")
     async_mode = False
 
-    def __init__(self, threshold: float = 1.0):
+    def __init__(self, threshold: float = 1.0) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         clarifications = metadata.get("clarification_requests", [])
 
         clarification_count = len(clarifications)

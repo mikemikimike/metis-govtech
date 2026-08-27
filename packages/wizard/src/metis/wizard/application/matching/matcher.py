@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from metis.wizard.application.matching.library_catalogue import library_catalogue
-from metis.wizard.contracts.metric_spec import MetricSpec
-from metis.wizard.domain.profile import Criterion, ProductProfile
+
+if TYPE_CHECKING:
+    from metis.wizard.contracts.metric_spec import MetricSpec
+    from metis.wizard.domain.profile import Criterion, ProductProfile
 
 # One parameterised class that builds a judge from the criterion text. Not codegen: the
 # criterion travels as an argument, so there is no generated file to keep in sync.

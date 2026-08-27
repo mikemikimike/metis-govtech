@@ -6,8 +6,7 @@ extracted from Langfuse observations and passed to DeepEval metrics.
 """
 
 from dataclasses import dataclass, field
-
-from typing_extensions import TypedDict
+from typing import TypedDict
 
 from metis.library.metrics._types import (
     ChatMessage,
@@ -43,7 +42,7 @@ class RoutingSummary(TypedDict):
     total_sessions: int
     direct_handle: int
     routing_failed: int
-    subagent_counts: dict
+    subagent_counts: dict[str, int]
 
 
 @dataclass

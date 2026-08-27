@@ -1,6 +1,6 @@
 """Cancellation metric (M-UNI-21)."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.test_case import LLMTestCase
 
@@ -20,7 +20,7 @@ class CancellationMetric(MetisTurnMetric):
     tags: ClassVar[tuple[str, ...]] = ("universal", "per-turn", "code-graded")
     async_mode = False
 
-    def __init__(self, threshold: float = 1.0):
+    def __init__(self, threshold: float = 1.0) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
@@ -48,7 +48,9 @@ class CancellationMetric(MetisTurnMetric):
         self.reason = f"{verdict} (was_cancelled={was_cancelled})."
         return self.score
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         return self.measure(test_case)
 
     @property

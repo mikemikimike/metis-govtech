@@ -7,7 +7,7 @@ change here, run `make generate-schema` and commit the updated schema files.
 
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, Field, GetJsonSchemaHandler, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -268,7 +268,7 @@ class Experiment(BaseModel):
         return data
 
     @model_validator(mode="after")
-    def _check_persona_refs(self) -> "Experiment":
+    def _check_persona_refs(self) -> Self:
         defined = {p.id for p in self.personas}
         for scenario in self.scenarios:
             missing = [ref for ref in scenario.persona_refs if ref not in defined]
@@ -279,7 +279,7 @@ class Experiment(BaseModel):
         return self
 
     @classmethod
-    def load_file(cls, path: Path) -> "Experiment":
+    def load_file(cls, path: Path) -> Self:
         import yaml
 
         return cls.model_validate(yaml.safe_load(path.read_text()))
@@ -377,6 +377,6 @@ class RunRecord(BaseModel, extra="ignore"):
         return data
 
     @classmethod
-    def load_file(cls, path: Path) -> "RunRecord":
+    def load_file(cls, path: Path) -> Self:
         with open(path) as fh:
             return cls.model_validate(json.load(fh))

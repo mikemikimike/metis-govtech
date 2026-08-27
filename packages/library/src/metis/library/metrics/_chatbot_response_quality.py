@@ -1,6 +1,6 @@
 """Chatbot Response Quality metric (M-ORCA-*)."""
 
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
@@ -11,7 +11,9 @@ from ._base import (
     mark_skipped,
 )
 from ._judge import _get_judge_model
-from ._types import LlmTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import LlmTestCaseMetadata
 
 
 class ChatbotResponseQualityMetric(MetisTurnMetric):
@@ -27,14 +29,14 @@ class ChatbotResponseQualityMetric(MetisTurnMetric):
         "judge-graded",
     )
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._geval = None
 
-    def _get_geval(self):
+    def _get_geval(self) -> _ContextAwareGEval:
         if self._geval is None:
             self._geval = _ContextAwareGEval(
                 name="Chatbot Response Quality",
@@ -67,8 +69,10 @@ class ChatbotResponseQualityMetric(MetisTurnMetric):
             )
         return self._geval
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         delegation = metadata.get("delegation")
 
         if delegation and delegation["target"]:

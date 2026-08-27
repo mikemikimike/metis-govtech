@@ -15,7 +15,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import typer
 from dotenv import load_dotenv
@@ -38,7 +38,11 @@ from metis.engine.tui import (
 )
 
 if TYPE_CHECKING:
+    import types as _types
+
     from metis.engine.evaluation.types import EvalResult
+    from metis.engine.simulation.experiment import RunPlanItem
+    from metis.engine.simulation.types import Experiment, RunRecord
 
 app = typer.Typer(help="Run METIS evaluations against traces.")
 
@@ -192,7 +196,9 @@ def _validate_inputs(input_dir: Path) -> None:
                 sys.exit(1)
 
 
-def _format_final_summary(state: Any, experiment_dir: str, log_dir: str) -> str:
+def _format_final_summary(
+    state: SimulationState, experiment_dir: str, log_dir: str
+) -> str:
     """Build the static final summary printed after TUI exits."""
     total = state.total_runs
     completed = state.completed_runs
@@ -453,14 +459,14 @@ def _print_evaluation_summary(
 
 def _classify_resume_runs(
     experiment_dir: Path,
-    run_plan: list[Any],
-) -> tuple[list[Any], dict[tuple[str, str, int], Any]]:
+    run_plan: list[RunPlanItem],
+) -> tuple[list[RunPlanItem], dict[tuple[str, str, int], RunRecord]]:
     """Return redo items and valid existing records keyed by plan identity."""
     from metis.engine.simulation.experiment import run_folder_name
     from metis.engine.simulation.types import RunRecord
 
-    redo: list[Any] = []
-    complete: dict[tuple[str, str, int], Any] = {}
+    redo: list[RunPlanItem] = []
+    complete: dict[tuple[str, str, int], RunRecord] = {}
     for scenario, persona, trial in run_plan:
         record_path = (
             experiment_dir
@@ -628,7 +634,7 @@ def _run_simulation(
     interrupt_lock = threading.Lock()
     shutdown_event = threading.Event()
 
-    def _handle_sigint(_signum: int, _frame: Any) -> None:
+    def _handle_sigint(_signum: int, _frame: _types.FrameType | None) -> None:
         nonlocal interrupt_count
         with interrupt_lock:
             interrupt_count += 1
@@ -679,7 +685,7 @@ def _run_simulation(
     return experiment_dir
 
 
-def _load_evaluation_experiment(experiment_dir: Path) -> Any:
+def _load_evaluation_experiment(experiment_dir: Path) -> Experiment:
     """Validate and load the frozen experiment snapshot."""
     from metis.engine.simulation.types import Experiment
 

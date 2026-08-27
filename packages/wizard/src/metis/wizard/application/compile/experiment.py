@@ -16,12 +16,13 @@ from __future__ import annotations
 import importlib.util
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import jsonschema
 import yaml
 
-from metis.wizard.domain.profile import Behaviour, ProductProfile, Scenario
+if TYPE_CHECKING:
+    from metis.wizard.domain.profile import Behaviour, ProductProfile, Scenario
 
 # The engine declares `schema_version: Literal[1]` with no default and requires it. A file
 # without it is one the engine refuses to load, so the compiler states it explicitly rather

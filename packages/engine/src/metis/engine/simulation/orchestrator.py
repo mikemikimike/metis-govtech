@@ -7,10 +7,8 @@ RunRecord assembly without knowing anything about the transport layer.
 
 from __future__ import annotations
 
-import threading
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
@@ -23,7 +21,6 @@ from .exceptions import (
     TransientDOMError,
     TurnRecoverableError,
 )
-from .runner import Runner
 from .types import (
     ChosenAction,
     CollectedArtifact,
@@ -36,10 +33,15 @@ from .types import (
     Scenario,
     UserAgentInput,
 )
-from .user_agent.agent import UserAgent
 
 if TYPE_CHECKING:
+    import threading
+    from pathlib import Path
+
     from metis.engine.tui import SimulationState, TUIContext
+
+    from .runner import Runner
+    from .user_agent.agent import UserAgent
 
 logger = get_logger()
 

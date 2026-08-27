@@ -11,12 +11,14 @@ import os
 import shutil
 import tempfile
 import unicodedata
-from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
 
 MAX_FIXTURES = 20
 MAX_FIXTURE_BYTES = 100_000_000

@@ -1,6 +1,6 @@
 """Shared base classes and utilities for METIS metrics."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.metrics import (
     BaseConversationalMetric,
@@ -19,7 +19,7 @@ EVIDENCE_INSTRUCTION = (
 )
 
 
-def _build_context_block(metadata: dict) -> str:
+def _build_context_block(metadata: dict[str, Any]) -> str:
     """Build an [EVALUATION CONTEXT] block from metadata, or return empty string."""
     task = metadata.get("scenario")
     persona = metadata.get("persona")
@@ -63,11 +63,11 @@ def _with_eval_context(test_case: LLMTestCase) -> LLMTestCase:
 class _ContextAwareGEval(GEval):
     """GEval subclass that injects eval context into criteria at measure time."""
 
-    def _get_prompt(self, method, **kwargs):
+    def _get_prompt(self, method, **kwargs: Any) -> str:  # noqa: ANN001
         kwargs.setdefault("template_class", "GEval")
         return super()._get_prompt(method, **kwargs)
 
-    def measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    def measure(self, test_case: LLMTestCase, *args: Any, **kwargs: Any) -> float:
         context_block = _build_context_block(test_case.metadata or {})
         if not context_block:
             return super().measure(test_case, *args, **kwargs)
@@ -78,7 +78,9 @@ class _ContextAwareGEval(GEval):
         finally:
             self.criteria = original_criteria
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         context_block = _build_context_block(test_case.metadata or {})
         if not context_block:
             return await super().a_measure(test_case, *args, **kwargs)
@@ -93,11 +95,13 @@ class _ContextAwareGEval(GEval):
 class _ContextAwareConversationalGEval(ConversationalGEval):
     """ConversationalGEval subclass that injects eval context into criteria."""
 
-    def _get_prompt(self, method, **kwargs):
+    def _get_prompt(self, method, **kwargs: Any) -> str:  # noqa: ANN001
         kwargs.setdefault("template_class", "ConversationalGEval")
         return super()._get_prompt(method, **kwargs)
 
-    def measure(self, test_case: ConversationalTestCase, *args, **kwargs) -> float:
+    def measure(
+        self, test_case: ConversationalTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         context_block = _build_context_block(test_case.metadata or {})
         if not context_block:
             return super().measure(test_case, *args, **kwargs)
@@ -109,7 +113,7 @@ class _ContextAwareConversationalGEval(ConversationalGEval):
             self.criteria = original_criteria
 
     async def a_measure(
-        self, test_case: ConversationalTestCase, *args, **kwargs
+        self, test_case: ConversationalTestCase, *args: Any, **kwargs: Any
     ) -> float:
         context_block = _build_context_block(test_case.metadata or {})
         if not context_block:
@@ -142,7 +146,7 @@ class MetisTurnMetric(BaseMetric):
 
     tags: ClassVar[tuple[str, ...]]
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if not hasattr(cls, "tags") or not isinstance(
             getattr(cls, "tags", None), tuple
@@ -174,7 +178,7 @@ class MetisSessionMetric(BaseConversationalMetric):
 
     tags: ClassVar[tuple[str, ...]]
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if not hasattr(cls, "tags") or not isinstance(
             getattr(cls, "tags", None), tuple

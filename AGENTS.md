@@ -88,6 +88,7 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 - Operational logging: `from metis.core.logging import get_logger` — structured events to stderr (debug, diagnostics, audit)
 - User-facing output: `from metis.core.console import console` — Rich-formatted output to stdout (tables, progress, results)
 - Never use `print()` or `logging.getLogger()` directly — use the core module APIs above
+- Imports used only in type annotations belong in `if TYPE_CHECKING:` blocks (enforced by ruff `TCH` rule). Exception: Pydantic field types must remain runtime imports because Pydantic resolves annotation strings at runtime via `get_type_hints()`.
 - All shared domain objects use Pydantic v2 models
 - CLIs use Typer with sub-app composition (see `metis_cli.py`)
 - Versioning: independent per package via static `version` in `pyproject.toml`; scoped git tags `<package-name>/v<semver>`

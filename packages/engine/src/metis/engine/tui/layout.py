@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from types import TracebackType
+from typing import TYPE_CHECKING
 
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.layout import Layout
@@ -13,8 +13,12 @@ from rich.panel import Panel
 from rich.text import Text
 
 from .dashboard import render_dashboard
-from .state import SimulationState
-from .tail import TailBuffer
+
+if TYPE_CHECKING:
+    from types import TracebackType
+
+    from .state import SimulationState
+    from .tail import TailBuffer
 
 
 class _LiveTailRenderable:

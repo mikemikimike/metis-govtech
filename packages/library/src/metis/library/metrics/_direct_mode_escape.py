@@ -1,6 +1,6 @@
 """Direct Mode Escape metric (M-ORCA-23)."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.metrics import BaseConversationalMetric
 from deepeval.test_case.conversational_test_case import ConversationalTestCase
@@ -21,7 +21,7 @@ class DirectModeEscapeMetric(BaseConversationalMetric):
 
     tags: ClassVar[tuple[str, ...]] = ("orchestration", "session-level", "code-graded")
 
-    def __init__(self, threshold: float = 1.0):
+    def __init__(self, threshold: float = 1.0) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
@@ -72,7 +72,7 @@ class DirectModeEscapeMetric(BaseConversationalMetric):
         return self.score
 
     async def a_measure(
-        self, test_case: ConversationalTestCase, *args, **kwargs
+        self, test_case: ConversationalTestCase, *args: Any, **kwargs: Any
     ) -> float:
         return self.measure(test_case)
 

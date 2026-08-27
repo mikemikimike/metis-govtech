@@ -1,11 +1,13 @@
 """Chart Granularity metric (M-DA-11)."""
 
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, mark_skipped
-from ._types import LlmTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import LlmTestCaseMetadata
 
 
 class ChartGranularityMetric(MetisTurnMetric):
@@ -26,7 +28,7 @@ class ChartGranularityMetric(MetisTurnMetric):
         threshold: float = 1.0,
         max_categories: int = 12,
         min_data_points: int = 3,
-    ):
+    ) -> None:
         self.threshold = threshold
         self.max_categories = max_categories
         self.min_data_points = min_data_points
@@ -35,7 +37,7 @@ class ChartGranularityMetric(MetisTurnMetric):
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         observations = metadata.get("observations", [])
         chart_meta = self._extract_chart_metadata(observations)
 

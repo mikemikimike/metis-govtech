@@ -9,9 +9,7 @@ dependency on metis-engine.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, NotRequired
-
-from typing_extensions import TypedDict
+from typing import Any, NotRequired, TypedDict
 
 # ---------------------------------------------------------------------------
 # Serialized shape TypedDicts (match what the engine writes)

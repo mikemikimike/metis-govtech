@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 from metis.wizard.contracts.conversation import (
     AnyRequest,
@@ -26,10 +26,10 @@ from metis.wizard.contracts.conversation import (
 )
 from metis.wizard.contracts.session_state import SessionState, Turn
 from metis.wizard.domain.permissions import SessionStep
-from metis.wizard.domain.profile import ProductProfile
 
 if TYPE_CHECKING:
     from metis.wizard.application.driver import StepDriver
+    from metis.wizard.domain.profile import ProductProfile
 
 
 class Session:
@@ -54,7 +54,7 @@ class Session:
         path: Path | None = None,
         driver: StepDriver | None = None,
         session_id: str | None = None,
-    ) -> Session:
+    ) -> Self:
         state = SessionState(
             id=session_id or f"wizard-{uuid.uuid4().hex[:8]}",
             profile=profile,
@@ -63,7 +63,7 @@ class Session:
         return cls(state, path=path, driver=driver)
 
     @classmethod
-    def resume(cls, path: Path, *, driver: StepDriver | None = None) -> Session:
+    def resume(cls, path: Path, *, driver: StepDriver | None = None) -> Self:
         """Pick up where it left off. No model call already paid for is re-paid."""
         return cls(SessionState.load(path), path=Path(path), driver=driver)
 

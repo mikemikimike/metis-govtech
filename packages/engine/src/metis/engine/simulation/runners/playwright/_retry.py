@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import functools
-from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any
 
 from metis.engine.simulation.exceptions import (
@@ -17,6 +16,8 @@ from metis.engine.simulation.exceptions import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+
     from ._config import RetryConfig
 
 _submission_committed: contextvars.ContextVar[bool] = contextvars.ContextVar(

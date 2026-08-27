@@ -26,10 +26,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
-
-from deepeval.test_case import LLMTestCase
-from deepeval.test_case.conversational_test_case import ConversationalTestCase
+from typing import TYPE_CHECKING, Any, cast
 
 from ._types import (
     ArtifactSummary,
@@ -39,6 +36,10 @@ from ._types import (
     ToolCallSummary,
 )
 
+if TYPE_CHECKING:
+    from deepeval.test_case import LLMTestCase
+    from deepeval.test_case.conversational_test_case import ConversationalTestCase
+
 # ---------------------------------------------------------------------------
 # Metadata access (per-turn)
 # ---------------------------------------------------------------------------
@@ -46,7 +47,7 @@ from ._types import (
 
 def get_metadata(test_case: LLMTestCase) -> LlmTestCaseMetadata:
     """Return the LlmTestCaseMetadata dict for a per-turn test case (never None)."""
-    return cast(LlmTestCaseMetadata, test_case.metadata or {})
+    return cast("LlmTestCaseMetadata", test_case.metadata or {})
 
 
 def get_observations(test_case: LLMTestCase) -> list[ObservationSummary]:

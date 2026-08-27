@@ -8,17 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import threading
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import structlog
 from playwright.async_api import Browser, async_playwright
 
 from metis.core.console import console
 from metis.core.logging import get_logger
-from metis.engine.logging import LogRouter, OrchestrationLogger
-from metis.engine.tui import SimulationState, TUIContext
 
 from .exceptions import RunRecoverableError
 from .orchestrator import Orchestrator
@@ -35,6 +33,12 @@ from .types import (
     Scenario,
 )
 from .user_agent.agent import UserAgent
+
+if TYPE_CHECKING:
+    import threading
+
+    from metis.engine.logging import LogRouter, OrchestrationLogger
+    from metis.engine.tui import SimulationState, TUIContext
 
 RunPlanItem = tuple[Scenario, Persona, int]
 

@@ -1,6 +1,6 @@
 """Follow-Up Relevance metric (M-ORCA-*)."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
@@ -38,7 +38,7 @@ class FollowUpRelevanceMetric(MetisTurnMetric):
         "track progress",
     ]
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
@@ -49,7 +49,7 @@ class FollowUpRelevanceMetric(MetisTurnMetric):
         output_lower = (test_case.actual_output or "").lower()
         return any(signal in output_lower for signal in self.MIDFLOW_SIGNALS)
 
-    def _get_geval(self):
+    def _get_geval(self) -> _ContextAwareGEval:
         if self._geval is None:
             self._geval = _ContextAwareGEval(
                 name="Follow-Up Relevance",
@@ -91,7 +91,9 @@ class FollowUpRelevanceMetric(MetisTurnMetric):
             )
         return self._geval
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         if self._is_midflow_response(test_case):
             return mark_skipped(
                 self,

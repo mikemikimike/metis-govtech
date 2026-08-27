@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json as json_mod
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import IO, Literal
+from typing import IO, TYPE_CHECKING, Literal
 
 from .router import _run_log_filename
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class OrchestrationLogger:

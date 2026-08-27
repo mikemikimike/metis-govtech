@@ -14,9 +14,8 @@ import inspect
 import json
 import shutil
 import uuid
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -38,6 +37,12 @@ from metis.wizard.application.compile import (
 from metis.wizard.application.fixtures import FixtureError, FixtureLibrary
 from metis.wizard.application.interviewer import Interviewer, InterviewerUnavailable
 from metis.wizard.contracts.conversation import AnyResponse
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from metis.wizard.application.driver import StepDriver
+    from metis.wizard.application.matching.matcher import Embedder
 
 _response_adapter: TypeAdapter[AnyResponse] = TypeAdapter(AnyResponse)
 
@@ -92,7 +97,7 @@ def _submitted_document(payload: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(422, str(exc)) from exc
 
 
-def _driver(interviewer: Interviewer):
+def _driver(interviewer: Interviewer) -> StepDriver:
     """The driver, with the matcher on the same gateway.
 
     Duplicated from the CLI's composition rather than shared with it: one adapter importing
@@ -106,7 +111,6 @@ def _driver(interviewer: Interviewer):
     """
     from metis.wizard.application.driver import StepDriver
     from metis.wizard.application.matching import EmbeddingMatcher
-    from metis.wizard.application.matching.matcher import Embedder
 
     matcher = (
         EmbeddingMatcher(embedder=cast("Embedder", interviewer))

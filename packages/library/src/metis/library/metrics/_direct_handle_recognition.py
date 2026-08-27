@@ -1,11 +1,13 @@
 """Direct Handle Recognition metric (M-ORCA-*)."""
 
-from typing import ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
 from ._base import MetisTurnMetric, mark_skipped
-from ._types import LlmTestCaseMetadata
+
+if TYPE_CHECKING:
+    from ._types import LlmTestCaseMetadata
 
 
 class DirectHandleRecognitionMetric(MetisTurnMetric):
@@ -24,14 +26,14 @@ class DirectHandleRecognitionMetric(MetisTurnMetric):
 
     async_mode = False
 
-    def __init__(self, threshold: float = 1.0):
+    def __init__(self, threshold: float = 1.0) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
 
     def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata)
+        metadata = cast("LlmTestCaseMetadata", test_case.metadata)
         annotations = metadata.get("annotations", {})
 
         if "expected_subagent" not in annotations:

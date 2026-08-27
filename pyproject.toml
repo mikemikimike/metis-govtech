@@ -42,6 +42,8 @@ venv = ".venv"
 include = ["packages/*/src", "apps/*/src", "metis_cli.py"]
 exclude = ["apps/api", "apps/web"]
 reportIncompatibleMethodOverride = false
+reportMissingTypeArgument = true
+reportUnnecessaryTypeIgnoreComment = true
 
 [tool.ruff]
 src = ["packages/*/src", "apps/*/src"]
@@ -55,11 +57,18 @@ select = [
     "B",    # flake8-bugbear
     "UP",   # pyupgrade
     "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+    "ANN",  # flake8-annotations
 ]
 ignore = [
-    "B008",   # function-call-in-default-argument (Typer pattern)
-    "E501",   # line-too-long (formatter enforces line-length)
+    "B008",    # function-call-in-default-argument (Typer pattern)
+    "E501",    # line-too-long (formatter enforces line-length)
+    "ANN401",  # typing.Any in function args (allow for flexibility)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["TCH", "ANN"]
+
 
 [tool.ruff.format]
 quote-style = "double"

@@ -10,13 +10,15 @@ Every Playwright interaction flows through one of these primitives:
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
-
-from playwright.sync_api import Page
+from typing import TYPE_CHECKING, Any
 
 from metis.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from playwright.sync_api import Page
 
 logger = get_logger()
 
@@ -372,7 +374,7 @@ class GuardFailed(Exception):
 
     def __init__(
         self, action: str, reason: str, page_context: PageContext | None = None
-    ):
+    ) -> None:
         self.action = action
         self.reason = reason
         self.page_context = page_context

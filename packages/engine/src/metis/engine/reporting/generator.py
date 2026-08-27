@@ -17,11 +17,11 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from metis.core.console import console
 from metis.core.logging import get_logger
 from metis.engine.evaluation.types import EvalDurations, EvalResult, SessionResult
-from metis.engine.extractor.types import RoutingSummary
 from metis.engine.reporting._types import (
     SessionMetricResult,
     SessionReport,
@@ -32,6 +32,9 @@ from metis.engine.reporting._types import (
 from ._aggregation import aggregate_metrics
 from ._report import build_report, load_report_sources
 from ._report_page import render_report_page
+
+if TYPE_CHECKING:
+    from metis.engine.extractor.types import RoutingSummary
 
 logger = get_logger(__name__)
 

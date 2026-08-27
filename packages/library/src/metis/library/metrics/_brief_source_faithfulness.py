@@ -1,6 +1,6 @@
 """Brief Source Faithfulness metric (M-SM-7)."""
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from deepeval.metrics import FaithfulnessMetric
 from deepeval.test_case import LLMTestCase
@@ -22,14 +22,14 @@ class BriefSourceFaithfulnessMetric(MetisTurnMetric):
     tags: ClassVar[tuple[str, ...]] = ("presentation", "per-turn", "judge-graded")
     async_mode = False
 
-    def __init__(self, threshold: float = 0.6):
+    def __init__(self, threshold: float = 0.6) -> None:
         self.threshold = threshold
         self.score = 0.0
         self.reason = ""
         self.success = False
         self._metric = None
 
-    def _get_metric(self):
+    def _get_metric(self) -> FaithfulnessMetric:
         if self._metric is None:
             self._metric = FaithfulnessMetric(
                 threshold=self.threshold,
@@ -63,7 +63,9 @@ class BriefSourceFaithfulnessMetric(MetisTurnMetric):
         self.success = (self.score or 0) >= self.threshold
         return self.score or 0.0
 
-    async def a_measure(self, test_case: LLMTestCase, *args, **kwargs) -> float:
+    async def a_measure(
+        self, test_case: LLMTestCase, *args: Any, **kwargs: Any
+    ) -> float:
         return self.measure(test_case)
 
     @property

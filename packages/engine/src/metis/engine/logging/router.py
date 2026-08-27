@@ -13,14 +13,17 @@ from __future__ import annotations
 import json as json_mod
 import logging
 import time
-from pathlib import Path
-from typing import IO, Any, Literal
+from typing import IO, TYPE_CHECKING, Any, Literal
 
 import structlog
 from rich.text import Text
-from structlog.types import EventDict
 
-from metis.engine.tui.tail import TailBuffer
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from structlog.types import EventDict
+
+    from metis.engine.tui.tail import TailBuffer
 
 _LEVEL_MAP = {
     "debug": logging.DEBUG,

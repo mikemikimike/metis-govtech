@@ -11,19 +11,21 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib import resources
 from string import Template
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, TypeAlias, cast
 
 import yaml
 
 from metis.wizard.application.interview import clarify_turn_cap, opening_question
 from metis.wizard.application.interviewer import ClarifyPhase
-from metis.wizard.contracts.session_state import Turn
-from metis.wizard.domain.profile import ProductProfile
+
+if TYPE_CHECKING:
+    from metis.wizard.contracts.session_state import Turn
+    from metis.wizard.domain.profile import ProductProfile
 
 PROMPTS_FILE = "prompts.yaml"
 PRIMER_FILE = "agentic-primer.md"
 
-ModelCall = Literal[
+ModelCall: TypeAlias = Literal[
     "clarify",
     "behaviours",
     "criteria",
@@ -221,7 +223,7 @@ def _compose(
         values,
     )
     return ModelPrompt(
-        name=cast(ModelCall, call_name or template_name),
+        name=cast("ModelCall", call_name or template_name),
         system=_system_message(catalog),
         user=user,
     )
