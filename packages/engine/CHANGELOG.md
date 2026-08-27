@@ -4,6 +4,16 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] — Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
+---
+
 ## [0.11.1] — 2026-08-27
 
 ### Changed
