@@ -13,16 +13,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
-from playwright.async_api import Browser, async_playwright
 
 from metis.core.console import console
 from metis.core.logging import get_logger
 
+from ._artifact_store import _save_artifacts
 from .exceptions import RunRecoverableError
 from .orchestrator import Orchestrator
-from .runners.playwright import PlaywrightRunner
-from .runners.playwright._artifact_store import _save_artifacts
-from .runners.playwright._config import HarnessConfig
 from .types import (
     Experiment,
     Persona,
@@ -40,10 +37,11 @@ if TYPE_CHECKING:
     from metis.engine.logging import LogRouter, OrchestrationLogger
     from metis.engine.tui import SimulationState, TUIContext
 
+    from .runner import RunnerFactory
+
 RunPlanItem = tuple[Scenario, Persona, int]
 
 __all__ = [
-    "HarnessConfig",
     "RunPlanItem",
     "expand_run_plan",
     "run_experiment",
@@ -80,14 +78,15 @@ def run_folder_name(scenario: Scenario, persona: Persona, trial: int) -> str:
 
 
 def run_experiment(
-    config: HarnessConfig,
+    runner_factory: RunnerFactory,
     experiment: Experiment,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
     output_dir: Path | None = None,
-    headed: bool = False,
     concurrency: int = 1,
     run_plan: list[RunPlanItem] | None = None,
+    run_max_retries: int = 2,
+    run_retry_delay_seconds: float = 5.0,
     # Optional hooks for TUI / structured-logging integration
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
@@ -101,14 +100,15 @@ def run_experiment(
     """
     asyncio.run(
         _run_experiment_async(
-            config=config,
+            runner_factory=runner_factory,
             experiment=experiment,
             personas_by_id=personas_by_id,
             fixtures_dir=fixtures_dir,
             output_dir=output_dir,
-            headed=headed,
             concurrency=concurrency,
             run_plan=run_plan,
+            run_max_retries=run_max_retries,
+            run_retry_delay_seconds=run_retry_delay_seconds,
             state=state,
             orchestration_logger=orchestration_logger,
             log_router=log_router,
@@ -119,21 +119,22 @@ def run_experiment(
 
 
 async def _run_experiment_async(
-    config: HarnessConfig,
+    runner_factory: RunnerFactory,
     experiment: Experiment,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
     output_dir: Path | None = None,
-    headed: bool = False,
     concurrency: int = 1,
     run_plan: list[RunPlanItem] | None = None,
+    run_max_retries: int = 2,
+    run_retry_delay_seconds: float = 5.0,
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
     shutdown_event: threading.Event | None = None,
 ) -> None:
-    """Async experiment orchestrator with concurrent browser contexts."""
+    """Async experiment orchestrator with concurrent runner contexts."""
     runs = (
         run_plan
         if run_plan is not None
@@ -147,7 +148,6 @@ async def _run_experiment_async(
     logger.info("[experiment]   Total runs: %d", total_runs)
     logger.info("[experiment]   Concurrency: %d worker(s)", concurrency)
     logger.info("[experiment]   Output dir: %s", output_dir or "results/ (default)")
-    logger.info("[experiment]   Mode: %s", "headed" if headed else "headless")
     logger.info(
         "[experiment]   Scenarios: %s", ", ".join(s.id for s in experiment.scenarios)
     )
@@ -163,49 +163,44 @@ async def _run_experiment_async(
     # Shared across workers so scenario_started fires exactly once
     started_scenarios: set[str] = set()
 
-    async with async_playwright() as pw:
-        logger.info(
-            "[experiment] Launching Chromium browser (%s mode)...",
-            "headed" if headed else "headless",
-        )
-        browser = await pw.chromium.launch(headless=not headed)
-        try:
-            active_worker_ids: list[int] = []
-            worker_tasks = []
-            for wid, slice_runs in enumerate(worker_slices):
-                if slice_runs:
-                    active_worker_ids.append(wid)
-                    worker_tasks.append(
-                        _worker(
-                            worker_id=wid,
-                            browser=browser,
-                            config=config,
-                            run_slice=slice_runs,
-                            total_runs=total_runs,
-                            output_dir=output_dir,
-                            fixtures_dir=fixtures_dir,
-                            console_lock=console_lock,
-                            started_scenarios=started_scenarios,
-                            state=state,
-                            orchestration_logger=orchestration_logger,
-                            log_router=log_router,
-                            tui_ctx=tui_ctx,
-                            shutdown_event=shutdown_event,
-                        )
+    await runner_factory.start()
+    try:
+        active_worker_ids: list[int] = []
+        worker_tasks = []
+        for wid, slice_runs in enumerate(worker_slices):
+            if slice_runs:
+                active_worker_ids.append(wid)
+                worker_tasks.append(
+                    _worker(
+                        worker_id=wid,
+                        runner_factory=runner_factory,
+                        run_slice=slice_runs,
+                        total_runs=total_runs,
+                        output_dir=output_dir,
+                        fixtures_dir=fixtures_dir,
+                        console_lock=console_lock,
+                        started_scenarios=started_scenarios,
+                        run_max_retries=run_max_retries,
+                        run_retry_delay_seconds=run_retry_delay_seconds,
+                        state=state,
+                        orchestration_logger=orchestration_logger,
+                        log_router=log_router,
+                        tui_ctx=tui_ctx,
+                        shutdown_event=shutdown_event,
                     )
+                )
 
-            raw_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
+        raw_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
 
-            # Collect results, log any worker crashes
-            all_records: list[RunRecord] = []
-            for wid, result in zip(active_worker_ids, raw_results, strict=True):
-                if isinstance(result, BaseException):
-                    logger.error("[experiment] Worker w%d crashed: %s", wid, result)
-                else:
-                    all_records.extend(result)
-        finally:
-            logger.info("[experiment] Closing browser...")
-            await browser.close()
+        # Collect results, log any worker crashes
+        all_records: list[RunRecord] = []
+        for wid, result in zip(active_worker_ids, raw_results, strict=True):
+            if isinstance(result, BaseException):
+                logger.error("[experiment] Worker w%d crashed: %s", wid, result)
+            else:
+                all_records.extend(result)
+    finally:
+        await runner_factory.close()
 
     # Print summary (only in non-TUI mode; TUI mode prints via CLI after exiting)
     if not tui_ctx:
@@ -228,21 +223,22 @@ async def _run_experiment_async(
 
 async def _worker(
     worker_id: int,
-    browser: Browser,
-    config: HarnessConfig,
+    runner_factory: RunnerFactory,
     run_slice: list[tuple[Scenario, Persona, int]],
     total_runs: int,
     output_dir: Path | None,
     fixtures_dir: Path,
     console_lock: asyncio.Lock,
     started_scenarios: set[str],
+    run_max_retries: int,
+    run_retry_delay_seconds: float,
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
     shutdown_event: threading.Event | None = None,
 ) -> list[RunRecord]:
-    """One concurrent worker: creates a fresh browser context per run for isolation."""
+    """One concurrent worker: creates a fresh runner per run for isolation."""
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(worker=f"w{worker_id}")
 
@@ -322,18 +318,13 @@ async def _worker(
             max_attempts = 1 + (
                 scenario.max_run_retries
                 if scenario.max_run_retries is not None
-                else config.retry.run_max_retries
+                else run_max_retries
             )
             prior_failures: list[RunFailure] = []
             record: RunRecord | None = None
 
             for attempt in range(1, max_attempts + 1):
-                # Fresh browser context per attempt for full isolation
-                context = await browser.new_context(
-                    viewport={"width": 1440, "height": 900},
-                    accept_downloads=True,
-                )
-                page = await context.new_page()
+                runner = await runner_factory.create(run_dir, fixtures_dir)
 
                 try:
                     run_config = RunConfig(
@@ -341,12 +332,6 @@ async def _worker(
                         scenario=scenario.id,
                         metric_refs=scenario.metric_refs,
                         response_wait_ms=scenario.response_wait_ms,
-                    )
-                    runner = PlaywrightRunner(
-                        page=page,
-                        config=config,
-                        fixtures_dir=fixtures_dir,
-                        run_dir=run_dir,
                     )
                     agent = UserAgent(persona=persona, scenario=scenario)
                     orchestrator = Orchestrator(
@@ -408,7 +393,7 @@ async def _worker(
                             prior_failures=prior_failures,
                         )
                     else:
-                        await asyncio.sleep(config.retry.run_retry_delay_seconds)
+                        await asyncio.sleep(run_retry_delay_seconds)
                         run_start = time.time()
 
                 except Exception as exc:

@@ -13,7 +13,7 @@ from metis.engine.simulation.exceptions import (
     TransientDOMError,
     TurnRecoverableError,
 )
-from metis.engine.simulation.runners.playwright._config import HarnessConfig
+from metis.engine.simulation.runners.playwright._config import PlaywrightRunnerConfig
 from metis.engine.simulation.runners.playwright._element_resolver import (
     resolve_element,
 )
@@ -176,10 +176,10 @@ class TestDiagnosticsWiring:
 
 
 class TestRetryConfigIntegration:
-    """Verify RetryConfig flows through HarnessConfig correctly."""
+    """Verify RetryConfig flows through PlaywrightRunnerConfig correctly."""
 
     def test_default_harness_config_has_retry(self) -> None:
-        config = HarnessConfig(
+        config = PlaywrightRunnerConfig(
             url="http://test.com",
             auth={"username": "u", "password": "p"},
         )

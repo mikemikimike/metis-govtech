@@ -513,10 +513,10 @@ def _run_simulation(
     _configure_process_logging(log_level, use_tui=use_tui)
 
     from metis.engine.simulation.experiment import (
-        HarnessConfig,
         expand_run_plan,
         run_experiment,
     )
+    from metis.engine.simulation.runners.playwright import PlaywrightRunnerFactory
     from metis.engine.simulation.types import Experiment
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
@@ -552,8 +552,9 @@ def _run_simulation(
         redo_plan = run_plan
         complete_records = {}
 
-    config = HarnessConfig.load()
     headed = os.environ.get("HEADED", "").lower() == "true"
+    runner_factory = PlaywrightRunnerFactory.from_env(headed=headed)
+    run_max_retries, run_retry_delay_seconds = runner_factory.retry_defaults
 
     console.print(f"\n{'=' * 60}")
     console.print("  SIMULATION")
@@ -654,14 +655,15 @@ def _run_simulation(
     try:
         with tui_ctx if tui_ctx else nullcontext():
             run_experiment(
-                config=config,
+                runner_factory=runner_factory,
                 experiment=experiment,
                 personas_by_id=personas_by_id,
                 output_dir=experiment_dir,
                 fixtures_dir=fixtures_dir,
-                headed=headed,
                 concurrency=concurrency,
                 run_plan=redo_plan,
+                run_max_retries=run_max_retries,
+                run_retry_delay_seconds=run_retry_delay_seconds,
                 state=sim_state,
                 orchestration_logger=orchestration_logger,
                 log_router=log_router,

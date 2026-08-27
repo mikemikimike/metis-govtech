@@ -31,7 +31,7 @@ from ._ui_capture import (
 if TYPE_CHECKING:
     from playwright.async_api import Page
 
-    from ._config import HarnessConfig
+    from ._config import PlaywrightRunnerConfig
 
 logger = get_logger()
 
@@ -61,12 +61,17 @@ def _form_element_to_action_slot(el: FormElement) -> ActionSlot:
 
 
 class PlaywrightRunner(Runner):
-    """Runner implementation using Playwright to interact with a browser target."""
+    """Runner implementation using Playwright to interact with a browser target.
+
+    Note: selectors, auth flow, and page interactions are hardcoded for the
+    Orca chat UI. Adapting to other browser targets requires subclassing or
+    a new runner.
+    """
 
     def __init__(
         self,
         page: Page,
-        config: HarnessConfig,
+        config: PlaywrightRunnerConfig,
         fixtures_dir: Path,
         run_dir: Path,
     ) -> None:
@@ -340,3 +345,8 @@ class PlaywrightRunner(Runner):
                     artifact.name,
                     exc,
                 )
+
+
+from ._factory import PlaywrightRunnerFactory  # noqa: E402
+
+__all__ = ["PlaywrightRunner", "PlaywrightRunnerFactory"]
