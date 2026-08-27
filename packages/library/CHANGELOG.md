@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 
 
+## [0.8.1] — 2026-08-27
+
+### Changed
+
+- **Typing modernization** — replaced `typing_extensions.TypedDict` with `typing.TypedDict`; added return type annotations to all `_get_geval`/`_get_metric` methods (55 total); added `-> None` to all metric `__init__` methods; annotated `*args: Any`/`**kwargs: Any` on measure method overrides; fixed `_build_context_block(metadata: dict)` → `dict[str, Any]`.
+- Moved annotation-only imports into `TYPE_CHECKING` blocks (ruff TCH compliance).
+
+### Removed
+
+- `typing-extensions` dependency — no longer needed on Python 3.11+.
+
+### Added
+
+- `py.typed` marker file (PEP 561).
+
+---
+
 ## [0.8.0] — 2026-08-26
 
 ### Removed (BREAKING)
