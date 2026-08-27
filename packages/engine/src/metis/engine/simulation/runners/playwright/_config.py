@@ -57,7 +57,7 @@ class PlaywrightRunnerConfig(BaseModel):
         required_vars = ("ORCA_URL", "ORCA_USERNAME", "ORCA_PASSWORD")
         missing = [v for v in required_vars if v not in os.environ]
         if missing:
-            raise EnvironmentError(
+            raise ValueError(
                 f"Playwright runner requires environment variables: {', '.join(missing)}. "
                 "Set them in .env or export them before running a simulation."
             )

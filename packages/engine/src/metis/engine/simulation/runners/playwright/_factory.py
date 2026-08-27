@@ -58,7 +58,8 @@ class PlaywrightRunnerFactory:
 
     async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
         """Create a fresh runner with an isolated browser context."""
-        assert self._browser is not None, "call start() before create()"
+        if self._browser is None:
+            raise RuntimeError("call start() before create()")
         context = await self._browser.new_context(
             viewport={"width": 1440, "height": 900},
             accept_downloads=True,
