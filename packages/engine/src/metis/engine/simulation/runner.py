@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from .types import ChosenAction, Observation, RunConfig
 
 
@@ -37,3 +39,23 @@ class Runner(ABC):
 
     async def recover(self) -> None:  # noqa: B027
         """Attempt lightweight recovery (e.g., page refresh). Default: no-op."""
+
+
+class RunnerFactory(Protocol):
+    """Factory that manages shared resources and creates Runner instances.
+
+    Implementations own the lifecycle of expensive shared state (e.g., a
+    browser process) and produce fresh Runner instances per attempt.
+    """
+
+    async def start(self) -> None:
+        """Acquire shared resources (launch browser, open connection pool)."""
+        ...
+
+    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
+        """Create a fresh Runner for one attempt."""
+        ...
+
+    async def close(self) -> None:
+        """Release shared resources."""
+        ...

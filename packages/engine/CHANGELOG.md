@@ -8,7 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- `RunnerFactory` protocol in `simulation/runner.py` — abstracts shared-resource lifecycle and per-attempt runner creation.
+- `PlaywrightRunnerFactory` in `simulation/runners/playwright/_factory.py` — encapsulates Playwright browser lifecycle and configuration.
+- `simulation/_artifact_store.py` — runner-agnostic artifact manifest writer (moved from `runners/playwright/`).
+
 ### Changed
+
+- **Decoupled `experiment.py` from Playwright** — `_worker` and `run_experiment` now operate on the `RunnerFactory` protocol; zero Playwright imports remain in the orchestration layer.
+- **CLI constructs `PlaywrightRunnerFactory`** instead of loading `HarnessConfig` directly; run-level retry defaults are passed as explicit parameters.
+- **Renamed `HarnessConfig` → `PlaywrightRunnerConfig`** — scoped entirely within `runners/playwright/`.
 
 ### Fixed
 

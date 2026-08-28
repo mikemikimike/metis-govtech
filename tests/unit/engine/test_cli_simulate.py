@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -115,10 +116,11 @@ def test_resume_runs_only_missing_or_system_error_records(
     _write_record(output_dir, "task-1-alice-1", "goal_achieved")
     _write_record(output_dir, "task-1-alice-2", "system_error")
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
+    mock_factory = MagicMock()
+    mock_factory.retry_defaults = (2, 5.0)
     monkeypatch.setattr(
-        experiment_module.HarnessConfig,
-        "load",
-        classmethod(lambda cls, *_a, **_k: object()),
+        "metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory.from_env",
+        lambda *_a, **_k: mock_factory,
     )
     selected: list[tuple[str, str, int]] = []
 

@@ -13,12 +13,12 @@ if TYPE_CHECKING:
     from playwright.async_api import Page
 
     from ...types import UIState
-    from ._config import HarnessConfig
+    from ._config import PlaywrightRunnerConfig
 
 logger = get_logger()
 
 
-async def _recover_page(page: Page, config: HarnessConfig) -> None:
+async def _recover_page(page: Page, config: PlaywrightRunnerConfig) -> None:
     """Lightweight page recovery: refresh + wait for chat textarea."""
     await page.reload(wait_until="domcontentloaded", timeout=15000)
     await dismiss_modals(page)
@@ -27,7 +27,7 @@ async def _recover_page(page: Page, config: HarnessConfig) -> None:
 
 async def _recover_and_check(
     page: Page,
-    config: HarnessConfig,
+    config: PlaywrightRunnerConfig,
     sent_message: str,
 ) -> UIState | None:
     """Recover page and check whether the sent message got a response.
