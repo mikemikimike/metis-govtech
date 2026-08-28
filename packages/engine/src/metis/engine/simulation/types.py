@@ -246,6 +246,11 @@ class Experiment(BaseModel):
     ]  # required — no default; see schemas/README.md for bump rules
     id: str
     description: str
+    runner_ref: str | None = Field(
+        default=None,
+        min_length=1,
+        description="FQN of a RunnerFactory class; None = metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory",
+    )
     personas: list[Persona] = Field(min_length=1)
     scenarios: list[Scenario] = Field(min_length=1)
 
@@ -276,6 +281,17 @@ class Experiment(BaseModel):
                 raise ValueError(
                     f"Scenario '{scenario.id}' references undefined persona(s): {missing}"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_runner_ref(self) -> Self:
+        if self.runner_ref is not None:
+            from .runner_resolver import resolve_runner_factory
+
+            try:
+                resolve_runner_factory(self.runner_ref)
+            except (ImportError, TypeError, ValueError) as exc:
+                raise ValueError(str(exc)) from exc
         return self
 
     @classmethod

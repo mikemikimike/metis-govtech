@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `RunnerFactory` protocol in `simulation/runner.py` — abstracts shared-resource lifecycle and per-attempt runner creation.
 - `PlaywrightRunnerFactory` in `simulation/runners/playwright/_factory.py` — encapsulates Playwright browser lifecycle and configuration.
 - `simulation/_artifact_store.py` — runner-agnostic artifact manifest writer (moved from `runners/playwright/`).
+- **Pluggable runner via `runner_ref`** — optional `runner_ref` field in `experiment.yaml` accepts a fully-qualified RunnerFactory class name; validated at load time with a clear error if the FQN is unimportable or doesn't satisfy the RunnerFactory protocol. Omitting the field preserves the current PlaywrightRunnerFactory default.
 
 ### Changed
 

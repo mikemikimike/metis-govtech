@@ -553,7 +553,15 @@ def _run_simulation(
         complete_records = {}
 
     headed = os.environ.get("HEADED", "").lower() == "true"
-    runner_factory = PlaywrightRunnerFactory.from_env(headed=headed)
+
+    if experiment.runner_ref:
+        from metis.engine.simulation.runner_resolver import resolve_runner_factory
+
+        factory_cls = resolve_runner_factory(experiment.runner_ref)
+        runner_factory = factory_cls.from_env(headed=headed)
+    else:
+        runner_factory = PlaywrightRunnerFactory.from_env(headed=headed)
+
     run_max_retries, run_retry_delay_seconds = runner_factory.retry_defaults
 
     console.print(f"\n{'=' * 60}")
