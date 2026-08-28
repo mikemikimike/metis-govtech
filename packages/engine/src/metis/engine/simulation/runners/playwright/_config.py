@@ -43,12 +43,13 @@ class PlaywrightRunnerConfig(BaseModel):
 
     url: str
     auth: AuthConfig
+    headed: bool = False
     timeouts: TimeoutConfig = Field(default_factory=TimeoutConfig)
     retry: RetryConfig = Field(default_factory=RetryConfig)
 
     @classmethod
     def load(cls, path: Path | None = None) -> PlaywrightRunnerConfig:
-        """Load from YAML, injecting credentials from environment.
+        """Load from YAML, injecting credentials and flags from environment.
 
         :param path: Path to config YAML. Defaults to config.yaml alongside this module.
         """
@@ -66,4 +67,5 @@ class PlaywrightRunnerConfig(BaseModel):
         raw.setdefault("auth", {})
         raw["auth"]["username"] = os.environ["ORCA_USERNAME"]
         raw["auth"]["password"] = os.environ["ORCA_PASSWORD"]
+        raw["headed"] = os.environ.get("HEADED", "").lower() == "true"
         return cls.model_validate(raw)

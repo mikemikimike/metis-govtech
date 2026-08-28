@@ -552,15 +552,14 @@ def _run_simulation(
         redo_plan = run_plan
         complete_records = {}
 
-    headed = os.environ.get("HEADED", "").lower() == "true"
-
     if experiment.runner_ref:
         from metis.engine.simulation.runner_resolver import resolve_runner_factory
 
         factory_cls = resolve_runner_factory(experiment.runner_ref)
-        runner_factory = factory_cls.from_env(headed=headed)
     else:
-        runner_factory = PlaywrightRunnerFactory.from_env(headed=headed)
+        factory_cls = PlaywrightRunnerFactory
+
+    runner_factory = factory_cls()
 
     run_max_retries, run_retry_delay_seconds = runner_factory.retry_defaults
 
@@ -568,8 +567,7 @@ def _run_simulation(
     console.print("  SIMULATION")
     console.print(f"{'=' * 60}")
     console.print(f"  Experiment: {experiment_dir}")
-    console.print(f"  Input: {fixtures_dir.parent}")
-    console.print(f"  Mode: {'headed' if headed else 'headless'}\n")
+    console.print(f"  Input: {fixtures_dir.parent}\n")
 
     resolved_log_dir = log_dir or (experiment_dir / "logs")
     resolved_log_dir.mkdir(parents=True, exist_ok=True)
