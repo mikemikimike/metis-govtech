@@ -136,6 +136,20 @@
       "title": "Description",
       "type": "string"
     },
+    "runner_ref": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "FQN of a RunnerFactory subclass; None = PlaywrightRunnerFactory",
+      "title": "Runner Ref"
+    },
     "personas": {
       "items": {
         "$ref": "#/$defs/Persona"
