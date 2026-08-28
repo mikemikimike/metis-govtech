@@ -249,7 +249,7 @@ class Experiment(BaseModel):
     runner_ref: str | None = Field(
         default=None,
         min_length=1,
-        description="FQN of a RunnerFactory subclass; None = PlaywrightRunnerFactory",
+        description="FQN of a RunnerFactory class; None = metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory",
     )
     personas: list[Persona] = Field(min_length=1)
     scenarios: list[Scenario] = Field(min_length=1)

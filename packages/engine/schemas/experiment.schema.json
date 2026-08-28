@@ -147,7 +147,7 @@
         }
       ],
       "default": null,
-      "description": "FQN of a RunnerFactory subclass; None = PlaywrightRunnerFactory",
+      "description": "FQN of a RunnerFactory class; None = metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory",
       "title": "Runner Ref"
     },
     "personas": {
