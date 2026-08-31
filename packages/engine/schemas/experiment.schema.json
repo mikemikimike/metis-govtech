@@ -124,7 +124,7 @@
   },
   "properties": {
     "schema_version": {
-      "const": 1,
+      "const": 2,
       "title": "Schema Version",
       "type": "integer"
     },
@@ -137,18 +137,10 @@
       "type": "string"
     },
     "runner_ref": {
-      "anyOf": [
-        {
-          "minLength": 1,
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "FQN of a RunnerFactory class; None = metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory",
-      "title": "Runner Ref"
+      "description": "FQN of a RunnerFactory class (e.g. metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory)",
+      "minLength": 1,
+      "title": "Runner Ref",
+      "type": "string"
     },
     "personas": {
       "items": {
@@ -171,9 +163,10 @@
     "schema_version",
     "id",
     "description",
+    "runner_ref",
     "personas",
     "scenarios"
   ],
-  "title": "Experiment v1",
+  "title": "Experiment v2",
   "type": "object"
 }

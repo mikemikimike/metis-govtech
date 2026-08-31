@@ -1,7 +1,11 @@
-"""Tests for RetryConfig and PlaywrightRunnerConfig.retry field."""
+"""Tests for RetryConfig and OrcaPlaywrightRunnerConfig.retry field."""
 
-from metis.engine.simulation.runners.playwright._config import (
-    PlaywrightRunnerConfig,
+import pytest
+
+pytest.importorskip("playwright")
+
+from metis.engine.simulation.runners.orca_playwright._config import (
+    OrcaPlaywrightRunnerConfig,
     RetryConfig,
 )
 
@@ -23,9 +27,9 @@ class TestRetryConfig:
         assert rc.run_max_retries == 1
 
 
-class TestPlaywrightRunnerConfigRetryField:
+class TestOrcaPlaywrightRunnerConfigRetryField:
     def test_retry_defaults_when_not_specified(self) -> None:
-        config = PlaywrightRunnerConfig(
+        config = OrcaPlaywrightRunnerConfig(
             url="http://example.com",
             auth={"username": "u", "password": "p"},
         )
@@ -33,7 +37,7 @@ class TestPlaywrightRunnerConfigRetryField:
         assert config.retry.action_max_attempts == 3
 
     def test_retry_can_be_overridden(self) -> None:
-        config = PlaywrightRunnerConfig(
+        config = OrcaPlaywrightRunnerConfig(
             url="http://example.com",
             auth={"username": "u", "password": "p"},
             retry={"run_max_retries": 0},

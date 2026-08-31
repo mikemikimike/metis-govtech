@@ -174,6 +174,8 @@ class UserAgent:
                 )
                 if slot.options:
                     parts += f", options: {slot.options}"
+                if slot.required is not None:
+                    parts += f", required: {'true' if slot.required else 'false'}"
                 action_lines.append(parts)
             available_actions_section = "\n" + "\n".join(action_lines) + "\n"
 

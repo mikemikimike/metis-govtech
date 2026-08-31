@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, GetJsonSchemaHandler, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
-_EXPERIMENT_VERSION = 1
+_EXPERIMENT_VERSION = 2
 _RUN_RECORD_VERSION = 1
 
 
@@ -59,13 +59,14 @@ class ActionSlot(BaseModel):
     kind: str
     label: str
     options: list[str] | None = None
+    required: bool | None = None
 
 
 class ChosenAction(BaseModel):
     """An action the UserAgent selected from available_actions."""
 
     id: str
-    value: str | None = None
+    value: str | list[str] | int | float | None = None
 
 
 class UserAgentOutput(BaseModel):
@@ -128,6 +129,7 @@ class Observation(BaseModel):
     errors: list[str] = Field(default_factory=list)
     available_actions: list[ActionSlot] = Field(default_factory=list)
     status_labels: list[str] = Field(default_factory=list)
+    discarded_message: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -242,14 +244,13 @@ class Scenario(BaseModel):
 
 class Experiment(BaseModel):
     schema_version: Literal[
-        1
+        2
     ]  # required — no default; see schemas/README.md for bump rules
     id: str
     description: str
-    runner_ref: str | None = Field(
-        default=None,
+    runner_ref: str = Field(
         min_length=1,
-        description="FQN of a RunnerFactory class; None = metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory",
+        description="FQN of a RunnerFactory class (e.g. metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory)",
     )
     personas: list[Persona] = Field(min_length=1)
     scenarios: list[Scenario] = Field(min_length=1)
@@ -268,7 +269,7 @@ class Experiment(BaseModel):
         if v != _EXPERIMENT_VERSION:
             raise ValueError(
                 f"Unsupported schema_version {v!r} (expected {_EXPERIMENT_VERSION}). "
-                "Update your experiment.yaml or migrate to the current schema version."
+                "Update your experiment.yaml to schema_version: 2 and add a runner_ref field."
             )
         return data
 
@@ -285,13 +286,12 @@ class Experiment(BaseModel):
 
     @model_validator(mode="after")
     def _validate_runner_ref(self) -> Self:
-        if self.runner_ref is not None:
-            from .runner_resolver import resolve_runner_factory
+        from .runner_resolver import resolve_runner_factory
 
-            try:
-                resolve_runner_factory(self.runner_ref)
-            except (ImportError, TypeError, ValueError) as exc:
-                raise ValueError(str(exc)) from exc
+        try:
+            resolve_runner_factory(self.runner_ref)
+        except (ImportError, TypeError, ValueError) as exc:
+            raise ValueError(str(exc)) from exc
         return self
 
     @classmethod
@@ -315,6 +315,7 @@ class RunConfig(BaseModel, extra="ignore"):
     max_turns: int = 20
     timeout_minutes: int = 15
     response_wait_ms: int = 300000
+    fixtures: list[str] = Field(default_factory=list)
 
 
 class RunOutcome(BaseModel, extra="ignore"):
@@ -345,6 +346,7 @@ class TurnDiagnostics(BaseModel, extra="ignore"):
     recovered: bool = False
     recovery_found_response: bool | None = None
     duration_ms: int = 0
+    discarded_message: str | None = None
 
 
 class RunFailure(BaseModel, extra="ignore"):

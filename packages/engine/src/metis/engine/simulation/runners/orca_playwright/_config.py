@@ -38,8 +38,8 @@ class RetryConfig(BaseModel):
     run_retry_delay_seconds: float = 5.0
 
 
-class PlaywrightRunnerConfig(BaseModel):
-    """Playwright runner configuration — YAML file + env vars."""
+class OrcaPlaywrightRunnerConfig(BaseModel):
+    """OrcaPlaywright runner configuration — YAML file + env vars."""
 
     url: str
     auth: AuthConfig
@@ -48,7 +48,7 @@ class PlaywrightRunnerConfig(BaseModel):
     retry: RetryConfig = Field(default_factory=RetryConfig)
 
     @classmethod
-    def load(cls, path: Path | None = None) -> PlaywrightRunnerConfig:
+    def load(cls, path: Path | None = None) -> OrcaPlaywrightRunnerConfig:
         """Load from YAML, injecting credentials and flags from environment.
 
         :param path: Path to config YAML. Defaults to config.yaml alongside this module.

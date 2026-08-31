@@ -1,4 +1,4 @@
-"""PlaywrightRunnerFactory — manages browser lifecycle and creates runners."""
+"""OrcaPlaywrightRunnerFactory — manages browser lifecycle and creates runners."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from playwright.async_api import async_playwright
 
 from metis.core.logging import get_logger
 
-from ._config import PlaywrightRunnerConfig
+from ._config import OrcaPlaywrightRunnerConfig
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -20,20 +20,20 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
-class PlaywrightRunnerFactory:
+class OrcaPlaywrightRunnerFactory:
     """Factory that owns the Playwright browser and creates runners per attempt.
 
     Note: the runners this factory creates are hardcoded for the Orca chat UI
     (auth flow, selectors, page interactions). For non-Orca browser targets,
     write a new RunnerFactory.
 
-    All configuration comes from PlaywrightRunnerConfig.load(), which reads
+    All configuration comes from OrcaPlaywrightRunnerConfig.load(), which reads
     ORCA_URL, ORCA_USERNAME, ORCA_PASSWORD, and HEADED from environment
     variables. Pass a config explicitly to override (e.g. in tests).
     """
 
-    def __init__(self, config: PlaywrightRunnerConfig | None = None) -> None:
-        self._config = config or PlaywrightRunnerConfig.load()
+    def __init__(self, config: OrcaPlaywrightRunnerConfig | None = None) -> None:
+        self._config = config or OrcaPlaywrightRunnerConfig.load()
         self._headed = self._config.headed
         self._pw: Playwright | None = None
         self._browser: Browser | None = None
@@ -65,9 +65,9 @@ class PlaywrightRunnerFactory:
         )
         page = await context.new_page()
 
-        from . import PlaywrightRunner
+        from . import OrcaPlaywrightRunner
 
-        return PlaywrightRunner(
+        return OrcaPlaywrightRunner(
             page=page,
             config=self._config,
             fixtures_dir=fixtures_dir,

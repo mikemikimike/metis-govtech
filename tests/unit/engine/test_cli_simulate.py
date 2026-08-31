@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -16,9 +15,10 @@ from metis.engine.simulation.types import RunConfig, RunOutcome, RunRecord
 runner = CliRunner()
 
 MINIMAL_EXPERIMENT = """\
-schema_version: 1
+schema_version: 2
 id: test-exp
 description: test experiment
+runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
 personas:
   - id: alice
     description: test persona
@@ -116,13 +116,6 @@ def test_resume_runs_only_missing_or_system_error_records(
     _write_record(output_dir, "task-1-alice-1", "goal_achieved")
     _write_record(output_dir, "task-1-alice-2", "system_error")
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
-    mock_factory = MagicMock()
-    mock_factory.retry_defaults = (2, 5.0)
-    mock_factory_cls = MagicMock(return_value=mock_factory)
-    monkeypatch.setattr(
-        "metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory",
-        mock_factory_cls,
-    )
     selected: list[tuple[str, str, int]] = []
 
     def fake_run_experiment(*_args: object, **kwargs: object) -> None:

@@ -1,7 +1,8 @@
-schema_version: 1
+schema_version: 2
 id: research-assistant
 description: An agent that answers research questions over an internal document library, citing
   what it used.
+runner_ref: metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory
 personas:
 - id: cooperative-delegator
   description: A policy analyst comfortable with AI tools who engages fully, answers questions

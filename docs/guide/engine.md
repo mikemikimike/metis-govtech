@@ -671,28 +671,28 @@ These Pydantic models are defined in `metis.engine.simulation.types`:
 
 ```python
 class Observation(BaseModel):
-    text: str = ""                                   # Target's text reply
-    artifacts: list[Artifact] = []                   # Downloads/charts produced
-    errors: list[str] = []                           # Error messages from the target
-    available_actions: list[ActionSlot] = []         # What the user can do next
-    status_labels: list[str] = []                    # Status indicators shown in UI
+    text: str = ""  # Target's text reply
+    artifacts: list[Artifact] = []  # Downloads/charts produced
+    errors: list[str] = []  # Error messages from the target
+    available_actions: list[ActionSlot] = []  # What the user can do next
+    status_labels: list[str] = []  # Status indicators shown in UI
 ```
 
 **`ActionSlot`** — one available action discovered per-turn:
 
 ```python
 class ActionSlot(BaseModel):
-    id: str                          # Unique action identifier
-    kind: str                        # Action type (e.g. "file_upload", "button")
-    label: str                       # Human-readable label
-    options: list[str] | None = None # Choices for select/radio actions
+    id: str  # Unique action identifier
+    kind: str  # Action type (e.g. "file_upload", "button")
+    label: str  # Human-readable label
+    options: list[str] | None = None  # Choices for select/radio actions
 ```
 
 **`ChosenAction`** — an action the UserAgent selected from `available_actions`:
 
 ```python
 class ChosenAction(BaseModel):
-    id: str                   # Must match an ActionSlot.id from the observation
+    id: str  # Must match an ActionSlot.id from the observation
     value: str | None = None  # Action payload (filename, form value, etc.)
 ```
 
@@ -879,7 +879,7 @@ scenarios:
 
 The value is a fully-qualified Python name pointing to your `RunnerFactory` class. The engine resolves it at load time using `importlib.import_module` — if the import fails or the class lacks `start`, `create`, or `close` methods, validation raises an error immediately.
 
-When `runner_ref` is omitted (or `null`), the engine defaults to `metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory`.
+When `runner_ref` is omitted (or `null`), the engine defaults to `metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory`.
 
 #### Resolution Logic
 
@@ -895,11 +895,8 @@ The engine performs these checks at experiment load time:
 At simulation time (`packages/engine/src/metis/engine/cli.py:557-563`):
 
 ```python
-if experiment.runner_ref:
-    factory_cls = resolve_runner_factory(experiment.runner_ref)
-    runner_factory = factory_cls()
-else:
-    runner_factory = PlaywrightRunnerFactory.from_env()
+factory_cls = resolve_runner_factory(experiment.runner_ref)
+runner_factory = factory_cls()
 ```
 
 The engine calls your factory's constructor with no arguments. All configuration (credentials, URLs, feature flags) should come from environment variables read inside `__init__`.
@@ -910,7 +907,7 @@ If your target is not browser-based:
 
 1. **You don't need to uninstall Playwright.** The import only happens when the Playwright factory is instantiated (the default path). With `runner_ref` set, the engine never touches Playwright code.
 
-2. **Don't set `ORCA_*` environment variables.** The Playwright factory's `PlaywrightRunnerConfig.load()` raises a `ValueError` listing missing variables (`ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD`) — but this code path is never reached when `runner_ref` points elsewhere.
+2. **Don't set `ORCA_*` environment variables.** The OrcaPlaywright factory's `OrcaPlaywrightRunnerConfig.load()` raises a `ValueError` listing missing variables (`ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD`) — but this code path is never reached when `runner_ref` points elsewhere.
 
 3. **Your `.env` only needs your own variables** plus the ones required by the engine core:
    - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — needed if you want evaluation (trace extraction)

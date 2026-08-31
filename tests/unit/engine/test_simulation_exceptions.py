@@ -8,6 +8,9 @@ from metis.engine.simulation.exceptions import (
     ResponseTimeoutError,
     RunRecoverableError,
     SimulationError,
+    TargetSessionEnded,
+    TargetSessionLostError,
+    TargetUnavailableError,
     TransientDOMError,
     TurnRecoverableError,
 )
@@ -48,3 +51,17 @@ class TestExceptionHierarchy:
 
         exc = AuthLossError("redirected to /login")
         assert "/login" in str(exc)
+
+
+def test_target_unavailable_is_turn_recoverable() -> None:
+    assert issubclass(TargetUnavailableError, TurnRecoverableError)
+
+
+def test_target_session_lost_is_run_recoverable() -> None:
+    assert issubclass(TargetSessionLostError, RunRecoverableError)
+
+
+def test_target_session_ended_is_simulation_error() -> None:
+    assert issubclass(TargetSessionEnded, SimulationError)
+    assert not issubclass(TargetSessionEnded, TurnRecoverableError)
+    assert not issubclass(TargetSessionEnded, RunRecoverableError)

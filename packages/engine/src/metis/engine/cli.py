@@ -516,7 +516,6 @@ def _run_simulation(
         expand_run_plan,
         run_experiment,
     )
-    from metis.engine.simulation.runners.playwright import PlaywrightRunnerFactory
     from metis.engine.simulation.types import Experiment
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
@@ -552,12 +551,9 @@ def _run_simulation(
         redo_plan = run_plan
         complete_records = {}
 
-    if experiment.runner_ref:
-        from metis.engine.simulation.runner_resolver import resolve_runner_factory
+    from metis.engine.simulation.runner_resolver import resolve_runner_factory
 
-        factory_cls = resolve_runner_factory(experiment.runner_ref)
-    else:
-        factory_cls = PlaywrightRunnerFactory
+    factory_cls = resolve_runner_factory(experiment.runner_ref)
 
     runner_factory = factory_cls()
 

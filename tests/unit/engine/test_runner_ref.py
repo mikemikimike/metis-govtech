@@ -18,13 +18,14 @@ from metis.engine.simulation.types import (
 
 
 class TestRunnerRefField:
-    """Tests for the runner_ref optional field on Experiment."""
+    """Tests for the runner_ref required field on Experiment."""
 
     def _minimal_experiment(self, **overrides) -> dict:
         base = {
-            "schema_version": 1,
+            "schema_version": 2,
             "id": "test-exp",
             "description": "test",
+            "runner_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
             "personas": [{"id": "p1", "description": "persona"}],
             "scenarios": [
                 {
@@ -37,16 +38,15 @@ class TestRunnerRefField:
         base.update(overrides)
         return base
 
-    def test_runner_ref_absent_defaults_to_none(self) -> None:
-        exp = Experiment.model_validate(self._minimal_experiment())
-        assert exp.runner_ref is None
-
-    def test_runner_ref_explicit_none(self) -> None:
-        exp = Experiment.model_validate(self._minimal_experiment(runner_ref=None))
-        assert exp.runner_ref is None
+    def test_runner_ref_required(self) -> None:
+        data = self._minimal_experiment()
+        del data["runner_ref"]
+        with pytest.raises(ValidationError):
+            Experiment.model_validate(data)
 
     def test_runner_ref_with_fqn_string(self) -> None:
-        fqn = "metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory"
+        # Use the always-importable StubRunnerFactory to test FQN string storage.
+        fqn = "tests.unit.engine.test_runner_ref.StubRunnerFactory"
         exp = Experiment.model_validate(self._minimal_experiment(runner_ref=fqn))
         assert exp.runner_ref == fqn
 
@@ -59,21 +59,23 @@ class TestResolveRunnerFactory:
     """Tests for dynamic runner factory resolution."""
 
     def test_resolve_playwright_factory(self) -> None:
-        fqn = "metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory"
+        pytest.importorskip("playwright")
+        fqn = "metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory"
         cls = resolve_runner_factory(fqn)
-        from metis.engine.simulation.runners.playwright import PlaywrightRunnerFactory
+        from metis.engine.simulation.runners.orca_playwright import (
+            OrcaPlaywrightRunnerFactory,
+        )
 
-        assert cls is PlaywrightRunnerFactory
+        assert cls is OrcaPlaywrightRunnerFactory
 
     def test_resolve_nonexistent_module_raises_import_error(self) -> None:
         with pytest.raises(ImportError, match="No module named 'nonexistent'"):
             resolve_runner_factory("nonexistent.module.ClassName")
 
     def test_resolve_nonexistent_class_raises_import_error(self) -> None:
+        # Use a module that doesn't need optional deps (runner.py is always importable).
         with pytest.raises(ImportError, match="has no attribute 'NoSuchClass'"):
-            resolve_runner_factory(
-                "metis.engine.simulation.runners.playwright.NoSuchClass"
-            )
+            resolve_runner_factory("metis.engine.simulation.runner.NoSuchClass")
 
     def test_resolve_non_factory_raises_type_error(self) -> None:
         with pytest.raises(
@@ -134,13 +136,16 @@ class TestRunnerRefCLIIntegration:
         cls = resolve_runner_factory(fqn)
         assert cls is StubRunnerFactory
 
-    def test_resolve_from_experiment_none_falls_back(self) -> None:
+    def test_resolve_playwright_factory_from_experiment(self) -> None:
+        pytest.importorskip("playwright")
         from metis.engine.simulation.runner_resolver import resolve_runner_factory
-        from metis.engine.simulation.runners.playwright import PlaywrightRunnerFactory
+        from metis.engine.simulation.runners.orca_playwright import (
+            OrcaPlaywrightRunnerFactory,
+        )
 
-        fqn = "metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory"
+        fqn = "metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory"
         cls = resolve_runner_factory(fqn)
-        assert cls is PlaywrightRunnerFactory
+        assert cls is OrcaPlaywrightRunnerFactory
 
 
 class TestRunnerRefValidation:
@@ -148,9 +153,10 @@ class TestRunnerRefValidation:
 
     def _minimal_experiment(self, **overrides) -> dict:
         base = {
-            "schema_version": 1,
+            "schema_version": 2,
             "id": "test-exp",
             "description": "test",
+            "runner_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
             "personas": [{"id": "p1", "description": "persona"}],
             "scenarios": [
                 {
@@ -170,10 +176,11 @@ class TestRunnerRefValidation:
             )
 
     def test_invalid_class_rejected_at_load(self) -> None:
+        # Use an always-importable module so playwright is not required.
         with pytest.raises(ValidationError, match="has no attribute"):
             Experiment.model_validate(
                 self._minimal_experiment(
-                    runner_ref="metis.engine.simulation.runners.playwright.NoSuchClass"
+                    runner_ref="metis.engine.simulation.runner.NoSuchClass"
                 )
             )
 
@@ -184,7 +191,8 @@ class TestRunnerRefValidation:
             )
 
     def test_valid_factory_passes_validation(self) -> None:
-        fqn = "metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory"
+        # Use StubRunnerFactory (always importable) to verify that a valid factory passes.
+        fqn = "tests.unit.engine.test_runner_ref.StubRunnerFactory"
         exp = Experiment.model_validate(self._minimal_experiment(runner_ref=fqn))
         assert exp.runner_ref == fqn
 
@@ -193,6 +201,10 @@ class TestExampleExperiment:
     """Verify the shipped example experiment continues to load."""
 
     def test_example_experiment_loads(self) -> None:
+        pytest.importorskip(
+            "playwright",
+            reason="example-experiment uses OrcaPlaywrightRunnerFactory (requires playwright extra)",
+        )
         example_path = (
             Path(__file__).resolve().parents[3]
             / "packages"
@@ -204,4 +216,7 @@ class TestExampleExperiment:
             pytest.skip("example-experiment not found at expected path")
         exp = Experiment.load_file(example_path)
         assert exp.id == "orca-eval"
-        assert exp.runner_ref is None
+        assert (
+            exp.runner_ref
+            == "metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory"
+        )

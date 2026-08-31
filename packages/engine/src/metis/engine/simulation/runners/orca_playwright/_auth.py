@@ -1,11 +1,17 @@
 """Authentication and modal dismissal for the target web UI."""
 
-from playwright.async_api import Page
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
 
-from ._config import PlaywrightRunnerConfig
 from ._element_resolver import AriaStrategy, CSSStrategy, TextStrategy, resolve_element
+
+if TYPE_CHECKING:
+    from playwright.async_api import Page
+
+    from ._config import OrcaPlaywrightRunnerConfig
 
 logger = get_logger()
 
@@ -91,7 +97,7 @@ async def dismiss_modals(page: Page) -> None:
         pass
 
 
-async def login(page: Page, config: PlaywrightRunnerConfig) -> None:
+async def login(page: Page, config: OrcaPlaywrightRunnerConfig) -> None:
     """Log in to Orca via WOG AD and navigate to a fresh chat."""
     logger.info("[login] Step 1/8: Navigating to %s ...", config.url)
     await page.goto(config.url, wait_until="networkidle", timeout=60000)
