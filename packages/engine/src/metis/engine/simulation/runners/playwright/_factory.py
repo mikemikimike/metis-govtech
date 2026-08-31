@@ -23,21 +23,20 @@ logger = get_logger()
 class PlaywrightRunnerFactory:
     """Factory that owns the Playwright browser and creates runners per attempt.
 
-    Note: configuration (ORCA_URL, ORCA_USERNAME, ORCA_PASSWORD env vars) and
-    the runners it creates are hardcoded for the Orca chat UI.
+    Note: the runners this factory creates are hardcoded for the Orca chat UI
+    (auth flow, selectors, page interactions). For non-Orca browser targets,
+    write a new RunnerFactory.
+
+    All configuration comes from PlaywrightRunnerConfig.load(), which reads
+    ORCA_URL, ORCA_USERNAME, ORCA_PASSWORD, and HEADED from environment
+    variables. Pass a config explicitly to override (e.g. in tests).
     """
 
-    def __init__(self, config: PlaywrightRunnerConfig, headed: bool = False) -> None:
-        self._config = config
-        self._headed = headed
+    def __init__(self, config: PlaywrightRunnerConfig | None = None) -> None:
+        self._config = config or PlaywrightRunnerConfig.load()
+        self._headed = self._config.headed
         self._pw: Playwright | None = None
         self._browser: Browser | None = None
-
-    @classmethod
-    def from_env(cls, headed: bool = False) -> PlaywrightRunnerFactory:
-        """Construct from environment variables (loads PlaywrightRunnerConfig)."""
-        config = PlaywrightRunnerConfig.load()
-        return cls(config=config, headed=headed)
 
     @property
     def retry_defaults(self) -> tuple[int, float]:

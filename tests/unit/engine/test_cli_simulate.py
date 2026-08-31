@@ -118,9 +118,10 @@ def test_resume_runs_only_missing_or_system_error_records(
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
     mock_factory = MagicMock()
     mock_factory.retry_defaults = (2, 5.0)
+    mock_factory_cls = MagicMock(return_value=mock_factory)
     monkeypatch.setattr(
-        "metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory.from_env",
-        lambda *_a, **_k: mock_factory,
+        "metis.engine.simulation.runners.playwright.PlaywrightRunnerFactory",
+        mock_factory_cls,
     )
     selected: list[tuple[str, str, int]] = []
 

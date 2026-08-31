@@ -12,12 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `PlaywrightRunnerFactory` in `simulation/runners/playwright/_factory.py` — encapsulates Playwright browser lifecycle and configuration.
 - `simulation/_artifact_store.py` — runner-agnostic artifact manifest writer (moved from `runners/playwright/`).
 - **Pluggable runner via `runner_ref`** — optional `runner_ref` field in `experiment.yaml` accepts a fully-qualified RunnerFactory class name; validated at load time with a clear error if the FQN is unimportable or doesn't satisfy the RunnerFactory protocol. Omitting the field preserves the current PlaywrightRunnerFactory default.
+- **User guide: "Adapting to Your Target System"** — new section in `docs/guide/engine.md` covering the Runner ABC, RunnerFactory protocol, a complete REST API runner example, `runner_ref` wiring, `profile.yaml` schema reference, Langfuse requirements, and a minimal experiment template with pre-flight checklist.
 
 ### Changed
 
 - **Decoupled `experiment.py` from Playwright** — `_worker` and `run_experiment` now operate on the `RunnerFactory` protocol; zero Playwright imports remain in the orchestration layer.
 - **CLI constructs `PlaywrightRunnerFactory`** instead of loading `HarnessConfig` directly; run-level retry defaults are passed as explicit parameters.
 - **Renamed `HarnessConfig` → `PlaywrightRunnerConfig`** — scoped entirely within `runners/playwright/`.
+- **CLI fully decoupled from Playwright** — factory instantiation is now a uniform no-arg `factory_cls()` call for all runners; `HEADED` env var moved into `PlaywrightRunnerConfig.load()` alongside `ORCA_*` vars; removed `from_env()` classmethod and the Playwright-specific "Mode: headed/headless" console output.
 
 ### Fixed
 
