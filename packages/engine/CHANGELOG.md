@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `simulation/_artifact_store.py` — runner-agnostic artifact manifest writer (moved from `runners/playwright/`).
 - **Pluggable runner via `runner_ref`** — optional `runner_ref` field in `experiment.yaml` accepts a fully-qualified RunnerFactory class name; validated at load time with a clear error if the FQN is unimportable or doesn't satisfy the RunnerFactory protocol. Omitting the field preserves the current PlaywrightRunnerFactory default.
 - **User guide: "Adapting to Your Target System"** — new section in `docs/guide/engine.md` covering the Runner ABC, RunnerFactory protocol, a complete REST API runner example, `runner_ref` wiring, `profile.yaml` schema reference, Langfuse requirements, and a minimal experiment template with pre-flight checklist.
+- **JSON schema for `report.json`** — Pydantic `Report` model in `reporting/_models.py` defines the full shape of the product evaluation report; `schemas/report.schema.json` is auto-generated via `make generate-schema` and CI-guarded by `make check-schema`. `save_report()` validates output through the model before writing. Intermediate TypedDicts (`TurnReport`, `SessionReport`, etc.) promoted to Pydantic BaseModels.
 
 ### Changed
 
