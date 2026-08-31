@@ -1,4 +1,4 @@
-"""Tests for runner_ref field in Experiment model."""
+"""Tests for runner_factory_ref field in Experiment model."""
 
 from __future__ import annotations
 
@@ -18,14 +18,14 @@ from metis.engine.simulation.types import (
 
 
 class TestRunnerRefField:
-    """Tests for the runner_ref required field on Experiment."""
+    """Tests for the runner_factory_ref required field on Experiment."""
 
     def _minimal_experiment(self, **overrides) -> dict:
         base = {
-            "schema_version": 2,
+            "schema_version": 1,
             "id": "test-exp",
             "description": "test",
-            "runner_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
+            "runner_factory_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
             "personas": [{"id": "p1", "description": "persona"}],
             "scenarios": [
                 {
@@ -38,21 +38,21 @@ class TestRunnerRefField:
         base.update(overrides)
         return base
 
-    def test_runner_ref_required(self) -> None:
+    def test_runner_factory_ref_required(self) -> None:
         data = self._minimal_experiment()
-        del data["runner_ref"]
+        del data["runner_factory_ref"]
         with pytest.raises(ValidationError):
             Experiment.model_validate(data)
 
-    def test_runner_ref_with_fqn_string(self) -> None:
+    def test_runner_factory_ref_with_fqn_string(self) -> None:
         # Use the always-importable StubRunnerFactory to test FQN string storage.
         fqn = "tests.unit.engine.test_runner_ref.StubRunnerFactory"
-        exp = Experiment.model_validate(self._minimal_experiment(runner_ref=fqn))
-        assert exp.runner_ref == fqn
+        exp = Experiment.model_validate(self._minimal_experiment(runner_factory_ref=fqn))
+        assert exp.runner_factory_ref == fqn
 
-    def test_runner_ref_empty_string_rejected(self) -> None:
+    def test_runner_factory_ref_empty_string_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            Experiment.model_validate(self._minimal_experiment(runner_ref=""))
+            Experiment.model_validate(self._minimal_experiment(runner_factory_ref=""))
 
 
 class TestResolveRunnerFactory:
@@ -127,7 +127,7 @@ class StubRunnerFactory:
 
 
 class TestRunnerRefCLIIntegration:
-    """Verify that runner_ref in experiment.yaml selects the correct factory."""
+    """Verify that runner_factory_ref in experiment.yaml selects the correct factory."""
 
     def test_resolve_from_experiment_uses_custom_factory(self) -> None:
         fqn = "tests.unit.engine.test_runner_ref.StubRunnerFactory"
@@ -149,14 +149,14 @@ class TestRunnerRefCLIIntegration:
 
 
 class TestRunnerRefValidation:
-    """Ensure invalid runner_ref values are caught at Experiment parse time."""
+    """Ensure invalid runner_factory_ref values are caught at Experiment parse time."""
 
     def _minimal_experiment(self, **overrides) -> dict:
         base = {
-            "schema_version": 2,
+            "schema_version": 1,
             "id": "test-exp",
             "description": "test",
-            "runner_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
+            "runner_factory_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
             "personas": [{"id": "p1", "description": "persona"}],
             "scenarios": [
                 {
@@ -172,7 +172,7 @@ class TestRunnerRefValidation:
     def test_invalid_module_rejected_at_load(self) -> None:
         with pytest.raises(ValidationError, match="No module named"):
             Experiment.model_validate(
-                self._minimal_experiment(runner_ref="nonexistent.FakeFactory")
+                self._minimal_experiment(runner_factory_ref="nonexistent.FakeFactory")
             )
 
     def test_invalid_class_rejected_at_load(self) -> None:
@@ -180,21 +180,21 @@ class TestRunnerRefValidation:
         with pytest.raises(ValidationError, match="has no attribute"):
             Experiment.model_validate(
                 self._minimal_experiment(
-                    runner_ref="metis.engine.simulation.runner.NoSuchClass"
+                    runner_factory_ref="metis.engine.simulation.runner.NoSuchClass"
                 )
             )
 
     def test_non_factory_rejected_at_load(self) -> None:
         with pytest.raises(ValidationError, match="does not satisfy"):
             Experiment.model_validate(
-                self._minimal_experiment(runner_ref="builtins.str")
+                self._minimal_experiment(runner_factory_ref="builtins.str")
             )
 
     def test_valid_factory_passes_validation(self) -> None:
         # Use StubRunnerFactory (always importable) to verify that a valid factory passes.
         fqn = "tests.unit.engine.test_runner_ref.StubRunnerFactory"
-        exp = Experiment.model_validate(self._minimal_experiment(runner_ref=fqn))
-        assert exp.runner_ref == fqn
+        exp = Experiment.model_validate(self._minimal_experiment(runner_factory_ref=fqn))
+        assert exp.runner_factory_ref == fqn
 
 
 class TestExampleExperiment:
@@ -217,6 +217,6 @@ class TestExampleExperiment:
         exp = Experiment.load_file(example_path)
         assert exp.id == "orca-eval"
         assert (
-            exp.runner_ref
+            exp.runner_factory_ref
             == "metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory"
         )

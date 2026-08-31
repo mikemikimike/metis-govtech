@@ -6,14 +6,14 @@ import os
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 
 class AuthConfig(BaseModel):
     """Authentication configuration."""
 
     username: str
-    password: str
+    password: SecretStr
     login_button_text: str = "Log in with WOG AD"
     userid_button_text: str = "Log in with user ID"
     signin_button_text: str = "Sign in"

@@ -154,7 +154,7 @@ async def login(page: Page, config: OrcaPlaywrightRunnerConfig) -> None:
             CSSStrategy(selector='input[name="password"]'),
         ],
     )
-    await password_field.fill(config.auth.password)
+    await password_field.fill(config.auth.password.get_secret_value())
 
     # Click "Sign in"
     logger.info("[login] Step 6/8: Clicking '%s'...", config.auth.signin_button_text)

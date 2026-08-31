@@ -1,9 +1,9 @@
-schema_version: 2
+schema_version: 1
 
 id: orca-eval
 description: >
   End-to-end evaluation of Orca's various capabilities.
-runner_ref: metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory
+runner_factory_ref: metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory
 
 personas:
   - id: cooperative-delegator

@@ -21,7 +21,7 @@ def resolve_runner_factory(fqn: str) -> type:
     """
     if "." not in fqn:
         raise ValueError(
-            f"runner_ref must be a dotted fully-qualified name, got: {fqn!r}"
+            f"runner_factory_ref must be a dotted fully-qualified name, got: {fqn!r}"
         )
 
     module_path, class_name = fqn.rsplit(".", 1)

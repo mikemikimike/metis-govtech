@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, GetJsonSchemaHandler, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
-_EXPERIMENT_VERSION = 2
+_EXPERIMENT_VERSION = 1
 _RUN_RECORD_VERSION = 1
 
 
@@ -244,11 +244,11 @@ class Scenario(BaseModel):
 
 class Experiment(BaseModel):
     schema_version: Literal[
-        2
+        1
     ]  # required — no default; see schemas/README.md for bump rules
     id: str
     description: str
-    runner_ref: str = Field(
+    runner_factory_ref: str = Field(
         min_length=1,
         description="FQN of a RunnerFactory class (e.g. metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory)",
     )
@@ -269,7 +269,7 @@ class Experiment(BaseModel):
         if v != _EXPERIMENT_VERSION:
             raise ValueError(
                 f"Unsupported schema_version {v!r} (expected {_EXPERIMENT_VERSION}). "
-                "Update your experiment.yaml to schema_version: 2 and add a runner_ref field."
+                "Update your experiment.yaml to the current schema version."
             )
         return data
 
@@ -285,11 +285,11 @@ class Experiment(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _validate_runner_ref(self) -> Self:
+    def _validate_runner_factory_ref(self) -> Self:
         from .runner_resolver import resolve_runner_factory
 
         try:
-            resolve_runner_factory(self.runner_ref)
+            resolve_runner_factory(self.runner_factory_ref)
         except (ImportError, TypeError, ValueError) as exc:
             raise ValueError(str(exc)) from exc
         return self

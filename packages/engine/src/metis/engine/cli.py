@@ -553,7 +553,7 @@ def _run_simulation(
 
     from metis.engine.simulation.runner_resolver import resolve_runner_factory
 
-    factory_cls = resolve_runner_factory(experiment.runner_ref)
+    factory_cls = resolve_runner_factory(experiment.runner_factory_ref)
 
     runner_factory = factory_cls()
 

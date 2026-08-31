@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from ...config import RunRetryConfig
 
@@ -37,7 +37,7 @@ class OrcaApiRunnerConfig(BaseModel):
     """Runner config: YAML-tunable knobs plus credentials from the environment."""
 
     base_url: str
-    api_key: str
+    api_key: SecretStr
     poll_interval_ms: int = 3000
     submit_rpm: int = 6
     store_retry_window_s: float = 30.0

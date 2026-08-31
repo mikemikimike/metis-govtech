@@ -693,7 +693,9 @@ class OrcaApiRunnerFactory:
     async def start(self) -> None:
         logger.info("[orca-api-runner] Using Orca API at %s", self._config.base_url)
         self._client = build_client(
-            self._config.base_url, self._config.api_key, transport=self._transport
+            self._config.base_url,
+            self._config.api_key.get_secret_value(),
+            transport=self._transport,
         )
         self._submit_limiter = SubmitRateLimiter(
             self._config.submit_rpm, clock=self._clock, sleep=self._sleep

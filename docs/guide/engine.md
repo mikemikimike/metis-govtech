@@ -595,7 +595,7 @@ The engine's default target is Orca — a browser-based multi-agent system drive
 
 This section covers:
 1. Writing a custom `Runner` class
-2. Wiring it into the engine via `runner_ref`
+2. Wiring it into the engine via `runner_factory_ref`
 3. Understanding `profile.yaml`
 4. The Langfuse requirement for evaluation
 5. A minimal experiment template for new targets
@@ -850,11 +850,11 @@ Before writing your runner:
 
 ### Wiring Your Runner into the Engine
 
-Once you have a `RunnerFactory` class, tell the engine to use it via the `runner_ref` field in `experiment.yaml`.
+Once you have a `RunnerFactory` class, tell the engine to use it via the `runner_factory_ref` field in `experiment.yaml`.
 
-#### The `runner_ref` Field
+#### The `runner_factory_ref` Field
 
-Add `runner_ref` at the top level of your experiment configuration:
+Add `runner_factory_ref` at the top level of your experiment configuration:
 
 ```yaml
 schema_version: 1
@@ -862,7 +862,7 @@ schema_version: 1
 id: my-api-eval
 description: Evaluate target system via REST API
 
-runner_ref: my_package.runners.RestRunnerFactory
+runner_factory_ref: my_package.runners.RestRunnerFactory
 
 personas:
   - id: cooperative
@@ -879,7 +879,7 @@ scenarios:
 
 The value is a fully-qualified Python name pointing to your `RunnerFactory` class. The engine resolves it at load time using `importlib.import_module` — if the import fails or the class lacks `start`, `create`, or `close` methods, validation raises an error immediately.
 
-When `runner_ref` is omitted (or `null`), the engine defaults to `metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory`.
+When `runner_factory_ref` is omitted (or `null`), the engine defaults to `metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory`.
 
 #### Resolution Logic
 
@@ -887,7 +887,7 @@ Source: `packages/engine/src/metis/engine/simulation/runner_resolver.py`
 
 The engine performs these checks at experiment load time:
 
-1. Split `runner_ref` on the last `.` to get `(module_path, class_name)`
+1. Split `runner_factory_ref` on the last `.` to get `(module_path, class_name)`
 2. Import `module_path` — raises `ImportError` if not found
 3. Get `class_name` from the module — raises `ImportError` if the attribute doesn't exist
 4. Verify the class has callable `start`, `create`, and `close` methods — raises `TypeError` if any are missing
@@ -895,7 +895,7 @@ The engine performs these checks at experiment load time:
 At simulation time (`packages/engine/src/metis/engine/cli.py:557-563`):
 
 ```python
-factory_cls = resolve_runner_factory(experiment.runner_ref)
+factory_cls = resolve_runner_factory(experiment.runner_factory_ref)
 runner_factory = factory_cls()
 ```
 
@@ -905,9 +905,9 @@ The engine calls your factory's constructor with no arguments. All configuration
 
 If your target is not browser-based:
 
-1. **You don't need to uninstall Playwright.** The import only happens when the Playwright factory is instantiated (the default path). With `runner_ref` set, the engine never touches Playwright code.
+1. **You don't need to uninstall Playwright.** The import only happens when the Playwright factory is instantiated (the default path). With `runner_factory_ref` set, the engine never touches Playwright code.
 
-2. **Don't set `ORCA_*` environment variables.** The OrcaPlaywright factory's `OrcaPlaywrightRunnerConfig.load()` raises a `ValueError` listing missing variables (`ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD`) — but this code path is never reached when `runner_ref` points elsewhere.
+2. **Don't set `ORCA_*` environment variables.** The OrcaPlaywright factory's `OrcaPlaywrightRunnerConfig.load()` raises a `ValueError` listing missing variables (`ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD`) — but this code path is never reached when `runner_factory_ref` points elsewhere.
 
 3. **Your `.env` only needs your own variables** plus the ones required by the engine core:
    - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — needed if you want evaluation (trace extraction)
@@ -1114,7 +1114,7 @@ id: my-target-eval
 description: >
   Evaluation of [target system] [capabilities being tested].
 
-runner_ref: my_package.runners.MyRunnerFactory  # omit for Playwright/Orca
+runner_factory_ref: my_package.runners.MyRunnerFactory  # omit for Playwright/Orca
 
 personas:
   - id: cooperative

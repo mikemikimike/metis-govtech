@@ -41,7 +41,7 @@ def _value_text(value: str | list[str] | int | float | None) -> str | None:
     if value is None:
         return None
     if isinstance(value, list):
-        return ", ".join(value)
+        return ", ".join(map(str, value))
     return str(value)
 
 

@@ -23,7 +23,7 @@ class TestOrcaApiRunnerConfig:
         monkeypatch.setenv("ORCA_API_KEY", "test-key")
         config = OrcaApiRunnerConfig.load(config_yaml)
         assert config.base_url == "https://orca.example.com"
-        assert config.api_key == "test-key"
+        assert config.api_key.get_secret_value() == "test-key"
         assert config.poll_interval_ms == 5000
         assert config.submit_rpm == 10
 

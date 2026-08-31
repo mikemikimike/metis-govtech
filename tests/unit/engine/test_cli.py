@@ -8,10 +8,10 @@ import pytest
 from metis.engine.cli import _validate_inputs
 
 MINIMAL_EXPERIMENT = dedent("""\
-    schema_version: 2
+    schema_version: 1
     id: test-exp
     description: test
-    runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+    runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
     personas:
       - id: alice
         description: a persona
@@ -66,10 +66,10 @@ def test_malformed_experiment_yaml(tmp_path: Path, capsys: pytest.CaptureFixture
 
 def test_duplicate_persona_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: first
@@ -94,10 +94,10 @@ def test_duplicate_persona_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]
 
 def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -123,10 +123,10 @@ def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
 
 def test_unknown_persona_ref(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -148,10 +148,10 @@ def test_unknown_persona_ref(tmp_path: Path, capsys: pytest.CaptureFixture[str])
 
 def test_missing_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -175,10 +175,10 @@ def test_missing_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
 
 def test_bad_metric_fqn(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -201,10 +201,10 @@ def test_metric_not_basemetric_subclass(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -234,10 +234,10 @@ def test_valid_input_passes(tmp_path: Path):
 
 def test_valid_input_with_fixtures(tmp_path: Path):
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -260,10 +260,10 @@ def test_valid_input_with_fixtures(tmp_path: Path):
 def test_metric_ref_all_formats(tmp_path: Path):
     """All accepted MetricRef formats parse without error."""
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -285,10 +285,10 @@ def test_metric_ref_legacy_class_format(tmp_path: Path):
     from metis.engine.simulation.types import Experiment
 
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -313,10 +313,10 @@ def test_metric_ref_null_args(tmp_path: Path):
     from metis.engine.simulation.types import Experiment
 
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -341,10 +341,10 @@ def test_metric_ref_null_args(tmp_path: Path):
 def test_extra_persona_fields_ignored(tmp_path: Path):
     """Extra fields on persona don't cause validation failure."""
     content = dedent("""\
-        schema_version: 2
+        schema_version: 1
         id: test-exp
         description: test
-        runner_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
