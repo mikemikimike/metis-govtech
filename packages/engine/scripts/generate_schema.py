@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from metis.engine.reporting._models import _REPORT_VERSION, Report
 from metis.engine.simulation.types import (
     _EXPERIMENT_VERSION,
     Experiment,
@@ -13,14 +14,15 @@ from metis.engine.simulation.types import (
 SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schemas"
 
 _MODELS = [
-    (Experiment, "experiment.schema.json", _EXPERIMENT_VERSION),
+    (Experiment, "experiment.schema.json", _EXPERIMENT_VERSION, False),
+    (Report, "report.schema.json", _REPORT_VERSION, True),
 ]
 
 
 def main() -> None:
     SCHEMA_DIR.mkdir(exist_ok=True)
-    for model, filename, version in _MODELS:
-        schema = model.model_json_schema()
+    for model, filename, version, by_alias in _MODELS:
+        schema = model.model_json_schema(by_alias=by_alias)
         schema["title"] = f"{model.__name__} v{version}"
         out = SCHEMA_DIR / filename
         out.write_text(json.dumps(schema, indent=2) + "\n")

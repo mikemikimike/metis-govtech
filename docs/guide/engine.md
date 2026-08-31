@@ -151,6 +151,8 @@ experiments/orca-eval-20260730-143022/
     └── report.html      # Visual report (open in browser)
 ```
 
+The structure of `report.json` is defined by a [JSON Schema](../../packages/engine/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
+
 Use `logs/evaluate.log` to review extraction, each configured metric, the actual judge model reported by DeepEval, metric scores, pass or fail results, reasons, errors, cost, token counts, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
 See the [report contract](report.md) for the report's scoring,
@@ -671,28 +673,28 @@ These Pydantic models are defined in `metis.engine.simulation.types`:
 
 ```python
 class Observation(BaseModel):
-    text: str = ""                                   # Target's text reply
-    artifacts: list[Artifact] = []                   # Downloads/charts produced
-    errors: list[str] = []                           # Error messages from the target
-    available_actions: list[ActionSlot] = []         # What the user can do next
-    status_labels: list[str] = []                    # Status indicators shown in UI
+    text: str = ""  # Target's text reply
+    artifacts: list[Artifact] = []  # Downloads/charts produced
+    errors: list[str] = []  # Error messages from the target
+    available_actions: list[ActionSlot] = []  # What the user can do next
+    status_labels: list[str] = []  # Status indicators shown in UI
 ```
 
 **`ActionSlot`** — one available action discovered per-turn:
 
 ```python
 class ActionSlot(BaseModel):
-    id: str                          # Unique action identifier
-    kind: str                        # Action type (e.g. "file_upload", "button")
-    label: str                       # Human-readable label
-    options: list[str] | None = None # Choices for select/radio actions
+    id: str  # Unique action identifier
+    kind: str  # Action type (e.g. "file_upload", "button")
+    label: str  # Human-readable label
+    options: list[str] | None = None  # Choices for select/radio actions
 ```
 
 **`ChosenAction`** — an action the UserAgent selected from `available_actions`:
 
 ```python
 class ChosenAction(BaseModel):
-    id: str                   # Must match an ActionSlot.id from the observation
+    id: str  # Must match an ActionSlot.id from the observation
     value: str | None = None  # Action payload (filename, form value, etc.)
 ```
 

@@ -6,15 +6,16 @@ The JSON files here are **auto-generated**. Do not edit them directly; they will
 
 ## Source of truth
 
-| Schema file | Pydantic model | Version constant |
-|---|---|---|
-| `experiment.schema.json` | `Experiment` | `_EXPERIMENT_VERSION` |
+| Schema file | Pydantic model | Version constant | Source file |
+|---|---|---|---|
+| `experiment.schema.json` | `Experiment` | `_EXPERIMENT_VERSION` | `src/metis/engine/simulation/types.py` |
+| `report.schema.json` | `Report` | `_REPORT_VERSION` | `src/metis/engine/reporting/_models.py` |
 
 `RunRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. Its version constant is `_RUN_RECORD_VERSION`.
 
 ## How to modify a schema
 
-1. Edit the Pydantic model in `src/metis.engine/simulation/types.py`
+1. Edit the Pydantic model in `src/metis.engine/simulation/types.py` (for `Experiment`) or `src/metis/engine/reporting/_models.py` (for `Report`)
 2. Determine whether the change is breaking (see [Version bump rules](#version-bump-rules) below); if so, increment the `_*_VERSION` constant and update the `Literal[N]` annotation on the model field to match
 3. Run `make generate-schema` to regenerate the schema file
 4. Update `example-experiment/experiment.yaml` if the `Experiment` model changed
