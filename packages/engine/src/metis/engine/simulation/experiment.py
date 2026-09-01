@@ -332,6 +332,7 @@ async def _worker(
                         scenario=scenario.id,
                         metric_refs=scenario.metric_refs,
                         response_wait_ms=scenario.response_wait_ms,
+                        fixtures=scenario.fixtures,
                     )
                     agent = UserAgent(persona=persona, scenario=scenario)
                     orchestrator = Orchestrator(
@@ -379,6 +380,7 @@ async def _worker(
                                 persona=persona.id,
                                 scenario=scenario.id,
                                 metric_refs=scenario.metric_refs,
+                                fixtures=scenario.fixtures,
                             ),
                             target_session_id=None,
                             outcome=RunOutcome(
@@ -410,6 +412,7 @@ async def _worker(
                             persona=persona.id,
                             scenario=scenario.id,
                             metric_refs=scenario.metric_refs,
+                            fixtures=scenario.fixtures,
                         ),
                         target_session_id=None,
                         outcome=RunOutcome(

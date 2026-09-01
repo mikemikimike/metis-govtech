@@ -2,6 +2,8 @@
 
 import pytest
 
+pytest.importorskip("playwright")
+
 from metis.engine.simulation.exceptions import (
     AuthLossError,
     ConsecutiveFailureEscalation,
@@ -13,11 +15,13 @@ from metis.engine.simulation.exceptions import (
     TransientDOMError,
     TurnRecoverableError,
 )
-from metis.engine.simulation.runners.playwright._config import PlaywrightRunnerConfig
-from metis.engine.simulation.runners.playwright._element_resolver import (
+from metis.engine.simulation.runners.orca_playwright._config import (
+    OrcaPlaywrightRunnerConfig,
+)
+from metis.engine.simulation.runners.orca_playwright._element_resolver import (
     resolve_element,
 )
-from metis.engine.simulation.runners.playwright._retry import (
+from metis.engine.simulation.runners.orca_playwright._retry import (
     action_retry,
     track_submission,
 )
@@ -60,7 +64,7 @@ class TestFullImportGraph:
             importlib.import_module("metis.engine.simulation.orchestrator")
         )
         importlib.reload(
-            importlib.import_module("metis.engine.simulation.runners.playwright")
+            importlib.import_module("metis.engine.simulation.runners.orca_playwright")
         )
 
 
@@ -176,10 +180,10 @@ class TestDiagnosticsWiring:
 
 
 class TestRetryConfigIntegration:
-    """Verify RetryConfig flows through PlaywrightRunnerConfig correctly."""
+    """Verify RetryConfig flows through OrcaPlaywrightRunnerConfig correctly."""
 
     def test_default_harness_config_has_retry(self) -> None:
-        config = PlaywrightRunnerConfig(
+        config = OrcaPlaywrightRunnerConfig(
             url="http://test.com",
             auth={"username": "u", "password": "p"},
         )

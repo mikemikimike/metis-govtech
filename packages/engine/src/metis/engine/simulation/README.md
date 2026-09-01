@@ -31,8 +31,8 @@ User Agent (Python/AsyncOpenAI)  →  Environment (Python/async Playwright)  →
 | `OPENAI_API_KEY` | Yes | Shared API key for the user agent and DeepEval judge metrics |
 | `OPENAI_BASE_URL` | No | Shared endpoint override for both; unset → default OpenAI endpoint |
 | `USER_AGENT_MODEL` | No | User-agent model name (default: `gpt-5.6-luna`) |
-| `USER_AGENT_MAX_TOKENS` | No | Max output tokens per turn (default: `1024`) |
-| `USER_AGENT_TEMPERATURE` | No | Sampling temperature (default: `0.7`) |
+| `USER_AGENT_MAX_TOKENS` | No | Max output tokens per turn (unset/empty → parameter omitted, provider default applies) |
+| `USER_AGENT_TEMPERATURE` | No | Sampling temperature (unset/empty → parameter omitted, provider default applies) |
 | `JUDGE_MODEL` | No | Judge model name (default: `gemini-3.5-flash-lite`) |
 
 ## Running

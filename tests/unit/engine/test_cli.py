@@ -11,6 +11,7 @@ MINIMAL_EXPERIMENT = dedent("""\
     schema_version: 1
     id: test-exp
     description: test
+    runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
     personas:
       - id: alice
         description: a persona
@@ -68,6 +69,7 @@ def test_duplicate_persona_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: first
@@ -95,6 +97,7 @@ def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -123,6 +126,7 @@ def test_unknown_persona_ref(tmp_path: Path, capsys: pytest.CaptureFixture[str])
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -147,6 +151,7 @@ def test_missing_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -173,6 +178,7 @@ def test_bad_metric_fqn(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -198,6 +204,7 @@ def test_metric_not_basemetric_subclass(
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -230,6 +237,7 @@ def test_valid_input_with_fixtures(tmp_path: Path):
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -255,6 +263,7 @@ def test_metric_ref_all_formats(tmp_path: Path):
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -279,6 +288,7 @@ def test_metric_ref_legacy_class_format(tmp_path: Path):
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -306,6 +316,7 @@ def test_metric_ref_null_args(tmp_path: Path):
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona
@@ -333,6 +344,7 @@ def test_extra_persona_fields_ignored(tmp_path: Path):
         schema_version: 1
         id: test-exp
         description: test
+        runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
         personas:
           - id: alice
             description: a persona

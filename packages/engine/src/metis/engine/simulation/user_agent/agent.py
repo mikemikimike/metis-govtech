@@ -174,6 +174,8 @@ class UserAgent:
                 )
                 if slot.options:
                     parts += f", options: {slot.options}"
+                if slot.required is not None:
+                    parts += f", required: {'true' if slot.required else 'false'}"
                 action_lines.append(parts)
             available_actions_section = "\n" + "\n".join(action_lines) + "\n"
 
@@ -213,7 +215,7 @@ class UserAgent:
         """
         messages = self._build_messages(user_prompt)
         logger.debug(
-            "[user_agent] Calling LLM: model=%s, messages=%d, max_tokens=%d, temp=%s",
+            "[user_agent] Calling LLM: model=%s, messages=%d, max_tokens=%s, temp=%s",
             USER_AGENT_MODEL,
             len(messages),
             USER_AGENT_MAX_TOKENS,
@@ -221,13 +223,16 @@ class UserAgent:
         )
 
         try:
-            response = await self.client.beta.chat.completions.parse(
+            kwargs: dict[str, object] = dict(
                 model=USER_AGENT_MODEL,
                 messages=messages,
-                max_tokens=USER_AGENT_MAX_TOKENS,
-                temperature=USER_AGENT_TEMPERATURE,
                 response_format=UserAgentOutput,
             )
+            if USER_AGENT_MAX_TOKENS is not None:
+                kwargs["max_tokens"] = USER_AGENT_MAX_TOKENS
+            if USER_AGENT_TEMPERATURE is not None:
+                kwargs["temperature"] = USER_AGENT_TEMPERATURE
+            response = await self.client.beta.chat.completions.parse(**kwargs)
             message = response.choices[0].message
             if message.parsed is not None:
                 usage = response.usage
