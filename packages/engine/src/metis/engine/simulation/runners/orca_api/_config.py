@@ -42,6 +42,7 @@ class OrcaApiRunnerConfig(BaseModel):
     submit_rpm: int = 6
     store_retry_window_s: float = 30.0
     delete_session_on_teardown: bool = False
+    insecure: bool = False
     retry: RunRetryConfig = Field(default_factory=RunRetryConfig)
 
     @classmethod

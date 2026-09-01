@@ -696,6 +696,7 @@ class OrcaApiRunnerFactory:
             self._config.base_url,
             self._config.api_key.get_secret_value(),
             transport=self._transport,
+            insecure=self._config.insecure,
         )
         self._submit_limiter = SubmitRateLimiter(
             self._config.submit_rpm, clock=self._clock, sleep=self._sleep

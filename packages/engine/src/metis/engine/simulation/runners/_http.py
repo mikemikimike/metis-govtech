@@ -28,6 +28,7 @@ def build_client(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
     timeout_s: float = 30.0,
+    insecure: bool = False,
 ) -> httpx.AsyncClient:
     """An async client rooted at ``base_url`` that sends ``Authorization: Bearer``.
 
@@ -39,6 +40,7 @@ def build_client(
         headers={"Authorization": f"Bearer {api_key}"},
         timeout=timeout_s,
         transport=transport,
+        verify=not insecure,
     )
 
 
