@@ -30,6 +30,7 @@ from metis.engine.reporting._types import (
 )
 
 from ._aggregation import aggregate_metrics
+from ._models import Report
 from ._report import build_report, load_report_sources
 from ._report_page import render_report_page
 
@@ -79,7 +80,10 @@ def format_terminal_summary(
             lines.append(f"  -> {agent:<20} {count}")
         lines.append("")
 
-    metric_agg = aggregate_metrics(turn_results, session_results)
+    metric_agg = aggregate_metrics(
+        [t.model_dump() for t in turn_results],
+        [s.model_dump() for s in session_results] if session_results else None,
+    )
 
     lines.append(f"  {'Metric':<40} {'Pass':>6} {'Fail':>6} {'Skip':>6} {'Rate':>7}")
     lines.append(f"  {'-' * 40} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 7}")
@@ -142,9 +146,11 @@ def save_report(
     report = build_report(
         profile,
         experiment,
-        turn_results,
+        [t.model_dump() for t in turn_results],
         persona_of=persona_of,
-        session_metrics=session_results,
+        session_metrics=[s.model_dump() for s in session_results]
+        if session_results
+        else None,
         run_id=run_id,
         timestamp=datetime.now().isoformat(),
         latency_seconds=latency,
@@ -153,10 +159,14 @@ def save_report(
         trial_outcomes=trial_outcomes,
     )
 
+    report_model = Report.model_validate(report)
+
     target_dir.mkdir(parents=True, exist_ok=True)
     json_path = target_dir / f"{run_id}.json"
     html_path = target_dir / f"{run_id}.html"
-    json_path.write_text(json.dumps(report, indent=1, default=str) + "\n")
+    json_path.write_text(
+        json.dumps(report_model.model_dump(by_alias=True), indent=1, default=str) + "\n"
+    )
     html_path.write_text(render_report_page(report, title=report["product"]))
 
     logger.info(
@@ -254,20 +264,18 @@ def _convert_turn_results(eval_result: EvalResult) -> list[TurnReport]:
         trace_id = metadata.get("trace_id", "unknown")
         metrics_data: list[TurnMetricResult] = []
         for mr in tcr.metric_results:
-            metric_entry = TurnMetricResult(
-                name=mr.name,
-                score=mr.score,
-                reason=mr.reason,
-                success=mr.success,
-                skipped=mr.skipped,
+            metrics_data.append(
+                TurnMetricResult(
+                    name=mr.name,
+                    score=mr.score,
+                    reason=mr.reason,
+                    success=mr.success,
+                    skipped=mr.skipped,
+                    cost=mr.evaluation_cost,
+                    input_tokens=mr.input_tokens,
+                    output_tokens=mr.output_tokens,
+                )
             )
-            if mr.evaluation_cost is not None:
-                metric_entry["cost"] = mr.evaluation_cost
-            if mr.input_tokens is not None:
-                metric_entry["input_tokens"] = mr.input_tokens
-            if mr.output_tokens is not None:
-                metric_entry["output_tokens"] = mr.output_tokens
-            metrics_data.append(metric_entry)
         delegation = metadata.get("delegation") or {}
         routed_to = delegation.get("target", "") if isinstance(delegation, dict) else ""
         results.append(

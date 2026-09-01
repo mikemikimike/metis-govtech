@@ -151,6 +151,8 @@ experiments/orca-eval-20260730-143022/
     └── report.html      # Visual report (open in browser)
 ```
 
+The structure of `report.json` is defined by a [JSON Schema](../../packages/engine/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
+
 Use `logs/evaluate.log` to review extraction, each configured metric, the actual judge model reported by DeepEval, metric scores, pass or fail results, reasons, errors, cost, token counts, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
 See the [report contract](report.md) for the report's scoring,

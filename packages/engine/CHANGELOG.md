@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Configurable user-agent token budget** — `USER_AGENT_MAX_TOKENS` env var controls the max tokens for the simulation persona LLM; omitted by default so the provider's own limit applies. Set explicitly (e.g. 4096) for reasoning models where chain-of-thought tokens count against the limit.
 - **`RunRetryConfig`** (`simulation/config.py`) — shared run-level retry budget model.
 - New exception types: `TargetUnavailableError` (turn-recoverable), `TargetSessionLostError` (run-recoverable), `TargetSessionEnded` (clean session exhaustion → `target_exhausted` stop reason).
+- **JSON schema for `report.json`** — Pydantic `Report` model in `reporting/_models.py` defines the full shape of the product evaluation report; `schemas/report.schema.json` is auto-generated via `make generate-schema` and CI-guarded by `make check-schema`. `save_report()` validates output through the model before writing. Intermediate TypedDicts (`TurnReport`, `SessionReport`, etc.) promoted to Pydantic BaseModels.
 
 ### Changed
 
