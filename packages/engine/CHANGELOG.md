@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **User guide: "Adapting to Your Target System"** — new section in `docs/guide/engine.md` covering the Runner ABC, RunnerFactory protocol, a complete REST API runner example, `runner_factory_ref` wiring, `profile.yaml` schema reference, Langfuse requirements, and a minimal experiment template with pre-flight checklist.
 - **Orca API runner** (`simulation/runners/orca_api/`) — drives simulations over Orca's key-authenticated REST API (`/api/v1`). Submits turns via `POST /chat`, polls digests, handles typed forms, uploads fixtures with experiment-scoped caching, and downloads generated artifacts. Includes rate limiting, backoff for transient failures, and turn cancellation on timeout.
 - **Shared HTTP utilities** (`simulation/runners/_http.py`) — `SubmitRateLimiter`, `poll_until`, `send_with_backoff`, `download_to` for API-driven runners.
+- **TLS verification bypass** — `insecure` flag in Orca API runner config (`config.yaml`) and `build_client()` for targets with self-signed certificates.
+- **Configurable user-agent token budget** — `USER_AGENT_MAX_TOKENS` env var controls the max tokens for the simulation persona LLM; omitted by default so the provider's own limit applies. Set explicitly (e.g. 4096) for reasoning models where chain-of-thought tokens count against the limit.
 - **`RunRetryConfig`** (`simulation/config.py`) — shared run-level retry budget model.
 - New exception types: `TargetUnavailableError` (turn-recoverable), `TargetSessionLostError` (run-recoverable), `TargetSessionEnded` (clean session exhaustion → `target_exhausted` stop reason).
 

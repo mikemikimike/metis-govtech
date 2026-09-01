@@ -53,8 +53,8 @@ Optional tuning variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `USER_AGENT_MODEL` | `gpt-5.6-luna` | Model used for the simulated user persona |
-| `USER_AGENT_MAX_TOKENS` | `1024` | Max tokens per user agent response |
-| `USER_AGENT_TEMPERATURE` | `0.7` | Sampling temperature for the user agent |
+| `USER_AGENT_MAX_TOKENS` | _(unset)_ | Max tokens per user agent response; unset/empty → parameter omitted, provider default applies. Set explicitly (e.g. `4096`) for reasoning models where chain-of-thought tokens count against the limit |
+| `USER_AGENT_TEMPERATURE` | _(unset)_ | Sampling temperature for the user agent; unset/empty → parameter omitted, provider default applies |
 | `HEADED` | `false` | Set to `true` to show the browser window |
 
 ### Verify Installation
@@ -879,7 +879,7 @@ scenarios:
 
 The value is a fully-qualified Python name pointing to your `RunnerFactory` class. The engine resolves it at load time using `importlib.import_module` — if the import fails or the class lacks `start`, `create`, or `close` methods, validation raises an error immediately.
 
-When `runner_factory_ref` is omitted (or `null`), the engine defaults to `metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory`.
+`runner_factory_ref` is a required field — the engine does not default to any runner. You must always specify which `RunnerFactory` to use.
 
 #### Resolution Logic
 
@@ -1114,7 +1114,7 @@ id: my-target-eval
 description: >
   Evaluation of [target system] [capabilities being tested].
 
-runner_factory_ref: my_package.runners.MyRunnerFactory  # omit for Playwright/Orca
+runner_factory_ref: my_package.runners.MyRunnerFactory
 
 personas:
   - id: cooperative
