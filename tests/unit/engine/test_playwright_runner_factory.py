@@ -1,4 +1,4 @@
-"""Tests for PlaywrightRunnerFactory."""
+"""Tests for OrcaPlaywrightRunnerFactory."""
 
 from __future__ import annotations
 
@@ -7,14 +7,16 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from metis.engine.simulation.runners.playwright._config import (
+pytest.importorskip("playwright")
+
+from metis.engine.simulation.runners.orca_playwright._config import (
     AuthConfig,
-    PlaywrightRunnerConfig,
+    OrcaPlaywrightRunnerConfig,
 )
 
 
-def _make_config(*, headed: bool = False) -> PlaywrightRunnerConfig:
-    return PlaywrightRunnerConfig(
+def _make_config(*, headed: bool = False) -> OrcaPlaywrightRunnerConfig:
+    return OrcaPlaywrightRunnerConfig(
         url="https://example.com",
         auth=AuthConfig(username="user", password="pass"),
         headed=headed,
@@ -23,12 +25,12 @@ def _make_config(*, headed: bool = False) -> PlaywrightRunnerConfig:
 
 class TestPlaywrightRunnerFactoryInit:
     def test_init_with_explicit_config(self) -> None:
-        from metis.engine.simulation.runners.playwright._factory import (
-            PlaywrightRunnerFactory,
+        from metis.engine.simulation.runners.orca_playwright._factory import (
+            OrcaPlaywrightRunnerFactory,
         )
 
         config = _make_config(headed=False)
-        factory = PlaywrightRunnerFactory(config=config)
+        factory = OrcaPlaywrightRunnerFactory(config=config)
         assert factory._config.url == "https://example.com"
         assert factory._config.auth.username == "user"
         assert factory._headed is False
@@ -41,21 +43,21 @@ class TestPlaywrightRunnerFactoryInit:
         monkeypatch.setenv("ORCA_PASSWORD", "env_pass")
         monkeypatch.setenv("HEADED", "true")
 
-        from metis.engine.simulation.runners.playwright._factory import (
-            PlaywrightRunnerFactory,
+        from metis.engine.simulation.runners.orca_playwright._factory import (
+            OrcaPlaywrightRunnerFactory,
         )
 
-        factory = PlaywrightRunnerFactory()
+        factory = OrcaPlaywrightRunnerFactory()
         assert factory._config.url == "https://env.example.com"
         assert factory._config.auth.username == "env_user"
         assert factory._headed is True
 
     def test_retry_defaults_from_config(self) -> None:
-        from metis.engine.simulation.runners.playwright._factory import (
-            PlaywrightRunnerFactory,
+        from metis.engine.simulation.runners.orca_playwright._factory import (
+            OrcaPlaywrightRunnerFactory,
         )
 
-        factory = PlaywrightRunnerFactory(config=_make_config())
+        factory = OrcaPlaywrightRunnerFactory(config=_make_config())
         max_retries, delay = factory.retry_defaults
         assert max_retries == 2
         assert delay == 5.0
@@ -64,8 +66,8 @@ class TestPlaywrightRunnerFactoryInit:
 class TestPlaywrightRunnerFactoryLifecycle:
     @pytest.mark.asyncio
     async def test_start_launches_browser_headed(self) -> None:
-        from metis.engine.simulation.runners.playwright._factory import (
-            PlaywrightRunnerFactory,
+        from metis.engine.simulation.runners.orca_playwright._factory import (
+            OrcaPlaywrightRunnerFactory,
         )
 
         mock_browser = AsyncMock()
@@ -76,19 +78,19 @@ class TestPlaywrightRunnerFactoryLifecycle:
         mock_playwright_fn.start = AsyncMock(return_value=mock_pw)
 
         with patch(
-            "metis.engine.simulation.runners.playwright._factory.async_playwright",
+            "metis.engine.simulation.runners.orca_playwright._factory.async_playwright",
             return_value=mock_playwright_fn,
         ):
-            factory = PlaywrightRunnerFactory(config=_make_config(headed=True))
+            factory = OrcaPlaywrightRunnerFactory(config=_make_config(headed=True))
             await factory.start()
 
             mock_pw.chromium.launch.assert_called_once_with(headless=False)
 
     @pytest.mark.asyncio
     async def test_create_returns_playwright_runner(self, tmp_path: Path) -> None:
-        from metis.engine.simulation.runners.playwright import PlaywrightRunner
-        from metis.engine.simulation.runners.playwright._factory import (
-            PlaywrightRunnerFactory,
+        from metis.engine.simulation.runners.orca_playwright import OrcaPlaywrightRunner
+        from metis.engine.simulation.runners.orca_playwright._factory import (
+            OrcaPlaywrightRunnerFactory,
         )
 
         mock_page = AsyncMock()
@@ -97,11 +99,11 @@ class TestPlaywrightRunnerFactoryLifecycle:
         mock_browser = AsyncMock()
         mock_browser.new_context = AsyncMock(return_value=mock_context)
 
-        factory = PlaywrightRunnerFactory(config=_make_config())
+        factory = OrcaPlaywrightRunnerFactory(config=_make_config())
         factory._browser = mock_browser
 
         runner = await factory.create(tmp_path / "run", tmp_path / "fixtures")
-        assert isinstance(runner, PlaywrightRunner)
+        assert isinstance(runner, OrcaPlaywrightRunner)
         mock_browser.new_context.assert_called_once_with(
             viewport={"width": 1440, "height": 900},
             accept_downloads=True,
@@ -109,11 +111,11 @@ class TestPlaywrightRunnerFactoryLifecycle:
 
     @pytest.mark.asyncio
     async def test_close_shuts_down_browser_and_playwright(self) -> None:
-        from metis.engine.simulation.runners.playwright._factory import (
-            PlaywrightRunnerFactory,
+        from metis.engine.simulation.runners.orca_playwright._factory import (
+            OrcaPlaywrightRunnerFactory,
         )
 
-        factory = PlaywrightRunnerFactory(config=_make_config())
+        factory = OrcaPlaywrightRunnerFactory(config=_make_config())
         factory._browser = AsyncMock()
         factory._pw = AsyncMock()
 

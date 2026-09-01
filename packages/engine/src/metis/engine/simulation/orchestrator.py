@@ -18,6 +18,8 @@ from .exceptions import (
     PostSubmissionObservationError,
     ResponseTimeoutError,
     RunRecoverableError,
+    TargetSessionEnded,
+    TargetUnavailableError,
     TransientDOMError,
     TurnRecoverableError,
 )
@@ -31,6 +33,7 @@ from .types import (
     RunOutcome,
     RunRecord,
     Scenario,
+    TurnDiagnostics,
     UserAgentInput,
 )
 
@@ -270,6 +273,24 @@ class Orchestrator:
                     observation = Observation(
                         errors=["Response timeout — no response received"]
                     )
+                except TargetUnavailableError as exc:
+                    consecutive_failures += 1
+                    if consecutive_failures >= 2:
+                        raise ConsecutiveFailureEscalation(
+                            f"{consecutive_failures} consecutive turn failures"
+                        ) from exc
+                    observation = Observation(errors=[f"Target unavailable — {exc}"])
+                except TargetSessionEnded as exc:
+                    logger.info(
+                        "[turn %d] STOP: target_exhausted (%s)", turn_count, exc
+                    )
+                    return self._build_record(
+                        "target_exhausted",
+                        conversation,
+                        artifacts_collected,
+                        start_time,
+                        target_session_id or await self._runner.get_session_id(),
+                    )
                 except RunRecoverableError:
                     raise
 
@@ -289,13 +310,26 @@ class Orchestrator:
                 turn_duration_ms = int((time.time() - turn_start) * 1000)
 
                 # Record the conversation turn
+                diagnostics: TurnDiagnostics | None = None
+                if observation.discarded_message is not None:
+                    diagnostics = TurnDiagnostics(
+                        discarded_message=observation.discarded_message
+                    )
+                    logger.info(
+                        "[turn %d]   Message not delivered by transport: %r",
+                        turn_count,
+                        observation.discarded_message[:80],
+                    )
                 turn = ConversationTurn(
                     turn_number=turn_count,
                     user_message=current_message,
-                    target_response=observation.model_dump(),
+                    target_response=observation.model_dump(
+                        exclude={"discarded_message"}
+                    ),
                     duration_ms=turn_duration_ms,
                     timestamp=datetime.now(tz=UTC).isoformat(),
                     user_ui_actions=[a.model_dump() for a in current_actions],
+                    diagnostics=diagnostics,
                 )
                 conversation.append(turn)
 

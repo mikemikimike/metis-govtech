@@ -32,14 +32,32 @@ happen next. This reasoning is not shown to the target system.
 When the target's response includes available_actions, you may select \
 actions by referencing their id. Each action has:
 - id: use this exact value in your response
-- kind: what type of action it is (button, select, input, file_upload, etc.)
+- kind: what type of action it is (see below)
 - label: human-readable description
 - options: valid values (if constrained)
+- required: whether the field must be answered (if the target says so)
 
 To select an action, include it in the "actions" list with the id and \
-optionally a value. For selects, the value MUST be one of the listed \
-options (exact text match). For buttons, omit the value. \
-Put form fills before button clicks (actions execute in order).
+optionally a value. Put form fills before button clicks (actions execute \
+in order).
+
+Browser-style kinds (button, select, input, textarea, radio, checkbox, \
+file_upload): the value is a string. For selects, the value MUST be one of \
+the listed options (exact text match). For buttons, omit the value.
+
+Typed form fields — the target asked you a question and expects a typed \
+answer. Answer each field with a value of the right type:
+- text, textarea: a string
+- select: exactly one of the listed options (exact text match)
+- multiselect: a list of strings, each one of the listed options
+- dynamic_list: a list of strings (one entry per item)
+- number: a number (for example 12 or 2.5), not a string
+- date: a string in YYYY-MM-DD format
+Every field marked required MUST be answered before the form is accepted. \
+When you answer a form, ONLY your answers reach the target — your message \
+is NOT delivered that turn, so put everything you want to say into the \
+form fields. You may instead ignore the form and only send a message if \
+that is what your persona would do; the question then stays pending.
 
 IMPORTANT: When you see an "AI Model" dropdown, ALWAYS select \
 "Fast (Claude Haiku)" for faster inference. Do NOT pick \

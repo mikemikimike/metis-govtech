@@ -9,17 +9,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Added
 
 - `RunnerFactory` protocol in `simulation/runner.py` — abstracts shared-resource lifecycle and per-attempt runner creation.
-- `PlaywrightRunnerFactory` in `simulation/runners/playwright/_factory.py` — encapsulates Playwright browser lifecycle and configuration.
 - `simulation/_artifact_store.py` — runner-agnostic artifact manifest writer (moved from `runners/playwright/`).
-- **Pluggable runner via `runner_ref`** — optional `runner_ref` field in `experiment.yaml` accepts a fully-qualified RunnerFactory class name; validated at load time with a clear error if the FQN is unimportable or doesn't satisfy the RunnerFactory protocol. Omitting the field preserves the current PlaywrightRunnerFactory default.
-- **User guide: "Adapting to Your Target System"** — new section in `docs/guide/engine.md` covering the Runner ABC, RunnerFactory protocol, a complete REST API runner example, `runner_ref` wiring, `profile.yaml` schema reference, Langfuse requirements, and a minimal experiment template with pre-flight checklist.
+- **Pluggable runner via `runner_factory_ref`** — required `runner_factory_ref` field in `experiment.yaml` accepts a fully-qualified RunnerFactory class name; validated at load time with a clear error if the FQN is unimportable or doesn't satisfy the RunnerFactory protocol.
+- **User guide: "Adapting to Your Target System"** — new section in `docs/guide/engine.md` covering the Runner ABC, RunnerFactory protocol, a complete REST API runner example, `runner_factory_ref` wiring, `profile.yaml` schema reference, Langfuse requirements, and a minimal experiment template with pre-flight checklist.
+- **Orca API runner** (`simulation/runners/orca_api/`) — drives simulations over Orca's key-authenticated REST API (`/api/v1`). Submits turns via `POST /chat`, polls digests, handles typed forms, uploads fixtures with experiment-scoped caching, and downloads generated artifacts. Includes rate limiting, backoff for transient failures, and turn cancellation on timeout.
+- **Shared HTTP utilities** (`simulation/runners/_http.py`) — `SubmitRateLimiter`, `poll_until`, `send_with_backoff`, `download_to` for API-driven runners.
+- **TLS verification bypass** — `insecure` flag in Orca API runner config (`config.yaml`) and `build_client()` for targets with self-signed certificates.
+- **Configurable user-agent token budget** — `USER_AGENT_MAX_TOKENS` env var controls the max tokens for the simulation persona LLM; omitted by default so the provider's own limit applies. Set explicitly (e.g. 4096) for reasoning models where chain-of-thought tokens count against the limit.
+- **`RunRetryConfig`** (`simulation/config.py`) — shared run-level retry budget model.
+- New exception types: `TargetUnavailableError` (turn-recoverable), `TargetSessionLostError` (run-recoverable), `TargetSessionEnded` (clean session exhaustion → `target_exhausted` stop reason).
 
 ### Changed
 
 - **Decoupled `experiment.py` from Playwright** — `_worker` and `run_experiment` now operate on the `RunnerFactory` protocol; zero Playwright imports remain in the orchestration layer.
-- **CLI constructs `PlaywrightRunnerFactory`** instead of loading `HarnessConfig` directly; run-level retry defaults are passed as explicit parameters.
-- **Renamed `HarnessConfig` → `PlaywrightRunnerConfig`** — scoped entirely within `runners/playwright/`.
-- **CLI fully decoupled from Playwright** — factory instantiation is now a uniform no-arg `factory_cls()` call for all runners; `HEADED` env var moved into `PlaywrightRunnerConfig.load()` alongside `ORCA_*` vars; removed `from_env()` classmethod and the Playwright-specific "Mode: headed/headless" console output.
+- **CLI fully decoupled from Playwright** — factory instantiation is now a uniform no-arg `factory_cls()` call for all runners; `HEADED` env var moved into `OrcaPlaywrightRunnerConfig.load()` alongside `ORCA_*` vars; removed the Playwright-specific "Mode: headed/headless" console output.
+- **BREAKING: `runner_factory_ref` required** — `runner_factory_ref` (renamed from `runner_ref`) is now a required field in `experiment.yaml` (FQN of a `RunnerFactory` class). `schema_version` stays at `1` per the v0.x policy (no version bumps before 1.0).
+- **Renamed Playwright runner** — `PlaywrightRunner` → `OrcaPlaywrightRunner`, `PlaywrightRunnerFactory` → `OrcaPlaywrightRunnerFactory`, `PlaywrightRunnerConfig` → `OrcaPlaywrightRunnerConfig`; moved from `runners/playwright/` to `runners/orca_playwright/`.
+- **Playwright is now an optional dependency** — install with `pip install metis-engine[playwright]`. The Orca API runner (`metis-engine` base) needs only `httpx`.
+- `Observation.discarded_message` — transports that cannot deliver the persona's prose message (e.g. when answering a form) set this field; the orchestrator records it in `TurnDiagnostics`.
+- `RunConfig.fixtures` — scenario fixture names are now passed to the runner via `RunConfig`.
+- `ActionSlot.required` — optional boolean for form fields.
+- `ChosenAction.value` — widened from `str | None` to `str | list[str] | int | float | None` for typed form answers.
+
+### Removed
+
+- **REST runner stub** (`simulation/runners/rest/`) — replaced by the Orca API runner and user guide examples for writing custom runners.
+- CLI no longer falls back to `PlaywrightRunnerFactory` when `runner_factory_ref` is absent.
 
 ### Fixed
 

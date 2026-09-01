@@ -2,14 +2,16 @@
 
 import pytest
 
+pytest.importorskip("playwright")
+
 from metis.engine.simulation.exceptions import (
     AuthLossError,
     PageCrashError,
     PostSubmissionObservationError,
     TransientDOMError,
 )
-from metis.engine.simulation.runners.playwright._config import RetryConfig
-from metis.engine.simulation.runners.playwright._retry import (
+from metis.engine.simulation.runners.orca_playwright._config import RetryConfig
+from metis.engine.simulation.runners.orca_playwright._retry import (
     action_retry,
     track_submission,
 )

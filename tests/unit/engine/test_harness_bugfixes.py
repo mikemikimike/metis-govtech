@@ -6,6 +6,8 @@ Playwright objects and verify the harness makes correct decisions.
 
 from pathlib import Path
 
+import pytest
+
 
 class TestH2_UploadBookkeeping:
     """H2: Failed uploads must NOT be marked as uploaded."""
@@ -136,7 +138,8 @@ class TestM3_ResponseDetectionScope:
         """Verify send_message checks message count for response detection."""
         import inspect
 
-        from metis.engine.simulation.runners.playwright._page_actions import (
+        pytest.importorskip("playwright")
+        from metis.engine.simulation.runners.orca_playwright._page_actions import (
             send_message,
         )
 
@@ -148,7 +151,8 @@ class TestM3_ResponseDetectionScope:
         """Verify we find the chat textarea by placeholder pattern."""
         import inspect
 
-        from metis.engine.simulation.runners.playwright._page_actions import (
+        pytest.importorskip("playwright")
+        from metis.engine.simulation.runners.orca_playwright._page_actions import (
             send_message,
         )
 
@@ -189,7 +193,8 @@ class TestS1_SendMessagePattern:
         """Verify send_message uses .fill() + .press('Enter')."""
         import inspect
 
-        from metis.engine.simulation.runners.playwright._page_actions import (
+        pytest.importorskip("playwright")
+        from metis.engine.simulation.runners.orca_playwright._page_actions import (
             send_message,
         )
 

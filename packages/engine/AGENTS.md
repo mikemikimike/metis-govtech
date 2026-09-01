@@ -18,17 +18,21 @@ Commit the updated schema files alongside the model change.
 
 ## Schema Versioning
 
-When modifying `Experiment` or `SessionRecord`, check whether the change is **breaking** — i.e., whether data valid under the current version would fail `model_validate()` under the new model.
+**v0.x policy:** While the monorepo is pre-1.0, schema versions are not bumped for breaking changes. All v0.x releases may break schemas freely — consumers pin to exact package versions. The `schema_version` field stays at `1` and serves only as a structural marker, not a compatibility contract.
+
+**v1.x policy (planned):** Starting with the 1.0 release, proper schema versioning will be enforced. Breaking changes will bump `schema_version`, and migration paths will be documented. The bump checklist below applies from 1.0 onward.
+
+When modifying `Experiment` or `RunRecord`, check whether the change is **breaking** — i.e., whether data valid under the current version would fail `model_validate()` under the new model.
 
 **A bump is required for:** new required fields, type changes, field renames, breaking changes in nested models.
 
 **No bump needed for:** new optional fields with defaults, removing fields (`extra="ignore"` silently drops them).
 
 A breaking change to a nested model bumps the version of the root model that contains it:
-- `ExperimentTask`, `MetricRef`, `Persona` → bump `Experiment`
-- `SessionConfig`, `SessionOutcome`, `CollectedArtifact`, `ConversationTurn` → bump `SessionRecord`
+- `Scenario`, `MetricRef`, `Persona` → bump `Experiment`
+- `RunConfig`, `RunOutcome`, `CollectedArtifact`, `ConversationTurn` → bump `RunRecord`
 
-### Bump Checklist
+### Bump Checklist (applies from v1.0)
 
 1. Increment the relevant `_*_VERSION` constant in `simulation/types.py`
 2. Update the `Literal[N]` annotation on the model field to match
