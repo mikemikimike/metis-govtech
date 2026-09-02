@@ -325,6 +325,7 @@ async def _worker(
 
             for attempt in range(1, max_attempts + 1):
                 runner = await runner_factory.create(run_dir, fixtures_dir)
+                orchestrator: Orchestrator | None = None  # reset each attempt
 
                 try:
                     run_config = RunConfig(
@@ -353,13 +354,21 @@ async def _worker(
                     record.prior_failures = prior_failures
                     break
                 except RunRecoverableError as exc:
+                    partial = (
+                        orchestrator.partial_record("system_error")
+                        if orchestrator is not None
+                        else None
+                    )
+                    turn_reached = (
+                        partial.outcome.total_turns if partial is not None else 0
+                    )
                     duration_ms = int((time.time() - run_start) * 1000)
                     failure = RunFailure(
                         attempt_number=attempt,
                         failure_type=type(exc).__name__,
                         submission_phase="unknown",
-                        turn_reached=0,
-                        error_message=str(exc),
+                        turn_reached=turn_reached,
+                        error_message=str(exc) or type(exc).__name__,
                         duration_ms=duration_ms,
                     )
                     prior_failures.append(failure)
@@ -375,58 +384,99 @@ async def _worker(
                     )
 
                     if attempt == max_attempts:
-                        record = RunRecord(
-                            config=RunConfig(
-                                persona=persona.id,
-                                scenario=scenario.id,
-                                metric_refs=scenario.metric_refs,
-                                fixtures=scenario.fixtures,
-                            ),
-                            target_session_id=None,
-                            outcome=RunOutcome(
-                                stop_reason="system_error",
-                                total_turns=0,
-                                duration_seconds=(time.time() - run_start),
-                            ),
-                            conversation=[],
-                            artifacts_collected=[],
-                            attempt_number=attempt,
-                            total_attempts=max_attempts,
-                            prior_failures=prior_failures,
-                        )
+                        if partial is not None:
+                            record = partial
+                            record.attempt_number = attempt
+                            record.total_attempts = max_attempts
+                            record.prior_failures = prior_failures
+                        else:
+                            record = RunRecord(
+                                config=RunConfig(
+                                    persona=persona.id,
+                                    scenario=scenario.id,
+                                    metric_refs=scenario.metric_refs,
+                                    fixtures=scenario.fixtures,
+                                ),
+                                target_session_id=None,
+                                outcome=RunOutcome(
+                                    stop_reason="system_error",
+                                    total_turns=0,
+                                    duration_seconds=(time.time() - run_start),
+                                ),
+                                conversation=[],
+                                artifacts_collected=[],
+                                attempt_number=attempt,
+                                total_attempts=max_attempts,
+                                prior_failures=prior_failures,
+                            )
                     else:
                         await asyncio.sleep(run_retry_delay_seconds)
                         run_start = time.time()
 
                 except Exception as exc:
-                    # Unexpected non-recoverable error — no retry
-                    logger.error(
-                        "[experiment] Worker w%d: unexpected crash for %s × %s: %s",
+                    # Unexpected crash. Capture the traceback (previously
+                    # swallowed), preserve any turns the orchestrator
+                    # completed, and retry within the configured budget.
+                    partial = (
+                        orchestrator.partial_record("system_error")
+                        if orchestrator is not None
+                        else None
+                    )
+                    turn_reached = (
+                        partial.outcome.total_turns if partial is not None else 0
+                    )
+                    duration_ms = int((time.time() - run_start) * 1000)
+                    logger.exception(
+                        "[experiment] Worker w%d: unexpected crash on attempt "
+                        "%d/%d for %s × %s (reached turn %d)",
                         worker_id,
+                        attempt,
+                        max_attempts,
                         scenario.id,
                         persona.id,
-                        exc,
+                        turn_reached,
                     )
-                    record = RunRecord(
-                        config=RunConfig(
-                            persona=persona.id,
-                            scenario=scenario.id,
-                            metric_refs=scenario.metric_refs,
-                            fixtures=scenario.fixtures,
-                        ),
-                        target_session_id=None,
-                        outcome=RunOutcome(
-                            stop_reason="system_error",
-                            total_turns=0,
-                            duration_seconds=(time.time() - run_start),
-                        ),
-                        conversation=[],
-                        artifacts_collected=[],
-                        attempt_number=attempt,
-                        total_attempts=max_attempts,
-                        prior_failures=prior_failures,
+                    prior_failures.append(
+                        RunFailure(
+                            attempt_number=attempt,
+                            failure_type=type(exc).__name__,
+                            submission_phase="unknown",
+                            turn_reached=turn_reached,
+                            # str(exc) is empty for message-less exceptions;
+                            # fall back to the class name so it is never blank.
+                            error_message=str(exc) or type(exc).__name__,
+                            duration_ms=duration_ms,
+                        )
                     )
-                    break
+
+                    if attempt == max_attempts:
+                        record = (
+                            partial
+                            if partial is not None
+                            else RunRecord(
+                                config=RunConfig(
+                                    persona=persona.id,
+                                    scenario=scenario.id,
+                                    metric_refs=scenario.metric_refs,
+                                    fixtures=scenario.fixtures,
+                                ),
+                                target_session_id=None,
+                                outcome=RunOutcome(
+                                    stop_reason="system_error",
+                                    total_turns=0,
+                                    duration_seconds=(time.time() - run_start),
+                                ),
+                                conversation=[],
+                                artifacts_collected=[],
+                            )
+                        )
+                        record.attempt_number = attempt
+                        record.total_attempts = max_attempts
+                        record.prior_failures = prior_failures
+                        break
+
+                    await asyncio.sleep(run_retry_delay_seconds)
+                    run_start = time.time()
 
             assert record is not None  # always set: loop runs at least once
 
