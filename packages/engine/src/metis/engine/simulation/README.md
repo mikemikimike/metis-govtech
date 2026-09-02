@@ -78,11 +78,9 @@ simulation/
 ├── exceptions.py      — Simulation-specific exceptions
 ├── _artifact_store.py — Artifact capture and storage
 ├── user_agent/        — LLM-powered user agent (persona embodiment)
-├── harness/           — Playwright-specific helpers (auth, page actions, UI capture)
-├── runners/
-│   ├── _http.py           — Shared HTTP utilities (rate limiter, backoff, polling)
-│   ├── orca_playwright/   — Orca browser runner
-│   ├── orca_api/          — Orca API runner
-│   └── playwright/        — Generic Playwright utilities
-└── fixtures/          — Internal test data files (see fixtures/README.md)
+└── runners/
+    ├── _http.py           — Shared HTTP utilities (rate limiter, backoff, polling)
+    ├── orca_playwright/   — Orca browser runner (auth, page actions, UI capture,
+    │                        element resolution, recovery, retry)
+    └── orca_api/          — Orca API runner (transport, fixtures, artifacts)
 ```
