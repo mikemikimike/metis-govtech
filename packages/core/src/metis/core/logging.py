@@ -11,6 +11,7 @@ import inspect
 import logging
 import os
 import sys
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -21,6 +22,17 @@ if TYPE_CHECKING:
     from structlog.types import EventDict, Processor
 
 _stderr_console = Console(stderr=True)
+
+
+def iso_timestamp() -> str:
+    """Return the current UTC time as an ISO-8601 string with a ``Z`` suffix.
+
+    Matches the format of ``structlog.processors.TimeStamper(fmt="iso")`` so
+    that log lines written outside the structlog pipeline stay consistent with
+    structlog-rendered logs. structlog omits the fractional part when the
+    microsecond is exactly 0; this helper always emits six digits.
+    """
+    return datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:

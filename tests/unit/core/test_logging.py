@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 from unittest.mock import patch
 
 import structlog
@@ -120,3 +121,39 @@ class TestPublicExports:
         from metis.core import console
 
         assert isinstance(console, Console)
+
+
+class TestIsoTimestamp:
+    # iso_timestamp() always emits 6-digit microseconds and a literal Z, e.g.
+    # 2026-09-02T03:27:51.790384Z
+    ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
+    # structlog's TimeStamper(fmt="iso") renders the same shape but omits the
+    # fractional part when the microsecond is exactly 0, so the fraction is
+    # optional when matching structlog's output.
+    STRUCTLOG_ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{6})?Z$")
+
+    def test_helper_shape(self):
+        from metis.core.logging import iso_timestamp
+
+        assert self.ISO_RE.match(iso_timestamp())
+
+    def test_matches_structlog_timestamper_format(self):
+        """Consistency guard: iso_timestamp() and structlog's
+        TimeStamper(fmt="iso") render UTC ISO-8601 with a Z suffix the same
+        way, so a structlog upgrade that changes ISO rendering fails CI.
+        Compare structure, not the exact instant.
+        """
+        from metis.core.logging import iso_timestamp
+
+        stamper = structlog.processors.TimeStamper(fmt="iso")
+        structlog_ts = stamper(None, "info", {})["timestamp"]
+
+        ours = iso_timestamp()
+
+        # Our helper always emits 6-digit microseconds...
+        assert self.ISO_RE.match(ours)
+        # ...and structlog renders the same canonical shape (fraction optional
+        # only when microsecond == 0), both ending in Z.
+        assert self.STRUCTLOG_ISO_RE.match(structlog_ts)
+        assert ours.endswith("Z")
+        assert structlog_ts.endswith("Z")
