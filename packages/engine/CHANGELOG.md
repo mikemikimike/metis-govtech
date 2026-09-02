@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **`RunRetryConfig`** (`simulation/config.py`) — shared run-level retry budget model.
 - New exception types: `TargetUnavailableError` (turn-recoverable), `TargetSessionLostError` (run-recoverable), `TargetSessionEnded` (clean session exhaustion → `target_exhausted` stop reason).
 - **JSON schema for `report.json`** — Pydantic `Report` model in `reporting/_models.py` defines the full shape of the product evaluation report; `schemas/report.schema.json` is auto-generated via `make generate-schema` and CI-guarded by `make check-schema`. `save_report()` validates output through the model before writing. Intermediate TypedDicts (`TurnReport`, `SessionReport`, etc.) promoted to Pydantic BaseModels.
+- **Evaluation README** (`evaluation/README.md`) — documents the evaluation orchestrator's architecture, concurrency model (`asyncio.Semaphore`-gated metric execution), environment variables (`JUDGE_MODEL`, `DEEPEVAL_*`), and input/output types.
 
 ### Changed
 
@@ -31,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `RunConfig.fixtures` — scenario fixture names are now passed to the runner via `RunConfig`.
 - `ActionSlot.required` — optional boolean for form fields.
 - `ChosenAction.value` — widened from `str | None` to `str | list[str] | int | float | None` for typed form answers.
+- **User guide: Concurrency section expanded** — `docs/guide/engine.md` now documents concurrency behavior per runner type (Playwright browser contexts vs. API runner factory/runner lifecycle with shared `SubmitRateLimiter` and `FixtureLibrary`), including the throughput constraint that `submit_rpm` is shared across all concurrent workers.
+- **Simulation README rewritten as runner-agnostic** — architecture diagrams and descriptions now use `RunnerFactory`/`Runner` abstractions; Orca runners are presented as reference implementations; `JUDGE_MODEL` moved to evaluation README; stale input-directory and structure sections replaced with current layout.
 
 ### Removed
 

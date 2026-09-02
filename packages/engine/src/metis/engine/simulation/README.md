@@ -1,39 +1,55 @@
 # Simulation Framework
 
-LLM-driven persona simulation for end-to-end testing of an AI assistant. Drives real conversations through the target UI via Playwright and writes frozen run records for later evaluation.
-
-> **Note:** The harness (auth flow, page selectors, session ID extraction) is currently
-> tightly coupled to Orca. Adapting to a different target requires changes in
-> `harness/_auth.py`, `harness/_ui_capture.py`, and `harness/_page_actions.py`.
+LLM-driven persona simulation for end-to-end testing of an AI assistant. Drives real conversations through a target system via a pluggable runner and writes frozen run records for later evaluation.
 
 ## Architecture
 
 ```
 CLI (sync) → run_experiment() → asyncio.run()
-  └── async_playwright() → 1 browser
-       ├── Worker 0: BrowserContext → Page → login → run slice
-       ├── Worker 1: BrowserContext → Page → login → run slice
+  └── RunnerFactory.start()
+       ├── Worker 0: factory.create() → Runner → run slice
+       ├── Worker 1: factory.create() → Runner → run slice
        └── ... (N workers, set by --concurrency)
 ```
 
 ```
-User Agent (Python/AsyncOpenAI)  →  Environment (Python/async Playwright)  →  Target UI
+User Agent (Python/AsyncOpenAI)  →  Runner  →  Target System
 ```
 
-- **User Agent** — embodies the persona, generates next messages; imported and called directly by the environment harness
-- **Environment** — handles Playwright interactions, file uploads, form fills, and artifact capture
-- **Artifacts** — charts (screenshotted as PNG) and downloads are captured and stored under the target session ID, which matches the Langfuse `session_id` for trace linking
+- **User Agent** — embodies the persona, generates next messages; imported and called directly by the orchestrator
+- **Runner** — translates messages and actions into transport-specific calls (HTTP API, browser automation, etc.) and returns observations
+- **RunnerFactory** — manages shared resources (connection pools, browser instances, rate limiters) and creates fresh `Runner` instances per attempt
+
+### Built-in runners
+
+The two Orca-specific runners under `runners/` are reference implementations for GovTech's Orca platform, not part of the framework contract:
+
+| Runner | Transport | Notes |
+|--------|-----------|-------|
+| `orca_playwright` | Playwright (browser) | Drives Orca's web UI via a headless browser. Each worker gets its own browser context with isolated login. |
+| `orca_api` | HTTP (`/api/v1`) | Drives Orca via its key-authenticated REST API. Turns are sequential within a run; concurrency comes from multiple runners sharing a rate limiter and fixture cache via the factory. |
+
+Custom runners are selected via `runner_factory_ref` in `experiment.yaml`. See the [Engine User Guide](../../../../../docs/guide/engine.md#writing-a-custom-runner) for the `Runner` ABC, `RunnerFactory` protocol, and a complete REST example.
+
+### Concurrency
+
+Workers run concurrently via `asyncio.gather`. Each worker processes its slice of runs sequentially, creating a fresh `Runner` per run. How isolation and shared resources work is runner-specific — see the [Concurrency section](../../../../../docs/guide/engine.md#concurrency) in the user guide.
+
+### Artifacts
+
+Charts (screenshotted as PNG) and downloads are captured and stored under the target session ID, which matches the Langfuse `session_id` for trace linking.
 
 ## Environment variables
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENAI_API_KEY` | Yes | Shared API key for the user agent and DeepEval judge metrics |
-| `OPENAI_BASE_URL` | No | Shared endpoint override for both; unset → default OpenAI endpoint |
+| `OPENAI_API_KEY` | Yes | API key for the user agent LLM |
+| `OPENAI_BASE_URL` | No | Endpoint override; unset → default OpenAI endpoint |
 | `USER_AGENT_MODEL` | No | User-agent model name (default: `gpt-5.6-luna`) |
 | `USER_AGENT_MAX_TOKENS` | No | Max output tokens per turn (unset/empty → parameter omitted, provider default applies) |
 | `USER_AGENT_TEMPERATURE` | No | Sampling temperature (unset/empty → parameter omitted, provider default applies) |
-| `JUDGE_MODEL` | No | Judge model name (default: `gemini-3.5-flash-lite`) |
+
+Runner-specific variables (e.g. `ORCA_URL`, `ORCA_API_URL`, `ORCA_API_KEY`) are documented in each runner's module docstring. Judge/evaluation variables (`JUDGE_MODEL`, `DEEPEVAL_*`) are documented in the [evaluation README](../evaluation/README.md).
 
 ## Running
 
@@ -42,7 +58,6 @@ Run from the project root. Use `uv run metis engine simulate` or activate the en
 ```bash
 metis engine simulate --input-dir path/to/my-experiment/
 # Evaluate the output directory that simulate wrote. It prints this command.
-# The name holds the experiment id and the start time of the run.
 metis engine evaluate --experiment-dir experiments/my-experiment-20260820-143000/
 ```
 
@@ -50,28 +65,22 @@ Use `metis engine run --input-dir path/to/my-experiment/` for the combined simul
 
 Simulation uses the live TUI in a terminal. Evaluation uses a normal progress bar, reports linear per-record progress outside a terminal, and writes one complete `logs/evaluate.log` file.
 
-## Input directory structure
-
-All inputs for an experiment live in a single flat directory:
-
-```
-my-experiment/
-├── experiment.yaml   — personas, tasks, metric refs, fixtures
-├── profile.yaml      - tasks, behaviours, criteria, and metrics
-└── fixtures/
-    └── *.csv / *.txt — fixture files referenced by tasks
-```
-
-See `example-experiment/` at the project root for a working example. The CLI validates that `experiment.yaml` exists in the input directory and that all fixture files referenced by tasks are present in `fixtures/`.
-
-On each run, the full input directory is copied into `experiments/experiment-YYYY-MM-DD-{uuid}/inputs/` for reproducibility.
-
 ## Structure
 
 ```
 simulation/
-├── fixtures/          — Internal test data files (see fixtures/README.md)
-├── user_agent/        — Python user agent (OpenAI-powered)
-├── schema_test.py     — Schema sync tests
-└── types.py           — Pydantic models (Experiment, ExperimentTask, Persona, SessionConfig, ...)
+├── runner.py          — Runner ABC and RunnerFactory protocol
+├── runner_resolver.py — Resolves runner_factory_ref FQN to a class
+├── experiment.py      — Experiment orchestrator (worker distribution, asyncio.gather)
+├── orchestrator.py    — Single-run orchestration (turn loop, retries)
+├── types.py           — Pydantic models (Experiment, Scenario, Persona, Observation, ...)
+├── config.py          — Shared configuration (retry defaults)
+├── exceptions.py      — Simulation-specific exceptions
+├── _artifact_store.py — Artifact capture and storage
+├── user_agent/        — LLM-powered user agent (persona embodiment)
+└── runners/
+    ├── _http.py           — Shared HTTP utilities (rate limiter, backoff, polling)
+    ├── orca_playwright/   — Orca browser runner (auth, page actions, UI capture,
+    │                        element resolution, recovery, retry)
+    └── orca_api/          — Orca API runner (transport, fixtures, artifacts)
 ```
