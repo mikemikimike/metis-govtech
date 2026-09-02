@@ -4,6 +4,14 @@ All notable changes to `metis-core` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-09-02
+
+### Added
+
+- `iso_timestamp()` in `metis.core.logging` — returns the current UTC time as an ISO-8601 string with a `Z` suffix and always-six-digit microseconds (e.g. `2026-09-02T03:27:51.790384Z`), matching the format of `structlog.processors.TimeStamper(fmt="iso")`. Provides a single source of truth for the canonical log-timestamp format so log lines written outside the structlog pipeline stay consistent with structlog-rendered logs.
+
+---
+
 ## [0.3.1] — 2026-08-27
 
 ### Added
