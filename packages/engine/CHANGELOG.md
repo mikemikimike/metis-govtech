@@ -42,6 +42,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **Silent worker crashes in `simulate`** — an unexpected exception in a run
+  now logs its full traceback (`logger.exception` instead of a bare `%s`),
+  preserves the turns that completed instead of recording `system_error` with
+  `0 turns` and an empty conversation, and is retried within the run's
+  `max_run_retries` budget (previously it broke immediately with no retry).
+  Partial state is exposed via the new `Orchestrator.partial_record()`.
+  (#250)
+- **Uncaught Orca transport errors** — a timeout, dropped connection, or
+  protocol error on an Orca `/api/v1` call (e.g. while polling a turn digest)
+  is now mapped to `TargetUnavailableError` (turn-recoverable) instead of
+  escaping `v1_request` as a bare, message-less exception. This was the
+  trigger behind the silent `system_error / 0 turns` crashes. (#250)
+
 ---
 
 ## [0.11.1] — 2026-08-27

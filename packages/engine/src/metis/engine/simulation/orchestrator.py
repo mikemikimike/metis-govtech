@@ -76,6 +76,13 @@ class Orchestrator:
         self._tui_ctx = tui_ctx
         self._shutdown_event = shutdown_event
 
+        # In-progress state mirrored here so a caller can still build a
+        # record if run() raises. run() overwrites these on entry.
+        self._conversation: list[ConversationTurn] = []
+        self._artifacts_collected: list[CollectedArtifact] = []
+        self._start_time: float = time.time()
+        self._target_session_id: str | None = None
+
     async def run(self) -> RunRecord:
         """Execute the full simulation run."""
         run_config = self._run_config
@@ -84,6 +91,14 @@ class Orchestrator:
         artifacts_collected: list[CollectedArtifact] = []
         turn_count = 0
         target_session_id: str | None = None
+
+        # Mirror onto instance attributes so partial_record() can read them
+        # if this coroutine raises before returning a record. The lists are
+        # shared by reference, so later .append()s are visible via self.
+        self._conversation = conversation
+        self._artifacts_collected = artifacts_collected
+        self._start_time = start_time
+        self._target_session_id = None
 
         logger.info("=" * 60)
         logger.info("[sim] START: %s x %s", run_config.persona, run_config.scenario)
@@ -300,6 +315,7 @@ class Orchestrator:
                 # Capture session ID
                 if not target_session_id:
                     target_session_id = await self._runner.get_session_id()
+                    self._target_session_id = target_session_id
                     if target_session_id:
                         logger.info(
                             "[turn %d] Captured target session ID: %s",
@@ -498,4 +514,20 @@ class Orchestrator:
             ),
             conversation=conversation,
             artifacts_collected=artifacts_collected,
+        )
+
+    def partial_record(self, stop_reason: str) -> RunRecord:
+        """Build a RunRecord from whatever progress this run has made.
+
+        Used by the experiment worker when run() raises unexpectedly, so
+        completed turns are preserved instead of discarded. total_turns is
+        the number of turns recorded so far; duration is measured from the
+        run's start.
+        """
+        return self._build_record(
+            stop_reason,
+            self._conversation,
+            self._artifacts_collected,
+            self._start_time,
+            self._target_session_id,
         )

@@ -5,10 +5,11 @@ from __future__ import annotations
 import asyncio
 import inspect
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from metis.engine.simulation.exceptions import ConsecutiveFailureEscalation
 from metis.engine.simulation.experiment import _worker, run_folder_name
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
@@ -199,3 +200,253 @@ class TestNoPlaywrightImport:
 
         source = inspect.getsource(mod)
         assert "OrcaPlaywrightRunner" not in source
+
+
+def _partial_record(
+    scenario: Scenario, persona: Persona, *, turns: int, stop_reason: str
+) -> RunRecord:
+    """A RunRecord standing in for orchestrator.partial_record() output."""
+    return RunRecord(
+        config=RunConfig(persona=persona.id, scenario=scenario.id, metric_refs=[]),
+        target_session_id="sess-partial",
+        outcome=RunOutcome(
+            stop_reason=stop_reason,
+            total_turns=turns,
+            duration_seconds=1.0,
+        ),
+        conversation=[],
+        artifacts_collected=[],
+    )
+
+
+class TestWorkerUnexpectedCrash:
+    @pytest.mark.asyncio
+    async def test_crash_preserves_partial_turns(
+        self, simple_persona: Persona, tmp_path: Path
+    ) -> None:
+        """On an unexpected crash the recorded turn count comes from the
+        orchestrator's partial state, not a zeroed-out record."""
+        scenario = Scenario(
+            id="test-scenario",
+            description="s",
+            persona_refs=["tester"],
+            num_trials=1,
+            max_turns=5,
+            max_run_retries=0,  # no retry: isolate preservation
+            metric_refs=[],
+        )
+        factory = MockRunnerFactory()
+        await factory.start()
+
+        partial = _partial_record(
+            scenario, simple_persona, turns=3, stop_reason="system_error"
+        )
+
+        with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
+            instance = AsyncMock()
+            instance.run = AsyncMock(side_effect=RuntimeError())  # message-less
+            instance.partial_record = MagicMock(return_value=partial)
+            mock_orch_cls.return_value = instance
+
+            records = await _worker(
+                worker_id=0,
+                runner_factory=factory,
+                run_slice=[(scenario, simple_persona, 0)],
+                total_runs=1,
+                output_dir=tmp_path,
+                fixtures_dir=tmp_path / "fixtures",
+                console_lock=asyncio.Lock(),
+                started_scenarios=set(),
+                run_max_retries=2,
+                run_retry_delay_seconds=0.0,
+            )
+
+        assert len(records) == 1
+        assert records[0].outcome.stop_reason == "system_error"
+        assert records[0].outcome.total_turns == 3  # preserved, not 0
+        assert len(records[0].prior_failures) == 1
+        assert records[0].prior_failures[0].turn_reached == 3
+        assert records[0].prior_failures[0].failure_type == "RuntimeError"
+
+    @pytest.mark.asyncio
+    async def test_crash_is_retried_then_succeeds(
+        self, simple_persona: Persona, tmp_path: Path
+    ) -> None:
+        """An unexpected crash on attempt 1 is retried; a successful
+        attempt 2 wins, and the crash is recorded in prior_failures."""
+        scenario = Scenario(
+            id="test-scenario",
+            description="s",
+            persona_refs=["tester"],
+            num_trials=1,
+            max_turns=5,
+            max_run_retries=1,  # -> max_attempts == 2
+            metric_refs=[],
+        )
+        factory = MockRunnerFactory()
+        await factory.start()
+
+        success = _make_canned_record(scenario, simple_persona)
+        partial = _partial_record(
+            scenario, simple_persona, turns=2, stop_reason="system_error"
+        )
+
+        with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
+            instance = AsyncMock()
+            instance.run = AsyncMock(side_effect=[RuntimeError(), success])
+            instance.partial_record = MagicMock(return_value=partial)
+            mock_orch_cls.return_value = instance
+
+            records = await _worker(
+                worker_id=0,
+                runner_factory=factory,
+                run_slice=[(scenario, simple_persona, 0)],
+                total_runs=1,
+                output_dir=tmp_path,
+                fixtures_dir=tmp_path / "fixtures",
+                console_lock=asyncio.Lock(),
+                started_scenarios=set(),
+                run_max_retries=2,
+                run_retry_delay_seconds=0.0,
+            )
+
+        assert instance.run.await_count == 2
+        assert records[0].outcome.stop_reason == "goal_achieved"
+        assert records[0].attempt_number == 2
+        assert records[0].total_attempts == 2
+        assert len(records[0].prior_failures) == 1
+        assert records[0].prior_failures[0].turn_reached == 2
+
+    @pytest.mark.asyncio
+    async def test_crash_before_orchestrator_built_falls_back_to_empty(
+        self, simple_persona: Persona, tmp_path: Path
+    ) -> None:
+        """If the crash happens before the Orchestrator is constructed,
+        the worker still records a system_error rather than propagating."""
+        scenario = Scenario(
+            id="test-scenario",
+            description="s",
+            persona_refs=["tester"],
+            num_trials=1,
+            max_turns=5,
+            max_run_retries=0,
+            metric_refs=[],
+        )
+        factory = MockRunnerFactory()
+        await factory.start()
+
+        with patch(
+            "metis.engine.simulation.experiment.Orchestrator",
+            side_effect=RuntimeError("construction blew up"),
+        ):
+            records = await _worker(
+                worker_id=0,
+                runner_factory=factory,
+                run_slice=[(scenario, simple_persona, 0)],
+                total_runs=1,
+                output_dir=tmp_path,
+                fixtures_dir=tmp_path / "fixtures",
+                console_lock=asyncio.Lock(),
+                started_scenarios=set(),
+                run_max_retries=2,
+                run_retry_delay_seconds=0.0,
+            )
+
+        assert len(records) == 1
+        assert records[0].outcome.stop_reason == "system_error"
+        assert records[0].outcome.total_turns == 0
+        assert records[0].conversation == []
+
+    @pytest.mark.asyncio
+    async def test_crash_is_logged_with_traceback(
+        self, simple_persona: Persona, tmp_path: Path
+    ) -> None:
+        """The crash handler uses logger.exception so a traceback is captured."""
+        scenario = Scenario(
+            id="test-scenario",
+            description="s",
+            persona_refs=["tester"],
+            num_trials=1,
+            max_turns=5,
+            max_run_retries=0,
+            metric_refs=[],
+        )
+        factory = MockRunnerFactory()
+        await factory.start()
+
+        partial = _partial_record(
+            scenario, simple_persona, turns=1, stop_reason="system_error"
+        )
+
+        with (
+            patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls,
+            patch("metis.engine.simulation.experiment.logger") as mock_logger,
+        ):
+            instance = AsyncMock()
+            instance.run = AsyncMock(side_effect=RuntimeError())
+            instance.partial_record = MagicMock(return_value=partial)
+            mock_orch_cls.return_value = instance
+
+            await _worker(
+                worker_id=0,
+                runner_factory=factory,
+                run_slice=[(scenario, simple_persona, 0)],
+                total_runs=1,
+                output_dir=tmp_path,
+                fixtures_dir=tmp_path / "fixtures",
+                console_lock=asyncio.Lock(),
+                started_scenarios=set(),
+                run_max_retries=2,
+                run_retry_delay_seconds=0.0,
+            )
+
+        assert mock_logger.exception.called
+
+    @pytest.mark.asyncio
+    async def test_recoverable_exhaustion_preserves_partial_turns(
+        self, simple_persona: Persona, tmp_path: Path
+    ) -> None:
+        """When a RunRecoverableError exhausts the retry budget, the recorded
+        turn count comes from the orchestrator's partial state, not zero."""
+        scenario = Scenario(
+            id="test-scenario",
+            description="s",
+            persona_refs=["tester"],
+            num_trials=1,
+            max_turns=5,
+            max_run_retries=0,  # single attempt — immediately exhausted
+            metric_refs=[],
+        )
+        factory = MockRunnerFactory()
+        await factory.start()
+
+        partial = _partial_record(
+            scenario, simple_persona, turns=3, stop_reason="system_error"
+        )
+
+        with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
+            instance = AsyncMock()
+            instance.run = AsyncMock(
+                side_effect=ConsecutiveFailureEscalation("too many failures")
+            )
+            instance.partial_record = MagicMock(return_value=partial)
+            mock_orch_cls.return_value = instance
+
+            records = await _worker(
+                worker_id=0,
+                runner_factory=factory,
+                run_slice=[(scenario, simple_persona, 0)],
+                total_runs=1,
+                output_dir=tmp_path,
+                fixtures_dir=tmp_path / "fixtures",
+                console_lock=asyncio.Lock(),
+                started_scenarios=set(),
+                run_max_retries=2,
+                run_retry_delay_seconds=0.0,
+            )
+
+        assert len(records) == 1
+        assert records[0].outcome.stop_reason == "system_error"
+        assert records[0].outcome.total_turns == 3  # preserved, not 0
+        assert len(records[0].prior_failures) == 1
+        assert records[0].prior_failures[0].turn_reached == 3

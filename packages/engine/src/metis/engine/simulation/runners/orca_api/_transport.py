@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import httpx
+
 from ...exceptions import AuthLossError, TargetUnavailableError
 from .._http import send_with_backoff
 
 if TYPE_CHECKING:
-    import httpx
-
     from .._http import Clock, Sleep, SubmitRateLimiter
 
 
@@ -50,13 +50,23 @@ async def v1_request(
             await limiter.acquire()
         return await client.request(method, path, json=json, files=files)
 
-    response = await send_with_backoff(
-        send,
-        unavailable_window_s=store_retry_window_s,
-        retry_after_default_s=limiter.interval_s,
-        clock=clock,
-        sleep=sleep,
-    )
+    try:
+        response = await send_with_backoff(
+            send,
+            unavailable_window_s=store_retry_window_s,
+            retry_after_default_s=limiter.interval_s,
+            clock=clock,
+            sleep=sleep,
+        )
+    except httpx.TransportError as exc:
+        # A timeout, dropped connection, or protocol error on the wire.
+        # httpx timeout errors often carry an empty message; surface a
+        # descriptive, turn-recoverable error instead of letting a bare,
+        # message-less Exception escape and be recorded as a silent
+        # system_error (see issue #250).
+        raise TargetUnavailableError(
+            f"Transport error on {method} {path}: {type(exc).__name__}: {exc}"
+        ) from exc
     if response.status_code == 401:
         raise AuthLossError("Orca rejected the API key (401)")
     if response.status_code == 503:
