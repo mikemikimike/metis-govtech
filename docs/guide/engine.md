@@ -345,9 +345,27 @@ The `run` command accepts the union of the simulation and evaluation options. It
 
 ### Concurrency
 
-The `--concurrency N` flag runs N simulation workers in parallel. Each worker gets its own isolated login session and page — no shared state between workers.
+The `--concurrency N` flag runs N simulation workers in parallel. The default is `5`. Reduce to `1` for sequential execution or increase based on your target system's capacity.
 
-The default is `5`. Reduce to `1` for sequential execution or increase based on your target system's capacity.
+Runs are distributed round-robin across workers. Each worker processes its slice sequentially — one run at a time — while all workers run concurrently via `asyncio.gather`. How isolation and resource sharing work depends on the runner.
+
+#### Playwright runner (browser-based)
+
+Each worker gets its own browser context with an isolated login session and page. No shared state or cookie leakage between workers. All contexts share a single browser process.
+
+#### API runner (OrcaApiRunner)
+
+Each worker gets a **fresh `OrcaApiRunner` per run**, not one for the worker's lifetime. The factory (`OrcaApiRunnerFactory`) mints a new runner for each run, which goes through `setup` → `send_turn` (repeated) → `teardown`, then is discarded. Within a single run, turns are strictly sequential — there is no intra-run parallelism.
+
+The factory owns three resources shared across all concurrent runners:
+
+| Resource | Purpose |
+|----------|---------|
+| `httpx.AsyncClient` | Single connection pool for all HTTP calls |
+| `SubmitRateLimiter` | Spaces submissions across all runners at the configured RPM (default: 6 RPM). Uses an `asyncio.Lock` so concurrent runners interleave in arrival order rather than racing. |
+| `FixtureLibrary` | Caches uploaded fixture file IDs. Uses a per-fixture-name `asyncio.Lock` so only one runner uploads a given fixture; others wait and reuse the cached ID. |
+
+The rate limiter is the key throttle: with `submit_rpm: 6`, all concurrent runners collectively share a budget of one submission every 10 seconds, regardless of the `--concurrency` value. Increasing concurrency overlaps polling and setup time across runs but does not increase submission throughput.
 
 ### Verbosity
 
