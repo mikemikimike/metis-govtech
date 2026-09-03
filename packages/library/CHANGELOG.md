@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- Default judge model (`JUDGE_MODEL`) is now `gemini-3.5-flash-lite` (was `gpt-5.6-luna`);
+override with `JUDGE_MODEL`. DeepEval's `GPTModel` always sends a `temperature` field,
+which `gpt-5.6-luna` rejects on Bedrock with a 400, so every GEval-graded metric errored.
+`gemini-3.5-flash-lite` tolerates the field.
+([#264](https://github.com/govtech-responsibleai/metis/issues/264))
+
 ### Removed
 
 ### Added
