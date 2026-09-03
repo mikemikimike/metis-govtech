@@ -136,6 +136,19 @@ class LogRouter:
         s = int(elapsed) % 60
         return f"{h:02d}:{m:02d}:{s:02d}"
 
+    def _wall_clock_str(self, timestamp: str) -> str:
+        """ISO-8601 UTC wall clock trimmed to whole seconds with a Z suffix.
+
+        Reuses the structlog ``timestamp`` (TimeStamper(fmt="iso")) so it is
+        byte-consistent with the per-run log files. Drops fractional seconds
+        for the live view but keeps ``Z`` so it is unambiguously UTC.
+        """
+        if not timestamp:
+            return ""
+        # Strip the trailing 'Z' suffix, drop the fractional part, re-append 'Z'.
+        base = timestamp.removesuffix("Z").split(".", 1)[0]
+        return f"{base}Z"
+
     def _render_styled(self, event_dict: EventDict) -> Text:
         """Build a styled Rich Text for the TUI tail panel."""
         event = event_dict.get("event", "")
@@ -143,7 +156,10 @@ class LogRouter:
         persona_id = event_dict.get("persona_id")
 
         output = Text()
-        output.append(f"{self._elapsed_str()} ", style="dim")
+        wall = self._wall_clock_str(event_dict.get("timestamp", ""))
+        if wall:
+            output.append(f"{wall} ", style="dim")
+        output.append(f"(+{self._elapsed_str()}) ", style="dim")
         if scenario_id and persona_id:
             output.append(f"[{scenario_id}:{persona_id}] ", style="dim cyan")
         output.append(event)

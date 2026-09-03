@@ -96,7 +96,9 @@ class TestRetryAfterSeconds:
         assert retry_after_seconds(resp, 5.0) == 0.0
 
 
-def _fake_response(status: int, headers: dict[str, str] | None = None) -> httpx.Response:
+def _fake_response(
+    status: int, headers: dict[str, str] | None = None
+) -> httpx.Response:
     return httpx.Response(status, headers=headers or {})
 
 
@@ -119,10 +121,12 @@ class TestSendWithBackoff:
             nonlocal now
             now += s
 
-        responses = iter([
-            _fake_response(429, {"Retry-After": "2"}),
-            _fake_response(200),
-        ])
+        responses = iter(
+            [
+                _fake_response(429, {"Retry-After": "2"}),
+                _fake_response(200),
+            ]
+        )
         send = AsyncMock(side_effect=lambda: next(responses))
         result = await send_with_backoff(
             send, unavailable_window_s=10, clock=clock, sleep=sleep
@@ -187,7 +191,9 @@ class TestSendWithBackoff:
             nonlocal now
             now += s
 
-        responses = iter([_fake_response(503), _fake_response(503), _fake_response(200)])
+        responses = iter(
+            [_fake_response(503), _fake_response(503), _fake_response(200)]
+        )
         send = AsyncMock(side_effect=lambda: next(responses))
         result = await send_with_backoff(
             send,
@@ -240,9 +246,7 @@ class TestDownloadTo:
     async def test_cleans_up_partial_on_error(self, tmp_path: Path) -> None:
         dest = tmp_path / "file.txt"
 
-        transport = httpx.MockTransport(
-            lambda req: httpx.Response(500)
-        )
+        transport = httpx.MockTransport(lambda req: httpx.Response(500))
         client = httpx.AsyncClient(transport=transport)
 
         with pytest.raises(httpx.HTTPStatusError):
