@@ -4,7 +4,7 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.12.0] — Unreleased
+## [0.12.0] — 2026-09-03
 
 ### Added
 
@@ -78,7 +78,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **Product evaluation report** — the report joins each metric result onto the product profile
 in `inputs/profile.yaml`, so pass rates roll up per criterion, behaviour, and task, and split
-by persona and scenario. 
+by persona and scenario.
 
 ### Changed
 
