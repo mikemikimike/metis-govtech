@@ -31,6 +31,15 @@ SCHEMA_VERSION = 1
 
 SCHEMA_FILENAME = "experiment.schema.json"
 
+# The engine v1 schema requires runner_factory_ref, and its loader resolves the FQN to a
+# real class. There is one runner factory today, so the compiler stamps it as a default
+# rather than asking the user — the interview is about product behaviour, not the runner.
+# This is a plain string, not an import of engine code, so it keeps the same arrangement
+# as the schema-on-disk lookup below.
+DEFAULT_RUNNER_FACTORY_REF = (
+    "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
+)
+
 
 class CompilationError(Exception):
     """The compiled document does not satisfy the experiment schema."""
@@ -114,13 +123,16 @@ def build_experiment_document(
     description: str,
     personas: list[dict[str, Any]],
     scenarios: list[dict[str, Any]],
+    runner_factory_ref: str = DEFAULT_RUNNER_FACTORY_REF,
 ) -> dict[str, Any]:
     """Assemble and validate an experiment document from its parts.
 
     The one place the document's shape and field order are decided, so every door that
     produces one — the interview's compiler and the web door's stateless compile route —
     emits the same bytes from the same content. The schema version is stamped here rather
-    than supplied by a caller: a form never asks the user for it.
+    than supplied by a caller: a form never asks the user for it. The runner factory ref
+    is stamped the same way — it defaults to the one runner factory that is live today, and
+    a form never asks the user for it either.
 
     `personas` and `scenarios` arrive already in document shape (the dicts the schema
     expects), so this function neither knows nor cares whether they came from a
@@ -133,6 +145,9 @@ def build_experiment_document(
         "schema_version": SCHEMA_VERSION,
         "id": experiment_id,
         "description": description,
+        # The engine reads this FQN, loads the class and uses it to run each scenario. The
+        # field order matches the schema, so the ref comes after the description.
+        "runner_factory_ref": runner_factory_ref,
         # Personas are inline: one output file, one schema. The input directory the engine
         # reads is experiment.yaml plus a fixtures/ folder — there is no personas file.
         "personas": personas,

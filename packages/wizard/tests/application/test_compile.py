@@ -54,6 +54,13 @@ def test_emits_schema_version_explicitly() -> None:
     assert compiled()["schema_version"] == SCHEMA_VERSION
 
 
+def test_emits_the_default_runner_factory_ref() -> None:
+    """The engine v1 schema requires it; the compiler stamps a default the loader resolves."""
+    from metis.wizard.application.compile import DEFAULT_RUNNER_FACTORY_REF
+
+    assert compiled()["runner_factory_ref"] == DEFAULT_RUNNER_FACTORY_REF
+
+
 def test_nothing_is_written_when_validation_fails(tmp_path: Path) -> None:
     """A malformed experiment must never reach disk."""
     profile = research_assistant()

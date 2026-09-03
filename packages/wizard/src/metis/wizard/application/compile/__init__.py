@@ -10,6 +10,7 @@ from metis.wizard.application.compile.bundle import (
     write_bundle,
 )
 from metis.wizard.application.compile.experiment import (
+    DEFAULT_RUNNER_FACTORY_REF,
     SCHEMA_VERSION,
     CompilationError,
     build_experiment_document,
@@ -20,6 +21,7 @@ from metis.wizard.application.compile.experiment import (
 from metis.wizard.application.compile.review import render_review, write_review
 
 __all__ = [
+    "DEFAULT_RUNNER_FACTORY_REF",
     "SCHEMA_VERSION",
     "BundleError",
     "CompilationError",

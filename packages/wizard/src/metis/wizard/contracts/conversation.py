@@ -19,14 +19,15 @@ saying different things.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias
+from typing import Annotated, Literal, TypeAlias
 
 from pydantic import BaseModel, Field, StrictInt, StrictStr, field_validator
 
+# `Option.patch` is a Pydantic field, so `Patch` must be a runtime import — Pydantic resolves
+# the annotation at runtime and a TYPE_CHECKING-only import leaves Option (and every model
+# nesting it) "not fully defined". See CLAUDE.md — Coding Conventions.
+from metis.wizard.domain.patch import Patch
 from metis.wizard.domain.types import InteractionType
-
-if TYPE_CHECKING:
-    from metis.wizard.domain.patch import Patch
 
 # ── what the user clicked ──────────────────────────────────────────────────
 

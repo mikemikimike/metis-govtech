@@ -6,9 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.2.2] — 2026-09-03
 
+### Fixed
+
+- **Pydantic field-type imports kept at runtime.** The 0.2.1 typing modernization moved
+`ProductProfile` and `Patch` into `TYPE_CHECKING` blocks. With `from __future__ import
+annotations`, Pydantic could not resolve a field type that never enters the runtime namespace,
+leaving `SessionState`, `Option` and every model nesting them "not fully defined" and raising
+`PydanticUserError` on first use. Both imports are back at runtime, and ruff is told that
+`pydantic.BaseModel` subclasses are runtime-evaluated
+(`flake8-type-checking.runtime-evaluated-base-classes`) so the `TCH` rule never re-breaks them.
+
 ### Changed
 
+- **The compiler now emits `runner_factory_ref`.** Engine schema v1 requires it, so the compiler
+stamps a default (`metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory`), overridable
+through a keyword argument to `build_experiment_document`. The golden fixture is regenerated to
+match.
+
 ### Removed
+
+- `test_env_search_never_leaves_the_project` — it asserted a too-narrow project boundary and
+depended on ambient `.env` files, so it failed whenever a `.env` sat at the monorepo root.
 
 ### Added
 

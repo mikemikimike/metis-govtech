@@ -12,15 +12,17 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, Field
 
 from metis.wizard.contracts.conversation import AnyRequest, WizardRequestState
 from metis.wizard.domain.permissions import SessionStep
 
-if TYPE_CHECKING:
-    from metis.wizard.domain.profile import ProductProfile
+# `profile` is a Pydantic field, so `ProductProfile` must be a runtime import — Pydantic
+# resolves the annotation at runtime and a TYPE_CHECKING-only import leaves SessionState
+# "not fully defined". See CLAUDE.md — Coding Conventions.
+from metis.wizard.domain.profile import ProductProfile
 
 SESSION_FORMAT_VERSION = 5
 

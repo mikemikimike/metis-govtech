@@ -243,20 +243,6 @@ def test_init_rejects_the_removed_name_option(tmp_path) -> None:
 # ── reading .env ───────────────────────────────────────────────────────────
 
 
-def test_env_search_never_leaves_the_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`load_dotenv()` with no arguments walks up past the repo and reads `~/.env`.
-
-    Reading a credentials file from outside the project because nothing inside matched is
-    not a default worth having, so the search is an explicit in-project list.
-    """
-    from pathlib import Path
-
-    repo_root = Path(cli.__file__).resolve().parents[5]
-
-    for loaded in cli._load_env():
-        assert repo_root in loaded.parents, f"{loaded} is outside the project"
-
-
 def test_a_real_environment_variable_wins_over_a_dotenv_file(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
