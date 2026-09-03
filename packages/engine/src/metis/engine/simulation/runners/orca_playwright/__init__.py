@@ -1,4 +1,4 @@
-"""Playwright-based runner — drives simulations against browser targets."""
+"""OrcaPlaywright-based runner — drives simulations against browser targets."""
 
 from __future__ import annotations
 
@@ -31,9 +31,18 @@ from ._ui_capture import (
 if TYPE_CHECKING:
     from playwright.async_api import Page
 
-    from ._config import HarnessConfig
+    from ._config import OrcaPlaywrightRunnerConfig
 
 logger = get_logger()
+
+
+def _value_text(value: str | list[str] | int | float | None) -> str | None:
+    """Convert the widened ChosenAction.value to a plain string for DOM calls."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return ", ".join(map(str, value))
+    return str(value)
 
 
 def _ui_state_to_observation(ui_state: UIState) -> Observation:
@@ -60,13 +69,18 @@ def _form_element_to_action_slot(el: FormElement) -> ActionSlot:
     )
 
 
-class PlaywrightRunner(Runner):
-    """Runner implementation using Playwright to interact with a browser target."""
+class OrcaPlaywrightRunner(Runner):
+    """Runner implementation using Playwright to interact with a browser target.
+
+    Note: selectors, auth flow, and page interactions are hardcoded for the
+    Orca chat UI. Adapting to other browser targets requires subclassing or
+    a new runner.
+    """
 
     def __init__(
         self,
         page: Page,
-        config: HarnessConfig,
+        config: OrcaPlaywrightRunnerConfig,
         fixtures_dir: Path,
         run_dir: Path,
     ) -> None:
@@ -93,17 +107,18 @@ class PlaywrightRunner(Runner):
         if actions:
             logger.info("[playwright-runner] Executing %d action(s)...", len(actions))
         for action_idx, action in enumerate(actions, 1):
+            value = _value_text(action.value)
             kind = self._infer_action_kind(action)
 
             if kind == "file_upload":
-                if action.value and action.value in self._uploaded_files:
+                if value and value in self._uploaded_files:
                     logger.info(
                         "[playwright-runner]   Action %d: SKIP duplicate upload '%s'",
                         action_idx,
-                        action.value,
+                        value,
                     )
                     continue
-                file_name = action.value or action.id
+                file_name = value or action.id
                 file_path = self._fixtures_dir / file_name
                 if not file_path.exists():
                     logger.warning(
@@ -150,7 +165,7 @@ class PlaywrightRunner(Runner):
                     has_form_submit = True
 
             elif kind in ("select", "input", "textarea", "radio", "checkbox"):
-                fill_value = action.value or ""
+                fill_value = value or ""
                 logger.info(
                     "[playwright-runner]   Action %d: FORM_FILL '%s' = %r",
                     action_idx,
@@ -340,3 +355,8 @@ class PlaywrightRunner(Runner):
                     artifact.name,
                     exc,
                 )
+
+
+from ._factory import OrcaPlaywrightRunnerFactory  # noqa: E402
+
+__all__ = ["OrcaPlaywrightRunner", "OrcaPlaywrightRunnerFactory"]

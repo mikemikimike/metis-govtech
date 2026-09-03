@@ -18,6 +18,7 @@ MINIMAL_EXPERIMENT = """\
 schema_version: 1
 id: test-exp
 description: test experiment
+runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
 personas:
   - id: alice
     description: test persona
@@ -115,11 +116,6 @@ def test_resume_runs_only_missing_or_system_error_records(
     _write_record(output_dir, "task-1-alice-1", "goal_achieved")
     _write_record(output_dir, "task-1-alice-2", "system_error")
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
-    monkeypatch.setattr(
-        experiment_module.HarnessConfig,
-        "load",
-        classmethod(lambda cls, *_a, **_k: object()),
-    )
     selected: list[tuple[str, str, int]] = []
 
     def fake_run_experiment(*_args: object, **kwargs: object) -> None:

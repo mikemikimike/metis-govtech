@@ -1,10 +1,14 @@
 """Artifact persistence — copies artifacts to registry and writes manifest."""
 
+from __future__ import annotations
+
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from ...types import RunRecord
+if TYPE_CHECKING:
+    from .types import RunRecord
 
 _TYPE_MAP = {
     "pdf": "report",

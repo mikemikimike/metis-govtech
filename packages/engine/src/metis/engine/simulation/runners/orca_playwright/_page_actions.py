@@ -14,7 +14,7 @@ from metis.core.logging import get_logger
 from ...exceptions import ResponseTimeoutError
 from ...types import UIState
 from ._auth import dismiss_modals
-from ._config import HarnessConfig
+from ._config import OrcaPlaywrightRunnerConfig
 from ._element_resolver import AriaStrategy, CSSStrategy, resolve_element
 from ._retry import action_retry, track_submission
 from ._ui_capture import capture_ui_state
@@ -25,7 +25,7 @@ logger = get_logger()
 async def send_message(
     page: Page,
     message: str,
-    config: HarnessConfig,
+    config: OrcaPlaywrightRunnerConfig,
     timeout_override: int | None = None,
 ) -> UIState:
     """Send a message in the chat and wait for the full response."""
@@ -174,7 +174,7 @@ async def send_message(
 
 
 async def upload_file(
-    page: Page, file_path: Path, config: HarnessConfig | None = None
+    page: Page, file_path: Path, config: OrcaPlaywrightRunnerConfig | None = None
 ) -> None:
     """Upload a file via the target system's attach-file flow."""
     filename = file_path.name
@@ -283,7 +283,9 @@ async def upload_file(
         )
 
 
-async def auto_fill_and_submit(page: Page, config: HarnessConfig | None = None) -> bool:
+async def auto_fill_and_submit(
+    page: Page, config: OrcaPlaywrightRunnerConfig | None = None
+) -> bool:
     """Auto-fill visible forms and click Submit. Returns True if form was submitted."""
     form_submit_btn = page.locator(
         'button:has-text("Submit"), button:has-text("Continue"), button:has-text("Confirm Theme"), button:has-text("Confirm")'

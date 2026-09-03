@@ -18,6 +18,8 @@ from .exceptions import (
     PostSubmissionObservationError,
     ResponseTimeoutError,
     RunRecoverableError,
+    TargetSessionEnded,
+    TargetUnavailableError,
     TransientDOMError,
     TurnRecoverableError,
 )
@@ -31,6 +33,7 @@ from .types import (
     RunOutcome,
     RunRecord,
     Scenario,
+    TurnDiagnostics,
     UserAgentInput,
 )
 
@@ -73,6 +76,13 @@ class Orchestrator:
         self._tui_ctx = tui_ctx
         self._shutdown_event = shutdown_event
 
+        # In-progress state mirrored here so a caller can still build a
+        # record if run() raises. run() overwrites these on entry.
+        self._conversation: list[ConversationTurn] = []
+        self._artifacts_collected: list[CollectedArtifact] = []
+        self._start_time: float = time.time()
+        self._target_session_id: str | None = None
+
     async def run(self) -> RunRecord:
         """Execute the full simulation run."""
         run_config = self._run_config
@@ -81,6 +91,14 @@ class Orchestrator:
         artifacts_collected: list[CollectedArtifact] = []
         turn_count = 0
         target_session_id: str | None = None
+
+        # Mirror onto instance attributes so partial_record() can read them
+        # if this coroutine raises before returning a record. The lists are
+        # shared by reference, so later .append()s are visible via self.
+        self._conversation = conversation
+        self._artifacts_collected = artifacts_collected
+        self._start_time = start_time
+        self._target_session_id = None
 
         logger.info("=" * 60)
         logger.info("[sim] START: %s x %s", run_config.persona, run_config.scenario)
@@ -270,6 +288,24 @@ class Orchestrator:
                     observation = Observation(
                         errors=["Response timeout — no response received"]
                     )
+                except TargetUnavailableError as exc:
+                    consecutive_failures += 1
+                    if consecutive_failures >= 2:
+                        raise ConsecutiveFailureEscalation(
+                            f"{consecutive_failures} consecutive turn failures"
+                        ) from exc
+                    observation = Observation(errors=[f"Target unavailable — {exc}"])
+                except TargetSessionEnded as exc:
+                    logger.info(
+                        "[turn %d] STOP: target_exhausted (%s)", turn_count, exc
+                    )
+                    return self._build_record(
+                        "target_exhausted",
+                        conversation,
+                        artifacts_collected,
+                        start_time,
+                        target_session_id or await self._runner.get_session_id(),
+                    )
                 except RunRecoverableError:
                     raise
 
@@ -279,6 +315,7 @@ class Orchestrator:
                 # Capture session ID
                 if not target_session_id:
                     target_session_id = await self._runner.get_session_id()
+                    self._target_session_id = target_session_id
                     if target_session_id:
                         logger.info(
                             "[turn %d] Captured target session ID: %s",
@@ -289,13 +326,26 @@ class Orchestrator:
                 turn_duration_ms = int((time.time() - turn_start) * 1000)
 
                 # Record the conversation turn
+                diagnostics: TurnDiagnostics | None = None
+                if observation.discarded_message is not None:
+                    diagnostics = TurnDiagnostics(
+                        discarded_message=observation.discarded_message
+                    )
+                    logger.info(
+                        "[turn %d]   Message not delivered by transport: %r",
+                        turn_count,
+                        observation.discarded_message[:80],
+                    )
                 turn = ConversationTurn(
                     turn_number=turn_count,
                     user_message=current_message,
-                    target_response=observation.model_dump(),
+                    target_response=observation.model_dump(
+                        exclude={"discarded_message"}
+                    ),
                     duration_ms=turn_duration_ms,
                     timestamp=datetime.now(tz=UTC).isoformat(),
                     user_ui_actions=[a.model_dump() for a in current_actions],
+                    diagnostics=diagnostics,
                 )
                 conversation.append(turn)
 
@@ -464,4 +514,20 @@ class Orchestrator:
             ),
             conversation=conversation,
             artifacts_collected=artifacts_collected,
+        )
+
+    def partial_record(self, stop_reason: str) -> RunRecord:
+        """Build a RunRecord from whatever progress this run has made.
+
+        Used by the experiment worker when run() raises unexpectedly, so
+        completed turns are preserved instead of discarded. total_turns is
+        the number of turns recorded so far; duration is measured from the
+        run's start.
+        """
+        return self._build_record(
+            stop_reason,
+            self._conversation,
+            self._artifacts_collected,
+            self._start_time,
+            self._target_session_id,
         )

@@ -4,12 +4,15 @@ Hierarchy:
     SimulationError (base — never raised directly)
     ├── TurnRecoverableError (caught by turn layer)
     │   ├── TransientDOMError
-    │   └── PostSubmissionObservationError
+    │   ├── PostSubmissionObservationError
+    │   └── TargetUnavailableError
     ├── RunRecoverableError (caught by run layer)
     │   ├── AuthLossError
     │   ├── PageCrashError
-    │   └── ConsecutiveFailureEscalation
-    └── ResponseTimeoutError (record incomplete, continue)
+    │   ├── ConsecutiveFailureEscalation
+    │   └── TargetSessionLostError
+    ├── ResponseTimeoutError (record incomplete, continue)
+    └── TargetSessionEnded (clean stop, target exhausted)
 """
 
 
@@ -33,6 +36,10 @@ class PostSubmissionObservationError(TurnRecoverableError):
     pass
 
 
+class TargetUnavailableError(TurnRecoverableError):
+    """The target kept answering 503 for longer than the runner's retry window."""
+
+
 class AuthLossError(RunRecoverableError):
     pass
 
@@ -45,5 +52,18 @@ class ConsecutiveFailureEscalation(RunRecoverableError):
     pass
 
 
+class TargetSessionLostError(RunRecoverableError):
+    """A session the runner was driving is gone (404) — reaped or deleted mid-run."""
+
+
 class ResponseTimeoutError(SimulationError):
     pass
+
+
+class TargetSessionEnded(SimulationError):
+    """The target ended the session itself (e.g. its lifetime budget is spent).
+
+    Neither turn- nor run-recoverable: retrying the turn cannot succeed and a
+    fresh session would not continue the same conversation. The orchestrator
+    ends the run with stop reason target_exhausted and a clean record.
+    """

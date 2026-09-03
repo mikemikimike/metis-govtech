@@ -72,6 +72,10 @@ class TestSchemaSync:
 
     def test_fixture_parses_with_pydantic(self, examples_dir: Path):
         """Test fixture must parse successfully with the Pydantic model."""
+        pytest.importorskip(
+            "playwright",
+            reason="example-experiment uses OrcaPlaywrightRunnerFactory (requires playwright extra)",
+        )
         fixture_path = examples_dir / "experiment.yaml"
         if not fixture_path.exists():
             pytest.fail(f"Fixture not found: {fixture_path}")

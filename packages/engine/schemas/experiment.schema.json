@@ -136,6 +136,12 @@
       "title": "Description",
       "type": "string"
     },
+    "runner_factory_ref": {
+      "description": "FQN of a RunnerFactory class (e.g. metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory)",
+      "minLength": 1,
+      "title": "Runner Factory Ref",
+      "type": "string"
+    },
     "personas": {
       "items": {
         "$ref": "#/$defs/Persona"
@@ -157,6 +163,7 @@
     "schema_version",
     "id",
     "description",
+    "runner_factory_ref",
     "personas",
     "scenarios"
   ],

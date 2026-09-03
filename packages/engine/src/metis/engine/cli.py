@@ -513,7 +513,6 @@ def _run_simulation(
     _configure_process_logging(log_level, use_tui=use_tui)
 
     from metis.engine.simulation.experiment import (
-        HarnessConfig,
         expand_run_plan,
         run_experiment,
     )
@@ -552,15 +551,19 @@ def _run_simulation(
         redo_plan = run_plan
         complete_records = {}
 
-    config = HarnessConfig.load()
-    headed = os.environ.get("HEADED", "").lower() == "true"
+    from metis.engine.simulation.runner_resolver import resolve_runner_factory
+
+    factory_cls = resolve_runner_factory(experiment.runner_factory_ref)
+
+    runner_factory = factory_cls()
+
+    run_max_retries, run_retry_delay_seconds = runner_factory.retry_defaults
 
     console.print(f"\n{'=' * 60}")
     console.print("  SIMULATION")
     console.print(f"{'=' * 60}")
     console.print(f"  Experiment: {experiment_dir}")
-    console.print(f"  Input: {fixtures_dir.parent}")
-    console.print(f"  Mode: {'headed' if headed else 'headless'}\n")
+    console.print(f"  Input: {fixtures_dir.parent}\n")
 
     resolved_log_dir = log_dir or (experiment_dir / "logs")
     resolved_log_dir.mkdir(parents=True, exist_ok=True)
@@ -654,14 +657,15 @@ def _run_simulation(
     try:
         with tui_ctx if tui_ctx else nullcontext():
             run_experiment(
-                config=config,
+                runner_factory=runner_factory,
                 experiment=experiment,
                 personas_by_id=personas_by_id,
                 output_dir=experiment_dir,
                 fixtures_dir=fixtures_dir,
-                headed=headed,
                 concurrency=concurrency,
                 run_plan=redo_plan,
+                run_max_retries=run_max_retries,
+                run_retry_delay_seconds=run_retry_delay_seconds,
                 state=sim_state,
                 orchestration_logger=orchestration_logger,
                 log_router=log_router,

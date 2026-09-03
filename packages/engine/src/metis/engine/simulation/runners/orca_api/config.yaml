@@ -1,0 +1,10 @@
+# Orca API runner configuration. Credentials come from the environment
+# (ORCA_API_URL, ORCA_API_KEY); response_wait_ms comes from the scenario.
+
+poll_interval_ms: 3000
+submit_rpm: 6
+store_retry_window_s: 30
+delete_session_on_teardown: false
+
+# Skip TLS certificate verification (for self-signed certs).
+insecure: true

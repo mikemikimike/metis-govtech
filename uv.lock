@@ -990,15 +990,15 @@ requires-dist = [
 
 [[package]]
 name = "metis-engine"
-version = "0.11.1"
+version = "0.12.0"
 source = { editable = "packages/engine" }
 dependencies = [
     { name = "deepeval" },
+    { name = "httpx" },
     { name = "langfuse" },
     { name = "metis-core" },
     { name = "metis-library" },
     { name = "openai" },
-    { name = "playwright" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
@@ -1007,14 +1007,20 @@ dependencies = [
     { name = "typer" },
 ]
 
+[package.optional-dependencies]
+playwright = [
+    { name = "playwright" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "deepeval", specifier = ">=2.0.0" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "langfuse", specifier = ">=2.0.0" },
     { name = "metis-core", editable = "packages/core" },
     { name = "metis-library", editable = "packages/library" },
     { name = "openai", specifier = ">=1.0.0" },
-    { name = "playwright", specifier = ">=1.50.0" },
+    { name = "playwright", marker = "extra == 'playwright'", specifier = ">=1.50.0" },
     { name = "pydantic", specifier = ">=2" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -1022,6 +1028,7 @@ requires-dist = [
     { name = "tenacity", specifier = ">=8.0.0" },
     { name = "typer", specifier = ">=0.9.0" },
 ]
+provides-extras = ["playwright"]
 
 [[package]]
 name = "metis-library"

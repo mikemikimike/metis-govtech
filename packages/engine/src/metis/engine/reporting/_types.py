@@ -2,24 +2,25 @@
 
 The evaluation pipeline produces structured results (TurnResult, SessionResult)
 that hold deepeval test case objects — rich but not JSON-serializable. These
-TypedDicts are the serializable projection used by the reporting layer:
+Pydantic models are the serializable projection used by the reporting layer:
 
   TurnResult  ──► TurnReport   (one per trace/turn)
   SessionResult ──► SessionReport (one per session)
 
 The conversion happens in generator._convert_turn_results and
-generator._convert_session_results. Downstream, these dicts are:
+generator._convert_session_results. Downstream, these models are:
   • aggregated for pass/fail/skip counts in the terminal summary (_aggregation.py)
   • joined onto the product profile to build the report (_report.py)
+  • exported as part of the report JSON schema (schemas/report.schema.json)
 """
 
 from __future__ import annotations
 
-from typing import TypedDict
+from pydantic import BaseModel
 
 
-class SessionMetricResult(TypedDict):
-    """Shape of a single metric result inside :class:`SessionReport`."""
+class SessionMetricResult(BaseModel):
+    """Shape of a single metric result inside SessionReport."""
 
     name: str
     score: float | None
@@ -28,37 +29,28 @@ class SessionMetricResult(TypedDict):
     skipped: bool
 
 
-class SessionReport(TypedDict):
-    """Report-ready projection of a SessionResult.
-
-    Only carries the fields consumed by aggregation and JSON output.
-    Session-level conversation content (turns, tool calls) is not included —
-    it's available in the source SessionResult.conversational_test_case if needed.
-    """
+class SessionReport(BaseModel):
+    """Report-ready projection of a SessionResult."""
 
     session_id: str
     metrics: list[SessionMetricResult]
 
 
-class TurnMetricResult(TypedDict, total=False):
-    """Shape of a single metric result inside :class:`TurnReport`."""
+class TurnMetricResult(BaseModel):
+    """Shape of a single metric result inside TurnReport."""
 
     name: str
     score: float | None
     reason: str
     success: bool
     skipped: bool
-    cost: float
-    input_tokens: int
-    output_tokens: int
+    cost: float | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
-class TurnReport(TypedDict):
-    """Report-ready projection of a TurnResult.
-
-    Every field is consumed by the HTML renderer (trace details, task sections,
-    failure extraction) — none are pass-through-only.
-    """
+class TurnReport(BaseModel):
+    """Report-ready projection of a TurnResult."""
 
     trace_id: str
     session_id: str

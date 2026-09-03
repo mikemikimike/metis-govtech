@@ -15,6 +15,7 @@ MINIMAL_EXPERIMENT = """\
 schema_version: 1
 id: test-exp
 description: test experiment
+runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
 personas:
   - id: alice
     description: test persona

@@ -4,6 +4,61 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] — Unreleased
+
+### Added
+
+- `RunnerFactory` protocol in `simulation/runner.py` — abstracts shared-resource lifecycle and per-attempt runner creation.
+- `simulation/_artifact_store.py` — runner-agnostic artifact manifest writer (moved from `runners/playwright/`).
+- **Pluggable runner via `runner_factory_ref`** — required `runner_factory_ref` field in `experiment.yaml` accepts a fully-qualified RunnerFactory class name; validated at load time with a clear error if the FQN is unimportable or doesn't satisfy the RunnerFactory protocol.
+- **User guide: "Adapting to Your Target System"** — new section in `docs/guide/engine.md` covering the Runner ABC, RunnerFactory protocol, a complete REST API runner example, `runner_factory_ref` wiring, `profile.yaml` schema reference, Langfuse requirements, and a minimal experiment template with pre-flight checklist.
+- **Orca API runner** (`simulation/runners/orca_api/`) — drives simulations over Orca's key-authenticated REST API (`/api/v1`). Submits turns via `POST /chat`, polls digests, handles typed forms, uploads fixtures with experiment-scoped caching, and downloads generated artifacts. Includes rate limiting, backoff for transient failures, and turn cancellation on timeout.
+- **Shared HTTP utilities** (`simulation/runners/_http.py`) — `SubmitRateLimiter`, `poll_until`, `send_with_backoff`, `download_to` for API-driven runners.
+- **TLS verification bypass** — `insecure` flag in Orca API runner config (`config.yaml`) and `build_client()` for targets with self-signed certificates.
+- **Configurable user-agent token budget** — `USER_AGENT_MAX_TOKENS` env var controls the max tokens for the simulation persona LLM; omitted by default so the provider's own limit applies. Set explicitly (e.g. 4096) for reasoning models where chain-of-thought tokens count against the limit.
+- **`RunRetryConfig`** (`simulation/config.py`) — shared run-level retry budget model.
+- New exception types: `TargetUnavailableError` (turn-recoverable), `TargetSessionLostError` (run-recoverable), `TargetSessionEnded` (clean session exhaustion → `target_exhausted` stop reason).
+- **JSON schema for `report.json`** — Pydantic `Report` model in `reporting/_models.py` defines the full shape of the product evaluation report; `schemas/report.schema.json` is auto-generated via `make generate-schema` and CI-guarded by `make check-schema`. `save_report()` validates output through the model before writing. Intermediate TypedDicts (`TurnReport`, `SessionReport`, etc.) promoted to Pydantic BaseModels.
+- **Evaluation README** (`evaluation/README.md`) — documents the evaluation orchestrator's architecture, concurrency model (`asyncio.Semaphore`-gated metric execution), environment variables (`JUDGE_MODEL`, `DEEPEVAL_*`), and input/output types.
+
+### Changed
+
+- **Orchestrator log timestamps aligned to ISO-8601 UTC** — `simulate.log`, `evaluate.log`, and the orchestrator JSON `timestamp` field now use the full `iso_timestamp()` format (`2026-09-02T15:02:03.138406Z`) instead of the time-only `HH:MM:SS`, making them self-dating and consistent with per-run logs.
+- **TUI tail prefix is now a real UTC wall clock** — the live tail panel shows `2026-09-02T00:51:17Z (+00:51:17) ...`: an ISO-8601 UTC wall clock (whole seconds, `Z`) followed by an explicitly-labelled `(+HH:MM:SS)` elapsed-run-time marker, replacing the ambiguous bare `HH:MM:SS` that read like a clock but was elapsed time.
+- **Decoupled `experiment.py` from Playwright** — `_worker` and `run_experiment` now operate on the `RunnerFactory` protocol; zero Playwright imports remain in the orchestration layer.
+- **CLI fully decoupled from Playwright** — factory instantiation is now a uniform no-arg `factory_cls()` call for all runners; `HEADED` env var moved into `OrcaPlaywrightRunnerConfig.load()` alongside `ORCA_*` vars; removed the Playwright-specific "Mode: headed/headless" console output.
+- **BREAKING: `runner_factory_ref` required** — `runner_factory_ref` (renamed from `runner_ref`) is now a required field in `experiment.yaml` (FQN of a `RunnerFactory` class). `schema_version` stays at `1` per the v0.x policy (no version bumps before 1.0).
+- **Renamed Playwright runner** — `PlaywrightRunner` → `OrcaPlaywrightRunner`, `PlaywrightRunnerFactory` → `OrcaPlaywrightRunnerFactory`, `PlaywrightRunnerConfig` → `OrcaPlaywrightRunnerConfig`; moved from `runners/playwright/` to `runners/orca_playwright/`.
+- **Playwright is now an optional dependency** — install with `pip install metis-engine[playwright]`. The Orca API runner (`metis-engine` base) needs only `httpx`.
+- `Observation.discarded_message` — transports that cannot deliver the persona's prose message (e.g. when answering a form) set this field; the orchestrator records it in `TurnDiagnostics`.
+- `RunConfig.fixtures` — scenario fixture names are now passed to the runner via `RunConfig`.
+- `ActionSlot.required` — optional boolean for form fields.
+- `ChosenAction.value` — widened from `str | None` to `str | list[str] | int | float | None` for typed form answers.
+- **User guide: Concurrency section expanded** — `docs/guide/engine.md` now documents concurrency behavior per runner type (Playwright browser contexts vs. API runner factory/runner lifecycle with shared `SubmitRateLimiter` and `FixtureLibrary`), including the throughput constraint that `submit_rpm` is shared across all concurrent workers.
+- **Simulation README rewritten as runner-agnostic** — architecture diagrams and descriptions now use `RunnerFactory`/`Runner` abstractions; Orca runners are presented as reference implementations; `JUDGE_MODEL` moved to evaluation README; stale input-directory and structure sections replaced with current layout.
+
+### Removed
+
+- **REST runner stub** (`simulation/runners/rest/`) — replaced by the Orca API runner and user guide examples for writing custom runners.
+- CLI no longer falls back to `PlaywrightRunnerFactory` when `runner_factory_ref` is absent.
+
+### Fixed
+
+- **Silent worker crashes in `simulate`** — an unexpected exception in a run
+  now logs its full traceback (`logger.exception` instead of a bare `%s`),
+  preserves the turns that completed instead of recording `system_error` with
+  `0 turns` and an empty conversation, and is retried within the run's
+  `max_run_retries` budget (previously it broke immediately with no retry).
+  Partial state is exposed via the new `Orchestrator.partial_record()`.
+  (#250)
+- **Uncaught Orca transport errors** — a timeout, dropped connection, or
+  protocol error on an Orca `/api/v1` call (e.g. while polling a turn digest)
+  is now mapped to `TargetUnavailableError` (turn-recoverable) instead of
+  escaping `v1_request` as a bare, message-less exception. This was the
+  trigger behind the silent `system_error / 0 turns` crashes. (#250)
+
+---
+
 ## [0.11.1] — 2026-08-27
 
 ### Changed

@@ -4,13 +4,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from metis.engine.simulation.runners.playwright._config import RetryConfig
+pytest.importorskip("playwright")
+
+from metis.engine.simulation.runners.orca_playwright._config import RetryConfig
 
 
 class TestCaptureUIStateRetry:
     @pytest.mark.asyncio
     async def test_capture_retries_on_js_evaluation_error(self) -> None:
-        from metis.engine.simulation.runners.playwright._ui_capture import (
+        from metis.engine.simulation.runners.orca_playwright._ui_capture import (
             capture_ui_state,
         )
 
@@ -41,7 +43,7 @@ class TestCaptureUIStateRetry:
     async def test_capture_ui_state_accepts_config_parameter(self) -> None:
         import inspect
 
-        from metis.engine.simulation.runners.playwright._ui_capture import (
+        from metis.engine.simulation.runners.orca_playwright._ui_capture import (
             capture_ui_state,
         )
 
@@ -53,8 +55,8 @@ class TestCaptureUIStateRetry:
 
     @pytest.mark.asyncio
     async def test_capture_ui_state_retries_and_succeeds(self) -> None:
-        from metis.engine.simulation.runners.playwright._config import RetryConfig
-        from metis.engine.simulation.runners.playwright._ui_capture import (
+        from metis.engine.simulation.runners.orca_playwright._config import RetryConfig
+        from metis.engine.simulation.runners.orca_playwright._ui_capture import (
             capture_ui_state,
         )
 
@@ -78,7 +80,9 @@ class TestCaptureUIStateRetry:
         page.evaluate = flaky_evaluate
 
         config = RetryConfig(action_max_attempts=3, action_backoff_base_seconds=0.0)
-        with patch("metis.engine.simulation.runners.playwright._ui_capture.logger"):
+        with patch(
+            "metis.engine.simulation.runners.orca_playwright._ui_capture.logger"
+        ):
             result = await capture_ui_state(page, config=config)
         assert result.text == "response"
         assert call_count == 2
@@ -86,19 +90,19 @@ class TestCaptureUIStateRetry:
 
 class TestLoginElementResolver:
     def test_login_function_exists(self) -> None:
-        from metis.engine.simulation.runners.playwright._auth import login
+        from metis.engine.simulation.runners.orca_playwright._auth import login
 
         assert login is not None
 
     def test_login_uses_resolve_element(self) -> None:
         """Verify that _auth imports resolve_element (i.e., the module was updated)."""
-        import metis.engine.simulation.runners.playwright._auth as auth_module
+        import metis.engine.simulation.runners.orca_playwright._auth as auth_module
 
         assert hasattr(auth_module, "resolve_element")
 
     def test_auth_imports_element_strategies(self) -> None:
         """Verify that _auth imports the element strategy types."""
-        import metis.engine.simulation.runners.playwright._auth as auth_module
+        import metis.engine.simulation.runners.orca_playwright._auth as auth_module
 
         assert hasattr(auth_module, "AriaStrategy")
         assert hasattr(auth_module, "CSSStrategy")
