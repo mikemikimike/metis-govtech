@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json as json_mod
-from datetime import UTC, datetime
 from typing import IO, TYPE_CHECKING, Literal
+
+from metis.core.logging import iso_timestamp
 
 from .router import _run_log_filename
 
@@ -36,7 +37,7 @@ class OrchestrationLogger:
         )
 
     def _timestamp(self) -> str:
-        return datetime.now(tz=UTC).strftime("%H:%M:%S")
+        return iso_timestamp()
 
     def _write_text(self, line: str) -> None:
         self._handle.write(f"[{self._timestamp()}] {line}\n")
@@ -156,6 +157,6 @@ class EvaluationLogger:
 
     def write(self, message: str) -> None:
         """Append one timestamped evaluation event."""
-        timestamp = datetime.now(tz=UTC).strftime("%H:%M:%S")
+        timestamp = iso_timestamp()
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(f"[{timestamp}] {message}\n")

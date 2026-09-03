@@ -1,8 +1,12 @@
 """Tests for orchestration log (simulate.log)."""
 
+import re
 from pathlib import Path
 
 from metis.engine.logging.orchestration import OrchestrationLogger
+
+# ISO-8601 UTC with microseconds and a Z suffix, e.g. 2026-09-02T15:02:03.138406Z
+_ISO_Z = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
 
 
 class TestOrchestrationLogger:
@@ -73,3 +77,35 @@ class TestOrchestrationLogger:
         content = (tmp_path / "simulate.log").read_text()
         assert "SCENARIO old STARTED" in content
         assert "RESUME STARTED (2 runs to redo, 3 already complete)" in content
+
+
+class TestOrchestrationTimestampFormat:
+    def test_text_line_starts_with_iso_z_timestamp(self, tmp_path: Path) -> None:
+        orch = OrchestrationLogger(log_dir=tmp_path)
+        orch.scenario_started("direct-question")
+        orch.close()
+        line = (tmp_path / "simulate.log").read_text().splitlines()[0]
+        # Line shape: "[<timestamp>] SCENARIO ... STARTED"
+        assert line.startswith("[")
+        stamp = line[1 : line.index("]")]
+        assert _ISO_Z.match(stamp), f"not ISO-8601 Z: {stamp!r}"
+
+    def test_json_timestamp_field_is_iso_z(self, tmp_path: Path) -> None:
+        import json
+
+        orch = OrchestrationLogger(log_dir=tmp_path, log_format="json")
+        orch.scenario_started("scn")
+        orch.close()
+        parsed = json.loads((tmp_path / "simulate.log").read_text().strip())
+        assert _ISO_Z.match(parsed["timestamp"]), parsed["timestamp"]
+
+    def test_evaluation_log_line_starts_with_iso_z_timestamp(
+        self, tmp_path: Path
+    ) -> None:
+        from metis.engine.logging.orchestration import EvaluationLogger
+
+        ev = EvaluationLogger(log_dir=tmp_path)
+        ev.write("EVALUATION STARTED")
+        line = (tmp_path / "evaluate.log").read_text().splitlines()[0]
+        stamp = line[1 : line.index("]")]
+        assert _ISO_Z.match(stamp), f"not ISO-8601 Z: {stamp!r}"

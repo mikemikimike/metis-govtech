@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **Orchestrator log timestamps aligned to ISO-8601 UTC** — `simulate.log`, `evaluate.log`, and the orchestrator JSON `timestamp` field now use the full `iso_timestamp()` format (`2026-09-02T15:02:03.138406Z`) instead of the time-only `HH:MM:SS`, making them self-dating and consistent with per-run logs.
+- **TUI tail prefix is now a real UTC wall clock** — the live tail panel shows `2026-09-02T00:51:17Z (+00:51:17) ...`: an ISO-8601 UTC wall clock (whole seconds, `Z`) followed by an explicitly-labelled `(+HH:MM:SS)` elapsed-run-time marker, replacing the ambiguous bare `HH:MM:SS` that read like a clock but was elapsed time.
 - **Decoupled `experiment.py` from Playwright** — `_worker` and `run_experiment` now operate on the `RunnerFactory` protocol; zero Playwright imports remain in the orchestration layer.
 - **CLI fully decoupled from Playwright** — factory instantiation is now a uniform no-arg `factory_cls()` call for all runners; `HEADED` env var moved into `OrcaPlaywrightRunnerConfig.load()` alongside `ORCA_*` vars; removed the Playwright-specific "Mode: headed/headless" console output.
 - **BREAKING: `runner_factory_ref` required** — `runner_factory_ref` (renamed from `runner_ref`) is now a required field in `experiment.yaml` (FQN of a `RunnerFactory` class). `schema_version` stays at `1` per the v0.x policy (no version bumps before 1.0).

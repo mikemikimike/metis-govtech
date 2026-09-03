@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 import structlog
 
 from metis.engine.logging.router import LogRouter
 from metis.engine.tui.tail import TailBuffer
+
+# ISO-8601 UTC wall clock trimmed to whole seconds + Z, then (+HH:MM:SS) elapsed
+_TAIL_PREFIX = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z \(\+\d{2}:\d{2}:\d{2}\) "
+)
 
 
 class TestLogRouter:
@@ -104,6 +110,11 @@ class TestLogRouter:
         self._process(router, event_dict)
         lines = tail.get_lines()
         assert any("tail test" in line for line in lines)
+        matching = [line for line in lines if "tail test" in line]
+        assert matching, "tail line missing"
+        assert _TAIL_PREFIX.match(matching[0]), (
+            f"tail prefix not ISO-8601 Z + (+elapsed): {matching[0]!r}"
+        )
 
     def test_close_run_flushes(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
@@ -141,3 +152,15 @@ class TestLogRouter:
         line = log_file.read_text().strip()
         parsed = json.loads(line)
         assert parsed["event"] == "json test"
+
+    def test_wall_clock_str_trims_fractional_and_keeps_z(self, tmp_path: Path) -> None:
+        router = LogRouter(log_dir=tmp_path, log_format="text")
+        # production-typical: fractional seconds + Z -> trimmed to whole seconds + Z
+        assert (
+            router._wall_clock_str("2026-09-02T00:51:17.138406Z")
+            == "2026-09-02T00:51:17Z"
+        )
+        # no fractional, no Z -> whole seconds + Z appended
+        assert router._wall_clock_str("2026-08-05T10:00:00") == "2026-08-05T10:00:00Z"
+        # empty/absent -> empty string, no raise
+        assert router._wall_clock_str("") == ""

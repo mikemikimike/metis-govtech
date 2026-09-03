@@ -47,7 +47,9 @@ class TestRunnerRefField:
     def test_runner_factory_ref_with_fqn_string(self) -> None:
         # Use the always-importable StubRunnerFactory to test FQN string storage.
         fqn = "tests.unit.engine.test_runner_ref.StubRunnerFactory"
-        exp = Experiment.model_validate(self._minimal_experiment(runner_factory_ref=fqn))
+        exp = Experiment.model_validate(
+            self._minimal_experiment(runner_factory_ref=fqn)
+        )
         assert exp.runner_factory_ref == fqn
 
     def test_runner_factory_ref_empty_string_rejected(self) -> None:
@@ -193,7 +195,9 @@ class TestRunnerRefValidation:
     def test_valid_factory_passes_validation(self) -> None:
         # Use StubRunnerFactory (always importable) to verify that a valid factory passes.
         fqn = "tests.unit.engine.test_runner_ref.StubRunnerFactory"
-        exp = Experiment.model_validate(self._minimal_experiment(runner_factory_ref=fqn))
+        exp = Experiment.model_validate(
+            self._minimal_experiment(runner_factory_ref=fqn)
+        )
         assert exp.runner_factory_ref == fqn
 
 
@@ -201,10 +205,6 @@ class TestExampleExperiment:
     """Verify the shipped example experiment continues to load."""
 
     def test_example_experiment_loads(self) -> None:
-        pytest.importorskip(
-            "playwright",
-            reason="example-experiment uses OrcaPlaywrightRunnerFactory (requires playwright extra)",
-        )
         example_path = (
             Path(__file__).resolve().parents[3]
             / "packages"
@@ -218,5 +218,5 @@ class TestExampleExperiment:
         assert exp.id == "orca-eval"
         assert (
             exp.runner_factory_ref
-            == "metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory"
+            == "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
         )
