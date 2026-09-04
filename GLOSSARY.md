@@ -22,3 +22,30 @@
 | Result | The pass rate of a set of **trial scores**. |
 | Test-Time Evals | Evaluations that measure a target model or **target agentic system** against curated datasets before release. |
 | Run-Time Evals | Evaluations that continuously measure live traffic and real user interaction as a target model or **target agentic system** runs. |
+
+## Baseline vs Task-specific
+
+**Baseline** — applies to any **target agentic system**, whatever the task. Baseline behaviour should include baseline criterion and scorers. Baseline scorers should come from the library.
+
+- fluency — is the response grammatically correct and natural?
+- instruction following — did the agent do what the user asked?
+
+**Task-specific** — exists only because of the task. Task-specific Behaviour should include task-specific criterion and scorers. These may or may not come from the library.
+
+Example: a slide-making agent.
+
+- from the library (a scorer with a parameter): minimum font size, colour contrast, number of slides
+- *custom* (no library scorer, written from the **criterion**): concise slide language, specific to the user's use case
+
+## Scorer Types
+
+A **scorer** is one of two kinds:
+
+- **Code scorer** — a program checks the **trace** against the **criterion**. Best when the criterion is exact and measurable.
+  - slide count equals the requested number
+  - font size at least the minimum
+  - response is valid JSON
+- **LLM-as-a-judge scorer** — a language model judges the **trace** against the **criterion**. Best when the criterion needs judgement.
+  - output tone
+  - instruction following
+  - summary faithful to the source
