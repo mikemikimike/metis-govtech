@@ -92,7 +92,7 @@ class Scenario(Authored):
     fixtures: list[str] = Field(
         default_factory=list
     )  # filenames only; web fixture bytes live beside the session or in a request bundle
-    num_trials: int = 3  # one run of a non-deterministic agent says very little
+    num_trials: int = 3  # one trial of a non-deterministic agent says very little
 
 
 class ProductProfile(BaseModel):
@@ -140,11 +140,11 @@ class ProductProfile(BaseModel):
         """Ticked behaviours no scenario exercises — the blocking gate at the scenarios step."""
         return [b for b in self.ticked() if not self.scenarios_covering(b.id)]
 
-    def run_count(self) -> int:
-        """Runs the engine will perform: Σ over scenarios of (personas × trials).
+    def trial_count(self) -> int:
+        """Trials the engine will perform: Σ over scenarios of (personas × trials).
 
         Mirrors the harness expansion exactly, so the footer the user reads during the
-        interview and the number of runs the engine performs cannot disagree.
+        interview and the number of trials the engine performs cannot disagree.
         """
         return sum(len(s.persona_refs) * s.num_trials for s in self.scenarios)
 

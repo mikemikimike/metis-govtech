@@ -24,7 +24,7 @@ import type {
 } from "./api";
 import { optionKey } from "./api";
 import { FixtureInput, NumberInput } from "./inputs";
-import { Button, cn, formatRuns, Mono, Panel } from "./ui";
+import { Button, cn, formatTrials, Mono, Panel } from "./ui";
 
 // What a block can send up. `null` from a resolved or read-only block.
 type Emit = (response: UserResponse) => void;
@@ -330,7 +330,7 @@ function CardBlock({
               <ComponentBlock
                 key={i}
                 component={component}
-                runCount={"runs" in card ? card.runs : undefined}
+                trialCount={"trials" in card ? card.trials : undefined}
                 disabled={disabled}
                 onPick={onPick}
                 onFieldChange={onFieldChange}
@@ -364,14 +364,14 @@ function CardBlock({
 
 function ComponentBlock({
   component,
-  runCount,
+  trialCount,
   disabled,
   onPick,
   onFieldChange,
   fixtureActions,
 }: {
   component: CardComponent;
-  runCount?: number;
+  trialCount?: number;
   disabled: boolean;
   onPick: (key: string) => void;
   onFieldChange: (key: string, value: CardFieldValue) => void;
@@ -412,7 +412,7 @@ function ComponentBlock({
         );
 
       case "number":
-        return runCount === undefined ? (
+        return trialCount === undefined ? (
           <NumberCardField
             component={component}
             disabled={disabled}
@@ -426,7 +426,7 @@ function ComponentBlock({
               onCommit={(value) => onFieldChange(optionKey(component.id), value)}
             />
             <span className="shrink-0 border-l border-border pl-3 text-xs text-muted-foreground">
-              {formatRuns(runCount)}
+              {formatTrials(trialCount)}
             </span>
           </div>
         );

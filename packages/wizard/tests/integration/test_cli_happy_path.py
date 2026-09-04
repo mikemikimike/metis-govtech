@@ -28,6 +28,6 @@ def test_init_happy_path_writes_experiment_review_and_profile(tmp_path: Path) ->
     profile_path = tmp_path / "profile.yaml"
     assert profile_path.is_file()
     # The profile the engine's verdict report reads is valid YAML that loads back.
-    assert ProductProfile.load(profile_path).run_count() > 0
+    assert ProductProfile.load(profile_path).trial_count() > 0
     assert opening_question() in result.output
     assert "Wrote" in result.output

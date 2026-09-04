@@ -109,16 +109,16 @@ def test_one_payload_serves_all_three_panes(tmp_path: Path) -> None:
     assert body["busy_message"] == "Building coverage scenarios…"
 
 
-def test_scenario_card_run_count_survives_the_http_wire(tmp_path: Path) -> None:
-    _seed(tmp_path, "wizard-runs", step=SessionStep.SCENARIOS)
+def test_scenario_card_trial_count_survives_the_http_wire(tmp_path: Path) -> None:
+    _seed(tmp_path, "wizard-trials", step=SessionStep.SCENARIOS)
 
-    body = client(tmp_path).get("/api/sessions/wizard-runs").json()
+    body = client(tmp_path).get("/api/sessions/wizard-trials").json()
     scenario_card = next(
         card for card in body["requests"][-1]["cards"] if card["id"] == "S-1"
     )
 
     assert scenario_card["kind"] == "scenario"
-    assert scenario_card["runs"] == 6
+    assert scenario_card["trials"] == 6
 
 
 def test_an_unknown_session_is_a_404(tmp_path: Path) -> None:
@@ -282,9 +282,9 @@ def test_the_two_doors_agree_on_typed_scenario_field_edits(tmp_path: Path) -> No
     assert scenario is not None
     assert (scenario.num_trials, scenario.fixtures) == (7, ["policy.pdf", "faq.md"])
     assert web.pending is not None
-    assert "Total: 13 runs" in web.pending.footer  # type: ignore[union-attr]
+    assert "Total: 13 trials" in web.pending.footer  # type: ignore[union-attr]
     scenario_card = next(card for card in web.pending.cards if card.id == "S-2")  # type: ignore[union-attr]
-    assert scenario_card.runs == 7
+    assert scenario_card.trials == 7
 
 
 def test_a_session_made_in_the_browser_is_resumable_from_the_terminal(

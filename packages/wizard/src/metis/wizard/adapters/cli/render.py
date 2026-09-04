@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from metis.wizard.application.runs import format_runs
+from metis.wizard.application.trials import format_trials
 from metis.wizard.contracts.conversation import (
     AnyRequest,
     AnyResponse,
@@ -161,9 +161,9 @@ def _draw_card(
                     f"      {number}({component.id}) {component.value}   "
                     f"[{component.min}–{component.max}]"
                 )
-                card_runs = getattr(card, "runs", None)
-                if isinstance(card_runs, int):
-                    out(f"      {format_runs(card_runs)}")
+                card_trials = getattr(card, "trials", None)
+                if isinstance(card_trials, int):
+                    out(f"      {format_trials(card_trials)}")
             case CardComponentType.UPLOAD:
                 key = str(component.id)
                 if editable is not None:

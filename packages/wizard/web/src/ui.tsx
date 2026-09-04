@@ -12,11 +12,11 @@ export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
 }
 
-export function formatRuns(count: number): string {
-  return `${count} ${count === 1 ? "run" : "runs"}`;
+export function formatTrials(count: number): string {
+  return `${count} ${count === 1 ? "trial" : "trials"}`;
 }
 
-export function countRuns(personaCount: number, trials: number): number {
+export function countTrials(personaCount: number, trials: number): number {
   return personaCount * trials;
 }
 

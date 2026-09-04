@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from metis.wizard.application.runs import format_runs
+from metis.wizard.application.trials import format_trials
 
 if TYPE_CHECKING:
     from metis.wizard.domain.profile import Behaviour, Criterion, ProductProfile
@@ -93,9 +93,9 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
     # The same calculation the interview footer shows, so the document and the screen the
     # user decided on cannot disagree.
     out += [
-        "## Runs",
+        "## Trials",
         "",
-        format_runs(profile.run_count()),
+        format_trials(profile.trial_count()),
         "",
     ]
 

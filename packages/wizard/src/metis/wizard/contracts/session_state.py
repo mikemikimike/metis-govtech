@@ -24,7 +24,7 @@ from metis.wizard.domain.permissions import SessionStep
 # "not fully defined". See CLAUDE.md — Coding Conventions.
 from metis.wizard.domain.profile import ProductProfile
 
-SESSION_FORMAT_VERSION = 5
+SESSION_FORMAT_VERSION = 6
 
 
 class SessionVersionError(Exception):

@@ -25,7 +25,7 @@ import type { FixtureMetadata, MetricSpec } from "./api";
 import { api, TransportError } from "./api";
 import { FixtureInput, NumberInput } from "./inputs";
 import { validateFixtureSelection } from "./fixture-policy";
-import { Button, cn, countRuns, formatRuns, Mono, Panel } from "./ui";
+import { Button, cn, countTrials, formatTrials, Mono, Panel } from "./ui";
 
 interface PersonaDraft {
   id: string;
@@ -384,8 +384,8 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                     />
                   </Field>
                   <div className="flex justify-end pt-1 text-xs text-muted-foreground">
-                    {formatRuns(
-                      countRuns(scenario.persona_refs.length, scenario.num_trials),
+                    {formatTrials(
+                      countTrials(scenario.persona_refs.length, scenario.num_trials),
                     )}
                   </div>
                 </div>
@@ -396,10 +396,10 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
           <AddButton label="Add a scenario" onClick={addScenario} />
           {scenarios.length > 0 && (
             <div className="flex justify-end border-t border-border pt-4 text-sm text-muted-foreground">
-              Total: {formatRuns(
+              Total: {formatTrials(
                 scenarios.reduce(
                   (total, scenario) =>
-                    total + countRuns(scenario.persona_refs.length, scenario.num_trials),
+                    total + countTrials(scenario.persona_refs.length, scenario.num_trials),
                   0,
                 ),
               )}

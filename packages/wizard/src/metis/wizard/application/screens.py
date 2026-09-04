@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from metis.wizard.application.runs import format_runs
+from metis.wizard.application.trials import format_trials
 from metis.wizard.contracts.conversation import (
     AnyCardComponent,
     BehaviourCard,
@@ -441,7 +441,7 @@ def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
             id=scenario.id,
             title=scenario.description,
             blocking=scenario.id in blocking_ids,
-            runs=len(scenario.persona_refs) * scenario.num_trials,
+            trials=len(scenario.persona_refs) * scenario.num_trials,
             components=[
                 _coverage_group(profile, scenario.id),
                 _persona_group(profile, scenario.id),
@@ -462,7 +462,7 @@ def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
         for scenario in profile.scenarios
     ]
 
-    footer = f"Total: {format_runs(profile.run_count())}"
+    footer = f"Total: {format_trials(profile.trial_count())}"
 
     return ChoiceRequest(
         prompt=message,

@@ -78,19 +78,19 @@ def test_criterion_ids_are_scoped_to_their_behaviour() -> None:
     assert [c.id for c in behaviour.criteria] == ["AC-1-1", "AC-1-2"]
 
 
-def test_coverage_and_run_count() -> None:
+def test_coverage_and_trial_count() -> None:
     profile = research_assistant()
 
     assert profile.uncovered() == []
     assert [t.id for t in profile.scenarios_covering("EB-1")] == ["S-1"]
     # S-1: 2 personas × 3 trials = 6; S-2: 1 × 3 = 3
-    assert profile.run_count() == 9
+    assert profile.trial_count() == 9
 
     profile.scenarios[1].num_trials = 1
-    assert profile.run_count() == 7
+    assert profile.trial_count() == 7
 
     profile.scenarios[0].persona_refs = []
-    assert profile.run_count() == 1
+    assert profile.trial_count() == 1
 
 
 def test_uncovered_reports_ticked_behaviours_with_no_scenario() -> None:

@@ -131,7 +131,7 @@ def test_the_cli_door_renders_every_screen(tmp_path: Path) -> None:
 
     assert screens
     assert any("[x]" in line or "[ ]" in line for line in lines)  # checkboxes drew
-    assert any("runs" in line for line in lines)  # the footer drew
+    assert any("trials" in line for line in lines)  # the footer drew
 
 
 def test_the_session_survives_a_restart_at_every_screen(tmp_path: Path) -> None:

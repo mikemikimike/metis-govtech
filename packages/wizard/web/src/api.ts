@@ -95,7 +95,7 @@ export interface Card extends CardBase {
 
 export interface ScenarioCard extends CardBase {
   kind: "scenario";
-  runs: number;
+  trials: number;
 }
 
 export type AnyCard = Card | ScenarioCard;

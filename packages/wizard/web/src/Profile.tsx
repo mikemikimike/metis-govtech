@@ -35,7 +35,7 @@ import type {
 import { api } from "./api";
 import { PanelRight } from "lucide-react";
 import { RevealText } from "./RevealText";
-import { Button, Chevron, Chip, cn, countRuns, formatRuns, Mono, Tooltip } from "./ui";
+import { Button, Chevron, Chip, cn, countTrials, formatTrials, Mono, Tooltip } from "./ui";
 
 // ── where the interview has got to ───────────────────────────────────────────
 
@@ -337,10 +337,11 @@ export function Profile({
                           <span className="text-muted-foreground">None</span>
                         )}
                       </ScenarioRow>
-                      {/* The run total is the whole of the count worth stating. Trials were shown
-                          alongside it and said nothing extra: runs *are* trials times personas, and
-                          the personas are named in the row directly above, so "3 trials, 3 runs" was
-                          the same fact written twice.
+                      {/* The trial total is the whole of the count worth stating. The per-persona
+                          trial count was shown alongside it and said nothing extra: the total *is*
+                          that per-persona count times personas, and the personas are named in the
+                          row directly above, so "3 per persona, 3 total" was the same fact written
+                          twice.
 
                           The total is plain text, not a chip: a chip marks something the profile
                           refers to by name — a behaviour, a persona, a file — and a total refers to
@@ -348,11 +349,11 @@ export function Profile({
                           for exactly that reason, and share the row with the total behind a faint dot
                           separator; they simply do not appear when there are none. */}
                       <ScenarioRow label="Experiment configuration">
-                        {/* py-0.5 matches the chip's own vertical padding so the run total and the
+                        {/* py-0.5 matches the chip's own vertical padding so the trial total and the
                             file chips sit on one line under `items-start` — without it the padding-
                             less text rode above the chip. */}
                         <span className="py-0.5 text-muted-foreground">
-                          {formatRuns(countRuns(s.persona_refs.length, s.num_trials))}
+                          {formatTrials(countTrials(s.persona_refs.length, s.num_trials))}
                         </span>
                         {s.fixtures.length > 0 && (
                           <>
@@ -370,10 +371,10 @@ export function Profile({
                 ))}
               </ul>
               <div className="flex justify-end border-t border-border pt-2 text-sm text-muted-foreground">
-                Total: {formatRuns(
+                Total: {formatTrials(
                   profile.scenarios.reduce(
                     (total, scenario) =>
-                      total + countRuns(scenario.persona_refs.length, scenario.num_trials),
+                      total + countTrials(scenario.persona_refs.length, scenario.num_trials),
                     0,
                   ),
                 )}

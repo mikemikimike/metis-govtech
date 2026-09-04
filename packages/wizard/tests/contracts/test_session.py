@@ -116,7 +116,7 @@ def test_old_comma_joined_file_field_rehydrates_as_a_list(tmp_path: Path) -> Non
                 ScenarioCard(
                     id="S-2",
                     title="Retry",
-                    runs=1,
+                    trials=1,
                     components=[
                         CardUploadField(
                             label="Files",
@@ -133,7 +133,7 @@ def test_old_comma_joined_file_field_rehydrates_as_a_list(tmp_path: Path) -> Non
 
     loaded = SessionState.load(path)
     field = loaded.pending.cards[0].components[0]  # type: ignore[union-attr]
-    assert loaded.pending.cards[0].runs == 1  # type: ignore[union-attr]
+    assert loaded.pending.cards[0].trials == 1  # type: ignore[union-attr]
     assert isinstance(field, CardUploadField)
     assert field.value == ["policy.pdf", "faq.md"]
 

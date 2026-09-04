@@ -158,7 +158,7 @@ class Card(BaseModel):
 
     The subclasses pin their narrow fields and carry a stable wire discriminator. The door still
     renders both through one shape-driven path; the discriminator exists so Pydantic can preserve
-    subtype-only fields such as a scenario's run count across HTTP and session persistence.
+    subtype-only fields such as a scenario's trial count across HTTP and session persistence.
     """
 
     # The base remains useful to shape-only helpers. Concrete cards narrow this to a Literal so
@@ -194,7 +194,7 @@ class ScenarioCard(Card):
 
     kind: Literal["scenario"] = "scenario"  # pyright: ignore[reportIncompatibleVariableOverride]
     # The value is carried as data so both doors can state the unit at the point they draw it.
-    runs: int
+    trials: int
     # Narrowed deliberately: a scenario never has a tick. See BehaviourCard for why the ignore.
     selected: None = None  # pyright: ignore[reportIncompatibleVariableOverride]
 
@@ -296,7 +296,7 @@ class ChoiceRequest(WizardRequest):
         default_factory=list
     )  # when set, options grouped into rows
     warnings: list[Warning] = Field(default_factory=list)
-    footer: str | None = None  # finished text — "Total: 9 runs"
+    footer: str | None = None  # finished text — "Total: 9 trials"
     instruction: str | None = None  # finished text explaining how to answer this screen
 
 

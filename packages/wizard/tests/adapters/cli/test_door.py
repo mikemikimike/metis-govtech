@@ -50,7 +50,7 @@ def a_screen(**overrides) -> ChoiceRequest:
             ScenarioCard(
                 id="S-1",
                 title="Ask for a review",
-                runs=6,
+                trials=6,
                 components=[
                     CardOptionGroup(
                         label="Covers",
@@ -79,7 +79,7 @@ def a_screen(**overrides) -> ChoiceRequest:
             Warning(text="EB-4 is covered by no scenario.", blocking=True),
             Warning(text="EB-2 has no acceptance criteria yet.", blocking=False),
         ],
-        footer="Total: 9 runs",
+        footer="Total: 9 trials",
         options=[
             Option(id=OptionId(action="back"), label="← Back"),
             Option(id=OptionId(action="continue"), label="Continue", enabled=False),
@@ -118,7 +118,7 @@ def test_both_card_kinds_go_through_one_path() -> None:
 
     assert "Cites a source" in text
     assert "Ask for a review" in text
-    assert "6 runs" in text
+    assert "6 trials" in text
 
 
 # ── every screen shape draws ───────────────────────────────────────────────

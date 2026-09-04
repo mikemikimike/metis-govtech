@@ -15,7 +15,7 @@ import typer
 
 from metis.wizard import __version__, core_version
 from metis.wizard.application.interviewer import Interviewer, InterviewerUnavailable
-from metis.wizard.application.runs import format_runs
+from metis.wizard.application.trials import format_trials
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -119,7 +119,7 @@ def _run(session: Session, out_dir: Path) -> None:
     typer.echo(f"\nWrote {experiment}")
     typer.echo(f"Wrote {review}")
     typer.echo(f"Wrote {profile}")
-    typer.echo(f"\n{format_runs(session.profile().run_count())} when you run this.")
+    typer.echo(f"\n{format_trials(session.profile().trial_count())} when you run this.")
 
 
 def _next_with_status(session: Session, console: Console) -> AnyRequest | None:

@@ -355,13 +355,13 @@ def test_the_footer_matches_the_harness_expansion() -> None:
 
     request = _scenarios_screen(profile)
 
-    assert f"Total: {profile.run_count()} runs" == request.footer
+    assert f"Total: {profile.trial_count()} trials" == request.footer
     assert "scenarios" not in (request.footer or "")
     assert "pairs" not in (request.footer or "")
 
     cards = {card.id: card for card in request.cards}
-    assert cards["S-1"].runs == 6
-    assert cards["S-2"].runs == 3
+    assert cards["S-1"].trials == 6
+    assert cards["S-2"].trials == 3
 
 
 def test_an_uncovered_behaviour_blocks_and_carries_its_fixes() -> None:
@@ -390,18 +390,18 @@ def test_a_scenario_with_no_persona_blocks() -> None:
     assert any(w.blocking and "S-1" in w.text for w in request.warnings)
 
 
-def test_run_count_is_zero_when_a_scenario_has_no_persona() -> None:
+def test_trial_count_is_zero_when_a_scenario_has_no_persona() -> None:
     profile = research_assistant()
     profile.scenario("S-1").persona_refs = []  # type: ignore[union-attr]
 
     request = _scenarios_screen(profile)
     card = next(card for card in request.cards if card.id == "S-1")
 
-    assert card.runs == 0
-    assert request.footer == "Total: 3 runs"
+    assert card.trials == 0
+    assert request.footer == "Total: 3 trials"
 
 
-def test_run_count_uses_the_singular_for_one() -> None:
+def test_trial_count_uses_the_singular_for_one() -> None:
     profile = research_assistant()
     profile.scenario("S-1").persona_refs = []  # type: ignore[union-attr]
     profile.scenario("S-2").num_trials = 1  # type: ignore[union-attr]
@@ -409,8 +409,8 @@ def test_run_count_uses_the_singular_for_one() -> None:
     request = _scenarios_screen(profile)
     card = next(card for card in request.cards if card.id == "S-2")
 
-    assert card.runs == 1
-    assert request.footer == "Total: 1 run"
+    assert card.trials == 1
+    assert request.footer == "Total: 1 trial"
 
 
 @pytest.mark.parametrize(
@@ -505,10 +505,10 @@ def test_a_trial_edit_recomposes_the_scenario_total() -> None:
 
     assert state.profile.scenario("S-2").num_trials == 7  # type: ignore[union-attr]
     refreshed = driver.compose(state)
-    assert refreshed.footer == "Total: 13 runs"  # 2×3 + 1×7
+    assert refreshed.footer == "Total: 13 trials"  # 2×3 + 1×7
     scenario_card = next(card for card in refreshed.cards if card.id == "S-2")
     assert next(c for c in scenario_card.components if c.type == "number").value == 7
-    assert scenario_card.runs == 7
+    assert scenario_card.trials == 7
 
 
 def test_fixture_edits_normalize_and_compile() -> None:
