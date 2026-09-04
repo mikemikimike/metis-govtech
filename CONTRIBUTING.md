@@ -76,6 +76,35 @@ Branch off `main` with a descriptive prefix:
 
 Example: `feat/langfuse-ingester`, `fix/score-validation`
 
+### Target branch: `next` vs. `v0.x`
+
+METIS is preparing a coordinated v0 → v1.0 major bump across all packages. That work lives on a
+long-lived **`next`** integration branch, tracked by the [v1.0 development plan](https://github.com/govtech-responsibleai/metis/issues/221).
+Pick your target branch by the kind of change:
+
+| Change | Branch off | PR into |
+|--------|-----------|---------|
+| v1 feature or breaking change | `next` | `next` |
+| v0 bugfix / patch | `v0.x` | `v0.x` |
+
+**`next` is an exception zone.** For the whole v1 pre-release phase the release ceremony is
+suspended so engineers can move fast:
+
+- **No release branches, tracking issues, or tags on `next`.** The `release/<pkg>/v<semver>`
+  workflow and `make release-*` targets below apply to released lines (`v0.x`), not `next`.
+- **Every package version is frozen at `1.0.0a1`.** Do not bump or tag it per change — it flips to
+  `1.0.0` once, at graduation. It is an honest "unstable v1 pre-release" marker, not a progress counter.
+- **Breaking changes are cheap** — no deprecation dance. Record each one in `MIGRATION.md`.
+- **Code review and `make ci` still apply.** Only the release ceremony is dropped.
+- **Pull relevant v0 fixes into `next` by cherry-picking** the fix commit from `v0.x` — never
+  full-merge (that drags in v0 version commits and conflicts on every package's `version` line).
+
+**`v0.x` keeps the normal release workflow** — `release/<pkg>/v0.x.y` branches and `<pkg>/v0.x.y`
+tags, critical/security fixes only. Write CHANGELOG entries during development on both branches; the
+`next` ones are finalized at graduation. When `next` stabilizes it merges to `main` in a single
+coordinated bump, and the normal release workflow resumes on `main`. See
+[docs/version-maintenance.md](docs/version-maintenance.md) for the graduation and v0.x maintenance procedure.
+
 ### Running Checks
 
 ```bash
