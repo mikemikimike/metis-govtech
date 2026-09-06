@@ -365,6 +365,7 @@ def test_the_behaviour_add_form_is_scoped_to_the_selected_task() -> None:
         "Recover gracefully",
         "Stops safely after a failed search.",
     )
+    assert added.measured is True
     assert [behaviour.id for behaviour in profile.task("T-1").behaviours] == before_t1  # type: ignore[union-attr]
     assert {"EB-4"} <= state.issued_ids
     assert {"EB-4"} <= state.user_typed
@@ -473,6 +474,23 @@ def test_shared_review_screens_show_names_and_descriptions() -> None:
     assert (
         scenarios.cards[0].components[0].text.startswith("Ask for a literature review")
     )  # type: ignore[union-attr]
+
+
+def test_drafted_behaviours_start_selected_on_the_prioritise_screen() -> None:
+    profile = ProductProfile(
+        product=Product(name="Agent", description="An agent.", users="Operators")
+    )
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    state = SessionState(id="s", profile=profile, step=SessionStep.BEHAVIOURS)
+
+    driver.compose(state)
+    state.step = SessionStep.PRIORITISE
+    request = driver.compose(state)
+
+    assert all(behaviour.measured for behaviour in profile.behaviours())
+    assert all(card.selected for card in request.cards)
+    assert all(card.options[0].selected for card in request.cards)
+    assert request.prompt.startswith("I've selected all behaviours")
 
 
 # ── the scenarios gates ─────────────────────────────────────────────────────
@@ -740,8 +758,8 @@ def test_a_task_with_nothing_ticked_is_not_warned() -> None:
         (
             SessionStep.CRITERIA,
             SessionStep.PRIORITISE,
-            "Which of these should we actually measure? "
-            "I'll write acceptance criteria for the ones you pick.",
+            "I've selected all behaviours as a starting point. Clear any you don't want "
+            "to measure, then I'll write acceptance criteria for the rest.",
         ),
         (
             SessionStep.SCENARIOS,

@@ -121,6 +121,7 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
     assert not result.rejected
     assert profile.tasks[-1].id == "T-3"
     assert profile.tasks[-1].behaviours[0].id == "EB-4"
+    assert profile.tasks[-1].behaviours[0].measured is True
     assert profile.personas[-1].id == "impatient-executive-2"
     assert profile.scenarios[-1].id == "S-3"
     assert profile.scenarios[-1].num_trials == 3
@@ -255,7 +256,8 @@ def test_a_bundled_task_cannot_carry_a_tick_or_a_metric() -> None:
     behaviour = profile.behaviour("EB-9")
     assert behaviour is not None
     assert behaviour.description.startswith("Validates uploaded data")
-    # arrives at the prioritise step waiting for a tick, not already ticked
+    # A generic persisted-object compatibility patch keeps the domain default. Strict model
+    # drafts and direct forms use the materializer and start selected.
     assert behaviour.measured is False
     assert behaviour.criteria[0].description.then.startswith("the gaps are flagged")
     assert behaviour.criteria[0].metric_fqn is None  # still the matcher's to resolve

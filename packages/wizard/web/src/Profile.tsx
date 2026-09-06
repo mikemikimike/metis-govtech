@@ -673,8 +673,8 @@ function TaskView({
   // How much of this task is actually being measured. A bare total said the task holds two
   // behaviours; it did not say that only one of them was ticked, which was left to the dormant
   // rows' opacity alone — easy to miss, and the fraction is the number that decides whether the
-  // profile is thorough enough. Note it reads `0/2` until the prioritise step, which is honest:
-  // nothing is selected yet.
+  // profile is thorough enough. New Behaviour rows start selected, and the fraction changes as
+  // the user clears or restores them.
   const measured = task.behaviours.filter((b) => b.measured).length;
   return (
     <div className="animate-arrive flex flex-col">
@@ -749,8 +749,7 @@ function BehaviourView({
   // true for the whole prioritise step (keyed on the step, not on `busy`, so a tick's brief in-
   // flight window does not flicker the blank on and off), and holds it back until Continue advances
   // the session off prioritise. From then on "ticked, not yet written up" is a settled promise. A
-  // dormant behaviour still shows no blank — none are coming for it — and before prioritise nothing
-  // is ticked at all.
+  // dormant behaviour still shows no blank because no criteria are coming for it.
   const awaitingCriteria =
     behaviour.measured && behaviour.criteria.length === 0 && !selecting;
   return (
@@ -771,8 +770,7 @@ function BehaviourView({
           `2/5` on the group named a count with no way to see which two it was. Teal is right here
           for the same reason the fraction carries it — being measured is a live selected state,
           not a label — and the ids already form a straight column to read down, so the counted
-          ones light up as a scannable set. Before prioritise nothing is ticked, so the whole
-          gutter stays grey, which is honest. */}
+          ones light up as a scannable set. */}
       <Mono
         tone={behaviour.measured ? "accent" : "muted"}
         className={cn("pt-px tabular-nums", behaviour.measured && "font-semibold")}

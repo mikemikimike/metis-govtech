@@ -201,8 +201,8 @@ def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
     # cannot arise, and there is nothing here that needs blocking either.
     return ChoiceRequest(
         prompt=(
-            "Which of these should we actually measure? "
-            "I'll write acceptance criteria for the ones you pick."
+            "I've selected all behaviours as a starting point. Clear any you don't want "
+            "to measure, then I'll write acceptance criteria for the rest."
         ),
         cards=cards,
         multi=True,

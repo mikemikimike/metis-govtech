@@ -95,6 +95,7 @@ def add_behaviour(
         id=_next_numeric(issued_ids | {b.id for b in profile.behaviours()}, "EB"),
         name=draft.name,
         description=draft.description,
+        measured=True,
     )
     _record(issued_ids, user_typed, behaviour.id, origin)
     return behaviour

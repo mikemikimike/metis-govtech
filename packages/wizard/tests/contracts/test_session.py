@@ -222,6 +222,34 @@ def test_a_tick_does_not_stack_a_second_copy_of_its_screen() -> None:
     assert after is not None and after.measured is True  # and the tick took
 
 
+def test_a_cleared_behaviour_stays_clear_after_save_and_resume(tmp_path: Path) -> None:
+    from metis.wizard.application.driver import StepDriver
+
+    path = tmp_path / "session.json"
+    session = Session(
+        a_state(step=SessionStep.PRIORITISE),
+        path=path,
+        driver=StepDriver(interviewer=ScriptedInterviewer()),
+    )
+    session.next()
+    before = session.state.profile.behaviour("EB-1")
+    assert before is not None and before.measured is True
+
+    session.respond(ChoiceResponse(selected=["tick:EB-1"]))
+    resumed = Session.resume(
+        path,
+        driver=StepDriver(interviewer=ScriptedInterviewer()),
+    )
+    recomposed = resumed.next()
+
+    behaviour = resumed.state.profile.behaviour("EB-1")
+    assert behaviour is not None and behaviour.measured is False
+    assert isinstance(recomposed, ChoiceRequest)
+    card = next(card for card in recomposed.cards if card.id == "EB-1")
+    assert card.selected is False
+    assert card.options[0].selected is False
+
+
 def test_continuing_resolves_the_screen_behind_it() -> None:
     session = _driven(SessionStep.PRIORITISE)
     session.next()

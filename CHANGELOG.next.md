@@ -44,6 +44,8 @@ _No v1 changes yet._
 
 #### Changed
 
+- **Wizard-created Behaviours now start selected.** The prioritise step starts with the complete
+  Behaviour set, and users can clear any items that they do not want to measure.
 - **Standardized wizard profile nodes.** Tasks, behaviours, criteria, personas, and scenarios now
   use explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
   behaviour selection is `measured`; and Product uses `description`.

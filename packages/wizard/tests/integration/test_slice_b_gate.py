@@ -45,15 +45,13 @@ def _pick(request: ChoiceRequest, action: str) -> list[str]:
     return keys
 
 
-def walk(session: Session, *, tick: int = 2) -> list:
+def walk(session: Session) -> list:
     """Drive the interview to DONE, answering each screen the way a user would.
 
-    Ticking is a *toggle* — the patch on each option flips that behaviour's current value —
-    so the prioritise screen is answered once and then continued past. Sending the same ticks
-    twice would turn them back off, which is correct behaviour and a bad way to drive a walk.
+    The wizard preselects all Behaviours. The walk keeps that complete starting scope and
+    continues without changing it.
     """
     seen = []
-    ticked = False
 
     for _ in range(40):  # a bound, so a driver bug fails the test rather than hanging
         request = session.next()
@@ -66,15 +64,6 @@ def walk(session: Session, *, tick: int = 2) -> list:
             continue
         if isinstance(request, FormRequest):
             session.respond(cli.FormResponse(values={"description": "typed by hand"}))
-            continue
-
-        if session.state.step is SessionStep.PRIORITISE and not ticked:
-            ticked = True
-            session.respond(
-                ChoiceResponse(
-                    selected=[str(c.options[0].id) for c in request.cards[:tick]]
-                )
-            )
             continue
 
         session.respond(
@@ -139,27 +128,11 @@ def test_the_session_survives_a_restart_at_every_screen(tmp_path: Path) -> None:
     path = tmp_path / "session.json"
     session, _ = a_session(path)
 
-    ticked = False
-    for _ in range(6):  # a few screens in — far enough to tick and move past prioritise
+    for _ in range(6):  # a few screens in — far enough to move past prioritise
         request = session.next()
         assert request is not None
         if isinstance(request, ChatRequest):
             session.respond(cli.ChatResponse(text="answer"))
-        elif (
-            isinstance(request, ChoiceRequest)
-            and session.state.step is SessionStep.PRIORITISE
-            and not ticked
-        ):
-            # Tick here and let a later iteration continue past prioritise. If the preamble
-            # left prioritise unanswered, the resumed walk would tick it — then the walk that
-            # follows would tick the same behaviours a second time, toggling them back off,
-            # and the scenarios gate would hold with nothing selected.
-            ticked = True
-            session.respond(
-                ChoiceResponse(
-                    selected=[str(c.options[0].id) for c in request.cards[:2]]
-                )
-            )
         elif isinstance(request, ChoiceRequest):
             session.respond(
                 ChoiceResponse(
@@ -174,7 +147,7 @@ def test_the_session_survives_a_restart_at_every_screen(tmp_path: Path) -> None:
 
 
 def test_a_rejected_patch_reaches_the_user_as_a_runtime_warning(tmp_path: Path) -> None:
-    """The model tries to tick something. The criteria land; the tick does not, and is said."""
+    """The model tries to set a tick. The criteria land; the write does not, and is said."""
     session, driver = a_session(tmp_path / "session.json", RejectingInterviewer())
 
     screens = walk(session)
