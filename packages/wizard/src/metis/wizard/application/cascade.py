@@ -96,15 +96,21 @@ def questions_for(profile: ProductProfile, patches: list[Patch]) -> list[Questio
     return asked
 
 
-def clear_for_regeneration(profile: ProductProfile, question: Question) -> None:
+def clear_for_regeneration(
+    profile: ProductProfile, question: Question, user_typed: set[str] | None = None
+) -> None:
     """Answering "Regenerate" lands in a state the screens already draw.
 
     A ticked behaviour with no criteria is what the prioritise step's Continue fills in; a
     behaviour no scenario covers is what the scenarios gate catches. Both were built for the forward
     pass and happen to be the landing pad for coming back.
 
-    **Text the user typed survives.** Anything with `interaction_type == FORM` came in through
-    a form and is used as-is, so regenerating a behaviour's criteria rewrites the model's and
-    keeps theirs.
+    **Text the user typed survives.** IDs recorded in the session's `user_typed` set came in
+    through a form and are used as-is, so regenerating criteria rewrites model nodes and keeps
+    those nodes.
     """
-    clear_impact(profile, Impact(subject=question.subject, kind=question.kind))
+    clear_impact(
+        profile,
+        Impact(subject=question.subject, kind=question.kind),
+        user_typed,
+    )

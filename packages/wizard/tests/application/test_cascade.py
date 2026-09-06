@@ -8,7 +8,6 @@ from metis.wizard.application.driver import StepDriver
 from metis.wizard.contracts import (
     ChatRequest,
     ChoiceResponse,
-    InteractionType,
     Patch,
     PatchOp,
     PatchOrigin,
@@ -17,7 +16,7 @@ from metis.wizard.contracts import (
 )
 from metis.wizard.domain.permissions import SessionStep
 
-EB1_STATEMENT = "tasks[T-1].behaviours[EB-1].statement"
+EB1_DESCRIPTION = "tasks[T-1].behaviours[EB-1].description"
 
 
 def edit(path: str, value="reworded") -> Patch:
@@ -35,7 +34,7 @@ def test_rewording_a_behaviour_asks_twice_in_sequence() -> None:
     """Criteria first, then each scenario covering it — nearest the edit, then further away."""
     profile = research_assistant()
 
-    questions = cascade.questions_for(profile, [edit(EB1_STATEMENT)])
+    questions = cascade.questions_for(profile, [edit(EB1_DESCRIPTION)])
 
     assert [q.kind for q in questions] == ["criteria", "scenario"]
     assert questions[0].subject == "EB-1"
@@ -44,7 +43,7 @@ def test_rewording_a_behaviour_asks_twice_in_sequence() -> None:
 
 def test_the_wizard_offers_no_opinion_on_whether_they_still_hold() -> None:
     """It asks either way. A wrong silent judgement is the failure being avoided."""
-    questions = cascade.questions_for(research_assistant(), [edit(EB1_STATEMENT)])
+    questions = cascade.questions_for(research_assistant(), [edit(EB1_DESCRIPTION)])
 
     request = questions[0].to_request()
     actions = [o.id.action for o in request.options]
@@ -54,19 +53,19 @@ def test_the_wizard_offers_no_opinion_on_whether_they_still_hold() -> None:
 
 
 def test_editing_the_product_reaches_the_whole_tree() -> None:
-    for path in ("product.summary", "product.detail"):
+    for path in ("product.description", "product.detail"):
         questions = cascade.questions_for(research_assistant(), [edit(path)])
 
         assert [q.kind for q in questions] == ["tree"]
 
 
 def test_initial_product_capture_does_not_invalidate_its_own_draft() -> None:
-    profile = ProductProfile(product=Product(name="X", summary="", users=""))
+    profile = ProductProfile(product=Product(name="X", description="", users=""))
 
     questions = cascade.questions_for(
         profile,
         [
-            edit("product.summary", "A new product"),
+            edit("product.description", "A new product"),
             edit("product.detail", "Tools"),
         ],
     )
@@ -74,12 +73,12 @@ def test_initial_product_capture_does_not_invalidate_its_own_draft() -> None:
     assert questions == []
 
 
-def test_summary_and_detail_edits_ask_about_the_tree_once() -> None:
+def test_description_and_detail_edits_ask_about_the_tree_once() -> None:
     profile = research_assistant()
 
     questions = cascade.questions_for(
         profile,
-        [edit("product.summary"), edit("product.detail")],
+        [edit("product.description"), edit("product.detail")],
     )
 
     assert [question.kind for question in questions] == ["tree"]
@@ -96,7 +95,7 @@ def test_edits_that_derive_nothing_ask_nothing() -> None:
     profile = research_assistant()
 
     nothing = [
-        edit("tasks[T-1].behaviours[EB-1].priority", False),
+        edit("tasks[T-1].behaviours[EB-1].measured", False),
         edit("personas[cooperative-delegator].description", "different words"),
         edit("scenarios[S-1].behaviour_refs", ["EB-1"]),
         edit("scenarios[S-1].num_trials", 5),
@@ -112,7 +111,13 @@ def test_personas_are_reached_by_nothing() -> None:
     profile = research_assistant()
 
     questions = cascade.questions_for(
-        profile, [edit("tasks[T-1].behaviours[EB-1].criteria[AC-1-1].then", "x")]
+        profile,
+        [
+            edit(
+                "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].description.then",
+                "x",
+            )
+        ],
     )
 
     assert not any(q.kind == "persona" for q in questions)
@@ -123,7 +128,7 @@ def test_each_thing_is_asked_about_once() -> None:
     profile = research_assistant()
 
     questions = cascade.questions_for(
-        profile, [edit(EB1_STATEMENT), edit(EB1_STATEMENT)]
+        profile, [edit(EB1_DESCRIPTION), edit(EB1_DESCRIPTION)]
     )
 
     assert len(questions) == 2  # criteria + S-1, not four
@@ -137,10 +142,10 @@ def test_regenerating_keeps_text_the_user_typed() -> None:
     profile = research_assistant()
     behaviour = profile.behaviour("EB-3")
     assert behaviour is not None
-    assert behaviour.criteria[0].interaction_type is InteractionType.FORM
-
     cascade.clear_for_regeneration(
-        profile, cascade.Question(text="", subject="EB-3", kind="criteria")
+        profile,
+        cascade.Question(text="", subject="EB-3", kind="criteria"),
+        {"AC-3-1"},
     )
 
     assert len(behaviour.criteria) == 1  # the user's survived
@@ -152,7 +157,7 @@ def test_regenerating_clears_what_the_model_wrote() -> None:
     assert behaviour is not None and len(behaviour.criteria) == 2
 
     cascade.clear_for_regeneration(
-        profile, cascade.Question(text="", subject="EB-1", kind="criteria")
+        profile, cascade.Question(text="", subject="EB-1", kind="criteria"), set()
     )
 
     assert behaviour.criteria == []  # both were CHAT-authored
@@ -163,7 +168,9 @@ def test_a_product_edit_clears_everything_derived_from_it() -> None:
     profile = research_assistant()
 
     cascade.clear_for_regeneration(
-        profile, cascade.Question(text="", subject="product.summary", kind="tree")
+        profile,
+        cascade.Question(text="", subject="product.description", kind="tree"),
+        set(),
     )
 
     assert profile.tasks == []
@@ -189,7 +196,7 @@ def test_chat_on_the_initial_draft_opens_free_text() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = SessionState(
         id="s-1",
-        profile=ProductProfile(product=Product(name="X", summary="", users="")),
+        profile=ProductProfile(product=Product(name="X", description="", users="")),
         step=SessionStep.BEHAVIOURS,
     )
     request = driver.compose(state)
@@ -260,4 +267,4 @@ def test_no_flag_survives_the_turn() -> None:
 def _result_editing_eb1():
     from metis.wizard.contracts import StepResult
 
-    return StepResult(message="Reworded.", patches=[edit(EB1_STATEMENT)])
+    return StepResult(message="Reworded.", patches=[edit(EB1_DESCRIPTION)])

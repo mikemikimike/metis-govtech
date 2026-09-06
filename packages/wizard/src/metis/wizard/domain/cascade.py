@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from metis.wizard.domain.patch import Patch
     from metis.wizard.domain.profile import ProductProfile
 
-BEHAVIOUR_STATEMENT = "statement"
-PRODUCT_WIDE = ("product.summary", "product.detail")
+BEHAVIOUR_DESCRIPTION = "description"
+PRODUCT_WIDE = ("product.description", "product.detail")
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
                 impacts.append(Impact(subject=path, kind="tree"))
             continue
 
-        if not path.endswith(f".{BEHAVIOUR_STATEMENT}"):
+        if not path.endswith(f".{BEHAVIOUR_DESCRIPTION}"):
             continue
 
         behaviour_id = _behaviour_id(path)
@@ -68,25 +68,36 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
     return impacts
 
 
-def clear_for_regeneration(profile: ProductProfile, impact: Impact) -> None:
+def clear_for_regeneration(
+    profile: ProductProfile,
+    impact: Impact,
+    user_typed: set[str] | None = None,
+) -> None:
     """Discard only model-derived state represented by ``impact``."""
     if impact.kind == "criteria":
         behaviour = profile.behaviour(impact.subject)
         if behaviour is not None:
-            behaviour.criteria = [c for c in behaviour.criteria if c.is_user_typed]
+            if user_typed is None:
+                user_typed = set()
+            behaviour.criteria = [c for c in behaviour.criteria if c.id in user_typed]
 
     elif impact.kind == "scenario":
         scenario = profile.scenario(impact.subject)
-        if scenario is not None and not scenario.is_user_typed:
+        if scenario is not None and (
+            user_typed is None or scenario.id not in user_typed
+        ):
             profile.scenarios = [s for s in profile.scenarios if s.id != impact.subject]
 
     elif impact.kind == "tree":
-        profile.tasks = []
-        profile.scenarios = []
+        keep = user_typed or set()
+        profile.tasks = [task for task in profile.tasks if task.id in keep]
+        profile.scenarios = [
+            scenario for scenario in profile.scenarios if scenario.id in keep
+        ]
 
 
 def _behaviour_id(path: str) -> str | None:
-    """Extract ``EB-*`` from ``tasks[T-1].behaviours[EB-4].statement``."""
+    """Extract ``EB-*`` from ``tasks[T-1].behaviours[EB-4].description``."""
     marker = "behaviours["
     if marker not in path:
         return None

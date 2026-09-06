@@ -24,7 +24,7 @@ from metis.wizard.domain.permissions import SessionStep
 # "not fully defined". See CLAUDE.md — Coding Conventions.
 from metis.wizard.domain.profile import ProductProfile
 
-SESSION_FORMAT_VERSION = 6
+SESSION_FORMAT_VERSION = 7
 
 
 class SessionVersionError(Exception):
@@ -54,6 +54,9 @@ class SessionState(BaseModel):
     # `history` is not the same record and does not replace this one. It is prose, and it is
     # what the model is shown; this is structure, and it is what a door redraws.
     requests: list[AnyRequest] = Field(default_factory=list)
+    # These sets belong to the interview, not to the portable ProductProfile artifact.
+    user_typed: set[str] = Field(default_factory=set)
+    issued_ids: set[str] = Field(default_factory=set)
 
     # ── the live screen ────────────────────────────────────────────────────
 

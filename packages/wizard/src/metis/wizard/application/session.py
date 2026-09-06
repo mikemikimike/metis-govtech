@@ -26,6 +26,7 @@ from metis.wizard.contracts.conversation import (
 )
 from metis.wizard.contracts.session_state import SessionState, Turn
 from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.profile import collect_profile_ids
 
 if TYPE_CHECKING:
     from metis.wizard.application.driver import StepDriver
@@ -59,6 +60,7 @@ class Session:
             id=session_id or f"wizard-{uuid.uuid4().hex[:8]}",
             profile=profile,
             step=SessionStep.CLARIFY,
+            issued_ids=collect_profile_ids(profile),
         )
         return cls(state, path=path, driver=driver)
 

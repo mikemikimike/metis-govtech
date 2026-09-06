@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fixtures.profiles import research_assistant
 
-from metis.wizard.contracts import InteractionType, ProductProfile
+from metis.wizard.contracts import ProductProfile
 
 
 def test_round_trips_through_json_unchanged() -> None:
@@ -13,8 +13,8 @@ def test_round_trips_through_json_unchanged() -> None:
     parsed = ProductProfile.model_validate_json(original.model_dump_json())
 
     assert parsed == original
-    # spot-check the things a loose serialiser would quietly flatten
-    assert parsed.behaviour("EB-3").interaction_type is InteractionType.FORM  # type: ignore[union-attr]
+    # spot-check the structured criterion description and stable references
+    assert parsed.behaviour("EB-3").criteria[0].description.then.startswith("it stops")  # type: ignore[union-attr]
     assert parsed.scenario("S-1").behaviour_refs == ["EB-1", "EB-2"]  # type: ignore[union-attr]
 
 
@@ -26,8 +26,8 @@ def test_save_and_load_round_trip(tmp_path: Path) -> None:
     assert ProductProfile.load(path) == original
 
 
-def test_unticking_keeps_criteria() -> None:
-    """`priority` is scope, not content — the criteria were never derived from it.
+def test_unmeasuring_keeps_criteria() -> None:
+    """`measured` is scope, not content — the criteria are never derived from it.
 
     This is what lets the tick stay live without any staleness tracking.
     """
@@ -36,28 +36,28 @@ def test_unticking_keeps_criteria() -> None:
     assert behaviour is not None
     before = [c.model_copy(deep=True) for c in behaviour.criteria]
 
-    behaviour.priority = False
+    behaviour.measured = False
 
     assert behaviour.criteria == before
     assert len(behaviour.criteria) == 2
 
 
-def test_dormant_criteria_survive_on_unticked_behaviours() -> None:
-    """The fixture's EB-2 is unticked but keeps its criterion, ready if it is ticked again."""
+def test_dormant_criteria_survive_on_unmeasured_behaviours() -> None:
+    """The fixture's EB-2 is unmeasured but keeps its criterion."""
     profile = research_assistant()
     behaviour = profile.behaviour("EB-2")
 
     assert behaviour is not None
-    assert behaviour.priority is False
+    assert behaviour.measured is False
     assert len(behaviour.criteria) == 1
 
 
-def test_ticked_is_the_behaviours_the_user_chose() -> None:
-    """The tick is the user's only real decision — nothing rides along beside it."""
+def test_measured_behaviours_are_the_behaviours_the_user_chose() -> None:
+    """The measurement choice is the user's only real decision."""
     profile = research_assistant()
 
-    assert {b.id for b in profile.ticked()} == {"EB-1", "EB-3"}
-    # EB-2 is unticked: still in the document, still carrying criteria, just not measured
+    assert {b.id for b in profile.measured_behaviours()} == {"EB-1", "EB-3"}
+    # EB-2 is unmeasured: still in the document, still carrying criteria
     assert "EB-2" in {b.id for b in profile.behaviours()}
 
 

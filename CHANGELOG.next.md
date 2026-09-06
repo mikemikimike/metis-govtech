@@ -38,6 +38,9 @@ _No v1 changes yet._
 
 #### Changed
 
+- **Standardized wizard profile nodes.** Tasks, behaviours, criteria, personas, and scenarios now
+  use explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
+  behaviour selection is `measured`; and Product uses `description`.
 - **Renamed the "run" count to "trial", to agree with the evaluation glossary.** The glossary
   calls one execution a **trial**. The wizard called the total execution count
   (`Σ scenarios of personas × trials`) a "run count". This was wrong. The count is now a trial
@@ -49,6 +52,9 @@ _No v1 changes yet._
 
 #### Breaking
 
+- **Profile and saved-session schemas changed.** Profile-owned authorship and generated IDs are
+  removed, with authorship and issued-ID history held by the session. Saved sessions use format 7.
+  The compiled experiment schema remains unchanged.
 - **The scenario card field `runs` is now `trials`, and `SESSION_FORMAT_VERSION` advances from 5
   to 6.** The web bundle mirrors the field, so it is rebuilt. A session file at an older format is
   refused with the existing clear message rather than misread.

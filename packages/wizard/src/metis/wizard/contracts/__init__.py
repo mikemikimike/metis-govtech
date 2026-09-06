@@ -52,12 +52,13 @@ from metis.wizard.contracts.session_state import (
 )
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.profile import (
-    Authored,
     Behaviour,
     Criterion,
+    CriterionDescription,
     Persona,
     Product,
     ProductProfile,
+    ProfileNode,
     Scenario,
     Task,
 )
@@ -68,7 +69,6 @@ __all__ = [
     "AnyCardComponent",
     "AnyRequest",
     "AnyResponse",
-    "Authored",
     "Behaviour",
     "BehaviourDraft",
     "BehaviourCard",
@@ -87,6 +87,7 @@ __all__ = [
     "ChoiceResponse",
     "ClarifyResult",
     "Criterion",
+    "CriterionDescription",
     "CriterionDraft",
     "FormField",
     "FormRequest",
@@ -103,6 +104,7 @@ __all__ = [
     "PersonaDraft",
     "Product",
     "ProductProfile",
+    "ProfileNode",
     "SESSION_FORMAT_VERSION",
     "Scenario",
     "ScenarioCard",

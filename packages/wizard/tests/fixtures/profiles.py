@@ -8,7 +8,7 @@ interview ever having run.
 from metis.wizard.contracts import (
     Behaviour,
     Criterion,
-    InteractionType,
+    CriterionDescription,
     Persona,
     Product,
     ProductProfile,
@@ -27,7 +27,7 @@ def orca_handover() -> ProductProfile:
         product=Product(
             name="Orca",
             users="Public Officers",
-            summary=(
+            description=(
                 "An orchestrator that coordinates specialist agents for public officers."
             ),
             detail=(
@@ -58,7 +58,7 @@ def research_assistant() -> ProductProfile:
     return ProductProfile(
         product=Product(
             name="Research assistant",
-            summary=(
+            description=(
                 "An agent that answers research questions over an internal document "
                 "library, citing what it used."
             ),
@@ -75,38 +75,54 @@ def research_assistant() -> ProductProfile:
             Task(
                 id="T-1",
                 name="Answer quality",
+                description="Answer research questions accurately and with useful evidence.",
                 behaviours=[
                     Behaviour(
                         id="EB-1",
-                        statement="Cites a source for every factual claim",
-                        priority=True,
+                        name="Cite factual claims",
+                        description="Cites a source for every factual claim",
+                        measured=True,
                         criteria=[
                             Criterion(
                                 id="AC-1-1",
-                                given="a question answerable from the library",
-                                when="the answer is returned",
-                                then="every factual claim names the document it came from",
+                                name="Cite supported answers",
+                                description=CriterionDescription(
+                                    given="a question answerable from the library",
+                                    when="the answer is returned",
+                                    then=(
+                                        "every factual claim names the document it came from"
+                                    ),
+                                ),
                                 metric_fqn=CITATION_METRIC,
                             ),
                             Criterion(
                                 id="AC-1-2",
-                                given="a question the library cannot answer",
-                                when="the answer is returned",
-                                then="it says so rather than citing an unrelated document",
+                                name="Do not cite unrelated sources",
+                                description=CriterionDescription(
+                                    given="a question the library cannot answer",
+                                    when="the answer is returned",
+                                    then=(
+                                        "it says so rather than citing an unrelated document"
+                                    ),
+                                ),
                                 metric_fqn=CITATION_METRIC,
                             ),
                         ],
                     ),
                     Behaviour(
                         id="EB-2",
-                        statement="Keeps answers under a page unless asked otherwise",
-                        priority=False,  # unticked — criteria below are dormant, not deleted
+                        name="Keep answers concise",
+                        description="Keeps answers under a page unless asked otherwise",
+                        measured=False,  # dormant criteria remain available
                         criteria=[
                             Criterion(
                                 id="AC-2-1",
-                                given="a question with no length instruction",
-                                when="the answer is returned",
-                                then="it is under 500 words",
+                                name="Default length limit",
+                                description=CriterionDescription(
+                                    given="a question with no length instruction",
+                                    when="the answer is returned",
+                                    then="it is under 500 words",
+                                ),
                                 metric_fqn=TURN_BUDGET,
                             ),
                         ],
@@ -116,21 +132,25 @@ def research_assistant() -> ProductProfile:
             Task(
                 id="T-2",
                 name="Recovery",
+                description="Recover safely when document search cannot complete.",
                 behaviours=[
                     Behaviour(
                         id="EB-3",
-                        statement="Stops after repeated search failures and says what it tried",
-                        priority=True,
-                        # the user typed this one — it must survive any regeneration
-                        interaction_type=InteractionType.FORM,
+                        name="Stop repeated failures",
+                        description=(
+                            "Stops after repeated search failures and says what it tried"
+                        ),
+                        measured=True,
                         criteria=[
                             Criterion(
                                 id="AC-3-1",
-                                given="a document search that times out repeatedly",
-                                when="the agent has retried three times",
-                                then="it stops and reports what it attempted",
+                                name="Report failed retries",
+                                description=CriterionDescription(
+                                    given="a document search that times out repeatedly",
+                                    when="the agent has retried three times",
+                                    then="it stops and reports what it attempted",
+                                ),
                                 metric_fqn=BOUNDED_TROUBLESHOOTING,
-                                interaction_type=InteractionType.FORM,
                             ),
                         ],
                     ),
@@ -140,6 +160,7 @@ def research_assistant() -> ProductProfile:
         personas=[
             Persona(
                 id="cooperative-delegator",
+                name="Cooperative delegator",
                 description=(
                     "A policy analyst comfortable with AI tools who engages fully, "
                     "answers questions willingly, and redirects gently if things stall."
@@ -147,6 +168,7 @@ def research_assistant() -> ProductProfile:
             ),
             Persona(
                 id="impatient-executive",
+                name="Impatient executive",
                 description=(
                     "A time-poor director who writes in curt imperatives, will not "
                     "answer clarifying questions, and abandons the work quickly."
@@ -156,6 +178,7 @@ def research_assistant() -> ProductProfile:
         scenarios=[
             Scenario(
                 id="S-1",
+                name="Supported literature review",
                 description=(
                     "Ask for a literature review on a topic the library covers well, "
                     "then ask a follow-up that needs a second document."
@@ -169,6 +192,7 @@ def research_assistant() -> ProductProfile:
             ),
             Scenario(
                 id="S-2",
+                name="Repeated search timeout",
                 description=(
                     "Ask a question whose documents live behind a search that will "
                     "time out, forcing the retry path."

@@ -241,8 +241,8 @@ def test_review_and_experiment_use_the_same_persona_ids() -> None:
     """The readable id is both the human label and the compiled reference key."""
     review = render_review(research_assistant(), EXPERIMENT_ID)
 
-    assert "**cooperative-delegator**" in review
-    assert "**impatient-executive**" in review
+    assert "**Cooperative delegator**" in review
+    assert "**Impatient executive**" in review
     assert [p["id"] for p in compiled()["personas"]] == [
         "cooperative-delegator",
         "impatient-executive",
@@ -257,4 +257,4 @@ def test_the_product_detail_is_kept_in_review_but_not_compiled() -> None:
 
     assert profile.product.detail in review
     assert profile.product.detail not in experiment
-    assert yaml.safe_load(experiment)["description"] == profile.product.summary
+    assert yaml.safe_load(experiment)["description"] == profile.product.description

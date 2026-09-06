@@ -20,26 +20,30 @@ class _StrictDraft(BaseModel):
 
 
 class BehaviourDraft(_StrictDraft):
-    statement: str
+    name: str
+    description: str
 
 
 class TaskDraft(_StrictDraft):
     name: str
+    description: str
     behaviours: list[BehaviourDraft] = Field(min_length=1)
 
 
 class CriterionDraft(_StrictDraft):
+    name: str
     given: str
     when: str
     then: str
 
 
 class PersonaDraft(_StrictDraft):
-    label: str
+    name: str
     description: str
 
 
 class ScenarioDraft(_StrictDraft):
+    name: str
     description: str
     behaviour_refs: list[str]
     persona_refs: list[str]
@@ -62,23 +66,31 @@ def _legacy_value(path: str, value: Any) -> Any:
     field = _container(path)
     if field == "tasks":
         behaviours = [
-            BehaviourDraft(statement=item["statement"])
+            BehaviourDraft(name=item["name"], description=item["description"])
             for item in value.get("behaviours", [])
         ]
-        return TaskDraft(name=value["name"], behaviours=behaviours)
+        return TaskDraft(
+            name=value["name"],
+            description=value["description"],
+            behaviours=behaviours,
+        )
     if field == "behaviours":
-        return BehaviourDraft(statement=value["statement"])
+        return BehaviourDraft(name=value["name"], description=value["description"])
     if field == "criteria":
         return CriterionDraft(
-            given=value["given"], when=value["when"], then=value["then"]
+            name=value["name"],
+            given=value["given"],
+            when=value["when"],
+            then=value["then"],
         )
     if field == "personas":
         return PersonaDraft(
-            label=value.get("label", value.get("id", "persona")),
+            name=value["name"],
             description=value["description"],
         )
     if field == "scenarios":
         return ScenarioDraft(
+            name=value["name"],
             description=value["description"],
             behaviour_refs=value.get("behaviour_refs", []),
             persona_refs=value.get("persona_refs", []),
@@ -121,6 +133,32 @@ class StepResultPatch(BaseModel):
             data.pop("origin", None)
             data["value"] = _legacy_value(data["path"], data.get("value"))
             return data
+        if isinstance(value, dict) and isinstance(value.get("value"), dict):
+            # JSON decoding does not preserve the draft subtype.  Rebuild it from the
+            # addressed container, while leaving incomplete or legacy shapes for strict
+            # Pydantic validation to reject.
+            field = _container(str(value.get("path", "")))
+            required = {
+                "tasks": {"name", "description", "behaviours"},
+                "behaviours": {"name", "description"},
+                "criteria": {"name", "given", "when", "then"},
+                "personas": {"name", "description"},
+                "scenarios": {
+                    "name",
+                    "description",
+                    "behaviour_refs",
+                    "persona_refs",
+                },
+            }.get(field, set())
+            semantic = value["value"]
+            nested_valid = field != "tasks" or all(
+                isinstance(item, dict) and set(item) == {"name", "description"}
+                for item in semantic.get("behaviours", [])
+            )
+            if set(semantic) == required and nested_valid:
+                data = dict(value)
+                data["value"] = _legacy_value(str(value["path"]), value["value"])
+                return data
         return value
 
     @model_validator(mode="after")

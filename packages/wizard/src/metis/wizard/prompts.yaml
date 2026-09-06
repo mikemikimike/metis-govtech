@@ -12,7 +12,7 @@ system:
   patch_rules: |-
     You return patches, never whole documents. Each patch has:
       op    — add | remove | set | reorder
-      path  — an address, e.g. tasks[T-1].behaviours[EB-4].statement
+      path  — an address, e.g. tasks[T-1].behaviours[EB-4].description
       value — the new value
 
     Address existing nodes by id, never by position — `tasks[T-1]`, never `tasks[0]`. Ids,
@@ -34,17 +34,18 @@ system:
       op: add
       path: tasks
       value: {"name": "…",
-              "behaviours": [{"statement": "…"}, {"statement": "…"}]}
+              "description": "…",
+              "behaviours": [{"name": "…", "description": "…"}]}
 
     Mirror that shape, and the shape of anything already in the document. The wizard allocates
     collision-free ids across the current profile.
 
-    The wizard owns ids, authorship, defaults, priority, metric bindings, trials and fixtures. The
-    model may never write any of them. Persona drafts use `label` and `description`; scenario drafts
-    use only `description`, `behaviour_refs` and `persona_refs`.
+    The wizard owns ids, authorship, defaults, measured state, metric bindings, trials and fixtures.
+    The model may never write any of them. Persona and scenario drafts use `name` and `description`;
+    scenario drafts also use `behaviour_refs` and `persona_refs`.
 
     Two semantic fields you may never write, at any step:
-      - a behaviour's `priority` — that is the user's decision alone
+      - a behaviour's `measured` — that is the user's decision alone
       - a criterion's `metric_fqn` — a separate matcher chooses it from the criterion's own
         wording. You can see which metric each criterion is bound to, but you cannot set it. If
         the user wants a different metric, do not touch `metric_fqn`; instead reword that
@@ -80,9 +81,9 @@ model_calls:
     as normal prose.
 
     Write only what the conversation established. You may set product.name, product.users,
-    product.summary and product.detail.
+    product.description and product.detail.
 
-    Keep product.summary short: it is the one-line description compiled into the experiment.
+    Keep product.description short: it is the one-line description compiled into the experiment.
     Treat product.detail as the cumulative handover to every later step, not as a second summary.
     Its depth must match the evidence. When the conversation or a supplied source establishes
     several material facts, preserve them separately and with enough context to use later.
@@ -131,9 +132,9 @@ model_calls:
     already used those words or explained them.
 
     Write only what the conversation established. You may update product.name, product.users,
-    product.summary and product.detail.
+    product.description and product.detail.
 
-    Keep product.summary short: it is the one-line description compiled into the experiment.
+    Keep product.description short: it is the one-line description compiled into the experiment.
     Treat product.detail as the cumulative handover to every later step, not as a second summary.
     Its depth must match the evidence. When the conversation or a supplied source establishes
     several material facts, preserve them separately and with enough context to use later.
@@ -162,16 +163,16 @@ model_calls:
 
     Then draft tasks, each with 2–5 behaviours. A task is a group of related behaviours — a job the
     product does, named as a heading; it is not a situation you run and has no persona or steps. A
-    behaviour is one statement of something that should be true — "cites a source for every factual
-    claim". No acceptance criteria yet, and do not set priority on anything.
+    behaviour is one description of something that should be true — "cites a source for every factual
+    claim". No acceptance criteria yet, and do not set measured on anything.
 
     `message`: a sentence introducing the list for review.
   criteria: |-
     The document:
     $profile
 
-    Write acceptance criteria for every behaviour with priority=true that has none yet. Ignore
-    behaviours with priority=false entirely — the user chose not to measure those.
+    Write acceptance criteria for every behaviour with measured=true that has none yet. Ignore
+    behaviours with measured=false entirely — the user chose not to measure those.
 
     Write 2–5 criteria for each behaviour. Choose the number from the distinct qualities that need
     to be checked. Use two for a narrow behaviour. Use more when the behaviour has separate
@@ -210,12 +211,11 @@ model_calls:
     are. Any persona must make sense dropped into any scenario.
 
     Every persona must include exactly these two fields:
-    - `label`: a short, stable, readable kebab-case label that the wizard turns into the id, such as
-      `indecisive-junior-officer` or `impatient-executive`
+    - `name`: a short display name, such as `Indecisive junior officer` or `Impatient executive`
     - `description`: one or two sentences describing how this archetype interacts, which the
       evaluation runner will use to simulate them
 
-    Do not add `id`, `name`, `scope` or `behaviours`; a persona is only its label and behavioural description.
+    Do not add `id`, `scope` or `behaviours`; the wizard derives the stable id from the name.
 
     Justify them by what the user chose to measure — "you're measuring citation discipline and
     scope refusal, so these will stress both" — in `message`. Include at least one who will
@@ -227,7 +227,7 @@ model_calls:
     Draft the whole set of scenarios in one go. A scenario is one simulated situation. It can
     exercise several behaviours at once, and one behaviour can be probed by several scenarios.
 
-    Every behaviour with priority=true must be covered by at least one scenario. Set behaviour_refs
+    Every behaviour with measured=true must be covered by at least one scenario. Set behaviour_refs
     to what each scenario covers and persona_refs to who runs it (at least one). Those, and the
     description, are the whole of a scenario you write — how many trials it runs and which files it
     uses are assigned by the wizard and cannot be sent by you.

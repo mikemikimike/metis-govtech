@@ -224,17 +224,17 @@ def test_configured_patch_rules_do_not_change_enforcement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     document = _document()
-    document["system"]["patch_rules"] = "The model may set priority."
+    document["system"]["patch_rules"] = "The model may set measured."
     _install_document(monkeypatch, document)
     profile = research_assistant()
 
-    assert "The model may set priority." in prompts.criteria(profile).system
+    assert "The model may set measured." in prompts.criteria(profile).system
     result = apply(
         profile,
         [
             Patch(
                 op=PatchOp.SET,
-                path="tasks[T-1].behaviours[EB-1].priority",
+                path="tasks[T-1].behaviours[EB-1].measured",
                 value=False,
             )
         ],
@@ -242,7 +242,7 @@ def test_configured_patch_rules_do_not_change_enforcement(
 
     assert result.applied == []
     assert len(result.rejected) == 1
-    assert profile.behaviour("EB-1").priority is True  # type: ignore[union-attr]
+    assert profile.behaviour("EB-1").measured is True  # type: ignore[union-attr]
 
 
 def test_prompt_catalogue_is_a_package_resource() -> None:
@@ -268,7 +268,7 @@ def test_clarify_selects_distinct_product_and_machinery_templates(
     document["model_calls"]["clarify_product"] += "\nPRODUCT PHASE MARKER"
     document["model_calls"]["clarify_machinery"] += "\nMACHINERY PHASE MARKER"
     _install_document(monkeypatch, document)
-    empty = ProductProfile(product=Product(name="", users="", summary=""))
+    empty = ProductProfile(product=Product(name="", users="", description=""))
 
     product = prompts.clarify(empty, [], "product")
     machinery = prompts.clarify(research_assistant(), [], "machinery")

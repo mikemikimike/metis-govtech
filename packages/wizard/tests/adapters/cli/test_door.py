@@ -27,7 +27,7 @@ DOMAIN_WORDS = [
     "task",
     "persona",
     "scenario",
-    "priority",
+    "measured",
     "profile",
 ]
 

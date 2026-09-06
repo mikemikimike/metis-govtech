@@ -94,7 +94,7 @@ def _metric_refs(behaviours: list[Behaviour]) -> list[str]:
 
 def _compile_scenario(profile: ProductProfile, scenario: Scenario) -> dict[str, Any]:
     known_personas = {p.id for p in profile.personas}
-    ticked = {b.id for b in profile.ticked()}
+    measured = {b.id for b in profile.measured_behaviours()}
 
     # Drop references that would not resolve. The harness raises ValueError on an unknown
     # persona_ref rather than skipping it, so emitting one produces a file that fails at run
@@ -102,7 +102,9 @@ def _compile_scenario(profile: ProductProfile, scenario: Scenario) -> dict[str, 
     # were deliberately not measured, and they survive in review.md.
     persona_refs = [ref for ref in scenario.persona_refs if ref in known_personas]
     covered = [
-        b for b in profile.ticked() if b.id in set(scenario.behaviour_refs) & ticked
+        b
+        for b in profile.measured_behaviours()
+        if b.id in set(scenario.behaviour_refs) & measured
     ]
 
     compiled: dict[str, Any] = {
@@ -174,7 +176,7 @@ def compile_experiment(profile: ProductProfile, experiment_id: str) -> dict[str,
     """
     return build_experiment_document(
         experiment_id=experiment_id,
-        description=profile.product.summary,
+        description=profile.product.description,
         personas=[{"id": p.id, "description": p.description} for p in profile.personas],
         scenarios=[
             _compile_scenario(profile, scenario) for scenario in profile.scenarios

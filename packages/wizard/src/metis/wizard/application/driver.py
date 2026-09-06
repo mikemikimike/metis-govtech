@@ -11,7 +11,7 @@ model is called at five points only — clarify, and the four drafting steps.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from metis.wizard.application import cascade, interview, screens
 from metis.wizard.application.interviewer import Interviewer, InterviewerOutputError
@@ -32,6 +32,7 @@ from metis.wizard.contracts.conversation import (
     editable_fields_of,
 )
 from metis.wizard.contracts.output import (
+    BehaviourDraft,
     CriterionDraft,
     PersonaDraft,
     ScenarioDraft,
@@ -77,7 +78,7 @@ _CLARIFY_PRODUCT_PATHS = frozenset(
     {
         "product.name",
         "product.users",
-        "product.summary",
+        "product.description",
         "product.detail",
     }
 )
@@ -153,7 +154,7 @@ class StepDriver:
             if asked < interview.clarify_turn_cap():
                 phase = (
                     "product"
-                    if not (profile.product.summary and profile.product.users)
+                    if not (profile.product.description and profile.product.users)
                     else "machinery"
                 )
                 result = self.interviewer.clarify(profile, state.history, phase)
@@ -306,7 +307,7 @@ class StepDriver:
     def _criterion_texts(state: SessionState) -> dict[str, str]:
         """Every criterion's wording, keyed by id — the input the matcher reads."""
         return {
-            criterion.id: criterion.text
+            criterion.id: str(criterion.description)
             for behaviour in state.profile.behaviours()
             for criterion in behaviour.criteria
         }
@@ -330,7 +331,7 @@ class StepDriver:
 
         for behaviour in state.profile.behaviours():
             for criterion in behaviour.criteria:
-                if criterion.text != before_texts.get(criterion.id, ""):
+                if str(criterion.description) != before_texts.get(criterion.id, ""):
                     rematch(criterion, self.matcher)  # type: ignore[arg-type]
 
     def _handle_form(
@@ -341,34 +342,68 @@ class StepDriver:
         values = getattr(response, "values", {}) or {}
         profile = state.profile
 
-        # A form carrying a target is the criteria card's "Write one myself": it becomes one
-        # criterion under that behaviour, whatever step we happen to be standing on. The step
-        # branches below handle the screen-level "add one" forms, which carry no target.
+        # A target keeps a manual child attached to the parent that offered the action. The
+        # current step tells us which parent type the opaque id names.
         if request.target is not None:
-            return self._add_typed_criterion(state, request.target, values)
+            if state.step is SessionStep.CRITERIA:
+                return self._add_typed_criterion(state, request.target, values)
+            if state.step is SessionStep.BEHAVIOURS:
+                return self._add_typed_behaviour(state, request.target, values)
+            return self._refuse_form_target()
+
+        # Scoped child forms must carry their parent id. A missing target is not a valid
+        # screen-level Behaviour or Criterion form, and must never be guessed or widened.
+        if state.step in (SessionStep.BEHAVIOURS, SessionStep.CRITERIA):
+            return self._refuse_form_target()
 
         if state.step is SessionStep.PERSONAS:
             materializer.add_persona(
                 profile,
                 PersonaDraft(
-                    label=values.get("label", values.get("id", "persona")),
+                    name=values.get("name", "Persona"),
                     description=values.get("description", ""),
                 ),
                 PatchOrigin.WIZARD,
+                issued_ids=state.issued_ids,
+                user_typed=state.user_typed,
             )
         elif state.step is SessionStep.SCENARIOS:
             materializer.add_scenario(
                 profile,
                 ScenarioDraft(
+                    name=values.get("name", "Scenario"),
                     description=values.get("description", ""),
                     behaviour_refs=values.get("behaviour_refs", []),
                     persona_refs=values.get("persona_refs", []),
                 ),
                 PatchOrigin.WIZARD,
+                issued_ids=state.issued_ids,
+                user_typed=state.user_typed,
             )
 
+    def _add_typed_behaviour(
+        self, state: SessionState, task_id: str, values: dict[str, Any]
+    ) -> None:
+        """Append one form-created Behaviour under the Task that offered the action."""
+        task = state.profile.task(task_id)
+        if task is None:
+            return self._refuse_form_target()
+
+        task.behaviours.append(
+            materializer.add_behaviour(
+                state.profile,
+                BehaviourDraft(
+                    name=values.get("name", "Behaviour"),
+                    description=values.get("description", ""),
+                ),
+                PatchOrigin.WIZARD,
+                issued_ids=state.issued_ids,
+                user_typed=state.user_typed,
+            )
+        )
+
     def _add_typed_criterion(
-        self, state: SessionState, behaviour_id: str, values: dict
+        self, state: SessionState, behaviour_id: str, values: dict[str, Any]
     ) -> None:
         """Turn a submitted Given/When/Then form into one criterion under one behaviour.
 
@@ -385,11 +420,14 @@ class StepDriver:
             state.profile,
             behaviour,
             CriterionDraft(
+                name=values.get("name", "Criterion"),
                 given=values.get("given", ""),
                 when=values.get("when", ""),
                 then=values.get("then", ""),
             ),
             PatchOrigin.WIZARD,
+            issued_ids=state.issued_ids,
+            user_typed=state.user_typed,
         )
         # The new criterion has no metric yet; match it, and only it, if a matcher is wired.
         self._match_new(behaviour, {c.id for c in behaviour.criteria[:-1]})
@@ -418,7 +456,12 @@ class StepDriver:
         # Toggles and ticks: apply the patches the package already composed.
         patches = [option.patch for option in chosen if option.patch]
         if patches:
-            apply(state.profile, patches)  # WIZARD origin — trusted by construction
+            apply(
+                state.profile,
+                patches,
+                issued_ids=state.issued_ids,
+                user_typed=state.user_typed,
+            )  # WIZARD origin — trusted by construction
 
         if "back" in actions:
             state.step = _PREVIOUS_STEP.get(state.step, state.step)
@@ -438,16 +481,22 @@ class StepDriver:
             return self._open_criterion_form(state, _target_of(chosen, "type"))
 
         if "add" in actions:
-            # The screen-level "I'll add one" on behaviours, personas and scenarios — one
-            # free-text description, handled per step in `_handle_form`. Distinct from the
-            # criteria card's "Write one myself" (`type`), which builds Given/When/Then.
+            # Every repeated node has a short name and substantive content. The Behaviour
+            # action also carries its Task id so the submitted node cannot move to another
+            # group during a door or save/resume round trip.
+            fields = [
+                FormField(id="name", label="Name"),
+                FormField(id="description", label="Description", multiline=True),
+            ]
+            target = (
+                _target_of(chosen, "add")
+                if state.step is SessionStep.BEHAVIOURS
+                else None
+            )
             form = FormRequest(
                 prompt="Go ahead — I'll use exactly what you write.",
-                fields=[
-                    FormField(
-                        id="description", label="In your own words", multiline=True
-                    )
-                ],
+                fields=fields,
+                target=target,
             )
             screens.stamp_step(form, state.step)
             state.pending = form
@@ -523,6 +572,8 @@ class StepDriver:
                     origin=PatchOrigin.WIZARD,
                 )
             ],
+            issued_ids=state.issued_ids,
+            user_typed=state.user_typed,
         )
         if outcome.any_rejected:
             return self._refuse_field_edit(
@@ -567,6 +618,7 @@ class StepDriver:
             prompt="Write one yourself — I'll use exactly what you type.",
             target=target,
             fields=[
+                FormField(id="name", label="Name", multiline=False),
                 FormField(id="given", label="Given", multiline=False),
                 FormField(id="when", label="When", multiline=False),
                 FormField(id="then", label="Then", multiline=False),
@@ -600,6 +652,19 @@ class StepDriver:
             )
         )
 
+    def _refuse_form_target(self) -> None:
+        """Refuse a form whose parent no longer exists, without widening its scope."""
+        self.pending_warnings.append(
+            Warning(
+                text=(
+                    "I couldn't find where that item belongs, so I've left the profile "
+                    "unchanged. Open the form again from its Task."
+                ),
+                source=WarningSource.RUNTIME,
+                blocking=False,
+            )
+        )
+
     def _suggest_one_criterion(self, state: SessionState, target: str | None) -> None:
         """Ask the model for exactly one new criterion under one behaviour, and match it.
 
@@ -623,7 +688,12 @@ class StepDriver:
         if not self._is_one_criterion_add(patches, behaviour.id):
             return self._refuse_suggestion()
 
-        outcome = apply(state.profile, patches)
+        outcome = apply(
+            state.profile,
+            patches,
+            issued_ids=state.issued_ids,
+            user_typed=state.user_typed,
+        )
         if outcome.any_rejected or not outcome.applied:
             # The address passed the shape check but the applier still refused it, or the value
             # would not build a Criterion. Either way nothing landed cleanly, so say so rather
@@ -634,7 +704,7 @@ class StepDriver:
         self._match_new(behaviour, before_ids)
 
     @staticmethod
-    def _is_one_criterion_add(patches: list, behaviour_id: str) -> bool:
+    def _is_one_criterion_add(patches: list[Patch], behaviour_id: str) -> bool:
         """True only for a single add that lands inside this behaviour's own criteria list."""
         if len(patches) != 1:
             return False
@@ -673,7 +743,7 @@ class StepDriver:
         # Continue at prioritise is what generates criteria — which is why ticked-but-empty
         # cannot exist, and why nothing is generated for behaviours nobody picked.
         if state.step is SessionStep.CRITERIA and any(
-            b.priority and not b.criteria for b in state.profile.ticked()
+            b.measured and not b.criteria for b in state.profile.measured_behaviours()
         ):
             self._try(lambda: self.interviewer.draft_criteria(state.profile), state)
             # A separate pass, after generation — never folded into it.
@@ -722,7 +792,12 @@ class StepDriver:
         patches = sanitise(result.patches)
         if allowed_paths is not None:
             patches = [p for p in patches if p.path in allowed_paths]
-        outcome = apply(state.profile, patches)
+        outcome = apply(
+            state.profile,
+            patches,
+            issued_ids=state.issued_ids,
+            user_typed=state.user_typed,
+        )
 
         for rejection in outcome.rejected:
             self.pending_warnings.append(
@@ -743,7 +818,7 @@ class StepDriver:
         action = next((s.split(":", 1)[0] for s in selected), "keep")
 
         if action == "regenerate":
-            cascade.clear_for_regeneration(state.profile, question)
+            cascade.clear_for_regeneration(state.profile, question, state.user_typed)
             # What is left is a state the forward pass already draws: a ticked behaviour
             # with no criteria, or a behaviour no scenario covers.
             if question.kind == "criteria":

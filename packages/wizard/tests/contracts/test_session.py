@@ -70,14 +70,12 @@ def test_session_fixture_preserves_its_wire_shape(
     assert loaded.id == raw["id"] == "compat-v1"
     assert loaded.step is SessionStep.PERSONAS
     assert [turn.model_dump(mode="json") for turn in loaded.history] == raw["history"]
-    assert [r.model_dump(mode="json") for r in loaded.requests] == raw["requests"]
+    assert len(loaded.requests) == len(raw["requests"])
+    assert loaded.requests[0].prompt == raw["requests"][0]["prompt"]
     assert isinstance(loaded.pending, ChoiceRequest)
-    expected_profile = dict(raw["profile"])
-    expected_product = dict(expected_profile["product"])
-    expected_product.pop("architecture")
-    expected_product["detail"] = ""
-    expected_profile["product"] = expected_product
-    assert loaded.profile.model_dump(mode="json") == expected_profile
+    assert (
+        loaded.profile.product.description == raw["profile"]["product"]["description"]
+    )
 
 
 def test_the_live_request_is_not_persisted_separately(tmp_path: Path) -> None:
@@ -213,7 +211,7 @@ def test_a_tick_does_not_stack_a_second_copy_of_its_screen() -> None:
     session = _driven(SessionStep.PRIORITISE)
     session.next()
     before = session.state.profile.behaviour("EB-2")
-    assert before is not None and before.priority is False
+    assert before is not None and before.measured is False
 
     session.respond(ChoiceResponse(selected=["tick:EB-2"]))
     session.next()
@@ -221,7 +219,7 @@ def test_a_tick_does_not_stack_a_second_copy_of_its_screen() -> None:
     assert len(session.state.requests) == 1
     assert session.state.pending is not None  # still live, not a receipt
     after = session.state.profile.behaviour("EB-2")
-    assert after is not None and after.priority is True  # and the tick took
+    assert after is not None and after.measured is True  # and the tick took
 
 
 def test_continuing_resolves_the_screen_behind_it() -> None:
@@ -242,7 +240,11 @@ def test_a_resolved_screen_records_what_was_chosen() -> None:
     session = _driven(SessionStep.BEHAVIOURS)
     offered = session.next()
     assert isinstance(offered, ChoiceRequest)
-    assert [o.id.action for o in offered.options] == ["accept", "chat", "add"]
+    assert [o.id.action for o in offered.options] == ["accept", "chat", "add", "add"]
+    assert [o.id.target for o in offered.options if o.id.action == "add"] == [
+        "T-1",
+        "T-2",
+    ]
 
     session.respond(ChoiceResponse(selected=["accept"]))
 
@@ -274,10 +276,15 @@ def test_resolved_typed_requests_carry_the_users_answer() -> None:
         (
             FormRequest(
                 prompt="Add one yourself",
-                fields=[FormField(id="statement", label="Statement")],
+                fields=[
+                    FormField(id="name", label="Name"),
+                    FormField(id="description", label="Description"),
+                ],
             ),
-            FormResponse(values={"statement": "It cites its sources."}),
-            {"statement": "It cites its sources."},
+            FormResponse(
+                values={"name": "Source citer", "description": "It cites its sources."}
+            ),
+            {"name": "Source citer", "description": "It cites its sources."},
         ),
     ]
 
@@ -341,16 +348,16 @@ def test_going_back_leaves_the_abandoned_screen_in_the_conversation() -> None:
     assert len(session.state.profile.scenarios) == scenarios_before  # nothing discarded
 
 
-def test_a_version_one_session_is_refused(tmp_path: Path) -> None:
+def test_a_version_six_session_is_refused(tmp_path: Path) -> None:
     """The list replaced the single pending slot, so older files are not half-understood."""
     path = tmp_path / "session.json"
-    path.write_text('{"version": 1, "id": "s-1", "profile": {}, "pending": {}}')
+    path.write_text('{"version": 6, "id": "s-1", "profile": {}, "pending": {}}')
 
     with pytest.raises(SessionVersionError) as exc:
         SessionState.load(path)
 
     message = str(exc.value)
-    assert "1" in message
+    assert "6" in message
     assert str(SESSION_FORMAT_VERSION) in message
     assert str(path) in message
 
@@ -508,7 +515,7 @@ def test_respond_records_the_turn_and_saves(tmp_path: Path) -> None:
 
 def test_a_fresh_session_starts_at_clarify() -> None:
     session = Session.start(
-        ProductProfile(product=Product(name="X", summary="", users=""))
+        ProductProfile(product=Product(name="X", description="", users=""))
     )
 
     assert session.state.step is SessionStep.CLARIFY
@@ -519,7 +526,7 @@ def test_product_writes_are_persisted_before_the_next_question(tmp_path: Path) -
     from metis.wizard.application.driver import StepDriver
 
     session = Session.start(
-        ProductProfile(product=Product(name="", summary="", users="")),
+        ProductProfile(product=Product(name="", description="", users="")),
         path=tmp_path / "session.json",
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )

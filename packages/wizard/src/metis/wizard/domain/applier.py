@@ -36,6 +36,7 @@ from metis.wizard.domain.profile import (
     ProductProfile,
     Scenario,
     Task,
+    collect_profile_ids,
 )
 
 if TYPE_CHECKING:
@@ -90,7 +91,7 @@ def _check(patch: Patch) -> str | None:
 
     # 2. Not "does my current step allow this?" but "does any step own it?".
     if owner_of(patch.path) is None:
-        if patch.path.endswith(".priority"):
+        if patch.path.endswith(".measured"):
             return (
                 "I've made that change. I can't tick it for you, though — "
                 "which behaviours actually matter is your call, not mine."
@@ -125,11 +126,17 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
     # that compatibility safe; provider JSON is already rejected by strict drafts before here.
     if origin is PatchOrigin.MODEL and isinstance(value, dict):
         allowed = {
-            "tasks": {"id", "name", "behaviours"},
-            "behaviours": {"id", "statement", "criteria"},
-            "criteria": {"id", "given", "when", "then"},
-            "personas": {"id", "description"},
-            "scenarios": {"id", "description", "behaviour_refs", "persona_refs"},
+            "tasks": {"id", "name", "description", "behaviours"},
+            "behaviours": {"id", "name", "description", "criteria"},
+            "criteria": {"id", "name", "description"},
+            "personas": {"id", "name", "description"},
+            "scenarios": {
+                "id",
+                "name",
+                "description",
+                "behaviour_refs",
+                "persona_refs",
+            },
         }.get(field_name)
         if allowed is not None:
             value = {
@@ -152,7 +159,13 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
     return value
 
 
-def _apply_one(profile: ProductProfile, patch: Patch) -> None:
+def _apply_one(
+    profile: ProductProfile,
+    patch: Patch,
+    *,
+    issued_ids: set[str],
+    user_typed: set[str] | None,
+) -> None:
     # A model can pair a right, unique behaviour id with a wrong task ancestor; correct the
     # ancestor against the behaviour it names before resolving. See `paths.normalise`.
     path = paths.normalise(profile, patch.path)
@@ -179,23 +192,56 @@ def _apply_one(profile: ProductProfile, patch: Patch) -> None:
             raise paths.PathError(f"{patch.path!r}: cannot ADD to a non-list.")
         value = patch.value
         if _draft(value, "TaskDraft") and segment.field == "tasks":
-            materializer.add_task(profile, value, patch.origin)
+            materializer.add_task(
+                profile,
+                value,
+                patch.origin,
+                issued_ids=issued_ids,
+                user_typed=user_typed,
+            )
             return
         if _draft(value, "BehaviourDraft") and segment.field == "behaviours":
-            items.append(materializer.add_behaviour(profile, value, patch.origin))
+            items.append(
+                materializer.add_behaviour(
+                    profile,
+                    value,
+                    patch.origin,
+                    issued_ids=issued_ids,
+                    user_typed=user_typed,
+                )
+            )
             return
         if _draft(value, "CriterionDraft") and segment.field == "criteria":
             if not isinstance(parent, Behaviour):
                 raise paths.PathError(
                     f"{patch.path!r}: criteria has no behaviour parent."
                 )
-            materializer.add_criterion(profile, parent, value, patch.origin)
+            materializer.add_criterion(
+                profile,
+                parent,
+                value,
+                patch.origin,
+                issued_ids=issued_ids,
+                user_typed=user_typed,
+            )
             return
         if _draft(value, "PersonaDraft") and segment.field == "personas":
-            materializer.add_persona(profile, value, patch.origin)
+            materializer.add_persona(
+                profile,
+                value,
+                patch.origin,
+                issued_ids=issued_ids,
+                user_typed=user_typed,
+            )
             return
         if _draft(value, "ScenarioDraft") and segment.field == "scenarios":
-            materializer.add_scenario(profile, value, patch.origin)
+            materializer.add_scenario(
+                profile,
+                value,
+                patch.origin,
+                issued_ids=issued_ids,
+                user_typed=user_typed,
+            )
             return
         items.append(_coerce(segment.field, value, patch.origin))
 
@@ -218,7 +264,13 @@ def _apply_one(profile: ProductProfile, patch: Patch) -> None:
         )
 
 
-def apply(profile: ProductProfile, patches: list[Patch]) -> ApplyResult:
+def apply(
+    profile: ProductProfile,
+    patches: list[Patch],
+    *,
+    issued_ids: set[str] | None = None,
+    user_typed: set[str] | None = None,
+) -> ApplyResult:
     """Apply what is allowed, report what was not.
 
     Patches are applied in order. Nothing here guards against a *set* of patches that
@@ -226,6 +278,7 @@ def apply(profile: ProductProfile, patches: list[Patch]) -> ApplyResult:
     is guaranteed not to conflict (see `multi`), and suggestion chips are one at a time.
     """
     result = ApplyResult()
+    issued_ids = issued_ids if issued_ids is not None else collect_profile_ids(profile)
 
     for patch in patches:
         reason = _check(patch)
@@ -233,7 +286,12 @@ def apply(profile: ProductProfile, patches: list[Patch]) -> ApplyResult:
             result.rejected.append(Rejection(patch, reason))
             continue
         try:
-            _apply_one(profile, patch)
+            _apply_one(
+                profile,
+                patch,
+                issued_ids=issued_ids,
+                user_typed=user_typed,
+            )
         except paths.PathError as exc:
             result.rejected.append(Rejection(patch, f"I couldn't apply that: {exc}"))
             continue
@@ -282,13 +340,20 @@ def validate_model_patches(profile: ProductProfile, patches: Sequence[Any]) -> N
     wizard refuses or cannot locate, not malformed structured output.
     """
     candidate = profile.model_copy(deep=True)
+    issued_ids = collect_profile_ids(candidate)
+    user_typed: set[str] = set()
     previous_persona_counts = _persona_description_counts(profile)
 
     for patch in sanitise(patches):
         if _check(patch) is not None:
             continue
         try:
-            _apply_one(candidate, patch)
+            _apply_one(
+                candidate,
+                patch,
+                issued_ids=issued_ids,
+                user_typed=user_typed,
+            )
             # Assignment itself is not validated on Pydantic models. Rebuilding after every
             # patch catches scalar SETs and list-shaped values as well as nested model errors.
             candidate = ProductProfile.model_validate(

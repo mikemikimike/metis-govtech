@@ -13,78 +13,65 @@ having happened. Where the interview got to is `SessionState.step`, deliberately
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Self
+from typing import Any, Generic, Self, TypeVar
 
 import yaml
 from pydantic import BaseModel, Field
 
-from metis.wizard.domain.types import InteractionType
+DescriptionT = TypeVar("DescriptionT")
 
 
-class Authored(BaseModel):
-    """Anything whose text was written by the model or typed by the user.
+class ProfileNode(BaseModel, Generic[DescriptionT]):
+    """A repeated profile entity with separate identity, label, and content."""
 
-    FORM means the user typed it and it is used as-is: the model never rewrites it, and the
-    wizard asks before discarding it. Only CHAT and FORM ever appear here — a CHOICE applies
-    a patch the model had already written, so it never produces prose of its own.
-    """
-
-    interaction_type: InteractionType = InteractionType.CHAT
-
-    @property
-    def is_user_typed(self) -> bool:
-        """True when this text must survive a regeneration byte-identical."""
-        return self.interaction_type is InteractionType.FORM
+    id: str
+    name: str
+    description: DescriptionT
 
 
 class Product(BaseModel):
     name: str
     users: str  # prose — who the product serves
-    summary: str  # prose — the short description compiled into the experiment
+    description: str  # prose — the short description compiled into the experiment
     detail: str = ""  # prose — useful depth, including how the product works
 
 
-class Criterion(Authored):
-    id: str  # scoped to its behaviour — AC-1-1, AC-1-2
+class CriterionDescription(BaseModel):
     given: str
     when: str
     then: str
-    # resolved by the matcher, never by the model. `None` means matching has not run yet.
-    metric_fqn: str | None = None
-    metric_args: dict = Field(default_factory=dict)
 
-    @property
-    def text(self) -> str:
-        """The three clauses as one string — what the matcher embeds."""
+    def __str__(self) -> str:
+        """Return the clauses as the flat text used for metric matching."""
         return f"Given {self.given}, when {self.when}, then {self.then}."
 
 
-class Behaviour(Authored):
-    id: str
-    statement: str
+class Criterion(ProfileNode[CriterionDescription]):
+    # The id is scoped to its behaviour: AC-1-1, AC-1-2.
+    # resolved by the matcher, never by the model. `None` means matching has not run yet.
+    metric_fqn: str | None = None
+    metric_args: dict[str, Any] = Field(default_factory=dict)
+
+
+class Behaviour(ProfileNode[str]):
     # the user's tick, and the only real decision in the interview. The model never writes
     # it — the path is absent from StepPermissions entirely.
-    priority: bool = False
+    measured: bool = False
     # criteria are kept when a behaviour is unticked — they go dormant rather than being
-    # deleted, and the compiler filters on `priority` at the end. this is what lets the
+    # deleted, and the compiler filters on `measured` at the end. this is what lets the
     # tick stay live without needing any staleness tracking.
     criteria: list[Criterion] = Field(default_factory=list)
 
 
-class Task(BaseModel):
-    id: str
-    name: str
+class Task(ProfileNode[str]):
     behaviours: list[Behaviour] = Field(default_factory=list)
 
 
-class Persona(Authored):
-    id: str  # stable key, visible label, and what compiled scenarios reference
-    description: str
+class Persona(ProfileNode[str]):
+    """A user type whose stable id can differ from its display name."""
 
 
-class Scenario(Authored):
-    id: str
-    description: str  # the situation
+class Scenario(ProfileNode[str]):
     behaviour_refs: list[str] = Field(
         default_factory=list
     )  # M:N — several per scenario
@@ -109,9 +96,9 @@ class ProductProfile(BaseModel):
         """Every behaviour, in document order."""
         return [b for task in self.tasks for b in task.behaviours]
 
-    def ticked(self) -> list[Behaviour]:
+    def measured_behaviours(self) -> list[Behaviour]:
         """The behaviours the user chose to measure."""
-        return [b for task in self.tasks for b in task.behaviours if b.priority]
+        return [b for task in self.tasks for b in task.behaviours if b.measured]
 
     def behaviour(self, behaviour_id: str) -> Behaviour | None:
         return next((b for b in self.behaviours() if b.id == behaviour_id), None)
@@ -137,8 +124,10 @@ class ProductProfile(BaseModel):
         return [s for s in self.scenarios if behaviour_id in s.behaviour_refs]
 
     def uncovered(self) -> list[Behaviour]:
-        """Ticked behaviours no scenario exercises — the blocking gate at the scenarios step."""
-        return [b for b in self.ticked() if not self.scenarios_covering(b.id)]
+        """Measured behaviours that no scenario exercises."""
+        return [
+            b for b in self.measured_behaviours() if not self.scenarios_covering(b.id)
+        ]
 
     def trial_count(self) -> int:
         """Trials the engine will perform: Σ over scenarios of (personas × trials).
@@ -163,3 +152,21 @@ class ProductProfile(BaseModel):
                 allow_unicode=True,
             )
         )
+
+
+def collect_profile_ids(profile: ProductProfile) -> set[str]:
+    """Return every node and reference id present in a profile."""
+    ids = {
+        *(task.id for task in profile.tasks),
+        *(behaviour.id for behaviour in profile.behaviours()),
+        *(
+            criterion.id
+            for behaviour in profile.behaviours()
+            for criterion in behaviour.criteria
+        ),
+        *(persona.id for persona in profile.personas),
+        *(scenario.id for scenario in profile.scenarios),
+        *(ref for scenario in profile.scenarios for ref in scenario.behaviour_refs),
+        *(ref for scenario in profile.scenarios for ref in scenario.persona_refs),
+    }
+    return ids

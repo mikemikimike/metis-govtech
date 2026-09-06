@@ -219,7 +219,7 @@ def create_app(
         from metis.wizard.contracts import Product, ProductProfile
 
         session_id = f"wizard-{uuid.uuid4().hex[:8]}"
-        profile = ProductProfile(product=Product(name="", summary="", users=""))
+        profile = ProductProfile(product=Product(name="", description="", users=""))
         session = Session.start(
             profile,
             path=store.new_path(session_id),

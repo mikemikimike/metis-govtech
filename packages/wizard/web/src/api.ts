@@ -165,9 +165,8 @@ export interface FormRequest extends RequestHeader {
   prompt: string;
   state: RequestState;
   fields: FormField[];
-  // Which behaviour a "Write one myself" criterion belongs to, carried opaquely so the scope
-  // survives the round trip; the package reads it back on submit. Absent for the screen-level
-  // add forms. Same field as a chat's `target`, same reason.
+  // Which parent a manual child belongs to. The door carries this opaque id unchanged, and the
+  // package reads it on submit. It is absent for screen-level forms.
   target?: string | null;
   // The values the user submitted, stamped on at resolve — the form's analogue of a chat's
   // `answer`, keyed by field id. Empty while pending.
@@ -191,32 +190,35 @@ export type UserResponse =
 
 export interface Criterion {
   id: string;
-  given: string;
-  when: string;
-  then: string;
+  name: string;
+  description: { given: string; when: string; then: string };
   metric_fqn?: string | null;
 }
 
 export interface Behaviour {
   id: string;
-  statement: string;
-  priority: boolean;
+  name: string;
+  description: string;
+  measured: boolean;
   criteria: Criterion[];
 }
 
 export interface Task {
   id: string;
   name: string;
+  description: string;
   behaviours: Behaviour[];
 }
 
 export interface Persona {
   id: string;
+  name: string;
   description: string;
 }
 
 export interface Scenario {
   id: string;
+  name: string;
   description: string;
   behaviour_refs: string[];
   persona_refs: string[];
@@ -227,7 +229,7 @@ export interface Scenario {
 export interface Product {
   name: string;
   users: string;
-  summary: string;
+  description: string;
   detail: string;
 }
 

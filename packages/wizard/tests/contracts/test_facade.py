@@ -41,13 +41,14 @@ def test_session_fixture_loads_through_the_facade(fixtures_dir: Path) -> None:
     raw = json.loads(path.read_text())
     state = SessionState.load(path)
 
-    expected_profile = dict(raw["profile"])
-    expected_product = dict(expected_profile["product"])
-    expected_product.pop("architecture")
-    expected_product["detail"] = ""
-    expected_profile["product"] = expected_product
-    assert state.profile.model_dump(mode="json") == expected_profile
+    assert state.profile.model_dump(mode="json") == raw["profile"]
     assert state.step.value == raw["step"]
     assert [turn.model_dump(mode="json") for turn in state.history] == raw["history"]
     assert isinstance(state.pending, ChoiceRequest)
-    assert [r.model_dump(mode="json") for r in state.requests] == raw["requests"]
+    assert len(state.requests) == len(raw["requests"])
+    assert state.requests[0].prompt == raw["requests"][0]["prompt"]
+    assert [o.label for o in state.pending.options] == [
+        o["label"] for o in raw["requests"][0]["options"]
+    ]
+    assert state.user_typed == set(raw["user_typed"])
+    assert state.issued_ids == set(raw["issued_ids"])

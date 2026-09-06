@@ -19,6 +19,7 @@ from fixtures.scripted import ScriptedInterviewer
 from metis.wizard.application import Session, SessionState, interview
 from metis.wizard.contracts import ChoiceResponse
 from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.profile import collect_profile_ids
 
 fastapi = pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
@@ -40,7 +41,13 @@ def client(root: Path) -> TestClient:
 
 def _seed(root: Path, name: str, *, step=SessionStep.PERSONAS) -> SessionState:
     """A session on disk in the layout `--out-dir` produces."""
-    state = SessionState(id=name, profile=research_assistant(), step=step)
+    profile = research_assistant()
+    state = SessionState(
+        id=name,
+        profile=profile,
+        step=step,
+        issued_ids=collect_profile_ids(profile),
+    )
     state.save(root / name / "session.json")
     return state
 
@@ -67,7 +74,7 @@ def test_a_session_without_a_product_name_is_still_listed(tmp_path: Path) -> Non
 
     state = SessionState(
         id="wizard-bbb",
-        profile=ProductProfile(product=Product(name="", summary="", users="")),
+        profile=ProductProfile(product=Product(name="", description="", users="")),
     )
     state.save(tmp_path / "wizard-bbb" / "session.json")
 
@@ -256,7 +263,7 @@ def test_the_two_doors_agree_on_a_targeted_criterion_workflow(tmp_path: Path) ->
     web = SessionStore(tmp_path / "web").load("s")
     assert web is not None
     fresh = web.profile.behaviour("EB-1").criteria[-1]  # type: ignore[union-attr]
-    assert (fresh.id, fresh.given, fresh.is_user_typed) == (
+    assert (fresh.id, fresh.description.given, fresh.id in web.user_typed) == (
         "AC-1-3",
         "a long report",
         True,
@@ -538,11 +545,14 @@ def test_a_submitted_document_serialises_like_an_interviewed_one(
     from metis.wizard.contracts import Persona, Product, ProductProfile, Scenario
 
     profile = ProductProfile(
-        product=Product(name="X", summary="the same description", users=""),
-        personas=[Persona(id="analyst", description="A policy analyst.")],
+        product=Product(name="X", description="the same description", users=""),
+        personas=[
+            Persona(id="analyst", name="Analyst", description="A policy analyst.")
+        ],
         scenarios=[
             Scenario(
                 id="S-1",
+                name="Ask a question",
                 description="Ask a question.",
                 persona_refs=["analyst"],
                 num_trials=3,

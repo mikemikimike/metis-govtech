@@ -22,16 +22,16 @@ if TYPE_CHECKING:
 def _criterion_lines(criterion: Criterion) -> list[str]:
     measured = criterion.metric_fqn or "not yet matched"
     return [
-        f"    - **{criterion.id}** — given {criterion.given}, "
-        f"when {criterion.when}, then {criterion.then}",
+        f"    - **{criterion.name}** — given {criterion.description.given}, "
+        f"when {criterion.description.when}, then {criterion.description.then}",
         f"      *measured by:* `{measured}`",
     ]
 
 
 def _behaviour_lines(behaviour: Behaviour) -> list[str]:
-    mark = "measured" if behaviour.priority else "considered, not measured"
+    mark = "measured" if behaviour.measured else "considered, not measured"
 
-    lines = [f"- **{behaviour.id}** — {behaviour.statement}  _({mark})_"]
+    lines = [f"- **{behaviour.name}** — {behaviour.description}  _({mark})_"]
     for criterion in behaviour.criteria:
         lines.extend(_criterion_lines(criterion))
     if not behaviour.criteria:
@@ -48,7 +48,7 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
         "",
         "## What it is",
         "",
-        product.summary,
+        product.description,
         "",
         "## Who uses it",
         "",
@@ -62,13 +62,15 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
     out += ["## What should be true", ""]
     for task in profile.tasks:
         out += [f"### {task.id} · {task.name}", ""]
+        if task.description:
+            out += [task.description, ""]
         for behaviour in task.behaviours:
             out += _behaviour_lines(behaviour)
         out += [""]
 
     out += ["## Personas", ""]
     for persona in profile.personas:
-        out += [f"- **{persona.id}** — {persona.description}"]
+        out += [f"- **{persona.name}** (`{persona.id}`) — {persona.description}"]
     if not profile.personas:
         out += ["_none_"]
     out += [""]
@@ -78,7 +80,7 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
         covers = ", ".join(scenario.behaviour_refs) or "nothing"
         runs = ", ".join(scenario.persona_refs) or "nobody"
         out += [
-            f"### {scenario.id}",
+            f"### {scenario.name} (`{scenario.id}`)",
             "",
             scenario.description,
             "",
@@ -100,7 +102,7 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
     ]
 
     not_measured = [
-        b for task in profile.tasks for b in task.behaviours if not b.priority
+        b for task in profile.tasks for b in task.behaviours if not b.measured
     ]
     if not_measured:
         out += [
@@ -110,7 +112,7 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
             "what was decided against, not as an oversight.",
             "",
         ]
-        out += [f"- **{b.id}** — {b.statement}" for b in not_measured]
+        out += [f"- **{b.name}** — {b.description}" for b in not_measured]
         out += [""]
 
     return "\n".join(out)

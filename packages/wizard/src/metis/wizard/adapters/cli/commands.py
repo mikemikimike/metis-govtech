@@ -244,7 +244,7 @@ def init(
 
     # The opening question collects the name. Keep it empty so the model writes what the user
     # actually established instead of preserving a door-owned placeholder in the document.
-    profile = ProductProfile(product=Product(name="", summary="", users=""))
+    profile = ProductProfile(product=Product(name="", description="", users=""))
     session = Session.start(
         profile,
         path=_session_path(out_dir),

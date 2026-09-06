@@ -49,7 +49,10 @@ TURNS = MetricSpec(
 
 def a_criterion(then: str, **kw) -> Criterion:
     return Criterion(
-        id="AC-1-1", given="a question", when="it answers", then=then, **kw
+        id="AC-1-1",
+        name="Criterion",
+        description={"given": "a question", "when": "it answers", "then": then},
+        **kw,
     )
 
 
@@ -173,7 +176,7 @@ def test_a_degraded_run_still_produces_a_loadable_experiment(tmp_path) -> None:
     from metis.wizard.application.compile import write_experiment
 
     profile = research_assistant()
-    for behaviour in profile.ticked():
+    for behaviour in profile.measured_behaviours():
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None
 
@@ -228,7 +231,7 @@ def test_rematching_a_criterion_is_silent_and_free() -> None:
         embedder=FakeEmbedder(["turn"]), specs=[TURNS], threshold=0.5
     )
 
-    criterion.then = "it stays within the turn budget"
+    criterion.description.then = "it stays within the turn budget"
     new_fqn = matcher.match(criterion)
 
     assert new_fqn == TURNS.fqn

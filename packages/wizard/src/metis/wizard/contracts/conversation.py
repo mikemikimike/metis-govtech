@@ -182,7 +182,7 @@ class BehaviourCard(Card):
     criteria its components are its criteria and its options are scoped to its behaviour.
 
     `selected` keeps the base's `bool | None`: `None` on behaviours (no checkbox drawn), a bool
-    on prioritise and criteria (a checkbox reflecting priority). A door draws no box for `None`,
+    on prioritise and criteria (a checkbox reflecting measured state). A door draws no box for `None`,
     which is what keeps the review screen from implying a decision the user has not been asked to
     make yet."""
 
@@ -190,7 +190,7 @@ class BehaviourCard(Card):
 
 
 class ScenarioCard(Card):
-    """The scenarios step. components = [Covers, Run as, Trials, Files], in that order."""
+    """The scenarios step. Components start with description, then Covers, Run as, Trials, Files."""
 
     kind: Literal["scenario"] = "scenario"  # pyright: ignore[reportIncompatibleVariableOverride]
     # The value is carried as data so both doors can state the unit at the point they draw it.
@@ -303,10 +303,10 @@ class ChoiceRequest(WizardRequest):
 class FormRequest(WizardRequest):
     type: Literal[InteractionType.FORM] = InteractionType.FORM
     fields: list[FormField]
-    # Which node this form writes into, when a per-card action raised it — a behaviour id such
-    # as "EB-1". Same role as `ChatRequest.target`: application context carried opaquely by both
-    # doors, read back by the package so a manual criterion lands under the behaviour whose card
-    # was clicked even across a reload. Optional with an empty default.
+    # Which parent this form writes into, when a per-card action raised it — an opaque id such
+    # as "T-1" or "EB-1". Both doors carry it unchanged. The package reads it back so a manual
+    # child stays under the parent whose card offered the action, including across a reload.
+    # It is optional for screen-level forms.
     target: str | None = None
     # The values the user submitted, stamped on at resolve — the form's analogue of a chat's
     # `answer`, keyed by field id. Empty while pending; additive with a default.

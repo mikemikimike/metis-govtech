@@ -137,7 +137,7 @@ def test_every_session_step_has_the_existing_status_copy() -> None:
 
 def test_the_session_facade_uses_the_interview_status_owner() -> None:
     session = Session.start(
-        ProductProfile(product=Product(name="Agent", summary="", users=""))
+        ProductProfile(product=Product(name="Agent", description="", users=""))
     )
 
     assert session.busy_message() == _EXPECTED_STATUSES["clarify"]

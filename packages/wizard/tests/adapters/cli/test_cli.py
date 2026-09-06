@@ -119,7 +119,7 @@ def test_an_unmatched_profile_loses_the_users_metrics() -> None:
     loads, and measures nothing at all.
     """
     profile = research_assistant()
-    for behaviour in profile.ticked():
+    for behaviour in profile.measured_behaviours():
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None  # what the driver leaves behind with no matcher
 
@@ -133,7 +133,7 @@ def test_a_matched_profile_keeps_them() -> None:
     from metis.wizard.application.matching import match_profile
 
     profile = research_assistant()
-    for behaviour in profile.ticked():
+    for behaviour in profile.measured_behaviours():
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None
 
@@ -155,13 +155,13 @@ def test_every_criterion_ends_up_measured_by_something() -> None:
     from metis.wizard.application.matching import match_profile
 
     profile = research_assistant()
-    for behaviour in profile.ticked():
+    for behaviour in profile.measured_behaviours():
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None
 
     match_profile(profile, cli._driver(StubInterviewer()).matcher)  # type: ignore[arg-type]
 
-    for behaviour in profile.ticked():
+    for behaviour in profile.measured_behaviours():
         for criterion in behaviour.criteria:
             assert criterion.metric_fqn
             assert (

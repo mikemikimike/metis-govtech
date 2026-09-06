@@ -67,7 +67,7 @@ class EmbeddingMatcher:
             vectors = self._vectors()
             if not vectors:
                 return GENERATED_JUDGE_FQN
-            [query] = self.embedder.embed([criterion.text])
+            [query] = self.embedder.embed([str(criterion.description)])
         except Exception:
             self.degraded = True
             return GENERATED_JUDGE_FQN
@@ -91,7 +91,7 @@ def match_profile(profile: ProductProfile, matcher: EmbeddingMatcher) -> int:
     picked, matching included).
     """
     matched = 0
-    for behaviour in profile.ticked():
+    for behaviour in profile.measured_behaviours():
         for criterion in behaviour.criteria:
             if criterion.metric_fqn:
                 continue

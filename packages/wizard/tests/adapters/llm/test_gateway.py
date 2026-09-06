@@ -189,6 +189,7 @@ def test_raw_scenario_fields_are_rejected_before_profile_materialization() -> No
                     "path": "scenarios",
                     "value": {
                         "id": "MODEL-ID",
+                        "name": "Invalid scenario",
                         "description": "x",
                         "behaviour_refs": [],
                         "persona_refs": [],
@@ -207,6 +208,7 @@ def test_raw_scenario_fields_are_rejected_before_profile_materialization() -> No
                     "op": "add",
                     "path": "scenarios",
                     "value": {
+                        "name": "A scenario",
                         "description": "x",
                         "behaviour_refs": [],
                         "persona_refs": [],
@@ -240,8 +242,9 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
                         "name": "Safety",
                         "behaviours": [
                             {
-                                "statement": "refuses unsafe requests",
-                                "priority": True,
+                                "name": "Refuse unsafe requests",
+                                "description": "refuses unsafe requests",
+                                "measured": True,
                                 "criteria": [{"metric_fqn": "forbidden"}],
                             }
                         ],
@@ -259,7 +262,13 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
                     "path": "tasks",
                     "value": {
                         "name": "Safety",
-                        "behaviours": [{"statement": "refuses unsafe requests"}],
+                        "description": "Safety behaviours",
+                        "behaviours": [
+                            {
+                                "name": "Refuse unsafe requests",
+                                "description": "refuses unsafe requests",
+                            }
+                        ],
                     },
                 }
             ],
@@ -302,7 +311,7 @@ def test_model_schema_has_no_persisted_or_runtime_fields() -> None:
     names = set(properties(schema))
     assert not names & {
         "id",
-        "priority",
+        "measured",
         "metric_fqn",
         "metric_args",
         "fixtures",
@@ -345,14 +354,14 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     """
     from metis.wizard.contracts import Product, ProductProfile, TaskDraft
 
-    profile = ProductProfile(product=Product(name="X", summary="", users=""))
+    profile = ProductProfile(product=Product(name="X", description="", users=""))
     bad = json.dumps(
         {
             "message": "drafted",
             "patches": [
                 {
                     "op": "set",
-                    "path": "product.summary",
+                    "path": "product.description",
                     "value": "changed too early",
                 },
                 {
@@ -360,7 +369,14 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
                     "path": "tasks",
                     "value": {
                         "name": "Routing",
-                        "behaviours": [{"statement": "", "priority": True}],
+                        "description": "Routing requests.",
+                        "behaviours": [
+                            {
+                                "name": "Route requests",
+                                "description": "",
+                                "measured": True,
+                            }
+                        ],
                     },
                 },
             ],
@@ -373,7 +389,11 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
                 {
                     "op": "add",
                     "path": "tasks",
-                    "value": {"name": "Routing", "behaviours": []},
+                    "value": {
+                        "name": "Routing",
+                        "description": "Routing requests.",
+                        "behaviours": [],
+                    },
                 }
             ],
         }
@@ -382,13 +402,23 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
         {
             "message": "drafted",
             "patches": [
-                {"op": "set", "path": "product.summary", "value": "an orchestrator"},
+                {
+                    "op": "set",
+                    "path": "product.description",
+                    "value": "an orchestrator",
+                },
                 {
                     "op": "add",
                     "path": "tasks",
                     "value": {
                         "name": "Routing",
-                        "behaviours": [{"statement": "Routes to the right agent"}],
+                        "description": "Routing requests.",
+                        "behaviours": [
+                            {
+                                "name": "Route requests",
+                                "description": "Routes to the right agent",
+                            }
+                        ],
                     },
                 },
             ],
@@ -401,29 +431,29 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     assert len(completions.calls) == 3
     task = result.patches[-1].value
     assert isinstance(task, TaskDraft)
-    assert task.behaviours[0].statement
-    assert profile.product.summary == ""
+    assert task.behaviours[0].description
+    assert profile.product.description == ""
     assert profile.tasks == []
     retry_messages = completions.calls[2]["messages"]
-    assert any("priority" in message["content"] for message in retry_messages)
+    assert any("measured" in message["content"] for message in retry_messages)
     assert any("behaviours" in message["content"] for message in retry_messages)
 
 
 def test_a_duplicate_persona_description_is_retried() -> None:
     from fixtures.profiles import research_assistant
 
-    from metis.wizard.contracts import StepResult
+    from metis.wizard.contracts import PersonaDraft, StepResult, StepResultPatch
 
     profile = research_assistant()
     existing = profile.personas[0]
     duplicate = StepResult(
         message="added",
         patches=[
-            {
-                "op": "add",
-                "path": "personas",
-                "value": {"label": "duplicate", "description": existing.description},
-            }
+            StepResultPatch(
+                op="add",
+                path="personas",
+                value=PersonaDraft(name="Duplicate", description=existing.description),
+            )
         ],  # type: ignore[list-item]
     ).model_dump_json()
     good = StepResult(message="updated", patches=[]).model_dump_json()
@@ -618,5 +648,5 @@ def test_the_patch_rules_forbid_the_protected_addresses() -> None:
 
     system = prompts.criteria(research_assistant()).system
 
-    assert "priority" in system
+    assert "measured" in system
     assert "metric_fqn" in system

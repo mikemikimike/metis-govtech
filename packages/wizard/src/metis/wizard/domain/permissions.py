@@ -8,11 +8,11 @@ structural rather than prompt instructions:
 
 **The check is against the step that owns the address, not the step you are standing in.**
 Asking to reword EB-4 while sitting at the criteria step should simply work: the behaviours
-step owns behaviour statements, so the patch is applied where you stand and your current step
+step owns behaviour descriptions, so the patch is applied where you stand and your current step
 never changes. Being told to press Back first would be the wizard enforcing its own structure
 over a clearly stated intent. It stays bounded — an address no step owns is writable nowhere.
 
-**Some addresses are unwritable by the model at any step.** `priority` is the user's only real
+**Some addresses are unwritable by the model at any step.** `measured` is the user's only real
 decision, and `num_trials` and `fixtures` are the user's to set, so none of them appears in any
 entry.
 
@@ -47,32 +47,37 @@ StepPermissions: dict[SessionStep, list[str]] = {
     SessionStep.CLARIFY: [
         "product.name",
         "product.users",
-        "product.summary",
+        "product.description",
         "product.detail",
     ],
     SessionStep.BEHAVIOURS: [
         "tasks",
         "tasks[*]",
         "tasks[*].name",
+        "tasks[*].description",
         "tasks[*].behaviours",
         "tasks[*].behaviours[*]",
-        "tasks[*].behaviours[*].statement",
+        "tasks[*].behaviours[*].name",
+        "tasks[*].behaviours[*].description",
     ],
     SessionStep.CRITERIA: [
         "tasks[*].behaviours[*].criteria",
         "tasks[*].behaviours[*].criteria[*]",
-        "tasks[*].behaviours[*].criteria[*].given",
-        "tasks[*].behaviours[*].criteria[*].when",
-        "tasks[*].behaviours[*].criteria[*].then",
+        "tasks[*].behaviours[*].criteria[*].name",
+        "tasks[*].behaviours[*].criteria[*].description.given",
+        "tasks[*].behaviours[*].criteria[*].description.when",
+        "tasks[*].behaviours[*].criteria[*].description.then",
     ],
     SessionStep.PERSONAS: [
         "personas",
         "personas[*]",
+        "personas[*].name",
         "personas[*].description",
     ],
     SessionStep.SCENARIOS: [
         "scenarios",
         "scenarios[*]",
+        "scenarios[*].name",
         "scenarios[*].description",
         "scenarios[*].behaviour_refs",
         "scenarios[*].persona_refs",

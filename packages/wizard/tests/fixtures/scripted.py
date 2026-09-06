@@ -44,7 +44,7 @@ class ScriptedInterviewer:
         if asked >= self.clarify_questions:
             return ClarifyResult(message="", done=True)
         patches = []
-        if not profile.product.summary or not profile.product.users:
+        if not profile.product.description or not profile.product.users:
             patches = [
                 Patch(
                     op=PatchOp.SET,
@@ -58,7 +58,7 @@ class ScriptedInterviewer:
                 ),
                 Patch(
                     op=PatchOp.SET,
-                    path="product.summary",
+                    path="product.description",
                     value="Answers research questions over an internal library.",
                 ),
                 Patch(
@@ -85,9 +85,16 @@ class ScriptedInterviewer:
                     path="tasks",
                     value={
                         "name": "Answer quality",
+                        "description": "Answer research questions accurately and with useful evidence.",
                         "behaviours": [
-                            {"statement": "Cites a source for every claim"},
-                            {"statement": "Keeps answers short"},
+                            {
+                                "name": "Source citations",
+                                "description": "Cites a source for every claim",
+                            },
+                            {
+                                "name": "Concise answers",
+                                "description": "Keeps answers short",
+                            },
                         ],
                     },
                 ),
@@ -96,7 +103,13 @@ class ScriptedInterviewer:
                     path="tasks",
                     value={
                         "name": "Recovery",
-                        "behaviours": [{"statement": "Stops after repeated failures"}],
+                        "description": "Recover safely when document search cannot complete.",
+                        "behaviours": [
+                            {
+                                "name": "Failure recovery",
+                                "description": "Stops after repeated failures",
+                            }
+                        ],
                     },
                 ),
             ],
@@ -105,7 +118,7 @@ class ScriptedInterviewer:
     def draft_criteria(self, profile: ProductProfile) -> StepResult:
         self.calls.append("draft_criteria")
         patches = []
-        for behaviour in profile.ticked():
+        for behaviour in profile.measured_behaviours():
             if behaviour.criteria:
                 continue
             task = profile.task_of(behaviour.id)
@@ -116,7 +129,8 @@ class ScriptedInterviewer:
                     value={
                         "given": "a question it can answer",
                         "when": "the answer comes back",
-                        "then": f"it satisfies: {behaviour.statement.lower()}",
+                        "then": f"it satisfies: {behaviour.description.lower()}",
+                        "name": "Expected outcome",
                     },
                 )
             )
@@ -131,7 +145,7 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path="personas",
                     value={
-                        "label": "cooperative-delegator",
+                        "name": "Cooperative delegator",
                         "description": "Engages fully and answers questions willingly.",
                     },
                 ),
@@ -139,7 +153,7 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path="personas",
                     value={
-                        "label": "impatient-executive",
+                        "name": "Impatient executive",
                         "description": "Curt imperatives, no patience for clarification.",
                     },
                 ),
@@ -148,7 +162,7 @@ class ScriptedInterviewer:
 
     def draft_scenarios(self, profile: ProductProfile) -> StepResult:
         self.calls.append("draft_scenarios")
-        covered = [b.id for b in profile.ticked()]
+        covered = [b.id for b in profile.measured_behaviours()]
         personas = [p.id for p in profile.personas]
         return StepResult(
             message="Two situations should cover everything you picked.",
@@ -157,6 +171,7 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path="scenarios",
                     value={
+                        "name": "Covered literature review",
                         "description": "Ask for a literature review on a covered topic.",
                         # one scenario covering several behaviours — M:N, and what makes
                         # experiments cheaper than one scenario per behaviour
@@ -189,6 +204,7 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path=f"tasks[{task.id}].behaviours[{behaviour_id}].criteria",
                     value={
+                        "name": "Consistent follow-up",
                         "given": "a follow-up on the same topic",
                         "when": "the agent answers again",
                         "then": "it stays consistent with its first answer",
@@ -210,7 +226,7 @@ class RejectingInterviewer(ScriptedInterviewer):
         result = super().draft_criteria(profile)
         result.patches.append(
             Patch(
-                op=PatchOp.SET, path="tasks[T-1].behaviours[EB-2].priority", value=True
+                op=PatchOp.SET, path="tasks[T-1].behaviours[EB-2].measured", value=True
             )
         )
         return result

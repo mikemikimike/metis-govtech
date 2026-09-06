@@ -225,6 +225,7 @@ export function Profile({
           <Section title="Product" writing={writing === "product"}>
             <div className="flex flex-col gap-4">
               <ProductField label="Name" value={product.name} />
+              <ProductField label="Description" value={product.description} preserveLines />
               <ProductField label="Users" value={product.users} preserveLines />
               <ProductField label="Details" value={product.detail} preserveLines />
             </div>
@@ -283,7 +284,7 @@ export function Profile({
                     className="mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full bg-border"
                   />
                   <div className="flex min-w-0 flex-col gap-0.5">
-                    <Mono className="text-foreground">{p.id}</Mono>
+                    <Mono className="text-foreground">{p.name}</Mono>
                     <span className="text-muted-foreground">{p.description}</span>
                   </div>
                 </li>
@@ -309,6 +310,7 @@ export function Profile({
                         so drawing `S-1` beside each one spent a column on a handle no reader
                         needs. It is still stamped on the compiled experiment, where it is what
                         results are traced back through. */}
+                    <h3 className="font-medium text-foreground">{s.name}</h3>
                     <p className="text-foreground">{s.description}</p>
                     {/* A scenario's metadata answers three separate questions — what it checks,
                         who runs it, and how much of it there is — so each is a labelled row, with
@@ -673,7 +675,7 @@ function TaskView({
   // rows' opacity alone — easy to miss, and the fraction is the number that decides whether the
   // profile is thorough enough. Note it reads `0/2` until the prioritise step, which is honest:
   // nothing is selected yet.
-  const measured = task.behaviours.filter((b) => b.priority).length;
+  const measured = task.behaviours.filter((b) => b.measured).length;
   return (
     <div className="animate-arrive flex flex-col">
       <button
@@ -701,17 +703,22 @@ function TaskView({
         // block below it must read as one unit set off from the next behaviour, not run flush
         // into it. The gap is smaller than the between-group gap so the hierarchy still reads:
         // groups first, behaviours within them second.
-        <ul className="mt-1 flex flex-col gap-4 border-l border-border pb-1 pl-3 ml-1.5">
-          {task.behaviours.map((b) => (
-            <BehaviourView
-              key={b.id}
-              behaviour={b}
-              selecting={selecting}
-              showMetrics={showMetrics}
-              metricByFqn={metricByFqn}
-            />
-          ))}
-        </ul>
+        <div className="ml-1.5 mt-1 border-l border-border pb-1 pl-3">
+          <p className="mb-3 whitespace-pre-wrap text-sm text-muted-foreground">
+            {task.description}
+          </p>
+          <ul className="flex flex-col gap-4">
+            {task.behaviours.map((b) => (
+              <BehaviourView
+                key={b.id}
+                behaviour={b}
+                selecting={selecting}
+                showMetrics={showMetrics}
+                metricByFqn={metricByFqn}
+              />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
@@ -730,13 +737,13 @@ function BehaviourView({
 }) {
   // A behaviour the user hasn't ticked is dormant: its criteria are kept but won't be
   // measured, so it reads de-emphasised.
-  const dormant = !behaviour.priority;
+  const dormant = !behaviour.measured;
   // Criteria are the one part of the document that lands *inside* another section rather than as a
   // section of its own, so the scaffold reaches one level deeper here: a behaviour chosen to be
   // measured but not yet written up shows the blank where its criteria will go.
   //
   // The tick is what makes the blank honest, but only once the tick is committed. A tick flips
-  // `priority` live — and is a server round-trip that recomposes the prioritise screen — so while
+  // `measured` live — and is a server round-trip that recomposes the prioritise screen — so while
   // the session is on prioritise the user is still choosing and any box can still be un-ticked.
   // Drawing the blank there promises content for a selection that has not been made. `selecting` is
   // true for the whole prioritise step (keyed on the step, not on `busy`, so a tick's brief in-
@@ -745,9 +752,9 @@ function BehaviourView({
   // dormant behaviour still shows no blank — none are coming for it — and before prioritise nothing
   // is ticked at all.
   const awaitingCriteria =
-    behaviour.priority && behaviour.criteria.length === 0 && !selecting;
+    behaviour.measured && behaviour.criteria.length === 0 && !selecting;
   return (
-    // The id sits in a gutter at the left rather than trailing the statement. Trailing, it landed
+    // The id sits in a gutter at the left rather than trailing the description. Trailing, it landed
     // wherever the prose happened to stop wrapping, so a run of behaviours ended in a ragged
     // column of ids that competed with the text without ever lining up. In a fixed gutter the ids
     // form one straight edge to read down, which is what makes a scenario's `Behaviours EB-1 EB-3`
@@ -767,14 +774,16 @@ function BehaviourView({
           ones light up as a scannable set. Before prioritise nothing is ticked, so the whole
           gutter stays grey, which is honest. */}
       <Mono
-        tone={behaviour.priority ? "accent" : "muted"}
-        className={cn("pt-px tabular-nums", behaviour.priority && "font-semibold")}
+        tone={behaviour.measured ? "accent" : "muted"}
+        className={cn("pt-px tabular-nums", behaviour.measured && "font-semibold")}
       >
         {behaviour.id}
       </Mono>
-      <span className="min-w-0 text-foreground">{behaviour.statement}</span>
+      <span className="min-w-0 text-foreground">
+        <span className="font-medium">{behaviour.name}</span> — {behaviour.description}
+      </span>
       {behaviour.criteria.length > 0 && (
-        // The criteria are set apart from the statement above them with a top gap, so a
+        // The criteria are set apart from the description above them with a top gap, so a
         // behaviour and its Given/When/Then read as a labelled unit rather than five stacked
         // rows. Each criterion is spaced from the next for the same reason.
         <ul className="col-start-2 mt-1.5 flex flex-col gap-3 text-xs">
@@ -807,13 +816,14 @@ function BehaviourView({
                     is what reads. (Sentence case, not caps: all-caps labels are the house style's
                     named AI tell, and the letter-spacing gives the label its quiet-marker look
                     without them.) */}
+                <p className="font-medium text-foreground">{c.name}</p>
                 <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-2 gap-y-0.5">
                   <span className="tracking-wide text-muted-foreground">Given</span>
-                  <span className="text-foreground">{c.given}</span>
+                  <span className="text-foreground">{c.description.given}</span>
                   <span className="tracking-wide text-muted-foreground">When</span>
-                  <span className="text-foreground">{c.when}</span>
+                  <span className="text-foreground">{c.description.when}</span>
                   <span className="tracking-wide text-muted-foreground">Then</span>
-                  <span className="text-foreground">{c.then}</span>
+                  <span className="text-foreground">{c.description.then}</span>
                 </div>
                 {showMetrics && metric && (
                   <Mono className="block break-words rounded border border-border bg-muted px-2 py-1 leading-relaxed">

@@ -20,12 +20,13 @@ from metis.wizard.contracts import (
     WarningSource,
 )
 from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.profile import collect_profile_ids
 
 
 def empty_state(step=SessionStep.CLARIFY, history=None) -> SessionState:
     return SessionState(
         id="s-1",
-        profile=ProductProfile(product=Product(name="X", summary="", users="")),
+        profile=ProductProfile(product=Product(name="X", description="", users="")),
         step=step,
         history=history or [],
     )
@@ -95,7 +96,7 @@ def test_clarify_commits_product_but_not_behaviours() -> None:
     assert request.prompt
     assert state.profile.product.name == "Research assistant"
     assert state.profile.product.users == "Policy analysts"
-    assert state.profile.product.summary
+    assert state.profile.product.description
     assert state.profile.product.detail
     assert state.profile.tasks == []
     assert state.profile.scenarios == []
@@ -115,7 +116,7 @@ def test_a_thin_answer_leaves_the_product_gate_closed() -> None:
     request = driver.compose(state)
 
     assert request.prompt == "Tell me a little more."
-    assert state.profile.product.summary == ""
+    assert state.profile.product.description == ""
     assert state.profile.product.users == ""
     assert state.step is SessionStep.CLARIFY
 
@@ -157,14 +158,14 @@ def test_a_later_product_edit_does_not_move_the_step() -> None:
             patches=[
                 {
                     "op": "set",
-                    "path": "product.summary",
+                    "path": "product.description",
                     "value": "A corrected description",
                 }
             ],
         ),
     )
 
-    assert state.profile.product.summary == "A corrected description"
+    assert state.profile.product.description == "A corrected description"
     assert state.step is SessionStep.CRITERIA
 
 
@@ -236,10 +237,13 @@ def test_a_criterion_is_three_labelled_rows_with_dividers_between() -> None:
 
     kinds = [(c.type.value, getattr(c, "label", None)) for c in card.components]
     assert kinds == [
+        ("text", None),
+        ("text", "Name"),
         ("text", "Given"),
         ("text", "When"),
         ("text", "Then"),
         ("divider", None),
+        ("text", "Name"),
         ("text", "Given"),
         ("text", "When"),
         ("text", "Then"),
@@ -276,14 +280,21 @@ def test_a_mid_step_form_inherits_the_parent_steps_header() -> None:
     assert (form.title, form.step, form.steps) == ("Personas", 5, 6)
 
 
-def test_the_persona_add_form_keeps_the_description_and_generates_an_id() -> None:
-    """One submission adds one persona in the original two-field shape."""
+def test_the_persona_add_form_keeps_the_name_and_description_and_generates_an_id() -> (
+    None
+):
+    """One submission adds one Persona with a stable generated id."""
     from metis.wizard.contracts import ChoiceResponse, FormResponse
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
     profile = research_assistant()
     before = len(profile.personas)
-    state = SessionState(id="s", profile=profile, step=SessionStep.PERSONAS)
+    state = SessionState(
+        id="s",
+        profile=profile,
+        step=SessionStep.PERSONAS,
+        issued_ids=collect_profile_ids(profile),
+    )
     screen = driver.compose(state)
     state.pending = screen
 
@@ -291,26 +302,113 @@ def test_the_persona_add_form_keeps_the_description_and_generates_an_id() -> Non
     driver.handle(state, screen, ChoiceResponse(selected=[str(add.id)]))
     form = state.pending
     assert form is not None
-    assert [f.id for f in form.fields] == ["description"]
+    assert [f.id for f in form.fields] == ["name", "description"]
 
     driver.handle(
         state,
         form,
-        FormResponse(values={"description": "Second-guesses each decision."}),
+        FormResponse(
+            values={
+                "name": "Careful reviewer",
+                "description": "Second-guesses each decision.",
+            }
+        ),
     )
 
     added = profile.personas[-1]
     assert len(profile.personas) == before + 1
     assert added.id == "P-1"
+    assert added.name == "Careful reviewer"
     assert added.description == "Second-guesses each decision."
-    assert added.is_user_typed
+    assert added.id in state.user_typed
+
+
+def test_the_behaviour_add_form_is_scoped_to_the_selected_task() -> None:
+    """A manual Behaviour keeps the Task target from the screen through submission."""
+    from metis.wizard.contracts import FormResponse
+
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    profile = research_assistant()
+    state = SessionState(
+        id="s",
+        profile=profile,
+        step=SessionStep.BEHAVIOURS,
+        issued_ids=collect_profile_ids(profile),
+    )
+    screen = driver.compose(state)
+    state.pending = screen
+    add = next(
+        option
+        for option in screen.options
+        if option.id.action == "add" and option.id.target == "T-2"
+    )
+    driver.handle(state, screen, ChoiceResponse(selected=[str(add.id)]))
+
+    form = state.pending
+    assert form is not None and form.target == "T-2"
+    assert [field.id for field in form.fields] == ["name", "description"]
+    before_t1 = [behaviour.id for behaviour in profile.task("T-1").behaviours]  # type: ignore[union-attr]
+    driver.handle(
+        state,
+        form,
+        FormResponse(
+            values={
+                "name": "Recover gracefully",
+                "description": "Stops safely after a failed search.",
+            }
+        ),
+    )
+
+    added = profile.task("T-2").behaviours[-1]  # type: ignore[union-attr]
+    assert (added.id, added.name, added.description) == (
+        "EB-4",
+        "Recover gracefully",
+        "Stops safely after a failed search.",
+    )
+    assert [behaviour.id for behaviour in profile.task("T-1").behaviours] == before_t1  # type: ignore[union-attr]
+    assert {"EB-4"} <= state.issued_ids
+    assert {"EB-4"} <= state.user_typed
+
+
+def test_a_behaviour_form_with_a_stale_or_missing_task_target_changes_nothing() -> None:
+    from metis.wizard.contracts import FormField, FormRequest, FormResponse
+
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    profile = research_assistant()
+    state = SessionState(id="s", profile=profile, step=SessionStep.BEHAVIOURS)
+    before = profile.model_copy(deep=True)
+    form = FormRequest(
+        prompt="Add a Behaviour",
+        target="T-404",
+        fields=[
+            FormField(id="name", label="Name"),
+            FormField(id="description", label="Description"),
+        ],
+    )
+    driver.handle(
+        state,
+        form,
+        FormResponse(values={"name": "Orphan", "description": "Must not land."}),
+    )
+    assert profile == before
+    assert driver.pending_warnings
+
+    driver.pending_warnings.clear()
+    no_target = form.model_copy(update={"target": None})
+    driver.handle(
+        state,
+        no_target,
+        FormResponse(values={"name": "Orphan", "description": "Must not land."}),
+    )
+    assert profile == before
+    assert driver.pending_warnings
 
 
 # ── persona ids are the visible and referenced labels ───────────────────────
 
 
-def test_a_persona_id_is_both_the_label_and_reference() -> None:
-    """Cards, Run-as chips and scenario references use the same stable readable id."""
+def test_a_persona_name_is_visible_and_its_id_is_the_reference() -> None:
+    """Cards and chips show Persona names while scenario references keep stable ids."""
     driver = StepDriver(interviewer=ScriptedInterviewer())
     profile = research_assistant()
 
@@ -319,8 +417,8 @@ def test_a_persona_id_is_both_the_label_and_reference() -> None:
     )
     titles = {c.id: c.title for c in personas.cards}
     assert titles == {
-        "cooperative-delegator": "cooperative-delegator",
-        "impatient-executive": "impatient-executive",
+        "cooperative-delegator": "Cooperative delegator",
+        "impatient-executive": "Impatient executive",
     }
 
     from metis.wizard.contracts import CardOptionGroup
@@ -336,9 +434,45 @@ def test_a_persona_id_is_both_the_label_and_reference() -> None:
         if isinstance(comp, CardOptionGroup) and comp.label == "Run as"
     )
     chips = {opt.id.via: opt.label for opt in run_as.options}
-    assert chips["cooperative-delegator"] == "cooperative-delegator"
-    assert chips["impatient-executive"] == "impatient-executive"
+    assert chips["cooperative-delegator"] == "Cooperative delegator"
+    assert chips["impatient-executive"] == "Impatient executive"
     assert profile.scenario("S-1").persona_refs == list(chips)  # type: ignore[union-attr]
+
+
+def test_shared_review_screens_show_names_and_descriptions() -> None:
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    profile = research_assistant()
+
+    behaviours = driver.compose(
+        SessionState(id="s", profile=profile, step=SessionStep.BEHAVIOURS)
+    )
+    assert behaviours.cards[0].title == "Cite factual claims"
+    assert (
+        behaviours.cards[0].components[0].text
+        == "Cites a source for every factual claim"
+    )  # type: ignore[union-attr]
+
+    prioritise = driver.compose(
+        SessionState(id="s", profile=profile, step=SessionStep.PRIORITISE)
+    )
+    assert (
+        prioritise.cards[0].components[0].text
+        == "Cites a source for every factual claim"
+    )  # type: ignore[union-attr]
+
+    personas = driver.compose(
+        SessionState(id="s", profile=profile, step=SessionStep.PERSONAS)
+    )
+    assert personas.cards[0].title == "Cooperative delegator"
+    assert personas.cards[0].components[0].text.startswith("A policy analyst")  # type: ignore[union-attr]
+
+    scenarios = driver.compose(
+        SessionState(id="s", profile=profile, step=SessionStep.SCENARIOS)
+    )
+    assert scenarios.cards[0].title == "Supported literature review"
+    assert (
+        scenarios.cards[0].components[0].text.startswith("Ask for a literature review")
+    )  # type: ignore[union-attr]
 
 
 # ── the scenarios gates ─────────────────────────────────────────────────────
@@ -582,7 +716,7 @@ def test_a_task_with_nothing_ticked_is_not_warned() -> None:
     screen raises no warning for it, and Continue stays enabled."""
     profile = research_assistant()
     for behaviour in profile.behaviours():
-        behaviour.priority = False
+        behaviour.measured = False
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = SessionState(id="s", profile=profile, step=SessionStep.PRIORITISE)
 
@@ -665,12 +799,12 @@ def test_going_back_regenerates_nothing_that_already_exists() -> None:
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
     state = SessionState(id="s", profile=profile, step=SessionStep.PRIORITISE)
-    before = profile.behaviour("EB-1").criteria[0].then  # type: ignore[union-attr]
+    before = profile.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
 
     driver._advance(state)  # the Continue that generates
 
     assert "draft_criteria" not in interviewer.calls  # nothing was missing
-    assert profile.behaviour("EB-1").criteria[0].then == before  # type: ignore[union-attr]
+    assert profile.behaviour("EB-1").criteria[0].description.then == before  # type: ignore[union-attr]
 
 
 def test_unticking_then_continuing_generates_only_the_gap() -> None:
@@ -722,7 +856,12 @@ def test_a_chat_failure_warns_and_loses_nothing() -> None:
     profile = research_assistant()
     before = profile.model_copy(deep=True)
     driver = StepDriver(interviewer=BrokenInterviewer())
-    state = SessionState(id="s", profile=profile, step=SessionStep.CRITERIA)
+    state = SessionState(
+        id="s",
+        profile=profile,
+        step=SessionStep.CRITERIA,
+        issued_ids=collect_profile_ids(profile),
+    )
 
     driver.handle(
         state,
@@ -750,12 +889,12 @@ def test_ticking_costs_no_model_call() -> None:
     driver.handle(state, request, ChoiceResponse(selected=["tick:EB-2"]))
 
     assert interviewer.calls == []
-    assert profile.behaviour("EB-2").priority is True  # type: ignore[union-attr]
+    assert profile.behaviour("EB-2").measured is True  # type: ignore[union-attr]
 
 
 # ── a reworded criterion re-maps its metric, silently ───────────────────────
 
-_AC1 = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].then"
+_AC1 = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].description.then"
 
 
 @dataclass
@@ -795,7 +934,12 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
     profile = research_assistant()
     matcher = RecordingMatcher()
     driver = StepDriver(interviewer=RewordingInterviewer(), matcher=matcher)
-    state = SessionState(id="s", profile=profile, step=SessionStep.CRITERIA)
+    state = SessionState(
+        id="s",
+        profile=profile,
+        step=SessionStep.CRITERIA,
+        issued_ids=collect_profile_ids(profile),
+    )
 
     driver.handle(
         state, ChatRequest(prompt="q", multiline=True), ChatResponse(text="use routing")
@@ -810,8 +954,8 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
 
 # ── a scoped criteria chat stays on its own behaviour ────────────────────────
 
-_EB1_THEN = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].then"
-_EB2_THEN = "tasks[T-1].behaviours[EB-2].criteria[AC-2-1].then"
+_EB1_THEN = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].description.then"
+_EB2_THEN = "tasks[T-1].behaviours[EB-2].criteria[AC-2-1].description.then"
 
 
 def _criterion_action(driver, state, action, label):
@@ -860,9 +1004,14 @@ def test_a_scoped_criteria_chat_edits_only_its_own_behaviour() -> None:
     profile = research_assistant()
     matcher = RecordingMatcher()
     driver = StepDriver(interviewer=ReachesAcrossInterviewer(), matcher=matcher)
-    state = SessionState(id="s", profile=profile, step=SessionStep.CRITERIA)
+    state = SessionState(
+        id="s",
+        profile=profile,
+        step=SessionStep.CRITERIA,
+        issued_ids=collect_profile_ids(profile),
+    )
 
-    before_eb2 = profile.behaviour("EB-2").criteria[0].then  # type: ignore[union-attr]
+    before_eb2 = profile.behaviour("EB-2").criteria[0].description.then  # type: ignore[union-attr]
     screen, chat_option = _criterion_action(
         driver, state, "chat", "Chat about these criteria"
     )
@@ -879,10 +1028,10 @@ def test_a_scoped_criteria_chat_edits_only_its_own_behaviour() -> None:
     # EB-1's own criterion changed and was rematched; EB-2 was left exactly as it was.
     assert matcher.matched == ["AC-1-1"]
     assert (
-        profile.behaviour("EB-1").criteria[0].then  # type: ignore[union-attr]
+        profile.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
         == "it names the routing decision"
     )
-    assert profile.behaviour("EB-2").criteria[0].then == before_eb2  # type: ignore[union-attr]
+    assert profile.behaviour("EB-2").criteria[0].description.then == before_eb2  # type: ignore[union-attr]
     assert any(w.source is WarningSource.RUNTIME for w in driver.pending_warnings)
 
 
@@ -897,7 +1046,12 @@ def _suggest_on(profile, interviewer, matcher=None):
     from metis.wizard.contracts import ChoiceResponse
 
     driver = StepDriver(interviewer=interviewer, matcher=matcher)
-    state = SessionState(id="s", profile=profile, step=SessionStep.CRITERIA)
+    state = SessionState(
+        id="s",
+        profile=profile,
+        step=SessionStep.CRITERIA,
+        issued_ids=collect_profile_ids(profile),
+    )
     screen, another = _criterion_action(driver, state, "another", "Suggest one for me")
     driver.handle(state, screen, ChoiceResponse(selected=[str(another.id)]))
     return driver, state
@@ -946,6 +1100,7 @@ class SuggestsElsewhere(ScriptedInterviewer):
                     path="tasks[T-1].behaviours[EB-2].criteria",
                     value={
                         "id": "AC-2-9",
+                        "name": "Wrong target",
                         "given": "g",
                         "when": "w",
                         "then": "t",
@@ -987,7 +1142,7 @@ def _type_one(driver, state, values):
     form = state.pending
     assert isinstance(form, FormRequest)
     assert form.target == "EB-1"
-    assert [f.id for f in form.fields] == ["given", "when", "then"]
+    assert [f.id for f in form.fields] == ["name", "given", "when", "then"]
     driver.handle(state, form, FormResponse(values=values))
 
 
@@ -998,12 +1153,18 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
     profile = research_assistant()
     matcher = RecordingMatcher()
     driver = StepDriver(interviewer=ScriptedInterviewer(), matcher=matcher)
-    state = SessionState(id="s", profile=profile, step=SessionStep.CRITERIA)
+    state = SessionState(
+        id="s",
+        profile=profile,
+        step=SessionStep.CRITERIA,
+        issued_ids=collect_profile_ids(profile),
+    )
 
     _type_one(
         driver,
         state,
         {
+            "name": "Long report outcome",
             "given": "a long report",
             "when": "it is asked to summarise",
             "then": "it keeps every citation",
@@ -1013,6 +1174,7 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
         driver,
         state,
         {
+            "name": "Consistent follow-up",
             "given": "a follow-up",
             "when": "it answers again",
             "then": "it stays consistent",
@@ -1022,9 +1184,9 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
     eb1 = profile.behaviour("EB-1")
     assert [c.id for c in eb1.criteria] == ["AC-1-1", "AC-1-2", "AC-1-3", "AC-1-4"]  # type: ignore[union-attr]
     fresh = eb1.criteria[-2:]  # type: ignore[union-attr]
-    assert [c.given for c in fresh] == [
+    assert [c.description.given for c in fresh] == [
         "a long report",
         "a follow-up",
     ]  # verbatim, in order
-    assert all(c.is_user_typed for c in fresh)  # stamped FORM — survives regeneration
+    assert {c.id for c in fresh} <= state.user_typed
     assert matcher.matched == ["AC-1-3", "AC-1-4"]  # each new one matched, once

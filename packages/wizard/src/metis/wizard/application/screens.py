@@ -137,8 +137,9 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                 BehaviourCard(
                     id=behaviour.id,
                     section=_section(task),
-                    title=behaviour.statement,
+                    title=behaviour.name,
                     selected=None,
+                    components=[CardText(text=behaviour.description)],
                 )
             )
 
@@ -146,7 +147,17 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
         prompt=message,
         cards=cards,
         multi=False,
-        options=_three_replies("Looks right", "I'll add one"),
+        options=[
+            Option(id=OptionId(action="accept"), label="Looks right", primary=True),
+            Option(id=OptionId(action="chat"), label="Chat about it"),
+            *[
+                Option(
+                    id=OptionId(action="add", target=task.id),
+                    label=f"Add to {task.name}",
+                )
+                for task in profile.tasks
+            ],
+        ],
         instruction=FEEDBACK_INSTRUCTION,
     )
 
@@ -168,16 +179,17 @@ def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
                 BehaviourCard(
                     id=behaviour.id,
                     section=_section(task),
-                    title=behaviour.statement,
-                    selected=behaviour.priority,
+                    title=behaviour.name,
+                    selected=behaviour.measured,
+                    components=[CardText(text=behaviour.description)],
                     options=[
                         Option(
                             id=OptionId(action="tick", target=behaviour.id),
                             label="Measure this",
-                            selected=behaviour.priority,
+                            selected=behaviour.measured,
                             patch=_wizard_patch(
-                                _behaviour_path(profile, behaviour.id, "priority"),
-                                not behaviour.priority,
+                                _behaviour_path(profile, behaviour.id, "measured"),
+                                not behaviour.measured,
                             ),
                         )
                     ],
@@ -219,9 +231,10 @@ def _criterion_components(behaviour: Behaviour) -> list[AnyCardComponent]:
     for criterion in behaviour.criteria:
         if components:
             components.append(CardDivider())
-        components.append(CardText(label="Given", text=criterion.given))
-        components.append(CardText(label="When", text=criterion.when))
-        components.append(CardText(label="Then", text=criterion.then))
+        components.append(CardText(label="Name", text=criterion.name))
+        components.append(CardText(label="Given", text=criterion.description.given))
+        components.append(CardText(label="When", text=criterion.description.when))
+        components.append(CardText(label="Then", text=criterion.description.then))
     return components
 
 
@@ -235,14 +248,17 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
 
     for task in profile.tasks:
         for behaviour in task.behaviours:
-            if behaviour.priority:
+            if behaviour.measured:
                 cards.append(
                     BehaviourCard(
                         id=behaviour.id,
                         section=_section(task),
-                        title=behaviour.statement,
+                        title=behaviour.name,
                         selected=True,
-                        components=_criterion_components(behaviour),
+                        components=[
+                            CardText(text=behaviour.description),
+                            *_criterion_components(behaviour),
+                        ],
                         # Three distinct, behaviour-scoped operations, each carrying this
                         # card's id. Their labels name the authorship they perform: a
                         # model-assisted discussion of these criteria, one model-authored
@@ -272,7 +288,11 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                     BehaviourCard(
                         id=behaviour.id,
                         section=_section(task),
-                        title=behaviour.statement,
+                        title=behaviour.name,
+                        components=[
+                            CardText(text=behaviour.description),
+                            *_criterion_components(behaviour),
+                        ],
                         selected=False,
                         note="not selected — no criteria will be written",
                     )
@@ -300,7 +320,7 @@ def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     cards = [
         BehaviourCard(
             id=persona.id,
-            title=persona.id,
+            title=persona.name,
             selected=True,
             components=[CardText(text=persona.description)],
         )
@@ -327,14 +347,14 @@ def _coverage_group(profile: ProductProfile, scenario_id: str) -> CardOptionGrou
         options=[
             Option(
                 id=OptionId(action="cover", target=scenario_id, via=behaviour.id),
-                label=behaviour.statement,
+                label=behaviour.name,
                 selected=behaviour.id in covered,
                 patch=_wizard_patch(
                     f"scenarios[{scenario_id}].behaviour_refs",
                     sorted(covered ^ {behaviour.id}),
                 ),
             )
-            for behaviour in profile.ticked()
+            for behaviour in profile.measured_behaviours()
         ],
     )
 
@@ -347,7 +367,7 @@ def _persona_group(profile: ProductProfile, scenario_id: str) -> CardOptionGroup
         options=[
             Option(
                 id=OptionId(action="run", target=scenario_id, via=persona.id),
-                label=persona.id,
+                label=persona.name,
                 selected=persona.id in running,
                 patch=_wizard_patch(
                     f"scenarios[{scenario_id}].persona_refs",
@@ -362,11 +382,13 @@ def _persona_group(profile: ProductProfile, scenario_id: str) -> CardOptionGroup
 def _covers_a_selection(profile: ProductProfile, scenario: Scenario) -> bool:
     """Does the scenario reference at least one currently selected behaviour?
 
-    `ticked()` is exactly that set. A scenario whose refs are all empty, unknown or unticked
+    `measured_behaviours()` is exactly that set. A scenario whose refs are all empty, unknown or unmeasured
     covers nothing the experiment will measure — nothing rides along to make up the
     difference — so it fails this test and the gate below stops the step.
     """
-    return bool(set(scenario.behaviour_refs) & {b.id for b in profile.ticked()})
+    return bool(
+        set(scenario.behaviour_refs) & {b.id for b in profile.measured_behaviours()}
+    )
 
 
 def _scenario_warnings(profile: ProductProfile) -> list[Warning]:
@@ -439,10 +461,11 @@ def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     cards = [
         ScenarioCard(
             id=scenario.id,
-            title=scenario.description,
+            title=scenario.name,
             blocking=scenario.id in blocking_ids,
             trials=len(scenario.persona_refs) * scenario.num_trials,
             components=[
+                CardText(text=scenario.description),
                 _coverage_group(profile, scenario.id),
                 _persona_group(profile, scenario.id),
                 CardNumberField(
