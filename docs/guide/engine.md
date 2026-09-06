@@ -969,25 +969,41 @@ The experiment defines *how* to run evaluations. The profile defines *what* corr
 ```yaml
 product:
   name: <string>           # Target system name
-  users: <string>          # Comma-separated persona IDs that test this product
-  summary: <string>        # One-line description of what's being evaluated
+  users: <string>          # Prose that describes the product users
+  description: <string>    # Short description of what is evaluated
   detail: <string>         # Longer context about the evaluation scope
 
 tasks:
   - id: <string>           # Unique task identifier (e.g. "EP-3")
     name: <string>         # Human-readable task name (e.g. "Data Analyst")
+    description: <string>  # What the task must achieve
     behaviours:
       - id: <string>       # Unique behaviour identifier (e.g. "EB-DA-1")
-        interaction_type: <string>  # How the user interacts (e.g. "chat")
-        statement: <string>         # Full behavioural description
-        priority: <bool>            # Whether this is a priority behaviour
+        name: <string>     # Human-readable behaviour name
+        description: <string>       # Full behavioural description
+        measured: <bool>            # Whether the evaluation measures this behaviour
         criteria:
           - id: <string>            # Acceptance criterion ID (e.g. "AC-DA-20a")
-            interaction_type: <string>
-            given: <string>         # Precondition
-            when: <string>          # Action/trigger
-            then: <string>          # Expected outcome
-            priority: <bool>
+            name: <string>          # Human-readable criterion name
+            description:
+              given: <string>       # Precondition
+              when: <string>        # Action or trigger
+              then: <string>        # Expected outcome
+            metric_fqn: <string|null>
+
+personas:
+  - id: <string>
+    name: <string>
+    description: <string>
+
+scenarios:
+  - id: <string>
+    name: <string>
+    description: <string>
+    behaviour_refs: [<behaviour-id>]
+    persona_refs: [<persona-id>]
+    fixtures: [<filename>]
+    num_trials: <integer>
 ```
 
 #### Field Descriptions
@@ -997,8 +1013,8 @@ tasks:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | Yes | Name of the target system being evaluated |
-| `users` | Yes | Comma-separated list of persona IDs (must match `experiment.yaml` persona IDs) |
-| `summary` | Yes | One-line evaluation description |
+| `users` | Yes | Prose that describes who uses the product |
+| `description` | Yes | Short evaluation description |
 | `detail` | No | Extended context about the evaluation's purpose and scope |
 
 **`tasks[]`** — capabilities being evaluated:
@@ -1007,6 +1023,7 @@ tasks:
 |-------|----------|-------------|
 | `id` | Yes | Stable identifier (conventionally `EP-N`) |
 | `name` | Yes | Human-readable name |
+| `description` | Yes | What the task must achieve |
 | `behaviours` | Yes | List of expected behaviours for this task |
 
 **`tasks[].behaviours[]`** — observable behaviors:
@@ -1014,9 +1031,9 @@ tasks:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `id` | Yes | Stable identifier (conventionally `EB-<TASK>-N`) |
-| `interaction_type` | Yes | Interaction mode (`chat`, `upload`, etc.) |
-| `statement` | Yes | Full description of expected behaviour — what the system should do |
-| `priority` | No | `true` if this is a priority behaviour for reporting |
+| `name` | Yes | Human-readable behaviour name |
+| `description` | Yes | Full description of what the system must do |
+| `measured` | No | `true` when the evaluation measures this behaviour; defaults to `false` |
 | `criteria` | Yes | Acceptance criteria that define pass/fail |
 
 **`tasks[].behaviours[].criteria[]`** — acceptance criteria (Given/When/Then):
@@ -1024,55 +1041,70 @@ tasks:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `id` | Yes | Stable identifier (conventionally `AC-<TASK>-N`) |
-| `interaction_type` | Yes | Interaction mode |
-| `given` | Yes | Precondition or setup state |
-| `when` | Yes | User action or trigger |
-| `then` | Yes | Expected system response or outcome |
-| `priority` | No | `true` if this criterion is high-priority |
+| `name` | Yes | Human-readable criterion name |
+| `description.given` | Yes | Precondition or setup state |
+| `description.when` | Yes | User action or trigger |
+| `description.then` | Yes | Expected system response or outcome |
+| `metric_fqn` | No | Fully-qualified metric class name, or `null` when unmatched |
 
 #### Minimal Example
 
 ```yaml
 product:
   name: My Chatbot
-  users: cooperative, impatient
-  summary: Evaluate chatbot response quality and safety.
+  users: People who need concise answers.
+  description: Evaluate chatbot response quality and safety.
   detail: Tests core chat capabilities across persona types.
 
 tasks:
   - id: EP-1
     name: General Chat
+    description: Answer direct and ambiguous questions safely.
     behaviours:
       - id: EB-CHAT-1
-        interaction_type: chat
-        statement: >
+        name: Give useful answers
+        description: >
           The chatbot responds helpfully and concisely to direct questions,
           providing accurate information without unnecessary elaboration.
-        priority: true
+        measured: true
         criteria:
           - id: AC-CHAT-1a
-            interaction_type: chat
-            given: a user asks a factual question
-            when: the chatbot receives the message
-            then: >
-              it responds with a correct, concise answer within 2 turns
-            priority: true
+            name: Answer factual questions
+            description:
+              given: a user asks a factual question
+              when: the chatbot receives the message
+              then: >
+                it responds with a correct, concise answer within 2 turns
           - id: AC-CHAT-1b
-            interaction_type: chat
-            given: a user asks an ambiguous question
-            when: the chatbot cannot determine intent
-            then: >
-              it asks one clarifying question before attempting an answer
-            priority: false
+            name: Clarify ambiguous questions
+            description:
+              given: a user asks an ambiguous question
+              when: the chatbot cannot determine intent
+              then: >
+                it asks one clarifying question before attempting an answer
+
+personas:
+  - id: cooperative
+    name: Cooperative user
+    description: Gives requested details.
+
+scenarios:
+  - id: S-1
+    name: Direct factual question
+    description: Ask one factual question.
+    behaviour_refs: [EB-CHAT-1]
+    persona_refs: [cooperative]
+    fixtures: []
+    num_trials: 1
 ```
 
 #### When profile.yaml is Optional
 
-`profile.yaml` is required for report generation. If the file is absent:
+`profile.yaml` is optional. If the file is absent:
 
 - `simulate` runs normally — no impact on simulation
-- `evaluate` runs metrics and writes `report.json` with metric scores, but skips the structured criteria pass/fail mapping
-- The HTML report omits the task/behaviour/criteria breakdown
+- `evaluate` runs metrics and prints the terminal summary
+- The engine does not write `report.json` or the HTML product report
 
 For early experimentation or simulation-only workflows, you can omit `profile.yaml` entirely.
 

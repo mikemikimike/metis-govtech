@@ -641,10 +641,11 @@ def build_report(
     for cid, criterion in criteria.items():
         slot = per_criterion[cid]
         rate = _rate_of(slot["all"])
+        description = criterion["description"]
         out_criteria[cid] = {
-            "given": criterion.get("given", ""),
-            "when": criterion.get("when", ""),
-            "then": criterion.get("then", ""),
+            "given": description["given"],
+            "when": description["when"],
+            "then": description["then"],
             "metric": slot["metricName"]
             or name_of.get(criterion.get("metric_fqn") or "", ""),
             "fqn": criterion.get("metric_fqn"),
@@ -667,13 +668,13 @@ def build_report(
                 for c in behaviour.get("criteria") or []
                 if out_criteria[c["id"]]["rate"] is not None
             ]
-            statement = _clean_prose(behaviour.get("statement"))
-            label, _, rest = statement.partition(". ")
+            statement = _clean_prose(behaviour["description"])
+            _, _, rest = statement.partition(". ")
             out_behaviours[behaviour["id"]] = {
-                "label": label,
+                "label": behaviour["name"],
                 "statement": statement,
                 "detail": rest,
-                "priority": bool(behaviour.get("priority")),
+                "priority": behaviour["measured"],
                 "criteria": [c["id"] for c in behaviour.get("criteria") or []],
                 "rate": min(live) if live else None,
                 "status": status(min(live) / 100 if live else None),

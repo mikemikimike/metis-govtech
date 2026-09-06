@@ -63,9 +63,12 @@ The report uses these aggregation rules:
 - A node with no usable evidence is Not evaluated.
 - A metric setup or mapping problem is Data error.
 
-The profile does not give criteria a separate name. The tree uses the exact criterion ID
-as the criterion title. It uses the exact metric result name as the metric title. If a
-result is missing, it uses the metric class display name as a fallback.
+The normalized profile gives each criterion a name and a stable ID. Report JSON keeps its
+current contract and uses the stable criterion ID as the criterion key and tree title.
+The criterion name is part of the profile contract; the report uses the exact metric result
+name as the metric title. If a result is missing, it uses the metric class display name as
+a fallback. Stable IDs join Tasks, Behaviours, Criteria, Personas, Scenarios, and metric
+results. The report JSON Schema remains unchanged.
 
 These rules are report inputs. The report must not replace an aggregator-supplied rate
 or aggregation method.

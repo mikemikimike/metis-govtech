@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from metis.engine.reporting._report import build_report
 from metis.engine.reporting._types import (
     SessionMetricResult,
     SessionReport,
@@ -89,6 +90,56 @@ class TestSessionReport:
             metrics=[],
         )
         assert s.session_id == "sess-1"
+
+
+def test_profile_fields_map_to_report():
+    profile = {
+        "product": {"name": "Assistant"},
+        "tasks": [
+            {
+                "id": "T-1",
+                "name": "Answer",
+                "behaviours": [
+                    {
+                        "id": "B-1",
+                        "name": "Cite sources",
+                        "description": "Cite each factual claim. Use a relevant source.",
+                        "measured": True,
+                        "criteria": [
+                            {
+                                "id": "C-1",
+                                "description": {
+                                    "given": "a factual question",
+                                    "when": "the assistant answers",
+                                    "then": "each claim has a source",
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+        "personas": [],
+        "scenarios": [],
+    }
+
+    report = build_report(profile, {}, [])
+
+    behaviour = report["behaviours"]["B-1"]
+    assert {
+        key: behaviour[key] for key in ("label", "statement", "detail", "priority")
+    } == {
+        "label": "Cite sources",
+        "statement": "Cite each factual claim. Use a relevant source.",
+        "detail": "Use a relevant source.",
+        "priority": True,
+    }
+    criterion = report["criteria"]["C-1"]
+    assert {key: criterion[key] for key in ("given", "when", "then")} == {
+        "given": "a factual question",
+        "when": "the assistant answers",
+        "then": "each claim has a source",
+    }
 
 
 class TestReportModel:
