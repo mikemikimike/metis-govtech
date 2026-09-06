@@ -25,11 +25,15 @@ layers, and the web UI is a demo over it. When a change touches both, land the s
 models, driver, session, door contract — first and get it right, then wire the frontend to it. Do
 not shape the service around what is convenient for the current UI.
 
-**Never use a term you haven't already shown the user.** Jargon, internal names, and concepts from
-the design have to be introduced before they are used — with a concrete example, not a definition
-in passing. If a term appears for the first time in an explanation or a question, stop and explain
-it there. This applies to vocabulary invented for this project just as much as to standard
-technical terms.
+**Use the root glossary as the vocabulary authority.** Before naming or changing a concept, read
+the glossary at the repository root and use its terms consistently in code, documentation,
+prompts, tests, and UI. Reuse existing glossary terms and do not invent new terminology. If the
+needed concept is not in the glossary, propose a glossary update before introducing a new term.
+
+**Never use a term you have not shown the user.** Jargon, internal names, and concepts from the
+design must be introduced before they are used — with a concrete example, not a definition in
+passing. If a term appears for the first time in an explanation or a question, stop and explain it
+there. This applies to standard technical terms as well as project vocabulary.
 
 **Design data models with OOP where possible.** Prefer a shared base class over repeating the same
 fields across several models. Prefer inheritance and composition over flags and optional fields

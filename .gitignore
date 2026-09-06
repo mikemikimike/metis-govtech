@@ -35,6 +35,8 @@ htmlcov/
 
 # Generated session artifacts
 docs/superpowers/
+.deepeval
+.impeccable/
 
 # OpenSpec (personal tooling — not team-adopted yet)
 openspec/
