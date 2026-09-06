@@ -424,7 +424,7 @@ function ProfileFooter({
             "transition-colors duration-150 hover:opacity-90 active:opacity-80",
           )}
         >
-          Download experiment.yaml
+          Download specification
         </a>
       ) : (
         <Tooltip label="Available once the interview is complete" focusable>
@@ -435,7 +435,7 @@ function ProfileFooter({
               "border border-accent bg-accent/12 text-sm font-medium text-foreground opacity-60",
             )}
           >
-            Download experiment.yaml
+            Download specification
           </span>
         </Tooltip>
       )}
