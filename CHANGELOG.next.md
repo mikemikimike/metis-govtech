@@ -36,6 +36,12 @@ _No v1 changes yet._
 
 ### metis-wizard
 
+#### Added
+
+- **Web interview bundles now include the portable profile.** A completed interview ZIP contains
+  `profile.yaml` beside `experiment.yaml` and `fixtures/`. Manual experiment-form ZIP files keep
+  their engine-only layout.
+
 #### Changed
 
 - **Standardized wizard profile nodes.** Tasks, behaviours, criteria, personas, and scenarios now

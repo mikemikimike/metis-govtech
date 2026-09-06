@@ -13,11 +13,12 @@ import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
 from fixtures.profiles import research_assistant
 from fixtures.scripted import ScriptedInterviewer
 
 from metis.wizard.application import Session, SessionState, interview
-from metis.wizard.contracts import ChoiceResponse
+from metis.wizard.contracts import ChoiceResponse, ProductProfile
 from metis.wizard.domain.permissions import SessionStep
 from metis.wizard.domain.profile import collect_profile_ids
 
@@ -456,8 +457,18 @@ def test_interview_bundle_download_has_the_engine_layout(tmp_path: Path) -> None
     assert response.headers["content-type"] == "application/zip"
     assert "experiment.zip" in response.headers["content-disposition"]
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-        assert "experiment.yaml" in archive.namelist()
-        assert "fixtures/policy.pdf" in archive.namelist()
+        assert archive.namelist() == [
+            "experiment.yaml",
+            "profile.yaml",
+            "fixtures/",
+            "fixtures/policy.pdf",
+        ]
+        profile = ProductProfile.model_validate(
+            yaml.safe_load(archive.read("profile.yaml"))
+        )
+        assert profile == research_assistant()
+        assert "user_typed" not in archive.read("profile.yaml").decode()
+        assert "issued_ids" not in archive.read("profile.yaml").decode()
     assert not (tmp_path / "wizard-zip" / "experiment.zip").exists()
 
 
@@ -473,6 +484,7 @@ def test_manual_bundle_route_is_stateless_and_includes_uploaded_files(
     assert response.status_code == 200
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         assert archive.read("fixtures/data.csv") == b"a,b\n1,2\n"
+        assert "profile.yaml" not in archive.namelist()
     assert client(tmp_path).get("/api/sessions").json() == []
     assert list(tmp_path.iterdir()) == []
 

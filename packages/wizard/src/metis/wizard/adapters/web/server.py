@@ -306,9 +306,15 @@ def create_app(
         session = Session.resume(path)
         temporary = temporary_bundle_directory(prefix="metis-session-bundle-")
         try:
-            document = compile_experiment(session.profile(), session.state.id)
+            profile = session.profile()
+            document = compile_experiment(profile, session.state.id)
             target = temporary / "experiment.zip"
-            write_bundle(document, path.parent / "fixtures", target)
+            write_bundle(
+                document,
+                path.parent / "fixtures",
+                target,
+                profile=profile,
+            )
         except (CompilationError, BundleError) as exc:
             _cleanup_directory(temporary)
             raise HTTPException(422, str(exc)) from exc

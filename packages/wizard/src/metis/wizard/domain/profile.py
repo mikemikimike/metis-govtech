@@ -143,15 +143,17 @@ class ProductProfile(BaseModel):
     def load(cls, path: Path) -> Self:
         return cls.model_validate(yaml.safe_load(Path(path).read_text()))
 
-    def save(self, path: Path) -> None:
-        Path(path).write_text(
-            yaml.dump(
-                self.model_dump(mode="json"),
-                sort_keys=False,
-                default_flow_style=False,
-                allow_unicode=True,
-            )
+    def to_yaml(self) -> str:
+        """Serialize the portable profile with the shared YAML format."""
+        return yaml.dump(
+            self.model_dump(mode="json"),
+            sort_keys=False,
+            default_flow_style=False,
+            allow_unicode=True,
         )
+
+    def save(self, path: Path) -> None:
+        Path(path).write_text(self.to_yaml())
 
 
 def collect_profile_ids(profile: ProductProfile) -> set[str]:

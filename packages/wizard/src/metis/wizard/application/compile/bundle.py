@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from metis.wizard.application.fixtures import (
     FixtureError,
@@ -14,6 +14,9 @@ from metis.wizard.application.fixtures import (
 )
 
 from .experiment import to_yaml
+
+if TYPE_CHECKING:
+    from metis.wizard.domain.profile import ProductProfile
 
 
 class BundleError(ValueError):
@@ -31,8 +34,14 @@ def _referenced_names(document: dict[str, Any]) -> set[str]:
     return names
 
 
-def write_bundle(document: dict[str, Any], fixture_dir: Path, target: Path) -> Path:
-    """Write ``experiment.yaml`` and ``fixtures/`` at the root of a ZIP archive."""
+def write_bundle(
+    document: dict[str, Any],
+    fixture_dir: Path,
+    target: Path,
+    *,
+    profile: ProductProfile | None = None,
+) -> Path:
+    """Write engine inputs and an optional profile at the root of a ZIP archive."""
 
     fixture_root = Path(fixture_dir)
     files: dict[str, Path] = {}
@@ -62,6 +71,8 @@ def write_bundle(document: dict[str, Any], fixture_dir: Path, target: Path) -> P
             destination, mode="w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
         ) as archive:
             archive.writestr("experiment.yaml", to_yaml(document))
+            if profile is not None:
+                archive.writestr("profile.yaml", profile.to_yaml())
             archive.writestr("fixtures/", b"")
             for name, path in sorted(files.items()):
                 archive.write(path, f"fixtures/{name}")

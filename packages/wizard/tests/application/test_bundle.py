@@ -4,8 +4,11 @@ import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
+from fixtures.profiles import research_assistant
 
 from metis.wizard.application.compile import BundleError, write_bundle
+from metis.wizard.contracts import ProductProfile
 
 
 def _document(*fixtures: str) -> dict:
@@ -53,6 +56,30 @@ def test_bundle_keeps_an_explicit_empty_fixtures_directory(tmp_path: Path) -> No
 
     with zipfile.ZipFile(target) as archive:
         assert archive.namelist() == ["experiment.yaml", "fixtures/"]
+
+
+def test_bundle_can_include_a_portable_profile(tmp_path: Path) -> None:
+    profile = research_assistant()
+    target = tmp_path / "experiment.zip"
+
+    write_bundle(
+        _document(),
+        tmp_path / "fixtures",
+        target,
+        profile=profile,
+    )
+
+    with zipfile.ZipFile(target) as archive:
+        assert archive.namelist() == [
+            "experiment.yaml",
+            "profile.yaml",
+            "fixtures/",
+        ]
+        saved = ProductProfile.model_validate(
+            yaml.safe_load(archive.read("profile.yaml"))
+        )
+
+    assert saved == profile
 
 
 def test_bundle_refuses_missing_referenced_file(tmp_path: Path) -> None:
