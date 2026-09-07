@@ -1,7 +1,7 @@
 """Hand-authored profiles used across the tests.
 
 Writing one by hand is the point of `ProductProfile` carrying no step, no history and no
-session id: this file proves the document is a pure artefact by building one without an
+interview id: this file proves the document is a pure artefact by building one without an
 interview ever having run.
 """
 
@@ -68,7 +68,7 @@ def research_assistant() -> ProductProfile:
             ),
             detail=(
                 "A router agent with a document search tool and a summariser subagent. "
-                "Search can time out. Nothing is carried between sessions."
+                "Search can time out. Nothing is carried between interviews."
             ),
         ),
         tasks=[

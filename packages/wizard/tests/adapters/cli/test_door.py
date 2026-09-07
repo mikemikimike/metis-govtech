@@ -398,7 +398,7 @@ def test_a_stamped_screen_draws_its_header_and_divider_pipe_safely() -> None:
 @pytest.mark.parametrize(
     ("kwargs", "absent"),
     [
-        ({}, "step"),  # an unstamped request draws no header — old sessions, web door
+        ({}, "step"),  # an unstamped request draws no header — old interviews, web door
         ({"cards": []}, "─"),  # a screen with no cards has no two regions to divide
     ],
 )

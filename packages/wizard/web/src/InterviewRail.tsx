@@ -1,20 +1,20 @@
-// The list of sessions, shown once at least one exists. A session is a title, when it was
+// The list of interviews, shown once at least one exists. A interview is a title, when it was
 // last touched, and where in the interview it got to. The current one is marked; a control
 // at the top starts a new one.
 
 import { CirclePlus, FolderClosed, PanelLeft } from "lucide-react";
-import type { SessionSummary } from "./api";
+import type { InterviewSummary } from "./api";
 import { Button, cn } from "./ui";
 
-export function SessionRail({
-  sessions,
+export function InterviewRail({
+  interviews,
   currentId,
   busy,
   onOpen,
   onNew,
   onCollapse,
 }: {
-  sessions: SessionSummary[];
+  interviews: InterviewSummary[];
   currentId: string | null;
   busy: boolean;
   onOpen: (id: string) => void;
@@ -31,8 +31,8 @@ export function SessionRail({
         {onCollapse && (
           <button
             type="button"
-            aria-label="Hide sessions"
-            title="Hide sessions"
+            aria-label="Hide interviews"
+            title="Hide interviews"
             onClick={onCollapse}
             className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
@@ -42,7 +42,7 @@ export function SessionRail({
       </div>
       <div className="border-b border-border p-3">
         <Button
-          // Bordered rather than solid. The rail's strongest mark belongs to the session you are
+          // Bordered rather than solid. The rail's strongest mark belongs to the interview you are
           // in, and a near-black button above the list was competing with it for that job — two
           // emphatic things stacked, only one of which reports state. Outlined, this reads as an
           // available action and the filled row below reads as where you are.
@@ -59,9 +59,9 @@ export function SessionRail({
         </Button>
       </div>
       <ul className="quiet-scrollbar flex-1 overflow-y-auto p-3">
-        {sessions.map((s) => (
+        {interviews.map((s) => (
           <li key={s.id}>
-            {/* The open session is filled with the accent outright, not tinted with it. A 10%
+            {/* The open interview is filled with the accent outright, not tinted with it. A 10%
                 wash was the quietest possible way to say "you are here" and it lost that argument
                 against a near-black button sitting directly above it. A solid row is the one
                 place in the rail worth spending the accent on, and it is at most one row at a
@@ -91,7 +91,7 @@ export function SessionRail({
                   s.id === currentId ? "text-accent-foreground" : "text-muted-foreground",
                 )}
               />
-              {/* One line per session: the title runs at the start and truncates, the timestamp
+              {/* One line per interview: the title runs at the start and truncates, the timestamp
                   sits at the end and never shrinks. The step is shown in the conversation header,
                   not repeated here, so the rail stays scannable as a plain list. */}
               <span

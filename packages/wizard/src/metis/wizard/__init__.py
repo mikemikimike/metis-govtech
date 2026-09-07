@@ -8,7 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from metis.core import Status
 from metis.core import __version__ as core_version
-from metis.wizard.application import Session, SessionState, SessionVersionError
+from metis.wizard.application import Interview, InterviewState, InterviewVersionError
 from metis.wizard.application.compile import (
     CompilationError,
     compile_experiment,
@@ -34,9 +34,9 @@ __all__ = [
     "AnyResponse",
     "CompilationError",
     "ProductProfile",
-    "Session",
-    "SessionState",
-    "SessionVersionError",
+    "Interview",
+    "InterviewState",
+    "InterviewVersionError",
     "Status",
     "UserResponse",
     "WizardRequest",

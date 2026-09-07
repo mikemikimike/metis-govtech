@@ -26,7 +26,7 @@ import re
 from enum import StrEnum
 
 
-class SessionStep(StrEnum):
+class InterviewStep(StrEnum):
     CLARIFY = "clarify"
     BEHAVIOURS = "behaviours"
     PRIORITISE = "prioritise"
@@ -43,14 +43,14 @@ class SessionStep(StrEnum):
 # Note that each step owns both the *container* and its *elements*. ADD addresses the list
 # it appends to (`tasks`, `tasks[T-1].behaviours`), while SET and REMOVE address an element
 # (`tasks[T-1]`). Listing only one of the two silently forbids half the operations.
-StepPermissions: dict[SessionStep, list[str]] = {
-    SessionStep.CLARIFY: [
+StepPermissions: dict[InterviewStep, list[str]] = {
+    InterviewStep.CLARIFY: [
         "product.name",
         "product.users",
         "product.description",
         "product.detail",
     ],
-    SessionStep.BEHAVIOURS: [
+    InterviewStep.BEHAVIOURS: [
         "tasks",
         "tasks[*]",
         "tasks[*].name",
@@ -60,7 +60,7 @@ StepPermissions: dict[SessionStep, list[str]] = {
         "tasks[*].behaviours[*].name",
         "tasks[*].behaviours[*].description",
     ],
-    SessionStep.CRITERIA: [
+    InterviewStep.CRITERIA: [
         "tasks[*].behaviours[*].criteria",
         "tasks[*].behaviours[*].criteria[*]",
         "tasks[*].behaviours[*].criteria[*].name",
@@ -68,13 +68,13 @@ StepPermissions: dict[SessionStep, list[str]] = {
         "tasks[*].behaviours[*].criteria[*].description.when",
         "tasks[*].behaviours[*].criteria[*].description.then",
     ],
-    SessionStep.PERSONAS: [
+    InterviewStep.PERSONAS: [
         "personas",
         "personas[*]",
         "personas[*].name",
         "personas[*].description",
     ],
-    SessionStep.SCENARIOS: [
+    InterviewStep.SCENARIOS: [
         "scenarios",
         "scenarios[*]",
         "scenarios[*].name",
@@ -100,12 +100,12 @@ def _glob_to_regex(glob: str) -> re.Pattern[str]:
     return re.compile("^" + "".join(parts) + "$")
 
 
-_COMPILED: dict[SessionStep, list[re.Pattern[str]]] = {
+_COMPILED: dict[InterviewStep, list[re.Pattern[str]]] = {
     step: [_glob_to_regex(g) for g in globs] for step, globs in StepPermissions.items()
 }
 
 
-def owner_of(path: str) -> SessionStep | None:
+def owner_of(path: str) -> InterviewStep | None:
     """Which step owns this address, if any.
 
     Deliberately not "may my current step write this?". A path owned by no step is writable

@@ -1,6 +1,6 @@
 """The output end: `ProductProfile` → `experiment.yaml` + `review.md`.
 
-Both are pure functions of the profile. Neither needs a session, a step or any history,
+Both are pure functions of the profile. Neither needs an interview, a step or any history,
 which is what makes the golden-file test possible.
 """
 

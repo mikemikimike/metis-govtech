@@ -51,6 +51,14 @@ _No v1 changes yet._
 
 #### Changed
 
+- **Renamed the wizard control model from Session to Interview.** The runtime object and its
+  neighbours now carry the Interview name: `Interview`, `InterviewState`, `InterviewStep`,
+  `InterviewStore`, `InterviewSummary`, and `InterviewVersionError`. The saved file is now
+  `interview_state.json`, and the web routes are `/api/interviews` and
+  `/api/interviews/{interview_id}` with an `interview_id` field. Step behaviour, the step strings,
+  and every persisted field value do not change; the format version stays at 7 (the constant is now
+  `INTERVIEW_FORMAT_VERSION`). Old `session.json` files are not migrated — start a new interview.
+  The web bundle mirrors the routes, so it is rebuilt.
 - **Wizard-created Behaviours now start selected.** The prioritise step starts with the complete
   Behaviour set, and users can clear any items that they do not want to measure.
 - **Standardized wizard profile nodes.** Tasks, behaviours, criteria, personas, and scenarios now

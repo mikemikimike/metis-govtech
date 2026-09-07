@@ -7,7 +7,7 @@ from metis.wizard.application import cascade
 from metis.wizard.contracts import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain import materializer, paths
 from metis.wizard.domain.applier import apply, sanitise
-from metis.wizard.domain.permissions import SessionStep, StepPermissions, owner_of
+from metis.wizard.domain.permissions import InterviewStep, StepPermissions, owner_of
 
 EB1_MEASURED = "tasks[T-1].behaviours[EB-1].measured"
 EB1_DESCRIPTION = "tasks[T-1].behaviours[EB-1].description"
@@ -344,16 +344,16 @@ def test_an_unowned_address_is_refused_without_leaking_its_path() -> None:
 def test_a_behaviour_edit_from_the_criteria_step_is_applied() -> None:
     """ "Reword EB-4" typed at the criteria step should simply work."""
     profile = research_assistant()
-    step = SessionStep.CRITERIA
+    step = InterviewStep.CRITERIA
 
     result = apply(profile, [patch(EB1_DESCRIPTION, "Cites a source, accurately")])
 
     assert len(result.applied) == 1
     assert profile.behaviour("EB-1").description == "Cites a source, accurately"  # type: ignore[union-attr]
     assert (
-        owner_of(EB1_DESCRIPTION) is SessionStep.BEHAVIOURS
+        owner_of(EB1_DESCRIPTION) is InterviewStep.BEHAVIOURS
     )  # a different step owns it
-    assert step is SessionStep.CRITERIA  # and the current step never changed
+    assert step is InterviewStep.CRITERIA  # and the current step never changed
 
 
 def test_an_address_no_step_owns_is_writable_nowhere() -> None:
@@ -367,13 +367,13 @@ def test_an_address_no_step_owns_is_writable_nowhere() -> None:
 
 def test_clarify_owns_product_and_prioritise_grants_nothing() -> None:
     """Clarify owns the product prose; prioritise still has no model-owned paths."""
-    assert StepPermissions[SessionStep.CLARIFY] == [
+    assert StepPermissions[InterviewStep.CLARIFY] == [
         "product.name",
         "product.users",
         "product.description",
         "product.detail",
     ]
-    assert SessionStep.PRIORITISE not in StepPermissions
+    assert InterviewStep.PRIORITISE not in StepPermissions
 
 
 # ── the mechanics ──────────────────────────────────────────────────────────
@@ -555,9 +555,10 @@ def test_criteria_added_by_positional_index_actually_land() -> None:
 
 def test_a_glob_does_not_span_a_dot() -> None:
     """`tasks[*].behaviours[*]` must not match something nested deeper under it."""
-    assert owner_of("tasks[T-1].behaviours[EB-1]") is SessionStep.BEHAVIOURS
+    assert owner_of("tasks[T-1].behaviours[EB-1]") is InterviewStep.BEHAVIOURS
     assert (
-        owner_of("tasks[T-1].behaviours[EB-1].criteria[AC-1-1]") is SessionStep.CRITERIA
+        owner_of("tasks[T-1].behaviours[EB-1].criteria[AC-1-1]")
+        is InterviewStep.CRITERIA
     )
 
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from metis.wizard.application import cascade, interview, screens
+from metis.wizard.application import cascade, config, screens
 from metis.wizard.application.interviewer import Interviewer, InterviewerOutputError
 from metis.wizard.contracts.conversation import (
     AnyRequest,
@@ -41,37 +41,37 @@ from metis.wizard.contracts.output import (
 from metis.wizard.domain import materializer
 from metis.wizard.domain.applier import apply, sanitise
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
-from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from metis.wizard.contracts.session_state import SessionState, Turn
+    from metis.wizard.contracts.interview_state import InterviewState, Turn
     from metis.wizard.domain.profile import Behaviour
 
 _NEXT_STEP = {
-    SessionStep.CLARIFY: SessionStep.BEHAVIOURS,
-    SessionStep.BEHAVIOURS: SessionStep.PRIORITISE,
-    SessionStep.PRIORITISE: SessionStep.CRITERIA,
-    SessionStep.CRITERIA: SessionStep.PERSONAS,
-    SessionStep.PERSONAS: SessionStep.SCENARIOS,
-    SessionStep.SCENARIOS: SessionStep.DONE,
+    InterviewStep.CLARIFY: InterviewStep.BEHAVIOURS,
+    InterviewStep.BEHAVIOURS: InterviewStep.PRIORITISE,
+    InterviewStep.PRIORITISE: InterviewStep.CRITERIA,
+    InterviewStep.CRITERIA: InterviewStep.PERSONAS,
+    InterviewStep.PERSONAS: InterviewStep.SCENARIOS,
+    InterviewStep.SCENARIOS: InterviewStep.DONE,
 }
 
 # Only these screens expose Back. Keeping the map explicit makes the door's visible
 # navigation contract inspectable and avoids implying that hidden or terminal steps can go
 # back through this handler.
 _PREVIOUS_STEP = {
-    SessionStep.PRIORITISE: SessionStep.BEHAVIOURS,
-    SessionStep.CRITERIA: SessionStep.PRIORITISE,
-    SessionStep.SCENARIOS: SessionStep.PERSONAS,
+    InterviewStep.PRIORITISE: InterviewStep.BEHAVIOURS,
+    InterviewStep.CRITERIA: InterviewStep.PRIORITISE,
+    InterviewStep.SCENARIOS: InterviewStep.PERSONAS,
 }
 
 _DEFAULT_MESSAGES = {
-    SessionStep.BEHAVIOURS: "Here's the current draft.",
-    SessionStep.CRITERIA: "Here are the current acceptance criteria.",
-    SessionStep.PERSONAS: "Here are the current personas.",
-    SessionStep.SCENARIOS: "Here are the current scenarios.",
+    InterviewStep.BEHAVIOURS: "Here's the current draft.",
+    InterviewStep.CRITERIA: "Here are the current acceptance criteria.",
+    InterviewStep.PERSONAS: "Here are the current personas.",
+    InterviewStep.SCENARIOS: "Here are the current scenarios.",
 }
 
 _CLARIFY_PRODUCT_PATHS = frozenset(
@@ -89,7 +89,7 @@ def _clarify_questions_asked(history: list[Turn]) -> int:
     count = sum(1 for turn in history if turn.role == "assistant")
     if history and history[0].role == "assistant":
         try:
-            opening = interview.opening_question()
+            opening = config.opening_question()
         except RuntimeError:
             opening = ""
         if opening and history[0].text == opening:
@@ -117,11 +117,11 @@ class StepDriver:
     # A later drafting call must not leak its introduction onto an earlier screen when the
     # user goes Back. These are presentation state only; a persisted pending request already
     # carries its prompt, and a recomposed screen after resume uses the neutral default.
-    _step_messages: dict[SessionStep, str] = field(default_factory=dict)
+    _step_messages: dict[InterviewStep, str] = field(default_factory=dict)
 
     # ── composing ──────────────────────────────────────────────────────────
 
-    def compose(self, state: SessionState) -> AnyRequest:
+    def compose(self, state: InterviewState) -> AnyRequest:
         """Compose the next screen and stamp its step header.
 
         Stamping here rather than in each screen builder is deliberate: every request the
@@ -134,7 +134,7 @@ class StepDriver:
         screens.stamp_step(request, state.step)
         return request
 
-    def _compose(self, state: SessionState) -> AnyRequest:
+    def _compose(self, state: InterviewState) -> AnyRequest:
         profile = state.profile
         step = state.step
 
@@ -144,14 +144,14 @@ class StepDriver:
         if self.pending_questions:
             return self.pending_questions[0].to_request()
 
-        if step is SessionStep.CLARIFY:
+        if step is InterviewStep.CLARIFY:
             # The package-owned opening line is an assistant turn for context, but it is not a
             # question composed by the model and must not consume the clarify budget.
             if not any(t.role == "user" for t in state.history):
-                return ChatRequest(prompt=interview.opening_question())
+                return ChatRequest(prompt=config.opening_question())
 
             asked = _clarify_questions_asked(state.history)
-            if asked < interview.clarify_turn_cap():
+            if asked < config.clarify_turn_cap():
                 phase = (
                     "product"
                     if not (profile.product.description and profile.product.users)
@@ -166,10 +166,10 @@ class StepDriver:
                 if not result.done and result.message:
                     return ChatRequest(prompt=result.message)
             # Either the model is finished or the cap is reached. Draft regardless.
-            state.step = SessionStep.BEHAVIOURS
-            step = SessionStep.BEHAVIOURS
+            state.step = InterviewStep.BEHAVIOURS
+            step = InterviewStep.BEHAVIOURS
 
-        if step is SessionStep.BEHAVIOURS:
+        if step is InterviewStep.BEHAVIOURS:
             if not profile.tasks:
                 self._try(
                     lambda: self.interviewer.draft_behaviours(profile, state.history),
@@ -177,35 +177,37 @@ class StepDriver:
                 )
             return self._attach(
                 screens.behaviours_screen(
-                    profile, self._message(SessionStep.BEHAVIOURS)
+                    profile, self._message(InterviewStep.BEHAVIOURS)
                 )
             )
 
-        if step is SessionStep.PRIORITISE:
+        if step is InterviewStep.PRIORITISE:
             return self._attach(screens.prioritise_screen(profile))
 
-        if step is SessionStep.CRITERIA:
+        if step is InterviewStep.CRITERIA:
             return self._attach(
-                screens.criteria_screen(profile, self._message(SessionStep.CRITERIA))
+                screens.criteria_screen(profile, self._message(InterviewStep.CRITERIA))
             )
 
-        if step is SessionStep.PERSONAS:
+        if step is InterviewStep.PERSONAS:
             if not profile.personas:
                 self._try(lambda: self.interviewer.draft_personas(profile), state)
             return self._attach(
-                screens.personas_screen(profile, self._message(SessionStep.PERSONAS))
+                screens.personas_screen(profile, self._message(InterviewStep.PERSONAS))
             )
 
-        if step is SessionStep.SCENARIOS:
+        if step is InterviewStep.SCENARIOS:
             if not profile.scenarios:
                 self._try(lambda: self.interviewer.draft_scenarios(profile), state)
             return self._attach(
-                screens.scenarios_screen(profile, self._message(SessionStep.SCENARIOS))
+                screens.scenarios_screen(
+                    profile, self._message(InterviewStep.SCENARIOS)
+                )
             )
 
         raise RuntimeError(f"Nothing to compose at step {step}.")
 
-    def _message(self, step: SessionStep) -> str:
+    def _message(self, step: InterviewStep) -> str:
         return self._step_messages.get(step, _DEFAULT_MESSAGES[step])
 
     def _attach(self, request: ChoiceRequest) -> ChoiceRequest:
@@ -222,7 +224,7 @@ class StepDriver:
     # ── handling ───────────────────────────────────────────────────────────
 
     def handle(
-        self, state: SessionState, request: AnyRequest, response: AnyResponse
+        self, state: InterviewState, request: AnyRequest, response: AnyResponse
     ) -> None:
         if self.pending_questions:
             # `compose()` stamped the header onto the question the user is answering, so the
@@ -240,10 +242,10 @@ class StepDriver:
         return self._handle_choice(state, request, response)
 
     def _handle_chat(
-        self, state: SessionState, request: ChatRequest, response: AnyResponse
+        self, state: InterviewState, request: ChatRequest, response: AnyResponse
     ) -> None:
         text = getattr(response, "text", "")
-        if state.step is SessionStep.CLARIFY:
+        if state.step is InterviewStep.CLARIFY:
             return  # the answer is in history; the next compose() asks the next question
 
         # A chat raised from a criteria card carries that behaviour's id; a screen-level chat
@@ -304,7 +306,7 @@ class StepDriver:
         return result.model_copy(update={"patches": kept})
 
     @staticmethod
-    def _criterion_texts(state: SessionState) -> dict[str, str]:
+    def _criterion_texts(state: InterviewState) -> dict[str, str]:
         """Every criterion's wording, keyed by id — the input the matcher reads."""
         return {
             criterion.id: str(criterion.description)
@@ -313,7 +315,7 @@ class StepDriver:
         }
 
     def _rematch_reworded(
-        self, state: SessionState, before_texts: dict[str, str]
+        self, state: InterviewState, before_texts: dict[str, str]
     ) -> None:
         """Re-resolve the metric for any criterion whose wording just changed.
 
@@ -335,7 +337,7 @@ class StepDriver:
                     rematch(criterion, self.matcher)  # type: ignore[arg-type]
 
     def _handle_form(
-        self, state: SessionState, request: FormRequest, response: AnyResponse
+        self, state: InterviewState, request: FormRequest, response: AnyResponse
     ) -> None:
         """Text typed into a form is used as-is — the model never sees it, so it cannot
         rewrite it. Everything created here is stamped FORM."""
@@ -345,18 +347,18 @@ class StepDriver:
         # A target keeps a manual child attached to the parent that offered the action. The
         # current step tells us which parent type the opaque id names.
         if request.target is not None:
-            if state.step is SessionStep.CRITERIA:
+            if state.step is InterviewStep.CRITERIA:
                 return self._add_typed_criterion(state, request.target, values)
-            if state.step is SessionStep.BEHAVIOURS:
+            if state.step is InterviewStep.BEHAVIOURS:
                 return self._add_typed_behaviour(state, request.target, values)
             return self._refuse_form_target()
 
         # Scoped child forms must carry their parent id. A missing target is not a valid
         # screen-level Behaviour or Criterion form, and must never be guessed or widened.
-        if state.step in (SessionStep.BEHAVIOURS, SessionStep.CRITERIA):
+        if state.step in (InterviewStep.BEHAVIOURS, InterviewStep.CRITERIA):
             return self._refuse_form_target()
 
-        if state.step is SessionStep.PERSONAS:
+        if state.step is InterviewStep.PERSONAS:
             materializer.add_persona(
                 profile,
                 PersonaDraft(
@@ -367,7 +369,7 @@ class StepDriver:
                 issued_ids=state.issued_ids,
                 user_typed=state.user_typed,
             )
-        elif state.step is SessionStep.SCENARIOS:
+        elif state.step is InterviewStep.SCENARIOS:
             materializer.add_scenario(
                 profile,
                 ScenarioDraft(
@@ -382,7 +384,7 @@ class StepDriver:
             )
 
     def _add_typed_behaviour(
-        self, state: SessionState, task_id: str, values: dict[str, Any]
+        self, state: InterviewState, task_id: str, values: dict[str, Any]
     ) -> None:
         """Append one form-created Behaviour under the Task that offered the action."""
         task = state.profile.task(task_id)
@@ -403,7 +405,7 @@ class StepDriver:
         )
 
     def _add_typed_criterion(
-        self, state: SessionState, behaviour_id: str, values: dict[str, Any]
+        self, state: InterviewState, behaviour_id: str, values: dict[str, Any]
     ) -> None:
         """Turn a submitted Given/When/Then form into one criterion under one behaviour.
 
@@ -433,7 +435,7 @@ class StepDriver:
         self._match_new(behaviour, {c.id for c in behaviour.criteria[:-1]})
 
     def _handle_choice(
-        self, state: SessionState, request: AnyRequest, response: AnyResponse
+        self, state: InterviewState, request: AnyRequest, response: AnyResponse
     ) -> None:
         values = getattr(response, "values", {}) or {}
         selected = set(getattr(response, "selected", []) or [])
@@ -490,7 +492,7 @@ class StepDriver:
             ]
             target = (
                 _target_of(chosen, "add")
-                if state.step is SessionStep.BEHAVIOURS
+                if state.step is InterviewStep.BEHAVIOURS
                 else None
             )
             form = FormRequest(
@@ -507,7 +509,7 @@ class StepDriver:
 
     def _handle_field_value(
         self,
-        state: SessionState,
+        state: InterviewState,
         request: AnyRequest,
         key: str,
         value: CardFieldValue,
@@ -587,7 +589,7 @@ class StepDriver:
 
     # ── the three criteria-card workflows ────────────────────────────────────
 
-    def _open_chat(self, state: SessionState, target: str | None) -> None:
+    def _open_chat(self, state: InterviewState, target: str | None) -> None:
         """Raise a chat request, scoped to a behaviour when one was named.
 
         `target` is the OptionId.target the clicked option carried — a behaviour id from a
@@ -604,7 +606,7 @@ class StepDriver:
         screens.stamp_step(chat, state.step)
         state.pending = chat
 
-    def _open_criterion_form(self, state: SessionState, target: str | None) -> None:
+    def _open_criterion_form(self, state: InterviewState, target: str | None) -> None:
         """Raise a Given/When/Then form that becomes one criterion under one behaviour.
 
         Three fields rather than one ambiguous description: manual entry is one structured
@@ -628,7 +630,7 @@ class StepDriver:
         state.pending = form
 
     def _targeted_behaviour(
-        self, state: SessionState, target: str | None
+        self, state: InterviewState, target: str | None
     ) -> Behaviour | None:
         """The behaviour a criteria action names, or None if it names nothing writable.
 
@@ -665,7 +667,7 @@ class StepDriver:
             )
         )
 
-    def _suggest_one_criterion(self, state: SessionState, target: str | None) -> None:
+    def _suggest_one_criterion(self, state: InterviewState, target: str | None) -> None:
         """Ask the model for exactly one new criterion under one behaviour, and match it.
 
         This is the "Suggest one for me" workflow: not a chat and not a form, but a bounded
@@ -735,14 +737,14 @@ class StepDriver:
             )
         )
 
-    def _advance(self, state: SessionState) -> None:
+    def _advance(self, state: InterviewState) -> None:
         """Move on, generating whatever the next screen needs and does not have."""
         current = state.step
-        state.step = _NEXT_STEP.get(current, SessionStep.DONE)
+        state.step = _NEXT_STEP.get(current, InterviewStep.DONE)
 
         # Continue at prioritise is what generates criteria — which is why ticked-but-empty
         # cannot exist, and why nothing is generated for behaviours nobody picked.
-        if state.step is SessionStep.CRITERIA and any(
+        if state.step is InterviewStep.CRITERIA and any(
             b.measured and not b.criteria for b in state.profile.measured_behaviours()
         ):
             self._try(lambda: self.interviewer.draft_criteria(state.profile), state)
@@ -751,7 +753,7 @@ class StepDriver:
 
     # ── applying model output ──────────────────────────────────────────────
 
-    def _try(self, call: Callable[[], StepResult], state: SessionState) -> bool:
+    def _try(self, call: Callable[[], StepResult], state: InterviewState) -> bool:
         """Run a model call, turning a total failure into a warning rather than a crash.
 
         Three attempts have already happened inside the client. Reaching here means all of
@@ -776,7 +778,7 @@ class StepDriver:
 
     def _run(
         self,
-        state: SessionState,
+        state: InterviewState,
         result: StepResult,
         *,
         allowed_paths: frozenset[str] | None = None,
@@ -811,7 +813,7 @@ class StepDriver:
         # Ask about anything derived from what just changed, before the next screen.
         self.pending_questions += cascade.questions_for(before, outcome.applied)
 
-    def _answer_question(self, state: SessionState, response: AnyResponse) -> None:
+    def _answer_question(self, state: InterviewState, response: AnyResponse) -> None:
         """Resolve one cascade question. Three answers, and only one changes anything."""
         question = self.pending_questions.pop(0)
         selected = set(getattr(response, "selected", []) or [])
@@ -827,7 +829,7 @@ class StepDriver:
             elif question.kind == "scenario":
                 self._run(state, self.interviewer.draft_scenarios(state.profile))
             elif question.kind == "tree":
-                state.step = SessionStep.BEHAVIOURS
+                state.step = InterviewStep.BEHAVIOURS
         elif action == "edit":
             form = FormRequest(
                 prompt="Go ahead — I'll use exactly what you write.",
@@ -840,9 +842,9 @@ class StepDriver:
             screens.stamp_step(form, state.step)
             state.pending = form
         elif action == "review" and question.kind == "tree":
-            state.step = SessionStep.BEHAVIOURS
+            state.step = InterviewStep.BEHAVIOURS
 
-    def match(self, state: SessionState) -> None:
+    def match(self, state: InterviewState) -> None:
         """Resolve metrics for criteria that lack them.
 
         A separate pass, run after criteria generation rather than folded into it. If the

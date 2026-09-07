@@ -36,7 +36,7 @@ class RecordingConsole:
         return None
 
 
-class StatusSession:
+class StatusInterview:
     def __init__(self) -> None:
         self.calls: list[object] = []
 
@@ -52,17 +52,17 @@ class StatusSession:
 
 
 def test_both_halves_of_the_cli_corridor_use_package_status_copy() -> None:
-    session = StatusSession()
+    interview = StatusInterview()
     console = RecordingConsole()
 
-    assert cli._next_with_status(session, console) == "request"
-    cli._respond_with_status(session, "response", console)
+    assert cli._next_with_status(interview, console) == "request"
+    cli._respond_with_status(interview, "response", console)
 
     assert console.messages == [
         ("Writing testable criteria…", "dots"),
         ("Writing testable criteria…", "dots"),
     ]
-    assert session.calls == ["next", "response"]
+    assert interview.calls == ["next", "response"]
 
 
 def test_the_cli_wires_a_matcher() -> None:
@@ -74,7 +74,7 @@ def test_the_cli_wires_a_matcher() -> None:
     assert isinstance(driver.matcher, EmbeddingMatcher)
 
 
-def test_the_cli_passes_one_session_id_to_the_interviewer_and_session(
+def test_the_cli_passes_one_interview_id_to_the_interviewer_and_interview(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
     from fixtures.scripted import ScriptedInterviewer
@@ -83,13 +83,15 @@ def test_the_cli_passes_one_session_id_to_the_interviewer_and_session(
     from metis.wizard.bootstrap import create_cli_app
 
     seen: list[str | None] = []
-    sessions = []
+    interviews = []
 
-    def factory(session_id: str | None):
-        seen.append(session_id)
+    def factory(interview_id: str | None):
+        seen.append(interview_id)
         return ScriptedInterviewer()
 
-    monkeypatch.setattr(cli, "_run", lambda session, out_dir: sessions.append(session))
+    monkeypatch.setattr(
+        cli, "_run", lambda interview, out_dir: interviews.append(interview)
+    )
     result = CliRunner().invoke(
         create_cli_app(factory),
         ["init", "--out-dir", str(tmp_path)],
@@ -98,8 +100,8 @@ def test_the_cli_passes_one_session_id_to_the_interviewer_and_session(
     assert result.exit_code == 0, result.output
     assert len(seen) == 1
     assert seen[0] is not None
-    assert len(sessions) == 1
-    assert sessions[0].state.id == seen[0]
+    assert len(interviews) == 1
+    assert interviews[0].state.id == seen[0]
 
 
 def test_the_matcher_uses_the_same_gateway() -> None:
@@ -185,8 +187,10 @@ def test_both_commands_fail_before_any_call_without_credentials(
 
     app = create_cli_app()
 
-    (tmp_path / "session.json").write_text("{}")  # so resume gets past its file check
-    # `init` refuses outright when a session already exists — its own guard, checked before
+    (tmp_path / "interview_state.json").write_text(
+        "{}"
+    )  # so resume gets past its file check
+    # `init` refuses outright when an interview already exists — its own guard, checked before
     # credentials — so `--restart` is needed to reach the credential check this test is about.
     invocations = {
         "init": ["init", "--out-dir", str(tmp_path), "--restart"],
@@ -202,7 +206,7 @@ def test_both_commands_fail_before_any_call_without_credentials(
 # ── the init guard ───────────────────────────────────────────────────────────
 
 
-def test_init_refuses_when_a_session_already_exists(tmp_path) -> None:
+def test_init_refuses_when_a_interview_already_exists(tmp_path) -> None:
     """A re-run of `init` reports the collision rather than overwriting an interview.
 
     The check reads the filesystem only and runs before the interviewer is built, so it fires
@@ -213,18 +217,18 @@ def test_init_refuses_when_a_session_already_exists(tmp_path) -> None:
     from metis.wizard.bootstrap import create_cli_app
 
     original = '{"do not": "overwrite me"}'
-    (tmp_path / "session.json").write_text(original)
+    (tmp_path / "interview_state.json").write_text(original)
 
     result = CliRunner().invoke(create_cli_app(), ["init", "--out-dir", str(tmp_path)])
 
     assert result.exit_code == 1
     assert "already in progress" in result.output
-    assert str(tmp_path / "session.json") in result.output
+    assert str(tmp_path / "interview_state.json") in result.output
     # both ways forward are named
     assert "resume" in result.output
     assert "--restart" in result.output
-    # and the existing session is untouched
-    assert (tmp_path / "session.json").read_text() == original
+    # and the existing interview is untouched
+    assert (tmp_path / "interview_state.json").read_text() == original
 
 
 def test_init_rejects_the_removed_name_option(tmp_path) -> None:

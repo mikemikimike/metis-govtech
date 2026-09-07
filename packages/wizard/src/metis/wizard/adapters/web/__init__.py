@@ -1,6 +1,6 @@
 """The wizard-local web door.
 
-`server.py` is the transport and `store.py` is the directory of sessions; the frontend it
+`server.py` is the transport and `store.py` is the directory of interviews; the frontend it
 serves is built into `static/`. Nothing in the shared layers imports this package, and nothing
 here imports the CLI — the door is removable, and deleting it leaves a working terminal wizard
 behind.

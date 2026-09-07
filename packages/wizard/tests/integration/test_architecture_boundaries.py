@@ -86,5 +86,13 @@ def test_bootstrap_is_the_only_adapter_composition_root() -> None:
 
 
 def test_implementation_paths_follow_the_ownership_layout() -> None:
-    for name in ("models", "session", "steps", "compile", "matching", "door", "cli.py"):
+    for name in (
+        "models",
+        "interview",
+        "steps",
+        "compile",
+        "matching",
+        "door",
+        "cli.py",
+    ):
         assert not (SRC / name).exists(), f"unowned implementation path remains: {name}"

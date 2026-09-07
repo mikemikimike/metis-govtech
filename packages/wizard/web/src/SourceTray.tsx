@@ -3,7 +3,7 @@
 // This component accepts no source values and owns no file objects. Its controls show the shape
 // of the planned paths, but every source input is disabled from the first render. The only live
 // state is the Codebase Link/ZIP presentation switch. Nothing here contacts an address, reads a
-// file, creates a session or depicts a result.
+// file, creates a interview or depicts a result.
 
 import { X } from "lucide-react";
 import { useState } from "react";

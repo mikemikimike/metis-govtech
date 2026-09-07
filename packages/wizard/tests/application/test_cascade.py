@@ -3,7 +3,7 @@
 from fixtures.profiles import research_assistant
 from fixtures.scripted import ScriptedInterviewer
 
-from metis.wizard.application import SessionState, cascade
+from metis.wizard.application import InterviewState, cascade
 from metis.wizard.application.driver import StepDriver
 from metis.wizard.contracts import (
     ChatRequest,
@@ -14,7 +14,7 @@ from metis.wizard.contracts import (
     Product,
     ProductProfile,
 )
-from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.permissions import InterviewStep
 
 EB1_DESCRIPTION = "tasks[T-1].behaviours[EB-1].description"
 
@@ -23,8 +23,8 @@ def edit(path: str, value="reworded") -> Patch:
     return Patch(op=PatchOp.SET, path=path, value=value, origin=PatchOrigin.MODEL)
 
 
-def a_state(step=SessionStep.CRITERIA) -> SessionState:
-    return SessionState(id="s-1", profile=research_assistant(), step=step)
+def a_state(step=InterviewStep.CRITERIA) -> InterviewState:
+    return InterviewState(id="s-1", profile=research_assistant(), step=step)
 
 
 # ── what asks, and in what order ───────────────────────────────────────────
@@ -194,10 +194,10 @@ def test_the_question_is_asked_before_the_next_screen() -> None:
 
 def test_chat_on_the_initial_draft_opens_free_text() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(
+    state = InterviewState(
         id="s-1",
         profile=ProductProfile(product=Product(name="X", description="", users="")),
-        step=SessionStep.BEHAVIOURS,
+        step=InterviewStep.BEHAVIOURS,
     )
     request = driver.compose(state)
 
@@ -238,7 +238,7 @@ def test_answering_regenerate_lands_in_a_state_the_screens_already_draw() -> Non
 
 def test_reviewing_a_product_edit_returns_to_the_draft_screen() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = a_state(step=SessionStep.CRITERIA)
+    state = a_state(step=InterviewStep.CRITERIA)
     question = cascade.questions_for(state.profile, [edit("product.detail")])[0]
     driver.pending_questions = [question]
 
@@ -246,7 +246,7 @@ def test_reviewing_a_product_edit_returns_to_the_draft_screen() -> None:
         state, ChoiceResponse(selected=[f"review:{question.subject}"])
     )
 
-    assert state.step is SessionStep.BEHAVIOURS
+    assert state.step is InterviewStep.BEHAVIOURS
     assert driver.pending_questions == []
 
 

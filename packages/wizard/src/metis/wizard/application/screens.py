@@ -34,7 +34,7 @@ from metis.wizard.contracts.conversation import (
     WizardRequest,
 )
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
-from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
     from metis.wizard.domain.profile import Behaviour, ProductProfile, Scenario, Task
@@ -52,18 +52,18 @@ FEEDBACK_INSTRUCTION = (
 # are *derived* from this list, so no screen builder ever writes a number — the one drift the
 # design names out loud. CLARIFY is step one even though the model, not a screen builder,
 # composes its chat; DONE is terminal and carries no header.
-_STEP_TITLES: dict[SessionStep, str] = {
-    SessionStep.CLARIFY: "Understanding your product",
-    SessionStep.BEHAVIOURS: "Behaviours",
-    SessionStep.PRIORITISE: "What to measure",
-    SessionStep.CRITERIA: "Acceptance criteria",
-    SessionStep.PERSONAS: "Personas",
-    SessionStep.SCENARIOS: "Scenarios",
+_STEP_TITLES: dict[InterviewStep, str] = {
+    InterviewStep.CLARIFY: "Understanding your product",
+    InterviewStep.BEHAVIOURS: "Behaviours",
+    InterviewStep.PRIORITISE: "What to measure",
+    InterviewStep.CRITERIA: "Acceptance criteria",
+    InterviewStep.PERSONAS: "Personas",
+    InterviewStep.SCENARIOS: "Scenarios",
 }
-_INTERVIEW_STEPS: list[SessionStep] = list(_STEP_TITLES)
+_INTERVIEW_STEPS: list[InterviewStep] = list(_STEP_TITLES)
 
 
-def stamp_step(request: WizardRequest, step: SessionStep) -> None:
+def stamp_step(request: WizardRequest, step: InterviewStep) -> None:
     """Write the step's header onto a request: title, one-based position and total.
 
     One place turns a step into a position, so the six screens cannot drift into disagreeing
@@ -424,7 +424,7 @@ def _scenario_warnings(profile: ProductProfile) -> list[Warning]:
 
     for scenario in profile.scenarios:
         if not _covers_a_selection(profile, scenario):
-            # A scenario that measures no selected behaviour is a session spent proving
+            # A scenario that measures no selected behaviour is a trial spent proving
             # nothing. The fix is a click on the card's own "Covers" group already on screen,
             # so no options.
             warnings.append(

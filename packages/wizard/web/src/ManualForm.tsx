@@ -1,5 +1,5 @@
 // The hand-authoring door: a form that writes an experiment document directly, with no
-// interview and no session.
+// interview and no interview.
 //
 // ── A DELIBERATE EXCEPTION TO THE WEB DOOR'S DISCIPLINE ───────────────────────────────────────
 // Everywhere else in this browser, not one domain word appears: the conversation renderer draws
@@ -17,7 +17,7 @@
 //
 // It builds the same document shape the server's compiler emits, posts it to the stateless
 // compile route, and streams the returned file to a download. It stores nothing and creates no
-// session — leaving the screen discards the work, by design.
+// interview — leaving the screen discards the work, by design.
 
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";

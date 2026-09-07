@@ -5,9 +5,9 @@ A tree plus two reference lists:
     tasks → behaviours → criteria     what should be true
     personas, scenarios               how we'll check it
 
-`ProductProfile` is a pure artefact. It carries no step, no history and no session id, so it
+`ProductProfile` is a pure artefact. It carries no step, no history and no interview id, so it
 can be hand-written in a fixture, rendered, compiled or diffed without an interview ever
-having happened. Where the interview got to is `SessionState.step`, deliberately elsewhere.
+having happened. Where the interview got to is `InterviewState.step`, deliberately elsewhere.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ class Scenario(ProfileNode[str]):
     persona_refs: list[str] = Field(default_factory=list)
     fixtures: list[str] = Field(
         default_factory=list
-    )  # filenames only; web fixture bytes live beside the session or in a specification request
+    )  # filenames only; web fixture bytes live beside the interview or in a specification request
     num_trials: int = 3  # one trial of a non-deterministic agent says very little
 
 

@@ -7,9 +7,9 @@ from fixtures.profiles import research_assistant
 from fixtures.scripted import ScriptedInterviewer
 
 from metis.wizard.adapters.llm.gateway import ModelOutputError
-from metis.wizard.application import SessionState, Turn
+from metis.wizard.application import InterviewState, Turn
+from metis.wizard.application.config import clarify_turn_cap, opening_question
 from metis.wizard.application.driver import StepDriver
-from metis.wizard.application.interview import clarify_turn_cap, opening_question
 from metis.wizard.contracts import (
     ChatRequest,
     ChatResponse,
@@ -19,12 +19,12 @@ from metis.wizard.contracts import (
     StepResult,
     WarningSource,
 )
-from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.permissions import InterviewStep
 from metis.wizard.domain.profile import collect_profile_ids
 
 
-def empty_state(step=SessionStep.CLARIFY, history=None) -> SessionState:
-    return SessionState(
+def empty_state(step=InterviewStep.CLARIFY, history=None) -> InterviewState:
+    return InterviewState(
         id="s-1",
         profile=ProductProfile(product=Product(name="X", description="", users="")),
         step=step,
@@ -73,7 +73,7 @@ def test_a_model_that_never_stops_is_stopped() -> None:
 
     driver.compose(state)
 
-    assert state.step is SessionStep.BEHAVIOURS  # drafted regardless
+    assert state.step is InterviewStep.BEHAVIOURS  # drafted regardless
 
 
 def test_below_the_cap_it_keeps_asking() -> None:
@@ -83,7 +83,7 @@ def test_below_the_cap_it_keeps_asking() -> None:
     request = driver.compose(state)
 
     assert request.prompt == "One more thing?"
-    assert state.step is SessionStep.CLARIFY
+    assert state.step is InterviewStep.CLARIFY
 
 
 def test_clarify_commits_product_but_not_behaviours() -> None:
@@ -118,7 +118,7 @@ def test_a_thin_answer_leaves_the_product_gate_closed() -> None:
     assert request.prompt == "Tell me a little more."
     assert state.profile.product.description == ""
     assert state.profile.product.users == ""
-    assert state.step is SessionStep.CLARIFY
+    assert state.step is InterviewStep.CLARIFY
 
 
 def test_clarify_rejects_a_non_product_patch() -> None:
@@ -149,7 +149,7 @@ def test_clarify_rejects_a_non_product_patch() -> None:
 
 def test_a_later_product_edit_does_not_move_the_step() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = empty_state(step=SessionStep.CRITERIA)
+    state = empty_state(step=InterviewStep.CRITERIA)
 
     driver._run(
         state,
@@ -166,7 +166,7 @@ def test_a_later_product_edit_does_not_move_the_step() -> None:
     )
 
     assert state.profile.product.description == "A corrected description"
-    assert state.step is SessionStep.CRITERIA
+    assert state.step is InterviewStep.CRITERIA
 
 
 def test_the_configured_cap_is_positive() -> None:
@@ -176,10 +176,10 @@ def test_the_configured_cap_is_positive() -> None:
 # ── the step header ────────────────────────────────────────────────────────
 
 
-def _compose_at(step: SessionStep):
+def _compose_at(step: InterviewStep):
     """Compose the screen for one step over a fully-drafted profile, no model call needed."""
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(id="s", profile=research_assistant(), step=step)
+    state = InterviewState(id="s", profile=research_assistant(), step=step)
     return driver.compose(state)
 
 
@@ -190,12 +190,12 @@ def test_every_screen_reports_a_position_consistent_with_its_step() -> None:
     steps because clarify is the first, even though a chat rather than a screen composes it.
     """
     expected = {
-        SessionStep.CLARIFY: ("Understanding your product", 1),
-        SessionStep.BEHAVIOURS: ("Behaviours", 2),
-        SessionStep.PRIORITISE: ("What to measure", 3),
-        SessionStep.CRITERIA: ("Acceptance criteria", 4),
-        SessionStep.PERSONAS: ("Personas", 5),
-        SessionStep.SCENARIOS: ("Scenarios", 6),
+        InterviewStep.CLARIFY: ("Understanding your product", 1),
+        InterviewStep.BEHAVIOURS: ("Behaviours", 2),
+        InterviewStep.PRIORITISE: ("What to measure", 3),
+        InterviewStep.CRITERIA: ("Acceptance criteria", 4),
+        InterviewStep.PERSONAS: ("Personas", 5),
+        InterviewStep.SCENARIOS: ("Scenarios", 6),
     }
 
     for step, (title, position) in expected.items():
@@ -206,13 +206,13 @@ def test_every_screen_reports_a_position_consistent_with_its_step() -> None:
 
 
 def test_the_scenarios_screen_reports_six_of_six() -> None:
-    request = _compose_at(SessionStep.SCENARIOS)
+    request = _compose_at(InterviewStep.SCENARIOS)
 
     assert (request.step, request.steps) == (6, 6)
 
 
 def test_criteria_cards_carry_no_metric_annotation() -> None:
-    request = _compose_at(SessionStep.CRITERIA)
+    request = _compose_at(InterviewStep.CRITERIA)
 
     components = [component for card in request.cards for component in card.components]
     assert components
@@ -232,7 +232,7 @@ def test_a_criterion_is_three_labelled_rows_with_dividers_between() -> None:
     EB-1 in the fixture is a ticked behaviour with two criteria, so its card is the case that
     needs the boundary; EB-2 is unticked and draws a note instead of criteria.
     """
-    request = _compose_at(SessionStep.CRITERIA)
+    request = _compose_at(InterviewStep.CRITERIA)
     card = next(card for card in request.cards if card.id == "EB-1")
 
     kinds = [(c.type.value, getattr(c, "label", None)) for c in card.components]
@@ -256,7 +256,7 @@ def test_the_terminal_step_carries_no_header() -> None:
     from metis.wizard.contracts import ChatRequest
 
     request = ChatRequest(prompt="done")
-    screens.stamp_step(request, SessionStep.DONE)
+    screens.stamp_step(request, InterviewStep.DONE)
 
     assert (request.title, request.step, request.steps) == (None, None, None)
 
@@ -266,8 +266,8 @@ def test_a_mid_step_form_inherits_the_parent_steps_header() -> None:
     from metis.wizard.contracts import ChoiceResponse
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(
-        id="s", profile=research_assistant(), step=SessionStep.PERSONAS
+    state = InterviewState(
+        id="s", profile=research_assistant(), step=InterviewStep.PERSONAS
     )
     screen = driver.compose(state)
     state.pending = screen
@@ -289,10 +289,10 @@ def test_the_persona_add_form_keeps_the_name_and_description_and_generates_an_id
     driver = StepDriver(interviewer=ScriptedInterviewer())
     profile = research_assistant()
     before = len(profile.personas)
-    state = SessionState(
+    state = InterviewState(
         id="s",
         profile=profile,
-        step=SessionStep.PERSONAS,
+        step=InterviewStep.PERSONAS,
         issued_ids=collect_profile_ids(profile),
     )
     screen = driver.compose(state)
@@ -329,10 +329,10 @@ def test_the_behaviour_add_form_is_scoped_to_the_selected_task() -> None:
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
     profile = research_assistant()
-    state = SessionState(
+    state = InterviewState(
         id="s",
         profile=profile,
-        step=SessionStep.BEHAVIOURS,
+        step=InterviewStep.BEHAVIOURS,
         issued_ids=collect_profile_ids(profile),
     )
     screen = driver.compose(state)
@@ -376,7 +376,7 @@ def test_a_behaviour_form_with_a_stale_or_missing_task_target_changes_nothing() 
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
     profile = research_assistant()
-    state = SessionState(id="s", profile=profile, step=SessionStep.BEHAVIOURS)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.BEHAVIOURS)
     before = profile.model_copy(deep=True)
     form = FormRequest(
         prompt="Add a Behaviour",
@@ -414,7 +414,7 @@ def test_a_persona_name_is_visible_and_its_id_is_the_reference() -> None:
     profile = research_assistant()
 
     personas = driver.compose(
-        SessionState(id="s", profile=profile, step=SessionStep.PERSONAS)
+        InterviewState(id="s", profile=profile, step=InterviewStep.PERSONAS)
     )
     titles = {c.id: c.title for c in personas.cards}
     assert titles == {
@@ -425,7 +425,7 @@ def test_a_persona_name_is_visible_and_its_id_is_the_reference() -> None:
     from metis.wizard.contracts import CardOptionGroup
 
     scenarios = driver.compose(
-        SessionState(id="s", profile=profile, step=SessionStep.SCENARIOS)
+        InterviewState(id="s", profile=profile, step=InterviewStep.SCENARIOS)
     )
     run_as = next(
         comp
@@ -445,7 +445,7 @@ def test_shared_review_screens_show_names_and_descriptions() -> None:
     profile = research_assistant()
 
     behaviours = driver.compose(
-        SessionState(id="s", profile=profile, step=SessionStep.BEHAVIOURS)
+        InterviewState(id="s", profile=profile, step=InterviewStep.BEHAVIOURS)
     )
     assert behaviours.cards[0].title == "Cite factual claims"
     assert (
@@ -454,7 +454,7 @@ def test_shared_review_screens_show_names_and_descriptions() -> None:
     )  # type: ignore[union-attr]
 
     prioritise = driver.compose(
-        SessionState(id="s", profile=profile, step=SessionStep.PRIORITISE)
+        InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
     )
     assert (
         prioritise.cards[0].components[0].text
@@ -462,13 +462,13 @@ def test_shared_review_screens_show_names_and_descriptions() -> None:
     )  # type: ignore[union-attr]
 
     personas = driver.compose(
-        SessionState(id="s", profile=profile, step=SessionStep.PERSONAS)
+        InterviewState(id="s", profile=profile, step=InterviewStep.PERSONAS)
     )
     assert personas.cards[0].title == "Cooperative delegator"
     assert personas.cards[0].components[0].text.startswith("A policy analyst")  # type: ignore[union-attr]
 
     scenarios = driver.compose(
-        SessionState(id="s", profile=profile, step=SessionStep.SCENARIOS)
+        InterviewState(id="s", profile=profile, step=InterviewStep.SCENARIOS)
     )
     assert scenarios.cards[0].title == "Supported literature review"
     assert (
@@ -481,10 +481,10 @@ def test_drafted_behaviours_start_selected_on_the_prioritise_screen() -> None:
         product=Product(name="Agent", description="An agent.", users="Operators")
     )
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(id="s", profile=profile, step=SessionStep.BEHAVIOURS)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.BEHAVIOURS)
 
     driver.compose(state)
-    state.step = SessionStep.PRIORITISE
+    state.step = InterviewStep.PRIORITISE
     request = driver.compose(state)
 
     assert all(behaviour.measured for behaviour in profile.behaviours())
@@ -498,7 +498,7 @@ def test_drafted_behaviours_start_selected_on_the_prioritise_screen() -> None:
 
 def _scenarios_screen(profile):
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(id="s", profile=profile, step=SessionStep.SCENARIOS)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.SCENARIOS)
     return driver.compose(state)
 
 
@@ -646,7 +646,7 @@ def test_scenario_card_fields_are_typed_and_separate_from_options() -> None:
 def _scenario_edit_state():
     profile = research_assistant()
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(id="s", profile=profile, step=SessionStep.SCENARIOS)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.SCENARIOS)
     return driver, state, driver.compose(state)
 
 
@@ -736,7 +736,7 @@ def test_a_task_with_nothing_ticked_is_not_warned() -> None:
     for behaviour in profile.behaviours():
         behaviour.measured = False
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(id="s", profile=profile, step=SessionStep.PRIORITISE)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
 
     request = driver.compose(state)
 
@@ -751,36 +751,36 @@ def test_a_task_with_nothing_ticked_is_not_warned() -> None:
     ("source", "destination", "expected_prompt"),
     [
         (
-            SessionStep.PRIORITISE,
-            SessionStep.BEHAVIOURS,
+            InterviewStep.PRIORITISE,
+            InterviewStep.BEHAVIOURS,
             "Review the behaviour draft.",
         ),
         (
-            SessionStep.CRITERIA,
-            SessionStep.PRIORITISE,
+            InterviewStep.CRITERIA,
+            InterviewStep.PRIORITISE,
             "I've selected all behaviours as a starting point. Clear any you don't want "
             "to measure, then I'll write acceptance criteria for the rest.",
         ),
         (
-            SessionStep.SCENARIOS,
-            SessionStep.PERSONAS,
+            InterviewStep.SCENARIOS,
+            InterviewStep.PERSONAS,
             "Review the personas.",
         ),
     ],
 )
 def test_every_visible_back_transition_restores_its_destination(
-    source: SessionStep, destination: SessionStep, expected_prompt: str
+    source: InterviewStep, destination: InterviewStep, expected_prompt: str
 ) -> None:
     profile = research_assistant()
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
     driver._step_messages = {
-        SessionStep.BEHAVIOURS: "Review the behaviour draft.",
-        SessionStep.CRITERIA: "Review the acceptance criteria.",
-        SessionStep.PERSONAS: "Review the personas.",
-        SessionStep.SCENARIOS: "Review the scenarios.",
+        InterviewStep.BEHAVIOURS: "Review the behaviour draft.",
+        InterviewStep.CRITERIA: "Review the acceptance criteria.",
+        InterviewStep.PERSONAS: "Review the personas.",
+        InterviewStep.SCENARIOS: "Review the scenarios.",
     }
-    state = SessionState(
+    state = InterviewState(
         id="s",
         profile=profile,
         step=source,
@@ -804,7 +804,7 @@ def test_every_visible_back_transition_restores_its_destination(
 def test_a_recomposed_screen_uses_a_neutral_message() -> None:
     profile = research_assistant()
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = SessionState(id="s", profile=profile, step=SessionStep.BEHAVIOURS)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.BEHAVIOURS)
 
     request = driver.compose(state)
 
@@ -816,7 +816,7 @@ def test_going_back_regenerates_nothing_that_already_exists() -> None:
     profile = research_assistant()
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
-    state = SessionState(id="s", profile=profile, step=SessionStep.PRIORITISE)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
     before = profile.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
 
     driver._advance(state)  # the Continue that generates
@@ -830,7 +830,7 @@ def test_unticking_then_continuing_generates_only_the_gap() -> None:
     profile.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
-    state = SessionState(id="s", profile=profile, step=SessionStep.PRIORITISE)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
 
     driver._advance(state)
 
@@ -857,7 +857,7 @@ def test_a_total_failure_warns_and_loses_nothing() -> None:
     profile = research_assistant()
     profile.personas = []
     driver = StepDriver(interviewer=BrokenInterviewer())
-    state = SessionState(id="s", profile=profile, step=SessionStep.PERSONAS)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.PERSONAS)
 
     request = driver.compose(state)
 
@@ -865,7 +865,7 @@ def test_a_total_failure_warns_and_loses_nothing() -> None:
     assert runtime and "nothing you've decided has been lost" in runtime[0].text.lower()
     assert not runtime[0].blocking
     assert state.profile.tasks  # the profile is intact
-    assert state.step is SessionStep.PERSONAS  # and we did not advance past it
+    assert state.step is InterviewStep.PERSONAS  # and we did not advance past it
 
 
 def test_a_chat_failure_warns_and_loses_nothing() -> None:
@@ -874,10 +874,10 @@ def test_a_chat_failure_warns_and_loses_nothing() -> None:
     profile = research_assistant()
     before = profile.model_copy(deep=True)
     driver = StepDriver(interviewer=BrokenInterviewer())
-    state = SessionState(
+    state = InterviewState(
         id="s",
         profile=profile,
-        step=SessionStep.CRITERIA,
+        step=InterviewStep.CRITERIA,
         issued_ids=collect_profile_ids(profile),
     )
 
@@ -900,7 +900,7 @@ def test_ticking_costs_no_model_call() -> None:
     profile = research_assistant()
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
-    state = SessionState(id="s", profile=profile, step=SessionStep.PRIORITISE)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
     request = driver.compose(state)
     interviewer.calls.clear()
 
@@ -952,10 +952,10 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
     profile = research_assistant()
     matcher = RecordingMatcher()
     driver = StepDriver(interviewer=RewordingInterviewer(), matcher=matcher)
-    state = SessionState(
+    state = InterviewState(
         id="s",
         profile=profile,
-        step=SessionStep.CRITERIA,
+        step=InterviewStep.CRITERIA,
         issued_ids=collect_profile_ids(profile),
     )
 
@@ -1022,10 +1022,10 @@ def test_a_scoped_criteria_chat_edits_only_its_own_behaviour() -> None:
     profile = research_assistant()
     matcher = RecordingMatcher()
     driver = StepDriver(interviewer=ReachesAcrossInterviewer(), matcher=matcher)
-    state = SessionState(
+    state = InterviewState(
         id="s",
         profile=profile,
-        step=SessionStep.CRITERIA,
+        step=InterviewStep.CRITERIA,
         issued_ids=collect_profile_ids(profile),
     )
 
@@ -1064,10 +1064,10 @@ def _suggest_on(profile, interviewer, matcher=None):
     from metis.wizard.contracts import ChoiceResponse
 
     driver = StepDriver(interviewer=interviewer, matcher=matcher)
-    state = SessionState(
+    state = InterviewState(
         id="s",
         profile=profile,
-        step=SessionStep.CRITERIA,
+        step=InterviewStep.CRITERIA,
         issued_ids=collect_profile_ids(profile),
     )
     screen, another = _criterion_action(driver, state, "another", "Suggest one for me")
@@ -1171,10 +1171,10 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
     profile = research_assistant()
     matcher = RecordingMatcher()
     driver = StepDriver(interviewer=ScriptedInterviewer(), matcher=matcher)
-    state = SessionState(
+    state = InterviewState(
         id="s",
         profile=profile,
-        step=SessionStep.CRITERIA,
+        step=InterviewStep.CRITERIA,
         issued_ids=collect_profile_ids(profile),
     )
 

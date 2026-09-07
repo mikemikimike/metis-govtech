@@ -39,7 +39,7 @@ def _header(request: AnyRequest, out: Printer) -> None:
 
     The title and position are finished values the package stamped — the door formats them
     into a panel and composes no sentence about the domain. A request with no metadata (an
-    older session, or any unstamped request) draws nothing, so the body renders exactly as it
+    older interview, or any unstamped request) draws nothing, so the body renders exactly as it
     did before this change.
 
     The panel is rendered to text through `out` rather than printed straight to a terminal,

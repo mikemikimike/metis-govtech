@@ -192,7 +192,7 @@
 }
 
 /* The one scripted transition in the product: arriving at the conversation. When the opening
-   screen gives way to the chat — the first message sent, or a session opened — the pane rises
+   screen gives way to the chat — the first message sent, or an interview opened — the pane rises
    and fades in rather than cutting, so the message the user just typed visibly becomes the
    first turn. It marks a state change, which is the only motion the style allows. */
 @keyframes enter-conversation {

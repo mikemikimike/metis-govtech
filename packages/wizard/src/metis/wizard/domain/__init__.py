@@ -4,7 +4,7 @@ This layer must not import application workflows, wire contracts, or adapters.
 """
 
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
-from metis.wizard.domain.permissions import SessionStep, StepPermissions, owner_of
+from metis.wizard.domain.permissions import InterviewStep, StepPermissions, owner_of
 from metis.wizard.domain.profile import (
     Behaviour,
     Criterion,
@@ -31,7 +31,7 @@ __all__ = [
     "ProductProfile",
     "ProfileNode",
     "Scenario",
-    "SessionStep",
+    "InterviewStep",
     "StepPermissions",
     "Task",
     "owner_of",

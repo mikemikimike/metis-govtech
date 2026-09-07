@@ -1,4 +1,4 @@
-"""Session state, persistence and resume.
+"""Interview state, persistence and resume.
 
 Written before the implementation. The properties here are the ones the design promises out
 loud — "closing the terminal at the personas step loses nothing", "resume is safe" — and they
@@ -13,10 +13,10 @@ from fixtures.profiles import research_assistant
 from fixtures.scripted import ScriptedInterviewer
 
 from metis.wizard.application import (
-    SESSION_FORMAT_VERSION,
-    Session,
-    SessionState,
-    SessionVersionError,
+    INTERVIEW_FORMAT_VERSION,
+    Interview,
+    InterviewState,
+    InterviewVersionError,
     Turn,
 )
 from metis.wizard.contracts import (
@@ -31,20 +31,20 @@ from metis.wizard.contracts import (
     ScenarioCard,
     WizardRequestState,
 )
-from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.permissions import InterviewStep
 
 
-def a_state(**overrides) -> SessionState:
+def a_state(**overrides) -> InterviewState:
     # `pending` is a property over the request list rather than a field, so it is set after
     # construction. Tests keep saying `pending=` because that is what they mean.
     pending = overrides.pop("pending", None)
     defaults = dict(
         id="s-1",
         profile=research_assistant(),
-        step=SessionStep.PERSONAS,
+        step=InterviewStep.PERSONAS,
         history=[Turn(role="user", text="hello"), Turn(role="assistant", text="hi")],
     )
-    state = SessionState(**{**defaults, **overrides})
+    state = InterviewState(**{**defaults, **overrides})
     if pending is not None:
         state.pending = pending
     return state
@@ -57,18 +57,18 @@ def a_request() -> ChoiceRequest:
     )
 
 
-def test_session_fixture_preserves_its_wire_shape(
+def test_interview_fixture_preserves_its_wire_shape(
     fixtures_dir: Path,
 ) -> None:
-    """A representative persisted session keeps its wire shape and subtype information."""
-    path = fixtures_dir / "session_fixture.json"
+    """A representative persisted interview keeps its wire shape and subtype information."""
+    path = fixtures_dir / "interview_state_fixture.json"
     raw = json.loads(path.read_text())
 
-    loaded = SessionState.load(path)
+    loaded = InterviewState.load(path)
 
-    assert loaded.version == SESSION_FORMAT_VERSION
+    assert loaded.version == INTERVIEW_FORMAT_VERSION
     assert loaded.id == raw["id"] == "compat-v1"
-    assert loaded.step is SessionStep.PERSONAS
+    assert loaded.step is InterviewStep.PERSONAS
     assert [turn.model_dump(mode="json") for turn in loaded.history] == raw["history"]
     assert len(loaded.requests) == len(raw["requests"])
     assert loaded.requests[0].prompt == raw["requests"][0]["prompt"]
@@ -80,7 +80,7 @@ def test_session_fixture_preserves_its_wire_shape(
 
 def test_the_live_request_is_not_persisted_separately(tmp_path: Path) -> None:
     """One representation on disk, so the list and the live screen cannot disagree."""
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     a_state(pending=a_request()).save(path)
 
     raw = json.loads(path.read_text())
@@ -96,10 +96,10 @@ def test_the_live_request_is_not_persisted_separately(tmp_path: Path) -> None:
 def test_pending_request_rehydrates_as_its_subclass(tmp_path: Path) -> None:
     """`Literal` discriminators exist so Pydantic rebuilds the right class, not the base."""
     state = a_state(pending=a_request())
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     state.save(path)
 
-    loaded = SessionState.load(path)
+    loaded = InterviewState.load(path)
 
     assert isinstance(loaded.pending, ChoiceRequest)
     assert loaded.pending.options[0].label == "Looks right"
@@ -129,7 +129,7 @@ def test_old_comma_joined_file_field_rehydrates_as_a_list(tmp_path: Path) -> Non
     path = tmp_path / "legacy.json"
     state.save(path)
 
-    loaded = SessionState.load(path)
+    loaded = InterviewState.load(path)
     field = loaded.pending.cards[0].components[0]  # type: ignore[union-attr]
     assert loaded.pending.cards[0].trials == 1  # type: ignore[union-attr]
     assert isinstance(field, CardUploadField)
@@ -147,17 +147,19 @@ def test_a_scenario_field_edit_survives_resume(tmp_path: Path) -> None:
 
     from metis.wizard.application.driver import StepDriver
 
-    path = tmp_path / "session.json"
-    session = Session(
-        a_state(step=SessionStep.SCENARIOS),
+    path = tmp_path / "interview_state.json"
+    interview = Interview(
+        a_state(step=InterviewStep.SCENARIOS),
         path=path,
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )
-    session.next()
-    session.respond(ChoiceResponse(values={"files:S-2": ["policy.pdf", "faq.md"]}))
-    assert any("files:S-2" in turn.text for turn in session.state.history)
+    interview.next()
+    interview.respond(ChoiceResponse(values={"files:S-2": ["policy.pdf", "faq.md"]}))
+    assert any("files:S-2" in turn.text for turn in interview.state.history)
 
-    resumed = Session.resume(path, driver=StepDriver(interviewer=ScriptedInterviewer()))
+    resumed = Interview.resume(
+        path, driver=StepDriver(interviewer=ScriptedInterviewer())
+    )
     request = resumed.next()
     assert resumed.state.profile.scenario("S-2").fixtures == [  # type: ignore[union-attr]
         "policy.pdf",
@@ -175,12 +177,12 @@ def test_a_scenario_field_edit_survives_resume(tmp_path: Path) -> None:
 
 def test_resuming_continues_from_the_pending_request(tmp_path: Path) -> None:
     """Closing the terminal mid-interview loses nothing, and re-pays no model call."""
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     a_state(pending=a_request()).save(path)
 
-    resumed = Session.resume(path)
+    resumed = Interview.resume(path)
 
-    assert resumed.state.step is SessionStep.PERSONAS
+    assert resumed.state.step is InterviewStep.PERSONAS
     assert resumed.state.profile == research_assistant()
     assert isinstance(resumed.state.pending, ChoiceRequest)
     # .next() hands back what was already asked rather than composing a new screen
@@ -190,13 +192,13 @@ def test_resuming_continues_from_the_pending_request(tmp_path: Path) -> None:
 # ── the conversation is a list, and answering is not the same as leaving ───
 
 
-def _driven(step: SessionStep) -> Session:
-    """A session with a real driver, parked at one step."""
+def _driven(step: InterviewStep) -> Interview:
+    """An interview with a real driver, parked at one step."""
     from fixtures.scripted import ScriptedInterviewer
 
     from metis.wizard.application.driver import StepDriver
 
-    return Session(
+    return Interview(
         a_state(step=step, profile=research_assistant()),
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )
@@ -208,35 +210,35 @@ def test_a_tick_does_not_stack_a_second_copy_of_its_screen() -> None:
     The regression this guards: resolving on every response, then recomposing, puts the same
     screen in the conversation twice — the first greyed out for no visible reason.
     """
-    session = _driven(SessionStep.PRIORITISE)
-    session.next()
-    before = session.state.profile.behaviour("EB-2")
+    interview = _driven(InterviewStep.PRIORITISE)
+    interview.next()
+    before = interview.state.profile.behaviour("EB-2")
     assert before is not None and before.measured is False
 
-    session.respond(ChoiceResponse(selected=["tick:EB-2"]))
-    session.next()
+    interview.respond(ChoiceResponse(selected=["tick:EB-2"]))
+    interview.next()
 
-    assert len(session.state.requests) == 1
-    assert session.state.pending is not None  # still live, not a receipt
-    after = session.state.profile.behaviour("EB-2")
+    assert len(interview.state.requests) == 1
+    assert interview.state.pending is not None  # still live, not a receipt
+    after = interview.state.profile.behaviour("EB-2")
     assert after is not None and after.measured is True  # and the tick took
 
 
 def test_a_cleared_behaviour_stays_clear_after_save_and_resume(tmp_path: Path) -> None:
     from metis.wizard.application.driver import StepDriver
 
-    path = tmp_path / "session.json"
-    session = Session(
-        a_state(step=SessionStep.PRIORITISE),
+    path = tmp_path / "interview_state.json"
+    interview = Interview(
+        a_state(step=InterviewStep.PRIORITISE),
         path=path,
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )
-    session.next()
-    before = session.state.profile.behaviour("EB-1")
+    interview.next()
+    before = interview.state.profile.behaviour("EB-1")
     assert before is not None and before.measured is True
 
-    session.respond(ChoiceResponse(selected=["tick:EB-1"]))
-    resumed = Session.resume(
+    interview.respond(ChoiceResponse(selected=["tick:EB-1"]))
+    resumed = Interview.resume(
         path,
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )
@@ -251,22 +253,22 @@ def test_a_cleared_behaviour_stays_clear_after_save_and_resume(tmp_path: Path) -
 
 
 def test_continuing_resolves_the_screen_behind_it() -> None:
-    session = _driven(SessionStep.PRIORITISE)
-    session.next()
+    interview = _driven(InterviewStep.PRIORITISE)
+    interview.next()
 
-    session.respond(ChoiceResponse(selected=["continue"]))
-    session.next()
+    interview.respond(ChoiceResponse(selected=["continue"]))
+    interview.next()
 
-    assert len(session.state.requests) == 2
-    assert session.state.requests[0].state is WizardRequestState.RESOLVED
-    assert session.state.requests[1].state is WizardRequestState.PENDING
-    assert session.state.step is SessionStep.CRITERIA
+    assert len(interview.state.requests) == 2
+    assert interview.state.requests[0].state is WizardRequestState.RESOLVED
+    assert interview.state.requests[1].state is WizardRequestState.PENDING
+    assert interview.state.step is InterviewStep.CRITERIA
 
 
 def test_a_resolved_screen_records_what_was_chosen() -> None:
     """A receipt saying "Looks right · Chat about it · I'll add one" tells you nothing."""
-    session = _driven(SessionStep.BEHAVIOURS)
-    offered = session.next()
+    interview = _driven(InterviewStep.BEHAVIOURS)
+    offered = interview.next()
     assert isinstance(offered, ChoiceRequest)
     assert [o.id.action for o in offered.options] == ["accept", "chat", "add", "add"]
     assert [o.id.target for o in offered.options if o.id.action == "add"] == [
@@ -274,9 +276,9 @@ def test_a_resolved_screen_records_what_was_chosen() -> None:
         "T-2",
     ]
 
-    session.respond(ChoiceResponse(selected=["accept"]))
+    interview.respond(ChoiceResponse(selected=["accept"]))
 
-    resolved = session.state.requests[0]
+    resolved = interview.state.requests[0]
     assert isinstance(resolved, ChoiceRequest)
     chosen = {o.id.action: o.selected for o in resolved.options}
     assert chosen["accept"] is True
@@ -317,11 +319,11 @@ def test_resolved_typed_requests_carry_the_users_answer() -> None:
     ]
 
     for request, response, expected in cases:
-        session = Session(a_state(pending=request))
+        interview = Interview(a_state(pending=request))
 
-        session.respond(response)
+        interview.respond(response)
 
-        resolved = session.state.requests[0]
+        resolved = interview.state.requests[0]
         assert isinstance(resolved, (ChatRequest, FormRequest))
         assert resolved.state is WizardRequestState.RESOLVED
         assert resolved.answer == expected
@@ -350,10 +352,10 @@ def test_a_targeted_follow_up_keeps_its_target_across_save_and_resume(
     )
 
     for index, request in enumerate((chat, form)):
-        path = tmp_path / f"session-{index}.json"
+        path = tmp_path / f"interview-{index}.json"
         a_state(pending=request).save(path)
 
-        resumed = SessionState.load(path)
+        resumed = InterviewState.load(path)
 
         pending = resumed.pending
         assert isinstance(pending, (ChatRequest, FormRequest))
@@ -363,42 +365,44 @@ def test_a_targeted_follow_up_keeps_its_target_across_save_and_resume(
 
 def test_going_back_leaves_the_abandoned_screen_in_the_conversation() -> None:
     """Back sets the step. It does not rewrite what already happened."""
-    session = _driven(SessionStep.SCENARIOS)
-    session.next()
-    scenarios_before = len(session.state.profile.scenarios)
+    interview = _driven(InterviewStep.SCENARIOS)
+    interview.next()
+    scenarios_before = len(interview.state.profile.scenarios)
 
-    session.back(SessionStep.PERSONAS)
-    session.next()
+    interview.back(InterviewStep.PERSONAS)
+    interview.next()
 
-    assert len(session.state.requests) == 2
-    assert session.state.requests[0].state is WizardRequestState.RESOLVED
-    assert session.state.step is SessionStep.PERSONAS
-    assert len(session.state.profile.scenarios) == scenarios_before  # nothing discarded
+    assert len(interview.state.requests) == 2
+    assert interview.state.requests[0].state is WizardRequestState.RESOLVED
+    assert interview.state.step is InterviewStep.PERSONAS
+    assert (
+        len(interview.state.profile.scenarios) == scenarios_before
+    )  # nothing discarded
 
 
-def test_a_version_six_session_is_refused(tmp_path: Path) -> None:
+def test_a_version_six_interview_is_refused(tmp_path: Path) -> None:
     """The list replaced the single pending slot, so older files are not half-understood."""
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     path.write_text('{"version": 6, "id": "s-1", "profile": {}, "pending": {}}')
 
-    with pytest.raises(SessionVersionError) as exc:
-        SessionState.load(path)
+    with pytest.raises(InterviewVersionError) as exc:
+        InterviewState.load(path)
 
     message = str(exc.value)
     assert "6" in message
-    assert str(SESSION_FORMAT_VERSION) in message
+    assert str(INTERVIEW_FORMAT_VERSION) in message
     assert str(path) in message
 
 
 def test_the_write_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A crash mid-write leaves the previous good session, not a truncated file.
+    """A crash mid-write leaves the previous good interview, not a truncated file.
 
     That is the difference between losing one turn and losing the interview plus every model
     call already paid for.
     """
-    import metis.wizard.contracts.session_state as state_module
+    import metis.wizard.contracts.interview_state as state_module
 
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     a_state().save(path)
     good = path.read_text()
 
@@ -414,27 +418,27 @@ def test_the_write_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_saving_leaves_no_temp_files(tmp_path: Path) -> None:
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     a_state().save(path)
     a_state().save(path)
 
-    assert [p.name for p in tmp_path.iterdir()] == ["session.json"]
+    assert [p.name for p in tmp_path.iterdir()] == ["interview_state.json"]
 
 
 # ── the version check ──────────────────────────────────────────────────────
 
 
-def test_an_older_session_file_is_refused_by_name(tmp_path: Path) -> None:
+def test_an_older_interview_file_is_refused_by_name(tmp_path: Path) -> None:
     """Refused with both versions and the path — not a Pydantic traceback about a field."""
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     path.write_text('{"version": 0, "id": "s-1", "profile": {}}')
 
-    with pytest.raises(SessionVersionError) as exc:
-        SessionState.load(path)
+    with pytest.raises(InterviewVersionError) as exc:
+        InterviewState.load(path)
 
     message = str(exc.value)
     assert "0" in message
-    assert str(SESSION_FORMAT_VERSION) in message
+    assert str(INTERVIEW_FORMAT_VERSION) in message
     assert str(path) in message
 
 
@@ -444,34 +448,34 @@ def test_the_version_is_checked_before_anything_else_parses(tmp_path: Path) -> N
     Otherwise the promise that resume is safe is kept only by luck — a changed model would
     surface as a validation error about a field nobody has heard of.
     """
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     path.write_text('{"version": 0, "profile": {"nonsense": true}, "step": "invented"}')
 
-    with pytest.raises(SessionVersionError):
-        SessionState.load(path)
+    with pytest.raises(InterviewVersionError):
+        InterviewState.load(path)
 
 
 def test_a_current_version_file_loads(tmp_path: Path) -> None:
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     a_state().save(path)
 
-    assert SessionState.load(path).version == SESSION_FORMAT_VERSION
+    assert InterviewState.load(path).version == INTERVIEW_FORMAT_VERSION
 
 
 def test_a_request_without_step_metadata_still_loads(tmp_path: Path) -> None:
-    """The header fields are optional, so a session saved before they existed still resumes.
+    """The header fields are optional, so an interview saved before they existed still resumes.
 
     `title`, `step` and `steps` were added to `WizardRequest` after the original request shape. A
-    `session.json` whose stored request predates them has no such keys; because the fields
+    `interview_state.json` whose stored request predates them has no such keys; because the fields
     default to `None`, it must validate and simply render without a header rather than being
-    rejected for missing metadata. The session version may still advance for a separate wire
+    rejected for missing metadata. The interview version may still advance for a separate wire
     contract change, as it does for the scenario-card discriminator in this change.
     """
-    path = tmp_path / "session.json"
+    path = tmp_path / "interview_state.json"
     path.write_text(
         json.dumps(
             {
-                "version": SESSION_FORMAT_VERSION,
+                "version": INTERVIEW_FORMAT_VERSION,
                 "id": "pre-metadata",
                 "profile": research_assistant().model_dump(mode="json"),
                 "step": "personas",
@@ -490,7 +494,7 @@ def test_a_request_without_step_metadata_still_loads(tmp_path: Path) -> None:
         )
     )
 
-    loaded = SessionState.load(path)
+    loaded = InterviewState.load(path)
 
     assert isinstance(loaded.pending, ChoiceRequest)
     assert loaded.pending.title is None
@@ -503,68 +507,68 @@ def test_a_request_without_step_metadata_still_loads(tmp_path: Path) -> None:
 
 def test_back_sets_the_step_and_nothing_else() -> None:
     """Not a mechanism — nothing is truncated and nothing is replayed."""
-    session = Session(a_state(step=SessionStep.SCENARIOS))
-    before = session.state.profile.model_copy(deep=True)
-    history_length = len(session.state.history)
+    interview = Interview(a_state(step=InterviewStep.SCENARIOS))
+    before = interview.state.profile.model_copy(deep=True)
+    history_length = len(interview.state.history)
 
-    session.back(SessionStep.PRIORITISE)
+    interview.back(InterviewStep.PRIORITISE)
 
-    assert session.state.step is SessionStep.PRIORITISE
+    assert interview.state.step is InterviewStep.PRIORITISE
     assert (
-        session.state.profile == before
+        interview.state.profile == before
     )  # every scenario, persona and criterion intact
-    assert len(session.state.history) == history_length
+    assert len(interview.state.history) == history_length
 
 
 # ── the corridor ───────────────────────────────────────────────────────────
 
 
 def test_next_returns_none_exactly_when_finished() -> None:
-    session = Session(a_state(step=SessionStep.DONE))
+    interview = Interview(a_state(step=InterviewStep.DONE))
 
-    assert session.next() is None
+    assert interview.next() is None
 
 
 def test_respond_records_the_turn_and_saves(tmp_path: Path) -> None:
     from metis.wizard.contracts import ChatRequest, ChatResponse
 
-    path = tmp_path / "session.json"
-    session = Session(
+    path = tmp_path / "interview_state.json"
+    interview = Interview(
         a_state(pending=ChatRequest(prompt="What does it do?")), path=path
     )
 
-    session.respond(ChatResponse(text="It answers research questions."))
+    interview.respond(ChatResponse(text="It answers research questions."))
 
-    assert session.state.pending is None
-    assert session.state.history[-1].text == "It answers research questions."
+    assert interview.state.pending is None
+    assert interview.state.history[-1].text == "It answers research questions."
     assert path.exists()
-    assert SessionState.load(path).history[-1].role == "user"
+    assert InterviewState.load(path).history[-1].role == "user"
 
 
-def test_a_fresh_session_starts_at_clarify() -> None:
-    session = Session.start(
+def test_a_fresh_interview_starts_at_clarify() -> None:
+    interview = Interview.start(
         ProductProfile(product=Product(name="X", description="", users=""))
     )
 
-    assert session.state.step is SessionStep.CLARIFY
-    assert session.state.id
+    assert interview.state.step is InterviewStep.CLARIFY
+    assert interview.state.id
 
 
 def test_product_writes_are_persisted_before_the_next_question(tmp_path: Path) -> None:
     from metis.wizard.application.driver import StepDriver
 
-    session = Session.start(
+    interview = Interview.start(
         ProductProfile(product=Product(name="", description="", users="")),
-        path=tmp_path / "session.json",
+        path=tmp_path / "interview_state.json",
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )
 
-    opening = session.next()
+    opening = interview.next()
     assert opening is not None
-    session.respond(ChatResponse(text="It answers research questions."))
-    question = session.next()
+    interview.respond(ChatResponse(text="It answers research questions."))
+    question = interview.next()
 
-    saved = SessionState.load(tmp_path / "session.json")
+    saved = InterviewState.load(tmp_path / "interview_state.json")
     assert saved.history[0].role == "assistant"
     assert saved.history[0].text == opening.prompt
     assert saved.profile.product.name == "Research assistant"
@@ -579,10 +583,10 @@ def test_product_line_breaks_survive_persistence_and_prompt_composition(
 
     profile = research_assistant()
     profile.product.detail = "First line.\nSecond line."
-    path = tmp_path / "session.json"
-    SessionState(id="s", profile=profile).save(path)
+    path = tmp_path / "interview_state.json"
+    InterviewState(id="s", profile=profile).save(path)
 
-    loaded = SessionState.load(path)
+    loaded = InterviewState.load(path)
     prompt = prompts.scenarios(loaded.profile)
 
     assert loaded.profile.product.detail == "First line.\nSecond line."

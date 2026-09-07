@@ -118,7 +118,7 @@ export type RequestState = "pending" | "resolved";
 // Fields every request shares, a one-directional projection of the interview's position that
 // the package stamps on so a door can show a header and mark step boundaries. They never come
 // back in a response. `step` here is the per-request 1-based step position — distinct from the
-// `step` on `SessionView`/`SessionSummary`, which is the session's *current* step as a string.
+// `step` on `InterviewView`/`InterviewSummary`, which is the interview's *current* step as a string.
 // Optional because they are additive: an older persisted request omits them and renders as
 // before.
 interface RequestHeader {
@@ -242,7 +242,7 @@ export interface ProductProfile {
 
 // ── the one payload that serves all three panes ──────────────────────────────
 
-export interface SessionView {
+export interface InterviewView {
   id: string;
   step: string;
   busy_message: string;
@@ -251,7 +251,7 @@ export interface SessionView {
   profile: ProductProfile;
 }
 
-export interface SessionSummary {
+export interface InterviewSummary {
   id: string;
   title: string;
   step: string;
@@ -260,13 +260,13 @@ export interface SessionSummary {
 
 export interface InterviewConfiguration {
   opening_question: string;
-  // Package-owned status copy, keyed by session step (the string carried on `SessionView.step`).
-  // The progress caption reads the line for the session's current step from here.
+  // Package-owned status copy, keyed by interview step (the string carried on `InterviewView.step`).
+  // The progress caption reads the line for the interview's current step from here.
   statuses: Record<string, string>;
 }
 
-// Fixture metadata is safe to send over the session door. File bytes stay in the upload and
-// specification requests, never in a session view or a choice response.
+// Fixture metadata is safe to send over the interview door. File bytes stay in the upload and
+// specification requests, never in a interview view or a choice response.
 export interface FixtureMetadata {
   name: string;
   size: number;
@@ -327,25 +327,25 @@ const POST = {
 export const api = {
   interview: () => call<InterviewConfiguration>("/api/interview"),
 
-  listSessions: () => call<SessionSummary[]>("/api/sessions"),
+  listInterviews: () => call<InterviewSummary[]>("/api/interviews"),
 
-  createSession: () => call<SessionView>("/api/sessions", { ...POST }),
+  createInterview: () => call<InterviewView>("/api/interviews", { ...POST }),
 
-  readSession: (id: string) =>
-    call<SessionView>(`/api/sessions/${encodeURIComponent(id)}`),
+  readInterview: (id: string) =>
+    call<InterviewView>(`/api/interviews/${encodeURIComponent(id)}`),
 
   respond: (id: string, response: UserResponse) =>
-    call<SessionView>(`/api/sessions/${encodeURIComponent(id)}/respond`, {
+    call<InterviewView>(`/api/interviews/${encodeURIComponent(id)}/respond`, {
       ...POST,
       body: JSON.stringify(response),
     }),
 
   experimentUrl: (id: string) =>
-    `/api/sessions/${encodeURIComponent(id)}/experiment.zip`,
+    `/api/interviews/${encodeURIComponent(id)}/experiment.zip`,
 
   fixtures: (id: string) =>
     call<FixtureMetadata[]>(
-      `/api/sessions/${encodeURIComponent(id)}/fixtures`,
+      `/api/interviews/${encodeURIComponent(id)}/fixtures`,
     ),
 
   uploadFixtures: async (
@@ -355,14 +355,14 @@ export const api = {
     const form = new FormData();
     for (const file of files) form.append("files", file, file.name);
     return call<FixtureUploadResponse>(
-      `/api/sessions/${encodeURIComponent(id)}/fixtures`,
+      `/api/interviews/${encodeURIComponent(id)}/fixtures`,
       { method: "POST", body: form },
     );
   },
 
   deleteFixture: (id: string, name: string) =>
     call<{ fixtures: FixtureMetadata[] }>(
-      `/api/sessions/${encodeURIComponent(id)}/fixtures/${encodeURIComponent(name)}`,
+      `/api/interviews/${encodeURIComponent(id)}/fixtures/${encodeURIComponent(name)}`,
       { method: "DELETE" },
     ),
 

@@ -1,4 +1,4 @@
-// The opening screen, shown in the middle region whenever no session is open — on first run
+// The opening screen, shown in the middle region whenever no interview is open — on first run
 // and every time "New evaluation" is pressed. It leads with the chat input rather than a
 // button: the way in is to start describing the product, exactly as a chat app opens.
 //

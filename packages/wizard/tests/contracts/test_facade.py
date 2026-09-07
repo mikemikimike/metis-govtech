@@ -6,9 +6,9 @@ from pathlib import Path
 from metis.wizard import (
     AnyRequest,
     CompilationError,
+    Interview,
+    InterviewState,
     ProductProfile,
-    Session,
-    SessionState,
     UserResponse,
     WizardRequest,
     compile_experiment,
@@ -18,9 +18,9 @@ from metis.wizard import (
 )
 
 
-def test_headless_facade_exports_session_contract_and_compiler() -> None:
-    assert Session
-    assert SessionState
+def test_headless_facade_exports_interview_contract_and_compiler() -> None:
+    assert Interview
+    assert InterviewState
     assert ProductProfile
     assert WizardRequest
     assert UserResponse
@@ -32,14 +32,14 @@ def test_headless_facade_exports_session_contract_and_compiler() -> None:
     assert write_review
 
 
-def test_session_fixture_loads_through_the_facade(fixtures_dir: Path) -> None:
+def test_interview_fixture_loads_through_the_facade(fixtures_dir: Path) -> None:
     """The stable facade preserves the persisted wire shape and concrete request type."""
-    from metis.wizard import SessionState
+    from metis.wizard import InterviewState
     from metis.wizard.contracts import ChoiceRequest
 
-    path = fixtures_dir / "session_fixture.json"
+    path = fixtures_dir / "interview_state_fixture.json"
     raw = json.loads(path.read_text())
-    state = SessionState.load(path)
+    state = InterviewState.load(path)
 
     assert state.profile.model_dump(mode="json") == raw["profile"]
     assert state.step.value == raw["step"]

@@ -1,114 +1,219 @@
-"""Load and validate non-model interview settings and status copy."""
+"""The object a door talks to.
+
+    while (request := interview.next()) is not None:
+        interview.respond(render(request))
+
+`.next()` composes the screen for wherever the interview is, or hands back the one already
+pending. `.respond()` applies what came back and moves on. `.profile()` exists for a door
+that wants to draw the read-only document pane — no door needs it to render a request.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
-from importlib import resources
+import uuid
+from pathlib import Path
+from typing import TYPE_CHECKING, Self
 
-import yaml
+from metis.wizard.contracts.conversation import (
+    AnyRequest,
+    AnyResponse,
+    ChatRequest,
+    ChatResponse,
+    ChoiceRequest,
+    FormRequest,
+    FormResponse,
+    options_of,
+)
+from metis.wizard.contracts.interview_state import InterviewState, Turn
+from metis.wizard.domain.permissions import InterviewStep
+from metis.wizard.domain.profile import collect_profile_ids
 
-from metis.wizard.domain.permissions import SessionStep
-
-INTERVIEW_FILE = "interview.yaml"
-
-
-class InterviewConfigError(RuntimeError):
-    """The package-owned interview configuration cannot be used."""
-
-
-@dataclass(frozen=True)
-class InterviewConfig:
-    """A complete, validated snapshot of ``interview.yaml``."""
-
-    clarify_turn_cap: int
-    opening_question: str
-    statuses: Mapping[SessionStep, str]
-
-
-def _error(key: str, detail: str) -> InterviewConfigError:
-    return InterviewConfigError(f"{INTERVIEW_FILE} key '{key}' {detail}")
+if TYPE_CHECKING:
+    from metis.wizard.application.driver import StepDriver
+    from metis.wizard.domain.profile import ProductProfile
 
 
-def _mapping(value: object, key: str) -> Mapping[object, object]:
-    if not isinstance(value, Mapping):
-        raise _error(key, "must be a mapping.")
-    return value
+class Interview:
+    def __init__(
+        self,
+        state: InterviewState,
+        *,
+        path: Path | None = None,
+        driver: StepDriver | None = None,
+    ) -> None:
+        self.state = state
+        self.path = path
+        self._driver = driver
 
+    # ── lifecycle ──────────────────────────────────────────────────────────
 
-def _required(mapping: Mapping[object, object], key: str) -> object:
-    name = key.rsplit(".", maxsplit=1)[-1]
-    if name not in mapping:
-        raise _error(key, "is missing.")
-    return mapping[name]
-
-
-def _read_config_text() -> str:
-    try:
-        return (
-            resources.files("metis.wizard")
-            .joinpath(INTERVIEW_FILE)
-            .read_text(encoding="utf-8")
+    @classmethod
+    def start(
+        cls,
+        profile: ProductProfile,
+        *,
+        path: Path | None = None,
+        driver: StepDriver | None = None,
+        interview_id: str | None = None,
+    ) -> Self:
+        state = InterviewState(
+            id=interview_id or f"wizard-{uuid.uuid4().hex[:8]}",
+            profile=profile,
+            step=InterviewStep.CLARIFY,
+            issued_ids=collect_profile_ids(profile),
         )
-    except (FileNotFoundError, ModuleNotFoundError) as exc:
-        raise _error("<file>", "is missing.") from exc
+        return cls(state, path=path, driver=driver)
+
+    @classmethod
+    def resume(cls, path: Path, *, driver: StepDriver | None = None) -> Self:
+        """Pick up where it left off. No model call already paid for is re-paid."""
+        return cls(InterviewState.load(path), path=Path(path), driver=driver)
+
+    # ── the corridor ───────────────────────────────────────────────────────
+
+    def next(self) -> AnyRequest | None:
+        """The screen to draw, or None when the interview is finished."""
+        if self.state.step is InterviewStep.DONE:
+            return None
+
+        # A pending request is one already asked and not yet answered. Handing it back rather
+        # than recomposing is what makes resume free: the screen the user was looking at is
+        # the screen they come back to, and no model call is repeated to rebuild it.
+        if self.state.pending is not None:
+            return self.state.pending
+
+        request = self._compose()
+        self.state.pending = request
+        self._record("assistant", request.prompt)
+        self.save()
+        return request
+
+    def respond(self, response: AnyResponse) -> None:
+        """Apply a response, then persist. The save is the last thing that happens."""
+        request = self.state.pending
+        if request is None:
+            raise RuntimeError("respond() called with nothing pending.")
+
+        self._record("user", _describe(response))
+        _mark_chosen(request, response)
+        _record_answer(request, response)
+
+        step_before = self.state.step
+        self.state.resolve_pending()
+
+        if self._driver is not None:
+            self._driver.handle(self.state, request, response)
+
+        # A screen is answered when it is left, not when it is replied to. If the step did
+        # not move and the driver composed nothing, the user toggled something on the screen
+        # they are still looking at — so drop the receipt and let `next()` rebuild that same
+        # screen with the toggle showing. Keeping it would put two copies of one screen in
+        # the conversation, the first of them greyed out for no reason the user can see.
+        #
+        # This is for *choice* screens only, where "toggle then recompose in place" is the
+        # mechanism. A chat or form turn is a real exchange, not a toggle — and clarify holds
+        # the step still on purpose (the answer goes to history and the next question is
+        # composed), so a chat receipt looks identical to a tick here. Popping it would
+        # discard the whole turn, which is exactly why the clarify conversation was never
+        # shown. Those receipts stay.
+        if (
+            isinstance(request, ChoiceRequest)
+            and self.state.step is step_before
+            and self.state.pending is None
+        ):
+            self.state.requests.pop()
+
+        self.save()
+
+    def back(self, step: InterviewStep) -> None:
+        """`← Back` is an assignment, not a mechanism.
+
+        Nothing is truncated and nothing is replayed. What happens to work written against
+        an older version of a node is decided separately, by the edit cascade — not here.
+
+        The screen being left stays in the conversation as a receipt. Removing it would be a
+        second mechanism, and it would make the transcript claim the user never went there.
+        """
+        self.state.step = step
+        self.state.pending = None
+        self.save()
+
+    # ── what a door may read ───────────────────────────────────────────────
+
+    def profile(self) -> ProductProfile:
+        """For drawing the read-only document pane. Not needed to render a request."""
+        return self.state.profile
+
+    def busy_message(self) -> str:
+        """Finished package copy for work started from the current phase."""
+        from metis.wizard.application.config import status_for
+
+        return status_for(self.state.step)
+
+    # ── internals ──────────────────────────────────────────────────────────
+
+    def _compose(self) -> AnyRequest:
+        if self._driver is None:
+            raise RuntimeError(
+                "This interview has no driver, so it cannot compose a screen. "
+                "Pass one to Interview.start() or Interview.resume()."
+            )
+        return self._driver.compose(self.state)
+
+    def _record(self, role: str, text: str) -> None:
+        if text:
+            self.state.history.append(Turn(role=role, text=text))  # type: ignore[arg-type]
+
+    def save(self) -> None:
+        if self.path is not None:
+            self.state.save(self.path)
 
 
-def load_interview_config() -> InterviewConfig:
-    """Read and validate a fresh interview-configuration snapshot."""
-    try:
-        raw = yaml.safe_load(_read_config_text())
-    except yaml.YAMLError as exc:
-        raise _error("<document>", f"is not valid YAML: {exc}.") from exc
+def _mark_chosen(request: AnyRequest, response: AnyResponse) -> None:
+    """Record what was picked, on the request itself.
 
-    document = _mapping(raw, "<document>")
-    settings = _mapping(_required(document, "settings"), "settings")
-    statuses = _mapping(_required(document, "statuses"), "statuses")
+    A receipt has to say what was chosen, or a greyed screen reading "Looks right · Chat
+    about it · I'll add one" tells the reader nothing. The alternative is persisting the
+    response beside the request, which is a second record of one fact. `Option.selected`
+    already exists and already means "this one", so the request answers for itself.
+    """
+    selected = set(getattr(response, "selected", None) or [])
+    if not selected:
+        return
 
-    turn_cap = _required(settings, "settings.clarify_turn_cap")
-    if isinstance(turn_cap, bool) or not isinstance(turn_cap, int) or turn_cap <= 0:
-        raise _error("settings.clarify_turn_cap", "must be a positive integer.")
-
-    opening_question = _required(document, "opening_question")
-    if not isinstance(opening_question, str) or not opening_question.strip():
-        raise _error("opening_question", "must be a non-empty string.")
-
-    checked: dict[SessionStep, str] = {}
-    for step in SessionStep:
-        key = f"statuses.{step.value}"
-        value = _required(statuses, key)
-        if not isinstance(value, str) or not value.strip():
-            raise _error(key, "must be a non-empty string.")
-        checked[step] = value
-
-    return InterviewConfig(
-        clarify_turn_cap=turn_cap,
-        opening_question=opening_question,
-        statuses=checked,
-    )
+    for key, option in options_of(request).items():
+        if key in selected:
+            option.selected = True
 
 
-def clarify_turn_cap() -> int:
-    """Return the current maximum number of clarify questions."""
-    return load_interview_config().clarify_turn_cap
+def _record_answer(request: AnyRequest, response: AnyResponse) -> None:
+    """Stamp the user's own words onto the request they answered.
+
+    A choice marks the chosen `Option.selected` and so describes itself when redrawn; a chat
+    and a form have no option to mark, so the reply is recorded on the request instead. Without
+    this, a resolved chat block shows the question with nothing beneath it — the whole clarify
+    exchange reads as one-sided, because the transcript is drawn from the requests alone and a
+    `ChatRequest` carries only its prompt.
+    """
+    if isinstance(request, ChatRequest) and isinstance(response, ChatResponse):
+        request.answer = response.text
+    elif isinstance(request, FormRequest) and isinstance(response, FormResponse):
+        request.answer = dict(response.values)
 
 
-def status_for(step: SessionStep) -> str:
-    """Return the current package-owned status for an interview step."""
-    return load_interview_config().statuses[step]
+def _describe(response: AnyResponse) -> str:
+    """The transcript line for a response.
 
-
-def opening_question() -> str:
-    """Return the package-owned question shown before the first model call."""
-    return load_interview_config().opening_question
-
-
-__all__ = [
-    "INTERVIEW_FILE",
-    "InterviewConfig",
-    "InterviewConfigError",
-    "clarify_turn_cap",
-    "load_interview_config",
-    "opening_question",
-    "status_for",
-]
+    A choice is an event rather than a message, so it gets the option ids it carried —
+    enough to reconstruct what the user did without pretending they typed a sentence.
+    """
+    text = getattr(response, "text", None)
+    if text is not None:
+        return str(text)
+    values = getattr(response, "values", None)
+    if values:
+        return "; ".join(f"{k}: {v}" for k, v in values.items())
+    selected = getattr(response, "selected", None)
+    if selected is not None:
+        return ", ".join(selected)
+    return ""

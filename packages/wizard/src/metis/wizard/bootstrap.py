@@ -21,9 +21,9 @@ if TYPE_CHECKING:
     from metis.wizard.application.interviewer import Interviewer
 
 
-def platform_interviewer(session_id: str | None = None) -> Interviewer:
+def platform_interviewer(interview_id: str | None = None) -> Interviewer:
     """Construct the real gateway-backed interviewer for one CLI run."""
-    return GatewayInterviewer(session_id=session_id)
+    return GatewayInterviewer(interview_id=interview_id)
 
 
 def create_cli_app(
@@ -73,7 +73,7 @@ def serve(
     import uvicorn
 
     commands._load_env()
-    typer.echo(f"Wizard at http://{host}:{port} — sessions in {root}/")
+    typer.echo(f"Wizard at http://{host}:{port} — interviews in {root}/")
     uvicorn.run(create_web_app(root=root), host=host, port=port, log_level="warning")
 
 

@@ -230,8 +230,8 @@ def test_review_trial_count_matches_the_profile() -> None:
     assert "## Scenarios" in review
 
 
-def test_review_needs_no_session() -> None:
-    """A hand-written profile renders — no step, no history, no session id."""
+def test_review_needs_no_interview() -> None:
+    """A hand-written profile renders — no step, no history, no interview id."""
     assert render_review(research_assistant(), EXPERIMENT_ID).startswith(
         "# Research assistant"
     )

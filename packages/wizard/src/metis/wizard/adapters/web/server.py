@@ -1,8 +1,8 @@
 """The web door.
 
 The same two lines every door runs, taken one turn at a time. A browser cannot hold a
-conversation in a process variable between requests, so each one loads the session, applies at
-most one response, and saves — which is the arrangement `SessionState` was split out for.
+conversation in a process variable between requests, so each one loads the interview, applies at
+most one response, and saves — which is the arrangement `InterviewState` was split out for.
 
 Nothing here composes a sentence about the domain. The payload carries the requests the
 package composed and the profile it built; the words are all already in them.
@@ -23,8 +23,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import TypeAdapter
 from starlette.background import BackgroundTask
 
-from metis.wizard.adapters.web.store import SessionStore
-from metis.wizard.application import Session, SessionVersionError
+from metis.wizard.adapters.web.store import InterviewStore
+from metis.wizard.application import Interview, InterviewVersionError
 from metis.wizard.application.compile import (
     CompilationError,
     SpecificationError,
@@ -53,9 +53,9 @@ def _fixture_library(path: Path) -> FixtureLibrary:
     return FixtureLibrary(path.parent / "fixtures")
 
 
-def _profile_fixture_names(session: Session) -> list[str]:
+def _profile_fixture_names(interview: Interview) -> list[str]:
     return [
-        name for scenario in session.profile().scenarios for name in scenario.fixtures
+        name for scenario in interview.profile().scenarios for name in scenario.fixtures
     ]
 
 
@@ -120,21 +120,21 @@ def _driver(interviewer: Interviewer) -> StepDriver:
     return StepDriver(interviewer=interviewer, matcher=matcher)
 
 
-def _view(session: Session) -> dict[str, Any]:
+def _view(interview: Interview) -> dict[str, Any]:
     """Everything the three panes need, in one payload.
 
     `next()` is called here rather than by the caller because composing the next screen is
     what makes the payload current — the conversation always ends at the screen you are
     looking at.
     """
-    request = session.next()
+    request = interview.next()
     return {
-        "id": session.state.id,
-        "step": session.state.step.value,
-        "busy_message": session.busy_message(),
+        "id": interview.state.id,
+        "step": interview.state.step.value,
+        "busy_message": interview.busy_message(),
         "done": request is None,
-        "requests": [r.model_dump(mode="json") for r in session.state.requests],
-        "profile": session.profile().model_dump(mode="json"),
+        "requests": [r.model_dump(mode="json") for r in interview.state.requests],
+        "profile": interview.profile().model_dump(mode="json"),
     }
 
 
@@ -150,18 +150,18 @@ def create_app(
     provider and never reach the network.
     """
     app = FastAPI(title="METIS wizard", docs_url=None, redoc_url=None)
-    store = SessionStore(root)
+    store = InterviewStore(root)
 
-    def _session(session_id: str) -> Session:
-        path = store.path_for(session_id)
+    def _interview(interview_id: str) -> Interview:
+        path = store.path_for(interview_id)
         if path is None:
-            raise HTTPException(404, f"No session {session_id}.")
+            raise HTTPException(404, f"No interview {interview_id}.")
         try:
-            return Session.resume(path, driver=_driver(_interviewer(session_id)))
-        except SessionVersionError as exc:
+            return Interview.resume(path, driver=_driver(_interviewer(interview_id)))
+        except InterviewVersionError as exc:
             raise HTTPException(409, str(exc)) from exc
 
-    def _interviewer(session_id: str | None = None) -> Interviewer:
+    def _interviewer(interview_id: str | None = None) -> Interviewer:
         try:
             parameters = inspect.signature(interviewer_factory).parameters
         except (TypeError, ValueError):
@@ -171,39 +171,39 @@ def create_app(
                 raise HTTPException(503, str(exc)) from exc
 
         try:
-            session_parameter = parameters.get("session_id")
+            id_parameter = parameters.get("interview_id")
             accepts_keywords = any(
                 parameter.kind is inspect.Parameter.VAR_KEYWORD
                 for parameter in parameters.values()
             )
-            if accepts_keywords or session_parameter is not None:
+            if accepts_keywords or id_parameter is not None:
                 if (
-                    session_parameter is not None
-                    and session_parameter.kind is inspect.Parameter.POSITIONAL_ONLY
+                    id_parameter is not None
+                    and id_parameter.kind is inspect.Parameter.POSITIONAL_ONLY
                 ):
-                    return interviewer_factory(session_id)
-                return interviewer_factory(session_id=session_id)
+                    return interviewer_factory(interview_id)
+                return interviewer_factory(interview_id=interview_id)
             return interviewer_factory()
         except InterviewerUnavailable as exc:
             raise HTTPException(503, str(exc)) from exc
 
-    # ── sessions ───────────────────────────────────────────────────────────
+    # ── interviews ───────────────────────────────────────────────────────────
 
     @app.get("/api/interview")
     def interview_configuration() -> dict[str, Any]:
-        """Return package-owned copy needed before a session exists."""
-        from metis.wizard.application.interview import load_interview_config
+        """Return package-owned copy needed before an interview exists."""
+        from metis.wizard.application.config import load_config
 
-        config = load_interview_config()
-        # Statuses are keyed by SessionStep; the door addresses them by the session's
+        config = load_config()
+        # Statuses are keyed by InterviewStep; the door addresses them by the interview's
         # current step string, so send the enum values as plain keys.
         return {
             "opening_question": config.opening_question,
             "statuses": {step.value: text for step, text in config.statuses.items()},
         }
 
-    @app.get("/api/sessions")
-    def list_sessions() -> list[dict[str, Any]]:
+    @app.get("/api/interviews")
+    def list_interviews() -> list[dict[str, Any]]:
         return [
             {
                 "id": s.id,
@@ -214,61 +214,61 @@ def create_app(
             for s in store.list()
         ]
 
-    @app.post("/api/sessions")
-    def create_session() -> dict[str, Any]:
+    @app.post("/api/interviews")
+    def create_interview() -> dict[str, Any]:
         from metis.wizard.contracts import Product, ProductProfile
 
-        session_id = f"wizard-{uuid.uuid4().hex[:8]}"
+        interview_id = f"wizard-{uuid.uuid4().hex[:8]}"
         profile = ProductProfile(product=Product(name="", description="", users=""))
-        session = Session.start(
+        interview = Interview.start(
             profile,
-            path=store.new_path(session_id),
-            driver=_driver(_interviewer(session_id)),
-            session_id=session_id,
+            path=store.new_path(interview_id),
+            driver=_driver(_interviewer(interview_id)),
+            interview_id=interview_id,
         )
-        return _view(session)
+        return _view(interview)
 
-    @app.get("/api/sessions/{session_id}")
-    def read_session(session_id: str) -> dict[str, Any]:
-        return _view(_session(session_id))
+    @app.get("/api/interviews/{interview_id}")
+    def read_interview(interview_id: str) -> dict[str, Any]:
+        return _view(_interview(interview_id))
 
-    @app.post("/api/sessions/{session_id}/respond")
-    def respond(session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        session = _session(session_id)
-        if session.state.pending is None:
+    @app.post("/api/interviews/{interview_id}/respond")
+    def respond(interview_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        interview = _interview(interview_id)
+        if interview.state.pending is None:
             raise HTTPException(409, "Nothing to answer.")
-        session.respond(_response_adapter.validate_python(payload))
-        return _view(session)
+        interview.respond(_response_adapter.validate_python(payload))
+        return _view(interview)
 
     # ── output ─────────────────────────────────────────────────────────────
 
-    @app.get("/api/sessions/{session_id}/experiment.yaml")
-    def experiment(session_id: str) -> FileResponse:
+    @app.get("/api/interviews/{interview_id}/experiment.yaml")
+    def experiment(interview_id: str) -> FileResponse:
         from metis.wizard.application.compile import write_experiment
 
-        path = store.path_for(session_id)
+        path = store.path_for(interview_id)
         if path is None:
-            raise HTTPException(404, f"No session {session_id}.")
-        session = Session.resume(path)
+            raise HTTPException(404, f"No interview {interview_id}.")
+        interview = Interview.resume(path)
         target = path.parent / "experiment.yaml"
-        write_experiment(session.profile(), session.state.id, target)
+        write_experiment(interview.profile(), interview.state.id, target)
         return FileResponse(target, filename="experiment.yaml")
 
-    @app.get("/api/sessions/{session_id}/fixtures")
-    def list_fixtures(session_id: str) -> list[dict[str, Any]]:
-        path = store.path_for(session_id)
+    @app.get("/api/interviews/{interview_id}/fixtures")
+    def list_fixtures(interview_id: str) -> list[dict[str, Any]]:
+        path = store.path_for(interview_id)
         if path is None:
-            raise HTTPException(404, f"No session {session_id}.")
+            raise HTTPException(404, f"No interview {interview_id}.")
         return [item.model_dump(mode="json") for item in _fixture_library(path).list()]
 
-    @app.post("/api/sessions/{session_id}/fixtures")
+    @app.post("/api/interviews/{interview_id}/fixtures")
     def upload_fixtures(
-        session_id: str,
+        interview_id: str,
         files: list[UploadFile] = File(default=[]),
     ) -> dict[str, Any]:
-        path = store.path_for(session_id)
+        path = store.path_for(interview_id)
         if path is None:
-            raise HTTPException(404, f"No session {session_id}.")
+            raise HTTPException(404, f"No interview {interview_id}.")
         library = _fixture_library(path)
         try:
             added = library.upload([(file.filename or "", file.file) for file in files])
@@ -279,16 +279,16 @@ def create_app(
             "fixtures": [item.model_dump(mode="json") for item in library.list()],
         }
 
-    @app.delete("/api/sessions/{session_id}/fixtures/{filename}")
-    def delete_fixture(session_id: str, filename: str) -> dict[str, Any]:
-        path = store.path_for(session_id)
+    @app.delete("/api/interviews/{interview_id}/fixtures/{filename}")
+    def delete_fixture(interview_id: str, filename: str) -> dict[str, Any]:
+        path = store.path_for(interview_id)
         if path is None:
-            raise HTTPException(404, f"No session {session_id}.")
-        session = Session.resume(path)
+            raise HTTPException(404, f"No interview {interview_id}.")
+        interview = Interview.resume(path)
         try:
             _fixture_library(path).delete(
                 filename,
-                referenced=_profile_fixture_names(session),
+                referenced=_profile_fixture_names(interview),
             )
         except FixtureError as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -298,18 +298,18 @@ def create_app(
             ]
         }
 
-    @app.get("/api/sessions/{session_id}/experiment.zip")
-    def experiment_specification(session_id: str) -> FileResponse:
-        path = store.path_for(session_id)
+    @app.get("/api/interviews/{interview_id}/experiment.zip")
+    def experiment_specification(interview_id: str) -> FileResponse:
+        path = store.path_for(interview_id)
         if path is None:
-            raise HTTPException(404, f"No session {session_id}.")
-        session = Session.resume(path)
+            raise HTTPException(404, f"No interview {interview_id}.")
+        interview = Interview.resume(path)
         temporary = temporary_specification_directory(
-            prefix="metis-session-specification-"
+            prefix="metis-interview-specification-"
         )
         try:
-            profile = session.profile()
-            document = compile_experiment(profile, session.state.id)
+            profile = interview.profile()
+            document = compile_experiment(profile, interview.state.id)
             target = temporary / "experiment.zip"
             write_specification(
                 document,
@@ -328,7 +328,7 @@ def create_app(
     # ── the hand-authoring door ──────────────────────────────────────────────
     #
     # The second way in: a form that authors the experiment document directly, with no
-    # interview and no session. These two routes carry no state — the catalogue is read-only,
+    # interview involved. These two routes carry no state — the catalogue is read-only,
     # and the compile route holds the document only for the duration of its response. Neither
     # touches the store.
 

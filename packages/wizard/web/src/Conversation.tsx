@@ -53,9 +53,9 @@ export function Transcript({
         // A light rule ahead of the first block of each new step, so consecutive steps do not
         // read as one unbroken scroll. The boundary is the per-request `step` changing between
         // adjacent blocks — the package stamps it; the door only notices when it moves. Not the
-        // session's current step, which cannot mark the joins between already-resolved blocks in
+        // interview's current step, which cannot mark the joins between already-resolved blocks in
         // the scrollback. The first block starts no divider (nothing precedes it), and a request
-        // with no `step` never introduces one, so the rule degrades to nothing on older sessions.
+        // with no `step` never introduces one, so the rule degrades to nothing on older interviews.
         const prevStep = requests[i - 1]?.step ?? null;
         const startsStep =
           request.step != null && i > 0 && request.step !== prevStep;
@@ -683,7 +683,7 @@ export function Composer({
   request: WizardRequest | undefined;
   busy: boolean;
   onSend: (text: string) => void;
-  // The opening screen has no session yet, so there is no request to derive from — it is a
+  // The opening screen has no interview yet, so there is no request to derive from — it is a
   // way in, always open. Everywhere else the greying rule stands.
   alwaysEnabled?: boolean;
   placeholder?: string;

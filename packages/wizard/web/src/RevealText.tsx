@@ -22,7 +22,7 @@ function usePrefersReducedMotion(): boolean {
 }
 
 // A string is the whole contract. The component knows nothing about the profile field, its path,
-// or the element that presents it. Its first value is the baseline, so reopening a stored session
+// or the element that presents it. Its first value is the baseline, so reopening a stored interview
 // draws complete text; only a later value received by the same mounted component is an arrival.
 export function RevealText({ value }: { value: string }) {
   const reducedMotion = usePrefersReducedMotion();

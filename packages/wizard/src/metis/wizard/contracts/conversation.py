@@ -2,8 +2,8 @@
 
 A CLI, an HTTP server and a pytest fixture are all the same two lines:
 
-    while (request := session.next()) is not None:
-        session.respond(render(request))
+    while (request := interview.next()) is not None:
+        interview.respond(render(request))
 
 `render` is the only thing a door implements, and a door never learns the domain. It does not
 know what a behaviour, a criterion or a persona is — it draws rows, checkboxes, buttons and
@@ -158,7 +158,7 @@ class Card(BaseModel):
 
     The subclasses pin their narrow fields and carry a stable wire discriminator. The door still
     renders both through one shape-driven path; the discriminator exists so Pydantic can preserve
-    subtype-only fields such as a scenario's trial count across HTTP and session persistence.
+    subtype-only fields such as a scenario's trial count across HTTP and interview persistence.
     """
 
     # The base remains useful to shape-only helpers. Concrete cards narrow this to a Literal so
@@ -252,13 +252,13 @@ class WizardRequestState(StrEnum):
 class WizardRequest(BaseModel):
     """Base — what every request shares.
 
-    `title`, `step` and `steps` are a one-directional projection of `SessionState.step`: the
+    `title`, `step` and `steps` are a one-directional projection of `InterviewState.step`: the
     package stamps where the interview is so a door can show it, and they never come back in a
     response. They live on the base, not on `ChoiceRequest`, so a chat question and an
     add-your-own form carry a header too. Optional with `None` defaults — additive, so an
     older persisted request validates and a door that ignores them renders exactly as before.
 
-    A door reads these; it does not derive them. Reading `SessionState.step` door-side would
+    A door reads these; it does not derive them. Reading `InterviewState.step` door-side would
     mean the door learning that `BEHAVIOURS` exists and what to call it — the one thing the
     contract keeps it from knowing.
     """
@@ -278,7 +278,7 @@ class ChatRequest(WizardRequest):
     # and still branch only on request shape. The package reads it back to keep a targeted edit
     # scoped after an HTTP round trip or a resume, so a persisted follow-up cannot silently
     # widen. Optional with an empty default, so a screen-level chat carries nothing and an
-    # older version-2 session validates without a format bump.
+    # older version-2 interview validates without a format bump.
     target: str | None = None
     # What the user typed, stamped on when the request resolves. A choice records what was
     # picked by marking the chosen `Option.selected`; a chat has no option to mark, so the
@@ -314,7 +314,7 @@ class FormRequest(WizardRequest):
 
 
 # `Literal[InteractionType.CHAT]` rather than the bare enum is Pydantic machinery: for it to
-# rebuild the right subclass when loading a session file, each subclass's `type` must be a
+# rebuild the right subclass when loading an interview file, each subclass's `type` must be a
 # *distinct* type. Annotating all three as `InteractionType` makes them indistinguishable.
 AnyRequest: TypeAlias = Annotated[
     ChatRequest | ChoiceRequest | FormRequest,

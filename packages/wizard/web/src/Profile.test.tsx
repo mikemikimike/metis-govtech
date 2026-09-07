@@ -22,19 +22,19 @@ function profile(product: Partial<ProductProfile["product"]> = {}): ProductProfi
 
 function render(
   value: ProductProfile,
-  state: { busy?: boolean; sessionStep?: string } = {},
+  state: { busy?: boolean; interviewStep?: string } = {},
 ): string {
   return renderToStaticMarkup(
     <Profile
       profile={value}
-      sessionStep={state.sessionStep}
+      interviewStep={state.interviewStep}
       busy={state.busy}
       showMetrics={false}
       onShowMetricsChange={() => undefined}
       metricByFqn={new Map()}
       metricsLoading={false}
       metricsError={false}
-      sessionId="wizard-test"
+      interviewId="wizard-test"
     />,
   );
 }
@@ -87,7 +87,7 @@ test("resumed values are complete and preserve paragraphs and line lists", () =>
 });
 
 test("clarify marks only Product and leaves its document content read-only", () => {
-  const markup = render(profile(), { busy: true, sessionStep: "clarify" });
+  const markup = render(profile(), { busy: true, interviewStep: "clarify" });
   const product = section(markup, "Product", "Behaviours");
 
   assert.equal(occurrences(markup, "is-writing"), 1);

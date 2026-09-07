@@ -15,11 +15,11 @@ from typing import TYPE_CHECKING, Literal, TypeAlias, cast
 
 import yaml
 
-from metis.wizard.application.interview import clarify_turn_cap, opening_question
+from metis.wizard.application.config import clarify_turn_cap, opening_question
 from metis.wizard.application.interviewer import ClarifyPhase
 
 if TYPE_CHECKING:
-    from metis.wizard.contracts.session_state import Turn
+    from metis.wizard.contracts.interview_state import Turn
     from metis.wizard.domain.profile import ProductProfile
 
 PROMPTS_FILE = "prompts.yaml"

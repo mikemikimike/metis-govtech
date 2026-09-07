@@ -105,7 +105,7 @@ def clear_for_regeneration(
     behaviour no scenario covers is what the scenarios gate catches. Both were built for the forward
     pass and happen to be the landing pad for coming back.
 
-    **Text the user typed survives.** IDs recorded in the session's `user_typed` set came in
+    **Text the user typed survives.** IDs recorded in the interview's `user_typed` set came in
     through a form and are used as-is, so regenerating criteria rewrites model nodes and keeps
     those nodes.
     """

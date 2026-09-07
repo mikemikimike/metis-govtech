@@ -45,7 +45,7 @@ class EmbeddingMatcher:
     embedder: Embedder
     specs: list[MetricSpec] = field(default_factory=library_catalogue)
     threshold: float = DEFAULT_THRESHOLD
-    degraded: bool = False  # the provider failed at least once this session
+    degraded: bool = False  # the provider failed at least once this run
     _catalogue_vectors: list[list[float]] | None = None
 
     def _vectors(self) -> list[list[float]] | None:

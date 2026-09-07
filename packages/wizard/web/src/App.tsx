@@ -1,9 +1,9 @@
-// The shell. The session rail is always on the left. The middle is either the opening screen
-// (when no session is open) or the conversation (when one is). The document pane sits on the
-// right for the whole of an open session.
+// The shell. The interview rail is always on the left. The middle is either the opening screen
+// (when no interview is open) or the conversation (when one is). The document pane sits on the
+// right for the whole of an open interview.
 //
-//   no session open    → the intro: a chat input and the ways in
-//   session open       → the conversation, and the document pane alongside it
+//   no interview open    → the intro: a chat input and the ways in
+//   interview open       → the conversation, and the document pane alongside it
 //
 // The document appears from the first turn, as scaffold: every section it will hold, drawn as an
 // outline, filling in as the interview produces content. It used to wait until the interview was
@@ -15,8 +15,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type {
   FixtureMetadata,
   MetricSpec,
-  SessionSummary,
-  SessionView,
+  InterviewSummary,
+  InterviewView,
   UserResponse,
 } from "./api";
 import { api, TransportError } from "./api";
@@ -26,7 +26,7 @@ import { Done } from "./Done";
 import { Intro } from "./Landing";
 import { ManualForm } from "./ManualForm";
 import { Profile, stepPosition } from "./Profile";
-import { SessionRail } from "./SessionRail";
+import { InterviewRail } from "./InterviewRail";
 import type { SourceTrayKind } from "./SourceTray";
 import { PanelLeft, PanelRight } from "lucide-react";
 import { cn } from "./ui";
@@ -49,14 +49,14 @@ function sourcePlaceholder(
 }
 
 export function App() {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [view, setView] = useState<SessionView | null>(null);
+  const [interviews, setInterviews] = useState<InterviewSummary[]>([]);
+  const [view, setView] = useState<InterviewView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [openingQuestion, setOpeningQuestion] = useState("");
-  // Package-owned status copy, keyed by session step. The progress caption in the document pane
-  // reads the line for the session's current step from here, so the wording lives in interview.yaml
+  // Package-owned status copy, keyed by interview step. The progress caption in the document pane
+  // reads the line for the interview's current step from here, so the wording lives in config.yaml
   // rather than in the frontend.
   const [statuses, setStatuses] = useState<Record<string, string>>({});
   // Whether each side pane is open. A reading preference for the moment, not a fact about the
@@ -68,16 +68,16 @@ export function App() {
   // reading preference as collapsing it, so it is held the same way: in the shell, unpersisted,
   // back to the default on reload.
   const [documentWidth, setDocumentWidth] = useState(DOCUMENT_WIDTH_DEFAULT);
-  // Metric details are presentation metadata, not part of the session payload. Fetch them once
-  // after the first session opens and keep the lookup for this page lifetime; the catalogue is
-  // shared by every session and changes only when the page is reloaded.
+  // Metric details are presentation metadata, not part of the interview payload. Fetch them once
+  // after the first interview opens and keep the lookup for this page lifetime; the catalogue is
+  // shared by every interview and changes only when the page is reloaded.
   const [metricCatalogue, setMetricCatalogue] = useState<MetricSpec[] | null>(null);
   const [metricCatalogueState, setMetricCatalogueState] = useState<
     "idle" | "loading" | "ready" | "error"
   >("idle");
   const metricCatalogueRequest = useRef<Promise<MetricSpec[]> | null>(null);
   const [showMetrics, setShowMetrics] = useState(false);
-  // The hand-authoring door: a form that writes an experiment file directly, with no session.
+  // The hand-authoring door: a form that writes an experiment file directly, with no interview.
   // It is a second front door alongside the interview, not a step within one — so it is view
   // state on the shell, and leaving it discards any unsaved form work, by design.
   const [authoring, setAuthoring] = useState(false);
@@ -85,17 +85,17 @@ export function App() {
   // closing or changing the tray retains no source data.
   const [sourceTray, setSourceTray] = useState<SourceTrayKind | null>(null);
 
-  const activeSessionId = view?.id ?? null;
+  const activeInterviewId = view?.id ?? null;
 
-  // This is deliberately keyed by the session id, not by pane mount state: collapsing the profile
-  // unmounts it, while moving to another session should restore the quiet default.
+  // This is deliberately keyed by the interview id, not by pane mount state: collapsing the profile
+  // unmounts it, while moving to another interview should restore the quiet default.
   useEffect(() => {
     setShowMetrics(false);
-  }, [activeSessionId]);
+  }, [activeInterviewId]);
 
-  const hasSession = view !== null;
+  const hasInterview = view !== null;
   useEffect(() => {
-    if (!hasSession || metricCatalogueRequest.current) return;
+    if (!hasInterview || metricCatalogueRequest.current) return;
 
     setMetricCatalogueState("loading");
     const request = api.metrics();
@@ -109,7 +109,7 @@ export function App() {
         setMetricCatalogueState("error");
       },
     );
-  }, [hasSession]);
+  }, [hasInterview]);
 
   const metricByFqn = useMemo(
     () => new Map((metricCatalogue ?? []).map((metric) => [metric.fqn, metric])),
@@ -121,18 +121,18 @@ export function App() {
   // later scroll event or on the temporary thinking line.
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pendingScroll = useRef<{
-    sourceView: SessionView;
+    sourceView: InterviewView;
     top: number;
     followBottom: boolean;
   } | null>(null);
 
-  // A pending action belongs to one session only. Do not let it affect a session opened while the
+  // A pending action belongs to one interview only. Do not let it affect a interview opened while the
   // previous request is still settling.
   useEffect(() => {
-    if (pendingScroll.current && pendingScroll.current.sourceView.id !== activeSessionId) {
+    if (pendingScroll.current && pendingScroll.current.sourceView.id !== activeInterviewId) {
       pendingScroll.current = null;
     }
-  }, [activeSessionId]);
+  }, [activeInterviewId]);
 
   // Apply the intent after the API has supplied a new view. Waiting for that identity change is
   // important: applying it when busy starts would be too early, before the response recomposes the
@@ -157,22 +157,22 @@ export function App() {
 
   const refreshList = useCallback(async () => {
     try {
-      setSessions(await api.listSessions());
+      setInterviews(await api.listInterviews());
     } catch (e) {
       report(e, setError);
     }
   }, []);
 
-  // First paint: learn the sessions and the package-owned opening copy, which the landing door
-  // needs before a session exists.
+  // First paint: learn the interviews and the package-owned opening copy, which the landing door
+  // needs before a interview exists.
   useEffect(() => {
     const load = async () => {
       try {
         const [existing, configuration] = await Promise.all([
-          api.listSessions(),
+          api.listInterviews(),
           api.interview(),
         ]);
-        setSessions(existing);
+        setInterviews(existing);
         setOpeningQuestion(configuration.opening_question);
         setStatuses(configuration.statuses);
       } catch (e) {
@@ -190,7 +190,7 @@ export function App() {
     setAuthoring(false);
     setSourceTray(null);
     try {
-      setView(await api.readSession(id));
+      setView(await api.readInterview(id));
     } catch (e) {
       report(e, setError);
     } finally {
@@ -198,8 +198,8 @@ export function App() {
     }
   }, []);
 
-  // "New evaluation" just clears the open session, which reveals the intro. Nothing is
-  // created until the user actually types their first message — an empty session on disk for
+  // "New evaluation" just clears the open interview, which reveals the intro. Nothing is
+  // created until the user actually types their first message — an empty interview on disk for
   // every stray click is litter the list would have to carry.
   const startNew = useCallback(() => {
     setError(null);
@@ -208,19 +208,19 @@ export function App() {
     setSourceTray(null);
   }, []);
 
-  // Typing the first message from the intro: create the session, then send that text as the
-  // opening answer. A fresh session arrives on the clarify step with a pending chat question,
+  // Typing the first message from the intro: create the interview, then send that text as the
+  // opening answer. A fresh interview arrives on the clarify step with a pending chat question,
   // so the user's first line answers it — the interview is under way in one move.
   const beginWithMessage = useCallback(
     async (text: string) => {
       setBusy(true);
       setError(null);
       try {
-        const created = await api.createSession();
-        // The source tray is a depiction only. Starting chat discards it before the live session
+        const created = await api.createInterview();
+        // The source tray is a depiction only. Starting chat discards it before the live interview
         // appears; no source selection or value enters the request.
         setSourceTray(null);
-        // Draw the new session before its first answer returns so its package-authored
+        // Draw the new interview before its first answer returns so its package-authored
         // activity message is visible during that initial model call too.
         setView(created);
         setView(await api.respond(created.id, { type: "chat", text }));
@@ -235,7 +235,7 @@ export function App() {
   );
 
   // Every turn is the same shape: send one response, receive the whole state back, redraw.
-  // The list is refreshed alongside because a reply can change a session's title or step.
+  // The list is refreshed alongside because a reply can change a interview's title or step.
   const send = useCallback(
     async (response: UserResponse) => {
       if (!view) return;
@@ -297,8 +297,8 @@ export function App() {
 
   if (!loaded) return null; // one frame, avoids flashing the intro before the list lands
 
-  // The document belongs to a session, so it shows whenever one is open — and only then. The two
-  // other front doors write no profile at all, and the opening screen has no session behind it.
+  // The document belongs to a interview, so it shows whenever one is open — and only then. The two
+  // other front doors write no profile at all, and the opening screen has no interview behind it.
   const showDocument = !authoring && view !== null;
   const pending = view?.requests.find((r) => r.state === "pending");
 
@@ -310,8 +310,8 @@ export function App() {
           it is the only pane that grows. Collapse is view state only — it never edits the profile
           and is not persisted, so a reload returns to both-open. */}
       {railOpen ? (
-        <SessionRail
-          sessions={sessions}
+        <InterviewRail
+          interviews={interviews}
           currentId={view?.id ?? null}
           busy={busy}
           onOpen={open}
@@ -319,7 +319,7 @@ export function App() {
           onCollapse={() => setRailOpen(false)}
         />
       ) : (
-        <EdgeStrip side="left" label="Show sessions" onClick={() => setRailOpen(true)} />
+        <EdgeStrip side="left" label="Show interviews" onClick={() => setRailOpen(true)} />
       )}
 
       <main className="flex min-w-0 flex-1 flex-col">
@@ -330,7 +330,7 @@ export function App() {
           // composer. Leaving it returns to the intro and drops the form's contents.
           <ManualForm onBack={() => setAuthoring(false)} />
         ) : view === null ? (
-          // No session open: the intro, with a type-first composer that begins the interview.
+          // No interview open: the intro, with a type-first composer that begins the interview.
           <Intro
             openingQuestion={openingQuestion}
             composer={(sourceControl) => (
@@ -358,7 +358,7 @@ export function App() {
           />
         ) : (
           <>
-            {/* Keyed on the session id so the entrance animation re-fires each time a
+            {/* Keyed on the interview id so the entrance animation re-fires each time a
                 different conversation is opened, not only on first mount. */}
             <div
               key={view.id}
@@ -404,7 +404,7 @@ export function App() {
               // on requests, the step name as the package's own string. The shell carries them
               // across; `Profile` is the one component that maps them onto sections.
               position={stepPosition(view.requests)}
-              sessionStep={view.step}
+              interviewStep={view.step}
               statusText={statuses[view.step]}
               busy={busy}
               showMetrics={showMetrics}
@@ -415,7 +415,7 @@ export function App() {
               }
               metricsError={metricCatalogueState === "error"}
               onCollapse={() => setProfileOpen(false)}
-              sessionId={view.id}
+              interviewId={view.id}
               done={view.done}
             />
           </aside>

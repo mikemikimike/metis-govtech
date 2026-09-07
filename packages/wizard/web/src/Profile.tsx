@@ -52,7 +52,7 @@ export interface StepPosition {
 // The newest request carrying step metadata. Searched from the end because the pending request is
 // the one that says where the interview is now, and older requests keep their own — stale —
 // positions in the scrollback. Requests carrying none yield null: the terminal step is stamped
-// with nothing, and a session persisted before the metadata existed has nothing either, so both
+// with nothing, and a interview persisted before the metadata existed has nothing either, so both
 // draw no position rather than a wrong one.
 export function stepPosition(requests: WizardRequest[]): StepPosition | null {
   for (let i = requests.length - 1; i >= 0; i--) {
@@ -71,7 +71,7 @@ export function stepPosition(requests: WizardRequest[]): StepPosition | null {
 // Which section-level placeholder an in-flight model call is writing into.
 //
 // `statuses.yaml` is offset by one on purpose — the status for a step names the work that
-// continuing *from* it starts. That offset is what lets the session's current step alone identify
+// continuing *from* it starts. That offset is what lets the interview's current step alone identify
 // the target, with no new field on the wire and no guessing.
 //
 // Prioritise is deliberately absent even though continuing from it drafts criteria. Criteria land
@@ -96,7 +96,7 @@ const WRITING_TARGET: Record<string, WritingTarget> = {
 export function Profile({
   profile,
   position,
-  sessionStep,
+  interviewStep,
   statusText,
   busy,
   showMetrics,
@@ -105,13 +105,13 @@ export function Profile({
   metricsLoading,
   metricsError,
   onCollapse,
-  sessionId,
+  interviewId,
   done,
 }: {
   profile: ProductProfile;
   position?: StepPosition | null;
-  sessionStep?: string;
-  // The package-owned status line for the session's current step, from interview.yaml. It is the
+  interviewStep?: string;
+  // The package-owned status line for the interview's current step, from config.yaml. It is the
   // progress caption; when absent the caption falls back to the step's own title.
   statusText?: string;
   busy?: boolean;
@@ -121,15 +121,15 @@ export function Profile({
   metricsLoading: boolean;
   metricsError: boolean;
   onCollapse?: () => void;
-  // The session the document belongs to, and whether the interview has reached its end. The
+  // The interview the document belongs to, and whether the interview has reached its end. The
   // download link is built from the id; `done` is what unlocks it. Both are the shell's to know —
   // the pane maps them onto the footer the same way it maps `position` onto the segments.
-  sessionId: string;
+  interviewId: string;
   done?: boolean;
 }) {
   const { product } = profile;
   const { tasks } = profile;
-  const writing = busy && sessionStep ? WRITING_TARGET[sessionStep] : undefined;
+  const writing = busy && interviewStep ? WRITING_TARGET[interviewStep] : undefined;
   const hasCriteria = tasks.some((task) =>
     task.behaviours.some((behaviour) => behaviour.criteria.length > 0),
   );
@@ -140,11 +140,11 @@ export function Profile({
   // is the *step*, not `busy`: a tick is a live server round-trip that recomposes prioritise and
   // stays on it, so keying on `busy` would flash the blank on during every tick and off again when
   // the recomposed screen arrives. Keying on the step alone, the blank is suppressed for the whole
-  // prioritise step — idle or mid-tick — and appears only once Continue advances the session off
-  // it. (Continue is also what generates the criteria, so by the time the session reports a later
+  // prioritise step — idle or mid-tick — and appears only once Continue advances the interview off
+  // it. (Continue is also what generates the criteria, so by the time the interview reports a later
   // step the blanks are usually already filled; one that remains is a behaviour whose criteria did
   // not draft, which is exactly what the blank should report.)
-  const selecting = sessionStep === "prioritise";
+  const selecting = interviewStep === "prioritise";
 
   const behaviourCount = tasks.reduce(
     (total, task) => total + task.behaviours.length,
@@ -389,7 +389,7 @@ export function Profile({
         </div>
       </div>
 
-      <ProfileFooter sessionId={sessionId} done={done} />
+      <ProfileFooter interviewId={interviewId} done={done} />
     </div>
   );
 }
@@ -406,17 +406,17 @@ export function Profile({
 // the moment it becomes pressable. Run evaluation belongs to the engine, which this door is
 // forbidden to import, so it ships disabled and labelled as such, exactly as it did in the chat.
 function ProfileFooter({
-  sessionId,
+  interviewId,
   done,
 }: {
-  sessionId: string;
+  interviewId: string;
   done?: boolean;
 }) {
   return (
     <div className="mt-3 flex shrink-0 flex-wrap items-center justify-end gap-2">
       {done ? (
         <a
-          href={api.experimentUrl(sessionId)}
+          href={api.experimentUrl(interviewId)}
           download
           className={cn(
             "inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5",
@@ -523,9 +523,9 @@ function ProgressSegments({
   title?: string | null;
   statusText?: string;
 }) {
-  // The caption is the package's own status line for the current step, from interview.yaml
+  // The caption is the package's own status line for the current step, from config.yaml
   // ("Shaping expected behaviours…"). It falls back to the step title, then to nothing, so a
-  // session with no status still draws a caption rather than an empty row. The whole widget carries
+  // interview with no status still draws a caption rather than an empty row. The whole widget carries
   // one accessible label, so a screen reader hears "Behaviours, step 2 of 6" once rather than
   // reading the caption and the segments as two things.
   const caption = statusText ?? title ?? "Getting started";
@@ -616,7 +616,7 @@ function ProductField({
     <div className="flex flex-col gap-1">
       <h3 className="text-xs font-medium text-muted-foreground">{label}</h3>
       {/* RevealText stays mounted under the placeholder. On the first response it therefore sees
-          empty → written; on a resumed session its initial value is already the completed text. */}
+          empty → written; on a resumed interview its initial value is already the completed text. */}
       <p
         className={cn(
           "text-muted-foreground",
@@ -691,7 +691,7 @@ function TaskView({
             and stays grey while none of it is. That makes "this task contributes nothing to the
             run" a thing you see rather than a thing you compute, and it scans down the list: the
             grey chips are the gaps. Teal is the right colour for it because this is a live state
-            and not a label — the same reason the open session in the rail carries it. */}
+            and not a label — the same reason the open interview in the rail carries it. */}
         <span aria-hidden className="shrink-0">
           <Chip tone={measured > 0 ? "accent" : "neutral"}>
             {measured}/{task.behaviours.length}
@@ -744,11 +744,11 @@ function BehaviourView({
   //
   // The tick is what makes the blank honest, but only once the tick is committed. A tick flips
   // `measured` live — and is a server round-trip that recomposes the prioritise screen — so while
-  // the session is on prioritise the user is still choosing and any box can still be un-ticked.
+  // the interview is on prioritise the user is still choosing and any box can still be un-ticked.
   // Drawing the blank there promises content for a selection that has not been made. `selecting` is
   // true for the whole prioritise step (keyed on the step, not on `busy`, so a tick's brief in-
   // flight window does not flicker the blank on and off), and holds it back until Continue advances
-  // the session off prioritise. From then on "ticked, not yet written up" is a settled promise. A
+  // the interview off prioritise. From then on "ticked, not yet written up" is a settled promise. A
   // dormant behaviour still shows no blank because no criteria are coming for it.
   const awaitingCriteria =
     behaviour.measured && behaviour.criteria.length === 0 && !selecting;

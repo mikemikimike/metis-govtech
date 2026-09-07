@@ -90,7 +90,7 @@ def library_catalogue() -> list[MetricSpec]:
     Read from the classes `metis.library.metrics` re-exports, so it is the full set the
     library publishes rather than whatever a submodule walk would happen to find.
 
-    Cached: the catalogue cannot change within a run, and it is read once per session start
+    Cached: the catalogue cannot change within a run, and it is read once per interview start
     and once per matcher construction.
     """
     package = import_module(METRICS_PACKAGE)

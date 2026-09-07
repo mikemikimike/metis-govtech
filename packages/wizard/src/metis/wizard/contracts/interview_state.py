@@ -1,6 +1,6 @@
 """Everything that survives a restart — one JSON file.
 
-`SessionState` is data. `Session` (next door) is the object with `.next()` and `.respond()`.
+`InterviewState` is data. `Interview` (next door) is the object with `.next()` and `.respond()`.
 Only the first is persisted, and that split is what lets a CLI and an HTTP server both
 rehydrate mid-conversation: a web door cannot hold a conversation in a process variable
 between requests, so it loads the state, applies one response, and saves it again.
@@ -17,18 +17,18 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, Field
 
 from metis.wizard.contracts.conversation import AnyRequest, WizardRequestState
-from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.permissions import InterviewStep
 
 # `profile` is a Pydantic field, so `ProductProfile` must be a runtime import — Pydantic
-# resolves the annotation at runtime and a TYPE_CHECKING-only import leaves SessionState
+# resolves the annotation at runtime and a TYPE_CHECKING-only import leaves InterviewState
 # "not fully defined". See CLAUDE.md — Coding Conventions.
 from metis.wizard.domain.profile import ProductProfile
 
-SESSION_FORMAT_VERSION = 7
+INTERVIEW_FORMAT_VERSION = 7
 
 
-class SessionVersionError(Exception):
-    """A session file written by a different version of the wizard."""
+class InterviewVersionError(Exception):
+    """An interview file written by a different version of the wizard."""
 
 
 class Turn(BaseModel):
@@ -36,18 +36,18 @@ class Turn(BaseModel):
     text: str
 
 
-class SessionState(BaseModel):
+class InterviewState(BaseModel):
     """One JSON file. Rewritten after every response, atomically."""
 
-    version: int = SESSION_FORMAT_VERSION
+    version: int = INTERVIEW_FORMAT_VERSION
     id: str
     profile: ProductProfile
     # `step` lives here, not on ProductProfile. The profile describes the product; where the
     # interview got to is conversation state. Keeping them apart is what makes the profile a
     # pure artefact — renderable, compilable and hand-writable without inventing a step.
-    step: SessionStep = SessionStep.CLARIFY
+    step: InterviewStep = InterviewStep.CLARIFY
     history: list[Turn] = Field(default_factory=list)
-    # Every screen this session has composed, in order. The last is the one being looked at;
+    # Every screen this interview has composed, in order. The last is the one being looked at;
     # everything before it has been answered. A terminal only ever needed the last one, which
     # is why this was a single slot until a door had to keep the conversation on screen.
     #
@@ -92,23 +92,23 @@ class SessionState(BaseModel):
 
     @classmethod
     def load(cls, path: Path) -> Self:
-        """Load a session, checking the format version before anything else parses.
+        """Load an interview, checking the format version before anything else parses.
 
         These models change daily during development and `resume` was promised to be safe.
         A mismatch is refused by name — not surfaced as a validation error about a field
         nobody has heard of. There are deliberately no migration functions while the models
-        are still moving; the message tells you to start a new session, and that is the
+        are still moving; the message tells you to start a new interview, and that is the
         whole policy.
         """
         path = Path(path)
         raw: Any = json.loads(path.read_text())
 
         version = raw.get("version") if isinstance(raw, dict) else None
-        if version != SESSION_FORMAT_VERSION:
-            raise SessionVersionError(
-                f"This session was written by a different wizard "
-                f"(format {version}, this is {SESSION_FORMAT_VERSION}) "
-                f"and can't be resumed: {path}. Start a new session."
+        if version != INTERVIEW_FORMAT_VERSION:
+            raise InterviewVersionError(
+                f"This interview was written by a different wizard "
+                f"(format {version}, this is {INTERVIEW_FORMAT_VERSION}) "
+                f"and can't be resumed: {path}. Start a new interview."
             )
 
         return cls.model_validate(raw)
@@ -116,7 +116,7 @@ class SessionState(BaseModel):
     def save(self, path: Path) -> None:
         """Write atomically: a temp file in the same directory, then `os.replace`.
 
-        A crash mid-write leaves the previous good session rather than a truncated file,
+        A crash mid-write leaves the previous good interview rather than a truncated file,
         which is the difference between losing one turn and losing the interview.
 
         This guards the *file*, not the *document*: a patch set that failed halfway would be
@@ -139,7 +139,7 @@ class SessionState(BaseModel):
                 os.fsync(f.fileno())
             os.replace(temp_name, path)
         except BaseException:
-            # Leave no debris behind on the way out — a stray temp file next to a session
+            # Leave no debris behind on the way out — a stray temp file next to an interview
             # is indistinguishable from a half-written one to anybody reading the directory.
             Path(temp_name).unlink(missing_ok=True)
             raise

@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, Protocol, TypeAlias
 
 if TYPE_CHECKING:
+    from metis.wizard.contracts.interview_state import Turn
     from metis.wizard.contracts.output import ClarifyResult, StepResult
-    from metis.wizard.contracts.session_state import Turn
     from metis.wizard.domain.profile import ProductProfile
 
 

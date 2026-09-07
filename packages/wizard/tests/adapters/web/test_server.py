@@ -17,9 +17,10 @@ import yaml
 from fixtures.profiles import research_assistant
 from fixtures.scripted import ScriptedInterviewer
 
-from metis.wizard.application import Session, SessionState, interview
+from metis.wizard.application import Interview, InterviewState
+from metis.wizard.application.config import load_config
 from metis.wizard.contracts import ChoiceResponse, ProductProfile
-from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.permissions import InterviewStep
 from metis.wizard.domain.profile import collect_profile_ids
 
 fastapi = pytest.importorskip("fastapi")
@@ -29,68 +30,68 @@ from metis.wizard.adapters.web.server import (  # noqa: E402
     _response_adapter,
     create_app,
 )
-from metis.wizard.adapters.web.store import UNTITLED, SessionStore  # noqa: E402
+from metis.wizard.adapters.web.store import UNTITLED, InterviewStore  # noqa: E402
 
 
 def client(root: Path) -> TestClient:
     return TestClient(
         create_app(
-            interviewer_factory=lambda session_id: ScriptedInterviewer(), root=root
+            interviewer_factory=lambda interview_id: ScriptedInterviewer(), root=root
         )
     )
 
 
-def _seed(root: Path, name: str, *, step=SessionStep.PERSONAS) -> SessionState:
-    """A session on disk in the layout `--out-dir` produces."""
+def _seed(root: Path, name: str, *, step=InterviewStep.PERSONAS) -> InterviewState:
+    """An interview on disk in the layout `--out-dir` produces."""
     profile = research_assistant()
-    state = SessionState(
+    state = InterviewState(
         id=name,
         profile=profile,
         step=step,
         issued_ids=collect_profile_ids(profile),
     )
-    state.save(root / name / "session.json")
+    state.save(root / name / "interview_state.json")
     return state
 
 
-# ── the session list ───────────────────────────────────────────────────────
+# ── the interview list ───────────────────────────────────────────────────────
 
 
 def test_an_empty_root_lists_nothing(tmp_path: Path) -> None:
-    assert client(tmp_path).get("/api/sessions").json() == []
+    assert client(tmp_path).get("/api/interviews").json() == []
 
 
-def test_sessions_are_listed_with_their_product_name(tmp_path: Path) -> None:
+def test_interviews_are_listed_with_their_product_name(tmp_path: Path) -> None:
     _seed(tmp_path, "wizard-aaa")
 
-    rows = client(tmp_path).get("/api/sessions").json()
+    rows = client(tmp_path).get("/api/interviews").json()
 
     assert [r["id"] for r in rows] == ["wizard-aaa"]
     assert rows[0]["title"] == "Research assistant"
     assert rows[0]["step"] == "personas"
 
 
-def test_a_session_without_a_product_name_is_still_listed(tmp_path: Path) -> None:
+def test_a_interview_without_a_product_name_is_still_listed(tmp_path: Path) -> None:
     from metis.wizard.contracts import Product, ProductProfile
 
-    state = SessionState(
+    state = InterviewState(
         id="wizard-bbb",
         profile=ProductProfile(product=Product(name="", description="", users="")),
     )
-    state.save(tmp_path / "wizard-bbb" / "session.json")
+    state.save(tmp_path / "wizard-bbb" / "interview_state.json")
 
-    rows = client(tmp_path).get("/api/sessions").json()
+    rows = client(tmp_path).get("/api/interviews").json()
 
     assert rows[0]["title"] == UNTITLED
 
 
-def test_an_unreadable_session_does_not_take_the_list_down(tmp_path: Path) -> None:
-    """One session written by an older wizard should cost you that session, not all of them."""
+def test_an_unreadable_interview_does_not_take_the_list_down(tmp_path: Path) -> None:
+    """One interview written by an older wizard should cost you that interview, not all of them."""
     _seed(tmp_path, "wizard-good")
     (tmp_path / "wizard-old").mkdir()
-    (tmp_path / "wizard-old" / "session.json").write_text("{ not json")
+    (tmp_path / "wizard-old" / "interview_state.json").write_text("{ not json")
 
-    rows = client(tmp_path).get("/api/sessions").json()
+    rows = client(tmp_path).get("/api/interviews").json()
 
     assert [r["id"] for r in rows] == ["wizard-good"]
 
@@ -101,7 +102,7 @@ def test_an_unreadable_session_does_not_take_the_list_down(tmp_path: Path) -> No
 def test_one_payload_serves_all_three_panes(tmp_path: Path) -> None:
     _seed(tmp_path, "wizard-ccc")
 
-    body = client(tmp_path).get("/api/sessions/wizard-ccc").json()
+    body = client(tmp_path).get("/api/interviews/wizard-ccc").json()
 
     assert set(body) == {
         "id",
@@ -118,9 +119,9 @@ def test_one_payload_serves_all_three_panes(tmp_path: Path) -> None:
 
 
 def test_scenario_card_trial_count_survives_the_http_wire(tmp_path: Path) -> None:
-    _seed(tmp_path, "wizard-trials", step=SessionStep.SCENARIOS)
+    _seed(tmp_path, "wizard-trials", step=InterviewStep.SCENARIOS)
 
-    body = client(tmp_path).get("/api/sessions/wizard-trials").json()
+    body = client(tmp_path).get("/api/interviews/wizard-trials").json()
     scenario_card = next(
         card for card in body["requests"][-1]["cards"] if card["id"] == "S-1"
     )
@@ -129,49 +130,49 @@ def test_scenario_card_trial_count_survives_the_http_wire(tmp_path: Path) -> Non
     assert scenario_card["trials"] == 6
 
 
-def test_an_unknown_session_is_a_404(tmp_path: Path) -> None:
-    assert client(tmp_path).get("/api/sessions/nope").status_code == 404
+def test_an_unknown_interview_is_a_404(tmp_path: Path) -> None:
+    assert client(tmp_path).get("/api/interviews/nope").status_code == 404
 
 
-def test_a_new_session_starts_at_clarify(tmp_path: Path) -> None:
-    body = client(tmp_path).post("/api/sessions").json()
+def test_a_new_interview_starts_at_clarify(tmp_path: Path) -> None:
+    body = client(tmp_path).post("/api/interviews").json()
 
     assert body["step"] == "clarify"
     assert body["profile"]["product"]["name"] == ""
-    assert (tmp_path / body["id"] / "session.json").is_file()
+    assert (tmp_path / body["id"] / "interview_state.json").is_file()
 
 
 def test_the_web_door_exposes_the_package_interview_copy(tmp_path: Path) -> None:
     api = client(tmp_path)
 
     configuration = api.get("/api/interview").json()
-    session = api.post("/api/sessions").json()
+    interview = api.post("/api/interviews").json()
 
-    config = interview.load_interview_config()
+    config = load_config()
     assert configuration == {
         "opening_question": config.opening_question,
         # Statuses are re-keyed by the step's string value for the door — the progress caption
-        # addresses them by the session's current step.
+        # addresses them by the interview's current step.
         "statuses": {step.value: text for step, text in config.statuses.items()},
     }
-    assert session["requests"][-1]["prompt"] == configuration["opening_question"]
+    assert interview["requests"][-1]["prompt"] == configuration["opening_question"]
 
 
-def test_the_web_door_passes_the_session_id_to_each_interviewer(
+def test_the_web_door_passes_the_interview_id_to_each_interviewer(
     tmp_path: Path,
 ) -> None:
     seen: list[str | None] = []
 
-    def factory(session_id: str | None):
-        seen.append(session_id)
+    def factory(interview_id: str | None):
+        seen.append(interview_id)
         return ScriptedInterviewer()
 
     api = TestClient(create_app(interviewer_factory=factory, root=tmp_path))
-    body = api.post("/api/sessions").json()
-    api.get(f"/api/sessions/{body['id']}")
+    body = api.post("/api/interviews").json()
+    api.get(f"/api/interviews/{body['id']}")
 
     assert seen
-    assert all(session_id == body["id"] for session_id in seen)
+    assert all(interview_id == body["id"] for interview_id in seen)
 
 
 # ── the two doors agree ────────────────────────────────────────────────────
@@ -181,22 +182,22 @@ def test_the_web_door_reaches_the_same_state_as_the_cli(tmp_path: Path) -> None:
     """The same two answers, through HTTP and through the object, land in the same place."""
     web_root = tmp_path / "web"
     cli_root = tmp_path / "cli"
-    _seed(web_root, "s", step=SessionStep.BEHAVIOURS)
-    _seed(cli_root, "s", step=SessionStep.BEHAVIOURS)
+    _seed(web_root, "s", step=InterviewStep.BEHAVIOURS)
+    _seed(cli_root, "s", step=InterviewStep.BEHAVIOURS)
 
     answers = [["accept"], ["tick:EB-2"]]
 
     api = client(web_root)
-    api.get("/api/sessions/s")
+    api.get("/api/interviews/s")
     for selected in answers:
         api.post(
-            "/api/sessions/s/respond", json={"type": "choice", "selected": selected}
+            "/api/interviews/s/respond", json={"type": "choice", "selected": selected}
         )
 
     from metis.wizard.application.driver import StepDriver
 
-    cli = Session.resume(
-        cli_root / "s" / "session.json",
+    cli = Interview.resume(
+        cli_root / "s" / "interview_state.json",
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )
     for selected in answers:
@@ -204,7 +205,7 @@ def test_the_web_door_reaches_the_same_state_as_the_cli(tmp_path: Path) -> None:
         cli.respond(ChoiceResponse(selected=selected))
     cli.next()
 
-    web = SessionStore(web_root).load("s")
+    web = InterviewStore(web_root).load("s")
     assert web is not None
     assert web.step is cli.state.step
     assert web.profile == cli.state.profile
@@ -223,12 +224,12 @@ def _both_doors_through(tmp_path: Path, responses: list[dict], *, step) -> None:
     _seed(cli_root, "s", step=step)
 
     api = client(web_root)
-    api.get("/api/sessions/s")
+    api.get("/api/interviews/s")
     for body in responses:
-        api.post("/api/sessions/s/respond", json=body)
+        api.post("/api/interviews/s/respond", json=body)
 
-    cli = Session.resume(
-        cli_root / "s" / "session.json",
+    cli = Interview.resume(
+        cli_root / "s" / "interview_state.json",
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )
     for body in responses:
@@ -236,7 +237,7 @@ def _both_doors_through(tmp_path: Path, responses: list[dict], *, step) -> None:
         cli.respond(_response_adapter.validate_python(body))
     cli.next()
 
-    web = SessionStore(web_root).load("s")
+    web = InterviewStore(web_root).load("s")
     assert web is not None
     assert web.step is cli.state.step
     assert web.profile == cli.state.profile
@@ -259,9 +260,9 @@ def test_the_two_doors_agree_on_a_targeted_criterion_workflow(tmp_path: Path) ->
                 },
             },
         ],
-        step=SessionStep.CRITERIA,
+        step=InterviewStep.CRITERIA,
     )
-    web = SessionStore(tmp_path / "web").load("s")
+    web = InterviewStore(tmp_path / "web").load("s")
     assert web is not None
     fresh = web.profile.behaviour("EB-1").criteria[-1]  # type: ignore[union-attr]
     assert (fresh.id, fresh.description.given, fresh.id in web.user_typed) == (
@@ -281,10 +282,10 @@ def test_the_two_doors_agree_on_typed_scenario_field_edits(tmp_path: Path) -> No
                 "values": {"files:S-2": [" policy.pdf ", "faq.md"]},
             },
         ],
-        step=SessionStep.SCENARIOS,
+        step=InterviewStep.SCENARIOS,
     )
 
-    web = SessionStore(tmp_path / "web").load("s")
+    web = InterviewStore(tmp_path / "web").load("s")
     assert web is not None
     scenario = web.profile.scenario("S-2")
     assert scenario is not None
@@ -295,57 +296,59 @@ def test_the_two_doors_agree_on_typed_scenario_field_edits(tmp_path: Path) -> No
     assert scenario_card.trials == 7
 
 
-def test_a_session_made_in_the_browser_is_resumable_from_the_terminal(
+def test_a_interview_made_in_the_browser_is_resumable_from_the_terminal(
     tmp_path: Path,
 ) -> None:
     """The layout is the one `--out-dir` already means, so neither door converts anything."""
-    from metis.wizard.adapters.cli.commands import _session_path
+    from metis.wizard.adapters.cli.commands import _interview_path
 
-    created = client(tmp_path).post("/api/sessions").json()
+    created = client(tmp_path).post("/api/interviews").json()
 
     out_dir = tmp_path / created["id"]
-    assert _session_path(out_dir).is_file()
-    assert Session.resume(_session_path(out_dir)).state.id == created["id"]
+    assert _interview_path(out_dir).is_file()
+    assert Interview.resume(_interview_path(out_dir)).state.id == created["id"]
 
 
-def test_a_session_made_in_the_terminal_appears_in_the_browser(tmp_path: Path) -> None:
+def test_a_interview_made_in_the_terminal_appears_in_the_browser(
+    tmp_path: Path,
+) -> None:
     """The CLI's default writes straight into the out-dir rather than a subdirectory."""
-    SessionState(id="wizard-cli", profile=research_assistant()).save(
-        tmp_path / "session.json"
+    InterviewState(id="wizard-cli", profile=research_assistant()).save(
+        tmp_path / "interview_state.json"
     )
 
-    rows = client(tmp_path).get("/api/sessions").json()
+    rows = client(tmp_path).get("/api/interviews").json()
 
     assert [r["id"] for r in rows] == ["wizard-cli"]
 
 
 def test_nothing_is_held_between_requests(tmp_path: Path) -> None:
     """Each call loads, applies one response and saves — so a fresh app sees the same thing."""
-    _seed(tmp_path, "wizard-ddd", step=SessionStep.BEHAVIOURS)
+    _seed(tmp_path, "wizard-ddd", step=InterviewStep.BEHAVIOURS)
 
     first = client(tmp_path)
-    first.get("/api/sessions/wizard-ddd")
+    first.get("/api/interviews/wizard-ddd")
     first.post(
-        "/api/sessions/wizard-ddd/respond",
+        "/api/interviews/wizard-ddd/respond",
         json={"type": "choice", "selected": ["accept"]},
     )
 
     # A different app object entirely, sharing only the directory.
-    body = client(tmp_path).get("/api/sessions/wizard-ddd").json()
+    body = client(tmp_path).get("/api/interviews/wizard-ddd").json()
 
     assert body["step"] == "prioritise"
     assert body["requests"][0]["state"] == "resolved"
 
 
 def test_answering_a_finished_interview_is_refused(tmp_path: Path) -> None:
-    """A door that kept a stale screen on screen would otherwise post into a closed session."""
-    _seed(tmp_path, "wizard-eee", step=SessionStep.DONE)
+    """A door that kept a stale screen on screen would otherwise post into a closed interview."""
+    _seed(tmp_path, "wizard-eee", step=InterviewStep.DONE)
     api = client(tmp_path)
 
-    assert api.get("/api/sessions/wizard-eee").json()["done"] is True
+    assert api.get("/api/interviews/wizard-eee").json()["done"] is True
 
     refused = api.post(
-        "/api/sessions/wizard-eee/respond",
+        "/api/interviews/wizard-eee/respond",
         json={"type": "choice", "selected": ["accept"]},
     )
 
@@ -356,30 +359,30 @@ def test_answering_a_finished_interview_is_refused(tmp_path: Path) -> None:
 
 
 def test_the_experiment_can_be_downloaded(tmp_path: Path) -> None:
-    _seed(tmp_path, "wizard-fff", step=SessionStep.DONE)
+    _seed(tmp_path, "wizard-fff", step=InterviewStep.DONE)
 
-    response = client(tmp_path).get("/api/sessions/wizard-fff/experiment.yaml")
+    response = client(tmp_path).get("/api/interviews/wizard-fff/experiment.yaml")
 
     assert response.status_code == 200
     assert "scenarios:" in response.text
 
 
-def test_session_fixture_upload_lists_metadata_and_keeps_bytes_out_of_session_json(
+def test_interview_fixture_upload_lists_metadata_and_keeps_bytes_out_of_interview_json(
     tmp_path: Path,
 ) -> None:
     _seed(tmp_path, "wizard-fixtures")
     upload = client(tmp_path).post(
-        "/api/sessions/wizard-fixtures/fixtures",
+        "/api/interviews/wizard-fixtures/fixtures",
         files=[("files", ("policy.pdf", b"pdf bytes", "application/pdf"))],
     )
 
     assert upload.status_code == 200
     assert upload.json()["added"] == [{"name": "policy.pdf", "size": 9}]
-    assert client(tmp_path).get("/api/sessions/wizard-fixtures/fixtures").json() == [
+    assert client(tmp_path).get("/api/interviews/wizard-fixtures/fixtures").json() == [
         {"name": "policy.pdf", "size": 9}
     ]
-    session_json = (tmp_path / "wizard-fixtures" / "session.json").read_text()
-    assert "pdf bytes" not in session_json
+    state_json = (tmp_path / "wizard-fixtures" / "interview_state.json").read_text()
+    assert "pdf bytes" not in state_json
     assert (
         tmp_path / "wizard-fixtures" / "fixtures" / "policy.pdf"
     ).read_bytes() == b"pdf bytes"
@@ -396,7 +399,7 @@ def test_engine_example_csv_fixture_uploads_without_transformation(
 
     with source.open("rb") as fixture:
         response = client(tmp_path).post(
-            "/api/sessions/wizard-example-csv/fixtures",
+            "/api/interviews/wizard-example-csv/fixtures",
             files=[("files", (source.name, fixture, "text/csv"))],
         )
 
@@ -408,7 +411,7 @@ def test_engine_example_csv_fixture_uploads_without_transformation(
 def test_fixture_upload_batches_are_all_or_nothing(tmp_path: Path) -> None:
     _seed(tmp_path, "wizard-batch")
     response = client(tmp_path).post(
-        "/api/sessions/wizard-batch/fixtures",
+        "/api/interviews/wizard-batch/fixtures",
         files=[
             ("files", ("good.txt", b"good", "text/plain")),
             ("files", ("bad.exe", b"bad", "application/octet-stream")),
@@ -416,7 +419,7 @@ def test_fixture_upload_batches_are_all_or_nothing(tmp_path: Path) -> None:
     )
 
     assert response.status_code == 422
-    assert client(tmp_path).get("/api/sessions/wizard-batch/fixtures").json() == []
+    assert client(tmp_path).get("/api/interviews/wizard-batch/fixtures").json() == []
 
 
 def test_referenced_fixture_cannot_be_deleted_but_unreferenced_can(
@@ -425,7 +428,7 @@ def test_referenced_fixture_cannot_be_deleted_but_unreferenced_can(
     _seed(tmp_path, "wizard-delete")
     api = client(tmp_path)
     api.post(
-        "/api/sessions/wizard-delete/fixtures",
+        "/api/interviews/wizard-delete/fixtures",
         files=[
             ("files", ("policy.pdf", b"policy", "application/pdf")),
             ("files", ("notes.txt", b"notes", "text/plain")),
@@ -433,25 +436,27 @@ def test_referenced_fixture_cannot_be_deleted_but_unreferenced_can(
     )
 
     assert (
-        api.delete("/api/sessions/wizard-delete/fixtures/policy.pdf").status_code == 409
+        api.delete("/api/interviews/wizard-delete/fixtures/policy.pdf").status_code
+        == 409
     )
     assert (
-        api.delete("/api/sessions/wizard-delete/fixtures/notes.txt").status_code == 200
+        api.delete("/api/interviews/wizard-delete/fixtures/notes.txt").status_code
+        == 200
     )
     assert [
-        row["name"] for row in api.get("/api/sessions/wizard-delete/fixtures").json()
+        row["name"] for row in api.get("/api/interviews/wizard-delete/fixtures").json()
     ] == ["policy.pdf"]
 
 
 def test_interview_specification_download_has_the_engine_layout(tmp_path: Path) -> None:
-    _seed(tmp_path, "wizard-zip", step=SessionStep.DONE)
+    _seed(tmp_path, "wizard-zip", step=InterviewStep.DONE)
     api = client(tmp_path)
     api.post(
-        "/api/sessions/wizard-zip/fixtures",
+        "/api/interviews/wizard-zip/fixtures",
         files=[("files", ("policy.pdf", b"policy", "application/pdf"))],
     )
 
-    response = api.get("/api/sessions/wizard-zip/experiment.zip")
+    response = api.get("/api/interviews/wizard-zip/experiment.zip")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/zip"
@@ -485,7 +490,7 @@ def test_manual_specification_route_is_stateless_and_includes_uploaded_files(
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         assert archive.read("fixtures/data.csv") == b"a,b\n1,2\n"
         assert "profile.yaml" not in archive.namelist()
-    assert client(tmp_path).get("/api/sessions").json() == []
+    assert client(tmp_path).get("/api/interviews").json() == []
     assert list(tmp_path.iterdir()) == []
 
 
@@ -623,8 +628,8 @@ def test_an_invalid_document_is_refused_with_no_file(
 
 
 def test_authoring_writes_nothing_to_the_store(tmp_path: Path) -> None:
-    """The route is stateless — a round trip leaves the session directory empty."""
+    """The route is stateless — a round trip leaves the interview directory empty."""
     client(tmp_path).post("/api/experiment.yaml", json=VALID_DOC)
 
-    assert client(tmp_path).get("/api/sessions").json() == []
+    assert client(tmp_path).get("/api/interviews").json() == []
     assert not any(tmp_path.iterdir())

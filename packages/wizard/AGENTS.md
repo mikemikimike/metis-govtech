@@ -22,7 +22,7 @@ The two HTML companions are illustrative flow and mockup artefacts. Where they d
 
 **Build the service before the frontend.** The interview lives in the application/contracts/domain
 layers, and the web UI is a demo over it. When a change touches both, land the service behaviour —
-models, driver, session, door contract — first and get it right, then wire the frontend to it. Do
+models, driver, interview, door contract — first and get it right, then wire the frontend to it. Do
 not shape the service around what is convenient for the current UI.
 
 **Use the root glossary as the vocabulary authority.** Before naming or changing a concept, read
@@ -87,12 +87,12 @@ the interview itself:
 ```
 src/metis/wizard/
 ├── domain/       profile, patches, path resolution, permissions and edit impacts
-├── contracts/    requests, responses, cards, warnings, model outputs and session persistence
-├── application/  Session, driver, prompts, screens, compiler, matcher and primer
+├── contracts/    requests, responses, cards, warnings, model outputs and interview persistence
+├── application/  Interview, driver, prompts, screens, compiler, matcher and primer
 ├── adapters/
 │   ├── cli/      Typer commands, Rich renderer and terminal input
 │   ├── llm/      PlatformAI structured-output and embedding gateway
-│   └── web/      HTTP server, per-session store and the built React bundle in static/
+│   └── web/      HTTP server, per-interview store and the built React bundle in static/
 ├── bootstrap.py  the only adapter composition root
 └── __init__.py   stable headless facade
 ```
@@ -115,7 +115,7 @@ that produced them:
   parametrized workflow matrix before creating another narrowly named test.
 - A change to labels, actions, request context, or door behaviour should update the current
   contract test and remove superseded assertions; do not retain tests as change archaeology.
-- Test shared interview behaviour at the driver/session layer. Door tests should prove that the CLI
+- Test shared interview behaviour at the driver/interview layer. Door tests should prove that the CLI
   and HTTP adapters preserve that behaviour, using representative or parametrized cases instead of
   repeating every driver example.
 - Keep frontend tests light while the wizard web UI is a demo: cover critical interaction wiring
@@ -157,8 +157,8 @@ line.
 The gateway imports its client from `langfuse.openai`. This is a drop-in for the OpenAI client:
 the import makes every model call record a trace, with no tracing code in the retry loop. The
 gateway wraps `_ask` with `@observe`, so the three attempts of one call are in one trace. The
-trace has the name of the interview step and, when the id is known, the session id. Thus one
-interview reads as one sequence, and the CLI and web doors use the same session id.
+trace has the name of the interview step and, when the id is known, the interview id. Thus one
+interview reads as one sequence, and the CLI and web doors use the same interview id.
 
 `langfuse` is a base dependency, so it installs with the wizard. To turn tracing on, set these
 three environment variables before you start the wizard:

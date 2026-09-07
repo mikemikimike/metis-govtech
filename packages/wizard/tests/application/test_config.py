@@ -11,11 +11,11 @@ import yaml
 from fixtures.profiles import research_assistant
 from fixtures.scripted import ScriptedInterviewer
 
-from metis.wizard.application import Session, interview
+from metis.wizard.application import Interview, config
 from metis.wizard.application.driver import StepDriver
 from metis.wizard.contracts import Product, ProductProfile
-from metis.wizard.contracts.session_state import SessionState, Turn
-from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.contracts.interview_state import InterviewState, Turn
+from metis.wizard.domain.permissions import InterviewStep
 
 _EXPECTED_STATUSES = {
     "clarify": "Understanding your agent…",
@@ -29,7 +29,7 @@ _EXPECTED_STATUSES = {
 
 
 def _document() -> dict[str, Any]:
-    value = yaml.safe_load(interview._read_config_text())
+    value = yaml.safe_load(config._read_config_text())
     assert isinstance(value, dict)
     return value
 
@@ -38,7 +38,7 @@ def _install_document(
     monkeypatch: pytest.MonkeyPatch, document: dict[str, Any]
 ) -> None:
     monkeypatch.setattr(
-        interview,
+        config,
         "_read_config_text",
         lambda: yaml.safe_dump(document, allow_unicode=True, sort_keys=False),
     )
@@ -53,11 +53,11 @@ def _assert_complete_interview_document_is_validated(
     change(document)
     _install_document(monkeypatch, document)
 
-    with pytest.raises(interview.InterviewConfigError) as caught:
-        interview.load_interview_config()
+    with pytest.raises(config.ConfigError) as caught:
+        config.load_config()
 
     message = str(caught.value)
-    assert interview.INTERVIEW_FILE in message
+    assert config.CONFIG_FILE in message
     assert broken_key in message
 
 
@@ -94,23 +94,23 @@ def test_interview_validation_cases(
     _assert_complete_interview_document_is_validated(monkeypatch, change, broken_key)
 
 
-def test_a_missing_interview_file_is_named(
+def test_a_missing_config_file_is_named(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(interview.resources, "files", lambda _package: tmp_path)
+    monkeypatch.setattr(config.resources, "files", lambda _package: tmp_path)
 
-    with pytest.raises(interview.InterviewConfigError) as caught:
-        interview.load_interview_config()
+    with pytest.raises(config.ConfigError) as caught:
+        config.load_config()
 
-    assert interview.INTERVIEW_FILE in str(caught.value)
+    assert config.CONFIG_FILE in str(caught.value)
     assert "missing" in str(caught.value)
 
 
-def test_a_wrong_interview_root_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(interview, "_read_config_text", lambda: "[]")
+def test_a_wrong_config_root_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config, "_read_config_text", lambda: "[]")
 
-    with pytest.raises(interview.InterviewConfigError, match="<document>"):
-        interview.load_interview_config()
+    with pytest.raises(config.ConfigError, match="<document>"):
+        config.load_config()
 
 
 @pytest.mark.parametrize("value", ["5", True, 0, -1])
@@ -121,26 +121,24 @@ def test_the_clarify_limit_must_be_a_positive_non_boolean_integer(
     document["settings"]["clarify_turn_cap"] = value
     _install_document(monkeypatch, document)
 
-    with pytest.raises(
-        interview.InterviewConfigError, match="settings.clarify_turn_cap"
-    ):
-        interview.clarify_turn_cap()
+    with pytest.raises(config.ConfigError, match="settings.clarify_turn_cap"):
+        config.clarify_turn_cap()
 
 
-def test_every_session_step_has_the_existing_status_copy() -> None:
-    config = interview.load_interview_config()
+def test_every_interview_step_has_the_existing_status_copy() -> None:
+    loaded = config.load_config()
 
     assert {
-        step.value: config.statuses[step] for step in SessionStep
+        step.value: loaded.statuses[step] for step in InterviewStep
     } == _EXPECTED_STATUSES
 
 
-def test_the_session_facade_uses_the_interview_status_owner() -> None:
-    session = Session.start(
+def test_the_interview_facade_uses_the_status_owner() -> None:
+    interview = Interview.start(
         ProductProfile(product=Product(name="Agent", description="", users=""))
     )
 
-    assert session.busy_message() == _EXPECTED_STATUSES["clarify"]
+    assert interview.busy_message() == _EXPECTED_STATUSES["clarify"]
 
 
 def test_a_status_edit_affects_the_next_lookup(
@@ -149,9 +147,9 @@ def test_a_status_edit_affects_the_next_lookup(
     document = _document()
     _install_document(monkeypatch, document)
 
-    first = interview.status_for(SessionStep.CRITERIA)
+    first = config.status_for(InterviewStep.CRITERIA)
     document["statuses"]["criteria"] = "Updated criteria status."
-    second = interview.status_for(SessionStep.CRITERIA)
+    second = config.status_for(InterviewStep.CRITERIA)
 
     assert first == _EXPECTED_STATUSES["criteria"]
     assert second == "Updated criteria status."
@@ -163,12 +161,12 @@ def test_a_limit_edit_affects_an_active_interview(
     document = _document()
     document["settings"]["clarify_turn_cap"] = 3
     _install_document(monkeypatch, document)
-    state = SessionState(
+    state = InterviewState(
         id="s",
         profile=research_assistant(),
-        step=SessionStep.CLARIFY,
+        step=InterviewStep.CLARIFY,
         history=[
-            Turn(role="assistant", text=interview.opening_question()),
+            Turn(role="assistant", text=config.opening_question()),
             Turn(role="user", text="the first answer"),
             Turn(role="assistant", text="question one"),
             Turn(role="assistant", text="question two"),
@@ -177,17 +175,17 @@ def test_a_limit_edit_affects_an_active_interview(
     driver = StepDriver(interviewer=ScriptedInterviewer(clarify_questions=5))
 
     driver.compose(state)
-    assert state.step is SessionStep.CLARIFY
+    assert state.step is InterviewStep.CLARIFY
 
     document["settings"]["clarify_turn_cap"] = 2
     driver.compose(state)
 
-    assert state.step is SessionStep.BEHAVIOURS
+    assert state.step is InterviewStep.BEHAVIOURS
 
 
 def test_interview_configuration_is_a_package_resource() -> None:
-    config = interview.load_interview_config()
+    loaded = config.load_config()
 
-    assert config.clarify_turn_cap > 0
-    assert config.opening_question
-    assert set(config.statuses) == set(SessionStep)
+    assert loaded.clarify_turn_cap > 0
+    assert loaded.opening_question
+    assert set(loaded.statuses) == set(InterviewStep)

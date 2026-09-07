@@ -1,6 +1,6 @@
 """Slice B gate: every screen in the flow, walked end to end, with no network.
 
-The corridor is proven here — session, driver, screens, patch application and the CLI door —
+The corridor is proven here — interview, driver, screens, patch application and the CLI door —
 on a scripted stand-in for the model. Nothing in this file touches a gateway.
 """
 
@@ -9,7 +9,7 @@ from pathlib import Path
 from fixtures.scripted import RejectingInterviewer, ScriptedInterviewer
 
 from metis.wizard.adapters.cli import render as cli
-from metis.wizard.application import Session
+from metis.wizard.application import Interview
 from metis.wizard.application.compile import write_experiment, write_review
 from metis.wizard.application.driver import StepDriver
 from metis.wizard.contracts import (
@@ -21,10 +21,12 @@ from metis.wizard.contracts import (
     ProductProfile,
     WarningSource,
 )
-from metis.wizard.domain.permissions import SessionStep
+from metis.wizard.domain.permissions import InterviewStep
 
 
-def a_session(path: Path | None = None, interviewer=None) -> tuple[Session, StepDriver]:
+def a_interview(
+    path: Path | None = None, interviewer=None
+) -> tuple[Interview, StepDriver]:
     driver = StepDriver(interviewer=interviewer or ScriptedInterviewer())
     profile = ProductProfile(
         product=Product(
@@ -34,7 +36,7 @@ def a_session(path: Path | None = None, interviewer=None) -> tuple[Session, Step
             detail="A router with a search tool that can time out.",
         )
     )
-    return Session.start(profile, path=path, driver=driver), driver
+    return Interview.start(profile, path=path, driver=driver), driver
 
 
 def _pick(request: ChoiceRequest, action: str) -> list[str]:
@@ -45,7 +47,7 @@ def _pick(request: ChoiceRequest, action: str) -> list[str]:
     return keys
 
 
-def walk(session: Session) -> list:
+def walk(interview: Interview) -> list:
     """Drive the interview to DONE, answering each screen the way a user would.
 
     The wizard preselects all Behaviours. The walk keeps that complete starting scope and
@@ -54,19 +56,19 @@ def walk(session: Session) -> list:
     seen = []
 
     for _ in range(40):  # a bound, so a driver bug fails the test rather than hanging
-        request = session.next()
+        request = interview.next()
         if request is None:
             break
         seen.append(request)
 
         if isinstance(request, ChatRequest):
-            session.respond(cli.ChatResponse(text="It answers research questions."))
+            interview.respond(cli.ChatResponse(text="It answers research questions."))
             continue
         if isinstance(request, FormRequest):
-            session.respond(cli.FormResponse(values={"description": "typed by hand"}))
+            interview.respond(cli.FormResponse(values={"description": "typed by hand"}))
             continue
 
-        session.respond(
+        interview.respond(
             ChoiceResponse(
                 selected=_pick(request, "continue") or _pick(request, "accept")
             )
@@ -76,12 +78,12 @@ def walk(session: Session) -> list:
 
 
 def test_the_whole_flow_walks_to_done(tmp_path: Path) -> None:
-    session, driver = a_session(tmp_path / "session.json")
+    interview, driver = a_interview(tmp_path / "interview_state.json")
 
-    walk(session)
+    walk(interview)
 
-    assert session.state.step is SessionStep.DONE
-    assert session.next() is None
+    assert interview.state.step is InterviewStep.DONE
+    assert interview.next() is None
     # every drafting step was reached
     assert {
         "clarify",
@@ -93,12 +95,12 @@ def test_the_whole_flow_walks_to_done(tmp_path: Path) -> None:
 
 
 def test_it_produces_both_output_files(tmp_path: Path) -> None:
-    session, _ = a_session(tmp_path / "session.json")
-    walk(session)
-    profile = session.profile()
+    interview, _ = a_interview(tmp_path / "interview_state.json")
+    walk(interview)
+    profile = interview.profile()
 
-    write_experiment(profile, session.state.id, tmp_path / "experiment.yaml")
-    write_review(profile, session.state.id, tmp_path / "review.md")
+    write_experiment(profile, interview.state.id, tmp_path / "experiment.yaml")
+    write_review(profile, interview.state.id, tmp_path / "review.md")
 
     assert (tmp_path / "experiment.yaml").is_file()
     assert (tmp_path / "review.md").is_file()
@@ -110,10 +112,10 @@ def test_it_produces_both_output_files(tmp_path: Path) -> None:
 
 def test_the_cli_door_renders_every_screen(tmp_path: Path) -> None:
     """Each screen goes through the real renderer — nothing raises, everything draws."""
-    session, _ = a_session(tmp_path / "session.json")
+    interview, _ = a_interview(tmp_path / "interview_state.json")
     lines: list[str] = []
 
-    screens = walk(session)
+    screens = walk(interview)
     for request in screens:
         if isinstance(request, ChoiceRequest):
             cli._draw(request, lines.append)
@@ -123,34 +125,38 @@ def test_the_cli_door_renders_every_screen(tmp_path: Path) -> None:
     assert any("trials" in line for line in lines)  # the footer drew
 
 
-def test_the_session_survives_a_restart_at_every_screen(tmp_path: Path) -> None:
+def test_the_interview_survives_a_restart_at_every_screen(tmp_path: Path) -> None:
     """Resume mid-interview and the walk still completes."""
-    path = tmp_path / "session.json"
-    session, _ = a_session(path)
+    path = tmp_path / "interview_state.json"
+    interview, _ = a_interview(path)
 
     for _ in range(6):  # a few screens in — far enough to move past prioritise
-        request = session.next()
+        request = interview.next()
         assert request is not None
         if isinstance(request, ChatRequest):
-            session.respond(cli.ChatResponse(text="answer"))
+            interview.respond(cli.ChatResponse(text="answer"))
         elif isinstance(request, ChoiceRequest):
-            session.respond(
+            interview.respond(
                 ChoiceResponse(
                     selected=_pick(request, "continue") or _pick(request, "accept")
                 )
             )
 
-    resumed = Session.resume(path, driver=StepDriver(interviewer=ScriptedInterviewer()))
+    resumed = Interview.resume(
+        path, driver=StepDriver(interviewer=ScriptedInterviewer())
+    )
     walk(resumed)
 
-    assert resumed.state.step is SessionStep.DONE
+    assert resumed.state.step is InterviewStep.DONE
 
 
 def test_a_rejected_patch_reaches_the_user_as_a_runtime_warning(tmp_path: Path) -> None:
     """The model tries to set a tick. The criteria land; the write does not, and is said."""
-    session, driver = a_session(tmp_path / "session.json", RejectingInterviewer())
+    interview, driver = a_interview(
+        tmp_path / "interview_state.json", RejectingInterviewer()
+    )
 
-    screens = walk(session)
+    screens = walk(interview)
 
     runtime = [
         w

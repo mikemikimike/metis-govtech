@@ -5,7 +5,7 @@ from pathlib import Path
 from fixtures.scripted import ScriptedInterviewer
 from typer.testing import CliRunner
 
-from metis.wizard.application.interview import opening_question
+from metis.wizard.application.config import opening_question
 from metis.wizard.bootstrap import create_cli_app
 from metis.wizard.contracts import ProductProfile
 

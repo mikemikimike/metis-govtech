@@ -12,9 +12,9 @@ import yaml
 from fixtures.profiles import orca_handover, research_assistant
 
 from metis.wizard.application import prompts
-from metis.wizard.application.interview import opening_question
+from metis.wizard.application.config import opening_question
 from metis.wizard.contracts import Product, ProductProfile
-from metis.wizard.contracts.session_state import Turn
+from metis.wizard.contracts.interview_state import Turn
 from metis.wizard.domain.applier import apply
 from metis.wizard.domain.patch import Patch, PatchOp
 

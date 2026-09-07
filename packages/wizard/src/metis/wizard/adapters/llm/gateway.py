@@ -8,7 +8,7 @@ The client is imported from `langfuse.openai`, Langfuse's drop-in for the OpenAI
 Importing it patches the client so every chat and embedding call is recorded as a generation —
 input, raw reply, model, token usage and latency — with no tracing code on the call path.
 `_ask` is wrapped with `@observe`, so a call's three attempts nest under one trace named by the
-interview step and grouped by the wizard's session id. Tracing is opt-in by environment: with no
+interview step and grouped by the wizard's interview id. Tracing is opt-in by environment: with no
 `LANGFUSE_*` variables the drop-in disables itself and sends nothing, and it exports on a
 background thread, so it never blocks or fails the interview.
 
@@ -45,7 +45,7 @@ from metis.wizard.domain.applier import PatchValueError, validate_model_patches
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from metis.wizard.contracts.session_state import Turn
+    from metis.wizard.contracts.interview_state import Turn
     from metis.wizard.domain.profile import ProductProfile
 
 BASE_URL_VAR = "OPENAI_BASE_URL"
@@ -87,7 +87,7 @@ class GatewayInterviewer:
 
     model: str = field(default_factory=lambda: os.environ.get(MODEL_VAR, DEFAULT_MODEL))
     _client: Any = None
-    session_id: str | None = None
+    interview_id: str | None = None
 
     def __post_init__(self) -> None:
         check_credentials()
@@ -121,10 +121,14 @@ class GatewayInterviewer:
         model's intro can be trusted in front of the user.
 
         `@observe` opens the trace; each attempt's `create` call nests under it as a generation.
-        The trace is named by the interview step and, where known, carries the session id, so one
-        interview reads as one sequence. A call with no session id is still recorded, ungrouped.
+        The trace is named by the interview step and, where known, carries the interview id, so one
+        interview reads as one sequence. A call with no interview id is still recorded, ungrouped.
         """
-        get_client().update_current_trace(name=prompt.name, session_id=self.session_id)
+        # `session_id=` is the Langfuse SDK's trace-grouping parameter; the wizard passes its
+        # interview id as that value.
+        get_client().update_current_trace(
+            name=prompt.name, session_id=self.interview_id
+        )
         messages = [
             {"role": "system", "content": prompt.system},
             {"role": "user", "content": prompt.user},

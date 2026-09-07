@@ -5,7 +5,7 @@ matters is that this keeps the behaviours nobody ticked. Those are the record of
 considered and deliberately not measured, which `experiment.yaml` has no way to express and
 no reason to.
 
-Like the compiler, this is a pure function of the profile — no session, no step, no history.
+Like the compiler, this is a pure function of the profile — no interview, no step, no history.
 """
 
 from __future__ import annotations

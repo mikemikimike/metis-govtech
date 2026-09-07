@@ -2,7 +2,7 @@
 
 `FIXTURES` is where hand-authored profiles and golden files live. A hand-authored
 `ProductProfile` is a first-class test input: the profile model deliberately requires no
-session, no step and no history, so a fixture can be written by hand and compiled.
+interview, no step and no history, so a fixture can be written by hand and compiled.
 """
 
 from pathlib import Path

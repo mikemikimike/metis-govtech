@@ -43,7 +43,7 @@ CITATION = MetricSpec(
 TURNS = MetricSpec(
     fqn="metis.library.metrics.universal.TurnBudgetMetric",
     name="Turn budget",
-    description="Session completed within the allowed turn budget.",
+    description="Interview completed within the allowed turn budget.",
 )
 
 
