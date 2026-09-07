@@ -95,15 +95,25 @@ suspended so engineers can move fast:
 - **Every package version is frozen at `1.0.0a1`.** Do not bump or tag it per change — it flips to
   `1.0.0` once, at graduation. It is an honest "unstable v1 pre-release" marker, not a progress counter.
 - **Breaking changes are cheap** — no deprecation dance. Record each one in `MIGRATION.md`.
+- **Changelog entries go in one combined file.** Add v1 entries to the temporary
+  [`CHANGELOG.next.md`](CHANGELOG.next.md) at the repo root (grouped by package), **not** to the
+  per-package `CHANGELOG.md` files. Those keep their v0.x history untouched on `next`. At graduation the
+  combined file is split back into each package's `CHANGELOG.md` under a `## [1.0.0]` heading and deleted.
 - **Code review and `make ci` still apply.** Only the release ceremony is dropped.
 - **Pull relevant v0 fixes into `next` by cherry-picking** the fix commit from `v0.x` — never
   full-merge (that drags in v0 version commits and conflicts on every package's `version` line).
 
 **`v0.x` keeps the normal release workflow** — `release/<pkg>/v0.x.y` branches and `<pkg>/v0.x.y`
-tags, critical/security fixes only. Write CHANGELOG entries during development on both branches; the
-`next` ones are finalized at graduation. When `next` stabilizes it merges to `main` in a single
+tags, critical/security fixes only. On `v0.x`, write CHANGELOG entries per package during development,
+as normal; on `next`, use the combined `CHANGELOG.next.md` (see above), which is split back into the
+per-package files at graduation. When `next` stabilizes it merges to `main` in a single
 coordinated bump, and the normal release workflow resumes on `main`. See
 [docs/version-maintenance.md](docs/version-maintenance.md) for the graduation and v0.x maintenance procedure.
+
+> **⚠️ Remove at graduation.** This whole "Target branch" section, the root `CHANGELOG.next.md`, and
+> every other `next` / `1.0.0a1` mention across the repo are temporary pre-release scaffolding. When
+> `next` merges to `main`, strip them per the
+> [graduation cleanup checklist](docs/version-maintenance.md#graduating-next-to-main).
 
 ### Running Checks
 

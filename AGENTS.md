@@ -95,6 +95,12 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 - Release workflow: develop on `release/<package>/v<semver>` branch → merge to `main` → tag the merge commit (`<package>/v<semver>`)
 - Every merge to `main` MUST be tagged with a version bump for the affected package(s)
 - Each package maintains a `CHANGELOG.md` — write entries during development, not at merge time
+- **⚠️ v1 pre-release (temporary, remove at graduation):** development currently targets the long-lived
+  `next` branch. There, package versions are frozen at `1.0.0a1` and changelog entries go in the root
+  `CHANGELOG.next.md` — **not** the per-package `CHANGELOG.md` files. This note and every other `next`
+  mention are stripped when `next` merges to `main`; see the
+  [graduation cleanup checklist](docs/version-maintenance.md#graduating-next-to-main) and
+  [CONTRIBUTING.md](CONTRIBUTING.md#target-branch-next-vs-v0x)
 - Commit messages MUST use a Conventional Commit type and the package scope in parentheses:
   `feat(wizard): split prompt configuration ownership`. Use the affected package name as the
   scope (`core`, `library`, `engine`, `wizard`, or `insights`), not the `metis-` distribution
