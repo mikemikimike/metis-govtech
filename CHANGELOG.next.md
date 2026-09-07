@@ -41,6 +41,10 @@ _No v1 changes yet._
 
 #### Added
 
+- **JSON schema for `profile.yaml`.** `packages/wizard/schemas/profile.schema.json` is generated
+  from the `ProductProfile` model and CI-guarded by `make check-schema`, giving schema-aware
+  editors autocomplete and validation for hand-authored profiles. `profile.yaml` now carries a
+  `schema_version` field (defaulted to `1`; an unreadable version is refused, not misread).
 - **Web interview specifications now include the portable profile.** A completed interview ZIP
   contains `profile.yaml` beside `experiment.yaml` and `fixtures/`. Manual experiment-form ZIP
   files keep their engine-only layout.

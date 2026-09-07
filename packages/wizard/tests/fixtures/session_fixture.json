@@ -2,6 +2,7 @@
   "version": 7,
   "id": "compat-v1",
   "profile": {
+    "schema_version": 1,
     "product": {
       "name": "Research assistant",
       "description": "An agent that answers research questions over an internal document library.",

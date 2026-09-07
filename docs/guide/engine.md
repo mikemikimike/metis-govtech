@@ -966,7 +966,14 @@ The experiment defines *how* to run evaluations. The profile defines *what* corr
 
 #### Schema Reference
 
+The structure of `profile.yaml` is defined by a [JSON Schema](../../packages/wizard/schemas/profile.schema.json), generated from the wizard's `ProductProfile` model. Point a schema-aware editor at it with a first-line directive for autocomplete and inline validation:
+
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/govtech-responsibleai/metis/main/packages/wizard/schemas/profile.schema.json
+```
+
+```yaml
+schema_version: 1         # Profile schema version; always 1 (current version)
 product:
   name: <string>           # Target system name
   users: <string>          # Prose that describes the product users
@@ -1007,6 +1014,8 @@ scenarios:
 ```
 
 #### Field Descriptions
+
+**`schema_version`** — the profile schema version. Always `1` (the current version). A profile written without it still loads and is stamped on the next save; a profile stamped with a version the wizard cannot read is refused rather than misread.
 
 **`product`** — top-level metadata:
 
@@ -1218,6 +1227,15 @@ Before running `metis engine simulate --input-dir my-experiment/`:
   from pathlib import Path
   from metis.engine.simulation.types import Experiment
   Experiment.load_file(Path('my-experiment/experiment.yaml'))
+  print('Valid')
+  "
+  ```
+  If you author a `profile.yaml`, validate it the same way (needs `metis-wizard` installed):
+  ```bash
+  python -c "
+  from pathlib import Path
+  from metis.wizard.domain.profile import ProductProfile
+  ProductProfile.load(Path('my-experiment/profile.yaml'))
   print('Valid')
   "
   ```

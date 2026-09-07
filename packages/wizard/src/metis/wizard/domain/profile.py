@@ -13,12 +13,16 @@ having happened. Where the interview got to is `SessionState.step`, deliberately
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Generic, Self, TypeVar
+from typing import Any, Generic, Literal, Self, TypeVar
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 DescriptionT = TypeVar("DescriptionT")
+
+# The profile.yaml schema version. Bump when a change makes an old profile fail to load; see
+# packages/wizard/schemas/README.md for the rules.
+_PROFILE_VERSION = 1
 
 
 class ProfileNode(BaseModel, Generic[DescriptionT]):
@@ -85,10 +89,28 @@ class Scenario(ProfileNode[str]):
 class ProductProfile(BaseModel):
     """The whole document. Every task in it was discovered from the interview."""
 
+    # First field so it leads the serialized YAML, as experiment.yaml does. The profile is
+    # machine-written and round-trips through this model, so the version is defaulted rather
+    # than required: a profile without the key still loads and is stamped on the next save.
+    schema_version: Literal[1] = _PROFILE_VERSION
     product: Product
     tasks: list[Task] = Field(default_factory=list)
     personas: list[Persona] = Field(default_factory=list)
     scenarios: list[Scenario] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _check_version(cls, data: object) -> object:
+        """Reject only an explicit version we cannot read; a missing key takes the default."""
+        if not isinstance(data, dict):
+            return data
+        version = data.get("schema_version")
+        if version is not None and version != _PROFILE_VERSION:
+            raise ValueError(
+                f"Unsupported schema_version {version!r} (expected {_PROFILE_VERSION}). "
+                "This profile.yaml was written by a different version of metis-wizard."
+            )
+        return data
 
     # ── walking the tree ───────────────────────────────────────────────────
 

@@ -1,10 +1,14 @@
 """The document model: round-tripping, the tick, and walking the tree."""
 
+import json
 from pathlib import Path
 
+import jsonschema
 from fixtures.profiles import research_assistant
 
 from metis.wizard.contracts import ProductProfile
+
+SCHEMA_PATH = Path(__file__).parents[2] / "schemas" / "profile.schema.json"
 
 
 def test_round_trips_through_json_unchanged() -> None:
@@ -98,3 +102,11 @@ def test_uncovered_reports_ticked_behaviours_with_no_scenario() -> None:
     profile.scenarios = [t for t in profile.scenarios if t.id != "S-2"]
 
     assert [b.id for b in profile.uncovered()] == ["EB-3"]
+
+
+def test_full_profile_validates_against_committed_schema() -> None:
+    """A profile exercising every shape conforms to the shipped profile.schema.json."""
+    schema = json.loads(SCHEMA_PATH.read_text())
+    jsonschema.validate(
+        instance=research_assistant().model_dump(mode="json"), schema=schema
+    )
