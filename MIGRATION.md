@@ -49,6 +49,33 @@ evaluation glossary. The arithmetic is unchanged; only the names change.
 
 The compiled `experiment.yaml` is unchanged.
 
+#### Profile models standardised on one shape
+
+Every profile entity (task, behaviour, criterion, persona, scenario) now exposes
+the same `name` + `description` pair through a shared `ProfileNode` base, and the
+behaviour tick and the product summary are renamed for clarity.
+
+**Python API**
+
+- `Behaviour.statement` → `Behaviour.description`
+- `Behaviour.priority` → `Behaviour.measured` (still a `bool` — the tick)
+- `Product.summary` → `Product.description`
+- `ProductProfile.ticked()` → `ProductProfile.measured_behaviours()`
+- A criterion's `description` is now a structured `CriterionDescription`
+  (`given` / `when` / `then`) instead of a flat string. Use
+  `str(criterion.description)` for the old flat "Given …, when …, then …." text.
+
+**Session files**
+
+- Per-node authorship and generated-id history move off the profile onto the
+  session (`SessionState.user_typed`, `SessionState.issued_ids`); profile nodes
+  no longer carry authorship.
+- `SESSION_FORMAT_VERSION` advances from `6` to `7`. Session files at an older
+  format version are refused with a clear message rather than auto-migrated —
+  regenerate them with `metis wizard init`.
+
+The compiled `experiment.yaml` is unchanged.
+
 ### metis-core
 
 _No breaking changes in v1.0._
