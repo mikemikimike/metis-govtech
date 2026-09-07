@@ -177,14 +177,13 @@ class Card(BaseModel):
 
 
 class BehaviourCard(Card):
-    """The behaviours, prioritise and criteria steps. On behaviours it is a plain row (no tick —
-    the review comes before the "which do we measure" ask); at prioritise it is a bare tick; at
-    criteria its components are its criteria and its options are scoped to its behaviour.
+    """The behaviours and criteria steps. On behaviours it carries the measurement tick — review
+    and the "which do we measure" ask are one screen — and at criteria its components are its
+    criteria and its options are scoped to its behaviour.
 
-    `selected` keeps the base's `bool | None`: `None` on behaviours (no checkbox drawn), a bool
-    on prioritise and criteria (a checkbox reflecting measured state). A door draws no box for `None`,
-    which is what keeps the review screen from implying a decision the user has not been asked to
-    make yet."""
+    `selected` keeps the base's `bool | None`: a bool on both steps, reflecting the measured
+    state a checkbox draws. A door draws no box only for `None`, which no live Behaviour card
+    now sets."""
 
     kind: Literal["standard"] = "standard"  # pyright: ignore[reportIncompatibleVariableOverride]
 

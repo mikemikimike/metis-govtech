@@ -101,7 +101,7 @@ def clear_for_regeneration(
 ) -> None:
     """Answering "Regenerate" lands in a state the screens already draw.
 
-    A ticked behaviour with no criteria is what the prioritise step's Continue fills in; a
+    A measured behaviour with no criteria is what the Behaviour step's Continue fills in; a
     behaviour no scenario covers is what the scenarios gate catches. Both were built for the forward
     pass and happen to be the landing pad for coming back.
 

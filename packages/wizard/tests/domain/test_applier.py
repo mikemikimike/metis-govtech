@@ -365,15 +365,16 @@ def test_an_address_no_step_owns_is_writable_nowhere() -> None:
     assert owner_of("product.invented_field") is None
 
 
-def test_clarify_owns_product_and_prioritise_grants_nothing() -> None:
-    """Clarify owns the product prose; prioritise still has no model-owned paths."""
+def test_clarify_owns_the_product_prose_and_measured_is_owned_nowhere() -> None:
+    """Clarify owns the product prose. The measurement flag is the user's only real decision,
+    so no step owns it: the model can write it at no point, and only a WIZARD-origin tick can."""
     assert StepPermissions[InterviewStep.CLARIFY] == [
         "product.name",
         "product.users",
         "product.description",
         "product.detail",
     ]
-    assert InterviewStep.PRIORITISE not in StepPermissions
+    assert owner_of(EB1_MEASURED) is None
 
 
 # ── the mechanics ──────────────────────────────────────────────────────────

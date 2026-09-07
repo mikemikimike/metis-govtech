@@ -55,7 +55,6 @@ FEEDBACK_INSTRUCTION = (
 _STEP_TITLES: dict[InterviewStep, str] = {
     InterviewStep.CLARIFY: "Understanding your product",
     InterviewStep.BEHAVIOURS: "Behaviours",
-    InterviewStep.PRIORITISE: "What to measure",
     InterviewStep.CRITERIA: "Acceptance criteria",
     InterviewStep.PERSONAS: "Personas",
     InterviewStep.SCENARIOS: "Scenarios",
@@ -66,8 +65,8 @@ _INTERVIEW_STEPS: list[InterviewStep] = list(_STEP_TITLES)
 def stamp_step(request: WizardRequest, step: InterviewStep) -> None:
     """Write the step's header onto a request: title, one-based position and total.
 
-    One place turns a step into a position, so the six screens cannot drift into disagreeing
-    about which of six they are. A step off the list — only DONE — leaves the fields at their
+    One place turns a step into a position, so the five screens cannot drift into disagreeing
+    about which of five they are. A step off the list — only DONE — leaves the fields at their
     `None` defaults, so a door draws no header rather than a wrong one.
 
     A mid-step form or chat is stamped with whatever step the interview is on when it is
@@ -120,59 +119,25 @@ def _three_replies(accept_label: str, add_label: str) -> list[Option]:
 
 # ── step 1 · behaviours ────────────────────────────────────────────────────
 
+BEHAVIOUR_INSTRUCTION = (
+    "Every behaviour starts selected for measurement. Clear any you don't want to measure. "
+    'To leave comments, choose "Chat about it" first; the next prompt accepts text.'
+)
+
 
 def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
-    """A flat list reviewed whole — so the replies belong to the screen, not to each card.
+    """Review and measurement selection in one screen.
 
-    No card carries a `selected` here (`selected=None`): this screen only shows the drafted
-    behaviours and asks for a nod to continue. The tick — the "which of these do we measure"
-    decision — is made one screen later, on prioritise. A checkbox drawn here would imply the
-    user must choose something before they have been asked to; both doors draw no box for a
-    `None` selected (the CLI's `_checkbox` returns "", the web door renders the plain row).
-    """
-    cards = []
-    for task in profile.tasks:
-        for behaviour in task.behaviours:
-            cards.append(
-                BehaviourCard(
-                    id=behaviour.id,
-                    section=_section(task),
-                    title=behaviour.name,
-                    selected=None,
-                    components=[CardText(text=behaviour.description)],
-                )
-            )
+    Each card shows a behaviour and carries its own measurement tick — the "which of these do
+    we measure" decision, the only real decision in the interview. `multi=True`: every tick was
+    composed by the package and writes one independent flag on a different behaviour, so nothing
+    can invalidate anything else, and several ticks can travel together.
 
-    return ChoiceRequest(
-        prompt=message,
-        cards=cards,
-        multi=False,
-        options=[
-            Option(id=OptionId(action="accept"), label="Looks right", primary=True),
-            Option(id=OptionId(action="chat"), label="Chat about it"),
-            *[
-                Option(
-                    id=OptionId(action="add", target=task.id),
-                    label=f"Add to {task.name}",
-                )
-                for task in profile.tasks
-            ],
-        ],
-        instruction=FEEDBACK_INSTRUCTION,
-    )
-
-
-# ── step 2 · prioritise ────────────────────────────────────────────────────
-
-
-def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
-    """One question, on its own screen. The tick is the user's only real decision.
-
-    `multi=True`: every option here was composed by the package and writes one independent
-    flag on a different behaviour, so nothing can invalidate anything else.
+    `selected` reflects `measured`, so both doors draw a checkbox (drafted and form behaviours
+    start measured). Continue is disabled while nothing is measured: with no measured behaviour
+    there is nothing to write criteria for.
     """
     cards: list[BehaviourCard] = []
-
     for task in profile.tasks:
         for behaviour in task.behaviours:
             cards.append(
@@ -196,24 +161,35 @@ def prioritise_screen(profile: ProductProfile) -> ChoiceRequest:
                 )
             )
 
-    # No empty-task warning: leaving a task unticked is a legitimate choice, not a mistake to
-    # flag. "Continue" is what generates criteria for whatever is ticked, so ticked-but-empty
-    # cannot arise, and there is nothing here that needs blocking either.
+    measured = any(behaviour.measured for behaviour in profile.behaviours())
     return ChoiceRequest(
-        prompt=(
-            "I've selected all behaviours as a starting point. Clear any you don't want "
-            "to measure, then I'll write acceptance criteria for the rest."
-        ),
+        prompt=message,
         cards=cards,
         multi=True,
         options=[
-            Option(id=OptionId(action="back"), label="← Back"),
-            Option(id=OptionId(action="continue"), label="Continue", primary=True),
+            Option(id=OptionId(action="chat"), label="Chat about it"),
+            *[
+                Option(
+                    id=OptionId(action="add", target=task.id),
+                    label=f"Add to {task.name}",
+                )
+                for task in profile.tasks
+            ],
+            Option(
+                id=OptionId(action="continue"),
+                label="Continue",
+                primary=True,
+                # A disabled Continue is still shown, marked unavailable. The measurement scope
+                # is the gate: at least one behaviour must be measured to have anything to write
+                # criteria for.
+                enabled=measured,
+            ),
         ],
+        instruction=BEHAVIOUR_INSTRUCTION,
     )
 
 
-# ── step 3 · criteria ──────────────────────────────────────────────────────
+# ── step 2 · criteria ──────────────────────────────────────────────────────
 
 
 def _criterion_components(behaviour: Behaviour) -> list[AnyCardComponent]:
@@ -313,7 +289,7 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     )
 
 
-# ── step 4 · personas ──────────────────────────────────────────────────────
+# ── step 3 · personas ──────────────────────────────────────────────────────
 
 
 def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
@@ -336,7 +312,7 @@ def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     )
 
 
-# ── step 5 · scenarios ───────────────────────────────────────────────────────
+# ── step 4 · scenarios ───────────────────────────────────────────────────────
 
 
 def _coverage_group(profile: ProductProfile, scenario_id: str) -> CardOptionGroup:

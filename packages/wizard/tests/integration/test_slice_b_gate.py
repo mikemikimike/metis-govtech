@@ -130,7 +130,7 @@ def test_the_interview_survives_a_restart_at_every_screen(tmp_path: Path) -> Non
     path = tmp_path / "interview_state.json"
     interview, _ = a_interview(path)
 
-    for _ in range(6):  # a few screens in — far enough to move past prioritise
+    for _ in range(6):  # a few screens in — far enough to move past behaviours
         request = interview.next()
         assert request is not None
         if isinstance(request, ChatRequest):

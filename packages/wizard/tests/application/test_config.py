@@ -20,10 +20,9 @@ from metis.wizard.domain.permissions import InterviewStep
 _EXPECTED_STATUSES = {
     "clarify": "Understanding your agent…",
     "behaviours": "Shaping expected behaviours…",
-    "prioritise": "Writing testable criteria…",
-    "criteria": "Designing evaluator personas…",
-    "personas": "Building coverage scenarios…",
-    "scenarios": "Finalising your evaluation…",
+    "criteria": "Writing testable criteria…",
+    "personas": "Designing evaluator personas…",
+    "scenarios": "Building coverage scenarios…",
     "done": "Finishing up…",
 }
 

@@ -115,7 +115,7 @@ def test_one_payload_serves_all_three_panes(tmp_path: Path) -> None:
     assert body["requests"], "the live screen is in the list"
     assert body["requests"][-1]["state"] == "pending"
     assert body["profile"]["product"]["name"] == "Research assistant"
-    assert body["busy_message"] == "Building coverage scenarios…"
+    assert body["busy_message"] == "Designing evaluator personas…"
 
 
 def test_scenario_card_trial_count_survives_the_http_wire(tmp_path: Path) -> None:
@@ -185,7 +185,7 @@ def test_the_web_door_reaches_the_same_state_as_the_cli(tmp_path: Path) -> None:
     _seed(web_root, "s", step=InterviewStep.BEHAVIOURS)
     _seed(cli_root, "s", step=InterviewStep.BEHAVIOURS)
 
-    answers = [["accept"], ["tick:EB-2"]]
+    answers = [["tick:EB-2"], ["continue"]]
 
     api = client(web_root)
     api.get("/api/interviews/s")
@@ -330,13 +330,13 @@ def test_nothing_is_held_between_requests(tmp_path: Path) -> None:
     first.get("/api/interviews/wizard-ddd")
     first.post(
         "/api/interviews/wizard-ddd/respond",
-        json={"type": "choice", "selected": ["accept"]},
+        json={"type": "choice", "selected": ["continue"]},
     )
 
     # A different app object entirely, sharing only the directory.
     body = client(tmp_path).get("/api/interviews/wizard-ddd").json()
 
-    assert body["step"] == "prioritise"
+    assert body["step"] == "criteria"
     assert body["requests"][0]["state"] == "resolved"
 
 

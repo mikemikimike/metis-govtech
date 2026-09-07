@@ -24,7 +24,7 @@ from metis.wizard.domain.permissions import InterviewStep
 # "not fully defined". See CLAUDE.md — Coding Conventions.
 from metis.wizard.domain.profile import ProductProfile
 
-INTERVIEW_FORMAT_VERSION = 7
+INTERVIEW_FORMAT_VERSION = 8
 
 
 class InterviewVersionError(Exception):
@@ -46,6 +46,12 @@ class InterviewState(BaseModel):
     # interview got to is conversation state. Keeping them apart is what makes the profile a
     # pure artefact — renderable, compilable and hand-writable without inventing a step.
     step: InterviewStep = InterviewStep.CLARIFY
+    # The measurement-scope lock. The combined Behaviour screen asks the user to pick the
+    # behaviours worth measuring; its Continue sets this true. It is not a "the user saw the
+    # screen" receipt — Criteria generation reads the measured subset it locks in, and going
+    # Back to reopen that decision clears it. There is deliberately no `criteria_confirmed` or
+    # `personas_confirmed`; only the measured scope needs an explicit lock.
+    behaviours_confirmed: bool = False
     history: list[Turn] = Field(default_factory=list)
     # Every screen this interview has composed, in order. The last is the one being looked at;
     # everything before it has been answered. A terminal only ever needed the last one, which

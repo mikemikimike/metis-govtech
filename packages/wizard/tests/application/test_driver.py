@@ -186,29 +186,28 @@ def _compose_at(step: InterviewStep):
 def test_every_screen_reports_a_position_consistent_with_its_step() -> None:
     """The header is stamped once, from the step, so no screen can disagree with another.
 
-    Positions are one-based and total six. Behaviours is the second of the six interview
+    Positions are one-based and total five. Behaviours is the second of the five interview
     steps because clarify is the first, even though a chat rather than a screen composes it.
     """
     expected = {
         InterviewStep.CLARIFY: ("Understanding your product", 1),
         InterviewStep.BEHAVIOURS: ("Behaviours", 2),
-        InterviewStep.PRIORITISE: ("What to measure", 3),
-        InterviewStep.CRITERIA: ("Acceptance criteria", 4),
-        InterviewStep.PERSONAS: ("Personas", 5),
-        InterviewStep.SCENARIOS: ("Scenarios", 6),
+        InterviewStep.CRITERIA: ("Acceptance criteria", 3),
+        InterviewStep.PERSONAS: ("Personas", 4),
+        InterviewStep.SCENARIOS: ("Scenarios", 5),
     }
 
     for step, (title, position) in expected.items():
         request = _compose_at(step)
         assert request.title == title, step
         assert request.step == position, step
-        assert request.steps == 6, step
+        assert request.steps == 5, step
 
 
-def test_the_scenarios_screen_reports_six_of_six() -> None:
+def test_the_scenarios_screen_reports_five_of_five() -> None:
     request = _compose_at(InterviewStep.SCENARIOS)
 
-    assert (request.step, request.steps) == (6, 6)
+    assert (request.step, request.steps) == (5, 5)
 
 
 def test_criteria_cards_carry_no_metric_annotation() -> None:
@@ -277,7 +276,7 @@ def test_a_mid_step_form_inherits_the_parent_steps_header() -> None:
 
     form = state.pending
     assert form is not None
-    assert (form.title, form.step, form.steps) == ("Personas", 5, 6)
+    assert (form.title, form.step, form.steps) == ("Personas", 4, 5)
 
 
 def test_the_persona_add_form_keeps_the_name_and_description_and_generates_an_id() -> (
@@ -453,14 +452,6 @@ def test_shared_review_screens_show_names_and_descriptions() -> None:
         == "Cites a source for every factual claim"
     )  # type: ignore[union-attr]
 
-    prioritise = driver.compose(
-        InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
-    )
-    assert (
-        prioritise.cards[0].components[0].text
-        == "Cites a source for every factual claim"
-    )  # type: ignore[union-attr]
-
     personas = driver.compose(
         InterviewState(id="s", profile=profile, step=InterviewStep.PERSONAS)
     )
@@ -476,21 +467,23 @@ def test_shared_review_screens_show_names_and_descriptions() -> None:
     )  # type: ignore[union-attr]
 
 
-def test_drafted_behaviours_start_selected_on_the_prioritise_screen() -> None:
+def test_drafted_behaviours_start_measured_on_the_behaviour_screen() -> None:
+    """The combined Behaviour screen reviews the draft and asks which to measure in one place:
+    every drafted behaviour starts measured, so each card draws a ticked measurement box, and
+    the screen carries the measurement instruction rather than a bare review prompt."""
     profile = ProductProfile(
         product=Product(name="Agent", description="An agent.", users="Operators")
     )
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = InterviewState(id="s", profile=profile, step=InterviewStep.BEHAVIOURS)
 
-    driver.compose(state)
-    state.step = InterviewStep.PRIORITISE
     request = driver.compose(state)
 
     assert all(behaviour.measured for behaviour in profile.behaviours())
     assert all(card.selected for card in request.cards)
     assert all(card.options[0].selected for card in request.cards)
-    assert request.prompt.startswith("I've selected all behaviours")
+    assert request.instruction is not None
+    assert "measure" in request.instruction.lower()
 
 
 # ── the scenarios gates ─────────────────────────────────────────────────────
@@ -729,15 +722,23 @@ def test_invalid_or_mixed_field_edits_do_not_mutate(response) -> None:
     assert any(w.source is WarningSource.RUNTIME for w in refreshed.warnings)
 
 
-def test_a_task_with_nothing_ticked_is_not_warned() -> None:
-    """Leaving a task unticked is a legitimate choice, not a mistake to flag. The prioritise
-    screen raises no warning for it, and Continue stays enabled."""
+def test_the_behaviour_screen_gates_continue_on_at_least_one_measured() -> None:
+    """Leaving behaviours unmeasured is a choice, not a mistake to flag, so the screen raises
+    no warning either way. But at least one behaviour must be measured to have anything to
+    write criteria for, so Continue is disabled while nothing is measured and enabled once one
+    is."""
     profile = research_assistant()
     for behaviour in profile.behaviours():
         behaviour.measured = False
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.BEHAVIOURS)
 
+    request = driver.compose(state)
+
+    assert not request.warnings
+    assert not next(o for o in request.options if o.id.action == "continue").enabled
+
+    profile.behaviour("EB-1").measured = True  # type: ignore[union-attr]
     request = driver.compose(state)
 
     assert not request.warnings
@@ -751,15 +752,9 @@ def test_a_task_with_nothing_ticked_is_not_warned() -> None:
     ("source", "destination", "expected_prompt"),
     [
         (
-            InterviewStep.PRIORITISE,
+            InterviewStep.CRITERIA,
             InterviewStep.BEHAVIOURS,
             "Review the behaviour draft.",
-        ),
-        (
-            InterviewStep.CRITERIA,
-            InterviewStep.PRIORITISE,
-            "I've selected all behaviours as a starting point. Clear any you don't want "
-            "to measure, then I'll write acceptance criteria for the rest.",
         ),
         (
             InterviewStep.SCENARIOS,
@@ -816,7 +811,7 @@ def test_going_back_regenerates_nothing_that_already_exists() -> None:
     profile = research_assistant()
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
-    state = InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.BEHAVIOURS)
     before = profile.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
 
     driver._advance(state)  # the Continue that generates
@@ -830,7 +825,7 @@ def test_unticking_then_continuing_generates_only_the_gap() -> None:
     profile.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
-    state = InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.BEHAVIOURS)
 
     driver._advance(state)
 
@@ -900,7 +895,7 @@ def test_ticking_costs_no_model_call() -> None:
     profile = research_assistant()
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
-    state = InterviewState(id="s", profile=profile, step=InterviewStep.PRIORITISE)
+    state = InterviewState(id="s", profile=profile, step=InterviewStep.BEHAVIOURS)
     request = driver.compose(state)
     interviewer.calls.clear()
 

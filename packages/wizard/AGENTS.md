@@ -9,14 +9,11 @@ IMPORTANT: Always talk in ASD-STE100 Simplified Technical English.
 Interactive wizard that turns a prose description of a product into a runnable `experiment.yaml`.
 Depends on metis-core and metis-library.
 
-Design lives in `packages/wizard/docs/`:
-- `wizard-mvp-design.md` — the models and behaviour, single source of truth
-- `wizard-agentic-primer-design.md` — amends the above to make the interview agentic
-- `wizard-mvp-userflow.html` — the flow, the dependency graph, the door contract
-- `wizard-mvp-mockup.html` — the interaction, clickable
-
-The two HTML companions are illustrative flow and mockup artefacts. Where they disagree with
-`wizard-mvp-design.md`, the markdown wins.
+The design record lives in these files:
+- Root `GLOSSARY.md` — the vocabulary authority. Use its terms in code, tests, prompts, and UI.
+- `docs/architecture.md` — the normative architecture specification.
+- `openspec/changes/` — the active and archived proposals, designs, and delta specs. This is the
+  living design record for each wizard change.
 
 ## Working style
 

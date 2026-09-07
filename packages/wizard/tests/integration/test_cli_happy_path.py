@@ -12,9 +12,9 @@ from metis.wizard.contracts import ProductProfile
 
 def test_init_happy_path_writes_experiment_review_and_profile(tmp_path: Path) -> None:
     app = create_cli_app(ScriptedInterviewer)
-    # Opening chat + two model questions, accept the behaviour draft, keep all preselected
-    # behaviours, continue through criteria, accept personas, then continue through scenarios.
-    answers = ["answer", "answer", "answer", "1", "5", "11", "1", "9"]
+    # Opening chat + two model questions, keep every behaviour measured and continue,
+    # continue through criteria, accept personas, then continue through scenarios.
+    answers = ["answer", "answer", "answer", "7", "11", "1", "9"]
 
     result = CliRunner().invoke(
         app,

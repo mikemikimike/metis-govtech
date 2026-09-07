@@ -29,17 +29,16 @@ from enum import StrEnum
 class InterviewStep(StrEnum):
     CLARIFY = "clarify"
     BEHAVIOURS = "behaviours"
-    PRIORITISE = "prioritise"
     CRITERIA = "criteria"
     PERSONAS = "personas"
     SCENARIOS = "scenarios"
     DONE = "done"
 
 
-# Note that PRIORITISE has no entry: the ticks that make it work are PatchOrigin.WIZARD, so they
-# never reach an address check. Clarify owns the product prose. The driver narrows a clarify result
-# to those four paths before applying it; the global owner lookup remains what lets a later step
-# correct an earlier step's fields.
+# Note that BEHAVIOURS grants no path for `measured`: the measurement ticks are PatchOrigin.WIZARD,
+# so they never reach an address check. Clarify owns the product prose. The driver narrows a clarify
+# result to those four paths before applying it; the global owner lookup remains what lets a later
+# step correct an earlier step's fields.
 # Note that each step owns both the *container* and its *elements*. ADD addresses the list
 # it appends to (`tasks`, `tasks[T-1].behaviours`), while SET and REMOVE address an element
 # (`tasks[T-1]`). Listing only one of the two silently forbids half the operations.

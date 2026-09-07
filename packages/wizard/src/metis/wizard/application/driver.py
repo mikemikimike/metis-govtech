@@ -51,8 +51,7 @@ if TYPE_CHECKING:
 
 _NEXT_STEP = {
     InterviewStep.CLARIFY: InterviewStep.BEHAVIOURS,
-    InterviewStep.BEHAVIOURS: InterviewStep.PRIORITISE,
-    InterviewStep.PRIORITISE: InterviewStep.CRITERIA,
+    InterviewStep.BEHAVIOURS: InterviewStep.CRITERIA,
     InterviewStep.CRITERIA: InterviewStep.PERSONAS,
     InterviewStep.PERSONAS: InterviewStep.SCENARIOS,
     InterviewStep.SCENARIOS: InterviewStep.DONE,
@@ -62,8 +61,7 @@ _NEXT_STEP = {
 # navigation contract inspectable and avoids implying that hidden or terminal steps can go
 # back through this handler.
 _PREVIOUS_STEP = {
-    InterviewStep.PRIORITISE: InterviewStep.BEHAVIOURS,
-    InterviewStep.CRITERIA: InterviewStep.PRIORITISE,
+    InterviewStep.CRITERIA: InterviewStep.BEHAVIOURS,
     InterviewStep.SCENARIOS: InterviewStep.PERSONAS,
 }
 
@@ -180,9 +178,6 @@ class StepDriver:
                     profile, self._message(InterviewStep.BEHAVIOURS)
                 )
             )
-
-        if step is InterviewStep.PRIORITISE:
-            return self._attach(screens.prioritise_screen(profile))
 
         if step is InterviewStep.CRITERIA:
             return self._attach(
@@ -466,7 +461,12 @@ class StepDriver:
             )  # WIZARD origin — trusted by construction
 
         if "back" in actions:
-            state.step = _PREVIOUS_STEP.get(state.step, state.step)
+            destination = _PREVIOUS_STEP.get(state.step, state.step)
+            # Back to Behaviour review reopens the measurement-scope decision, so its earlier
+            # confirmation no longer holds and must be earned again with Continue.
+            if destination is InterviewStep.BEHAVIOURS:
+                state.behaviours_confirmed = False
+            state.step = destination
             return
 
         # The three criteria-card actions and the screen-level chat all dispatch on the action
@@ -740,12 +740,21 @@ class StepDriver:
     def _advance(self, state: InterviewState) -> None:
         """Move on, generating whatever the next screen needs and does not have."""
         current = state.step
+
+        # Behaviour Continue is the measurement-scope lock. It needs at least one measured
+        # behaviour — with none there is nothing to write criteria for — and it records that
+        # the user has chosen the set to measure. A screen with the gate held stays put.
+        if current is InterviewStep.BEHAVIOURS:
+            if not state.profile.measured_behaviours():
+                return
+            state.behaviours_confirmed = True
+
         state.step = _NEXT_STEP.get(current, InterviewStep.DONE)
 
-        # Continue at prioritise is what generates criteria — which is why ticked-but-empty
+        # Continue at behaviours is what generates criteria — which is why measured-but-empty
         # cannot exist, and why nothing is generated for behaviours nobody picked.
         if state.step is InterviewStep.CRITERIA and any(
-            b.measured and not b.criteria for b in state.profile.measured_behaviours()
+            not b.criteria for b in state.profile.measured_behaviours()
         ):
             self._try(lambda: self.interviewer.draft_criteria(state.profile), state)
             # A separate pass, after generation — never folded into it.

@@ -210,7 +210,7 @@ def test_a_tick_does_not_stack_a_second_copy_of_its_screen() -> None:
     The regression this guards: resolving on every response, then recomposing, puts the same
     screen in the conversation twice — the first greyed out for no visible reason.
     """
-    interview = _driven(InterviewStep.PRIORITISE)
+    interview = _driven(InterviewStep.BEHAVIOURS)
     interview.next()
     before = interview.state.profile.behaviour("EB-2")
     assert before is not None and before.measured is False
@@ -229,7 +229,7 @@ def test_a_cleared_behaviour_stays_clear_after_save_and_resume(tmp_path: Path) -
 
     path = tmp_path / "interview_state.json"
     interview = Interview(
-        a_state(step=InterviewStep.PRIORITISE),
+        a_state(step=InterviewStep.BEHAVIOURS),
         path=path,
         driver=StepDriver(interviewer=ScriptedInterviewer()),
     )
@@ -253,7 +253,7 @@ def test_a_cleared_behaviour_stays_clear_after_save_and_resume(tmp_path: Path) -
 
 
 def test_continuing_resolves_the_screen_behind_it() -> None:
-    interview = _driven(InterviewStep.PRIORITISE)
+    interview = _driven(InterviewStep.BEHAVIOURS)
     interview.next()
 
     interview.respond(ChoiceResponse(selected=["continue"]))
@@ -266,22 +266,23 @@ def test_continuing_resolves_the_screen_behind_it() -> None:
 
 
 def test_a_resolved_screen_records_what_was_chosen() -> None:
-    """A receipt saying "Looks right · Chat about it · I'll add one" tells you nothing."""
+    """A receipt saying "Chat about it · Add to … · Continue" tells you nothing; the resolved
+    request must record which reply was actually clicked."""
     interview = _driven(InterviewStep.BEHAVIOURS)
     offered = interview.next()
     assert isinstance(offered, ChoiceRequest)
-    assert [o.id.action for o in offered.options] == ["accept", "chat", "add", "add"]
+    assert [o.id.action for o in offered.options] == ["chat", "add", "add", "continue"]
     assert [o.id.target for o in offered.options if o.id.action == "add"] == [
         "T-1",
         "T-2",
     ]
 
-    interview.respond(ChoiceResponse(selected=["accept"]))
+    interview.respond(ChoiceResponse(selected=["continue"]))
 
     resolved = interview.state.requests[0]
     assert isinstance(resolved, ChoiceRequest)
     chosen = {o.id.action: o.selected for o in resolved.options}
-    assert chosen["accept"] is True
+    assert chosen["continue"] is True
     assert chosen["chat"] is not True
     assert chosen["add"] is not True
     assert not hasattr(resolved, "answer")
@@ -511,9 +512,9 @@ def test_back_sets_the_step_and_nothing_else() -> None:
     before = interview.state.profile.model_copy(deep=True)
     history_length = len(interview.state.history)
 
-    interview.back(InterviewStep.PRIORITISE)
+    interview.back(InterviewStep.BEHAVIOURS)
 
-    assert interview.state.step is InterviewStep.PRIORITISE
+    assert interview.state.step is InterviewStep.BEHAVIOURS
     assert (
         interview.state.profile == before
     )  # every scenario, persona and criterion intact
