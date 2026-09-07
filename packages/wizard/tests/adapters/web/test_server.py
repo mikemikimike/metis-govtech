@@ -443,7 +443,7 @@ def test_referenced_fixture_cannot_be_deleted_but_unreferenced_can(
     ] == ["policy.pdf"]
 
 
-def test_interview_bundle_download_has_the_engine_layout(tmp_path: Path) -> None:
+def test_interview_specification_download_has_the_engine_layout(tmp_path: Path) -> None:
     _seed(tmp_path, "wizard-zip", step=SessionStep.DONE)
     api = client(tmp_path)
     api.post(
@@ -472,7 +472,7 @@ def test_interview_bundle_download_has_the_engine_layout(tmp_path: Path) -> None
     assert not (tmp_path / "wizard-zip" / "experiment.zip").exists()
 
 
-def test_manual_bundle_route_is_stateless_and_includes_uploaded_files(
+def test_manual_specification_route_is_stateless_and_includes_uploaded_files(
     tmp_path: Path,
 ) -> None:
     response = client(tmp_path).post(
@@ -489,7 +489,9 @@ def test_manual_bundle_route_is_stateless_and_includes_uploaded_files(
     assert list(tmp_path.iterdir()) == []
 
 
-def test_manual_bundle_route_refuses_a_missing_referenced_file(tmp_path: Path) -> None:
+def test_manual_specification_route_refuses_a_missing_referenced_file(
+    tmp_path: Path,
+) -> None:
     import copy
 
     document = copy.deepcopy(VALID_DOC)

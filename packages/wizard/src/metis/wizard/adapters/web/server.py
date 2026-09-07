@@ -26,13 +26,13 @@ from starlette.background import BackgroundTask
 from metis.wizard.adapters.web.store import SessionStore
 from metis.wizard.application import Session, SessionVersionError
 from metis.wizard.application.compile import (
-    BundleError,
     CompilationError,
+    SpecificationError,
     build_experiment_document,
     compile_experiment,
-    temporary_bundle_directory,
+    temporary_specification_directory,
     to_yaml,
-    write_bundle,
+    write_specification,
 )
 from metis.wizard.application.fixtures import FixtureError, FixtureLibrary
 from metis.wizard.application.interviewer import Interviewer, InterviewerUnavailable
@@ -63,7 +63,7 @@ def _cleanup_directory(path: Path) -> None:
     shutil.rmtree(path, ignore_errors=True)
 
 
-def _bundle_response(path: Path, *, cleanup: Path | None = None) -> FileResponse:
+def _specification_response(path: Path, *, cleanup: Path | None = None) -> FileResponse:
     background = (
         BackgroundTask(_cleanup_directory, cleanup) if cleanup is not None else None
     )
@@ -299,29 +299,31 @@ def create_app(
         }
 
     @app.get("/api/sessions/{session_id}/experiment.zip")
-    def experiment_bundle(session_id: str) -> FileResponse:
+    def experiment_specification(session_id: str) -> FileResponse:
         path = store.path_for(session_id)
         if path is None:
             raise HTTPException(404, f"No session {session_id}.")
         session = Session.resume(path)
-        temporary = temporary_bundle_directory(prefix="metis-session-bundle-")
+        temporary = temporary_specification_directory(
+            prefix="metis-session-specification-"
+        )
         try:
             profile = session.profile()
             document = compile_experiment(profile, session.state.id)
             target = temporary / "experiment.zip"
-            write_bundle(
+            write_specification(
                 document,
                 path.parent / "fixtures",
                 target,
                 profile=profile,
             )
-        except (CompilationError, BundleError) as exc:
+        except (CompilationError, SpecificationError) as exc:
             _cleanup_directory(temporary)
             raise HTTPException(422, str(exc)) from exc
         except Exception:
             _cleanup_directory(temporary)
             raise
-        return _bundle_response(target, cleanup=temporary)
+        return _specification_response(target, cleanup=temporary)
 
     # ── the hand-authoring door ──────────────────────────────────────────────
     #
@@ -369,7 +371,7 @@ def create_app(
         )
 
     @app.post("/api/experiment.zip")
-    def compile_submitted_bundle(
+    def compile_submitted_specification(
         document: str = Form(...),
         files: list[UploadFile] = File(default=[]),
     ) -> FileResponse:
@@ -383,19 +385,19 @@ def create_app(
             raise HTTPException(422, "The experiment document must be a JSON object.")
 
         compiled = _submitted_document(payload)
-        temporary = temporary_bundle_directory()
+        temporary = temporary_specification_directory()
         try:
             library = FixtureLibrary(temporary / "fixtures")
             library.upload([(file.filename or "", file.file) for file in files])
             target = temporary / "experiment.zip"
-            write_bundle(compiled, library.root, target)
-        except (FixtureError, BundleError) as exc:
+            write_specification(compiled, library.root, target)
+        except (FixtureError, SpecificationError) as exc:
             _cleanup_directory(temporary)
             raise HTTPException(422, str(exc)) from exc
         except Exception:
             _cleanup_directory(temporary)
             raise
-        return _bundle_response(target, cleanup=temporary)
+        return _specification_response(target, cleanup=temporary)
 
     # ── the app itself ─────────────────────────────────────────────────────
 

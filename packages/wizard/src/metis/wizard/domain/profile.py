@@ -78,7 +78,7 @@ class Scenario(ProfileNode[str]):
     persona_refs: list[str] = Field(default_factory=list)
     fixtures: list[str] = Field(
         default_factory=list
-    )  # filenames only; web fixture bytes live beside the session or in a request bundle
+    )  # filenames only; web fixture bytes live beside the session or in a specification request
     num_trials: int = 3  # one trial of a non-deterministic agent says very little
 
 

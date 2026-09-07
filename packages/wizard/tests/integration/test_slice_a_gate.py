@@ -20,9 +20,9 @@ from fixtures.profiles import CITATION_METRIC, research_assistant
 
 from metis.wizard.application.compile import (
     build_experiment_document,
-    write_bundle,
     write_experiment,
     write_review,
+    write_specification,
 )
 
 EXPERIMENT_ID = "research-assistant"
@@ -85,12 +85,14 @@ def test_the_gate_would_catch_an_unimportable_metric(tmp_path: Path) -> None:
     assert exit_info.value.code == 1
 
 
-def test_an_extracted_bundle_passes_the_engine_input_gate(tmp_path: Path) -> None:
+def test_an_extracted_specification_passes_the_engine_input_gate(
+    tmp_path: Path,
+) -> None:
     """The ZIP is not just well formed; its extracted root is a real engine input directory."""
     from metis.engine.cli import _validate_inputs
 
     document = build_experiment_document(
-        experiment_id="bundle-gate",
+        experiment_id="specification-gate",
         description="CSV and text fixtures",
         personas=[{"id": "p", "description": "A person."}],
         scenarios=[
@@ -109,10 +111,10 @@ def test_an_extracted_bundle_passes_the_engine_input_gate(tmp_path: Path) -> Non
     (fixture_dir / "data.csv").write_text("name,value\nalpha,1\n")
     (fixture_dir / "notes.txt").write_text("fixture notes\n")
     archive = tmp_path / "experiment.zip"
-    write_bundle(document, fixture_dir, archive)
+    write_specification(document, fixture_dir, archive)
 
     extracted = tmp_path / "extracted"
-    with zipfile.ZipFile(archive) as bundle:
-        bundle.extractall(extracted)
+    with zipfile.ZipFile(archive) as specification:
+        specification.extractall(extracted)
 
     _validate_inputs(extracted)

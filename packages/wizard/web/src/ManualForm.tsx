@@ -204,11 +204,11 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
       })),
     };
     try {
-      const bundle = await api.compileBundle(
+      const specification = await api.compileSpecification(
         payload,
         library.map(({ name, file }) => ({ name, file })),
       );
-      const url = URL.createObjectURL(bundle);
+      const url = URL.createObjectURL(specification);
       const anchor = window.document.createElement("a");
       anchor.href = url;
       anchor.download = "experiment.zip";
@@ -241,7 +241,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
             </h1>
             <p className="text-sm text-muted-foreground">
               Fill in the scenarios, personas, metrics and fixture files, and
-              download the experiment bundle.
+              download the experiment specification.
             </p>
           </header>
         </div>

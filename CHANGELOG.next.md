@@ -38,9 +38,9 @@ _No v1 changes yet._
 
 #### Added
 
-- **Web interview bundles now include the portable profile.** A completed interview ZIP contains
-  `profile.yaml` beside `experiment.yaml` and `fixtures/`. Manual experiment-form ZIP files keep
-  their engine-only layout.
+- **Web interview specifications now include the portable profile.** A completed interview ZIP
+  contains `profile.yaml` beside `experiment.yaml` and `fixtures/`. Manual experiment-form ZIP
+  files keep their engine-only layout.
 
 #### Changed
 

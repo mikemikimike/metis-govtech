@@ -266,7 +266,7 @@ export interface InterviewConfiguration {
 }
 
 // Fixture metadata is safe to send over the session door. File bytes stay in the upload and
-// bundle requests, never in a session view or a choice response.
+// specification requests, never in a session view or a choice response.
 export interface FixtureMetadata {
   name: string;
   size: number;
@@ -396,7 +396,7 @@ export const api = {
     return res.text();
   },
 
-  compileBundle: async (
+  compileSpecification: async (
     document: unknown,
     files: Array<{ name: string; file: File }>,
   ): Promise<Blob> => {

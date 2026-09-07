@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from metis.wizard.domain.profile import ProductProfile
 
 
-class BundleError(ValueError):
-    """The YAML and fixture directory cannot form a runnable bundle."""
+class SpecificationError(ValueError):
+    """The YAML and fixture directory cannot form a runnable specification."""
 
 
 def _referenced_names(document: dict[str, Any]) -> set[str]:
@@ -30,11 +30,11 @@ def _referenced_names(document: dict[str, Any]) -> set[str]:
             try:
                 names.add(normalize_fixture_name(raw_name))
             except FixtureError as exc:
-                raise BundleError(str(exc)) from exc
+                raise SpecificationError(str(exc)) from exc
     return names
 
 
-def write_bundle(
+def write_specification(
     document: dict[str, Any],
     fixture_dir: Path,
     target: Path,
@@ -47,22 +47,22 @@ def write_bundle(
     files: dict[str, Path] = {}
     if fixture_root.exists():
         if not fixture_root.is_dir():
-            raise BundleError("The fixture library is not a directory.")
+            raise SpecificationError("The fixture library is not a directory.")
         for path in fixture_root.iterdir():
             if path.is_symlink() or not path.is_file():
                 continue
             try:
                 name = normalize_upload_name(path.name)
             except FixtureError as exc:
-                raise BundleError(str(exc)) from exc
+                raise SpecificationError(str(exc)) from exc
             if name in files:
-                raise BundleError(f"Duplicate fixture '{name}'.")
+                raise SpecificationError(f"Duplicate fixture '{name}'.")
             files[name] = path
 
     missing = sorted(_referenced_names(document) - files.keys())
     if missing:
         joined = ", ".join(missing)
-        raise BundleError(f"Missing fixture file(s): {joined}.")
+        raise SpecificationError(f"Missing fixture file(s): {joined}.")
 
     destination = Path(target)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -77,11 +77,11 @@ def write_bundle(
             for name, path in sorted(files.items()):
                 archive.write(path, f"fixtures/{name}")
     except OSError as exc:
-        raise BundleError(f"Could not create experiment.zip: {exc}") from exc
+        raise SpecificationError(f"Could not create experiment.zip: {exc}") from exc
     return destination
 
 
-def temporary_bundle_directory(prefix: str = "metis-bundle-") -> Path:
-    """Create a caller-owned temporary directory for a response-scoped bundle."""
+def temporary_specification_directory(prefix: str = "metis-specification-") -> Path:
+    """Create a caller-owned temporary directory for a response-scoped specification."""
 
     return Path(tempfile.mkdtemp(prefix=prefix))
