@@ -32,7 +32,10 @@ _No v1 changes yet._
 
 ### metis-engine
 
-_No v1 changes yet._
+#### Changed
+
+- Report generation now reads named Behaviours, measured state, and structured Criteria from
+  normalized `profile.yaml` files.
 
 ### metis-wizard
 

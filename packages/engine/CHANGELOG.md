@@ -4,13 +4,6 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
-### Changed
-
-- Report generation now reads named Behaviours, measured state, and structured Criteria
-  from normalized `profile.yaml` files.
-
 ## [0.12.0] — 2026-09-03
 
 ### Added
@@ -337,3 +330,4 @@ Initial release. Corresponds to `orca-agentic-evals` v0.1.0 — evaluation frame
 - Langfuse client refactored: top-level import, required keyword-only arg, typed return values
 - Removed legacy TypeScript runner (`runner.ts`, `chat.ts`, `test-cases/`)
 - Removed dead code: `check_routing_passed`, `--dedup` flag, `deduplicate_traces`, `build_test_cases_from_langfuse`, `artifact_registry` references
+
