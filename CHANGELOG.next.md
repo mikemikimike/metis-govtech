@@ -36,7 +36,22 @@ _No v1 changes yet._
 
 ### metis-wizard
 
-_No v1 changes yet._
+#### Changed
+
+- **Renamed the "run" count to "trial", to agree with the evaluation glossary.** The glossary
+  calls one execution a **trial**. The wizard called the total execution count
+  (`Σ scenarios of personas × trials`) a "run count". This was wrong. The count is now a trial
+  count on every surface: the domain method `ProductProfile.run_count()` is now `trial_count()`,
+  the `application/runs.py` module is now `trials.py` (`format_runs` → `format_trials`), and all
+  interview, review-document and hand-authoring copy states "trials". The arithmetic does not
+  change. The compiled `experiment.yaml` does not change.
+  ([#254](https://github.com/govtech-responsibleai/metis/issues/254))
+
+#### Breaking
+
+- **The scenario card field `runs` is now `trials`, and `SESSION_FORMAT_VERSION` advances from 5
+  to 6.** The web bundle mirrors the field, so it is rebuilt. A session file at an older format is
+  refused with the existing clear message rather than misread.
 
 ### metis-api
 
