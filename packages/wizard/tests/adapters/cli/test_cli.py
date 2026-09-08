@@ -1,8 +1,8 @@
 """What the commands wire up.
 
-Every other test builds a `StepDriver` by hand, so none of them noticed that the CLI built one
-without a matcher. That gap is exactly the kind a unit test cannot see: each part worked, and
-the assembly was wrong. These tests assert the assembly.
+Every other test drives the Interview through `handle_interview`, so none of them noticed whether the
+CLI door wired a matcher onto its turns. That gap is exactly the kind a unit test cannot see: each
+part worked, and the assembly was wrong. These tests assert the assembly the CLI door builds.
 """
 
 import pytest
@@ -10,8 +10,11 @@ from fixtures.profiles import research_assistant
 
 from metis.wizard.adapters.cli import commands as cli
 from metis.wizard.adapters.llm.gateway import API_KEY_VAR, BASE_URL_VAR
+from metis.wizard.application import config
 from metis.wizard.application.compile import compile_experiment
 from metis.wizard.application.matching import GENERATED_JUDGE_FQN, EmbeddingMatcher
+from metis.wizard.contracts import ChoiceRequest, InterviewState, Option, OptionId
+from metis.wizard.domain.permissions import InterviewStep
 
 
 class StubInterviewer:
@@ -21,87 +24,63 @@ class StubInterviewer:
         return [[1.0, 0.0] for _ in texts]
 
 
-class RecordingConsole:
-    def __init__(self) -> None:
-        self.messages: list[tuple[str, str]] = []
-
-    def status(self, message: str, *, spinner: str):
-        self.messages.append((message, spinner))
-        return self
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args) -> None:
-        return None
+def _state_pending_at(stage: InterviewStep) -> InterviewState:
+    """A client-held state whose one pending screen was stamped at a given stage."""
+    request = ChoiceRequest(
+        prompt="Do these look right?",
+        stage=stage,
+        request_id="req-1",
+        options=[Option(id=OptionId(action="accept"), label="Looks right")],
+    )
+    return InterviewState(profile=research_assistant(), pending=request)
 
 
-class StatusInterview:
-    def __init__(self) -> None:
-        self.calls: list[object] = []
+def test_the_spinner_uses_the_package_status_copy_for_the_pending_stage() -> None:
+    """The CLI door's spinner names the stage the turn is about to work on, in package copy.
 
-    def busy_message(self) -> str:
-        return "Writing testable criteria…"
-
-    def next(self) -> str:
-        self.calls.append("next")
-        return "request"
-
-    def respond(self, response: object) -> None:
-        self.calls.append(response)
+    Before any state exists the turn opens at clarify; once a screen is pending, its own stage
+    drives the copy. The door never authors this text — it reads the package status owner.
+    """
+    assert cli._busy_message(None) == config.status_for(InterviewStep.CLARIFY)
+    assert cli._busy_message(
+        _state_pending_at(InterviewStep.CRITERIA)
+    ) == config.status_for(InterviewStep.CRITERIA)
 
 
-def test_both_halves_of_the_cli_corridor_use_package_status_copy() -> None:
-    interview = StatusInterview()
-    console = RecordingConsole()
+def test_resume_reports_the_pending_request_stage(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """A pending request is authoritative even when Profile evidence points elsewhere."""
+    from typer.testing import CliRunner
 
-    assert cli._next_with_status(interview, console) == "request"
-    cli._respond_with_status(interview, "response", console)
+    from metis.wizard.adapters.cli import render as render_module
+    from metis.wizard.bootstrap import create_cli_app
 
-    assert console.messages == [
-        ("Writing testable criteria…", "dots"),
-        ("Writing testable criteria…", "dots"),
-    ]
-    assert interview.calls == ["next", "response"]
+    state = _state_pending_at(InterviewStep.CRITERIA)
+    (tmp_path / "interview_state.json").write_text(
+        state.model_dump_json(), encoding="utf-8"
+    )
+    monkeypatch.setattr(cli, "_load_env", list)
+    monkeypatch.setattr(cli, "_new_interviewer", StubInterviewer)
+
+    def stop_after_heading(*_args, **_kwargs):
+        raise RuntimeError("stop after resume heading")
+
+    monkeypatch.setattr(render_module, "render", stop_after_heading)
+
+    result = CliRunner().invoke(
+        create_cli_app(), ["resume", "--out-dir", str(tmp_path)]
+    )
+
+    assert "Resuming at the criteria step." in result.output
 
 
 def test_the_cli_wires_a_matcher() -> None:
     """Without one, every criterion keeps metric_fqn=None and the experiment measures
     almost nothing the user chose."""
-    driver = cli._driver(StubInterviewer())
+    matcher = cli._matcher(StubInterviewer())
 
-    assert driver.matcher is not None
-    assert isinstance(driver.matcher, EmbeddingMatcher)
-
-
-def test_the_cli_passes_one_interview_id_to_the_interviewer_and_interview(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    from fixtures.scripted import ScriptedInterviewer
-    from typer.testing import CliRunner
-
-    from metis.wizard.bootstrap import create_cli_app
-
-    seen: list[str | None] = []
-    interviews = []
-
-    def factory(interview_id: str | None):
-        seen.append(interview_id)
-        return ScriptedInterviewer()
-
-    monkeypatch.setattr(
-        cli, "_run", lambda interview, out_dir: interviews.append(interview)
-    )
-    result = CliRunner().invoke(
-        create_cli_app(factory),
-        ["init", "--out-dir", str(tmp_path)],
-    )
-
-    assert result.exit_code == 0, result.output
-    assert len(seen) == 1
-    assert seen[0] is not None
-    assert len(interviews) == 1
-    assert interviews[0].state.id == seen[0]
+    assert isinstance(matcher, EmbeddingMatcher)
 
 
 def test_the_matcher_uses_the_same_gateway() -> None:
@@ -109,21 +88,21 @@ def test_the_matcher_uses_the_same_gateway() -> None:
     embedder — there is no second integration to configure."""
     interviewer = StubInterviewer()
 
-    driver = cli._driver(interviewer)
+    matcher = cli._matcher(interviewer)
 
-    assert driver.matcher.embedder is interviewer  # type: ignore[attr-defined]
+    assert matcher.embedder is interviewer  # type: ignore[attr-defined]
 
 
 def test_an_unmatched_profile_loses_the_users_metrics() -> None:
     """The failure the wiring prevents, stated as a fact rather than a warning.
 
-    This is what a real run produced before `_driver` existed: a file that validates and
-    loads, and measures nothing at all.
+    Without a matcher every criterion keeps metric_fqn=None, and the result is a file that
+    validates and loads, and measures nothing at all.
     """
     profile = research_assistant()
     for behaviour in profile.measured_behaviours():
         for criterion in behaviour.criteria:
-            criterion.metric_fqn = None  # what the driver leaves behind with no matcher
+            criterion.metric_fqn = None  # what a turn leaves behind with no matcher
 
     document = compile_experiment(profile, "unmatched")
 
@@ -139,7 +118,7 @@ def test_a_matched_profile_keeps_them() -> None:
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None
 
-    match_profile(profile, cli._driver(StubInterviewer()).matcher)  # type: ignore[arg-type]
+    match_profile(profile, cli._matcher(StubInterviewer()))  # type: ignore[arg-type]
     document = compile_experiment(profile, "matched")
 
     # the stub embeds everything identically, so matches land on the fallback or a real
@@ -161,7 +140,7 @@ def test_every_criterion_ends_up_measured_by_something() -> None:
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None
 
-    match_profile(profile, cli._driver(StubInterviewer()).matcher)  # type: ignore[arg-type]
+    match_profile(profile, cli._matcher(StubInterviewer()))  # type: ignore[arg-type]
 
     for behaviour in profile.measured_behaviours():
         for criterion in behaviour.criteria:
@@ -193,7 +172,13 @@ def test_both_commands_fail_before_any_call_without_credentials(
     # `init` refuses outright when an interview already exists — its own guard, checked before
     # credentials — so `--restart` is needed to reach the credential check this test is about.
     invocations = {
-        "init": ["init", "--out-dir", str(tmp_path), "--restart"],
+        "init": [
+            "init",
+            "A research assistant",
+            "--out-dir",
+            str(tmp_path),
+            "--restart",
+        ],
         "resume": ["resume", "--out-dir", str(tmp_path)],
     }
     for argv in invocations.values():
@@ -219,7 +204,10 @@ def test_init_refuses_when_a_interview_already_exists(tmp_path) -> None:
     original = '{"do not": "overwrite me"}'
     (tmp_path / "interview_state.json").write_text(original)
 
-    result = CliRunner().invoke(create_cli_app(), ["init", "--out-dir", str(tmp_path)])
+    result = CliRunner().invoke(
+        create_cli_app(),
+        ["init", "A research assistant", "--out-dir", str(tmp_path)],
+    )
 
     assert result.exit_code == 1
     assert "already in progress" in result.output
@@ -229,19 +217,6 @@ def test_init_refuses_when_a_interview_already_exists(tmp_path) -> None:
     assert "--restart" in result.output
     # and the existing interview is untouched
     assert (tmp_path / "interview_state.json").read_text() == original
-
-
-def test_init_rejects_the_removed_name_option(tmp_path) -> None:
-    from typer.testing import CliRunner
-
-    from metis.wizard.bootstrap import create_cli_app
-
-    result = CliRunner().invoke(
-        create_cli_app(), ["init", "--out-dir", str(tmp_path), "--name", "X"]
-    )
-
-    assert result.exit_code != 0
-    assert "no such option" in result.output.lower()
 
 
 # ── reading .env ───────────────────────────────────────────────────────────

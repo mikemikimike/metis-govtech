@@ -7,7 +7,8 @@ A tree plus two reference lists:
 
 `ProductProfile` is a pure artefact. It carries no step, no history and no interview id, so it
 can be hand-written in a fixture, rendered, compiled or diffed without an interview ever
-having happened. Where the interview got to is `InterviewState.step`, deliberately elsewhere.
+having happened. The live pending request owns the current stage; otherwise, the application
+derives the stage from Profile evidence and explicit confirmation values.
 """
 
 from __future__ import annotations

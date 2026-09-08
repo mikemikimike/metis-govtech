@@ -1,20 +1,33 @@
 """The wizard's commands.
 
-Thin on purpose. `init` and `resume` both build an interview and hand it to the door; the loop
-they run is the same two lines any door runs.
+Thin on purpose. The interview state is client-held, so the CLI keeps it in a JSON file and is
+just another door over `handle_interview`: send a concrete lifecycle request, render the pending
+screen, and send the answer back. `init` starts from the user's description; `resume` reloads the
+saved state and answers its pending screen. The corridor both run is the same loop.
 """
 
 from __future__ import annotations
 
 import inspect
-import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 import typer
 
-from metis.wizard import __version__, core_version
-from metis.wizard.application.interviewer import Interviewer, InterviewerUnavailable
+from metis.wizard import (
+    InterviewerUnavailable,
+    InterviewFailure,
+    InterviewRequest,
+    InterviewStartRequest,
+    InterviewState,
+    InterviewStep,
+    InterviewTurnRequest,
+    __version__,
+    compile_profile,
+    core_version,
+    derive_stage,
+    handle_interview,
+)
 from metis.wizard.application.trials import format_trials
 
 if TYPE_CHECKING:
@@ -22,9 +35,8 @@ if TYPE_CHECKING:
 
     from rich.console import Console
 
-    from metis.wizard.application.driver import StepDriver
-    from metis.wizard.application.interview import Interview
-    from metis.wizard.contracts.conversation import AnyRequest, AnyResponse
+    from metis.wizard.application.interviewer import Interviewer
+
 
 app = typer.Typer(help="Generate METIS evaluation configurations.")
 _interviewer_factory: Callable[..., Interviewer] | None = None
@@ -66,10 +78,18 @@ def _new_interviewer(interview_id: str | None = None) -> Interviewer:
     return factory()
 
 
-def _bind_interview_id(interviewer: Interviewer, interview_id: str) -> None:
-    """Attach a loaded interview id to the concrete gateway before its first model call."""
-    if hasattr(interviewer, "interview_id"):
-        object.__setattr__(interviewer, "interview_id", interview_id)
+def _matcher(interviewer: Interviewer) -> object:
+    """The metric matcher, wired to the same gateway.
+
+    The matcher is not optional in a real run. Without it every criterion keeps
+    `metric_fqn=None`, the compiler drops it from the scenario's metric list, and the experiment
+    comes out with empty `metric_refs` — it validates, it loads, and it measures nothing at all.
+
+    One gateway serves both chat and embeddings, so the interviewer *is* the embedder.
+    """
+    from metis.wizard.application.matching import EmbeddingMatcher
+
+    return EmbeddingMatcher(embedder=interviewer)  # type: ignore[arg-type]
 
 
 def version_callback(value: bool) -> None:
@@ -87,69 +107,119 @@ def main(
     """Turn a description of your product into a runnable evaluation."""
 
 
-def _run(interview: Interview, out_dir: Path) -> None:
-    """The corridor. Two lines, then write what it produced."""
-    from rich.console import Console
+# ── the corridor ─────────────────────────────────────────────────────────────
 
+
+def _busy_message(state: InterviewState | None) -> str:
+    """The package-owned status for the stage an operation is about to work on."""
+    from metis.wizard.application import config
+
+    if state is None:
+        return config.status_for(InterviewStep.CLARIFY)
+    if state.pending is not None and state.pending.stage is not None:
+        return config.status_for(state.pending.stage)
+    return config.status_for(derive_stage(state))
+
+
+def _drive(
+    request: InterviewRequest,
+    *,
+    interviewer: Interviewer,
+    matcher: object,
+    out_dir: Path,
+    console: Console,
+) -> InterviewState:
+    """Run Interview operations until DONE, persisting returned state after each success.
+
+    A model call happens inside `handle_interview`, before any screen exists — so the spinner wraps
+    the whole operation, using the package-authored status for the stage. The header is redrawn only
+    when the step position changes, so a run of clarify questions does not repeat the panel.
+    """
     from metis.wizard.adapters.cli.render import render
-    from metis.wizard.application.compile import write_experiment, write_review
 
-    console = Console()
+    last_step: int | None = None
+    while True:
+        state = None if isinstance(request, InterviewStartRequest) else request.state
+        with console.status(_busy_message(state), spinner="dots"):
+            result = handle_interview(
+                request,
+                interviewer=interviewer,
+                matcher=matcher,
+            )
+        if isinstance(result, InterviewFailure):
+            _fail(result)
 
-    # The header is drawn only when the step changes. Consecutive screens of one step (the
-    # clarify questions, a mid-step form) already carry the same title and position, so
-    # repeating the panel above each is noise. `step` is the finished value the package
-    # stamped; the door compares it, it does not compute it.
-    last_step = None
-    while (request := _next_with_status(interview, console)) is not None:
-        response = render(request, show_header=request.step != last_step)
-        _respond_with_status(interview, response, console)
-        last_step = request.step
+        state = result.state
+        _save(state, out_dir)
+        if result.outcome == "done":
+            return state
+
+        pending = state.pending
+        if pending is None:
+            raise RuntimeError(
+                "An awaiting Interview result must include a pending request."
+            )
+        response = render(pending, show_header=pending.step != last_step)
+        last_step = pending.step
+        request = InterviewTurnRequest(
+            state=state, request_id=pending.request_id or "", response=response
+        )
+
+
+def _fail(failure: InterviewFailure) -> NoReturn:
+    """Report an Interview failure and stop. Any structured gaps are listed under the message."""
+    typer.echo(f"Error: {failure.message}", err=True)
+    for gap in failure.missing:
+        typer.echo(f"  - {gap.message}", err=True)
+    raise typer.Exit(1)
+
+
+def _write_outputs(state: InterviewState, out_dir: Path) -> None:
+    """Write the experiment, the review and the profile beside each other, then clear the state.
+
+    The profile is the spec the engine's verdict report joins results onto; it rides beside the
+    experiment so `simulate` freezes it into the run's inputs/. The saved interview state is
+    removed once the files exist — the interview is finished, so there is nothing to resume.
+    """
+    from metis.wizard.application.compile import render_review
+    from metis.wizard.application.turn import experiment_id
+
+    profile = state.profile
+    compiled = compile_profile(profile)
+    review = render_review(profile, experiment_id(profile))
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    experiment = out_dir / "experiment.yaml"
-    review = out_dir / "review.md"
-    profile = out_dir / "profile.yaml"
-    write_experiment(interview.profile(), interview.state.id, experiment)
-    write_review(interview.profile(), interview.state.id, review)
-    # The profile is the spec the engine's verdict report joins results onto; it rides
-    # beside the experiment so `simulate` freezes it into the run's inputs/.
-    interview.profile().save(profile)
+    experiment_path = out_dir / "experiment.yaml"
+    review_path = out_dir / "review.md"
+    profile_path = out_dir / "profile.yaml"
+    experiment_path.write_text(compiled.experiment_yaml, encoding="utf-8")
+    review_path.write_text(review, encoding="utf-8")
+    profile_path.write_text(compiled.profile_yaml, encoding="utf-8")
+    _state_path(out_dir).unlink(missing_ok=True)
 
-    typer.echo(f"\nWrote {experiment}")
-    typer.echo(f"Wrote {review}")
-    typer.echo(f"Wrote {profile}")
-    typer.echo(
-        f"\n{format_trials(interview.profile().trial_count())} when you run this."
+    typer.echo(f"\nWrote {experiment_path}")
+    typer.echo(f"Wrote {review_path}")
+    typer.echo(f"Wrote {profile_path}")
+    typer.echo(f"\n{format_trials(profile.trial_count())} when you run this.")
+
+
+# ── state persistence (client-held) ────────────────────────────────────────────
+
+
+def _state_path(out_dir: Path) -> Path:
+    return out_dir / "interview_state.json"
+
+
+def _save(state: InterviewState, out_dir: Path) -> None:
+    """Persist the client-held state so an interrupted interview can resume from it."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    _state_path(out_dir).write_text(state.model_dump_json(), encoding="utf-8")
+
+
+def _load(out_dir: Path) -> InterviewState:
+    return InterviewState.model_validate_json(
+        _state_path(out_dir).read_text(encoding="utf-8")
     )
-
-
-def _next_with_status(interview: Interview, console: Console) -> AnyRequest | None:
-    """Compose the next screen behind a spinner.
-
-    Some model calls happen inside `interview.next()`, before a request exists — so without this
-    the terminal simply stops for several seconds with nothing on screen. The application
-    facade supplies the wording; the door only chooses the terminal presentation.
-
-    `console.status` disables its live animation when the console is not a terminal, so a
-    redirected or piped run degrades to silence rather than leaking control sequences into
-    the transcript. Cheap composes (a chip toggle) flash it too briefly to notice; only the
-    model calls linger, which is exactly when it earns its place.
-    """
-    with console.status(interview.busy_message(), spinner="dots"):
-        return interview.next()
-
-
-def _respond_with_status(
-    interview: Interview, response: AnyResponse, console: Console
-) -> None:
-    """Apply a response behind the same package-authored status as the web door.
-
-    Criteria generation and model-assisted edits happen during `respond()`, not `next()`.
-    Wrapping both halves of the corridor keeps every slow path acknowledged.
-    """
-    with console.status(interview.busy_message(), spinner="dots"):
-        interview.respond(response)
 
 
 def _load_env() -> list[Path]:
@@ -178,31 +248,14 @@ def _load_env() -> list[Path]:
     return loaded
 
 
-def _interview_path(out_dir: Path) -> Path:
-    return out_dir / "interview_state.json"
-
-
-def _driver(interviewer: Interviewer) -> StepDriver:
-    """The driver, with the matcher wired to the same gateway.
-
-    The matcher is not optional in a real run. Without it every criterion keeps
-    `metric_fqn=None`, the compiler drops it from the scenario's metric list, and the experiment
-    comes out with empty `metric_refs` — it validates, it loads, and it measures nothing at
-    all. `test_cli.py` guards this.
-
-    One gateway serves both chat and embeddings, so the interviewer *is* the embedder.
-    """
-    from metis.wizard.application.driver import StepDriver
-    from metis.wizard.application.matching import EmbeddingMatcher
-
-    return StepDriver(
-        interviewer=interviewer,
-        matcher=EmbeddingMatcher(embedder=interviewer),  # type: ignore[arg-type]
-    )
+# ── commands ───────────────────────────────────────────────────────────────
 
 
 @app.command()
 def init(
+    description: str = typer.Argument(
+        ..., help="A raw description of the product or agent to evaluate."
+    ),
     out_dir: Path = typer.Option(
         Path("evaluation"),
         "--out-dir",
@@ -215,19 +268,17 @@ def init(
     ),
 ) -> None:
     """Start a new interview."""
-    from metis.wizard.application import Interview
-    from metis.wizard.contracts import Product, ProductProfile
+    from rich.console import Console
 
     # Refuse before anything else — the filesystem check costs no model call and needs no
     # credentials, so an accidental re-run of `init` reports the collision rather than
-    # overwriting twenty minutes of interview on the first save(). `--restart` is the one
-    # way past this, and it has to be typed.
-    interview_path = _interview_path(out_dir)
-    if interview_path.is_file() and not restart:
+    # overwriting an interview in progress. `--restart` is the one way past this.
+    state_path = _state_path(out_dir)
+    if state_path.is_file() and not restart:
         typer.echo(
-            f"Error: an interview is already in progress at {interview_path}.\n\n"
+            f"Error: an interview is already in progress at {state_path}.\n\n"
             f"  metis wizard resume            continue it\n"
-            f"  metis wizard init --restart    discard it and start over",
+            f"  metis wizard init <description> --restart    discard it and start over",
             err=True,
         )
         raise typer.Exit(1)
@@ -238,24 +289,20 @@ def init(
     try:
         # Checked before anything else happens, so a missing key costs nothing and is
         # reported as the environment problem it is.
-        interview_id = f"wizard-{uuid.uuid4().hex[:8]}"
-        interviewer = _new_interviewer(interview_id)
+        interviewer = _new_interviewer()
     except InterviewerUnavailable as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
 
-    # The opening question collects the name. Keep it empty so the model writes what the user
-    # actually established instead of preserving a door-owned placeholder in the document.
-    profile = ProductProfile(product=Product(name="", description="", users=""))
-    interview = Interview.start(
-        profile,
-        path=_interview_path(out_dir),
-        driver=_driver(interviewer),
-        interview_id=interview_id,
+    console = Console()
+    state = _drive(
+        InterviewStartRequest(description=description),
+        interviewer=interviewer,
+        matcher=_matcher(interviewer),
+        out_dir=out_dir,
+        console=console,
     )
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    _run(interview, out_dir)
+    _write_outputs(state, out_dir)
 
 
 @app.command()
@@ -267,9 +314,11 @@ def resume(
     ),
 ) -> None:
     """Pick up an interview where it left off."""
-    from metis.wizard.application import Interview, InterviewVersionError
+    from rich.console import Console
 
-    path = _interview_path(out_dir)
+    from metis.wizard.adapters.cli.render import render
+
+    path = _state_path(out_dir)
     if not path.is_file():
         typer.echo(f"Error: no interview to resume at {path}.", err=True)
         raise typer.Exit(1)
@@ -282,13 +331,29 @@ def resume(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
 
-    try:
-        interview = Interview.resume(path, driver=_driver(interviewer))
-    except InterviewVersionError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(1) from exc
+    state = _load(out_dir)
+    if state.pending is None:
+        typer.echo("Error: this interview has no pending screen to resume.", err=True)
+        raise typer.Exit(1)
 
-    _bind_interview_id(interviewer, interview.state.id)
+    typer.echo(f"Resuming at the {state.pending.stage} step.")
 
-    typer.echo(f"Resuming at the {interview.state.step} step.")
-    _run(interview, out_dir)
+    # The saved state already holds the screen the interview stopped on; answer that first, then
+    # hand the resulting Interview request to the same corridor `init` runs.
+    request = state.pending
+    response = render(request, show_header=True)
+    interview_request = InterviewTurnRequest(
+        state=state,
+        request_id=request.request_id or "",
+        response=response,
+    )
+
+    console = Console()
+    state = _drive(
+        interview_request,
+        interviewer=interviewer,
+        matcher=_matcher(interviewer),
+        out_dir=out_dir,
+        console=console,
+    )
+    _write_outputs(state, out_dir)

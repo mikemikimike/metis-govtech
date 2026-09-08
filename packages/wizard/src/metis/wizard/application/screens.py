@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from metis.wizard.application.readiness import scenario_readiness
 from metis.wizard.application.trials import format_trials
 from metis.wizard.contracts.conversation import (
     AnyCardComponent,
@@ -427,7 +428,12 @@ def _scenario_warnings(profile: ProductProfile) -> list[Warning]:
 
 def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     warnings = _scenario_warnings(profile)
-    blocked = any(w.blocking for w in warnings)
+    # The gate reads the one readiness source, not the on-screen warnings. The warnings carry
+    # their own fixes and cover only what a person can act on here; readiness is the authoritative
+    # set the derived stage, finish and compile preflight all share, so the Continue this screen
+    # offers and the DONE the interview computes can never disagree — a wire-borne fault such as
+    # an out-of-range trial count or a dangling reference holds Continue even with no warning card.
+    blocked = bool(scenario_readiness(profile))
     blocking_ids = (
         {s.id for s in profile.scenarios if not s.persona_refs}
         | {s.id for s in profile.scenarios if not _covers_a_selection(profile, s)}

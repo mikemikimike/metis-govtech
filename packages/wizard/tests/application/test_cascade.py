@@ -3,8 +3,8 @@
 from fixtures.profiles import research_assistant
 from fixtures.scripted import ScriptedInterviewer
 
-from metis.wizard.application import InterviewState, cascade
-from metis.wizard.application.driver import StepDriver
+from metis.wizard.application import cascade
+from metis.wizard.application.driver import DriverState, StepDriver
 from metis.wizard.contracts import (
     ChatRequest,
     ChoiceResponse,
@@ -23,8 +23,8 @@ def edit(path: str, value="reworded") -> Patch:
     return Patch(op=PatchOp.SET, path=path, value=value, origin=PatchOrigin.MODEL)
 
 
-def a_state(step=InterviewStep.CRITERIA) -> InterviewState:
-    return InterviewState(id="s-1", profile=research_assistant(), step=step)
+def a_state(step=InterviewStep.CRITERIA) -> DriverState:
+    return DriverState(profile=research_assistant(), step=step)
 
 
 # ── what asks, and in what order ───────────────────────────────────────────
@@ -194,8 +194,7 @@ def test_the_question_is_asked_before_the_next_screen() -> None:
 
 def test_chat_on_the_initial_draft_opens_free_text() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = InterviewState(
-        id="s-1",
+    state = DriverState(
         profile=ProductProfile(product=Product(name="X", description="", users="")),
         step=InterviewStep.BEHAVIOURS,
     )

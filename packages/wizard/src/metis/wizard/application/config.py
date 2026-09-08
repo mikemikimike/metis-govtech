@@ -73,6 +73,9 @@ def load_config() -> Config:
     if not isinstance(opening_question, str) or not opening_question.strip():
         raise _error("opening_question", "must be a non-empty string.")
 
+    if "prioritise" in statuses:
+        raise _error("statuses.prioritise", "was removed and must not be present.")
+
     checked: dict[InterviewStep, str] = {}
     for step in InterviewStep:
         key = f"statuses.{step.value}"

@@ -3,7 +3,9 @@
 import json
 from dataclasses import dataclass, field
 
+import httpx
 import pytest
+from openai import APIConnectionError
 
 from metis.wizard.adapters.llm.gateway import (
     API_KEY_VAR,
@@ -15,7 +17,8 @@ from metis.wizard.adapters.llm.gateway import (
     check_credentials,
 )
 from metis.wizard.application import prompts
-from metis.wizard.contracts import ClarifyResult
+from metis.wizard.application.interviewer import InterviewerOutputError
+from metis.wizard.contracts import ClarifyResult, Product, ProductProfile
 
 
 @dataclass
@@ -87,6 +90,25 @@ def test_credentials_are_checked_before_any_call(
 
     with pytest.raises(CredentialsMissing):
         GatewayInterviewer()
+
+
+def test_gateway_connection_failure_is_a_retryable_interviewer_error() -> None:
+    class BrokenCompletions:
+        def create(self, **_kwargs):
+            raise APIConnectionError(
+                request=httpx.Request("POST", "https://gateway.example")
+            )
+
+    class BrokenClient:
+        chat = type("Chat", (), {"completions": BrokenCompletions()})()
+
+    gateway = GatewayInterviewer(_client=BrokenClient())
+
+    with pytest.raises(InterviewerOutputError, match="could not complete"):
+        gateway.clarify(
+            profile=ProductProfile(product=Product(name="", description="", users="")),
+            history=[],
+        )
 
 
 # ── the retry loop ─────────────────────────────────────────────────────────

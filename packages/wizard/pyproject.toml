@@ -26,19 +26,6 @@ dependencies = [
     "langfuse>=3.0,<4.0",
 ]
 
-[project.optional-dependencies]
-# The web door only. Kept optional so installing the wizard for its CLI does not drag in a
-# web framework, and so `adapters/web` stays a removable ownership unit in the dependency
-# list as well as in the import graph.
-web = [
-    "fastapi>=0.110",
-    # FastAPI's TestClient uses httpx; keeping it here makes the web adapter testable with the
-    # same optional install as the adapter itself.
-    "httpx>=0.27",
-    "python-multipart>=0.0.18",
-    "uvicorn>=0.27",
-]
-
 [project.scripts]
 metis-wizard = "metis.wizard.bootstrap:cli_app"
 

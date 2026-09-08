@@ -1,34 +1,34 @@
-"""Everything that survives a restart — one JSON file.
+"""The resumable control data of one interview — client-held, not package-owned.
 
-`InterviewState` is data. `Interview` (next door) is the object with `.next()` and `.respond()`.
-Only the first is persisted, and that split is what lets a CLI and an HTTP server both
-rehydrate mid-conversation: a web door cannot hold a conversation in a process variable
-between requests, so it loads the state, applies one response, and saves it again.
+`InterviewState` is a plain value. `handle_interview` (in the application layer) takes one
+operation, applies it, and returns the next value. Nothing here reads or writes a file: a client
+that wants to keep the interview between requests serializes this model to JSON and sends it back
+on the next operation, so a CLI and a stateless HTTP server rehydrate mid-conversation the same way.
+
+It carries only what the next operation needs: the Profile being built, the two explicit user
+decisions (`behaviours_confirmed`, `confirmed`), the bounded clarification history, the authorship
+bookkeeping, and at most one pending request. Where the interview *is* — its stage — is not stored:
+it is derived from this evidence, or read from the pending request's own `stage`. See
+`application.turn.derive_stage`.
 """
 
 from __future__ import annotations
 
-import json
-import os
-import tempfile
-from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from metis.wizard.contracts.conversation import AnyRequest, WizardRequestState
-from metis.wizard.domain.permissions import InterviewStep
+from metis.wizard.contracts.conversation import AnyRequest
 
 # `profile` is a Pydantic field, so `ProductProfile` must be a runtime import — Pydantic
 # resolves the annotation at runtime and a TYPE_CHECKING-only import leaves InterviewState
 # "not fully defined". See CLAUDE.md — Coding Conventions.
 from metis.wizard.domain.profile import ProductProfile
 
-INTERVIEW_FORMAT_VERSION = 8
-
-
-class InterviewVersionError(Exception):
-    """An interview file written by a different version of the wizard."""
+# The most recent clarification turns kept for model context. Older turns are trimmed after each
+# accepted operation: they are prose the model no longer needs, not a display transcript a door
+# must keep. A door that wants the full transcript keeps its own record outside this state.
+HISTORY_LIMIT = 12
 
 
 class Turn(BaseModel):
@@ -37,115 +37,38 @@ class Turn(BaseModel):
 
 
 class InterviewState(BaseModel):
-    """One JSON file. Rewritten after every response, atomically."""
+    """One client-held value, serialized to JSON between turns.
 
-    version: int = INTERVIEW_FORMAT_VERSION
-    id: str
+    There is no `id`, `step`, resolved-request transcript, or file method. The pending request is
+    the only structured request, and it carries its own stage; the stage is not duplicated here.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     profile: ProductProfile
-    # `step` lives here, not on ProductProfile. The profile describes the product; where the
-    # interview got to is conversation state. Keeping them apart is what makes the profile a
-    # pure artefact — renderable, compilable and hand-writable without inventing a step.
-    step: InterviewStep = InterviewStep.CLARIFY
     # The measurement-scope lock. The combined Behaviour screen asks the user to pick the
     # behaviours worth measuring; its Continue sets this true. It is not a "the user saw the
-    # screen" receipt — Criteria generation reads the measured subset it locks in, and going
-    # Back to reopen that decision clears it. There is deliberately no `criteria_confirmed` or
-    # `personas_confirmed`; only the measured scope needs an explicit lock.
+    # screen" receipt — Criteria generation reads the measured subset it locks in, and any later
+    # change to the Behaviour list or its measured selection clears it. There is deliberately no
+    # `criteria_confirmed` or `personas_confirmed`; only the measured scope needs an explicit lock.
     behaviours_confirmed: bool = False
-    history: list[Turn] = Field(default_factory=list)
-    # Every screen this interview has composed, in order. The last is the one being looked at;
-    # everything before it has been answered. A terminal only ever needed the last one, which
-    # is why this was a single slot until a door had to keep the conversation on screen.
-    #
-    # `history` is not the same record and does not replace this one. It is prose, and it is
-    # what the model is shown; this is structure, and it is what a door redraws.
-    requests: list[AnyRequest] = Field(default_factory=list)
+    # The final lock, set only by Continue on a ready Scenario screen or a successful finish. Any
+    # accepted Profile mutation clears it, so an earlier approval can never sign off new content.
+    confirmed: bool = False
+    history: list[Turn] = Field(default_factory=list, max_length=HISTORY_LIMIT)
     # These sets belong to the interview, not to the portable ProductProfile artifact.
     user_typed: set[str] = Field(default_factory=set)
     issued_ids: set[str] = Field(default_factory=set)
+    # The one live screen, or None between the finish and a fresh start. It carries its own
+    # `request_id` and `stage`; the state stores neither separately.
+    pending: AnyRequest | None = None
 
-    # ── the live screen ────────────────────────────────────────────────────
-
-    # `pending` is a property rather than a field, and that is load-bearing rather than
-    # tidy: every existing caller assigns and reads it, so keeping the name keeps the
-    # driver, the CLI door and their tests untouched. Being a property also means it is not
-    # serialised — the list is the single persisted representation, so the two cannot drift.
-
-    @property
-    def pending(self) -> AnyRequest | None:
-        last = self.requests[-1] if self.requests else None
-        if last is not None and last.state is WizardRequestState.PENDING:
-            return last
-        return None
-
-    @pending.setter
-    def pending(self, request: AnyRequest | None) -> None:
-        if request is None:
-            self.resolve_pending()
-        elif self.pending is not None:
-            # The same screen, recomposed. Replacing rather than appending is what stops a
-            # tick from stacking a second copy of the screen it was ticked on.
-            self.requests[-1] = request
-        else:
-            self.requests.append(request)
-
-    def resolve_pending(self) -> None:
-        """Mark the live screen answered. A no-op when nothing is live."""
+    @model_validator(mode="after")
+    def _pending_has_turn_metadata(self) -> InterviewState:
+        """Reject a client state that cannot bind its next response safely."""
         if self.pending is not None:
-            self.requests[-1].state = WizardRequestState.RESOLVED
-
-    # ── persistence ────────────────────────────────────────────────────────
-
-    @classmethod
-    def load(cls, path: Path) -> Self:
-        """Load an interview, checking the format version before anything else parses.
-
-        These models change daily during development and `resume` was promised to be safe.
-        A mismatch is refused by name — not surfaced as a validation error about a field
-        nobody has heard of. There are deliberately no migration functions while the models
-        are still moving; the message tells you to start a new interview, and that is the
-        whole policy.
-        """
-        path = Path(path)
-        raw: Any = json.loads(path.read_text())
-
-        version = raw.get("version") if isinstance(raw, dict) else None
-        if version != INTERVIEW_FORMAT_VERSION:
-            raise InterviewVersionError(
-                f"This interview was written by a different wizard "
-                f"(format {version}, this is {INTERVIEW_FORMAT_VERSION}) "
-                f"and can't be resumed: {path}. Start a new interview."
-            )
-
-        return cls.model_validate(raw)
-
-    def save(self, path: Path) -> None:
-        """Write atomically: a temp file in the same directory, then `os.replace`.
-
-        A crash mid-write leaves the previous good interview rather than a truncated file,
-        which is the difference between losing one turn and losing the interview.
-
-        This guards the *file*, not the *document*: a patch set that failed halfway would be
-        saved perfectly atomically in a state that was never meant to exist. That case is
-        removed a level up instead — anything the user can click together is guaranteed not
-        to conflict. See `multi`.
-        """
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(self.model_dump(mode="json"), indent=2) + "\n"
-
-        # Same directory, so the replace is a rename within one filesystem.
-        handle, temp_name = tempfile.mkstemp(
-            dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
-        )
-        try:
-            with os.fdopen(handle, "w") as f:
-                f.write(payload)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(temp_name, path)
-        except BaseException:
-            # Leave no debris behind on the way out — a stray temp file next to an interview
-            # is indistinguishable from a half-written one to anybody reading the directory.
-            Path(temp_name).unlink(missing_ok=True)
-            raise
+            if not self.pending.request_id:
+                raise ValueError("pending.request_id is required")
+            if self.pending.stage is None:
+                raise ValueError("pending.stage is required")
+        return self

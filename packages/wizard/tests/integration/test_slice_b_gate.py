@@ -1,89 +1,41 @@
-"""Slice B gate: every screen in the flow, walked end to end, with no network.
+"""Slice B gate: the whole interview walks to DONE through the turn contract, with no network.
 
-The corridor is proven here — interview, driver, screens, patch application and the CLI door —
-on a scripted stand-in for the model. Nothing in this file touches a gateway.
+The corridor is proven here — `handle_interview`, the driver, the screens and patch application — on a
+scripted stand-in for the model. Every turn round-trips the client-held state through JSON, so the
+gate also proves the interview survives the wire. Nothing in this file touches a gateway.
 """
 
 from pathlib import Path
 
-from fixtures.scripted import RejectingInterviewer, ScriptedInterviewer
+from fixtures.scripted import RejectingInterviewer, ScriptedInterviewer, walk
 
-from metis.wizard.adapters.cli import render as cli
-from metis.wizard.application import Interview
-from metis.wizard.application.compile import write_experiment, write_review
-from metis.wizard.application.driver import StepDriver
+from metis.wizard import compile_profile
 from metis.wizard.contracts import (
     ChatRequest,
     ChoiceRequest,
-    ChoiceResponse,
     FormRequest,
-    Product,
-    ProductProfile,
     WarningSource,
 )
-from metis.wizard.domain.permissions import InterviewStep
+from metis.wizard.contracts.interview_state import HISTORY_LIMIT
 
 
-def a_interview(
-    path: Path | None = None, interviewer=None
-) -> tuple[Interview, StepDriver]:
-    driver = StepDriver(interviewer=interviewer or ScriptedInterviewer())
-    profile = ProductProfile(
-        product=Product(
-            name="Research assistant",
-            description="Answers research questions over an internal library.",
-            users="Policy analysts.",
-            detail="A router with a search tool that can time out.",
-        )
+def test_the_whole_flow_walks_to_done() -> None:
+    interviewer = ScriptedInterviewer()
+
+    result = walk(interviewer)
+
+    assert result.state.confirmed
+    assert result.state.pending is None
+    assert result.used_end
+    assert {ChatRequest, ChoiceRequest, FormRequest} <= {
+        type(request) for request in result.seen
+    }
+    stages = [request.stage for request in result.seen]
+    first_criteria = stages.index("criteria")
+    assert "behaviours" in stages[first_criteria + 1 :]
+    assert any(
+        not behaviour.measured for behaviour in result.state.profile.behaviours()
     )
-    return Interview.start(profile, path=path, driver=driver), driver
-
-
-def _pick(request: ChoiceRequest, action: str) -> list[str]:
-    """Select every option with a given action — how a door replies without knowing why."""
-    keys = [str(o.id) for o in request.options if o.id.action == action and o.enabled]
-    for card in request.cards:
-        keys += [str(o.id) for o in card.options if o.id.action == action]
-    return keys
-
-
-def walk(interview: Interview) -> list:
-    """Drive the interview to DONE, answering each screen the way a user would.
-
-    The wizard preselects all Behaviours. The walk keeps that complete starting scope and
-    continues without changing it.
-    """
-    seen = []
-
-    for _ in range(40):  # a bound, so a driver bug fails the test rather than hanging
-        request = interview.next()
-        if request is None:
-            break
-        seen.append(request)
-
-        if isinstance(request, ChatRequest):
-            interview.respond(cli.ChatResponse(text="It answers research questions."))
-            continue
-        if isinstance(request, FormRequest):
-            interview.respond(cli.FormResponse(values={"description": "typed by hand"}))
-            continue
-
-        interview.respond(
-            ChoiceResponse(
-                selected=_pick(request, "continue") or _pick(request, "accept")
-            )
-        )
-
-    return seen
-
-
-def test_the_whole_flow_walks_to_done(tmp_path: Path) -> None:
-    interview, driver = a_interview(tmp_path / "interview_state.json")
-
-    walk(interview)
-
-    assert interview.state.step is InterviewStep.DONE
-    assert interview.next() is None
     # every drafting step was reached
     assert {
         "clarify",
@@ -91,80 +43,51 @@ def test_the_whole_flow_walks_to_done(tmp_path: Path) -> None:
         "draft_criteria",
         "draft_personas",
         "draft_scenarios",
-    } <= set(driver.interviewer.calls)  # type: ignore[attr-defined]
+    } <= set(interviewer.calls)
 
 
-def test_it_produces_both_output_files(tmp_path: Path) -> None:
-    interview, _ = a_interview(tmp_path / "interview_state.json")
-    walk(interview)
-    profile = interview.profile()
+def test_it_produces_an_experiment_the_engine_loads(tmp_path: Path) -> None:
+    result = walk(ScriptedInterviewer())
 
-    write_experiment(profile, interview.state.id, tmp_path / "experiment.yaml")
-    write_review(profile, interview.state.id, tmp_path / "review.md")
-
-    assert (tmp_path / "experiment.yaml").is_file()
-    assert (tmp_path / "review.md").is_file()
+    compiled = compile_profile(result.state.profile)
+    experiment_path = tmp_path / "experiment.yaml"
+    experiment_path.write_text(compiled.experiment_yaml, encoding="utf-8")
 
     from metis.engine.simulation.types import Experiment
 
-    assert Experiment.load_file(tmp_path / "experiment.yaml").scenarios
+    assert Experiment.load_file(experiment_path).scenarios
 
 
-def test_the_cli_door_renders_every_screen(tmp_path: Path) -> None:
-    """Each screen goes through the real renderer — nothing raises, everything draws."""
-    interview, _ = a_interview(tmp_path / "interview_state.json")
-    lines: list[str] = []
+def test_the_state_on_the_wire_stays_bounded() -> None:
+    """The client-held state carries the interview, not a transcript — it must stay small.
 
-    screens = walk(interview)
-    for request in screens:
-        if isinstance(request, ChoiceRequest):
-            cli._draw(request, lines.append)
+    At DONE there is no live screen, the clarification history never grows past its limit, and the
+    state holds no resolved-request log or document bytes. This is what keeps a stateless HTTP turn
+    cheap however long the interview ran.
+    """
+    result = walk(ScriptedInterviewer())
 
-    assert screens
-    assert any("[x]" in line or "[ ]" in line for line in lines)  # checkboxes drew
-    assert any("trials" in line for line in lines)  # the footer drew
-
-
-def test_the_interview_survives_a_restart_at_every_screen(tmp_path: Path) -> None:
-    """Resume mid-interview and the walk still completes."""
-    path = tmp_path / "interview_state.json"
-    interview, _ = a_interview(path)
-
-    for _ in range(6):  # a few screens in — far enough to move past behaviours
-        request = interview.next()
-        assert request is not None
-        if isinstance(request, ChatRequest):
-            interview.respond(cli.ChatResponse(text="answer"))
-        elif isinstance(request, ChoiceRequest):
-            interview.respond(
-                ChoiceResponse(
-                    selected=_pick(request, "continue") or _pick(request, "accept")
-                )
-            )
-
-    resumed = Interview.resume(
-        path, driver=StepDriver(interviewer=ScriptedInterviewer())
-    )
-    walk(resumed)
-
-    assert resumed.state.step is InterviewStep.DONE
+    assert result.state.pending is None  # one live screen at most, and none at DONE
+    assert (
+        len(result.state.history) <= HISTORY_LIMIT
+    )  # trimmed, not an ever-growing log
+    # The largest payload seen across the whole walk stays well inside a request body — the
+    # state carries the interview, not a transcript. (The field set itself is fixed in
+    # tests/contracts/test_interview_state.py.)
+    assert result.max_state_bytes < 32_768
 
 
-def test_a_rejected_patch_reaches_the_user_as_a_runtime_warning(tmp_path: Path) -> None:
+def test_a_rejected_patch_reaches_the_user_as_a_runtime_warning() -> None:
     """The model tries to set a tick. The criteria land; the write does not, and is said."""
-    interview, driver = a_interview(
-        tmp_path / "interview_state.json", RejectingInterviewer()
-    )
-
-    screens = walk(interview)
+    result = walk(RejectingInterviewer())
 
     runtime = [
         w
-        for request in screens
+        for request in result.seen
         if isinstance(request, ChoiceRequest)
         for w in request.warnings
         if w.source is WarningSource.RUNTIME
     ]
     assert runtime, "the refusal should have been shown, not swallowed"
-    assert "your call" in runtime[0].text
+    assert "scope you selected" in runtime[0].text
     assert not runtime[0].blocking

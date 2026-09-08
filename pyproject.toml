@@ -12,6 +12,7 @@ dependencies = [
     "metis-engine",
     "metis-library",
     "metis-wizard",
+    "metis-api",
 ]
 
 [project.scripts]
@@ -29,6 +30,7 @@ metis-core = { workspace = true }
 metis-engine = { workspace = true }
 metis-library = { workspace = true }
 metis-wizard = { workspace = true }
+metis-api = { workspace = true }
 
 [tool.uv.workspace]
 members = [
@@ -40,7 +42,6 @@ members = [
 venvPath = "."
 venv = ".venv"
 include = ["packages/*/src", "apps/*/src", "metis_cli.py"]
-exclude = ["apps/api", "apps/web"]
 reportIncompatibleMethodOverride = false
 reportMissingTypeArgument = true
 reportUnnecessaryTypeIgnoreComment = true
@@ -83,7 +84,14 @@ indent-style = "space"
 
 [tool.pytest.ini_options]
 addopts = "-p no:rerunfailures"
-testpaths = ["tests"]
+testpaths = [
+    "tests",
+    "packages/core/tests",
+    "packages/library/tests",
+    "packages/engine/tests",
+    "packages/wizard/tests",
+    "apps/api/tests",
+]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

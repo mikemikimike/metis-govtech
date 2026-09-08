@@ -128,6 +128,11 @@ MUST depend on `metis-core` and `metis-library`. MAY depend on HTTP, math, parsi
 
 MUST depend on `metis-core` and `metis-library`. MUST NOT depend on `metis-engine`.
 
+The wizard exposes a stateless Interview lifecycle interface (`handle_interview`,
+`compile_profile`, `derive_stage`) and holds no server state: the Interview state is client-held and
+travels whole on each operation. The wizard MUST NOT own an HTTP server or a frontend; a web client
+reaches the Interview through `apps/api`. The CLI adapter drives the same lifecycle interface.
+
 ---
 
 ### 5.5. `metis-insights`
@@ -156,9 +161,20 @@ MUST depend on `metis-core` and `metis-engine`.
 
 | | |
 |---|---|
-| **Purpose** | Web backend exposing METIS capabilities as a REST service. |
+| **Import Path** | `from metis.api import ...` |
+| **Purpose** | A thin, stateless HTTP door exposing METIS capabilities as a REST service. |
 
-MAY depend on all `packages/*` members.
+MAY depend on all `packages/*` members. For the wizard it depends on the `metis.wizard` public
+Interview interface only (`apps/api -> metis.wizard`): the router calls `handle_interview` and
+`compile_profile` and maps the typed result onto an HTTP status. No stage, Profile, prompt,
+matching, or compilation rule lives in the API.
+
+**Client-held state boundary.** The service holds only immutable settings and model clients for the
+process lifetime. It holds no Interview state: start creates state, turn carries the complete state
+and one typed response, and end carries the complete state for best-effort completion. The next state
+goes back whole in the response, so any instance serves any operation and no Interview file is
+written. Web clients drive the wizard through these HTTP lifecycle routes; they MUST NOT embed the
+wizard.
 
 ---
 
@@ -177,16 +193,16 @@ MUST communicate exclusively with `apps/api` via REST. MUST NOT import or depend
 Dependencies MUST flow downward only. The following DAG is normative:
 
 ```text
-[ apps/web ] ──HTTP──▶ [ apps/api ]
-                            │
-                            ▼
-                       [ packages/engine ] ◄── [ apps/testbed ]
-                            │         │
-                            │         ▼
-                            │   [ packages/insights ]
-                            │
-                            ▼
-                     [ packages/library ] ◄── [ packages/wizard ]
+[ apps/web ] ──HTTP──▶ [ apps/api ] ───────────────────────┐
+                            │                               │
+                            ▼                               ▼
+                       [ packages/engine ] ◄── [ apps/testbed ]   [ packages/wizard ]
+                            │         │                               │
+                            │         ▼                               │
+                            │   [ packages/insights ]                 │
+                            │                                         │
+                            ▼                                         ▼
+                     [ packages/library ] ◄───────────────────────────┘
                             │
                             ▼
                      [ packages/core ]   (Base — zero local dependencies)

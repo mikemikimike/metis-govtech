@@ -72,6 +72,47 @@ class Question:
         )
 
 
+# The three actions a cascade question always offers. `edit` and `review` are the two "I'll look
+# myself" answers — a criteria/scenario question edits, a tree question reviews — so either marks
+# the shape. `keep` and `regenerate` are always both present.
+_CASCADE_ACTIONS = frozenset({"keep", "regenerate", "edit", "review"})
+
+
+def question_from_request(request: object, profile: ProductProfile) -> Question | None:
+    """Rebuild the cascade question a pending request represents, or None if it is not one.
+
+    A cascade question is composed on one turn and answered on the next, but the driver is built
+    fresh each turn and no longer holds the `pending_questions` list it used to route the answer
+    through. So a turn reconstructs the question from the request the client sends back — the same
+    three options `Question.to_request` emits — and reseeds the driver with it. Detection is by
+    shape: a single-select choice whose options are exactly the cascade actions, with `keep` and
+    `regenerate` both present. The kind follows the subject — a tree question carries `review`; a
+    criteria question names a behaviour; a scenario question names a scenario.
+    """
+    if not isinstance(request, ChoiceRequest) or request.multi:
+        return None
+    actions = {option.id.action for option in request.options}
+    if not ({"keep", "regenerate"} <= actions <= _CASCADE_ACTIONS):
+        return None
+
+    subject = next(
+        (option.id.target for option in request.options if option.id.target), None
+    )
+    if subject is None:
+        return None
+
+    if "review" in actions:
+        kind = "tree"
+    elif profile.behaviour(subject) is not None:
+        kind = "criteria"
+    elif profile.scenario(subject) is not None:
+        kind = "scenario"
+    else:
+        return None
+
+    return Question(text=request.prompt, subject=subject, kind=kind)
+
+
 def questions_for(profile: ProductProfile, patches: list[Patch]) -> list[Question]:
     """What to ask, in order, given what was just edited.
 

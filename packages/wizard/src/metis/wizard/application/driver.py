@@ -31,6 +31,7 @@ from metis.wizard.contracts.conversation import (
     WarningSource,
     editable_fields_of,
 )
+from metis.wizard.contracts.interview_state import InterviewState
 from metis.wizard.contracts.output import (
     BehaviourDraft,
     CriterionDraft,
@@ -46,8 +47,22 @@ from metis.wizard.domain.permissions import InterviewStep
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from metis.wizard.contracts.interview_state import InterviewState, Turn
+    from metis.wizard.contracts.interview_state import Turn
     from metis.wizard.domain.profile import Behaviour
+
+
+class DriverState(InterviewState):
+    """The client-held state, plus the one field the driver alone needs: where the interview is.
+
+    `InterviewState` carries no stage — the stage is derived, so the client never stores it. But
+    the state machine below reads and writes a stage on every turn, so a turn lifts the client
+    value into this subclass, runs the driver on it, and projects the result back down without
+    the stage. The driver therefore needs no knowledge of derivation, and the client contract
+    keeps its single source of truth. See `application.turn`.
+    """
+
+    step: InterviewStep
+
 
 _NEXT_STEP = {
     InterviewStep.CLARIFY: InterviewStep.BEHAVIOURS,
@@ -112,6 +127,7 @@ class StepDriver:
     # screen is composed, in the same turn — which is what stops this being staleness
     # tracking. Nothing here survives to a later turn.
     pending_questions: list[cascade.Question] = field(default_factory=list)
+    model_error: InterviewerOutputError | None = field(default=None, repr=False)
     # A later drafting call must not leak its introduction onto an earlier screen when the
     # user goes Back. These are presentation state only; a persisted pending request already
     # carries its prompt, and a recomposed screen after resume uses the neutral default.
@@ -119,7 +135,7 @@ class StepDriver:
 
     # ── composing ──────────────────────────────────────────────────────────
 
-    def compose(self, state: InterviewState) -> AnyRequest:
+    def compose(self, state: DriverState) -> AnyRequest:
         """Compose the next screen and stamp its step header.
 
         Stamping here rather than in each screen builder is deliberate: every request the
@@ -132,7 +148,7 @@ class StepDriver:
         screens.stamp_step(request, state.step)
         return request
 
-    def _compose(self, state: InterviewState) -> AnyRequest:
+    def _compose(self, state: DriverState) -> AnyRequest:
         profile = state.profile
         step = state.step
 
@@ -219,7 +235,7 @@ class StepDriver:
     # ── handling ───────────────────────────────────────────────────────────
 
     def handle(
-        self, state: InterviewState, request: AnyRequest, response: AnyResponse
+        self, state: DriverState, request: AnyRequest, response: AnyResponse
     ) -> None:
         if self.pending_questions:
             # `compose()` stamped the header onto the question the user is answering, so the
@@ -237,7 +253,7 @@ class StepDriver:
         return self._handle_choice(state, request, response)
 
     def _handle_chat(
-        self, state: InterviewState, request: ChatRequest, response: AnyResponse
+        self, state: DriverState, request: ChatRequest, response: AnyResponse
     ) -> None:
         text = getattr(response, "text", "")
         if state.step is InterviewStep.CLARIFY:
@@ -251,10 +267,10 @@ class StepDriver:
         before_texts = self._criterion_texts(state)
         try:
             result = self.interviewer.chat(state.profile, str(state.step), text, target)
-        except InterviewerOutputError:
-            # Every model call the driver makes degrades to a warning rather than a crash;
-            # chat is no exception. All the retries already failed inside the client, so tell
-            # the user and leave the profile untouched — nothing was applied.
+        except InterviewerOutputError as exc:
+            self.model_error = exc
+            # Keep the direct driver API's warning behavior. The turn transaction checks
+            # `model_error` and converts this into a typed retryable failure.
             return self._refuse_chat()
         if target is not None:
             result = self._confine_to_behaviour(result, target)
@@ -301,7 +317,7 @@ class StepDriver:
         return result.model_copy(update={"patches": kept})
 
     @staticmethod
-    def _criterion_texts(state: InterviewState) -> dict[str, str]:
+    def _criterion_texts(state: DriverState) -> dict[str, str]:
         """Every criterion's wording, keyed by id — the input the matcher reads."""
         return {
             criterion.id: str(criterion.description)
@@ -310,7 +326,7 @@ class StepDriver:
         }
 
     def _rematch_reworded(
-        self, state: InterviewState, before_texts: dict[str, str]
+        self, state: DriverState, before_texts: dict[str, str]
     ) -> None:
         """Re-resolve the metric for any criterion whose wording just changed.
 
@@ -332,7 +348,7 @@ class StepDriver:
                     rematch(criterion, self.matcher)  # type: ignore[arg-type]
 
     def _handle_form(
-        self, state: InterviewState, request: FormRequest, response: AnyResponse
+        self, state: DriverState, request: FormRequest, response: AnyResponse
     ) -> None:
         """Text typed into a form is used as-is — the model never sees it, so it cannot
         rewrite it. Everything created here is stamped FORM."""
@@ -379,7 +395,7 @@ class StepDriver:
             )
 
     def _add_typed_behaviour(
-        self, state: InterviewState, task_id: str, values: dict[str, Any]
+        self, state: DriverState, task_id: str, values: dict[str, Any]
     ) -> None:
         """Append one form-created Behaviour under the Task that offered the action."""
         task = state.profile.task(task_id)
@@ -400,7 +416,7 @@ class StepDriver:
         )
 
     def _add_typed_criterion(
-        self, state: InterviewState, behaviour_id: str, values: dict[str, Any]
+        self, state: DriverState, behaviour_id: str, values: dict[str, Any]
     ) -> None:
         """Turn a submitted Given/When/Then form into one criterion under one behaviour.
 
@@ -430,7 +446,7 @@ class StepDriver:
         self._match_new(behaviour, {c.id for c in behaviour.criteria[:-1]})
 
     def _handle_choice(
-        self, state: InterviewState, request: AnyRequest, response: AnyResponse
+        self, state: DriverState, request: AnyRequest, response: AnyResponse
     ) -> None:
         values = getattr(response, "values", {}) or {}
         selected = set(getattr(response, "selected", []) or [])
@@ -459,6 +475,11 @@ class StepDriver:
                 issued_ids=state.issued_ids,
                 user_typed=state.user_typed,
             )  # WIZARD origin — trusted by construction
+            # Measurement changes are their own operation. Even if a multi-select caller also
+            # sends Continue, return the recomposed Behaviour review first so the changed scope is
+            # visible and must then be confirmed deliberately.
+            if state.step is InterviewStep.BEHAVIOURS:
+                return
 
         if "back" in actions:
             destination = _PREVIOUS_STEP.get(state.step, state.step)
@@ -509,7 +530,7 @@ class StepDriver:
 
     def _handle_field_value(
         self,
-        state: InterviewState,
+        state: DriverState,
         request: AnyRequest,
         key: str,
         value: CardFieldValue,
@@ -589,7 +610,7 @@ class StepDriver:
 
     # ── the three criteria-card workflows ────────────────────────────────────
 
-    def _open_chat(self, state: InterviewState, target: str | None) -> None:
+    def _open_chat(self, state: DriverState, target: str | None) -> None:
         """Raise a chat request, scoped to a behaviour when one was named.
 
         `target` is the OptionId.target the clicked option carried — a behaviour id from a
@@ -606,7 +627,7 @@ class StepDriver:
         screens.stamp_step(chat, state.step)
         state.pending = chat
 
-    def _open_criterion_form(self, state: InterviewState, target: str | None) -> None:
+    def _open_criterion_form(self, state: DriverState, target: str | None) -> None:
         """Raise a Given/When/Then form that becomes one criterion under one behaviour.
 
         Three fields rather than one ambiguous description: manual entry is one structured
@@ -630,7 +651,7 @@ class StepDriver:
         state.pending = form
 
     def _targeted_behaviour(
-        self, state: InterviewState, target: str | None
+        self, state: DriverState, target: str | None
     ) -> Behaviour | None:
         """The behaviour a criteria action names, or None if it names nothing writable.
 
@@ -667,7 +688,7 @@ class StepDriver:
             )
         )
 
-    def _suggest_one_criterion(self, state: InterviewState, target: str | None) -> None:
+    def _suggest_one_criterion(self, state: DriverState, target: str | None) -> None:
         """Ask the model for exactly one new criterion under one behaviour, and match it.
 
         This is the "Suggest one for me" workflow: not a chat and not a form, but a bounded
@@ -682,7 +703,8 @@ class StepDriver:
 
         try:
             result = self.interviewer.suggest_criterion(state.profile, behaviour.id)
-        except InterviewerOutputError:
+        except InterviewerOutputError as exc:
+            self.model_error = exc
             return self._refuse_suggestion()
 
         before_ids = {c.id for c in behaviour.criteria}
@@ -737,7 +759,7 @@ class StepDriver:
             )
         )
 
-    def _advance(self, state: InterviewState) -> None:
+    def _advance(self, state: DriverState) -> None:
         """Move on, generating whatever the next screen needs and does not have."""
         current = state.step
 
@@ -753,16 +775,47 @@ class StepDriver:
 
         # Continue at behaviours is what generates criteria — which is why measured-but-empty
         # cannot exist, and why nothing is generated for behaviours nobody picked.
-        if state.step is InterviewStep.CRITERIA and any(
-            not b.criteria for b in state.profile.measured_behaviours()
-        ):
-            self._try(lambda: self.interviewer.draft_criteria(state.profile), state)
+        if state.step is InterviewStep.CRITERIA:
+            allowed_paths = self._missing_measured_criteria_paths(state)
+        else:
+            allowed_paths = frozenset()
+        if allowed_paths:
+            self._try(
+                lambda: self.interviewer.draft_criteria(state.profile),
+                state,
+                allowed_paths=allowed_paths,
+                allowed_ops=frozenset({PatchOp.ADD}),
+            )
             # A separate pass, after generation — never folded into it.
             self.match(state)
 
     # ── applying model output ──────────────────────────────────────────────
 
-    def _try(self, call: Callable[[], StepResult], state: InterviewState) -> bool:
+    @staticmethod
+    def _missing_measured_criteria_paths(state: DriverState) -> frozenset[str]:
+        """Return the exact Criteria collections that one draft can add to.
+
+        The model receives the complete Profile for context. This allowlist prevents it from
+        writing Criteria to an unmeasured Behaviour or replacing an existing Criteria set.
+        """
+        paths = set()
+        for behaviour in state.profile.measured_behaviours():
+            if behaviour.criteria:
+                continue
+            task = state.profile.task_of(behaviour.id)
+            if task is None:  # a Behaviour from this Profile must belong to one Task
+                continue
+            paths.add(f"tasks[{task.id}].behaviours[{behaviour.id}].criteria")
+        return frozenset(paths)
+
+    def _try(
+        self,
+        call: Callable[[], StepResult],
+        state: DriverState,
+        *,
+        allowed_paths: frozenset[str] | None = None,
+        allowed_ops: frozenset[PatchOp] | None = None,
+    ) -> bool:
         """Run a model call, turning a total failure into a warning rather than a crash.
 
         Three attempts have already happened inside the client. Reaching here means all of
@@ -770,9 +823,15 @@ class StepDriver:
         already decided is still in the profile, because nothing was applied.
         """
         try:
-            self._run(state, call())
+            self._run(
+                state,
+                call(),
+                allowed_paths=allowed_paths,
+                allowed_ops=allowed_ops,
+            )
             return True
-        except InterviewerOutputError:
+        except InterviewerOutputError as exc:
+            self.model_error = exc
             self.pending_warnings.append(
                 Warning(
                     text=(
@@ -787,10 +846,11 @@ class StepDriver:
 
     def _run(
         self,
-        state: InterviewState,
+        state: DriverState,
         result: StepResult,
         *,
         allowed_paths: frozenset[str] | None = None,
+        allowed_ops: frozenset[PatchOp] | None = None,
     ) -> None:
         """Apply a model result, reporting anything the applier refused.
 
@@ -801,8 +861,24 @@ class StepDriver:
         if result.message:
             self._step_messages[state.step] = result.message
         patches = sanitise(result.patches)
-        if allowed_paths is not None:
-            patches = [p for p in patches if p.path in allowed_paths]
+        refused = [
+            patch
+            for patch in patches
+            if (allowed_paths is not None and patch.path not in allowed_paths)
+            or (allowed_ops is not None and patch.op not in allowed_ops)
+        ]
+        patches = [patch for patch in patches if patch not in refused]
+        if refused:
+            self.pending_warnings.append(
+                Warning(
+                    text=(
+                        "I left out a model change that was outside this operation's "
+                        "allowed scope. Your profile keeps the scope you selected."
+                    ),
+                    source=WarningSource.RUNTIME,
+                    blocking=False,
+                )
+            )
         outcome = apply(
             state.profile,
             patches,
@@ -822,18 +898,27 @@ class StepDriver:
         # Ask about anything derived from what just changed, before the next screen.
         self.pending_questions += cascade.questions_for(before, outcome.applied)
 
-    def _answer_question(self, state: InterviewState, response: AnyResponse) -> None:
+    def _answer_question(self, state: DriverState, response: AnyResponse) -> None:
         """Resolve one cascade question. Three answers, and only one changes anything."""
         question = self.pending_questions.pop(0)
         selected = set(getattr(response, "selected", []) or [])
         action = next((s.split(":", 1)[0] for s in selected), "keep")
 
         if action == "regenerate":
+            if question.kind == "criteria":
+                behaviour = state.profile.behaviour(question.subject)
+                if behaviour is None or not behaviour.measured:
+                    return
             cascade.clear_for_regeneration(state.profile, question, state.user_typed)
             # What is left is a state the forward pass already draws: a ticked behaviour
             # with no criteria, or a behaviour no scenario covers.
             if question.kind == "criteria":
-                self._run(state, self.interviewer.draft_criteria(state.profile))
+                self._run(
+                    state,
+                    self.interviewer.draft_criteria(state.profile),
+                    allowed_paths=self._missing_measured_criteria_paths(state),
+                    allowed_ops=frozenset({PatchOp.ADD}),
+                )
                 self.match(state)
             elif question.kind == "scenario":
                 self._run(state, self.interviewer.draft_scenarios(state.profile))
@@ -853,7 +938,7 @@ class StepDriver:
         elif action == "review" and question.kind == "tree":
             state.step = InterviewStep.BEHAVIOURS
 
-    def match(self, state: InterviewState) -> None:
+    def match(self, state: DriverState) -> None:
         """Resolve metrics for criteria that lack them.
 
         A separate pass, run after criteria generation rather than folded into it. If the
@@ -939,4 +1024,4 @@ def _all_options(request: AnyRequest) -> dict[str, Option]:
     return found
 
 
-__all__ = ["OptionId", "StepDriver"]
+__all__ = ["DriverState", "OptionId", "StepDriver"]

@@ -6,7 +6,7 @@ CLI adapter depend on protocols; this module supplies the PlatformAI implementat
 
 from __future__ import annotations
 
-from pathlib import Path
+import os
 from typing import TYPE_CHECKING
 
 from metis.wizard.adapters.cli import commands
@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     import typer
-    from fastapi import FastAPI
 
     from metis.wizard.application.interviewer import Interviewer
 
@@ -24,6 +23,25 @@ if TYPE_CHECKING:
 def platform_interviewer(interview_id: str | None = None) -> Interviewer:
     """Construct the real gateway-backed interviewer for one CLI run."""
     return GatewayInterviewer(interview_id=interview_id)
+
+
+def configure_interview_runtime(*, api_key: str, base_url: str, model: str) -> None:
+    """Install the production Interviewer and matcher used by the public Interview function.
+
+    Provider construction stays in this composition root. Callers provide connection settings and
+    never need to import or operate the gateway, matcher, or driver objects.
+    """
+    os.environ["OPENAI_API_KEY"] = api_key
+    os.environ["OPENAI_BASE_URL"] = base_url
+    os.environ["INTERVIEW_MODEL"] = model
+
+    from metis.wizard.application.matching import EmbeddingMatcher
+    from metis.wizard.application.turn import configure_interview_dependencies
+
+    interviewer = GatewayInterviewer()
+    configure_interview_dependencies(
+        interviewer, EmbeddingMatcher(embedder=interviewer)
+    )
 
 
 def create_cli_app(
@@ -38,49 +56,12 @@ def create_cli_app(
     return commands.app
 
 
-def create_web_app(
-    interviewer_factory: Callable[..., Interviewer] = platform_interviewer,
-    *,
-    root: Path = Path("evaluation"),
-) -> FastAPI:
-    """Compose the web door.
-
-    FastAPI is imported here rather than at module scope because the web door is an optional
-    extra: a CLI-only install has no framework, and importing this module to get `cli_app`
-    must not require one.
-    """
-    from metis.wizard.adapters.web.server import create_app
-
-    return create_app(interviewer_factory=interviewer_factory, root=root)
-
-
 cli_app = create_cli_app()
-
-
-@cli_app.command()
-def serve(
-    root: Path = Path("evaluation"),
-    host: str = "127.0.0.1",
-    port: int = 8000,
-) -> None:
-    """Open the wizard in a browser.
-
-    Registered here rather than in the CLI adapter's `commands` module: this starts the web
-    door, so it is composition, and composition is what this module is for. It also keeps the
-    CLI adapter free of any knowledge that another door exists.
-    """
-    import typer
-    import uvicorn
-
-    commands._load_env()
-    typer.echo(f"Wizard at http://{host}:{port} — interviews in {root}/")
-    uvicorn.run(create_web_app(root=root), host=host, port=port, log_level="warning")
 
 
 __all__ = [
     "cli_app",
+    "configure_interview_runtime",
     "create_cli_app",
-    "create_web_app",
     "platform_interviewer",
-    "serve",
 ]

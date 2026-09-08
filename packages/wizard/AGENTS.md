@@ -78,20 +78,24 @@ behaviour.priority = False
 
 ## Module layout
 
-The package is split by ownership so the CLI can later move to a web application without moving
-the interview itself:
+The package is split by ownership so a door lives at the edge and the interview does not move with
+it. The interview is driven through a stateless lifecycle interface (`handle_interview`,
+`compile_profile`, `derive_stage`); the state is client-held and travels whole on each operation.
+The CLI is the only door inside the package. A web client reaches the same interface over HTTP
+through `apps/api`; the wizard owns no HTTP server and no frontend.
 
 ```
 src/metis/wizard/
 ├── domain/       profile, patches, path resolution, permissions and edit impacts
-├── contracts/    requests, responses, cards, warnings, model outputs and interview persistence
-├── application/  Interview, driver, prompts, screens, compiler, matcher and primer
+├── contracts/    requests, responses, cards, warnings, model outputs, the Interview transaction, and
+│                 the client-held InterviewState
+├── application/  handle_interview, driver, stage derivation, readiness, prompts, screens, compiler,
+│                 matcher and primer
 ├── adapters/
 │   ├── cli/      Typer commands, Rich renderer and terminal input
-│   ├── llm/      PlatformAI structured-output and embedding gateway
-│   └── web/      HTTP server, per-interview store and the built React bundle in static/
+│   └── llm/      PlatformAI structured-output and embedding gateway
 ├── bootstrap.py  the only adapter composition root
-└── __init__.py   stable headless facade
+└── __init__.py   stable headless facade: the Interview interface and interaction models
 ```
 
 Dependencies point inward: adapters depend on application/contracts/domain, application depends
@@ -154,8 +158,9 @@ line.
 The gateway imports its client from `langfuse.openai`. This is a drop-in for the OpenAI client:
 the import makes every model call record a trace, with no tracing code in the retry loop. The
 gateway wraps `_ask` with `@observe`, so the three attempts of one call are in one trace. The
-trace has the name of the interview step and, when the id is known, the interview id. Thus one
-interview reads as one sequence, and the CLI and web doors use the same interview id.
+trace has the name of the Interview step. A caller can also give the gateway an Interview ID to
+group its traces. The stateless lifecycle does not carry an Interview ID, so the CLI and API
+normally record these traces ungrouped; the missing ID does not prevent tracing.
 
 `langfuse` is a base dependency, so it installs with the wizard. To turn tracing on, set these
 three environment variables before you start the wizard:

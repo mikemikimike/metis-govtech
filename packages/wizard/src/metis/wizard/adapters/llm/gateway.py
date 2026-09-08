@@ -8,9 +8,10 @@ The client is imported from `langfuse.openai`, Langfuse's drop-in for the OpenAI
 Importing it patches the client so every chat and embedding call is recorded as a generation —
 input, raw reply, model, token usage and latency — with no tracing code on the call path.
 `_ask` is wrapped with `@observe`, so a call's three attempts nest under one trace named by the
-interview step and grouped by the wizard's interview id. Tracing is opt-in by environment: with no
-`LANGFUSE_*` variables the drop-in disables itself and sends nothing, and it exports on a
-background thread, so it never blocks or fails the interview.
+Interview step. A caller that has an Interview ID can use it to group traces; the stateless
+lifecycle normally records them ungrouped. Tracing is opt-in by environment: with no `LANGFUSE_*`
+variables the drop-in disables itself and sends nothing, and it exports on a background thread, so
+it never blocks or fails the Interview.
 
 Every call asks for structured output and retries twice on a validation failure, feeding the
 error back each time. Three attempts total, silent unless all three fail: a first-attempt
@@ -31,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from langfuse import get_client, observe
+from openai import APIError
 from pydantic import BaseModel, ValidationError
 
 from metis.wizard.application import prompts
@@ -124,8 +126,8 @@ class GatewayInterviewer:
         The trace is named by the interview step and, where known, carries the interview id, so one
         interview reads as one sequence. A call with no interview id is still recorded, ungrouped.
         """
-        # `session_id=` is the Langfuse SDK's trace-grouping parameter; the wizard passes its
-        # interview id as that value.
+        # `session_id=` is the Langfuse SDK's trace-grouping parameter. It stays empty when a
+        # stateless caller has no Interview ID; the call is still traced.
         get_client().update_current_trace(
             name=prompt.name, session_id=self.interview_id
         )
@@ -136,18 +138,23 @@ class GatewayInterviewer:
         last_error: Exception | None = None
 
         for attempt in range(ATTEMPTS):
-            response = self._client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": schema.__name__,
-                        "schema": schema.model_json_schema(),
-                        "strict": True,
+            try:
+                response = self._client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": schema.__name__,
+                            "schema": schema.model_json_schema(),
+                            "strict": True,
+                        },
                     },
-                },
-            )
+                )
+            except APIError as exc:
+                raise InterviewerOutputError(
+                    "The model gateway could not complete the request."
+                ) from exc
             text = response.choices[0].message.content or ""
 
             try:

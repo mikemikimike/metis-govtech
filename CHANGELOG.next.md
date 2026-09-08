@@ -45,25 +45,24 @@ _No v1 changes yet._
   from the `ProductProfile` model and CI-guarded by `make check-schema`, giving schema-aware
   editors autocomplete and validation for hand-authored profiles. `profile.yaml` now carries a
   `schema_version` field (defaulted to `1`; an unreadable version is refused, not misread).
-- **Web interview specifications now include the portable profile.** A completed interview ZIP
-  contains `profile.yaml` beside `experiment.yaml` and `fixtures/`. Manual experiment-form ZIP
-  files keep their engine-only layout.
+- **A stateless Interview lifecycle interface.** `handle_interview` accepts a start, turn, or end
+  request against client-held state and returns the next state with a derived stage, or a typed
+  failure with a stable error code and the caller's state unchanged. `compile_profile` turns a
+  finished Profile into the `profile.yaml` and `experiment.yaml` strings in memory. `derive_stage`
+  computes progress from the Profile and two confirmation flags, so no stage is stored. The Interview
+  state travels whole in each request and is never written to a file.
+- **Standardized wizard profile nodes.** Tasks, behaviours, criteria, personas, and scenarios use
+  explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
+  behaviour selection is `measured`; and Product uses `description`.
 
 #### Changed
 
-- **Renamed the wizard control model from Session to Interview.** The runtime object and its
-  neighbours now carry the Interview name: `Interview`, `InterviewState`, `InterviewStep`,
-  `InterviewStore`, `InterviewSummary`, and `InterviewVersionError`. The saved file is now
-  `interview_state.json`, and the web routes are `/api/interviews` and
-  `/api/interviews/{interview_id}` with an `interview_id` field. Step behaviour, the step strings,
-  and every persisted field value do not change; the format version stays at 7 (the constant is now
-  `INTERVIEW_FORMAT_VERSION`). Old `session.json` files are not migrated — start a new interview.
-  The web bundle mirrors the routes, so it is rebuilt.
-- **Wizard-created Behaviours now start selected.** The prioritise step starts with the complete
-  Behaviour set, and users can clear any items that they do not want to measure.
-- **Standardized wizard profile nodes.** Tasks, behaviours, criteria, personas, and scenarios now
-  use explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
-  behaviour selection is `measured`; and Product uses `description`.
+- **Renamed the wizard control model from Session to Interview.** The runtime object and its state
+  carry the Interview name: `Interview`, `InterviewState`, and `InterviewStep`.
+- **Behaviour review and measurement are now one stage.** Every wizard-created Behaviour starts
+  selected for measurement. One screen shows each Behaviour with its measurement control, and the
+  user clears any Behaviour they do not want to measure. Continue needs at least one measured
+  Behaviour and writes Criteria for that final subset only.
 - **Renamed the "run" count to "trial", to agree with the evaluation glossary.** The glossary
   calls one execution a **trial**. The wizard called the total execution count
   (`Σ scenarios of personas × trials`) a "run count". This was wrong. The count is now a trial
@@ -73,15 +72,34 @@ _No v1 changes yet._
   change. The compiled `experiment.yaml` does not change.
   ([#254](https://github.com/govtech-responsibleai/metis/issues/254))
 
+#### Removed
+
+- **The wizard no longer serves its own HTTP door or frontend.** The stateful web server, the
+  per-interview store, the `metis-wizard serve` command, the committed React bundle, and the wizard
+  FastAPI, Uvicorn, and multipart dependencies are gone. A web client now talks to the new
+  `metis-api` service over HTTP. The interview itself — models, driver, screens, compiler — does not
+  change.
+- **`InterviewStep.PRIORITISE` is removed**, with its screen, transitions, and status. The interview
+  now shows five steps.
+
 #### Breaking
 
-- **Profile and saved-session schemas changed.** Profile-owned authorship and generated IDs are
-  removed, with authorship and issued-ID history held by the session. Saved sessions use format 7.
-  The compiled experiment schema remains unchanged.
-- **The scenario card field `runs` is now `trials`, and `SESSION_FORMAT_VERSION` advances from 5
-  to 6.** The web bundle mirrors the field, so it is rebuilt. A session file at an older format is
-  refused with the existing clear message rather than misread.
+- **Interview state is client-held and file-free.** The server-owned session file, its format
+  version, and the `/api/interviews` routes are gone. A caller holds the returned state and sends it
+  back on the next operation. `InterviewState` now carries only the Profile, the two confirmation
+  flags, a bounded clarification history, and one pending request; the resolved-request
+  transcript, stored step, and file methods are removed. Old session files are not migrated — start a
+  new interview.
 
 ### metis-api
 
-_No v1 changes yet._
+#### Added
+
+- **New package: a stateless HTTP door over the wizard.** `POST /api/v1/wizard/interview/start`
+  creates state from the raw product description, `POST /api/v1/wizard/interview/turn` applies one
+  typed response, and `POST /api/v1/wizard/interview/end` performs best-effort completion.
+  `POST /api/v1/wizard/compile` compiles a Profile; `/health` reports liveness. The service holds
+  no Interview state — each turn or end request carries the whole client-held state — so any instance
+  can serve any operation. Typed wizard results map to 200, 400, 422, 503, and 500, all in one error
+  shape. Runs as
+  the `metis-api` executable and ships with a `Dockerfile` built from the repository root.

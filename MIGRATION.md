@@ -40,13 +40,6 @@ evaluation glossary. The arithmetic is unchanged; only the names change.
 - module `metis.wizard.application.runs` → `metis.wizard.application.trials`
 - `format_runs()` → `format_trials()`
 
-**Session files**
-
-- The scenario card field `runs` is now `trials`.
-- `SESSION_FORMAT_VERSION` advances from `5` to `6`. Session files at an older
-  format version are refused with a clear message rather than auto-migrated —
-  regenerate them with `metis wizard init`.
-
 The compiled `experiment.yaml` is unchanged.
 
 #### Profile models standardised on one shape
@@ -65,16 +58,54 @@ behaviour tick and the product summary are renamed for clarity.
   (`given` / `when` / `then`) instead of a flat string. Use
   `str(criterion.description)` for the old flat "Given …, when …, then …." text.
 
-**Session files**
-
-- Per-node authorship and generated-id history move off the profile onto the
-  session (`SessionState.user_typed`, `SessionState.issued_ids`); profile nodes
-  no longer carry authorship.
-- `SESSION_FORMAT_VERSION` advances from `6` to `7`. Session files at an older
-  format version are refused with a clear message rather than auto-migrated —
-  regenerate them with `metis wizard init`.
-
 The compiled `experiment.yaml` is unchanged.
+
+#### The interview is now stateless and file-free
+
+The Interview no longer holds server-side state or writes a file. A caller runs one
+lifecycle operation at a time and holds the returned state itself. This replaces the old
+server-owned session file and its `SESSION_FORMAT_VERSION` / `INTERVIEW_FORMAT_VERSION`
+machinery, which are gone.
+
+**Python API**
+
+- Call `handle_interview(request, interviewer=..., matcher=...)` with an
+  `InterviewStartRequest`, `InterviewTurnRequest`, or `InterviewEndRequest`. It returns the next
+  `InterviewState` with a derived stage, or a typed
+  failure with a stable error code and the caller's state unchanged.
+- Call `compile_profile(profile)` to get the `profile.yaml` and `experiment.yaml`
+  strings in memory.
+- Read progress with `derive_stage(state)`; there is no stored stage.
+
+**What to change:** hold the `InterviewState` the last operation returned and send it back
+on the next operation. Do not look for a session id or a saved file. Old server-owned
+`session.json` / `interview_state.json` files are not read or migrated — start a new
+interview.
+
+#### `InterviewStep.PRIORITISE` removed
+
+The separate prioritisation step is gone. Behaviour review and measurement selection
+are now one step: every wizard-created Behaviour starts selected for measurement, and
+the user clears the ones they do not want. The interview now shows five steps.
+
+**What to change:** nothing in a caller; the step is internal. Any code or fixture
+that named `PRIORITISE` must drop it.
+
+#### The wizard no longer serves HTTP
+
+`metis-wizard` no longer serves its own HTTP door or frontend. These are removed:
+
+- the stateful web server and its per-interview store;
+- the `/api/interviews` and `/api/interviews/{interview_id}` routes;
+- the server-owned interview state files;
+- the committed React frontend bundle served by the wizard;
+- the `metis-wizard serve` command;
+- the wizard FastAPI, Uvicorn, and multipart dependencies.
+
+**Where it went:** the new [`metis-api`](#metis-api) service is the HTTP door.
+
+**What to change:** point web clients at `metis-api`. Run it with the `metis-api`
+executable, or the `apps/api/Dockerfile` built from the repository root.
 
 ### metis-core
 
@@ -90,4 +121,9 @@ _No breaking changes in v1.0._
 
 ### metis-api
 
-_No breaking changes in v1.0._
+New package in v1.0 — the stateless HTTP door over the wizard. It replaces the
+wizard-owned web server (see [The wizard no longer serves HTTP](#the-wizard-no-longer-serves-http)).
+It is stateless — each turn or end request carries the whole client-held state — and exposes
+`POST /api/v1/wizard/interview/start`, `POST /api/v1/wizard/interview/turn`,
+`POST /api/v1/wizard/interview/end`, `POST /api/v1/wizard/compile`, and `/health`. There is no
+prior version to migrate from; point web clients here.

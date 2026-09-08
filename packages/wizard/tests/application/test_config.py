@@ -11,10 +11,9 @@ import yaml
 from fixtures.profiles import research_assistant
 from fixtures.scripted import ScriptedInterviewer
 
-from metis.wizard.application import Interview, config
-from metis.wizard.application.driver import StepDriver
-from metis.wizard.contracts import Product, ProductProfile
-from metis.wizard.contracts.interview_state import InterviewState, Turn
+from metis.wizard.application import config
+from metis.wizard.application.driver import DriverState, StepDriver
+from metis.wizard.contracts.interview_state import Turn
 from metis.wizard.domain.permissions import InterviewStep
 
 _EXPECTED_STATUSES = {
@@ -76,6 +75,10 @@ def _blank_status(document: dict[str, Any]) -> None:
     document["statuses"]["criteria"] = "  "
 
 
+def _restore_removed_status(document: dict[str, Any]) -> None:
+    document["statuses"]["prioritise"] = "Choosing what to measure…"
+
+
 @pytest.mark.parametrize(
     ("change", "broken_key"),
     [
@@ -83,6 +86,7 @@ def _blank_status(document: dict[str, Any]) -> None:
         (_set_statuses_to_list, "statuses"),
         (_remove_status, "statuses.criteria"),
         (_blank_status, "statuses.criteria"),
+        (_restore_removed_status, "statuses.prioritise"),
     ],
 )
 def test_interview_validation_cases(
@@ -132,14 +136,6 @@ def test_every_interview_step_has_the_existing_status_copy() -> None:
     } == _EXPECTED_STATUSES
 
 
-def test_the_interview_facade_uses_the_status_owner() -> None:
-    interview = Interview.start(
-        ProductProfile(product=Product(name="Agent", description="", users=""))
-    )
-
-    assert interview.busy_message() == _EXPECTED_STATUSES["clarify"]
-
-
 def test_a_status_edit_affects_the_next_lookup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -160,8 +156,7 @@ def test_a_limit_edit_affects_an_active_interview(
     document = _document()
     document["settings"]["clarify_turn_cap"] = 3
     _install_document(monkeypatch, document)
-    state = InterviewState(
-        id="s",
+    state = DriverState(
         profile=research_assistant(),
         step=InterviewStep.CLARIFY,
         history=[

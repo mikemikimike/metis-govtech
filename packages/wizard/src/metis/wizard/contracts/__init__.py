@@ -33,12 +33,7 @@ from metis.wizard.contracts.conversation import (
     editable_fields_of,
     options_of,
 )
-from metis.wizard.contracts.interview_state import (
-    INTERVIEW_FORMAT_VERSION,
-    InterviewState,
-    InterviewVersionError,
-    Turn,
-)
+from metis.wizard.contracts.interview_state import InterviewState, Turn
 from metis.wizard.contracts.metric_spec import MetricParam, MetricSpec
 from metis.wizard.contracts.output import (
     BehaviourDraft,
@@ -49,6 +44,20 @@ from metis.wizard.contracts.output import (
     StepResult,
     StepResultPatch,
     TaskDraft,
+)
+from metis.wizard.contracts.turn import (
+    CompileResult,
+    InterviewEndRequest,
+    InterviewErrorCode,
+    InterviewFailure,
+    InterviewOutcome,
+    InterviewRequest,
+    InterviewResult,
+    InterviewStartRequest,
+    InterviewSuccess,
+    InterviewTurnRequest,
+    MissingData,
+    MissingDataCode,
 )
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.profile import (
@@ -105,17 +114,27 @@ __all__ = [
     "Product",
     "ProductProfile",
     "ProfileNode",
-    "INTERVIEW_FORMAT_VERSION",
+    "CompileResult",
+    "MissingDataCode",
+    "MissingData",
     "Scenario",
     "ScenarioCard",
     "ScenarioDraft",
     "InterviewState",
-    "InterviewVersionError",
     "StepResult",
     "StepResultPatch",
     "Task",
     "TaskDraft",
     "Turn",
+    "InterviewEndRequest",
+    "InterviewErrorCode",
+    "InterviewFailure",
+    "InterviewOutcome",
+    "InterviewRequest",
+    "InterviewResult",
+    "InterviewStartRequest",
+    "InterviewSuccess",
+    "InterviewTurnRequest",
     "UserResponse",
     "Warning",
     "WarningSource",

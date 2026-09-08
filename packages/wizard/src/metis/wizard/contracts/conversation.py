@@ -1,9 +1,7 @@
 """The contract between this package and whatever is driving it.
 
-A CLI, an HTTP server and a pytest fixture are all the same two lines:
-
-    while (request := interview.next()) is not None:
-        interview.respond(render(request))
+A CLI, an HTTP server and a pytest fixture all drive the same lifecycle: start with the user's
+description, then send each typed answer in an `InterviewTurnRequest`.
 
 `render` is the only thing a door implements, and a door never learns the domain. It does not
 know what a behaviour, a criterion or a persona is — it draws rows, checkboxes, buttons and
@@ -21,12 +19,13 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, Field, StrictInt, StrictStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_validator
 
-# `Option.patch` is a Pydantic field, so `Patch` must be a runtime import — Pydantic resolves
-# the annotation at runtime and a TYPE_CHECKING-only import leaves Option (and every model
-# nesting it) "not fully defined". See CLAUDE.md — Coding Conventions.
+# `Option.patch` and `WizardRequest.stage` are Pydantic fields, so `Patch` and `InterviewStep`
+# must be runtime imports — Pydantic resolves the annotation at runtime and a TYPE_CHECKING-only
+# import leaves the nesting models "not fully defined". See CLAUDE.md — Coding Conventions.
 from metis.wizard.domain.patch import Patch
+from metis.wizard.domain.permissions import InterviewStep
 from metis.wizard.domain.types import InteractionType
 
 # ── what the user clicked ──────────────────────────────────────────────────
@@ -248,18 +247,61 @@ class WizardRequestState(StrEnum):
     RESOLVED = "resolved"
 
 
+def _require_turn_metadata(schema: dict[str, object]) -> None:
+    """Expose pending turn metadata as required and non-null in client schemas.
+
+    Screen builders use the same models before the turn binder has the final stage and request
+    identity. The pending-state boundary rejects that temporary form. The wire schema must describe
+    the boundary form, not the internal draft form.
+    """
+    required = schema.setdefault("required", [])
+    if isinstance(required, list):
+        for name in ("request_id", "stage"):
+            if name not in required:
+                required.append(name)
+
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return
+    for name in ("request_id", "stage"):
+        property_schema = properties.get(name)
+        if not isinstance(property_schema, dict):
+            continue
+        variants = property_schema.get("anyOf")
+        if isinstance(variants, list):
+            non_null = next(
+                (
+                    variant
+                    for variant in variants
+                    if isinstance(variant, dict) and variant.get("type") != "null"
+                ),
+                None,
+            )
+            if isinstance(non_null, dict):
+                property_schema.clear()
+                property_schema.update(non_null)
+        property_schema.pop("default", None)
+
+
 class WizardRequest(BaseModel):
     """Base — what every request shares.
 
-    `title`, `step` and `steps` are a one-directional projection of `InterviewState.step`: the
-    package stamps where the interview is so a door can show it, and they never come back in a
-    response. They live on the base, not on `ChoiceRequest`, so a chat question and an
-    add-your-own form carry a header too. Optional with `None` defaults — additive, so an
-    older persisted request validates and a door that ignores them renders exactly as before.
+    `title`, `step` and `steps` are a one-directional projection of the driver's current stage.
+    The package stamps where the interview is so a door can show it, and they never come back in
+    a response. They live on the base, not on `ChoiceRequest`, so a chat question and an
+    add-your-own form carry a header too. Screen builders may leave these unset until the request
+    becomes pending.
 
-    A door reads these; it does not derive them. Reading `InterviewState.step` door-side would
+    A door reads these; it does not derive them. Reading the interview stage door-side would
     mean the door learning that `BEHAVIOURS` exists and what to call it — the one thing the
     contract keeps it from knowing.
+
+    `request_id` and `stage` are the turn contract's control fields, distinct from the three
+    presentation fields above. `request_id` is opaque and fresh for every composed or recomposed
+    request; an `InterviewTurnRequest` must carry the same one, which is what detects a late or
+    duplicated answer. `stage` is the `InterviewStep` that owns the request and is authoritative
+    while the request is pending — the client-held state stores the stage nowhere else. Both are
+    stamped when a request becomes the pending one, so a screen builder never sets them.
     """
 
     prompt: str
@@ -267,6 +309,10 @@ class WizardRequest(BaseModel):
     step: int | None = None  # 1-based position of this step in the interview
     steps: int | None = None  # how many steps the interview has
     state: WizardRequestState = WizardRequestState.PENDING
+    request_id: str | None = None  # opaque, fresh per composition — "req-<uuid>"
+    stage: InterviewStep | None = None  # the step that owns this pending request
+
+    model_config = ConfigDict(json_schema_extra=_require_turn_metadata)
 
 
 class ChatRequest(WizardRequest):

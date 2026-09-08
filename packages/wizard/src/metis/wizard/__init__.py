@@ -8,7 +8,12 @@ from importlib.metadata import PackageNotFoundError, version
 
 from metis.core import Status
 from metis.core import __version__ as core_version
-from metis.wizard.application import Interview, InterviewState, InterviewVersionError
+from metis.wizard.application import (
+    InterviewState,
+    compile_profile,
+    derive_stage,
+    handle_interview,
+)
 from metis.wizard.application.compile import (
     CompilationError,
     compile_experiment,
@@ -16,13 +21,41 @@ from metis.wizard.application.compile import (
     write_experiment,
     write_review,
 )
+from metis.wizard.application.interviewer import InterviewerUnavailable
 from metis.wizard.contracts import (
     AnyRequest,
     AnyResponse,
+    ChatRequest,
+    ChatResponse,
+    ChoiceRequest,
+    ChoiceResponse,
+    CompileResult,
+    FormRequest,
+    FormResponse,
+    InterviewEndRequest,
+    InterviewErrorCode,
+    InterviewFailure,
+    InterviewOutcome,
+    InterviewRequest,
+    InterviewResult,
+    InterviewStartRequest,
+    InterviewSuccess,
+    InterviewTurnRequest,
+    MissingData,
+    MissingDataCode,
     ProductProfile,
     UserResponse,
     WizardRequest,
 )
+from metis.wizard.domain.permissions import InterviewStep
+
+
+def configure_interview_runtime(*, api_key: str, base_url: str, model: str) -> None:
+    """Configure the production collaborators used by :func:`handle_interview`."""
+    from metis.wizard.bootstrap import configure_interview_runtime
+
+    configure_interview_runtime(api_key=api_key, base_url=base_url, model=model)
+
 
 try:
     __version__ = version("metis-wizard")
@@ -32,17 +65,39 @@ except PackageNotFoundError:
 __all__ = [
     "AnyRequest",
     "AnyResponse",
+    "ChatRequest",
+    "ChatResponse",
     "CompilationError",
-    "ProductProfile",
-    "Interview",
+    "CompileResult",
+    "ChoiceRequest",
+    "ChoiceResponse",
+    "FormRequest",
+    "FormResponse",
+    "InterviewEndRequest",
+    "InterviewErrorCode",
+    "InterviewFailure",
+    "InterviewOutcome",
+    "InterviewRequest",
+    "InterviewResult",
+    "InterviewStartRequest",
     "InterviewState",
-    "InterviewVersionError",
+    "InterviewSuccess",
+    "InterviewTurnRequest",
+    "InterviewStep",
+    "InterviewerUnavailable",
+    "MissingData",
+    "MissingDataCode",
+    "ProductProfile",
     "Status",
     "UserResponse",
     "WizardRequest",
     "__version__",
     "compile_experiment",
+    "compile_profile",
+    "configure_interview_runtime",
     "core_version",
+    "derive_stage",
+    "handle_interview",
     "render_review",
     "write_experiment",
     "write_review",

@@ -1,54 +1,81 @@
 """The stable headless import surface."""
 
-import json
-from pathlib import Path
-
 from metis.wizard import (
     AnyRequest,
+    AnyResponse,
+    ChatRequest,
+    ChatResponse,
+    ChoiceRequest,
+    ChoiceResponse,
     CompilationError,
-    Interview,
+    CompileResult,
+    FormRequest,
+    FormResponse,
+    InterviewEndRequest,
+    InterviewFailure,
+    InterviewRequest,
+    InterviewResult,
+    InterviewStartRequest,
     InterviewState,
+    InterviewStep,
+    InterviewSuccess,
+    InterviewTurnRequest,
     ProductProfile,
     UserResponse,
     WizardRequest,
     compile_experiment,
+    compile_profile,
+    derive_stage,
+    handle_interview,
     render_review,
     write_experiment,
     write_review,
 )
 
 
-def test_headless_facade_exports_interview_contract_and_compiler() -> None:
-    assert Interview
-    assert InterviewState
-    assert ProductProfile
-    assert WizardRequest
-    assert UserResponse
-    assert AnyRequest
-    assert CompilationError
-    assert compile_experiment
-    assert render_review
-    assert write_experiment
-    assert write_review
+def test_the_headless_facade_exports_the_interview_contract_and_compiler() -> None:
+    exported = (
+        handle_interview,
+        derive_stage,
+        compile_profile,
+        compile_experiment,
+        render_review,
+        write_experiment,
+        write_review,
+        InterviewState,
+        InterviewStartRequest,
+        InterviewTurnRequest,
+        InterviewEndRequest,
+        InterviewRequest,
+        InterviewResult,
+        InterviewSuccess,
+        InterviewFailure,
+        CompileResult,
+        ProductProfile,
+        WizardRequest,
+        UserResponse,
+        AnyRequest,
+        AnyResponse,
+        ChatRequest,
+        ChatResponse,
+        ChoiceRequest,
+        ChoiceResponse,
+        FormRequest,
+        FormResponse,
+        CompilationError,
+        InterviewStep,
+    )
+    assert all(name is not None for name in exported)
 
 
-def test_interview_fixture_loads_through_the_facade(fixtures_dir: Path) -> None:
-    """The stable facade preserves the persisted wire shape and concrete request type."""
-    from metis.wizard import InterviewState
-    from metis.wizard.contracts import ChoiceRequest
+def test_the_facade_entrypoint_starts_a_serializable_interview() -> None:
+    from fixtures.scripted import ScriptedInterviewer
 
-    path = fixtures_dir / "interview_state_fixture.json"
-    raw = json.loads(path.read_text())
-    state = InterviewState.load(path)
+    result = handle_interview(
+        InterviewStartRequest(description="A research assistant"),
+        interviewer=ScriptedInterviewer(),
+        matcher=None,
+    )
 
-    assert state.profile.model_dump(mode="json") == raw["profile"]
-    assert state.step.value == raw["step"]
-    assert [turn.model_dump(mode="json") for turn in state.history] == raw["history"]
-    assert isinstance(state.pending, ChoiceRequest)
-    assert len(state.requests) == len(raw["requests"])
-    assert state.requests[0].prompt == raw["requests"][0]["prompt"]
-    assert [o.label for o in state.pending.options] == [
-        o["label"] for o in raw["requests"][0]["options"]
-    ]
-    assert state.user_typed == set(raw["user_typed"])
-    assert state.issued_ids == set(raw["issued_ids"])
+    assert isinstance(result, InterviewSuccess)
+    assert InterviewState.model_validate_json(result.state.model_dump_json())
