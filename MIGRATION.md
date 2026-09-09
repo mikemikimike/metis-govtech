@@ -75,6 +75,10 @@ machinery, which are gone.
   failure with a stable error code and the caller's state unchanged.
 - Call `compile_profile(profile)` to get the `profile.yaml` and `experiment.yaml`
   strings in memory.
+- Call `package_specification(profile, fixtures)` to get one in-memory `experiment.zip` with the
+  validated fixture bytes under `fixtures/`.
+- `SpecificationFixture` now takes a `stream` binary file object instead of a `content` byte
+  string. The packager consumes streams in bounded chunks; the caller owns and closes them.
 - Read progress with `derive_stage(state)`; there is no stored stage.
 
 **What to change:** hold the `InterviewState` the last operation returned and send it back
@@ -125,8 +129,9 @@ New package in v1.0 — the stateless HTTP door over the wizard. It replaces the
 wizard-owned web server (see [The wizard no longer serves HTTP](#the-wizard-no-longer-serves-http)).
 It is stateless — each turn or end request carries the whole client-held state — and exposes
 `POST /api/v1/wizard/interview/start`, `POST /api/v1/wizard/interview/turn`,
-`POST /api/v1/wizard/interview/end`, `POST /api/v1/wizard/compile`, and `/health`. There is no
-prior version to migrate from; point web clients here.
+`POST /api/v1/wizard/interview/end`, `POST /api/v1/wizard/compile`,
+`POST /api/v1/wizard/package`, and `/health`. There is no prior version to migrate from; point web
+clients here.
 
 ### metis-web
 
@@ -134,8 +139,10 @@ The wizard web client now lives in `apps/web` and is a separate Node project. Re
 previously targeted the retired web project with `npm --prefix apps/web run dev`,
 `npm --prefix apps/web run build`, and `npm --prefix apps/web run check:api`. Start `metis-api` on
 port 8001 (or set `METIS_API_ORIGIN` for another origin). Interview lists, state, and the display
-transcript are browser-local; there is no server Interview list to migrate and no cross-device state.
+transcript and fixture Blobs are browser-local; there is no server Interview list to migrate and no
+cross-device state. A completed Interview downloads one `experiment.zip` containing the two YAML
+documents and its validated `fixtures/` files. The API retains no fixture bytes.
 Use `make web-check` for non-mutating web checks and `make web-build` for the production bundle.
 The web gets optional metric details from `GET /api/v1/metrics` after a Profile contains a
-Criterion. Direct authoring, fixture persistence, ZIP packaging, source analysis, hosted state,
-authentication, and evaluation execution remain deferred.
+Criterion. Direct authoring, source analysis, hosted state, authentication, and evaluation execution
+remain deferred.

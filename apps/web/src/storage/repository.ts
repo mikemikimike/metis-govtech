@@ -1,14 +1,15 @@
 import type {
   InterviewState,
   InterviewStep,
+  LocalFixture,
   LocalInterviewRecord,
   TranscriptEntry,
 } from "../transport/api.ts";
 
 const DB_NAME = "metis-web";
 const STORE_NAME = "interviews";
-const DB_VERSION = 1;
-const STORAGE_VERSION = 2 as const;
+const DB_VERSION = 2;
+const STORAGE_VERSION = 3 as const;
 const INTERVIEW_STEPS: readonly InterviewStep[] = [
   "clarify",
   "behaviours",
@@ -38,7 +39,25 @@ function validRecord(value: unknown): value is LocalInterviewRecord {
     INTERVIEW_STEPS.includes(record.stage) &&
     validState(record.state) &&
     Array.isArray(record.transcript) &&
-    record.transcript.every(validTranscriptEntry)
+    record.transcript.every(validTranscriptEntry) &&
+    Array.isArray(record.fixtures) &&
+    record.fixtures.every(validFixture)
+  );
+}
+
+function validFixture(value: unknown): value is LocalFixture {
+  if (!value || typeof value !== "object") return false;
+  const fixture = value as Partial<LocalFixture>;
+  return (
+    typeof fixture.name === "string" &&
+    fixture.name.length > 0 &&
+    typeof fixture.type === "string" &&
+    typeof fixture.size === "number" &&
+    Number.isFinite(fixture.size) &&
+    fixture.size >= 0 &&
+    typeof Blob !== "undefined" &&
+    fixture.blob instanceof Blob &&
+    fixture.size === fixture.blob.size
   );
 }
 
@@ -191,8 +210,30 @@ export class InterviewRepository {
   private database(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
-      request.onupgradeneeded = () =>
-        request.result.createObjectStore(STORE_NAME, { keyPath: "id" });
+      request.onupgradeneeded = (event) => {
+        const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
+        const store = request.result.objectStoreNames.contains(STORE_NAME)
+          ? request.transaction?.objectStore(STORE_NAME)
+          : request.result.createObjectStore(STORE_NAME, { keyPath: "id" });
+        if (!store || oldVersion >= DB_VERSION) return;
+        const cursor = store.openCursor();
+        cursor.onsuccess = () => {
+          const current = cursor.result;
+          if (!current) return;
+          const value = current.value as Partial<LocalInterviewRecord>;
+          if (
+            (value as { storage_version?: number }).storage_version === 2 &&
+            !Array.isArray(value.fixtures)
+          ) {
+            current.update({
+              ...value,
+              storage_version: STORAGE_VERSION,
+              fixtures: [],
+            });
+          }
+          current.continue();
+        };
+      };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () =>
         reject(
@@ -218,5 +259,60 @@ export function emptyRecord(
     stage,
     state,
     transcript,
+    fixtures: [],
+  };
+}
+
+export function addFixtures(
+  record: LocalInterviewRecord,
+  files: readonly File[],
+): LocalInterviewRecord {
+  const fixtures = [...record.fixtures];
+  for (const file of files) {
+    const next: LocalFixture = {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      blob: file,
+    };
+    const index = fixtures.findIndex((fixture) => fixture.name === file.name);
+    if (index === -1) fixtures.push(next);
+    else fixtures[index] = next;
+  }
+  return { ...record, fixtures };
+}
+
+export async function withProvisionalFixtures<T>(
+  repository: Pick<InterviewRepository, "put">,
+  prior: LocalInterviewRecord,
+  files: readonly File[],
+  operation: (provisional: LocalInterviewRecord) => Promise<T>,
+): Promise<T> {
+  if (files.length === 0) return operation(prior);
+
+  const provisional = addFixtures(prior, files);
+  await repository.put(provisional);
+  try {
+    return await operation(provisional);
+  } catch (cause) {
+    // The fixture must exist before its name crosses the API boundary. If the turn or its final
+    // local write fails, restore the exact record that existed before the provisional write.
+    await repository.put(prior);
+    throw cause;
+  }
+}
+
+export function removeUnreferencedFixtures(
+  record: LocalInterviewRecord,
+  names: readonly string[],
+): LocalInterviewRecord {
+  const references = new Set(
+    record.state.profile.scenarios.flatMap((scenario) => scenario.fixtures),
+  );
+  const removable = new Set(names.filter((name) => !references.has(name)));
+  if (removable.size === 0) return record;
+  return {
+    ...record,
+    fixtures: record.fixtures.filter((fixture) => !removable.has(fixture.name)),
   };
 }

@@ -165,9 +165,11 @@ MUST depend on `metis-core` and `metis-engine`.
 | **Purpose** | A thin, stateless HTTP door exposing METIS capabilities as a REST service. |
 
 MAY depend on all `packages/*` members. For the wizard it depends on the `metis.wizard` public
-Interview interface only (`apps/api -> metis.wizard`): the router calls `handle_interview` and
-`compile_profile` and maps the typed result onto an HTTP status. No stage, Profile, prompt,
-matching, or compilation rule lives in the API.
+Interview interface only (`apps/api -> metis.wizard`): the router calls `handle_interview`,
+`compile_profile`, and the in-memory specification packager and maps typed results onto HTTP
+responses. No stage, Profile, prompt, matching, fixture validation, or compilation rule lives in
+the API. The package route accepts a Profile JSON part and request-scoped fixture bytes and returns
+one `experiment.zip`; it retains no uploaded files.
 
 **Client-held state boundary.** The service holds only immutable settings and model clients for the
 process lifetime. It holds no Interview state: start creates state, turn carries the complete state
@@ -185,9 +187,10 @@ wizard.
 | **Purpose** | Web frontend providing a graphical interface for METIS capabilities. |
 
 MUST communicate exclusively with `apps/api` via REST. MUST NOT import or depend on any Python package directly.
-The browser owns the local Interview record and display transcript in IndexedDB. It sends only the
-client-held `InterviewState` and typed responses to the stateless lifecycle routes. It MUST NOT
-depend on server Interview resources, wizard static assets, or an embedded wizard runtime.
+The browser owns the local Interview record, fixture Blobs, and display transcript in IndexedDB. It
+sends only the client-held `InterviewState` and typed responses to lifecycle routes; fixture bytes
+are sent only for a request-scoped package operation. It MUST NOT depend on server Interview
+resources, wizard static assets, or an embedded wizard runtime.
 
 The normal local run uses two processes: `PORT=8001 uv run metis-api` and
 `npm --prefix apps/web run dev`.

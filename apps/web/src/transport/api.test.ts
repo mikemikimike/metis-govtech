@@ -37,7 +37,9 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
     calls.push({
       path: String(input),
       body:
-        init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+        init?.body === undefined || init.body instanceof FormData
+          ? init?.body
+          : JSON.parse(String(init.body)),
     });
     return new Response(JSON.stringify(success), {
       status: 200,
@@ -54,6 +56,7 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
   await api.compile(state.profile);
   await api.metrics();
   await api.config();
+  await api.package(state.profile, []);
 
   assert.deepEqual(
     calls.map((call) => call.path),
@@ -64,6 +67,7 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
       "/api/v1/wizard/compile",
       "/api/v1/metrics",
       "/api/v1/wizard/config",
+      "/api/v1/wizard/package",
     ],
   );
   assert.deepEqual(calls[0]?.body, { description: "A support assistant" });
@@ -74,6 +78,53 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
   });
   assert.deepEqual(calls[2]?.body, { state });
   assert.deepEqual(calls[3]?.body, state.profile);
+});
+
+test("packages the Profile and fixtures as multipart and returns binary content", async () => {
+  let received: FormData | undefined;
+  globalThis.fetch = async (input, init) => {
+    assert.equal(String(input), "/api/v1/wizard/package");
+    assert.equal(init?.method, "POST");
+    assert.ok(init?.body instanceof FormData);
+    received = init?.body as FormData;
+    return new Response(new Blob(["zip bytes"], { type: "application/zip" }), {
+      status: 200,
+      headers: { "content-type": "application/zip" },
+    });
+  };
+
+  const fixture = new File(["policy"], "policy.pdf", {
+    type: "application/pdf",
+  });
+  const archive = await api.package(state.profile, [
+    { name: fixture.name, blob: fixture },
+  ]);
+
+  assert.equal(await archive.text(), "zip bytes");
+  assert.equal(received?.get("profile"), JSON.stringify(state.profile));
+  assert.equal((received?.get("files") as File).name, "policy.pdf");
+});
+
+test("package failures preserve the API error shape", async () => {
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        type: "failure",
+        code: "compilation_failed",
+        message: "Missing fixture file(s): policy.pdf.",
+        retryable: false,
+      }),
+      { status: 400, headers: { "content-type": "application/json" } },
+    );
+
+  await assert.rejects(
+    api.package(state.profile, []),
+    (cause: unknown) =>
+      cause instanceof TransportError &&
+      cause.status === 400 &&
+      cause.code === "compilation_failed" &&
+      !cause.retryable,
+  );
 });
 
 for (const status of [400, 422, 500, 503]) {

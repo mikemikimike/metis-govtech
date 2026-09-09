@@ -19,6 +19,16 @@ type JsonResponse<O, Status extends PropertyKey = 200> = O extends {
     ? Body
     : never
   : never;
+type BinaryResponse<O, Status extends PropertyKey = 200> = O extends {
+  responses: infer Responses;
+}
+  ? Responses extends Record<
+      Status,
+      { content: { "application/zip": infer Body } }
+    >
+    ? Body
+    : never
+  : never;
 
 type StartOperation = operations["start_api_v1_wizard_interview_start_post"];
 type TurnOperation = operations["turn_api_v1_wizard_interview_turn_post"];
@@ -26,6 +36,8 @@ type EndOperation = operations["end_api_v1_wizard_interview_end_post"];
 type CompileOperation = operations["compile__api_v1_wizard_compile_post"];
 type MetricsOperation = operations["metrics_api_v1_metrics_get"];
 type ConfigOperation = operations["config_api_v1_wizard_config_get"];
+type PackageOperation = operations["package_api_v1_wizard_package_post"];
+type PackageWireRequest = Schema["Body_package_api_v1_wizard_package_post"];
 
 export type InterviewStep = Schema["InterviewStep"];
 export type OptionId = Schema["OptionId"];
@@ -135,6 +147,18 @@ export type EndResponse = JsonResponse<EndOperation>;
 export type CompileResponse = JsonResponse<CompileOperation>;
 export type MetricsResponse = JsonResponse<MetricsOperation>;
 export type ConfigResponse = JsonResponse<ConfigOperation>;
+export type PackageRequest = Omit<PackageWireRequest, "files"> & {
+  files?: PackageFile[] | null;
+};
+export type PackageResponse =
+  BinaryResponse<PackageOperation> extends string
+    ? Blob
+    : BinaryResponse<PackageOperation>;
+
+export interface PackageFile {
+  name: string;
+  blob: Blob;
+}
 
 type GeneratedCardComponent = Present<
   Schema["BehaviourCard"]["components"]
@@ -238,7 +262,7 @@ export interface InteractionEntry {
 }
 export type TranscriptEntry = InitialDescriptionEntry | InteractionEntry;
 export interface LocalInterviewRecord {
-  storage_version: 2;
+  storage_version: 3;
   id: string;
   created_at: number;
   updated_at: number;
@@ -246,6 +270,13 @@ export interface LocalInterviewRecord {
   stage: InterviewStep;
   state: InterviewState;
   transcript: TranscriptEntry[];
+  fixtures: LocalFixture[];
+}
+export interface LocalFixture {
+  name: string;
+  type: string;
+  size: number;
+  blob: Blob;
 }
 export interface InterviewSummary {
   id: string;
@@ -284,7 +315,10 @@ export class TransportError extends Error {
   }
 }
 
-async function call<T>(path: keyof ApiPaths, init?: RequestInit): Promise<T> {
+async function responseFor(
+  path: keyof ApiPaths,
+  init?: RequestInit,
+): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(path, init);
@@ -310,7 +344,20 @@ async function call<T>(path: keyof ApiPaths, init?: RequestInit): Promise<T> {
       },
     );
   }
-  return (await response.json()) as T;
+  return response;
+}
+
+async function call<T>(path: keyof ApiPaths, init?: RequestInit): Promise<T> {
+  return (await responseFor(path, init).then((response) =>
+    response.json(),
+  )) as T;
+}
+
+async function callBlob(
+  path: keyof ApiPaths,
+  init?: RequestInit,
+): Promise<Blob> {
+  return responseFor(path, init).then((response) => response.blob());
 }
 
 const JSON_POST: RequestInit = {
@@ -366,6 +413,15 @@ export const api = {
     }),
   metrics: () => call<MetricsResponse>("/api/v1/metrics"),
   config: () => call<ConfigResponse>("/api/v1/wizard/config"),
+  package: (profile: ProductProfile, files: readonly PackageFile[]) => {
+    const form = new FormData();
+    form.append("profile", JSON.stringify(profile));
+    for (const file of files) form.append("files", file.blob, file.name);
+    return callBlob("/api/v1/wizard/package", {
+      method: "POST",
+      body: form,
+    });
+  },
 };
 
 export function toSummary(record: LocalInterviewRecord): InterviewSummary {

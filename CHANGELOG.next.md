@@ -48,9 +48,11 @@ _No v1 changes yet._
 - **A stateless Interview lifecycle interface.** `handle_interview` accepts a start, turn, or end
   request against client-held state and returns the next state with a derived stage, or a typed
   failure with a stable error code and the caller's state unchanged. `compile_profile` turns a
-  finished Profile into the `profile.yaml` and `experiment.yaml` strings in memory. `derive_stage`
-  computes progress from the Profile and two confirmation flags, so no stage is stored. The Interview
-  state travels whole in each request and is never written to a file.
+  finished Profile into the `profile.yaml` and `experiment.yaml` strings in memory, and
+  `package_specification` returns a complete in-memory `experiment.zip` with validated fixture bytes
+  read from bounded streams.
+  `derive_stage` computes progress from the Profile and two confirmation flags, so no stage is stored.
+  The Interview state travels whole in each request and is never written to a file.
 - **Standardized wizard profile nodes.** Tasks, behaviours, criteria, personas, and scenarios use
   explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
   behaviour selection is `measured`; and Product uses `description`.
@@ -107,6 +109,9 @@ _No v1 changes yet._
   public wizard facade without user state or filesystem writes.
 - **Wizard client configuration route.** `GET /api/v1/wizard/config` returns the package-owned
   Interview busy message, so HTTP clients do not copy wizard presentation text.
+- **Specification package route.** `POST /api/v1/wizard/package` accepts a Profile and request-scoped
+  fixture files and returns one `experiment.zip` containing `profile.yaml`, `experiment.yaml`, and
+  an explicit `fixtures/` directory. The API retains no uploaded bytes.
 - **Shared model environment names.** The API reads `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and
   `INTERVIEW_MODEL`, matching the wizard and engine provider configuration, and can load one root
   `.env` for local development.
@@ -116,8 +121,9 @@ _No v1 changes yet._
 #### Added
 
 - **Standalone browser client.** The wizard UI now lives in `apps/web`, uses generated OpenAPI
-  types and the stateless `apps/api` lifecycle routes, and stores local Interviews and their display
-  transcript in IndexedDB. The old wizard-owned web project and Python static output are retired.
+  types and the stateless `apps/api` lifecycle routes, and stores local Interviews, fixture Blobs,
+  and their display transcript in IndexedDB. The old wizard-owned web project and Python static
+  output are retired.
 - **Metric details.** The Profile pane can request the optional metric catalogue once per page load
   through `GET /api/v1/metrics`; the rest of the Interview remains usable when that route fails.
 
@@ -126,9 +132,10 @@ _No v1 changes yet._
 - **Clear completion and output actions.** The conversation composer now fills its column. Early
   finish and download use one action in the Profile footer. A normal final Continue stores the
   completed Interview and reports that the specification is ready without an automatic compile or
-  download. Review actions are disabled when their required Profile content is incomplete.
+  download. The output action downloads one portable `experiment.zip` with the local fixture files.
+  Review actions are disabled when their required Profile content is incomplete.
 
 #### Deferred
 
-- Direct authoring, fixture persistence, ZIP packaging, source analysis, hosted state,
-  authentication, and evaluation execution remain outside this change.
+- Direct authoring, source analysis, hosted state, authentication, and evaluation execution remain
+  outside this change.

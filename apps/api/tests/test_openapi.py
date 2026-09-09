@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
-def test_the_route_table_is_exactly_health_interview_lifecycle_and_compile(
+def test_the_route_table_is_exactly_health_interview_lifecycle_compile_and_package(
     client: TestClient,
 ) -> None:
     paths = client.get("/openapi.json").json()["paths"]
@@ -14,6 +14,7 @@ def test_the_route_table_is_exactly_health_interview_lifecycle_and_compile(
         "/health",
         "/api/v1/metrics",
         "/api/v1/wizard/config",
+        "/api/v1/wizard/package",
         "/api/v1/wizard/interview/start",
         "/api/v1/wizard/interview/turn",
         "/api/v1/wizard/interview/end",

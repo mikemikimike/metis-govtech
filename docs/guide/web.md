@@ -23,10 +23,10 @@ npm --prefix apps/web run dev
 ```
 
 Set `METIS_API_ORIGIN` when the API uses another origin. Vite proxies `/api` to that origin. The
-browser stores local Interview records and the display transcript in IndexedDB. The API receives
-only the JSON `InterviewState` and the typed response for the current turn. Browser data belongs to
-the exact web origin, so `http://localhost:5173` and `http://127.0.0.1:5173` have separate local
-Interview lists.
+browser stores local Interview records, fixture Blobs, and the display transcript in IndexedDB. The
+API receives only the JSON `InterviewState` and the typed response for the current turn. Fixture
+bytes are sent only when the user requests a package. Browser data belongs to the exact web origin,
+so `http://localhost:5173` and `http://127.0.0.1:5173` have separate local Interview lists.
 
 The package-level `.env.example` files are entry-point templates. They do not require three active
 `.env` files. One root `.env` can contain the union of settings needed by the commands you run.
@@ -41,14 +41,15 @@ in `packages/wizard/src/metis/wizard/config.yaml` with the other Interview statu
 The web client does not provide these features yet:
 
 - direct Profile or experiment authoring outside the wizard conversation;
-- fixture byte upload, fixture persistence, or ZIP packaging;
 - source-code or trace analysis inputs;
 - hosted or cross-device Interview state;
 - authentication and multi-user access;
 - evaluation execution.
 
-The completed Interview downloads `profile.yaml` and `experiment.yaml`. Evaluation execution is
-not a web control in this change.
+The completed Interview downloads one `experiment.zip` package. It contains `profile.yaml`,
+`experiment.yaml`, and a `fixtures/` directory with the validated fixture files selected during the
+Interview. The API packages these bytes for one request and retains no fixture files. Evaluation
+execution is not a web control in this change.
 
 These are deferred changes. They must use new API contracts when they are added; do not restore the
 retired wizard-owned web server or Python static output.

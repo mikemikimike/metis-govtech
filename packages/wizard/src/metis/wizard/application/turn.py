@@ -28,6 +28,8 @@ from metis.core.logging import get_logger
 from metis.wizard.application import cascade
 from metis.wizard.application.compile import (
     CompilationError,
+    SpecificationFixture,
+    build_specification_archive,
     compile_experiment,
     to_yaml,
 )
@@ -67,6 +69,8 @@ from metis.wizard.domain.profile import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from metis.wizard.application.interviewer import Interviewer
     from metis.wizard.contracts.conversation import AnyResponse
 
@@ -466,6 +470,20 @@ def compile_profile(profile: ProductProfile) -> CompileResult:
     )
 
 
+def package_specification(
+    profile: ProductProfile,
+    fixtures: Iterable[SpecificationFixture],
+) -> bytes:
+    """Compile a Profile and package request-scoped fixture streams in an engine-ready ZIP."""
+    gaps = profile_readiness(profile)
+    if gaps:
+        raise CompilationError(
+            "Profile is not runnable: " + "; ".join(gap.message for gap in gaps)
+        )
+    document = compile_experiment(profile, experiment_id(profile))
+    return build_specification_archive(document, fixtures, profile=profile)
+
+
 def experiment_id(profile: ProductProfile) -> str:
     """A stable, filename-safe id from the product name, falling back when it is empty."""
     slug = re.sub(r"[^a-z0-9]+", "-", profile.product.name.lower()).strip("-")
@@ -581,6 +599,7 @@ def _completion_gaps(profile: ProductProfile) -> list[MissingData]:
 __all__ = [
     "MissingData",
     "compile_profile",
+    "package_specification",
     "derive_stage",
     "experiment_id",
     "configure_interview_dependencies",

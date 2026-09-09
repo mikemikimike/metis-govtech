@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { downloadCompileResult } from "./download.ts";
+import { downloadArchive } from "./download.ts";
 
-test("offers exactly the two compiled YAML documents with stable names", () => {
+test("offers one portable experiment ZIP with a stable name", () => {
   const downloads: string[] = [];
   const revoked: string[] = [];
   const document = {
@@ -20,12 +20,12 @@ test("offers exactly the two compiled YAML documents with stable names", () => {
     revokeObjectURL: (url: string) => revoked.push(url),
   } as Pick<typeof URL, "createObjectURL" | "revokeObjectURL">;
 
-  downloadCompileResult(
-    { "profile.yaml": "profile", "experiment.yaml": "experiment" },
+  downloadArchive(
+    new Blob(["zip bytes"], { type: "application/zip" }),
     document,
     urlApi,
   );
 
-  assert.deepEqual(downloads, ["profile.yaml", "experiment.yaml"]);
-  assert.deepEqual(revoked, ["blob:metis", "blob:metis"]);
+  assert.deepEqual(downloads, ["experiment.zip"]);
+  assert.deepEqual(revoked, ["blob:metis"]);
 });

@@ -25,16 +25,16 @@ something, it belongs in the returned `InterviewState`, not on the app.
 src/metis/api/
 ├── main.py            the app composition root: /health, routers, and error handlers
 ├── routes/metrics.py  read-only installed metric catalogue route
-├── routes/wizard.py   client config, Interview lifecycle, and compile routes
+├── routes/wizard.py   client config, Interview lifecycle, compile, and package routes
 ├── settings.py        environment-backed settings and the production dependency composition
 ├── cli.py             the `metis-api` executable (Uvicorn on metis.api.main:app)
 └── __init__.py        version and the re-exported core version
 ```
 
-The dependency arrow is `apps/api -> metis.wizard`. The router calls `handle_interview` and
-`compile_profile` from the `metis.wizard` facade and maps the typed result onto an HTTP status
-(200/400/422/503/500) in one error shape. No stage, Profile, prompt, matching, or compilation rule
-lives here.
+The dependency arrow is `apps/api -> metis.wizard`. The router calls `handle_interview`,
+`compile_profile`, and `package_specification` from the `metis.wizard` facade and maps typed results
+onto an HTTP status (200/400/422/503/500) in one error shape. No stage, Profile, prompt, matching,
+fixture validation, or compilation rule lives here.
 
 `GET /api/v1/metrics` is a stateless catalogue route owned by `routes/metrics.py`. It reads stable
 `MetricSummary` values from the public wizard facade only. It does not read Interview state or write
@@ -53,9 +53,9 @@ puts that fixture tree on `sys.path` and injects the scripted dependency pair, s
 real gateway or reaches the network.
 
 Cover the door contract with representative cases: status mapping, the stable failure body,
-statelessness across two app instances, the generated OpenAPI discriminators, and one offline
-Interview start/turn/end-to-`/compile` end-to-end validated through the engine gate. Do not repeat every driver
-example.
+statelessness across two app instances, the generated OpenAPI discriminators, package archive
+contents and validation, and one offline Interview start/turn/end-to-`/compile` end-to-end validated
+through the engine gate. Do not repeat every driver example.
 
 ## Package-Specific Notes
 

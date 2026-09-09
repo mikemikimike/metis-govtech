@@ -3,7 +3,6 @@ import { PanelLeft, PanelRight } from "lucide-react";
 import type {
   InterviewSummary,
   LocalInterviewRecord,
-  ProductProfile,
   UserResponse,
 } from "./transport/api";
 import { api, TransportError, toSummary } from "./transport/api";
@@ -15,10 +14,12 @@ import { cn } from "./ui";
 import {
   InterviewRepository,
   emptyRecord,
+  removeUnreferencedFixtures,
   type LocalStorageProblem,
+  withProvisionalFixtures,
 } from "./storage/repository";
 import { profileHasCriteria } from "./metrics";
-import { downloadCompileResult } from "./download";
+import { downloadArchive } from "./download";
 import {
   applyEnd,
   applyTurn,
@@ -33,9 +34,14 @@ const SELECTED_INTERVIEW_KEY = "metis-web-selected-interview";
 const repository = new InterviewRepository();
 
 type RetryIntent =
-  | { kind: "turn"; response: UserResponse }
+  | {
+      kind: "turn";
+      response: UserResponse;
+      files?: File[];
+      removedFixtures?: string[];
+    }
   | { kind: "end" }
-  | { kind: "compile"; profile: ProductProfile };
+  | { kind: "package"; record: LocalInterviewRecord };
 
 export function App() {
   const [interviews, setInterviews] = useState<InterviewSummary[]>([]);
@@ -194,30 +200,91 @@ export function App() {
     [record, refreshList],
   );
 
-  const compileAndDownload = useCallback(
-    async (profile: LocalInterviewRecord["state"]["profile"]) => {
-      const result = await api.compile(profile);
-      downloadCompileResult(result);
+  const packageAndDownload = useCallback(
+    async (localRecord: LocalInterviewRecord) => {
+      const archive = await api.package(
+        localRecord.state.profile,
+        localRecord.fixtures,
+      );
+      downloadArchive(archive);
     },
     [],
   );
 
+  const showPackageError = useCallback(
+    (cause: unknown, localRecord: LocalInterviewRecord) => {
+      setError(errorMessage(cause));
+      // Packaging is request-scoped and idempotent. A retry never invokes another model turn,
+      // including when the API returned a correctable validation error.
+      setRetryIntent({ kind: "package", record: localRecord });
+    },
+    [],
+  );
+
+  const downloadCurrent = useCallback(
+    async (localRecord: LocalInterviewRecord) => {
+      if (busy) return;
+      setBusy(true);
+      setError(null);
+      setRetryIntent(null);
+      try {
+        await packageAndDownload(localRecord);
+      } catch (cause) {
+        showPackageError(cause, localRecord);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, packageAndDownload, showPackageError],
+  );
+
   const send = useCallback(
-    async (response: UserResponse) => {
+    async (
+      response: UserResponse,
+      files: readonly File[] = [],
+      removedFixtures: readonly string[] = [],
+    ) => {
       if (!record?.state.pending || busy) return;
       setBusy(true);
       setError(null);
       setRetryIntent(null);
       try {
-        const result = await api.respond(
-          record.state,
-          record.state.pending.request_id ?? "",
-          response,
+        await withProvisionalFixtures(
+          repository,
+          record,
+          files,
+          async (base) => {
+            if (files.length > 0) setRecord(base);
+            const result = await api.respond(
+              base.state,
+              base.state.pending?.request_id ?? "",
+              response,
+            );
+            const next = removeUnreferencedFixtures(
+              applyTurn(base, result, response),
+              removedFixtures,
+            );
+            await saveResult(next);
+          },
         );
-        const next = applyTurn(record, result, response);
-        await saveResult(next);
       } catch (cause) {
-        showError(cause, { kind: "turn", response });
+        if (files.length > 0) {
+          // A successful rollback is already durable. Read it back so the rendered record also
+          // reflects the exact state that will survive a reload. If rollback failed, this read
+          // gives the user the durable record without claiming that it was restored.
+          try {
+            const restored = await repository.read(record.id);
+            if (restored) setRecord(restored);
+          } catch {
+            // Keep the operation error visible; the durable record may be inspected on reload.
+          }
+        }
+        showError(cause, {
+          kind: "turn",
+          response,
+          files: [...files],
+          removedFixtures: [...removedFixtures],
+        });
       } finally {
         setBusy(false);
       }
@@ -232,12 +299,13 @@ export function App() {
     setRetryIntent(null);
     try {
       const result = await api.end(record.state);
-      await saveResult(applyEnd(record, result));
+      const next = applyEnd(record, result);
+      await saveResult(next);
       if (result.outcome === "done") {
         try {
-          await compileAndDownload(result.state.profile);
+          await packageAndDownload(next);
         } catch (cause) {
-          showError(cause, { kind: "compile", profile: result.state.profile });
+          showPackageError(cause, next);
         }
       }
     } catch (cause) {
@@ -245,20 +313,25 @@ export function App() {
     } finally {
       setBusy(false);
     }
-  }, [busy, compileAndDownload, record, saveResult, showError]);
+  }, [
+    busy,
+    packageAndDownload,
+    record,
+    saveResult,
+    showError,
+    showPackageError,
+  ]);
 
   const retry = useCallback(() => {
     const intent = retryIntent;
     if (!intent) return;
     setRetryIntent(null);
     setError(null);
-    if (intent.kind === "turn") void send(intent.response);
+    if (intent.kind === "turn")
+      void send(intent.response, intent.files, intent.removedFixtures);
     else if (intent.kind === "end") void finish();
-    else
-      void compileAndDownload(intent.profile).catch((cause) =>
-        showError(cause, intent),
-      );
-  }, [compileAndDownload, finish, retryIntent, send, showError]);
+    else void downloadCurrent(intent.record);
+  }, [downloadCurrent, finish, retryIntent, send]);
 
   const remove = useCallback(
     async (id: string) => {
@@ -378,14 +451,9 @@ export function App() {
                 onCollapse={() => setProfileOpen(false)}
                 done={view.done}
                 onFinish={() => void finish()}
-                onDownload={() =>
-                  void compileAndDownload(view.profile).catch((cause) =>
-                    showError(cause, {
-                      kind: "compile",
-                      profile: view.profile,
-                    }),
-                  )
-                }
+                onDownload={() => {
+                  if (record) void downloadCurrent(record);
+                }}
               />
             </aside>
           </>

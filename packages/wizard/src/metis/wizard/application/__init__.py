@@ -16,6 +16,7 @@ from metis.wizard.application.turn import (
     configure_interview_dependencies,
     derive_stage,
     handle_interview,
+    package_specification,
 )
 from metis.wizard.contracts.interview_state import InterviewState, Turn
 
@@ -30,6 +31,7 @@ __all__ = [
     "configure_interview_dependencies",
     "derive_stage",
     "handle_interview",
+    "package_specification",
     "profile_readiness",
     "scenario_readiness",
 ]

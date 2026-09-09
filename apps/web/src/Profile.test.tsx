@@ -262,6 +262,57 @@ test("the generic form renderer transports names, descriptions, and opaque targe
   assert.doesNotMatch(markup, /T-2/);
 });
 
+test("wizard upload fields render a working local file control", () => {
+  const markup = renderToStaticMarkup(
+    <Transcript
+      requests={[
+        {
+          type: "choice",
+          prompt: "Add scenario files",
+          title: "Scenarios",
+          step: 5,
+          steps: 5,
+          state: "pending",
+          request_id: "choice-upload",
+          stage: "scenarios",
+          options: [],
+          multi: false,
+          cards: [
+            {
+              kind: "scenario",
+              id: "S-1",
+              title: "Support case",
+              section: "Scenarios",
+              selected: null,
+              components: [
+                {
+                  type: "upload",
+                  id: { action: "files", target: "S-1" },
+                  label: "Files",
+                  value: ["policy.pdf"],
+                },
+              ],
+              options: [],
+              note: null,
+              blocking: false,
+              trials: 1,
+            },
+          ],
+          warnings: [],
+          footer: null,
+          instruction: null,
+        },
+      ]}
+      busy={false}
+      onRespond={() => undefined}
+    />,
+  );
+
+  assert.match(markup, /type="file"/);
+  assert.match(markup, /policy\.pdf/);
+  assert.doesNotMatch(markup, /File attachments are not available/);
+});
+
 test("the docked composer fills the conversation column", () => {
   const markup = renderToStaticMarkup(
     <Composer

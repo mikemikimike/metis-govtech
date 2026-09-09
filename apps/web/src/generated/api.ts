@@ -42,6 +42,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/wizard/package": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Package a wizard Profile and fixtures into a ZIP
+         * @description Build one request-scoped engine-ready ZIP without retaining uploaded files.
+         */
+        post: operations["package_api_v1_wizard_package_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wizard/interview/start": {
         parameters: {
             query?: never;
@@ -200,6 +220,13 @@ export interface components {
              * @default false
              */
             blocking: boolean;
+        };
+        /** Body_package_api_v1_wizard_package_post */
+        Body_package_api_v1_wizard_package_post: {
+            /** Profile */
+            profile: string;
+            /** Files */
+            files?: string[] | null;
         };
         /**
          * CardDivider
@@ -910,6 +937,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InterviewConfig"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+        };
+    };
+    package_api_v1_wizard_package_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_package_api_v1_wizard_package_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
                 };
             };
             /** @description Internal Server Error */

@@ -7,8 +7,12 @@ import type {
   InterviewSuccess,
 } from "../transport/api.ts";
 import { api } from "../transport/api.ts";
-import { downloadCompileResult } from "../download.ts";
-import { InterviewRepository, emptyRecord } from "../storage/repository.ts";
+import { downloadArchive } from "../download.ts";
+import {
+  addFixtures,
+  InterviewRepository,
+  emptyRecord,
+} from "../storage/repository.ts";
 import { applyEnd, applyTurn, startTranscript } from "./transcript.ts";
 
 const originalFetch = globalThis.fetch;
@@ -57,7 +61,7 @@ function success(
   };
 }
 
-test("runs an offline start, chat, choice, form, reload, end and compile flow", async () => {
+test("runs an offline start, chat, choice, form, reload, end and package flow", async () => {
   const startState = baseState();
   const choice: ChoiceRequest = {
     type: "choice",
@@ -123,13 +127,15 @@ test("runs an offline start, chat, choice, form, reload, end and compile flow", 
       return new Response(JSON.stringify(success(finalState, "done")), {
         status: 200,
       });
-    return new Response(
-      JSON.stringify({
-        "profile.yaml": "profile: {}\n",
-        "experiment.yaml": "scenarios: []\n",
-      }),
-      { status: 200 },
-    );
+    if (path.endsWith("/package"))
+      return new Response(
+        new Blob(["zip bytes"], { type: "application/zip" }),
+        {
+          status: 200,
+          headers: { "content-type": "application/zip" },
+        },
+      );
+    throw new Error(`Unexpected API path: ${path}`);
   };
 
   const repository = new InterviewRepository();
@@ -170,13 +176,18 @@ test("runs an offline start, chat, choice, form, reload, end and compile flow", 
   const reloaded = await new InterviewRepository().read("offline-flow");
   assert.equal(reloaded?.transcript.length, 4);
   const ended = applyEnd(reloaded!, await api.end(reloaded!.state));
-  await repository.put(ended);
-  const compiled = await api.compile(ended.state.profile);
-  assert.match(compiled["profile.yaml"], /profile/);
-  assert.match(compiled["experiment.yaml"], /scenarios/);
+  const withFixture = addFixtures(ended, [
+    new File(["fixture bytes"], "policy.pdf", { type: "application/pdf" }),
+  ]);
+  await repository.put(withFixture);
+  const archive = await api.package(
+    withFixture.state.profile,
+    withFixture.fixtures,
+  );
+  assert.equal(await archive.text(), "zip bytes");
   const downloads: string[] = [];
-  downloadCompileResult(
-    compiled,
+  downloadArchive(
+    archive,
     {
       createElement: () => ({
         href: "",
@@ -189,7 +200,7 @@ test("runs an offline start, chat, choice, form, reload, end and compile flow", 
     } as unknown as Document,
     { createObjectURL: () => "blob:offline", revokeObjectURL: () => {} },
   );
-  assert.deepEqual(downloads, ["profile.yaml", "experiment.yaml"]);
-  assert.equal(ended.state.confirmed, true);
-  assert.equal(ended.transcript.at(-1)?.kind, "interaction");
+  assert.deepEqual(downloads, ["experiment.zip"]);
+  assert.equal(withFixture.state.confirmed, true);
+  assert.equal(withFixture.transcript.at(-1)?.kind, "interaction");
 });

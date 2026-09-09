@@ -26,7 +26,11 @@ import { NumberInput } from "./inputs";
 import { Button, cn, formatTrials, Mono, Panel } from "./ui";
 
 // What a block can send up. `null` from a resolved or read-only block.
-type Emit = (response: UserResponse) => void;
+type Emit = (
+  response: UserResponse,
+  files?: readonly File[],
+  removedFixtures?: readonly string[],
+) => void;
 type CardFieldValue = number | string[];
 
 // ── whole transcript ─────────────────────────────────────────────────────────
@@ -155,8 +159,17 @@ function ChoiceBlock({
 }) {
   const send = (keys: string[]) =>
     onRespond({ type: "choice", selected: keys });
-  const sendField = (key: string, value: CardFieldValue) =>
-    onRespond({ type: "choice", values: { [key]: value } });
+  const sendField = (
+    key: string,
+    value: CardFieldValue,
+    files?: readonly File[],
+    removedFixtures?: readonly string[],
+  ) =>
+    onRespond(
+      { type: "choice", values: { [key]: value } },
+      files,
+      removedFixtures,
+    );
   const disabled = resolved || busy;
 
   return (
@@ -261,7 +274,12 @@ function CardBlock({
   card: AnyCard;
   disabled: boolean;
   onPick: (key: string) => void;
-  onFieldChange: (key: string, value: CardFieldValue) => void;
+  onFieldChange: (
+    key: string,
+    value: CardFieldValue,
+    files?: readonly File[],
+    removedFixtures?: readonly string[],
+  ) => void;
 }) {
   // Three cases, decided by the package, not the door:
   //   • `selected == null` — no box at all. The behaviours review sends this: it lists the drafted
@@ -350,7 +368,12 @@ function ComponentBlock({
   trialCount?: number;
   disabled: boolean;
   onPick: (key: string) => void;
-  onFieldChange: (key: string, value: CardFieldValue) => void;
+  onFieldChange: (
+    key: string,
+    value: CardFieldValue,
+    files?: readonly File[],
+    removedFixtures?: readonly string[],
+  ) => void;
 }) {
   // The value alone, unlabelled. `FormRow` decides where the label goes: a labelled component
   // reads as a form field (label in a left column, value at the right), an unlabelled one runs
@@ -410,9 +433,18 @@ function ComponentBlock({
 
       case "upload":
         return (
-          <p className="text-sm text-muted-foreground">
-            File attachments are not available in this web app.
-          </p>
+          <FixtureField
+            component={component}
+            disabled={disabled}
+            onChange={(names, files, removedFixtures) =>
+              onFieldChange(
+                optionKey(component.id),
+                names,
+                files,
+                removedFixtures,
+              )
+            }
+          />
         );
 
       case "divider":
@@ -428,6 +460,69 @@ function ComponentBlock({
   if (component.type === "divider") return value;
 
   return <FormRow label={component.label}>{value}</FormRow>;
+}
+
+function FixtureField({
+  component,
+  disabled,
+  onChange,
+}: {
+  component: Extract<CardComponent, { type: "upload" }>;
+  disabled: boolean;
+  onChange: (
+    names: string[],
+    files: readonly File[],
+    removedFixtures: readonly string[],
+  ) => void;
+}) {
+  const remove = (name: string) => {
+    const next = component.value.filter((item) => item !== name);
+    onChange(next, [], [name]);
+  };
+
+  const names = component.value;
+
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      {names.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5">
+          {names.map((name) => (
+            <li
+              key={name}
+              className="flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-xs"
+            >
+              <span className="max-w-48 truncate">{name}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${name}`}
+                disabled={disabled}
+                onClick={() => remove(name)}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <input
+        type="file"
+        multiple
+        disabled={disabled}
+        onChange={(event) => {
+          const files = [...(event.currentTarget.files ?? [])];
+          if (files.length === 0) return;
+          const next = [...component.value];
+          for (const file of files) {
+            if (!next.includes(file.name)) next.push(file.name);
+          }
+          onChange(next, files, []);
+          event.currentTarget.value = "";
+        }}
+        className="block w-full min-w-0 text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-background file:px-2 file:py-1 file:text-xs file:font-medium file:text-foreground hover:file:bg-muted"
+      />
+    </div>
+  );
 }
 
 function NumberCardField({

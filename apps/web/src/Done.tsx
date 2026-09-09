@@ -16,7 +16,7 @@ export function Done() {
         Your specification is ready
       </h2>
       <p className="text-sm text-muted-foreground">
-        Download the YAML files from the product profile.
+        Download the complete specification ZIP.
       </p>
     </Panel>
   );

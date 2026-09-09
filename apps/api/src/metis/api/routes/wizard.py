@@ -1,4 +1,4 @@
-"""The wizard Interview lifecycle routes and Profile compilation route.
+"""The wizard Interview lifecycle, compilation, and package routes.
 
 The router does no wizard work. It receives a typed body, calls the public wizard facade, and maps
 the typed result onto an HTTP status. No stage, Profile, prompt, matching or compilation rule lives
@@ -18,11 +18,13 @@ Request/Profile schema failures become 422 through the app's validation handler.
 
 from __future__ import annotations
 
+import json
+from contextlib import suppress
 from typing import TYPE_CHECKING, Literal
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel, ValidationError
 
 from metis.wizard import (
     CompilationError,
@@ -34,7 +36,10 @@ from metis.wizard import (
     InterviewStartRequest,
     InterviewTurnRequest,
     ProductProfile,
+    SpecificationError,
+    SpecificationFixture,
     compile_profile,
+    package_specification,
     working_status,
 )
 
@@ -89,6 +94,68 @@ def get_dependencies(request: Request) -> WizardDependencies:
 def config() -> InterviewConfig:
     """Return presentation text without copying it into the HTTP client."""
     return InterviewConfig(working_status=working_status())
+
+
+@router.post(
+    "/package",
+    summary="Package a wizard Profile and fixtures into a ZIP",
+    response_class=Response,
+    response_model=None,
+    responses={
+        200: {
+            "content": {
+                "application/zip": {"schema": {"type": "string", "format": "binary"}}
+            }
+        },
+        400: {"model": ServiceError},
+        422: {"model": ServiceError},
+        500: {"model": ServiceError},
+    },
+)
+def package(
+    profile: str = Form(...),
+    files: list[UploadFile] | None = File(default=None),
+) -> Response | JSONResponse:
+    """Build one request-scoped engine-ready ZIP without retaining uploaded files."""
+    uploads = files or []
+    try:
+        parsed = ProductProfile.model_validate_json(profile)
+        fixtures: list[SpecificationFixture] = []
+        for upload in uploads:
+            fixtures.append(
+                SpecificationFixture(
+                    name=upload.filename or "",
+                    stream=upload.file,
+                )
+            )
+        archive = package_specification(parsed, fixtures)
+    except (json.JSONDecodeError, ValidationError):
+        return JSONResponse(
+            ServiceError(
+                code="validation_error",
+                message="The submitted Profile is invalid.",
+                retryable=False,
+            ).model_dump(),
+            status_code=400,
+        )
+    except (CompilationError, SpecificationError) as exc:
+        return JSONResponse(
+            ServiceError(
+                code="compilation_failed",
+                message=str(exc),
+                retryable=False,
+            ).model_dump(),
+            status_code=400,
+        )
+    finally:
+        for upload in uploads:
+            with suppress(OSError):
+                upload.file.close()
+    return Response(
+        content=archive,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="experiment.zip"'},
+    )
 
 
 @router.post(
