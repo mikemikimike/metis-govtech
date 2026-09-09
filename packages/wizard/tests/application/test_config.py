@@ -24,6 +24,7 @@ _EXPECTED_STATUSES = {
     "scenarios": "Building coverage scenarios…",
     "done": "Finishing up…",
 }
+_EXPECTED_WORKING_STATUS = "Working on your Interview…"
 
 
 def _document() -> dict[str, Any]:
@@ -75,6 +76,14 @@ def _blank_status(document: dict[str, Any]) -> None:
     document["statuses"]["criteria"] = "  "
 
 
+def _remove_working_status(document: dict[str, Any]) -> None:
+    del document["statuses"]["working"]
+
+
+def _blank_working_status(document: dict[str, Any]) -> None:
+    document["statuses"]["working"] = "  "
+
+
 def _restore_removed_status(document: dict[str, Any]) -> None:
     document["statuses"]["prioritise"] = "Choosing what to measure…"
 
@@ -86,6 +95,8 @@ def _restore_removed_status(document: dict[str, Any]) -> None:
         (_set_statuses_to_list, "statuses"),
         (_remove_status, "statuses.criteria"),
         (_blank_status, "statuses.criteria"),
+        (_remove_working_status, "statuses.working"),
+        (_blank_working_status, "statuses.working"),
         (_restore_removed_status, "statuses.prioritise"),
     ],
 )
@@ -136,6 +147,10 @@ def test_every_interview_step_has_the_existing_status_copy() -> None:
     } == _EXPECTED_STATUSES
 
 
+def test_the_general_working_status_comes_from_the_package_config() -> None:
+    assert config.working_status() == _EXPECTED_WORKING_STATUS
+
+
 def test_a_status_edit_affects_the_next_lookup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -182,4 +197,5 @@ def test_interview_configuration_is_a_package_resource() -> None:
 
     assert loaded.clarify_turn_cap > 0
     assert loaded.opening_question
+    assert loaded.working_status
     assert set(loaded.statuses) == set(InterviewStep)

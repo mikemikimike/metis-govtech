@@ -965,6 +965,7 @@ dependencies = [
     { name = "metis-core" },
     { name = "metis-wizard" },
     { name = "pydantic" },
+    { name = "python-dotenv" },
     { name = "uvicorn" },
 ]
 
@@ -982,6 +983,7 @@ requires-dist = [
     { name = "metis-engine", marker = "extra == 'test'", editable = "packages/engine" },
     { name = "metis-wizard", editable = "packages/wizard" },
     { name = "pydantic", specifier = ">=2.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "uvicorn", specifier = ">=0.27" },
 ]
 provides-extras = ["test"]

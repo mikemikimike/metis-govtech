@@ -23,8 +23,9 @@ something, it belongs in the returned `InterviewState`, not on the app.
 
 ```
 src/metis/api/
-├── main.py            the app composition root: /health, the wizard router, the error handlers
-├── routes/wizard.py   Interview start, turn, end, and compile routes — status mapping only
+├── main.py            the app composition root: /health, routers, and error handlers
+├── routes/metrics.py  read-only installed metric catalogue route
+├── routes/wizard.py   client config, Interview lifecycle, and compile routes
 ├── settings.py        environment-backed settings and the production dependency composition
 ├── cli.py             the `metis-api` executable (Uvicorn on metis.api.main:app)
 └── __init__.py        version and the re-exported core version
@@ -34,6 +35,13 @@ The dependency arrow is `apps/api -> metis.wizard`. The router calls `handle_int
 `compile_profile` from the `metis.wizard` facade and maps the typed result onto an HTTP status
 (200/400/422/503/500) in one error shape. No stage, Profile, prompt, matching, or compilation rule
 lives here.
+
+`GET /api/v1/metrics` is a stateless catalogue route owned by `routes/metrics.py`. It reads stable
+`MetricSummary` values from the public wizard facade only. It does not read Interview state or write
+files.
+
+`GET /api/v1/wizard/config` returns package-owned presentation text from the public wizard facade.
+The API transports this text but does not own or copy it.
 
 ## Testing
 
@@ -51,8 +59,9 @@ example.
 
 ## Package-Specific Notes
 
-- Settings map the service names `API_KEY`, `BASE_URL`, and `JUDGE_MODEL` onto the gateway's own
-  `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `INTERVIEW_MODEL` variables in `settings.py`.
+- The API uses the same `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `INTERVIEW_MODEL` names as the
+  wizard. `JUDGE_MODEL` and `USER_AGENT_MODEL` belong to the engine. For monorepo development, keep
+  one active `.env` at the repository root; `apps/api/.env.example` is the API-specific template.
 - Build the image from the repository root: `docker build -f apps/api/Dockerfile -t metis-api .`.
   METIS is one uv workspace with a single lockfile, so the build needs the workspace root and the
   path-dependency members.

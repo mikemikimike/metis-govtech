@@ -1,0 +1,119 @@
+import assert from "node:assert/strict";
+import { afterEach, test } from "node:test";
+import { api, TransportError, type InterviewState } from "./api.ts";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+const state = {
+  profile: {
+    schema_version: 1,
+    product: { name: "", users: "", description: "", detail: "" },
+    tasks: [],
+    personas: [],
+    scenarios: [],
+  },
+  behaviours_confirmed: false,
+  confirmed: false,
+  history: [],
+  user_typed: [],
+  issued_ids: [],
+  pending: null,
+} as InterviewState;
+const success = {
+  type: "success",
+  state,
+  stage: "clarify",
+  missing: [],
+  outcome: "awaiting_response",
+} as const;
+
+test("uses the stateless wizard routes and JSON request shapes", async () => {
+  const calls: Array<{ path: string; body: unknown }> = [];
+  globalThis.fetch = async (input, init) => {
+    calls.push({
+      path: String(input),
+      body:
+        init?.body === undefined ? undefined : JSON.parse(String(init.body)),
+    });
+    return new Response(JSON.stringify(success), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  await api.start("A support assistant");
+  await api.respond(state, "request-1", {
+    type: "chat",
+    text: "It answers questions",
+  });
+  await api.end(state);
+  await api.compile(state.profile);
+  await api.metrics();
+  await api.config();
+
+  assert.deepEqual(
+    calls.map((call) => call.path),
+    [
+      "/api/v1/wizard/interview/start",
+      "/api/v1/wizard/interview/turn",
+      "/api/v1/wizard/interview/end",
+      "/api/v1/wizard/compile",
+      "/api/v1/metrics",
+      "/api/v1/wizard/config",
+    ],
+  );
+  assert.deepEqual(calls[0]?.body, { description: "A support assistant" });
+  assert.deepEqual(calls[1]?.body, {
+    state,
+    request_id: "request-1",
+    response: { type: "chat", text: "It answers questions" },
+  });
+  assert.deepEqual(calls[2]?.body, { state });
+  assert.deepEqual(calls[3]?.body, state.profile);
+});
+
+for (const status of [400, 422, 500, 503]) {
+  test(`turn failures preserve HTTP ${status} and retry metadata`, async () => {
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          type: "failure",
+          code: "service_error",
+          message: "Try again",
+          retryable: status >= 500,
+        }),
+        { status, headers: { "content-type": "application/json" } },
+      );
+    await assert.rejects(
+      api.respond(state, "request-1", { type: "chat", text: "retry" }),
+      (cause: unknown) =>
+        cause instanceof TransportError &&
+        cause.status === status &&
+        cause.retryable === status >= 500,
+    );
+  });
+}
+
+test("typed failures in a successful HTTP response are still surfaced", async () => {
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        type: "failure",
+        code: "invalid_response",
+        message: "The response is invalid.",
+        retryable: false,
+      }),
+      { status: 200 },
+    );
+  await assert.rejects(
+    api.start("bad"),
+    (cause: unknown) =>
+      cause instanceof TransportError &&
+      cause.code === "invalid_response" &&
+      !cause.retryable,
+  );
+});

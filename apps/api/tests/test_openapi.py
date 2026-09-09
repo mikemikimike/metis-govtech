@@ -12,11 +12,20 @@ def test_the_route_table_is_exactly_health_interview_lifecycle_and_compile(
 
     assert set(paths) == {
         "/health",
+        "/api/v1/metrics",
+        "/api/v1/wizard/config",
         "/api/v1/wizard/interview/start",
         "/api/v1/wizard/interview/turn",
         "/api/v1/wizard/interview/end",
         "/api/v1/wizard/compile",
     }
+
+
+def test_metric_route_documents_success_and_internal_error(client: TestClient) -> None:
+    responses = client.get("/openapi.json").json()["paths"]["/api/v1/metrics"]["get"][
+        "responses"
+    ]
+    assert {"200", "500"} <= set(responses)
 
 
 def test_each_interview_route_documents_its_service_statuses(

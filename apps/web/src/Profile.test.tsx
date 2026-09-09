@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ProductProfile } from "./api";
-import { Transcript } from "./Conversation";
+import type { ProductProfile } from "./transport/api";
+import { Composer, Transcript } from "./Conversation";
+import { Done } from "./Done";
 import { Profile } from "./Profile";
 
-function profile(product: Partial<ProductProfile["product"]> = {}): ProductProfile {
+function profile(
+  product: Partial<ProductProfile["product"]> = {},
+): ProductProfile {
   return {
+    schema_version: 1,
     product: {
       name: "",
       users: "",
@@ -34,14 +38,17 @@ function render(
       metricByFqn={new Map()}
       metricsLoading={false}
       metricsError={false}
-      interviewId="wizard-test"
     />,
   );
 }
 
 function section(markup: string, title: string, nextTitle: string): string {
-  const start = markup.indexOf(`<h2 class="min-w-0 text-base font-semibold tracking-tight text-foreground">${title}</h2>`);
-  const end = markup.indexOf(`<h2 class="min-w-0 text-base font-semibold tracking-tight text-foreground">${nextTitle}</h2>`);
+  const start = markup.indexOf(
+    `<h2 class="min-w-0 text-base font-semibold tracking-tight text-foreground">${title}</h2>`,
+  );
+  const end = markup.indexOf(
+    `<h2 class="min-w-0 text-base font-semibold tracking-tight text-foreground">${nextTitle}</h2>`,
+  );
   assert.notEqual(start, -1, `${title} heading is present`);
   assert.notEqual(end, -1, `${nextTitle} heading is present`);
   return markup.slice(start, end);
@@ -97,7 +104,10 @@ test("clarify marks only Product and leaves its document content read-only", () 
 
 test("the document keeps node names and descriptions in their presentation roles", () => {
   const value: ProductProfile = {
-    ...profile({ name: "Research assistant", description: "Answers questions." }),
+    ...profile({
+      name: "Research assistant",
+      description: "Answers questions.",
+    }),
     tasks: [
       {
         id: "T-1",
@@ -113,6 +123,7 @@ test("the document keeps node names and descriptions in their presentation roles
               {
                 id: "AC-1-1",
                 name: "Supported answer",
+                metric_fqn: "metis.metrics.answer_quality",
                 description: {
                   given: "a question",
                   when: "the answer returns",
@@ -125,7 +136,11 @@ test("the document keeps node names and descriptions in their presentation roles
       },
     ],
     personas: [
-      { id: "careful-reviewer", name: "Careful reviewer", description: "Checks outputs." },
+      {
+        id: "careful-reviewer",
+        name: "Careful reviewer",
+        description: "Checks outputs.",
+      },
     ],
     scenarios: [
       {
@@ -155,6 +170,62 @@ test("the document keeps node names and descriptions in their presentation roles
   assert.doesNotMatch(markup, />analyst<\/span>/);
 });
 
+test("hides metric identifiers and shows only the human summary when enabled", () => {
+  const value = profile();
+  value.tasks = [
+    {
+      id: "T-1",
+      name: "Answer quality",
+      description: "Answer accurately.",
+      behaviours: [
+        {
+          id: "EB-1",
+          name: "Cite sources",
+          description: "Cites claims.",
+          measured: true,
+          criteria: [
+            {
+              id: "AC-1-1",
+              name: "Supported answer",
+              metric_fqn: "metis.metrics.answer_quality",
+              description: {
+                given: "a question",
+                when: "it answers",
+                then: "claims cite sources",
+              },
+            },
+          ],
+        },
+      ],
+    },
+  ];
+  const hidden = render(value);
+  assert.doesNotMatch(hidden, /Answer quality metric/);
+  const visible = renderToStaticMarkup(
+    <Profile
+      profile={value}
+      showMetrics
+      onShowMetricsChange={() => undefined}
+      metricByFqn={
+        new Map([
+          [
+            "metis.metrics.answer_quality",
+            {
+              fqn: "metis.metrics.answer_quality",
+              name: "Answer quality metric",
+              description: "Checks supported answers.",
+            },
+          ],
+        ])
+      }
+      metricsLoading={false}
+      metricsError={false}
+    />,
+  );
+  assert.match(visible, /Answer quality metric/);
+  assert.doesNotMatch(visible, /metis\.metrics\.answer_quality/);
+});
+
 test("the generic form renderer transports names, descriptions, and opaque targets", () => {
   const markup = renderToStaticMarkup(
     <Transcript
@@ -165,15 +236,21 @@ test("the generic form renderer transports names, descriptions, and opaque targe
           state: "pending",
           fields: [
             { id: "name", label: "Name", placeholder: "", multiline: false },
-            { id: "description", label: "Description", placeholder: "", multiline: true },
+            {
+              id: "description",
+              label: "Description",
+              placeholder: "",
+              multiline: true,
+            },
           ],
           target: "T-2",
           answer: {},
+          request_id: "form-1",
+          stage: "behaviours",
         },
       ]}
       busy={false}
       onRespond={() => undefined}
-      fixtureActions={{ onUpload: async () => [] }}
     />,
   );
 
@@ -183,4 +260,54 @@ test("the generic form renderer transports names, descriptions, and opaque targe
   assert.match(markup, /<textarea/);
   assert.match(markup, /<input/);
   assert.doesNotMatch(markup, /T-2/);
+});
+
+test("the docked composer fills the conversation column", () => {
+  const markup = renderToStaticMarkup(
+    <Composer
+      request={{
+        type: "chat",
+        prompt: "What should change?",
+        title: "Scenarios",
+        step: 5,
+        steps: 5,
+        state: "pending",
+        request_id: "chat-1",
+        stage: "scenarios",
+        multiline: true,
+        answer: "",
+      }}
+      busy={false}
+      onSend={() => undefined}
+    />,
+  );
+
+  assert.match(markup, /class="w-full pb-6 pt-2"/);
+});
+
+test("the Profile output action follows Interview completion", () => {
+  const shared = {
+    profile: profile(),
+    showMetrics: false,
+    onShowMetricsChange: () => undefined,
+    metricByFqn: new Map(),
+    metricsLoading: false,
+    metricsError: false,
+    onFinish: () => undefined,
+    onDownload: () => undefined,
+  };
+  const pending = renderToStaticMarkup(<Profile {...shared} />);
+  const complete = renderToStaticMarkup(<Profile {...shared} done />);
+
+  assert.match(pending, /Skip interview and download specification/);
+  assert.doesNotMatch(pending, />Download specification</);
+  assert.match(complete, />Download specification</);
+  assert.doesNotMatch(complete, /Skip interview/);
+});
+
+test("a completed Interview reports that its specification is ready", () => {
+  const markup = renderToStaticMarkup(<Done />);
+
+  assert.match(markup, /Your specification is ready/);
+  assert.doesNotMatch(markup, /Your evaluation is ready/);
 });

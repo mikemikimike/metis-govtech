@@ -16,9 +16,19 @@ test("keeps unchanged text still", () => {
 
 test("reveals a first value by word while preserving its exact whitespace", () => {
   const value = "First line\nsecond  line";
-  assert.deepEqual(wordFrames(value), ["First ", "First line\n", "First line\nsecond  ", value]);
+  assert.deepEqual(wordFrames(value), [
+    "First ",
+    "First line\n",
+    "First line\nsecond  ",
+    value,
+  ]);
   assert.deepEqual(
-    transitionFrames({ displayed: "", previous: "", next: value, reducedMotion: false }),
+    transitionFrames({
+      displayed: "",
+      previous: "",
+      next: value,
+      reducedMotion: false,
+    }),
     ["First ", "First line\n", "First line\nsecond  ", value],
   );
 });
@@ -31,10 +41,7 @@ test("animates only a replaced word", () => {
       next: "Orca coordinates four specialists",
       reducedMotion: false,
     }),
-    [
-      "Orca coordinates specialists",
-      "Orca coordinates four specialists",
-    ],
+    ["Orca coordinates specialists", "Orca coordinates four specialists"],
   );
 });
 
@@ -46,7 +53,11 @@ test("animates an insertion without restarting the field", () => {
     reducedMotion: false,
   });
   assert.deepEqual(frames, ["Orca coordinates five specialists"]);
-  assert(frames.every((frame) => frame.includes("Orca") && frame.includes("specialists")));
+  assert(
+    frames.every(
+      (frame) => frame.includes("Orca") && frame.includes("specialists"),
+    ),
+  );
 });
 
 test("animates a deletion without restarting the field", () => {
@@ -57,7 +68,11 @@ test("animates a deletion without restarting the field", () => {
     reducedMotion: false,
   });
   assert.deepEqual(frames, ["Orca coordinates specialists"]);
-  assert(frames.every((frame) => frame.includes("Orca") && frame.includes("specialists")));
+  assert(
+    frames.every(
+      (frame) => frame.includes("Orca") && frame.includes("specialists"),
+    ),
+  );
 });
 
 test("keeps matching words between separated changes visible", () => {
@@ -67,8 +82,16 @@ test("keeps matching words between separated changes visible", () => {
     next: "Orca routes four specialists securely",
     reducedMotion: false,
   });
-  assert(frames.some((frame) => frame.includes("Orca") && frame.includes("specialists")));
-  assert(frames.every((frame) => frame.includes("Orca") && frame.includes("specialists")));
+  assert(
+    frames.some(
+      (frame) => frame.includes("Orca") && frame.includes("specialists"),
+    ),
+  );
+  assert(
+    frames.every(
+      (frame) => frame.includes("Orca") && frame.includes("specialists"),
+    ),
+  );
   assert.equal(frames.at(-1), "Orca routes four specialists securely");
 });
 

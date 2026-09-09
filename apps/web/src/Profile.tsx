@@ -1,10 +1,7 @@
 // The document view. This is the component in the door that reads `ProductProfile` and knows
 // its shape — tasks hold behaviours hold criteria; personas and scenarios are flat lists. The
 // conversation stays shape-only so this can hold all of the interview's domain knowledge in one
-// place. There is one other domain-aware component, deliberately: the hand-authoring form
-// (`ManualForm.tsx`), which names the experiment schema's own fields; its header comment
-// explains why that exception is allowed. Neither of those names leaks into the shape-only
-// conversation renderer, which remains the rule.
+// place. Presentation remains read-only; the conversation owns every Profile mutation.
 //
 // It is read-only where it counts: no control here changes the profile — every edit still
 // originates in the conversation. The only controls are presentation: disclosures that fold a
@@ -16,7 +13,7 @@
 // visible before any of it exists and the boundary between written and unwritten reads as the
 // interview's frontier. This is also where the interview's progress is expressed — the segmented
 // bar above the sheet, and the rules of the section being written — because the document and the interview are
-// the same six things in the same order, and a second stepper in the conversation would be a
+// the same five stages in the same order, and a second stepper in the conversation would be a
 // second drawing of what is already on screen.
 //
 // It is a live mirror of the profile the package built, drawn fresh each time the payload arrives.
@@ -31,11 +28,18 @@ import type {
   ProductProfile,
   Task,
   WizardRequest,
-} from "./api";
-import { api } from "./api";
+} from "./transport/api";
 import { PanelRight } from "lucide-react";
 import { RevealText } from "./RevealText";
-import { Button, Chevron, Chip, cn, countTrials, formatTrials, Mono, Tooltip } from "./ui";
+import {
+  Button,
+  Chevron,
+  Chip,
+  cn,
+  countTrials,
+  formatTrials,
+  Mono,
+} from "./ui";
 
 // ── where the interview has got to ───────────────────────────────────────────
 
@@ -70,17 +74,13 @@ export function stepPosition(requests: WizardRequest[]): StepPosition | null {
 
 // Which section-level placeholder an in-flight model call is writing into.
 //
-// `statuses.yaml` is offset by one on purpose — the status for a step names the work that
+// `config.yaml` is offset by one on purpose — the status for a step names the work that
 // continuing *from* it starts. That offset is what lets the interview's current step alone identify
 // the target, with no new field on the wire and no guessing.
 //
-// Prioritise is deliberately absent even though continuing from it drafts criteria. Criteria land
-// *inside* the Behaviours section as per-behaviour blanks, not as a section-level placeholder, and
-// those blanks are suppressed for the whole of the prioritise step (see `selecting`), which is
-// exactly the window a `prioritise → criteria` mark would cover. So the mark had nothing to attach
-// to: it would fire only while the one placeholder it targets is hidden. The criteria the Continue
-// generates land inside already-populated behaviours, so there is no empty section to shimmer for
-// it, and the arrival animation still fires on each criterion as it mounts.
+// Criteria land *inside* the Behaviours section as per-behaviour blanks, not as a section-level
+// placeholder. The blanks stay hidden while measurement selection is still pending, then appear
+// after Continue and the arrival animation runs as each criterion mounts.
 //
 // Clarify now writes the Product section on every useful answer, so it follows the same rule as the
 // later drafting steps instead of being a special case.
@@ -97,7 +97,6 @@ export function Profile({
   profile,
   position,
   interviewStep,
-  statusText,
   busy,
   showMetrics,
   onShowMetricsChange,
@@ -105,15 +104,13 @@ export function Profile({
   metricsLoading,
   metricsError,
   onCollapse,
-  interviewId,
+  onFinish,
+  onDownload,
   done,
 }: {
   profile: ProductProfile;
   position?: StepPosition | null;
   interviewStep?: string;
-  // The package-owned status line for the interview's current step, from config.yaml. It is the
-  // progress caption; when absent the caption falls back to the step's own title.
-  statusText?: string;
   busy?: boolean;
   showMetrics: boolean;
   onShowMetricsChange: (show: boolean) => void;
@@ -121,30 +118,30 @@ export function Profile({
   metricsLoading: boolean;
   metricsError: boolean;
   onCollapse?: () => void;
-  // The interview the document belongs to, and whether the interview has reached its end. The
-  // download link is built from the id; `done` is what unlocks it. Both are the shell's to know —
-  // the pane maps them onto the footer the same way it maps `position` onto the segments.
-  interviewId: string;
+  // The shell owns whether the local Interview has reached its end.
   done?: boolean;
+  onFinish?: () => void;
+  onDownload?: () => void;
 }) {
   const { product } = profile;
   const { tasks } = profile;
-  const writing = busy && interviewStep ? WRITING_TARGET[interviewStep] : undefined;
+  const writing =
+    busy && interviewStep ? WRITING_TARGET[interviewStep] : undefined;
   const hasCriteria = tasks.some((task) =>
     task.behaviours.some((behaviour) => behaviour.criteria.length > 0),
   );
   const metricsAvailable = !metricsLoading && !metricsError;
 
-  // The user is choosing which behaviours to measure for the whole of the prioritise step, and a
+  // The user is choosing which behaviours to measure on the combined Behaviours screen, and a
   // criteria blank must not appear until that choice is committed with Continue. The commit signal
-  // is the *step*, not `busy`: a tick is a live server round-trip that recomposes prioritise and
+  // is the *step*, not `busy`: a tick is a live server round-trip that recomposes the screen and
   // stays on it, so keying on `busy` would flash the blank on during every tick and off again when
   // the recomposed screen arrives. Keying on the step alone, the blank is suppressed for the whole
-  // prioritise step — idle or mid-tick — and appears only once Continue advances the interview off
+  // Behaviours step — idle or mid-tick — and appears only once Continue advances the interview off
   // it. (Continue is also what generates the criteria, so by the time the interview reports a later
   // step the blanks are usually already filled; one that remains is a behaviour whose criteria did
   // not draft, which is exactly what the blank should report.)
-  const selecting = interviewStep === "prioritise";
+  const selecting = interviewStep === "behaviours";
 
   const behaviourCount = tasks.reduce(
     (total, task) => total + task.behaviours.length,
@@ -165,7 +162,6 @@ export function Profile({
               step={position.step}
               steps={position.steps}
               title={position.title}
-              statusText={statusText}
             />
           )}
           {onCollapse && (
@@ -207,7 +203,9 @@ export function Profile({
                   active={showMetrics}
                   disabled={!metricsAvailable}
                   aria-pressed={showMetrics}
-                  title={metricsError ? "Metric details unavailable" : "Show metrics"}
+                  title={
+                    metricsError ? "Metric details unavailable" : "Show metrics"
+                  }
                   onClick={() => onShowMetricsChange(!showMetrics)}
                   className="px-2 py-1 text-xs"
                 >
@@ -225,13 +223,21 @@ export function Profile({
           <Section title="Product" writing={writing === "product"}>
             <div className="flex flex-col gap-4">
               <ProductField label="Name" value={product.name} />
-              <ProductField label="Description" value={product.description} preserveLines />
+              <ProductField
+                label="Description"
+                value={product.description}
+                preserveLines
+              />
               <ProductField label="Users" value={product.users} preserveLines />
-              <ProductField label="Details" value={product.detail} preserveLines />
+              <ProductField
+                label="Details"
+                value={product.detail}
+                preserveLines
+              />
             </div>
           </Section>
 
-        {/* Sections run in the order the interview fills them, and every one of them is drawn
+          {/* Sections run in the order the interview fills them, and every one of them is drawn
             whether or not it holds anything yet.
 
             Each heading is the package's own name for the step that fills it — "Behaviours",
@@ -239,80 +245,85 @@ export function Profile({
             sheet reads as the interview's output section by section. They are entity names, all
             three of the same kind; "What should be true" was a sentence sitting between two nouns,
             which is what made it read as the odd one out. */}
-        <Section
-          title="Behaviours"
-          count={behaviourCount}
-          writing={writing === "behaviours"}
-        >
-          {tasks.length > 0 ? (
-            // Groups are set well apart from one another, so the section reads as a handful of
-            // named groups rather than one long run of behaviours. The gap is the largest inside
-            // the sheet: it is the boundary the eye chunks the list on.
-            <div className="flex flex-col gap-6">
-              {tasks.map((task) => (
-                <TaskView
-                  key={task.id}
-                  task={task}
-                  selecting={selecting}
-                  showMetrics={showMetrics}
-                  metricByFqn={metricByFqn}
-                />
-              ))}
-            </div>
-          ) : (
-            <Placeholder boxed />
-          )}
-        </Section>
-
-        <Section
-          title="Personas"
-          count={profile.personas.length}
-          writing={writing === "personas"}
-        >
-          {profile.personas.length > 0 ? (
-            // Each persona leads with its name and is anchored by a marker at the left edge, so a
-            // run of them is countable at a glance rather than read to be counted. The two were
-            // previously the same weight — a muted id above a full-strength paragraph — which put
-            // the emphasis on the description and let three personas run together into one block.
-            // The name now carries the foreground and the description recedes behind it. The
-            // description stays whole: a persona is judged on what it says, not on its name.
-            <ul className="flex flex-col gap-4">
-              {profile.personas.map((p) => (
-                <li key={p.id} className="animate-arrive flex gap-3">
-                  <span
-                    aria-hidden
-                    className="mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full bg-border"
+          <Section
+            title="Behaviours"
+            count={behaviourCount}
+            writing={writing === "behaviours"}
+          >
+            {tasks.length > 0 ? (
+              // Groups are set well apart from one another, so the section reads as a handful of
+              // named groups rather than one long run of behaviours. The gap is the largest inside
+              // the sheet: it is the boundary the eye chunks the list on.
+              <div className="flex flex-col gap-6">
+                {tasks.map((task) => (
+                  <TaskView
+                    key={task.id}
+                    task={task}
+                    selecting={selecting}
+                    showMetrics={showMetrics}
+                    metricByFqn={metricByFqn}
                   />
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <Mono className="text-foreground">{p.name}</Mono>
-                    <span className="text-muted-foreground">{p.description}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Placeholder boxed />
-          )}
-        </Section>
+                ))}
+              </div>
+            ) : (
+              <Placeholder boxed />
+            )}
+          </Section>
 
-        <Section
-          title="Scenarios"
-          count={profile.scenarios.length}
-          writing={writing === "scenarios"}
-        >
-          {profile.scenarios.length > 0 ? (
-            <div className="flex flex-col gap-3">
+          <Section
+            title="Personas"
+            count={profile.personas.length}
+            writing={writing === "personas"}
+          >
+            {profile.personas.length > 0 ? (
+              // Each persona leads with its name and is anchored by a marker at the left edge, so a
+              // run of them is countable at a glance rather than read to be counted. The two were
+              // previously the same weight — a muted id above a full-strength paragraph — which put
+              // the emphasis on the description and let three personas run together into one block.
+              // The name now carries the foreground and the description recedes behind it. The
+              // description stays whole: a persona is judged on what it says, not on its name.
               <ul className="flex flex-col gap-4">
-                {profile.scenarios.map((s) => (
-                  <li key={s.id} className="animate-arrive flex flex-col gap-2">
-                    {/* No visible id. A behaviour's id is referenced — a scenario says which
+                {profile.personas.map((p) => (
+                  <li key={p.id} className="animate-arrive flex gap-3">
+                    <span
+                      aria-hidden
+                      className="mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full bg-border"
+                    />
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <Mono className="text-foreground">{p.name}</Mono>
+                      <span className="text-muted-foreground">
+                        {p.description}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Placeholder boxed />
+            )}
+          </Section>
+
+          <Section
+            title="Scenarios"
+            count={profile.scenarios.length}
+            writing={writing === "scenarios"}
+          >
+            {profile.scenarios.length > 0 ? (
+              <div className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-4">
+                  {profile.scenarios.map((s) => (
+                    <li
+                      key={s.id}
+                      className="animate-arrive flex flex-col gap-2"
+                    >
+                      {/* No visible id. A behaviour's id is referenced — a scenario says which
                         behaviours it covers — but nothing in the pane ever points at a scenario,
                         so drawing `S-1` beside each one spent a column on a handle no reader
                         needs. It is still stamped on the compiled experiment, where it is what
                         results are traced back through. */}
-                    <h3 className="font-medium text-foreground">{s.name}</h3>
-                    <p className="text-foreground">{s.description}</p>
-                    {/* A scenario's metadata answers three separate questions — what it checks,
+                      <h3 className="font-medium text-foreground">{s.name}</h3>
+                      <p className="text-foreground">{s.description}</p>
+                      {/* A scenario's metadata answers three separate questions — what it checks,
                         who runs it, and how much of it there is — so each is a labelled row, with
                         the labels lined up in a fixed left column and the values reading down a
                         single column beside them. The three-column grid that stood here spread the
@@ -324,22 +335,26 @@ export function Profile({
                         share one left edge regardless of pane width — no fixed width to re-tune when
                         a label is renamed. On a pane dragged narrow the value cell wraps under its
                         own label rather than under the description. */}
-                    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
-                      <ScenarioRow label="Behaviours">
-                        {s.behaviour_refs.length > 0 ? (
-                          s.behaviour_refs.map((ref) => <Chip key={ref}>{ref}</Chip>)
-                        ) : (
-                          <span className="text-muted-foreground">None</span>
-                        )}
-                      </ScenarioRow>
-                      <ScenarioRow label="Personas">
-                        {s.persona_refs.length > 0 ? (
-                          s.persona_refs.map((ref) => <Chip key={ref}>{ref}</Chip>)
-                        ) : (
-                          <span className="text-muted-foreground">None</span>
-                        )}
-                      </ScenarioRow>
-                      {/* The trial total is the whole of the count worth stating. The per-persona
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
+                        <ScenarioRow label="Behaviours">
+                          {s.behaviour_refs.length > 0 ? (
+                            s.behaviour_refs.map((ref) => (
+                              <Chip key={ref}>{ref}</Chip>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground">None</span>
+                          )}
+                        </ScenarioRow>
+                        <ScenarioRow label="Personas">
+                          {s.persona_refs.length > 0 ? (
+                            s.persona_refs.map((ref) => (
+                              <Chip key={ref}>{ref}</Chip>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground">None</span>
+                          )}
+                        </ScenarioRow>
+                        {/* The trial total is the whole of the count worth stating. The per-persona
                           trial count was shown alongside it and said nothing extra: the total *is*
                           that per-persona count times personas, and the personas are named in the
                           row directly above, so "3 per persona, 3 total" was the same fact written
@@ -350,100 +365,90 @@ export function Profile({
                           nothing, so bordering it would imply it could be looked up. Files stay chips
                           for exactly that reason, and share the row with the total behind a faint dot
                           separator; they simply do not appear when there are none. */}
-                      <ScenarioRow label="Experiment configuration">
-                        {/* py-0.5 matches the chip's own vertical padding so the trial total and the
+                        <ScenarioRow label="Experiment configuration">
+                          {/* py-0.5 matches the chip's own vertical padding so the trial total and the
                             file chips sit on one line under `items-start` — without it the padding-
                             less text rode above the chip. */}
-                        <span className="py-0.5 text-muted-foreground">
-                          {formatTrials(countTrials(s.persona_refs.length, s.num_trials))}
-                        </span>
-                        {s.fixtures.length > 0 && (
-                          <>
-                            <span aria-hidden className="py-0.5 text-muted-foreground/40">
-                              ·
-                            </span>
-                            {s.fixtures.map((file) => (
-                              <Chip key={file}>{file}</Chip>
-                            ))}
-                          </>
-                        )}
-                      </ScenarioRow>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="flex justify-end border-t border-border pt-2 text-sm text-muted-foreground">
-                Total: {formatTrials(
-                  profile.scenarios.reduce(
-                    (total, scenario) =>
-                      total + countTrials(scenario.persona_refs.length, scenario.num_trials),
-                    0,
-                  ),
-                )}
+                          <span className="py-0.5 text-muted-foreground">
+                            {formatTrials(
+                              countTrials(s.persona_refs.length, s.num_trials),
+                            )}
+                          </span>
+                          {s.fixtures.length > 0 && (
+                            <>
+                              <span
+                                aria-hidden
+                                className="py-0.5 text-muted-foreground/40"
+                              >
+                                ·
+                              </span>
+                              {s.fixtures.map((file) => (
+                                <Chip key={file}>{file}</Chip>
+                              ))}
+                            </>
+                          )}
+                        </ScenarioRow>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex justify-end border-t border-border pt-2 text-sm text-muted-foreground">
+                  Total:{" "}
+                  {formatTrials(
+                    profile.scenarios.reduce(
+                      (total, scenario) =>
+                        total +
+                        countTrials(
+                          scenario.persona_refs.length,
+                          scenario.num_trials,
+                        ),
+                      0,
+                    ),
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
-            <Placeholder boxed />
-          )}
-        </Section>
+            ) : (
+              <Placeholder boxed />
+            )}
+          </Section>
         </div>
       </div>
 
-      <ProfileFooter interviewId={interviewId} done={done} />
+      <ProfileFooter
+        done={done}
+        busy={busy}
+        onFinish={onFinish}
+        onDownload={onDownload}
+      />
     </div>
   );
 }
 
-// The pane's foot: the two things you do with a finished experiment, held below the sheet rather
-// than inside it, because they act on the produced artifact — they are not part of it. Both are
-// pinned to the right, the download near-black as the one action the user takes here and Run
-// evaluation the disabled placeholder beside it.
-//
-// The download is disabled until the interview reaches its end. A half-written profile still
-// compiles to a file, but it is not the file the user came for, so the control that hands it over
-// stays inert — and says why on hover — until `done`. It carries the accent while it waits: an
-// armed-but-not-yet action is a live state, which is what the accent marks, and it turns near-black
-// the moment it becomes pressable. Run evaluation belongs to the engine, which this door is
-// forbidden to import, so it ships disabled and labelled as such, exactly as it did in the chat.
+// The pane's foot owns the one output action. Before completion it asks the API to finish the
+// remaining interview and download the result. After completion it downloads the current result
+// without doing more interview work.
 function ProfileFooter({
-  interviewId,
   done,
+  busy,
+  onFinish,
+  onDownload,
 }: {
-  interviewId: string;
   done?: boolean;
+  busy?: boolean;
+  onFinish?: () => void;
+  onDownload?: () => void;
 }) {
   return (
     <div className="mt-3 flex shrink-0 flex-wrap items-center justify-end gap-2">
-      {done ? (
-        <a
-          href={api.experimentUrl(interviewId)}
-          download
-          className={cn(
-            "inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5",
-            "border border-primary bg-primary text-sm font-medium text-primary-foreground",
-            "transition-colors duration-150 hover:opacity-90 active:opacity-80",
-          )}
-        >
-          Download specification
-        </a>
-      ) : (
-        <Tooltip label="Available once the interview is complete" focusable>
-          <span
-            aria-disabled
-            className={cn(
-              "inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-md px-3 py-1.5",
-              "border border-accent bg-accent/12 text-sm font-medium text-foreground opacity-60",
-            )}
-          >
-            Download specification
-          </span>
-        </Tooltip>
-      )}
-
-      {/* Wired to the engine later — the wizard package must not depend on it, so the control
-          ships disabled rather than absent. */}
-      <Button variant="secondary" disabled title="Coming soon">
-        Run evaluation
+      <Button
+        type="button"
+        variant={done ? "primary" : "secondary"}
+        disabled={busy}
+        onClick={done ? onDownload : onFinish}
+      >
+        {done
+          ? "Download specification"
+          : "Skip interview and download specification"}
       </Button>
     </div>
   );
@@ -506,9 +511,9 @@ function Placeholder({
   );
 }
 
-// The interview's position, as a row of segments — one per step, the document's six sections in
-// their order. It draws the package's own numbers and computes neither: six steps is what the
-// package says six steps is. Segments up to and including the current step carry the accent; the
+// The interview's position, as a row of segments — one per stage, in the document's order. It
+// draws the package's own numbers and computes neither. Segments up to and including the current
+// stage carry the accent; the
 // rest stay on the border grey. The fill colour transitions rather than snapping, which marks the
 // step advancing — the only reason a segment ever changes at all. It reads as a header for the page
 // below: a full-width strip, not a puck floating in a corner.
@@ -516,28 +521,20 @@ function ProgressSegments({
   step,
   steps,
   title,
-  statusText,
 }: {
   step: number;
   steps: number;
   title?: string | null;
-  statusText?: string;
 }) {
-  // The caption is the package's own status line for the current step, from config.yaml
-  // ("Shaping expected behaviours…"). It falls back to the step title, then to nothing, so a
-  // interview with no status still draws a caption rather than an empty row. The whole widget carries
+  // The caption falls back to the request title, then to a neutral label. The whole widget carries
   // one accessible label, so a screen reader hears "Behaviours, step 2 of 6" once rather than
   // reading the caption and the segments as two things.
-  const caption = statusText ?? title ?? "Getting started";
+  const caption = title ?? "Getting started";
   const label = title
     ? `${title}, step ${step} of ${steps}`
     : `Step ${step} of ${steps}`;
   return (
-    <div
-      role="img"
-      aria-label={label}
-      className="flex flex-1 flex-col gap-1.5"
-    >
+    <div role="img" aria-label={label} className="flex flex-1 flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
         <span aria-hidden className="min-w-0 truncate font-medium">
           {caption}
@@ -595,7 +592,9 @@ function Section({
               className="section-writing-marker h-1.5 w-1.5 rounded-full bg-accent"
             />
           )}
-          {count != null && count > 0 && <Mono className="tabular-nums">{count}</Mono>}
+          {count != null && count > 0 && (
+            <Mono className="tabular-nums">{count}</Mono>
+          )}
         </div>
       </div>
       {children}
@@ -685,8 +684,13 @@ function TaskView({
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded py-1 text-left transition-colors hover:text-accent"
       >
-        <Chevron dir={open ? "down" : "right"} className="text-muted-foreground transition-transform" />
-        <span className="min-w-0 flex-1 font-medium text-foreground">{task.name}</span>
+        <Chevron
+          dir={open ? "down" : "right"}
+          className="text-muted-foreground transition-transform"
+        />
+        <span className="min-w-0 flex-1 font-medium text-foreground">
+          {task.name}
+        </span>
         {/* The fraction goes teal the moment anything in this task is actually being measured,
             and stays grey while none of it is. That makes "this task contributes nothing to the
             run" a thing you see rather than a thing you compute, and it scans down the list: the
@@ -743,12 +747,12 @@ function BehaviourView({
   // measured but not yet written up shows the blank where its criteria will go.
   //
   // The tick is what makes the blank honest, but only once the tick is committed. A tick flips
-  // `measured` live — and is a server round-trip that recomposes the prioritise screen — so while
-  // the interview is on prioritise the user is still choosing and any box can still be un-ticked.
+  // `measured` live — and is a server round-trip that recomposes the Behaviours screen — so while
+  // the interview is on that screen the user is still choosing and any box can still be un-ticked.
   // Drawing the blank there promises content for a selection that has not been made. `selecting` is
-  // true for the whole prioritise step (keyed on the step, not on `busy`, so a tick's brief in-
+  // true for the whole Behaviours step (keyed on the step, not on `busy`, so a tick's brief in-
   // flight window does not flicker the blank on and off), and holds it back until Continue advances
-  // the interview off prioritise. From then on "ticked, not yet written up" is a settled promise. A
+  // the interview off Behaviours. From then on "ticked, not yet written up" is a settled promise. A
   // dormant behaviour still shows no blank because no criteria are coming for it.
   const awaitingCriteria =
     behaviour.measured && behaviour.criteria.length === 0 && !selecting;
@@ -773,12 +777,16 @@ function BehaviourView({
           ones light up as a scannable set. */}
       <Mono
         tone={behaviour.measured ? "accent" : "muted"}
-        className={cn("pt-px tabular-nums", behaviour.measured && "font-semibold")}
+        className={cn(
+          "pt-px tabular-nums",
+          behaviour.measured && "font-semibold",
+        )}
       >
         {behaviour.id}
       </Mono>
       <span className="min-w-0 text-foreground">
-        <span className="font-medium">{behaviour.name}</span> — {behaviour.description}
+        <span className="font-medium">{behaviour.name}</span> —{" "}
+        {behaviour.description}
       </span>
       {behaviour.criteria.length > 0 && (
         // The criteria are set apart from the description above them with a top gap, so a
@@ -786,7 +794,9 @@ function BehaviourView({
         // rows. Each criterion is spaced from the next for the same reason.
         <ul className="col-start-2 mt-1.5 flex flex-col gap-3 text-xs">
           {behaviour.criteria.map((c) => {
-            const metric = c.metric_fqn ? metricByFqn.get(c.metric_fqn) : undefined;
+            const metric = c.metric_fqn
+              ? metricByFqn.get(c.metric_fqn)
+              : undefined;
             return (
               <li
                 key={c.id}
@@ -816,17 +826,25 @@ function BehaviourView({
                     without them.) */}
                 <p className="font-medium text-foreground">{c.name}</p>
                 <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-2 gap-y-0.5">
-                  <span className="tracking-wide text-muted-foreground">Given</span>
+                  <span className="tracking-wide text-muted-foreground">
+                    Given
+                  </span>
                   <span className="text-foreground">{c.description.given}</span>
-                  <span className="tracking-wide text-muted-foreground">When</span>
+                  <span className="tracking-wide text-muted-foreground">
+                    When
+                  </span>
                   <span className="text-foreground">{c.description.when}</span>
-                  <span className="tracking-wide text-muted-foreground">Then</span>
+                  <span className="tracking-wide text-muted-foreground">
+                    Then
+                  </span>
                   <span className="text-foreground">{c.description.then}</span>
                 </div>
                 {showMetrics && metric && (
                   <Mono className="block break-words rounded border border-border bg-muted px-2 py-1 leading-relaxed">
                     <span className="block text-foreground">{metric.name}</span>
-                    <span className="block text-muted-foreground">{metric.description}</span>
+                    <span className="block text-muted-foreground">
+                      {metric.description}
+                    </span>
                   </Mono>
                 )}
               </li>
@@ -838,7 +856,7 @@ function BehaviourView({
         // One short rule per behaviour still to be written up. Not boxed and not the full
         // three-line placeholder: this repeats once per selected behaviour, so anything larger
         // would put the grey back on the page that the sections were kept spare to avoid. It never
-        // shimmers: the criteria are drafted during the Continue that leaves prioritise, before
+        // shimmers: the criteria are drafted during the Continue that leaves Behaviours, before
         // this blank is allowed to appear, so there is no in-flight window to mark here.
         <div className="col-start-2 pt-0.5">
           <Placeholder widths={["w-28"]} />

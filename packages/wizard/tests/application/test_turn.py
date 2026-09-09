@@ -20,7 +20,7 @@ from metis.wizard import (
 )
 from metis.wizard.application.driver import DriverState
 from metis.wizard.application.interviewer import InterviewerOutputError
-from metis.wizard.application.screens import behaviours_screen
+from metis.wizard.application.screens import behaviours_screen, scenarios_screen
 from metis.wizard.application.turn import _reconcile_locks
 from metis.wizard.contracts import (
     ChatResponse,
@@ -223,6 +223,25 @@ def test_end_finishes_a_completable_interview() -> None:
     assert result.state.confirmed
     assert result.state.pending is None
     assert result.state.profile.behaviour("EB-1").criteria[0].metric_fqn  # type: ignore[union-attr]
+
+
+def test_final_continue_completes_a_ready_specification() -> None:
+    profile = research_assistant()
+    pending = scenarios_screen(profile, "Review scenarios")
+    pending.request_id = "req-final"
+    pending.stage = InterviewStep.SCENARIOS
+    state = InterviewState(
+        profile=profile,
+        behaviours_confirmed=True,
+        pending=pending,
+    )
+
+    result = _turn(state, ChoiceResponse(selected=["continue"]))
+
+    assert isinstance(result, InterviewSuccess)
+    assert result.outcome == "done"
+    assert result.state.confirmed
+    assert result.state.pending is None
 
 
 def test_end_on_a_held_gate_preserves_state() -> None:

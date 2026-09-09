@@ -185,6 +185,13 @@ wizard.
 | **Purpose** | Web frontend providing a graphical interface for METIS capabilities. |
 
 MUST communicate exclusively with `apps/api` via REST. MUST NOT import or depend on any Python package directly.
+The browser owns the local Interview record and display transcript in IndexedDB. It sends only the
+client-held `InterviewState` and typed responses to the stateless lifecycle routes. It MUST NOT
+depend on server Interview resources, wizard static assets, or an embedded wizard runtime.
+
+The normal local run uses two processes: `PORT=8001 uv run metis-api` and
+`npm --prefix apps/web run dev`.
+The Vite proxy uses `METIS_API_ORIGIN`, defaulting to `http://127.0.0.1:8001`.
 
 ---
 
@@ -241,6 +248,9 @@ tests/
     └── experiment.yaml
 ```
 
+The web client workflow and its deferred features are documented in
+[`docs/guide/web.md`](guide/web.md).
+
 ### Rules
 
 - Unit tests (`tests/unit/<package>/`) MUST test a single package in isolation. External dependencies SHOULD be mocked.
@@ -268,14 +278,16 @@ A root `Makefile` MUST provide the following targets as the public development a
 | `test-unit` | Run unit tests only. |
 | `test-integration` | Run integration tests only. |
 | `check` | Composition: `lint` + `format-check` + `typecheck`. |
-| `ci` | Composition: `check` + `test`. MUST mirror what CI pipelines execute. |
+| `web-check` | Run non-mutating `apps/web` formatter, type checker, tests, and API drift checks. |
+| `web-build` | Run the production `apps/web` build. This target writes the normal Vite output. |
+| `ci` | Composition: `check` + `web-check` + `web-build` + `test`. MUST mirror what CI pipelines execute. |
 | `clean` | Remove all generated/cached files across the monorepo. |
 
 **Rules:**
 
 - All targets MUST operate from the workspace root.
 - The `ci` target MUST be the single command that reproduces a CI pipeline run locally.
-- `check` MUST be non-mutating (read-only verification).
+- `check` and `web-check` MUST be non-mutating (read-only verification).
 
 ---
 

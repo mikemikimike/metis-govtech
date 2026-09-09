@@ -1,4 +1,4 @@
-.PHONY: help install lint lint-fix format format-check fix typecheck check ci clean release-init release-branch release-issue
+.PHONY: help install lint lint-fix format format-check fix typecheck check ci test test-unit web-install web-format-check web-typecheck web-test web-build web-check-api web-check clean release-init release-branch release-issue
 
 help:
 	@printf "Available targets:\n"
@@ -12,7 +12,9 @@ help:
 	@printf "  make check             Run lint + format-check + typecheck (non-mutating)\n"
 	@printf "  make test              Run all tests\n"
 	@printf "  make test-unit         Run unit tests only\n"
-	@printf "  make ci                Full CI suite: check + test\n"
+	@printf "  make ci                Full CI suite: check + web checks + test\n"
+	@printf "  make web-install       Install apps/web dependencies from its lockfile\n"
+	@printf "  make web-check         Run non-mutating apps/web checks\n"
 	@printf "  make clean             Remove all generated/cached files\n"
 	@printf "  make release-init      Create release branch + tracking issue (PKG=<name>|APP=<name> VER=<semver>)\n"
 	@printf "  make release-branch    Create release branch only\n"
@@ -20,7 +22,31 @@ help:
 
 install:
 	uv sync --all-packages --group dev --extra test
+	$(MAKE) web-install
 	$(MAKE) -C packages/engine install-playwright
+
+web-install:
+	npm --prefix apps/web ci
+
+web-format-check:
+	npm --prefix apps/web run format:check
+
+web-typecheck:
+	npm --prefix apps/web run typecheck
+
+web-test:
+	@temp_dir=$$(mktemp -d); \
+	trap 'rm -rf "$$temp_dir"' EXIT; \
+	ln -s "$$(pwd)/apps/web/node_modules" "$$temp_dir/node_modules"; \
+	METIS_WEB_TEST_CACHE_DIR="$$temp_dir/cache" npm --prefix apps/web test
+
+web-build:
+	npm --prefix apps/web run build
+
+web-check-api:
+	npm --prefix apps/web run check:api
+
+web-check: web-format-check web-typecheck web-test web-check-api
 
 lint:
 	uv run ruff check .
@@ -54,6 +80,8 @@ check:
 
 ci:
 	$(MAKE) check
+	$(MAKE) web-check
+	$(MAKE) web-build
 	$(MAKE) test
 	$(MAKE) -C packages/engine check-schema
 	$(MAKE) -C packages/wizard check-schema

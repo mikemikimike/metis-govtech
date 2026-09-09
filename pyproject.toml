@@ -37,6 +37,7 @@ members = [
     "packages/*",
     "apps/*",
 ]
+exclude = ["apps/web"]
 
 [tool.pyright]
 venvPath = "."

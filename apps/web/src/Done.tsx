@@ -1,7 +1,5 @@
-// The end of the interview, marked in the conversation. The two actions on a finished experiment —
-// downloading it and running it — now live at the foot of the document pane, on the artifact they
-// act on. So this panel no longer carries buttons: it is the moment of completion in the chat, and
-// it points the user to the pane where the file is waiting.
+// The end of the interview, marked in the conversation. Download remains available from the
+// completed Profile pane.
 
 import { PartyPopper } from "lucide-react";
 import { Panel } from "./ui";
@@ -15,10 +13,10 @@ export function Done() {
     <Panel className="flex flex-col gap-2 p-5">
       <h2 className="flex items-center gap-2 text-base font-semibold text-accent">
         <PartyPopper size={18} strokeWidth={1.75} aria-hidden />
-        Your evaluation is ready
+        Your specification is ready
       </h2>
       <p className="text-sm text-muted-foreground">
-        Download it, or run the evaluation, from the foot of the product profile.
+        Download the YAML files from the product profile.
       </p>
     </Panel>
   );

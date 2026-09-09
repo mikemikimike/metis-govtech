@@ -19,12 +19,18 @@ METIS (Measurement and Evaluation of Trustworthy Intelligent Systems) is a Pytho
 ## Commands
 
 ```bash
-make install        # uv sync --group dev
+make install        # uv sync and npm install for all workspace tools
 make check          # lint + format-check + typecheck (non-mutating)
 make fix            # auto-fix lint + format
 make ci             # full CI suite (check + test)
 make clean          # remove generated/cached files
 ```
+
+The browser client is a separate Node project. Run `make web-install` once, then use
+`make web-check` for non-mutating formatting, type checking, tests, and API-contract drift checks.
+Use `make web-build` for the production build. For local development, run
+`PORT=8001 uv run metis-api` and `npm --prefix apps/web run dev` in two terminals. Set
+`METIS_API_ORIGIN` when the API is not on port 8001.
 
 Individual targets: `lint`, `lint-fix`, `format`, `format-check`, `typecheck`.
 
@@ -77,6 +83,9 @@ Key invariants:
 - **metis-engine:** Evaluation runtime — simulation harness, trace extraction (Langfuse), metric execution, and reporting. CLI: `metis engine simulate --input-dir <path>`.
 - **metis-wizard:** Interactive CLI for generating evaluation config YAML. CLI: `metis wizard init`.
 - **metis-insights:** Trajectory diagnostics and compliance analytics. CLI: `metis insights report --results-file <path>`.
+- **apps/web:** React browser client. It calls `apps/api` over HTTP and stores Interview records and
+  the display transcript in browser-local IndexedDB. It does not import Python packages or use the
+  wizard's retired server/static-web path.
 
 ## Contributing
 
@@ -115,5 +124,6 @@ When working on a specific package, read its local `AGENTS.md` for package-speci
 - [`packages/engine/AGENTS.md`](packages/engine/AGENTS.md) — metis-engine
 - [`packages/wizard/AGENTS.md`](packages/wizard/AGENTS.md) — metis-wizard
 - [`apps/api/AGENTS.md`](apps/api/AGENTS.md) — metis-api
+- [`apps/web/AGENTS.md`](apps/web/AGENTS.md) — metis-web
 
 See `docs/architecture.md` for the full normative specification.

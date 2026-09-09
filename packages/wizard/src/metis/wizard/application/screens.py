@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from metis.wizard.application.readiness import scenario_readiness
+from metis.wizard.application.readiness import profile_readiness
 from metis.wizard.application.trials import format_trials
 from metis.wizard.contracts.conversation import (
     AnyCardComponent,
@@ -63,6 +63,15 @@ _STEP_TITLES: dict[InterviewStep, str] = {
 _INTERVIEW_STEPS: list[InterviewStep] = list(_STEP_TITLES)
 
 
+def _ready_through(profile: ProductProfile, step: InterviewStep) -> bool:
+    """True when the Profile has no missing content at or before this review."""
+    position = _INTERVIEW_STEPS.index(step)
+    return not any(
+        _INTERVIEW_STEPS.index(gap.stage) <= position
+        for gap in profile_readiness(profile)
+    )
+
+
 def stamp_step(request: WizardRequest, step: InterviewStep) -> None:
     """Write the step's header onto a request: title, one-based position and total.
 
@@ -105,14 +114,21 @@ def _section(task: Task) -> str:
 # ── the three replies ──────────────────────────────────────────────────────
 
 
-def _three_replies(accept_label: str, add_label: str) -> list[Option]:
+def _three_replies(
+    accept_label: str, add_label: str, *, accept_enabled: bool = True
+) -> list[Option]:
     """Screen-level replies, for a flat list reviewed as a whole.
 
     Single-select: each carries a model-composed patch or triggers a model call, and two of
     those can contradict each other.
     """
     return [
-        Option(id=OptionId(action="accept"), label=accept_label, primary=True),
+        Option(
+            id=OptionId(action="accept"),
+            label=accept_label,
+            primary=True,
+            enabled=accept_enabled,
+        ),
         Option(id=OptionId(action="chat"), label="Chat about it"),
         Option(id=OptionId(action="add"), label=add_label),
     ]
@@ -162,7 +178,6 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                 )
             )
 
-    measured = any(behaviour.measured for behaviour in profile.behaviours())
     return ChoiceRequest(
         prompt=message,
         cards=cards,
@@ -180,10 +195,9 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                 id=OptionId(action="continue"),
                 label="Continue",
                 primary=True,
-                # A disabled Continue is still shown, marked unavailable. The measurement scope
-                # is the gate: at least one behaviour must be measured to have anything to write
-                # criteria for.
-                enabled=measured,
+                # A disabled Continue is still shown, marked unavailable. Readiness through this
+                # review requires a complete Product and at least one measured Behaviour.
+                enabled=_ready_through(profile, InterviewStep.BEHAVIOURS),
             ),
         ],
         instruction=BEHAVIOUR_INSTRUCTION,
@@ -285,7 +299,12 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
         ),
         options=[
             Option(id=OptionId(action="back"), label="← Back"),
-            Option(id=OptionId(action="continue"), label="Continue", primary=True),
+            Option(
+                id=OptionId(action="continue"),
+                label="Continue",
+                primary=True,
+                enabled=_ready_through(profile, InterviewStep.CRITERIA),
+            ),
         ],
     )
 
@@ -308,7 +327,11 @@ def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
         prompt=message,
         cards=cards,
         multi=False,
-        options=_three_replies("Looks right", "Add one"),
+        options=_three_replies(
+            "Looks right",
+            "Add one",
+            accept_enabled=_ready_through(profile, InterviewStep.PERSONAS),
+        ),
         instruction=FEEDBACK_INSTRUCTION,
     )
 
@@ -433,7 +456,13 @@ def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     # set the derived stage, finish and compile preflight all share, so the Continue this screen
     # offers and the DONE the interview computes can never disagree — a wire-borne fault such as
     # an out-of-range trial count or a dangling reference holds Continue even with no warning card.
-    blocked = bool(scenario_readiness(profile))
+    readiness = profile_readiness(profile)
+    warnings.extend(
+        Warning(text=gap.message, source=WarningSource.DOCUMENT, blocking=True)
+        for gap in readiness
+        if gap.stage is not InterviewStep.SCENARIOS
+    )
+    blocked = bool(readiness)
     blocking_ids = (
         {s.id for s in profile.scenarios if not s.persona_refs}
         | {s.id for s in profile.scenarios if not _covers_a_selection(profile, s)}

@@ -35,6 +35,7 @@ from metis.wizard import (
     InterviewTurnRequest,
     ProductProfile,
     compile_profile,
+    working_status,
 )
 
 if TYPE_CHECKING:
@@ -63,6 +64,12 @@ class ServiceError(BaseModel):
     retryable: bool = False
 
 
+class InterviewConfig(BaseModel):
+    """Package-owned presentation text needed by an Interview client."""
+
+    working_status: str
+
+
 def get_dependencies(request: Request) -> WizardDependencies:
     """Return the startup-composed public Interview handler."""
     dependencies = getattr(request.app.state, "wizard_dependencies", None)
@@ -71,6 +78,17 @@ def get_dependencies(request: Request) -> WizardDependencies:
             "Wizard dependencies were not composed at application startup."
         )
     return dependencies
+
+
+@router.get(
+    "/config",
+    summary="Get package-owned wizard client configuration",
+    response_model=InterviewConfig,
+    responses={500: {"model": ServiceError}},
+)
+def config() -> InterviewConfig:
+    """Return presentation text without copying it into the HTTP client."""
+    return InterviewConfig(working_status=working_status())
 
 
 @router.post(
@@ -167,4 +185,4 @@ def compile_(profile: ProductProfile) -> JSONResponse:
     return JSONResponse(result.model_dump(mode="json", by_alias=True), status_code=200)
 
 
-__all__ = ["ServiceError", "router"]
+__all__ = ["InterviewConfig", "ServiceError", "router"]

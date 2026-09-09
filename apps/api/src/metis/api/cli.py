@@ -7,12 +7,27 @@ can set them without a code change; both have local-friendly defaults.
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+
+def _load_env() -> None:
+    """Load local settings from one project `.env` without overriding exported values."""
+    from dotenv import load_dotenv
+
+    app_root = Path(__file__).resolve().parents[3]
+    repo_root = app_root.parents[1]
+    seen: set[Path] = set()
+    for candidate in (Path.cwd() / ".env", app_root / ".env", repo_root / ".env"):
+        if candidate.is_file() and candidate not in seen:
+            load_dotenv(candidate, override=False)
+            seen.add(candidate)
 
 
 def main() -> None:
     """Run the API under Uvicorn."""
     import uvicorn
 
+    _load_env()
     host = os.environ.get("HOST", "0.0.0.0")  # noqa: S104 — a container binds all interfaces
     port = int(os.environ.get("PORT", "8000"))
     uvicorn.run("metis.api.main:app", host=host, port=port, log_level="info")

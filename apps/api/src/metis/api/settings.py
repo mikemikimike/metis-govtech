@@ -27,20 +27,20 @@ class Settings:
 
     api_key: str
     base_url: str
-    judge_model: str
+    interview_model: str
 
     @classmethod
     def from_env(cls) -> Settings:
         """Read settings from the environment, naming any that are missing."""
-        api_key = os.environ.get("API_KEY", "")
-        base_url = os.environ.get("BASE_URL", "")
-        judge_model = os.environ.get("JUDGE_MODEL", "")
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+        base_url = os.environ.get("OPENAI_BASE_URL", "")
+        interview_model = os.environ.get("INTERVIEW_MODEL", "")
         missing = [
             name
             for name, value in (
-                ("API_KEY", api_key),
-                ("BASE_URL", base_url),
-                ("JUDGE_MODEL", judge_model),
+                ("OPENAI_API_KEY", api_key),
+                ("OPENAI_BASE_URL", base_url),
+                ("INTERVIEW_MODEL", interview_model),
             )
             if not value
         ]
@@ -48,7 +48,11 @@ class Settings:
             raise SettingsError(
                 f"The API needs {', '.join(missing)} in the environment."
             )
-        return cls(api_key=api_key, base_url=base_url, judge_model=judge_model)
+        return cls(
+            api_key=api_key,
+            base_url=base_url,
+            interview_model=interview_model,
+        )
 
 
 InterviewHandler: TypeAlias = Callable[[InterviewRequest], InterviewResult]
@@ -72,7 +76,7 @@ def build_dependencies(settings: Settings) -> WizardDependencies:
     configure_interview_runtime(
         api_key=settings.api_key,
         base_url=settings.base_url,
-        model=settings.judge_model,
+        model=settings.interview_model,
     )
     return WizardDependencies(interview_handler=handle_interview)
 

@@ -23,6 +23,7 @@ class Config:
 
     clarify_turn_cap: int
     opening_question: str
+    working_status: str
     statuses: Mapping[InterviewStep, str]
 
 
@@ -76,6 +77,10 @@ def load_config() -> Config:
     if "prioritise" in statuses:
         raise _error("statuses.prioritise", "was removed and must not be present.")
 
+    working_status = _required(statuses, "statuses.working")
+    if not isinstance(working_status, str) or not working_status.strip():
+        raise _error("statuses.working", "must be a non-empty string.")
+
     checked: dict[InterviewStep, str] = {}
     for step in InterviewStep:
         key = f"statuses.{step.value}"
@@ -87,6 +92,7 @@ def load_config() -> Config:
     return Config(
         clarify_turn_cap=turn_cap,
         opening_question=opening_question,
+        working_status=working_status,
         statuses=checked,
     )
 
@@ -99,6 +105,11 @@ def clarify_turn_cap() -> int:
 def status_for(step: InterviewStep) -> str:
     """Return the current package-owned status for an interview step."""
     return load_config().statuses[step]
+
+
+def working_status() -> str:
+    """Return the package-owned general status for active interview work."""
+    return load_config().working_status
 
 
 def opening_question() -> str:
@@ -114,4 +125,5 @@ __all__ = [
     "load_config",
     "opening_question",
     "status_for",
+    "working_status",
 ]

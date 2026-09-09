@@ -4,6 +4,7 @@ settings:
 opening_question: "Tell me about your product — what it does and who it's for."
 
 statuses:
+  working: "Working on your Interview…"
   clarify: "Understanding your agent…"
   behaviours: "Shaping expected behaviours…"
   criteria: "Writing testable criteria…"

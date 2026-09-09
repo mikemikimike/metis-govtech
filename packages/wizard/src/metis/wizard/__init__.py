@@ -21,7 +21,11 @@ from metis.wizard.application.compile import (
     write_experiment,
     write_review,
 )
+from metis.wizard.application.config import working_status
 from metis.wizard.application.interviewer import InterviewerUnavailable
+from metis.wizard.application.matching.library_catalogue import (
+    library_catalogue as _library_catalogue,
+)
 from metis.wizard.contracts import (
     AnyRequest,
     AnyResponse,
@@ -47,6 +51,7 @@ from metis.wizard.contracts import (
     UserResponse,
     WizardRequest,
 )
+from metis.wizard.contracts.metric_spec import MetricSummary
 from metis.wizard.domain.permissions import InterviewStep
 
 
@@ -55,6 +60,18 @@ def configure_interview_runtime(*, api_key: str, base_url: str, model: str) -> N
     from metis.wizard.bootstrap import configure_interview_runtime
 
     configure_interview_runtime(api_key=api_key, base_url=base_url, model=model)
+
+
+def metric_catalogue() -> list[MetricSummary]:
+    """Return installed metric display metadata without exposing matcher internals."""
+    return [
+        MetricSummary(
+            fqn=spec.fqn,
+            name=spec.name,
+            description=spec.description,
+        )
+        for spec in _library_catalogue()
+    ]
 
 
 try:
@@ -87,6 +104,7 @@ __all__ = [
     "InterviewerUnavailable",
     "MissingData",
     "MissingDataCode",
+    "MetricSummary",
     "ProductProfile",
     "Status",
     "UserResponse",
@@ -98,7 +116,9 @@ __all__ = [
     "core_version",
     "derive_stage",
     "handle_interview",
+    "metric_catalogue",
     "render_review",
     "write_experiment",
     "write_review",
+    "working_status",
 ]

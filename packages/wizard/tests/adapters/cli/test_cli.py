@@ -6,6 +6,7 @@ part worked, and the assembly was wrong. These tests assert the assembly the CLI
 """
 
 import pytest
+import typer
 from fixtures.profiles import research_assistant
 
 from metis.wizard.adapters.cli import commands as cli
@@ -73,6 +74,97 @@ def test_resume_reports_the_pending_request_stage(
     )
 
     assert "Resuming at the criteria step." in result.output
+
+
+def test_a_retryable_failure_is_resent_when_the_user_agrees(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """The CLI acts on the `retryable` flag the contract exposes.
+
+    A retryable failure leaves the state unchanged, so the door offers the same operation
+    again — the terminal equivalent of the web client's Retry button — rather than treating
+    every failure as terminal.
+    """
+    from rich.console import Console
+
+    from metis.wizard import (
+        InterviewErrorCode,
+        InterviewFailure,
+        InterviewStartRequest,
+        InterviewSuccess,
+    )
+
+    start = InterviewStartRequest(description="a helpful research assistant")
+    done = InterviewSuccess(
+        state=InterviewState(profile=research_assistant(), confirmed=True),
+        stage=InterviewStep.DONE,
+        outcome="done",
+    )
+    seen: list[object] = []
+
+    def fake_handle(request, **_kwargs):
+        seen.append(request)
+        if len(seen) == 1:
+            return InterviewFailure(
+                code=InterviewErrorCode.MODEL_UNAVAILABLE,
+                message="The model could not be reached; nothing was changed.",
+                retryable=True,
+                state=None,
+            )
+        return done
+
+    monkeypatch.setattr(cli, "handle_interview", fake_handle)
+    monkeypatch.setattr(cli, "_retry_confirmed", lambda _failure: True)
+
+    result = cli._drive(
+        start,
+        interviewer=StubInterviewer(),
+        matcher=None,
+        out_dir=tmp_path,
+        console=Console(),
+    )
+
+    assert seen == [start, start]  # the failed start was resent unchanged
+    assert result.confirmed is True
+
+
+def test_a_non_retryable_failure_stops_without_offering_a_retry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """A terminal failure exits at once; only a retryable one is ever offered again."""
+    from rich.console import Console
+
+    from metis.wizard import (
+        InterviewErrorCode,
+        InterviewFailure,
+        InterviewStartRequest,
+    )
+
+    offered: list[object] = []
+    monkeypatch.setattr(
+        cli, "_retry_confirmed", lambda failure: offered.append(failure) or True
+    )
+    monkeypatch.setattr(
+        cli,
+        "handle_interview",
+        lambda request, **_kwargs: InterviewFailure(
+            code=InterviewErrorCode.COMPLETION_FAILED,
+            message="I couldn't finish this into a runnable evaluation on my own.",
+            retryable=False,
+            state=None,
+        ),
+    )
+
+    with pytest.raises(typer.Exit):
+        cli._drive(
+            InterviewStartRequest(description="x"),
+            interviewer=StubInterviewer(),
+            matcher=None,
+            out_dir=tmp_path,
+            console=Console(),
+        )
+
+    assert offered == []  # the retryable gate short-circuits before any prompt
 
 
 def test_the_cli_wires_a_matcher() -> None:

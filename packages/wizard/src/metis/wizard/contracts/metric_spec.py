@@ -33,3 +33,11 @@ class MetricSpec(BaseModel):
     def match_text(self) -> str:
         """What the matcher embeds for this metric."""
         return f"{self.name}. {self.description}"
+
+
+class MetricSummary(BaseModel):
+    """The small, stable metric shape exposed to presentation clients."""
+
+    fqn: str
+    name: str
+    description: str

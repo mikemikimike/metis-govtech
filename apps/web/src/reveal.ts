@@ -15,14 +15,19 @@ function words(value: string): Word[] {
 function wordChunks(oldValue: string, newValue: string): WordChunk[] {
   const oldWords = words(oldValue);
   const newWords = words(newValue);
-  const lengths = oldWords.map(() => new Array<number>(newWords.length + 1).fill(0));
+  const lengths = oldWords.map(() =>
+    new Array<number>(newWords.length + 1).fill(0),
+  );
 
   for (let oldIndex = oldWords.length - 1; oldIndex >= 0; oldIndex -= 1) {
     for (let newIndex = newWords.length - 1; newIndex >= 0; newIndex -= 1) {
       lengths[oldIndex][newIndex] =
         oldWords[oldIndex].text === newWords[newIndex].text
           ? 1 + (lengths[oldIndex + 1]?.[newIndex + 1] ?? 0)
-          : Math.max(lengths[oldIndex + 1]?.[newIndex] ?? 0, lengths[oldIndex][newIndex + 1]);
+          : Math.max(
+              lengths[oldIndex + 1]?.[newIndex] ?? 0,
+              lengths[oldIndex][newIndex + 1],
+            );
     }
   }
 
@@ -34,7 +39,11 @@ function wordChunks(oldValue: string, newValue: string): WordChunk[] {
 
   const flushChange = () => {
     if (changedOld.length || changedNew.length) {
-      chunks.push({ kind: "change", oldWords: changedOld, newWords: changedNew });
+      chunks.push({
+        kind: "change",
+        oldWords: changedOld,
+        newWords: changedNew,
+      });
       changedOld = [];
       changedNew = [];
     }
@@ -65,7 +74,11 @@ function wordChunks(oldValue: string, newValue: string): WordChunk[] {
   return chunks;
 }
 
-function renderChunks(chunks: WordChunk[], oldCounts: number[], newCounts: number[]): string {
+function renderChunks(
+  chunks: WordChunk[],
+  oldCounts: number[],
+  newCounts: number[],
+): string {
   const visibleWords: string[] = [];
   let changeIndex = 0;
   for (const chunk of chunks) {
@@ -74,8 +87,12 @@ function renderChunks(chunks: WordChunk[], oldCounts: number[], newCounts: numbe
       continue;
     }
     visibleWords.push(
-      ...chunk.oldWords.slice(0, oldCounts[changeIndex]).map((word) => word.text),
-      ...chunk.newWords.slice(0, newCounts[changeIndex]).map((word) => word.text),
+      ...chunk.oldWords
+        .slice(0, oldCounts[changeIndex])
+        .map((word) => word.text),
+      ...chunk.newWords
+        .slice(0, newCounts[changeIndex])
+        .map((word) => word.text),
     );
     changeIndex += 1;
   }
@@ -88,14 +105,18 @@ function diffFrames(displayed: string, next: string): string[] {
   if (changeCount === 0) return [];
 
   const oldCounts = chunks
-    .filter((chunk): chunk is Extract<WordChunk, { kind: "change" }> => chunk.kind === "change")
+    .filter(
+      (chunk): chunk is Extract<WordChunk, { kind: "change" }> =>
+        chunk.kind === "change",
+    )
     .map((chunk) => chunk.oldWords.length);
   const newCounts = oldCounts.map(() => 0);
   const frames: string[] = [];
 
   for (let changeIndex = 0; changeIndex < changeCount; changeIndex += 1) {
     const chunk = chunks.filter(
-      (chunk): chunk is Extract<WordChunk, { kind: "change" }> => chunk.kind === "change",
+      (chunk): chunk is Extract<WordChunk, { kind: "change" }> =>
+        chunk.kind === "change",
     )[changeIndex];
     for (let count = chunk.oldWords.length - 1; count >= 0; count -= 1) {
       oldCounts[changeIndex] = count;

@@ -15,6 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from metis.api import __version__, core_version
+from metis.api.routes.metrics import router as metrics_router
 from metis.api.routes.wizard import ServiceError
 from metis.api.routes.wizard import router as wizard_router
 from metis.api.settings import (
@@ -55,6 +56,7 @@ def create_app(interview_handler: InterviewHandler | None = None) -> FastAPI:
         return {"status": "ok", "version": __version__, "core_version": core_version}
 
     app.include_router(wizard_router)
+    app.include_router(metrics_router)
 
     @app.exception_handler(RequestValidationError)
     def _on_validation_error(

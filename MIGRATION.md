@@ -127,3 +127,15 @@ It is stateless — each turn or end request carries the whole client-held state
 `POST /api/v1/wizard/interview/start`, `POST /api/v1/wizard/interview/turn`,
 `POST /api/v1/wizard/interview/end`, `POST /api/v1/wizard/compile`, and `/health`. There is no
 prior version to migrate from; point web clients here.
+
+### metis-web
+
+The wizard web client now lives in `apps/web` and is a separate Node project. Replace commands that
+previously targeted the retired web project with `npm --prefix apps/web run dev`,
+`npm --prefix apps/web run build`, and `npm --prefix apps/web run check:api`. Start `metis-api` on
+port 8001 (or set `METIS_API_ORIGIN` for another origin). Interview lists, state, and the display
+transcript are browser-local; there is no server Interview list to migrate and no cross-device state.
+Use `make web-check` for non-mutating web checks and `make web-build` for the production bundle.
+The web gets optional metric details from `GET /api/v1/metrics` after a Profile contains a
+Criterion. Direct authoring, fixture persistence, ZIP packaging, source analysis, hosted state,
+authentication, and evaluation execution remain deferred.

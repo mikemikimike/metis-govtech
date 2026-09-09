@@ -15,24 +15,19 @@ import type {
   AnyCard,
   CardComponent,
   ChoiceRequest,
-  FixtureMetadata,
   FormRequest,
   Option,
   UserResponse,
   Warning,
   WizardRequest,
-} from "./api";
-import { optionKey } from "./api";
-import { FixtureInput, NumberInput } from "./inputs";
+} from "./transport/api";
+import { optionKey } from "./transport/api";
+import { NumberInput } from "./inputs";
 import { Button, cn, formatTrials, Mono, Panel } from "./ui";
 
 // What a block can send up. `null` from a resolved or read-only block.
 type Emit = (response: UserResponse) => void;
 type CardFieldValue = number | string[];
-
-export interface FixtureActions {
-  onUpload: (files: File[]) => Promise<FixtureMetadata[]>;
-}
 
 // ── whole transcript ─────────────────────────────────────────────────────────
 
@@ -40,12 +35,10 @@ export function Transcript({
   requests,
   busy,
   onRespond,
-  fixtureActions,
 }: {
   requests: WizardRequest[];
   busy: boolean;
   onRespond: Emit;
-  fixtureActions: FixtureActions;
 }) {
   return (
     <div className="flex flex-col gap-8">
@@ -67,12 +60,7 @@ export function Transcript({
             data-step-start={startsStep ? "" : undefined}
             className={cn(startsStep && "border-t border-border pt-8")}
           >
-            <RequestBlock
-              request={request}
-              busy={busy}
-              onRespond={onRespond}
-              fixtureActions={fixtureActions}
-            />
+            <RequestBlock request={request} busy={busy} onRespond={onRespond} />
           </div>
         );
       })}
@@ -84,12 +72,10 @@ function RequestBlock({
   request,
   busy,
   onRespond,
-  fixtureActions,
 }: {
   request: WizardRequest;
   busy: boolean;
   onRespond: Emit;
-  fixtureActions: FixtureActions;
 }) {
   const resolved = request.state === "resolved";
   return (
@@ -110,7 +96,6 @@ function RequestBlock({
         resolved={resolved}
         busy={busy}
         onRespond={onRespond}
-        fixtureActions={fixtureActions}
       />
     </section>
   );
@@ -121,13 +106,11 @@ function RequestBody({
   resolved,
   busy,
   onRespond,
-  fixtureActions,
 }: {
   request: WizardRequest;
   resolved: boolean;
   busy: boolean;
   onRespond: Emit;
-  fixtureActions: FixtureActions;
 }) {
   switch (request.type) {
     case "chat":
@@ -152,7 +135,6 @@ function RequestBody({
           resolved={resolved}
           busy={busy}
           onRespond={onRespond}
-          fixtureActions={fixtureActions}
         />
       );
   }
@@ -165,15 +147,14 @@ function ChoiceBlock({
   resolved,
   busy,
   onRespond,
-  fixtureActions,
 }: {
   request: ChoiceRequest;
   resolved: boolean;
   busy: boolean;
   onRespond: Emit;
-  fixtureActions: FixtureActions;
 }) {
-  const send = (keys: string[]) => onRespond({ type: "choice", selected: keys });
+  const send = (keys: string[]) =>
+    onRespond({ type: "choice", selected: keys });
   const sendField = (key: string, value: CardFieldValue) =>
     onRespond({ type: "choice", values: { [key]: value } });
   const disabled = resolved || busy;
@@ -214,7 +195,6 @@ function ChoiceBlock({
                   disabled={disabled}
                   onPick={(k) => send([k])}
                   onFieldChange={sendField}
-                  fixtureActions={fixtureActions}
                 />
               </div>
             );
@@ -248,7 +228,7 @@ function ChoiceBlock({
 }
 
 // A screen-level button. `selected` on a screen option is rare, but honoured: a checkbox
-// list at prioritise sends its own action per row and Continue commits.
+// list on the measurement review screen sends its own action per row and Continue commits.
 function ActionButton({
   option,
   disabled,
@@ -277,19 +257,17 @@ function CardBlock({
   disabled,
   onPick,
   onFieldChange,
-  fixtureActions,
 }: {
   card: AnyCard;
   disabled: boolean;
   onPick: (key: string) => void;
   onFieldChange: (key: string, value: CardFieldValue) => void;
-  fixtureActions: FixtureActions;
 }) {
   // Three cases, decided by the package, not the door:
   //   • `selected == null` — no box at all. The behaviours review sends this: it lists the drafted
   //     behaviours and only asks for a nod to continue, so a checkbox would imply a decision the
-  //     user has not been asked to make yet. The ask comes one screen later, on prioritise.
-  //   • `selected` set AND a real `tick` option present — an interactive checkbox. Only prioritise
+  //     user has not been asked to make yet. The measurement choice is part of this screen.
+  //   • `selected` set AND a real `tick` option present — an interactive checkbox. Only the
   //     composes that option (with a patch). We drive the box from the option and send *its* key,
   //     so the tick matches an option server-side and the recomposed screen reflects the flip.
   //   • `selected` set but no `tick` option — a read-only marker. Criteria sends this to show which
@@ -305,60 +283,59 @@ function CardBlock({
   // The section heading is drawn by the caller, once per group; a card renders only its panel.
   return (
     <Panel className={cn("p-3", card.blocking && "border-destructive/60")}>
-        <div className="flex items-start gap-3">
-          {showBox && (
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 accent-[hsl(var(--accent))]"
-              checked={checked}
-              // Read-only when the screen offers no toggle for this card: the box then reports
-              // state rather than accepting a click that would post a key matching no option.
-              disabled={disabled || !tick}
-              onChange={tick ? () => onPick(optionKey(tick.id)) : undefined}
-              aria-label={card.title}
-            />
-          )}
-          <div className="flex flex-1 flex-col gap-2">
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-medium text-foreground">{card.title}</span>
-              {/* The id keeps its own gutter: it never shrinks and never wraps, so a short
+      <div className="flex items-start gap-3">
+        {showBox && (
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 accent-[hsl(var(--accent))]"
+            checked={checked}
+            // Read-only when the screen offers no toggle for this card: the box then reports
+            // state rather than accepting a click that would post a key matching no option.
+            disabled={disabled || !tick}
+            onChange={tick ? () => onPick(optionKey(tick.id)) : undefined}
+            aria-label={card.title}
+          />
+        )}
+        <div className="flex flex-1 flex-col gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-medium text-foreground">{card.title}</span>
+            {/* The id keeps its own gutter: it never shrinks and never wraps, so a short
                   identifier like EB-1 or T-1 reads on one line however long the title runs. */}
-              <Mono className="shrink-0 whitespace-nowrap">{card.id}</Mono>
-            </div>
-
-            {card.components.map((component, i) => (
-              <ComponentBlock
-                key={i}
-                component={component}
-                trialCount={"trials" in card ? card.trials : undefined}
-                disabled={disabled}
-                onPick={onPick}
-                onFieldChange={onFieldChange}
-                fixtureActions={fixtureActions}
-              />
-            ))}
-
-            {card.note && (
-              <p className="text-sm text-muted-foreground">{card.note}</p>
-            )}
-
-            {/* Actions scoped to this card — "chat", "add a scenario", "remove". The tick, if any, is
-                the checkbox above, so it is filtered out here. */}
-            {actions.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {actions.map((o) => (
-                  <ActionButton
-                    key={optionKey(o.id)}
-                    option={o}
-                    disabled={disabled}
-                    onPick={onPick}
-                  />
-                ))}
-              </div>
-            )}
+            <Mono className="shrink-0 whitespace-nowrap">{card.id}</Mono>
           </div>
+
+          {card.components.map((component, i) => (
+            <ComponentBlock
+              key={i}
+              component={component}
+              trialCount={"trials" in card ? card.trials : undefined}
+              disabled={disabled}
+              onPick={onPick}
+              onFieldChange={onFieldChange}
+            />
+          ))}
+
+          {card.note && (
+            <p className="text-sm text-muted-foreground">{card.note}</p>
+          )}
+
+          {/* Actions scoped to this card — "chat", "add a scenario", "remove". The tick, if any, is
+                the checkbox above, so it is filtered out here. */}
+          {actions.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {actions.map((o) => (
+                <ActionButton
+                  key={optionKey(o.id)}
+                  option={o}
+                  disabled={disabled}
+                  onPick={onPick}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      </Panel>
+      </div>
+    </Panel>
   );
 }
 
@@ -368,14 +345,12 @@ function ComponentBlock({
   disabled,
   onPick,
   onFieldChange,
-  fixtureActions,
 }: {
   component: CardComponent;
   trialCount?: number;
   disabled: boolean;
   onPick: (key: string) => void;
   onFieldChange: (key: string, value: CardFieldValue) => void;
-  fixtureActions: FixtureActions;
 }) {
   // The value alone, unlabelled. `FormRow` decides where the label goes: a labelled component
   // reads as a form field (label in a left column, value at the right), an unlabelled one runs
@@ -423,7 +398,9 @@ function ComponentBlock({
             <NumberCardField
               component={component}
               disabled={disabled}
-              onCommit={(value) => onFieldChange(optionKey(component.id), value)}
+              onCommit={(value) =>
+                onFieldChange(optionKey(component.id), value)
+              }
             />
             <span className="shrink-0 border-l border-border pl-3 text-xs text-muted-foreground">
               {formatTrials(trialCount)}
@@ -433,12 +410,9 @@ function ComponentBlock({
 
       case "upload":
         return (
-          <FixtureInput
-            value={component.value}
-            disabled={disabled}
-            onChange={(value) => onFieldChange(optionKey(component.id), value)}
-            onUpload={fixtureActions.onUpload}
-          />
+          <p className="text-sm text-muted-foreground">
+            File attachments are not available in this web app.
+          </p>
         );
 
       case "divider":
@@ -678,7 +652,6 @@ export function Composer({
   placeholder,
   leadingIcon = false,
   bare = false,
-  sourceControl,
 }: {
   request: WizardRequest | undefined;
   busy: boolean;
@@ -695,13 +668,11 @@ export function Composer({
   // opening screen already lays the composer inside a sized column alongside the entry cards, so
   // it should fill that column and match their width rather than re-centre itself narrower.
   bare?: boolean;
-  // Only the opening screen supplies this slot. It adds the source-menu control and changes the
-  // opening composer to a textarea-over-foot-row layout; the in-conversation composer omits it.
-  sourceControl?: ReactNode;
 }) {
   const [text, setText] = useState("");
   const enabled = (alwaysEnabled || acceptsChat(request)) && !busy;
-  const hint = placeholder ?? (enabled ? "Type a reply" : composerHint(request));
+  const hint =
+    placeholder ?? (enabled ? "Type a reply" : composerHint(request));
 
   const submit = () => {
     const trimmed = text.trim();
@@ -739,7 +710,7 @@ export function Composer({
       onClick={submit}
       className={cn(
         "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-        !sourceControl && "mb-0.5",
+        "mb-0.5",
         "transition-colors",
         canSend
           ? "bg-primary text-primary-foreground hover:opacity-90"
@@ -792,24 +763,7 @@ export function Composer({
     />
   );
 
-  const pill = sourceControl ? (
-    <div
-      className={cn(
-        "flex flex-col gap-1 rounded-2xl border border-input bg-card p-2",
-        "transition-colors focus-within:border-accent",
-        !enabled && "opacity-70",
-      )}
-    >
-      <div className="flex items-start gap-2 pl-2">
-        {leading}
-        {textarea}
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <div className="relative">{sourceControl}</div>
-        {sendButton}
-      </div>
-    </div>
-  ) : (
+  const pill = (
     <div
       className={cn(
         "flex items-end gap-2 rounded-2xl border border-input bg-card p-2 pl-4",
@@ -828,7 +782,7 @@ export function Composer({
   // the same width as the conversation above it.
   if (bare) return pill;
   return (
-    <div className="pb-6 pt-2">
+    <div className="w-full pb-6 pt-2">
       <div className="mx-auto w-4/5">{pill}</div>
     </div>
   );

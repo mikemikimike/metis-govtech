@@ -103,3 +103,32 @@ _No v1 changes yet._
   can serve any operation. Typed wizard results map to 200, 400, 422, 503, and 500, all in one error
   shape. Runs as
   the `metis-api` executable and ships with a `Dockerfile` built from the repository root.
+- **Metric catalogue route.** `GET /api/v1/metrics` returns installed metric summaries through the
+  public wizard facade without user state or filesystem writes.
+- **Wizard client configuration route.** `GET /api/v1/wizard/config` returns the package-owned
+  Interview busy message, so HTTP clients do not copy wizard presentation text.
+- **Shared model environment names.** The API reads `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and
+  `INTERVIEW_MODEL`, matching the wizard and engine provider configuration, and can load one root
+  `.env` for local development.
+
+### metis-web
+
+#### Added
+
+- **Standalone browser client.** The wizard UI now lives in `apps/web`, uses generated OpenAPI
+  types and the stateless `apps/api` lifecycle routes, and stores local Interviews and their display
+  transcript in IndexedDB. The old wizard-owned web project and Python static output are retired.
+- **Metric details.** The Profile pane can request the optional metric catalogue once per page load
+  through `GET /api/v1/metrics`; the rest of the Interview remains usable when that route fails.
+
+#### Changed
+
+- **Clear completion and output actions.** The conversation composer now fills its column. Early
+  finish and download use one action in the Profile footer. A normal final Continue stores the
+  completed Interview and reports that the specification is ready without an automatic compile or
+  download. Review actions are disabled when their required Profile content is incomplete.
+
+#### Deferred
+
+- Direct authoring, fixture persistence, ZIP packaging, source analysis, hosted state,
+  authentication, and evaluation execution remain outside this change.

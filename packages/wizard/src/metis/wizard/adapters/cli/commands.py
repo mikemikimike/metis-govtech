@@ -9,6 +9,7 @@ saved state and answers its pending screen. The corridor both run is the same lo
 from __future__ import annotations
 
 import inspect
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
@@ -147,6 +148,11 @@ def _drive(
                 matcher=matcher,
             )
         if isinstance(result, InterviewFailure):
+            # A retryable failure — usually the model was unreachable — leaves the state
+            # unchanged, so resending the same request is safe. The door acts on the flag the
+            # contract exposes; a non-retryable failure always stops here.
+            if result.retryable and _retry_confirmed(result):
+                continue
             _fail(result)
 
         state = result.state
@@ -164,6 +170,17 @@ def _drive(
         request = InterviewTurnRequest(
             state=state, request_id=pending.request_id or "", response=response
         )
+
+
+def _retry_confirmed(failure: InterviewFailure) -> bool:
+    """After a retryable failure, ask whether to run the same operation again.
+
+    The failure changed nothing, so the same request is safe to resend. Only a terminal can
+    answer, so a non-interactive run does not retry and falls through to the normal error report.
+    """
+    if not sys.stdin.isatty():
+        return False
+    return typer.confirm(f"{failure.message} Try again?", default=True)
 
 
 def _fail(failure: InterviewFailure) -> NoReturn:

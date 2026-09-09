@@ -101,7 +101,10 @@ export function Tooltip({
   const showBelowTrigger = () => {
     const bounds = triggerRef.current?.getBoundingClientRect();
     if (!bounds) return;
-    setPosition({ left: bounds.left + bounds.width / 2, top: bounds.bottom + 14 });
+    setPosition({
+      left: bounds.left + bounds.width / 2,
+      top: bounds.bottom + 14,
+    });
     setVisible(true);
   };
 
@@ -179,7 +182,12 @@ export function Chevron({
   dir?: "up" | "down" | "left" | "right";
   className?: string;
 }) {
-  const rotation = { right: "", down: "rotate-90", left: "rotate-180", up: "-rotate-90" }[dir];
+  const rotation = {
+    right: "",
+    down: "rotate-90",
+    left: "rotate-180",
+    up: "-rotate-90",
+  }[dir];
   return (
     <ChevronRight
       size={14}

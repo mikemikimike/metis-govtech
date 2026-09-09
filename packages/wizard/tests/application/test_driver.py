@@ -10,6 +10,7 @@ from metis.wizard.adapters.llm.gateway import ModelOutputError
 from metis.wizard.application import Turn
 from metis.wizard.application.config import clarify_turn_cap, opening_question
 from metis.wizard.application.driver import DriverState, StepDriver
+from metis.wizard.application.readiness import scenario_readiness
 from metis.wizard.contracts import (
     ChatRequest,
     ChatResponse,
@@ -751,6 +752,39 @@ def test_the_behaviour_screen_gates_continue_on_at_least_one_measured() -> None:
 
     assert not request.warnings
     assert next(o for o in request.options if o.id.action == "continue").enabled
+
+
+def test_each_review_gates_its_continue_action_on_complete_content() -> None:
+    from metis.wizard.application.screens import personas_screen
+
+    profile = research_assistant()
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+
+    profile.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
+    criteria = driver.compose(DriverState(profile=profile, step=InterviewStep.CRITERIA))
+    assert not next(
+        option for option in criteria.options if option.id.action == "continue"
+    ).enabled
+
+    profile = research_assistant()
+    profile.personas = []
+    personas = personas_screen(profile, "Current personas")
+    assert not next(
+        option for option in personas.options if option.id.action == "accept"
+    ).enabled
+
+
+def test_the_final_continue_uses_full_profile_readiness() -> None:
+    profile = research_assistant()
+    profile.product.name = ""
+
+    request = _scenarios_screen(profile)
+
+    assert not scenario_readiness(profile)
+    assert any("name and description" in warning.text for warning in request.warnings)
+    assert not next(
+        option for option in request.options if option.id.action == "continue"
+    ).enabled
 
 
 # ── going back ─────────────────────────────────────────────────────────────
