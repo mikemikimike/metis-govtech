@@ -126,6 +126,12 @@ metis wizard init "<description>" --restart
 Without `--restart`, `init` refuses to overwrite an interview in progress and points you to
 `resume`.
 
+### Finish
+
+The interview ends when you answer the review screens for the behaviours, personas, scenarios, and
+criteria. The wizard checks that the specification is runnable, then writes the output files (see
+below).
+
 ---
 
 ## Outputs

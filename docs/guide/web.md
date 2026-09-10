@@ -46,10 +46,14 @@ The web client does not provide these features yet:
 - authentication and multi-user access;
 - evaluation execution.
 
-The completed Interview downloads one `experiment.zip` package. It contains `profile.yaml`,
-`experiment.yaml`, and a `fixtures/` directory with the validated fixture files selected during the
-Interview. The API packages these bytes for one request and retains no fixture files. Evaluation
-execution is not a web control in this change.
+When you finish the Interview, the browser client ends and packages it through two API operations.
+It first sends the Interview state to `POST /api/v1/wizard/interview/end`, which completes and
+validates the specification. It then sends the result to `POST /api/v1/wizard/package`, which
+returns one `experiment.zip` package to download. For an Interview that is already complete, the
+**Download specification** button packages it through `/package` alone. The ZIP contains
+`profile.yaml`, `experiment.yaml`, and a `fixtures/` directory with the validated fixture files
+selected during the Interview. The API packages these bytes for one request and retains no fixture
+files. Evaluation execution is not a web control in this change.
 
 These are deferred changes. They must use new API contracts when they are added; do not restore the
 retired wizard-owned web server or Python static output.
