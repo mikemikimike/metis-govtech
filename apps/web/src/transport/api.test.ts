@@ -70,7 +70,10 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
       "/api/v1/wizard/package",
     ],
   );
-  assert.deepEqual(calls[0]?.body, { description: "A support assistant" });
+  assert.deepEqual(calls[0]?.body, {
+    description: "A support assistant",
+    perspective: "end_user",
+  });
   assert.deepEqual(calls[1]?.body, {
     state,
     request_id: "request-1",
@@ -78,6 +81,24 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
   });
   assert.deepEqual(calls[2]?.body, { state });
   assert.deepEqual(calls[3]?.body, state.profile);
+});
+
+test("sends the selected perspective when an Interview begins", async () => {
+  let body: unknown;
+  globalThis.fetch = async (_input, init) => {
+    body = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify(success), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  await api.start("A support assistant", "security");
+
+  assert.deepEqual(body, {
+    description: "A support assistant",
+    perspective: "security",
+  });
 });
 
 test("packages the Profile and fixtures as multipart and returns binary content", async () => {

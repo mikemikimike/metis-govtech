@@ -35,8 +35,10 @@ Use `make web-check` for non-mutating web checks. Use `make web-build` when you 
 Vite output. The web requests metric summaries only after a Profile contains a Criterion, and a
 failed metric request does not block the Interview.
 
-The web gets its busy message from `GET /api/v1/wizard/config`. The wizard package owns this text
-in `packages/wizard/src/metis/wizard/config.yaml` with the other Interview status messages.
+The web gets its opening question, busy message, and perspective labels and questions from
+`GET /api/v1/wizard/config`. The wizard package owns these values in
+`packages/wizard/src/metis/wizard/config.yaml`. The perspective prompt content is separate,
+editable files in `packages/wizard/src/metis/wizard/application/perspectives/`.
 
 The web client does not provide these features yet:
 

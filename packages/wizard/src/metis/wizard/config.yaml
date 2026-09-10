@@ -3,6 +3,20 @@ settings:
 
 opening_question: "Tell me about your product — what it does and who it's for."
 
+perspectives:
+  - id: end_user
+    label: "End user"
+    question: "What should feel useful, clear, and safe for the people who use this product?"
+  - id: engineer
+    label: "Engineer"
+    question: "What should work reliably across the product's workflows, boundaries, and failures?"
+  - id: compliance
+    label: "Compliance"
+    question: "What evidence, controls, and limits must the product meet for its intended use?"
+  - id: security
+    label: "Security"
+    question: "How should the product protect data, permissions, and users from misuse?"
+
 statuses:
   working: "Working on your Interview…"
   clarify: "Understanding your agent…"

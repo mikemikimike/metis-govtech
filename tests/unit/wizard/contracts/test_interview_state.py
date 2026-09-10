@@ -13,8 +13,10 @@ from metis.wizard.contracts import (
     ChoiceRequest,
     FormField,
     FormRequest,
+    InterviewContext,
     Option,
     OptionId,
+    Perspective,
     Turn,
 )
 from metis.wizard.contracts.interview_state import InterviewState
@@ -66,6 +68,7 @@ def test_the_state_carries_only_client_held_control_data() -> None:
     """
     assert set(InterviewState.model_fields) == {
         "profile",
+        "context",
         "behaviours_confirmed",
         "confirmed",
         "history",
@@ -73,6 +76,24 @@ def test_the_state_carries_only_client_held_control_data() -> None:
         "issued_ids",
         "pending",
     }
+
+
+def test_context_defaults_to_the_end_user_perspective() -> None:
+    state = InterviewState(profile=research_assistant())
+
+    assert state.context == InterviewContext(perspective=Perspective.END_USER)
+
+
+def test_context_round_trips_without_entering_the_profile() -> None:
+    state = InterviewState(
+        profile=research_assistant(),
+        context=InterviewContext(perspective=Perspective.SECURITY),
+    )
+
+    loaded = _roundtrip(state)
+
+    assert loaded.context.perspective is Perspective.SECURITY
+    assert "perspective" not in loaded.profile.model_dump()
 
 
 def test_state_rejects_unknown_fields() -> None:

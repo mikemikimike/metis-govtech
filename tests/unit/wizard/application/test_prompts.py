@@ -13,7 +13,7 @@ import yaml
 from metis.wizard.application import prompts
 from metis.wizard.application.config import opening_question
 from metis.wizard.contracts import Product, ProductProfile
-from metis.wizard.contracts.interview_state import Turn
+from metis.wizard.contracts.interview_state import InterviewContext, Perspective, Turn
 from metis.wizard.domain.applier import apply
 from metis.wizard.domain.patch import Patch, PatchOp
 from tests.fixtures.wizard.profiles import orca_handover, research_assistant
@@ -276,6 +276,74 @@ def test_clarify_selects_distinct_product_and_machinery_templates(
     assert product.name == machinery.name == "clarify"
     assert product.user.endswith("PRODUCT PHASE MARKER")
     assert machinery.user.endswith("MACHINERY PHASE MARKER")
+
+
+def test_clarify_and_behaviours_use_only_the_selected_perspective_content() -> None:
+    end_user = InterviewContext(perspective=Perspective.END_USER)
+    security = InterviewContext(perspective=Perspective.SECURITY)
+    end_user_prompts = (
+        prompts.clarify(research_assistant(), [], context=end_user),
+        prompts.behaviours(research_assistant(), [], context=end_user),
+    )
+    security_prompts = (
+        prompts.clarify(research_assistant(), [], context=security),
+        prompts.behaviours(research_assistant(), [], context=security),
+    )
+
+    for prompt in end_user_prompts:
+        assert "people who use the product" in prompt.user
+        assert "instruction-data separation" not in prompt.user
+    for prompt in security_prompts:
+        assert "instruction-data separation" in prompt.user
+        assert "people who use the product" not in prompt.user
+    assert end_user_prompts[0].user != security_prompts[0].user
+
+
+def test_later_prompts_do_not_receive_perspective_content() -> None:
+    prompt = prompts.criteria(research_assistant())
+
+    assert "instruction-data separation" not in prompt.user
+    assert "$perspective" not in prompt.user
+
+
+def test_a_perspective_edit_affects_the_next_prompt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source = Path(
+        "packages/wizard/src/metis/wizard/application/perspectives/security.md"
+    )
+    perspective_dir = tmp_path / prompts.PERSPECTIVES_DIR
+    perspective_dir.mkdir()
+    perspective_path = perspective_dir / "security.md"
+    perspective_path.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    (tmp_path / prompts.PRIMER_FILE).write_text("primer", encoding="utf-8")
+    for name in ("end_user", "engineer", "compliance"):
+        (perspective_dir / f"{name}.md").write_text(
+            "other perspective", encoding="utf-8"
+        )
+    monkeypatch.setattr(
+        prompts.resources,
+        "files",
+        lambda package: (
+            tmp_path
+            if package == "metis.wizard.application"
+            else Path("packages/wizard/src/metis/wizard")
+        ),
+    )
+    first = prompts.clarify(
+        research_assistant(),
+        [],
+        context=InterviewContext(perspective=Perspective.SECURITY),
+    )
+    perspective_path.write_text("EDITED SECURITY LENS", encoding="utf-8")
+    second = prompts.clarify(
+        research_assistant(),
+        [],
+        context=InterviewContext(perspective=Perspective.SECURITY),
+    )
+
+    assert "EDITED SECURITY LENS" not in first.user
+    assert "EDITED SECURITY LENS" in second.user
 
 
 @pytest.mark.parametrize("phase", ["product", "machinery"])

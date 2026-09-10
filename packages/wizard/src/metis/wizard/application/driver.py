@@ -171,7 +171,12 @@ class StepDriver:
                     if not (profile.product.description and profile.product.users)
                     else "machinery"
                 )
-                result = self.interviewer.clarify(profile, state.history, phase)
+                result = self.interviewer.clarify(
+                    profile,
+                    state.history,
+                    phase,
+                    context=state.context,
+                )
                 self._run(
                     state,
                     result,
@@ -186,7 +191,11 @@ class StepDriver:
         if step is InterviewStep.BEHAVIOURS:
             if not profile.tasks:
                 self._try(
-                    lambda: self.interviewer.draft_behaviours(profile, state.history),
+                    lambda: self.interviewer.draft_behaviours(
+                        profile,
+                        state.history,
+                        context=state.context,
+                    ),
                     state,
                 )
             return self._attach(

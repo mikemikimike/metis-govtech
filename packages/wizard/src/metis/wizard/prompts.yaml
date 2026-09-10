@@ -62,6 +62,9 @@ model_calls:
     The conversation so far:
     $history
 
+    Answer from this perspective:
+    $perspective
+
     Think like a product manager taking over this product from another busy product manager. Build
     a broad handover in a few questions. Start wide: ask ONE open question that helps explain the
     product's overall purpose, main capabilities and user workflows. Use the user's own words, but
@@ -110,6 +113,9 @@ model_calls:
 
     The conversation so far:
     $history
+
+    Answer from this perspective:
+    $perspective
 
     Think like a product manager taking over this product from another busy product manager. The
     product is established, but the handover is not. Start wide and continue building a broad
@@ -160,6 +166,9 @@ model_calls:
 
     The interview:
     $history
+
+    Frame the questions and the behaviours through this perspective:
+    $perspective
 
     Then draft tasks, each with 2–5 behaviours. A task is a group of related behaviours — a job the
     product does, named as a heading; it is not a situation you run and has no persona or steps. A

@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PanelLeft, PanelRight } from "lucide-react";
+import {
+  Code2,
+  ClipboardCheck,
+  PanelLeft,
+  PanelRight,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type {
   InterviewSummary,
   LocalInterviewRecord,
+  Perspective,
+  PerspectiveDefinition,
   UserResponse,
 } from "./transport/api";
 import { api, TransportError, toSummary } from "./transport/api";
@@ -32,6 +42,14 @@ const DOCUMENT_WIDTH_MIN = 24;
 const DOCUMENT_WIDTH_MAX = 60;
 const SELECTED_INTERVIEW_KEY = "metis-web-selected-interview";
 const repository = new InterviewRepository();
+type WizardConfig = Awaited<ReturnType<typeof api.config>>;
+
+const PERSPECTIVE_ICONS: Record<Perspective, LucideIcon> = {
+  end_user: UserRound,
+  engineer: Code2,
+  compliance: ClipboardCheck,
+  security: ShieldCheck,
+};
 
 type RetryIntent =
   | {
@@ -51,6 +69,9 @@ export function App() {
   const [record, setRecord] = useState<LocalInterviewRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [workingStatus, setWorkingStatus] = useState("Working…");
+  const [wizardConfig, setWizardConfig] = useState<WizardConfig | null>(null);
+  const [selectedPerspective, setSelectedPerspective] =
+    useState<Perspective>("end_user");
   const [error, setError] = useState<string | null>(null);
   const [retryIntent, setRetryIntent] = useState<RetryIntent | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -88,7 +109,10 @@ export function App() {
 
   useEffect(() => {
     void api.config().then(
-      (config) => setWorkingStatus(config.working_status),
+      (config) => {
+        setWizardConfig(config);
+        setWorkingStatus(config.working_status);
+      },
       () => undefined,
     );
   }, []);
@@ -159,13 +183,16 @@ export function App() {
   }, []);
 
   const beginWithMessage = useCallback(
-    async (description: string) => {
+    async (
+      description: string,
+      perspective: Perspective = selectedPerspective,
+    ) => {
       if (busy) return;
       setBusy(true);
       setError(null);
       setRetryIntent(null);
       try {
-        const result = await api.start(description);
+        const result = await api.start(description, perspective);
         const next = emptyRecord(
           crypto.randomUUID(),
           result.state,
@@ -182,7 +209,7 @@ export function App() {
         setBusy(false);
       }
     },
-    [busy, refreshList, showError],
+    [busy, refreshList, selectedPerspective, showError],
   );
 
   const saveResult = useCallback(
@@ -384,22 +411,15 @@ export function App() {
           />
         )}
         {view === null ? (
-          <div className="flex flex-1 flex-col items-center justify-center px-6">
-            <div className="flex w-full max-w-3xl flex-col gap-8">
-              <h1 className="text-center text-2xl font-semibold text-foreground">
-                Describe the product you want to evaluate
-              </h1>
-              <Composer
-                request={undefined}
-                busy={busy}
-                alwaysEnabled
-                leadingIcon
-                bare
-                placeholder="Tell METIS what this product does…"
-                onSend={beginWithMessage}
-              />
-            </div>
-          </div>
+          <OpeningScreen
+            config={wizardConfig}
+            busy={busy}
+            perspective={selectedPerspective}
+            onPerspective={setSelectedPerspective}
+            onBegin={(description, perspective) =>
+              void beginWithMessage(description, perspective)
+            }
+          />
         ) : (
           <>
             <div
@@ -465,6 +485,111 @@ export function App() {
           />
         ))}
     </div>
+  );
+}
+
+export function OpeningScreen({
+  config,
+  busy,
+  perspective,
+  onPerspective,
+  onBegin,
+}: {
+  config: WizardConfig | null;
+  busy: boolean;
+  perspective: Perspective;
+  onPerspective: (perspective: Perspective) => void;
+  onBegin: (description: string, perspective: Perspective) => void;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-6">
+      <div className="flex w-full max-w-2xl flex-col gap-6">
+        <h1 className="text-center text-2xl font-semibold text-foreground">
+          {config?.opening_question}
+        </h1>
+        <div className="flex flex-col gap-3">
+          <Composer
+            request={undefined}
+            busy={busy}
+            alwaysEnabled
+            leadingIcon
+            bare
+            placeholder={config?.opening_question}
+            onSend={(description) => onBegin(description, perspective)}
+          />
+          <PerspectivePicker
+            perspectives={config?.perspectives ?? []}
+            selected={perspective}
+            onSelect={onPerspective}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PerspectivePicker({
+  perspectives,
+  selected,
+  onSelect,
+}: {
+  perspectives: PerspectiveDefinition[];
+  selected: Perspective;
+  onSelect: (perspective: Perspective) => void;
+}) {
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-2">
+      <legend className="text-sm text-muted-foreground">
+        Who is this evaluation for?
+      </legend>
+      <div
+        role="radiogroup"
+        aria-label="Who is this evaluation for?"
+        className="flex flex-col gap-2"
+      >
+        {perspectives.map((perspective) => {
+          const Icon = PERSPECTIVE_ICONS[perspective.id];
+          const active = perspective.id === selected;
+          return (
+            <button
+              key={perspective.id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              aria-label={`${perspective.label}: ${perspective.question}`}
+              onClick={() => onSelect(perspective.id)}
+              className={cn(
+                "group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-4 py-3 text-left",
+                "transition-colors duration-200",
+                active
+                  ? "border-accent bg-accent/10 text-foreground"
+                  : "border-border bg-card text-card-foreground hover:border-accent/40 hover:bg-accent/10",
+              )}
+            >
+              <Icon
+                size={18}
+                strokeWidth={1.75}
+                aria-hidden
+                className={cn(
+                  "shrink-0 transition-colors duration-200",
+                  active
+                    ? "text-accent"
+                    : "text-muted-foreground group-hover:text-accent group-focus-visible:text-accent",
+                )}
+              />
+              <span className="relative block h-5 min-w-0 flex-1">
+                <span className="absolute inset-0 flex items-center truncate text-sm font-medium leading-5 transition-all duration-200 group-hover:-translate-y-full group-hover:opacity-0 group-focus-visible:-translate-y-full group-focus-visible:opacity-0">
+                  {perspective.label}
+                </span>
+                <span className="absolute inset-0 flex translate-y-full items-center truncate text-xs leading-5 text-muted-foreground opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
+                  {perspective.question}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

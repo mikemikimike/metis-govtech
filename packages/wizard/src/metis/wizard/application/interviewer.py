@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, Protocol, TypeAlias
 
 if TYPE_CHECKING:
-    from metis.wizard.contracts.interview_state import Turn
+    from metis.wizard.contracts.interview_state import InterviewContext, Turn
     from metis.wizard.contracts.output import ClarifyResult, StepResult
     from metis.wizard.domain.profile import ProductProfile
 
@@ -36,12 +36,16 @@ class Interviewer(Protocol):
         profile: ProductProfile,
         history: list[Turn],
         phase: ClarifyPhase = "product",
+        context: InterviewContext | None = None,
     ) -> ClarifyResult:
         """One open question, or done. The only step the model may end on its own."""
         ...
 
     def draft_behaviours(
-        self, profile: ProductProfile, history: list[Turn]
+        self,
+        profile: ProductProfile,
+        history: list[Turn],
+        context: InterviewContext | None = None,
     ) -> StepResult:
         """Tasks and behaviours. No criteria yet."""
         ...

@@ -41,6 +41,10 @@ _No v1 changes yet._
 
 #### Added
 
+- Interview opening now offers End user, Engineer, Compliance, and Security perspectives. The
+  selected perspective travels in client-held Interview context and shapes only Clarify and
+  Behaviours prompts; labels and questions are package configuration.
+
 - **JSON schema for `profile.yaml`.** `packages/wizard/schemas/profile.schema.json` is generated
   from the `ProductProfile` model and CI-guarded by `make check-schema`, giving schema-aware
   editors autocomplete and validation for hand-authored profiles. `profile.yaml` now carries a
@@ -122,6 +126,9 @@ _No v1 changes yet._
 
 #### Changed
 
+- The wizard configuration payload now includes the opening question and the four perspective
+  definitions. The Interview start request accepts an optional perspective and records it in the
+  returned client-held context.
 - **Moved the API tests into the root `tests/` tree.** Door tests now live under `tests/unit/api/`
   and end-to-end tests under `tests/integration/api/`, sharing the wizard's offline fixtures from
   `tests/fixtures/wizard/` directly instead of through a `sys.path` insertion. Test behaviour is
@@ -140,6 +147,8 @@ _No v1 changes yet._
 
 #### Changed
 
+- The opening screen now reads its question and perspective choices from the API configuration,
+  asks who the evaluation is for with hover help, and sends the selected perspective on start.
 - **Clear completion and output actions.** The conversation composer now fills its column. Early
   finish and download use one action in the Profile footer. A normal final Continue stores the
   completed Interview and reports that the specification is ready without an automatic compile or

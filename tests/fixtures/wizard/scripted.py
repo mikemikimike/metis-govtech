@@ -27,7 +27,7 @@ from metis.wizard.contracts import (
 from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
-    from metis.wizard.contracts import AnyRequest, InterviewState
+    from metis.wizard.contracts import AnyRequest, InterviewContext, InterviewState
 
 
 @dataclass
@@ -42,6 +42,7 @@ class ScriptedInterviewer:
         profile: ProductProfile,
         history: list[Turn],
         phase: ClarifyPhase = "product",
+        context: InterviewContext | None = None,
     ) -> ClarifyResult:
         self.calls.append("clarify")
         asked = sum(1 for t in history if t.role == "assistant")
@@ -80,7 +81,10 @@ class ScriptedInterviewer:
         )
 
     def draft_behaviours(
-        self, profile: ProductProfile, history: list[Turn]
+        self,
+        profile: ProductProfile,
+        history: list[Turn],
+        context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("draft_behaviours")
         return StepResult(

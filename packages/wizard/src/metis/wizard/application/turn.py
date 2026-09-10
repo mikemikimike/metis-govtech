@@ -48,7 +48,12 @@ from metis.wizard.contracts.conversation import (
     editable_fields_of,
     options_of,
 )
-from metis.wizard.contracts.interview_state import HISTORY_LIMIT, InterviewState, Turn
+from metis.wizard.contracts.interview_state import (
+    HISTORY_LIMIT,
+    InterviewContext,
+    InterviewState,
+    Turn,
+)
 from metis.wizard.contracts.turn import (
     CompileResult,
     InterviewEndRequest,
@@ -239,6 +244,7 @@ def _start(
     working = _lift(
         InterviewState(
             profile=profile,
+            context=InterviewContext(perspective=request.perspective),
             history=[Turn(role="user", text=request.description)],
             issued_ids=collect_profile_ids(profile),
         ),

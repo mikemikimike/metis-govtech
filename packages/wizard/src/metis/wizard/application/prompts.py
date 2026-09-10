@@ -17,6 +17,7 @@ import yaml
 
 from metis.wizard.application.config import clarify_turn_cap, opening_question
 from metis.wizard.application.interviewer import ClarifyPhase
+from metis.wizard.contracts.interview_state import InterviewContext, Perspective
 
 if TYPE_CHECKING:
     from metis.wizard.contracts.interview_state import Turn
@@ -24,6 +25,7 @@ if TYPE_CHECKING:
 
 PROMPTS_FILE = "prompts.yaml"
 PRIMER_FILE = "agentic-primer.md"
+PERSPECTIVES_DIR = "perspectives"
 
 ModelCall: TypeAlias = Literal[
     "clarify",
@@ -40,6 +42,7 @@ _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
         {
             "profile",
             "history",
+            "perspective",
             "question_number",
             "question_cap",
         }
@@ -48,11 +51,12 @@ _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
         {
             "profile",
             "history",
+            "perspective",
             "question_number",
             "question_cap",
         }
     ),
-    "behaviours": frozenset({"profile", "history"}),
+    "behaviours": frozenset({"profile", "history", "perspective"}),
     "criteria": frozenset({"profile"}),
     "personas": frozenset({"profile"}),
     "scenarios": frozenset({"profile"}),
@@ -197,6 +201,32 @@ def _transcript(history: list[Turn]) -> str:
     return "\n".join(f"{t.role}: {t.text}" for t in history)
 
 
+def _perspective(context: InterviewContext | None) -> str:
+    """Read all supported perspective files and return the selected one, without caching."""
+    selected = context.perspective if context is not None else Perspective.END_USER
+    try:
+        directory = resources.files("metis.wizard.application").joinpath(
+            PERSPECTIVES_DIR
+        )
+    except (FileNotFoundError, ModuleNotFoundError) as exc:
+        raise PromptCatalogError(f"{PERSPECTIVES_DIR} is missing.") from exc
+    content: dict[Perspective, str] = {}
+    for perspective in Perspective:
+        path = directory.joinpath(f"{perspective.value}.md")
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (FileNotFoundError, ModuleNotFoundError) as exc:
+            raise PromptCatalogError(
+                f"{PERSPECTIVES_DIR}/{perspective.value}.md is missing."
+            ) from exc
+        if not text.strip():
+            raise PromptCatalogError(
+                f"{PERSPECTIVES_DIR}/{perspective.value}.md is empty."
+            )
+        content[perspective] = text.strip()
+    return f"{selected.value}\n{content[selected]}"
+
+
 def _clarify_position(history: list[Turn]) -> tuple[int, int]:
     """Return the next model question's one-based position and the package cap."""
     asked = sum(1 for turn in history if turn.role == "assistant")
@@ -233,6 +263,7 @@ def clarify(
     profile: ProductProfile,
     history: list[Turn],
     phase: ClarifyPhase = "product",
+    context: InterviewContext | None = None,
 ) -> ModelPrompt:
     template_name = "clarify_product" if phase == "product" else "clarify_machinery"
     question_number, question_cap = _clarify_position(history)
@@ -241,6 +272,7 @@ def clarify(
         {
             "profile": _profile(profile),
             "history": _transcript(history),
+            "perspective": _perspective(context),
             "question_number": str(question_number),
             "question_cap": str(question_cap),
         },
@@ -248,9 +280,18 @@ def clarify(
     )
 
 
-def behaviours(profile: ProductProfile, history: list[Turn]) -> ModelPrompt:
+def behaviours(
+    profile: ProductProfile,
+    history: list[Turn],
+    context: InterviewContext | None = None,
+) -> ModelPrompt:
     return _compose(
-        "behaviours", {"profile": _profile(profile), "history": _transcript(history)}
+        "behaviours",
+        {
+            "profile": _profile(profile),
+            "history": _transcript(history),
+            "perspective": _perspective(context),
+        },
     )
 
 
@@ -294,6 +335,7 @@ __all__ = [
     "ClarifyPhase",
     "PROMPTS_FILE",
     "PRIMER_FILE",
+    "PERSPECTIVES_DIR",
     "PromptCatalog",
     "PromptCatalogError",
     "behaviours",

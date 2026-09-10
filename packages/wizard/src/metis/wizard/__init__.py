@@ -24,7 +24,10 @@ from metis.wizard.application.compile import (
     write_experiment,
     write_review,
 )
-from metis.wizard.application.config import working_status
+from metis.wizard.application.config import (
+    interview_client_config,
+    working_status,
+)
 from metis.wizard.application.interviewer import InterviewerUnavailable
 from metis.wizard.application.matching.library_catalogue import (
     library_catalogue as _library_catalogue,
@@ -39,6 +42,8 @@ from metis.wizard.contracts import (
     CompileResult,
     FormRequest,
     FormResponse,
+    InterviewConfig,
+    InterviewContext,
     InterviewEndRequest,
     InterviewErrorCode,
     InterviewFailure,
@@ -50,6 +55,8 @@ from metis.wizard.contracts import (
     InterviewTurnRequest,
     MissingData,
     MissingDataCode,
+    Perspective,
+    PerspectiveDefinition,
     ProductProfile,
     UserResponse,
     WizardRequest,
@@ -94,6 +101,8 @@ __all__ = [
     "FormRequest",
     "FormResponse",
     "InterviewEndRequest",
+    "InterviewContext",
+    "InterviewConfig",
     "InterviewErrorCode",
     "InterviewFailure",
     "InterviewOutcome",
@@ -109,6 +118,8 @@ __all__ = [
     "MissingDataCode",
     "MetricSummary",
     "ProductProfile",
+    "Perspective",
+    "PerspectiveDefinition",
     "SpecificationFixture",
     "SpecificationError",
     "Status",
@@ -121,6 +132,7 @@ __all__ = [
     "core_version",
     "derive_stage",
     "handle_interview",
+    "interview_client_config",
     "metric_catalogue",
     "package_specification",
     "render_review",

@@ -17,6 +17,7 @@ from metis.wizard.contracts import (
     InterviewStartRequest,
     InterviewState,
     InterviewTurnRequest,
+    Perspective,
     ProductProfile,
 )
 from metis.wizard.domain.permissions import InterviewStep
@@ -56,6 +57,19 @@ def test_start_returns_state_with_a_pending_request(client: TestClient) -> None:
     assert body["type"] == "success"
     assert body["outcome"] == "awaiting_response"
     assert body["state"]["pending"]["request_id"]
+    assert body["state"]["context"]["perspective"] == "end_user"
+
+
+def test_start_records_the_chosen_perspective(client: TestClient) -> None:
+    body = {
+        "description": "A policy research assistant",
+        "perspective": Perspective.SECURITY.value,
+    }
+
+    response = client.post("/api/v1/wizard/interview/start", json=body)
+
+    assert response.status_code == 200
+    assert response.json()["state"]["context"]["perspective"] == "security"
 
 
 def test_a_stale_request_id_is_a_400_with_the_state_echoed_back(
@@ -113,7 +127,7 @@ def test_pending_request_metadata_is_required_and_non_null_over_http(
 
 def test_an_exhausted_model_is_a_503_retryable_failure(make_client) -> None:
     class ClarifyUnavailable(ScriptedInterviewer):
-        def clarify(self, profile, history, phase="product"):
+        def clarify(self, profile, history, phase="product", context=None):
             raise InterviewerOutputError("three attempts, all failed")
 
     client = make_client(ClarifyUnavailable())
@@ -127,7 +141,7 @@ def test_an_exhausted_model_is_a_503_retryable_failure(make_client) -> None:
 
 def test_an_exhausted_model_during_turn_is_a_503_with_safe_state(make_client) -> None:
     class ClarifyUnavailable(ScriptedInterviewer):
-        def clarify(self, profile, history, phase="product"):
+        def clarify(self, profile, history, phase="product", context=None):
             raise InterviewerOutputError("three attempts, all failed")
 
     opening = (
@@ -152,7 +166,7 @@ def test_an_exhausted_model_during_turn_is_a_503_with_safe_state(make_client) ->
 
 def test_an_exhausted_model_during_end_is_a_503_with_safe_state(make_client) -> None:
     class DraftUnavailable(ScriptedInterviewer):
-        def draft_behaviours(self, profile, history):
+        def draft_behaviours(self, profile, history, context=None):
             raise InterviewerOutputError("three attempts, all failed")
 
     state = InterviewState(
@@ -178,7 +192,7 @@ def test_an_exhausted_model_during_end_is_a_503_with_safe_state(make_client) -> 
 
 def test_an_unexpected_interview_fault_is_a_stable_500_failure(make_client) -> None:
     class BrokenInterviewer(ScriptedInterviewer):
-        def clarify(self, profile, history, phase="product"):
+        def clarify(self, profile, history, phase="product", context=None):
             raise RuntimeError("unexpected provider bug")
 
     client = make_client(BrokenInterviewer())

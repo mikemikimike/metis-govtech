@@ -33,6 +33,7 @@ const state: InterviewState = {
   },
   behaviours_confirmed: false,
   confirmed: false,
+  context: { perspective: "end_user" },
   history: [],
   user_typed: [],
   issued_ids: [],

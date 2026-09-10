@@ -11,7 +11,7 @@ import yaml
 
 from metis.wizard.application import config
 from metis.wizard.application.driver import DriverState, StepDriver
-from metis.wizard.contracts.interview_state import Turn
+from metis.wizard.contracts.interview_state import Perspective, Turn
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
@@ -25,6 +25,12 @@ _EXPECTED_STATUSES = {
     "done": "Finishing up…",
 }
 _EXPECTED_WORKING_STATUS = "Working on your Interview…"
+_EXPECTED_PERSPECTIVES = {
+    "end_user",
+    "engineer",
+    "compliance",
+    "security",
+}
 
 
 def _document() -> dict[str, Any]:
@@ -88,6 +94,18 @@ def _restore_removed_status(document: dict[str, Any]) -> None:
     document["statuses"]["prioritise"] = "Choosing what to measure…"
 
 
+def _remove_perspective(document: dict[str, Any]) -> None:
+    document["perspectives"] = document["perspectives"][:-1]
+
+
+def _duplicate_perspective(document: dict[str, Any]) -> None:
+    document["perspectives"].append(document["perspectives"][0].copy())
+
+
+def _unknown_perspective(document: dict[str, Any]) -> None:
+    document["perspectives"][0]["id"] = "business"
+
+
 @pytest.mark.parametrize(
     ("change", "broken_key"),
     [
@@ -98,6 +116,9 @@ def _restore_removed_status(document: dict[str, Any]) -> None:
         (_remove_working_status, "statuses.working"),
         (_blank_working_status, "statuses.working"),
         (_restore_removed_status, "statuses.prioritise"),
+        (_remove_perspective, "perspectives"),
+        (_duplicate_perspective, "perspectives[4].id"),
+        (_unknown_perspective, "perspectives[0].id"),
     ],
 )
 def test_interview_validation_cases(
@@ -199,3 +220,27 @@ def test_interview_configuration_is_a_package_resource() -> None:
     assert loaded.opening_question
     assert loaded.working_status
     assert set(loaded.statuses) == set(InterviewStep)
+    assert {item.id.value for item in loaded.perspectives} == _EXPECTED_PERSPECTIVES
+
+
+def test_public_client_configuration_exposes_the_opening_copy_and_perspectives() -> (
+    None
+):
+    client_config = config.interview_client_config()
+
+    assert client_config.opening_question
+    assert client_config.working_status == _EXPECTED_WORKING_STATUS
+    assert {item.id for item in client_config.perspectives} == {
+        Perspective(item) for item in _EXPECTED_PERSPECTIVES
+    }
+
+
+def test_a_perspective_label_edit_affects_the_next_client_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = _document()
+    _install_document(monkeypatch, document)
+
+    document["perspectives"][0]["label"] = "People who use it"
+
+    assert config.interview_client_config().perspectives[0].label == "People who use it"

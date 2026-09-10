@@ -81,6 +81,11 @@ machinery, which are gone.
   string. The packager consumes streams in bounded chunks; the caller owns and closes them.
 - Read progress with `derive_stage(state)`; there is no stored stage.
 
+The start request also accepts an optional `perspective` value. Existing callers can omit it and
+get the `end_user` default. To choose a point of view, send one of `end_user`, `engineer`,
+`compliance`, or `security`. Older client-held state without `context` is still accepted and uses
+the same default.
+
 **What to change:** hold the `InterviewState` the last operation returned and send it back
 on the next operation. Do not look for a session id or a saved file. Old server-owned
 `session.json` / `interview_state.json` files are not read or migrated — start a new

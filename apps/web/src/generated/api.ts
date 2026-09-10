@@ -491,11 +491,23 @@ export interface components {
         };
         /**
          * InterviewConfig
-         * @description Package-owned presentation text needed by an Interview client.
+         * @description Package-owned values that a wizard door needs to render its opening screen.
          */
         InterviewConfig: {
+            /** Opening Question */
+            opening_question: string;
             /** Working Status */
             working_status: string;
+            /** Perspectives */
+            perspectives: components["schemas"]["PerspectiveDefinition"][];
+        };
+        /**
+         * InterviewContext
+         * @description User-owned context that travels with an Interview but is not Profile data.
+         */
+        InterviewContext: {
+            /** @default end_user */
+            perspective: components["schemas"]["Perspective"];
         };
         /**
          * InterviewEndRequest
@@ -536,6 +548,8 @@ export interface components {
         InterviewStartRequest: {
             /** Description */
             description: string;
+            /** @default end_user */
+            perspective: components["schemas"]["Perspective"];
         };
         /**
          * InterviewState
@@ -546,6 +560,7 @@ export interface components {
          */
         InterviewState: {
             profile: components["schemas"]["ProductProfile"];
+            context?: components["schemas"]["InterviewContext"];
             /**
              * Behaviours Confirmed
              * @default false
@@ -716,6 +731,23 @@ export interface components {
             name: string;
             /** Description */
             description: string;
+        };
+        /**
+         * Perspective
+         * @description The point of view from which the user answers the Interview.
+         * @enum {string}
+         */
+        Perspective: "end_user" | "engineer" | "compliance" | "security";
+        /**
+         * PerspectiveDefinition
+         * @description The user-facing label and question for one Interview perspective.
+         */
+        PerspectiveDefinition: {
+            id: components["schemas"]["Perspective"];
+            /** Label */
+            label: string;
+            /** Question */
+            question: string;
         };
         /** Product */
         Product: {

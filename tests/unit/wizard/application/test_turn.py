@@ -26,6 +26,7 @@ from metis.wizard.contracts import (
     ChoiceResponse,
     Option,
     OptionId,
+    Perspective,
     Product,
     ProductProfile,
 )
@@ -35,9 +36,12 @@ from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer, ScriptedMatcher
 
 
-def _start(*, interviewer=None):
+def _start(*, interviewer=None, perspective=Perspective.END_USER):
     return handle_interview(
-        InterviewStartRequest(description="A research assistant"),
+        InterviewStartRequest(
+            description="A research assistant",
+            perspective=perspective,
+        ),
         interviewer=interviewer or ScriptedInterviewer(),
         matcher=None,
     )
@@ -86,6 +90,33 @@ def test_start_records_the_raw_description_as_the_first_user_turn() -> None:
     assert result.state.history[0].role == "user"
     assert result.state.history[0].text == "A research assistant"
     assert result.state.pending is not None
+
+
+def test_start_records_a_perspective_and_reuses_it_on_the_next_turn() -> None:
+    class RecordingInterviewer(ScriptedInterviewer):
+        def __init__(self) -> None:
+            super().__init__()
+            self.seen: list[Perspective] = []
+
+        def clarify(self, profile, history, phase="product", context=None):
+            assert context is not None
+            self.seen.append(context.perspective)
+            return super().clarify(profile, history, phase, context)
+
+    interviewer = RecordingInterviewer()
+    started = _start(interviewer=interviewer, perspective=Perspective.SECURITY)
+    assert isinstance(started, InterviewSuccess)
+    assert started.state.context.perspective is Perspective.SECURITY
+
+    continued = _turn(
+        started.state,
+        ChatResponse(text="It answers policy questions."),
+        interviewer=interviewer,
+    )
+
+    assert isinstance(continued, InterviewSuccess)
+    assert interviewer.seen
+    assert all(perspective is Perspective.SECURITY for perspective in interviewer.seen)
 
 
 def test_start_with_whitespace_is_rejected_before_processing() -> None:
@@ -190,7 +221,7 @@ def test_a_behaviour_measurement_change_stays_pending_before_continue() -> None:
 
 
 class ClarifyUnavailable(ScriptedInterviewer):
-    def clarify(self, profile, history, phase="product"):
+    def clarify(self, profile, history, phase="product", context=None):
         raise InterviewerOutputError("three attempts, all failed")
 
 
@@ -259,7 +290,7 @@ def test_end_on_a_held_gate_preserves_state() -> None:
 
 def test_failed_end_preserves_pending_state_for_a_later_turn() -> None:
     class DraftUnavailable(ScriptedInterviewer):
-        def draft_behaviours(self, profile, history):
+        def draft_behaviours(self, profile, history, context=None):
             raise InterviewerOutputError("three attempts, all failed")
 
     state = InterviewState(

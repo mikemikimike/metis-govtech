@@ -8,7 +8,7 @@ from typing import Annotated, Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from metis.wizard.contracts.conversation import AnyResponse
-from metis.wizard.contracts.interview_state import InterviewState
+from metis.wizard.contracts.interview_state import InterviewState, Perspective
 from metis.wizard.domain.permissions import InterviewStep
 
 
@@ -18,6 +18,7 @@ class InterviewStartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     description: str
+    perspective: Perspective = Perspective.END_USER
 
     @field_validator("description")
     @classmethod

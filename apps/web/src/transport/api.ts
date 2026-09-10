@@ -40,6 +40,8 @@ type PackageOperation = operations["package_api_v1_wizard_package_post"];
 type PackageWireRequest = Schema["Body_package_api_v1_wizard_package_post"];
 
 export type InterviewStep = Schema["InterviewStep"];
+export type Perspective = Schema["Perspective"];
+export type PerspectiveDefinition = Schema["PerspectiveDefinition"];
 export type OptionId = Schema["OptionId"];
 export function optionKey(id: OptionId): string {
   return [id.action, id.target, id.via].filter(Boolean).join(":");
@@ -223,6 +225,7 @@ function normalizeState(state: Schema["InterviewState"]): InterviewState {
   return {
     ...state,
     profile: normalizeProfile(state.profile),
+    context: state.context ?? { perspective: "end_user" },
     history: state.history ?? [],
     user_typed: state.user_typed ?? [],
     issued_ids: state.issued_ids ?? [],
@@ -375,8 +378,8 @@ function result(resultValue: WireInterviewResult): InterviewSuccess {
 }
 
 export const api = {
-  start: async (description: string) => {
-    const body: StartRequest = { description };
+  start: async (description: string, perspective: Perspective = "end_user") => {
+    const body: StartRequest = { description, perspective };
     return result(
       await call<StartResponse>("/api/v1/wizard/interview/start", {
         ...JSON_POST,

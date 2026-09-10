@@ -8,6 +8,8 @@ from importlib import resources
 
 import yaml
 
+from metis.wizard.contracts.config import InterviewConfig, PerspectiveDefinition
+from metis.wizard.contracts.interview_state import Perspective
 from metis.wizard.domain.permissions import InterviewStep
 
 CONFIG_FILE = "config.yaml"
@@ -25,6 +27,7 @@ class Config:
     opening_question: str
     working_status: str
     statuses: Mapping[InterviewStep, str]
+    perspectives: tuple[PerspectiveDefinition, ...]
 
 
 def _error(key: str, detail: str) -> ConfigError:
@@ -42,6 +45,12 @@ def _required(mapping: Mapping[object, object], key: str) -> object:
     if name not in mapping:
         raise _error(key, "is missing.")
     return mapping[name]
+
+
+def _sequence(value: object, key: str) -> list[object]:
+    if not isinstance(value, list):
+        raise _error(key, "must be a list.")
+    return value
 
 
 def _read_config_text() -> str:
@@ -74,6 +83,45 @@ def load_config() -> Config:
     if not isinstance(opening_question, str) or not opening_question.strip():
         raise _error("opening_question", "must be a non-empty string.")
 
+    perspective_values = _sequence(_required(document, "perspectives"), "perspectives")
+    perspectives: list[PerspectiveDefinition] = []
+    seen: set[Perspective] = set()
+    for index, raw_perspective in enumerate(perspective_values):
+        key = f"perspectives[{index}]"
+        entry = _mapping(raw_perspective, key)
+        raw_id = _required(entry, f"{key}.id")
+        if not isinstance(raw_id, str) or not raw_id.strip():
+            raise _error(f"{key}.id", "must be a non-empty string.")
+        try:
+            perspective = Perspective(raw_id)
+        except ValueError as exc:
+            supported = ", ".join(item.value for item in Perspective)
+            raise _error(f"{key}.id", f"must be one of: {supported}.") from exc
+        if perspective in seen:
+            raise _error(f"{key}.id", "is duplicated.")
+        seen.add(perspective)
+        label = _required(entry, f"{key}.label")
+        if not isinstance(label, str) or not label.strip():
+            raise _error(f"{key}.label", "must be a non-empty string.")
+        question = _required(entry, f"{key}.question")
+        if (
+            not isinstance(question, str)
+            or not question.strip()
+            or "\n" in question
+            or "\r" in question
+        ):
+            raise _error(f"{key}.question", "must be a non-empty one-line string.")
+        perspectives.append(
+            PerspectiveDefinition(id=perspective, label=label, question=question)
+        )
+
+    missing = [item.value for item in Perspective if item not in seen]
+    if missing:
+        raise _error(
+            "perspectives",
+            f"is missing supported id(s): {', '.join(missing)}.",
+        )
+
     if "prioritise" in statuses:
         raise _error("statuses.prioritise", "was removed and must not be present.")
 
@@ -94,6 +142,7 @@ def load_config() -> Config:
         opening_question=opening_question,
         working_status=working_status,
         statuses=checked,
+        perspectives=tuple(perspectives),
     )
 
 
@@ -117,11 +166,22 @@ def opening_question() -> str:
     return load_config().opening_question
 
 
+def interview_client_config() -> InterviewConfig:
+    """Return the complete package-owned configuration for a wizard door."""
+    current = load_config()
+    return InterviewConfig(
+        opening_question=current.opening_question,
+        working_status=current.working_status,
+        perspectives=list(current.perspectives),
+    )
+
+
 __all__ = [
     "CONFIG_FILE",
     "Config",
     "ConfigError",
     "clarify_turn_cap",
+    "interview_client_config",
     "load_config",
     "opening_question",
     "status_for",

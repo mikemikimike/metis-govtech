@@ -13,8 +13,10 @@ from metis.wizard.contracts import (
     ChatRequest,
     ChatResponse,
     ChoiceResponse,
+    InterviewContext,
     Patch,
     PatchOp,
+    Perspective,
     Product,
     ProductProfile,
     StepResult,
@@ -41,7 +43,7 @@ def empty_state(step=InterviewStep.CLARIFY, history=None) -> DriverState:
 class NeverDone(ScriptedInterviewer):
     """A model that always says it needs one more question."""
 
-    def clarify(self, profile, history, phase="product"):
+    def clarify(self, profile, history, phase="product", context=None):
         self.calls.append("clarify")
         from metis.wizard.contracts import ClarifyResult
 
@@ -107,7 +109,7 @@ def test_clarify_commits_product_but_not_behaviours() -> None:
 def test_a_thin_answer_leaves_the_product_gate_closed() -> None:
     @dataclass
     class ThinInterviewer(ScriptedInterviewer):
-        def clarify(self, profile, history, phase="product"):
+        def clarify(self, profile, history, phase="product", context=None):
             from metis.wizard.contracts import ClarifyResult
 
             return ClarifyResult(message="Tell me a little more.", done=False)
@@ -126,7 +128,7 @@ def test_a_thin_answer_leaves_the_product_gate_closed() -> None:
 def test_clarify_rejects_a_non_product_patch() -> None:
     @dataclass
     class WritesABehaviour(NeverDone):
-        def clarify(self, profile, history, phase="product"):
+        def clarify(self, profile, history, phase="product", context=None):
             from metis.wizard.contracts import ClarifyResult
 
             return ClarifyResult(
@@ -147,6 +149,28 @@ def test_clarify_rejects_a_non_product_patch() -> None:
     driver.compose(state)
 
     assert state.profile.tasks == []
+
+
+def test_model_drafts_cannot_change_interview_context() -> None:
+    state = empty_state(step=InterviewStep.BEHAVIOURS)
+    state.context = InterviewContext(perspective=Perspective.SECURITY)
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+
+    driver._run(
+        state,
+        StepResult(
+            message="",
+            patches=[
+                {
+                    "op": "set",
+                    "path": "context.perspective",
+                    "value": "engineer",
+                }
+            ],
+        ),
+    )
+
+    assert state.context.perspective is Perspective.SECURITY
 
 
 def test_a_later_product_edit_does_not_move_the_step() -> None:

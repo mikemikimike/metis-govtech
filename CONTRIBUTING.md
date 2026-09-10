@@ -125,6 +125,11 @@ make ci             # full CI suite (check + test)
 
 Run `make check` before pushing. CI will reject PRs that fail.
 
+When you change a wizard HTTP request or response, update the Pydantic contract in
+`packages/wizard` first. Then regenerate the committed web types with
+`npm --prefix apps/web run generate:api` and run `npm --prefix apps/web run check:api`. Do not edit
+`apps/web/src/generated/api.ts` by hand.
+
 ### Commit Messages
 
 We follow a convention for commit messages [borrowed from Deis/CoreOS/AngularJS](https://github.com/deis/deis/blob/master/CONTRIBUTING.md#commit-style-guideline). The format is:
