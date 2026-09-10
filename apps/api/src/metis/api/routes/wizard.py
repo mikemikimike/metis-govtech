@@ -1,8 +1,11 @@
-"""The wizard Interview lifecycle, compilation, and package routes.
+"""HTTP routes for the wizard Interview lifecycle, compilation, and package download.
 
-The router does no wizard work. It receives a typed body, calls the public wizard facade, and maps
-the typed result onto an HTTP status. No stage, Profile, prompt, matching or compilation rule lives
-here — those all stay inside metis-wizard.
+This router is a thin HTTP adapter over the metis-wizard package. It parses a typed request body,
+calls the wizard's public facade, and maps the typed result onto an HTTP status code — it adds no
+behaviour of its own. Every stage, Profile, prompt, matching and compilation rule lives in
+metis-wizard.
+
+For what the interview does and how to use it, see the wizard user guide: ``docs/guide/wizard.md``.
 
 Status mapping (from the design):
 
