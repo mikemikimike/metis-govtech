@@ -73,6 +73,10 @@ _No v1 changes yet._
   interview, review-document and hand-authoring copy states "trials". The arithmetic does not
   change. The compiled `experiment.yaml` does not change.
   ([#254](https://github.com/govtech-responsibleai/metis/issues/254))
+- **Moved the wizard tests into the root `tests/` tree.** Unit tests now live under
+  `tests/unit/wizard/`, integration tests under `tests/integration/wizard/`, and shared fixtures
+  under `tests/fixtures/wizard/`, matching the documented repository convention. Test behaviour is
+  unchanged.
 
 #### Removed
 
@@ -115,6 +119,13 @@ _No v1 changes yet._
 - **Shared model environment names.** The API reads `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and
   `INTERVIEW_MODEL`, matching the wizard and engine provider configuration, and can load one root
   `.env` for local development.
+
+#### Changed
+
+- **Moved the API tests into the root `tests/` tree.** Door tests now live under `tests/unit/api/`
+  and end-to-end tests under `tests/integration/api/`, sharing the wizard's offline fixtures from
+  `tests/fixtures/wizard/` directly instead of through a `sys.path` insertion. Test behaviour is
+  unchanged.
 
 ### metis-web
 

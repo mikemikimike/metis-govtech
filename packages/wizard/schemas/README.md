@@ -22,7 +22,7 @@ The JSON files here are **auto-generated**. Do not edit them directly; they will
 
 ## Automated checks
 
-`make check-schema` runs in CI (`make ci`) and fails if the committed schema does not match what Pydantic generates now (a stale file — a forgotten `make generate-schema`). The wizard schema tests (`packages/wizard/tests/test_schema.py`) also fail if the example profile does not validate against the committed schema or does not parse with the model.
+`make check-schema` runs in CI (`make ci`) and fails if the committed schema does not match what Pydantic generates now (a stale file — a forgotten `make generate-schema`). The wizard schema test (`tests/unit/wizard/domain/test_profile.py`) also fails if the example profile does not validate against the committed schema or does not parse with the model.
 
 These catch forgotten regeneration runs and broken examples, but **not** forgotten version bumps — if you make a breaking change and don't increment `_PROFILE_VERSION`, the checks won't notice.
 

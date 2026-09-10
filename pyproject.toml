@@ -85,14 +85,7 @@ indent-style = "space"
 
 [tool.pytest.ini_options]
 addopts = "-p no:rerunfailures"
-testpaths = [
-    "tests",
-    "packages/core/tests",
-    "packages/library/tests",
-    "packages/engine/tests",
-    "packages/wizard/tests",
-    "apps/api/tests",
-]
+testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

@@ -45,12 +45,14 @@ The API transports this text but does not own or copy it.
 
 ## Testing
 
+The API's unit tests live under `tests/unit/api/` and its end-to-end tests under
+`tests/integration/api/`, in the root `tests/` tree.
+
 API tests are door tests: they prove the HTTP adapter preserves wizard behaviour, not the wizard
 rules themselves. They reuse the wizard's own offline corridor — the `ScriptedInterviewer`, the
-`walk` driver, and the hand-authored profiles under `packages/wizard/tests/fixtures/` — through the
+`walk` driver, and the hand-authored profiles under `tests/fixtures/wizard/` — through the
 `send` transport, so the door and the wizard's Slice B gate share one answer script. `conftest.py`
-puts that fixture tree on `sys.path` and injects the scripted dependency pair, so no test builds the
-real gateway or reaches the network.
+injects the scripted dependency pair, so no test builds the real gateway or reaches the network.
 
 Cover the door contract with representative cases: status mapping, the stable failure body,
 statelessness across two app instances, the generated OpenAPI discriminators, package archive

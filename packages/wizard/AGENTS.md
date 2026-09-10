@@ -104,8 +104,9 @@ on contracts/domain, and contracts depend on domain. Adapter siblings never impo
 
 ## Testing
 
-`make test` runs `packages/*/tests`. The wizard tests are grouped by ownership, with shared
-fixtures under `tests/fixtures/`.
+`make test` runs the root `tests/` tree. The wizard's unit tests live under `tests/unit/wizard/`
+grouped by ownership, its integration tests under `tests/integration/wizard/`, and its shared
+fixtures under `tests/fixtures/wizard/`.
 
 Keep the suite organised around the wizard's stable contracts, not around the sequence of fixes
 that produced them:
@@ -135,18 +136,18 @@ or a boundary risk.
 
 Two integration tests are gates rather than unit tests:
 
-- **`tests/integration/test_slice_a_gate.py`** — a hand-written profile compiles to an experiment the engine
+- **`tests/integration/wizard/test_slice_a_gate.py`** — a hand-written profile compiles to an experiment the engine
   actually loads, via the engine's own `_validate_inputs`. No model call anywhere in it.
-- **`tests/integration/test_slice_b_gate.py`** — the whole interview walks to DONE on `ScriptedInterviewer`,
-  with no network. That stand-in in `tests/fixtures/scripted.py` is **not a throwaway**: it is
+- **`tests/integration/wizard/test_slice_b_gate.py`** — the whole interview walks to DONE on `ScriptedInterviewer`,
+  with no network. That stand-in in `tests/fixtures/wizard/scripted.py` is **not a throwaway**: it is
   the regression suite for the prompts and the matcher, and the only way to exercise the
   corridor without paying per test run. Keep it working.
 
-`tests/fixtures/golden_experiment.yaml` is a golden file. Regenerate with
-`uv run python packages/wizard/tests/regenerate_golden.py` — and read the diff before
+`tests/fixtures/wizard/golden_experiment.yaml` is a golden file. Regenerate with
+`uv run python tests/fixtures/wizard/regenerate_golden.py` — and read the diff before
 committing it, or it stops buying anything.
 
-`tests/integration/test_cli_happy_path.py` drives the actual Typer app through `CliRunner` with
+`tests/integration/wizard/test_cli_happy_path.py` drives the actual Typer app through `CliRunner` with
 the scripted interviewer. It is the offline full happy-path check for both output files.
 
 ## Langfuse tracing
