@@ -119,8 +119,8 @@ def test_resume_runs_only_missing_or_system_error_records(
     selected: list[tuple[str, str, int]] = []
 
     def fake_run_experiment(*_args: object, **kwargs: object) -> None:
-        for scenario, persona, trial in kwargs["run_plan"]:  # type: ignore[index]
-            selected.append((scenario.id, persona.id, trial))
+        for scenario, persona, trial_index in kwargs["run_plan"]:  # type: ignore[index]
+            selected.append((scenario.id, persona.id, trial_index))
 
     monkeypatch.setattr(experiment_module, "run_experiment", fake_run_experiment)
 
@@ -130,7 +130,7 @@ def test_resume_runs_only_missing_or_system_error_records(
     )
 
     assert result.exit_code == 0
-    assert selected == [("task-1", "alice", 1)]
+    assert selected == [("task-1", "alice", 2)]
     assert "runs to redo" in " ".join(result.output.split())
 
 

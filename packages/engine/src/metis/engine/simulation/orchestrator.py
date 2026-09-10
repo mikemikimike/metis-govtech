@@ -60,7 +60,7 @@ class Orchestrator:
         scenario: Scenario,
         run_dir: Path,
         fixtures_dir: Path,
-        trial: int = 1,
+        trial_index: int = 1,  # 1-based
         state: SimulationState | None = None,
         tui_ctx: TUIContext | None = None,
         shutdown_event: threading.Event | None = None,
@@ -71,7 +71,7 @@ class Orchestrator:
         self._scenario = scenario
         self._run_dir = run_dir
         self._fixtures_dir = fixtures_dir
-        self._trial = trial
+        self._trial_index = trial_index
         self._state = state
         self._tui_ctx = tui_ctx
         self._shutdown_event = shutdown_event
@@ -163,10 +163,10 @@ class Orchestrator:
                 )
 
                 if self._state:
-                    self._state.update_run_turn(
+                    self._state.mark_run_turn(
                         self._scenario.id,
                         run_config.persona,
-                        trial=self._trial,
+                        trial_index=self._trial_index,
                         turn=turn_count,
                         max_turns=run_config.max_turns,
                         detail="sending message...",
@@ -422,10 +422,10 @@ class Orchestrator:
 
                 # TUI update
                 if self._state:
-                    self._state.update_run_turn(
+                    self._state.mark_run_turn(
                         self._scenario.id,
                         run_config.persona,
-                        trial=self._trial,
+                        trial_index=self._trial_index,
                         turn=turn_count,
                         max_turns=run_config.max_turns,
                         detail="waiting for LLM...",

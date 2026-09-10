@@ -43,10 +43,11 @@ _LEVEL_STYLES = {
 
 
 def _run_log_filename(
-    scenario_id: str, persona_id: str, trial: int, num_trials: int
+    scenario_id: str, persona_id: str, trial_index: int, num_trials: int
 ) -> str:
+    """Build a per-run log filename. ``trial_index`` is 1-based (first trial is 1)."""
     pad = max(2, len(str(num_trials)))
-    return f"simulate-{scenario_id}_{persona_id}-{trial:0{pad}}.log"
+    return f"simulate-{scenario_id}_{persona_id}-{trial_index:0{pad}}.log"
 
 
 class LogRouter:
@@ -72,19 +73,19 @@ class LogRouter:
         self._start_time = time.monotonic()
         log_dir.mkdir(parents=True, exist_ok=True)
 
-    def _run_key(self, scenario_id: str, persona_id: str, trial: int) -> str:
-        return f"{scenario_id}:{persona_id}:{trial}"
+    def _run_key(self, scenario_id: str, persona_id: str, trial_index: int) -> str:
+        return f"{scenario_id}:{persona_id}:{trial_index}"
 
     def open_run(
-        self, scenario_id: str, persona_id: str, trial: int, num_trials: int
+        self, scenario_id: str, persona_id: str, trial_index: int, num_trials: int
     ) -> None:
-        key = self._run_key(scenario_id, persona_id, trial)
-        filename = _run_log_filename(scenario_id, persona_id, trial, num_trials)
+        key = self._run_key(scenario_id, persona_id, trial_index)
+        filename = _run_log_filename(scenario_id, persona_id, trial_index, num_trials)
         path = self._log_dir / filename
         self._handles[key] = open(path, "w", encoding="utf-8")  # noqa: SIM115
 
-    def close_run(self, scenario_id: str, persona_id: str, trial: int) -> None:
-        key = self._run_key(scenario_id, persona_id, trial)
+    def close_run(self, scenario_id: str, persona_id: str, trial_index: int) -> None:
+        key = self._run_key(scenario_id, persona_id, trial_index)
         handle = self._handles.pop(key, None)
         if handle:
             handle.flush()
@@ -100,11 +101,11 @@ class LogRouter:
         """Structlog renderer: routes to files + tail, optionally to stderr."""
         scenario_id = event_dict.get("scenario_id")
         persona_id = event_dict.get("persona_id")
-        trial = event_dict.get("trial")
+        trial_index = event_dict.get("trial_index")
 
         # Route to per-run file (always at DEBUG — all events)
-        if scenario_id and persona_id and trial is not None:
-            key = self._run_key(scenario_id, persona_id, trial)
+        if scenario_id and persona_id and trial_index is not None:
+            key = self._run_key(scenario_id, persona_id, trial_index)
             handle = self._handles.get(key)
             if handle:
                 handle.write(self._format_file_line(event_dict) + "\n")

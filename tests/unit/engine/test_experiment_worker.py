@@ -10,7 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from metis.engine.simulation.exceptions import ConsecutiveFailureEscalation
-from metis.engine.simulation.experiment import _worker, run_folder_name
+from metis.engine.simulation.experiment import (
+    RunPlanItem,
+    _worker,
+    run_folder_name,
+)
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     ChosenAction,
@@ -114,7 +118,7 @@ class TestWorkerWithMockFactory:
         factory = MockRunnerFactory()
         await factory.start()
 
-        run_slice = [(simple_scenario, simple_persona, 0)]
+        worker_runs = [RunPlanItem(simple_scenario, simple_persona, 1)]
         console_lock = asyncio.Lock()
 
         canned = _make_canned_record(simple_scenario, simple_persona)
@@ -127,8 +131,7 @@ class TestWorkerWithMockFactory:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=run_slice,
-                total_runs=1,
+                worker_runs=worker_runs,
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 console_lock=console_lock,
@@ -152,7 +155,7 @@ class TestWorkerWithMockFactory:
         await factory.start()
 
         fixtures_dir = tmp_path / "fixtures"
-        run_slice = [(simple_scenario, simple_persona, 0)]
+        worker_runs = [RunPlanItem(simple_scenario, simple_persona, 1)]
         console_lock = asyncio.Lock()
 
         canned = _make_canned_record(simple_scenario, simple_persona)
@@ -165,8 +168,7 @@ class TestWorkerWithMockFactory:
             await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=run_slice,
-                total_runs=1,
+                worker_runs=worker_runs,
                 output_dir=tmp_path,
                 fixtures_dir=fixtures_dir,
                 console_lock=console_lock,
@@ -179,7 +181,7 @@ class TestWorkerWithMockFactory:
         assert len(factory.runners_created) == 1
 
         # Verify the expected run_dir path was constructed
-        expected_folder = run_folder_name(simple_scenario, simple_persona, 0)
+        expected_folder = run_folder_name(simple_scenario, simple_persona, 1)
         expected_run_dir = tmp_path / "runs" / expected_folder
         assert expected_run_dir.exists()
 
@@ -251,8 +253,7 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 console_lock=asyncio.Lock(),
@@ -300,8 +301,7 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 console_lock=asyncio.Lock(),
@@ -342,8 +342,7 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 console_lock=asyncio.Lock(),
@@ -390,8 +389,7 @@ class TestWorkerUnexpectedCrash:
             await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 console_lock=asyncio.Lock(),
@@ -435,8 +433,7 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 console_lock=asyncio.Lock(),

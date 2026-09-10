@@ -18,7 +18,7 @@ def _make_state_with_active_run() -> SimulationState:
                 SimulationRunState(
                     scenario_id="direct-question",
                     persona_id="cooperative",
-                    trial=1,
+                    trial_index=1,
                     num_trials=1,
                     phase="completed",
                     current_turn=None,
@@ -36,7 +36,7 @@ def _make_state_with_active_run() -> SimulationState:
                 SimulationRunState(
                     scenario_id="constrained-analysis",
                     persona_id="impatient",
-                    trial=1,
+                    trial_index=1,
                     num_trials=1,
                     phase="simulating",
                     current_turn=4,

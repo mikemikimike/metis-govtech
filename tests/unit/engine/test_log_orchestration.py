@@ -24,7 +24,7 @@ class TestOrchestrationLogger:
 
     def test_run_started_includes_log_pointer(self, tmp_path: Path) -> None:
         orch = OrchestrationLogger(log_dir=tmp_path)
-        orch.run_started("direct-question", "cooperative", trial=1, num_trials=1)
+        orch.run_started("direct-question", "cooperative", trial_index=1, num_trials=1)
         orch.close()
         content = (tmp_path / "simulate.log").read_text()
         assert "RUN direct-question x cooperative [trial 1/1] STARTED" in content
@@ -35,7 +35,7 @@ class TestOrchestrationLogger:
         orch.run_completed(
             "direct-question",
             "cooperative",
-            trial=1,
+            trial_index=1,
             num_trials=1,
             stop_reason="goal_achieved",
             total_turns=3,

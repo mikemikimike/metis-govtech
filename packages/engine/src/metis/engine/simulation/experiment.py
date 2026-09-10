@@ -10,7 +10,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import structlog
 
@@ -39,7 +39,17 @@ if TYPE_CHECKING:
 
     from .runner import RunnerFactory
 
-RunPlanItem = tuple[Scenario, Persona, int]
+class RunPlanItem(NamedTuple):
+    """One planned run: a scenario × persona pair at a specific trial.
+
+    ``trial_index`` is 1-based: the first trial is 1 (not 0). It numbers the
+    repeated trials of a scenario/persona pair (1..``scenario.num_trials``) and
+    is used verbatim in log filenames, run-folder names, and TUI/log output.
+    """
+
+    scenario: Scenario
+    persona: Persona
+    trial_index: int  # 1-based: first trial is 1
 
 __all__ = [
     "RunPlanItem",
@@ -54,7 +64,7 @@ logger = get_logger()
 def expand_run_plan(
     experiment: Experiment, personas_by_id: dict[str, Persona]
 ) -> list[RunPlanItem]:
-    """Expand an experiment into scenario, persona, and zero-based trial items."""
+    """Expand an experiment into scenario, persona, and 1-based trial items."""
     runs: list[RunPlanItem] = []
     for scenario in experiment.scenarios:
         for persona_ref in scenario.persona_refs:
@@ -65,14 +75,13 @@ def expand_run_plan(
                     f"Scenario '{scenario.id}': unknown persona_ref '{persona_ref}'. "
                     f"Available: {available}"
                 )
-            for trial in range(scenario.num_trials):
-                runs.append((scenario, persona, trial))
+            for trial_index in range(1, scenario.num_trials + 1):
+                runs.append(RunPlanItem(scenario, persona, trial_index))
     return runs
 
 
-def run_folder_name(scenario: Scenario, persona: Persona, trial: int) -> str:
-    """Return the stable folder name for a zero-based plan item."""
-    trial_index = trial + 1
+def run_folder_name(scenario: Scenario, persona: Persona, trial_index: int) -> str:
+    """Return the stable run-folder name. ``trial_index`` is 1-based (first trial is 1)."""
     pad = len(str(scenario.num_trials))
     return f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
 
@@ -82,9 +91,9 @@ def run_experiment(
     experiment: Experiment,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
+    run_plan: list[RunPlanItem],
     output_dir: Path | None = None,
     concurrency: int = 1,
-    run_plan: list[RunPlanItem] | None = None,
     run_max_retries: int = 2,
     run_retry_delay_seconds: float = 5.0,
     # Optional hooks for TUI / structured-logging integration
@@ -123,9 +132,9 @@ async def _run_experiment_async(
     experiment: Experiment,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
+    run_plan: list[RunPlanItem],
     output_dir: Path | None = None,
     concurrency: int = 1,
-    run_plan: list[RunPlanItem] | None = None,
     run_max_retries: int = 2,
     run_retry_delay_seconds: float = 5.0,
     state: SimulationState | None = None,
@@ -135,13 +144,7 @@ async def _run_experiment_async(
     shutdown_event: threading.Event | None = None,
 ) -> None:
     """Async experiment orchestrator with concurrent runner contexts."""
-    runs = (
-        run_plan
-        if run_plan is not None
-        else expand_run_plan(experiment, personas_by_id)
-    )
-
-    total_runs = len(runs)
+    total_runs = len(run_plan)
 
     logger.info("=" * 60)
     logger.info("[experiment] STARTING EXPERIMENT")
@@ -155,7 +158,7 @@ async def _run_experiment_async(
     logger.info("=" * 60)
 
     # Distribute runs across workers (round-robin for balanced load)
-    worker_slices = _distribute_runs(runs, concurrency)
+    runs_per_worker: list[list[RunPlanItem]] = _distribute_runs(run_plan, concurrency)
 
     # Console lock for safe Rich output from concurrent workers
     console_lock = asyncio.Lock()
@@ -167,15 +170,14 @@ async def _run_experiment_async(
     try:
         active_worker_ids: list[int] = []
         worker_tasks = []
-        for wid, slice_runs in enumerate(worker_slices):
-            if slice_runs:
+        for wid, worker_runs in enumerate(runs_per_worker):
+            if worker_runs:
                 active_worker_ids.append(wid)
                 worker_tasks.append(
                     _worker(
                         worker_id=wid,
                         runner_factory=runner_factory,
-                        run_slice=slice_runs,
-                        total_runs=total_runs,
+                        worker_runs=worker_runs,
                         output_dir=output_dir,
                         fixtures_dir=fixtures_dir,
                         console_lock=console_lock,
@@ -224,8 +226,7 @@ async def _run_experiment_async(
 async def _worker(
     worker_id: int,
     runner_factory: RunnerFactory,
-    run_slice: list[tuple[Scenario, Persona, int]],
-    total_runs: int,
+    worker_runs: list[RunPlanItem],
     output_dir: Path | None,
     fixtures_dir: Path,
     console_lock: asyncio.Lock,
@@ -243,19 +244,18 @@ async def _worker(
     structlog.contextvars.bind_contextvars(worker=f"w{worker_id}")
 
     logger.info(
-        "[experiment] Worker w%d starting with %d run(s)", worker_id, len(run_slice)
+        "[experiment] Worker w%d starting with %d run(s)", worker_id, len(worker_runs)
     )
 
     try:
         records: list[RunRecord] = []
-        for _idx, (scenario, persona, trial) in enumerate(run_slice):
+        for scenario, persona, trial_index in worker_runs:
             if shutdown_event and shutdown_event.is_set():
                 logger.info(
                     "[experiment] Worker w%d stopping (shutdown requested)", worker_id
                 )
                 break
 
-            trial_index = trial + 1
             trial_label = (
                 f" (trial {trial_index}/{scenario.num_trials})"
                 if scenario.num_trials > 1
@@ -268,7 +268,7 @@ async def _worker(
                 trial_label,
             )
 
-            folder_name = run_folder_name(scenario, persona, trial)
+            folder_name = run_folder_name(scenario, persona, trial_index)
             run_dir = (
                 (output_dir / "runs" / folder_name)
                 if output_dir
@@ -280,7 +280,7 @@ async def _worker(
             structlog.contextvars.bind_contextvars(
                 scenario_id=scenario.id,
                 persona_id=persona.id,
-                trial=trial_index,
+                trial_index=trial_index,
             )
 
             # Emit pre-run orchestration events (shared set — fires once across all workers)
@@ -293,19 +293,19 @@ async def _worker(
                 orchestration_logger.run_started(
                     scenario.id,
                     persona.id,
-                    trial=trial_index,
+                    trial_index=trial_index,
                     num_trials=scenario.num_trials,
                 )
             if log_router:
                 log_router.open_run(
                     scenario.id,
                     persona.id,
-                    trial=trial_index,
+                    trial_index=trial_index,
                     num_trials=scenario.num_trials,
                 )
             if state:
-                state.start_run(
-                    scenario.id, persona.id, trial=trial_index, worker_id=worker_id
+                state.mark_run_started(
+                    scenario.id, persona.id, trial_index=trial_index, worker_id=worker_id
                 )
 
             async with console_lock:
@@ -343,7 +343,7 @@ async def _worker(
                         scenario=scenario,
                         run_dir=run_dir,
                         fixtures_dir=fixtures_dir,
-                        trial=trial_index,
+                        trial_index=trial_index,
                         state=state,
                         tui_ctx=tui_ctx,
                         shutdown_event=shutdown_event,
@@ -482,10 +482,10 @@ async def _worker(
 
             # Emit post-run orchestration events
             if state:
-                state.complete_run(
+                state.mark_run_completed(
                     scenario.id,
                     persona.id,
-                    trial=trial_index,
+                    trial_index=trial_index,
                     stop_reason=record.outcome.stop_reason,
                     duration_seconds=record.outcome.duration_seconds,
                 )
@@ -493,14 +493,14 @@ async def _worker(
                 orchestration_logger.run_completed(
                     scenario.id,
                     persona.id,
-                    trial=trial_index,
+                    trial_index=trial_index,
                     num_trials=scenario.num_trials,
                     stop_reason=record.outcome.stop_reason,
                     total_turns=record.outcome.total_turns,
                     duration_seconds=record.outcome.duration_seconds,
                 )
             if log_router:
-                log_router.close_run(scenario.id, persona.id, trial=trial_index)
+                log_router.close_run(scenario.id, persona.id, trial_index=trial_index)
 
             # Check scenario completion
             if (
@@ -560,11 +560,11 @@ async def _worker(
 
 
 def _distribute_runs(
-    runs: list[tuple[Scenario, Persona, int]],
+    runs: list[RunPlanItem],
     concurrency: int,
-) -> list[list[tuple[Scenario, Persona, int]]]:
+) -> list[list[RunPlanItem]]:
     """Distribute runs across workers using round-robin."""
-    slices: list[list[tuple[Scenario, Persona, int]]] = [[] for _ in range(concurrency)]
+    slices: list[list[RunPlanItem]] = [[] for _ in range(concurrency)]
     for i, run in enumerate(runs):
         slices[i % concurrency].append(run)
     return slices

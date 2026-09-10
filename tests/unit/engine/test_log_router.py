@@ -25,13 +25,13 @@ class TestLogRouter:
 
     def test_open_run_creates_file(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("direct-question", "cooperative", trial=1, num_trials=1)
+        router.open_run("direct-question", "cooperative", trial_index=1, num_trials=1)
         expected = tmp_path / "simulate-direct-question_cooperative-01.log"
         assert expected.exists()
 
     def test_reopened_run_replaces_old_log(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scn", "per", trial=1, num_trials=1)
+        router.open_run("scn", "per", trial_index=1, num_trials=1)
         self._process(
             router,
             {
@@ -39,11 +39,11 @@ class TestLogRouter:
                 "level": "info",
                 "scenario_id": "scn",
                 "persona_id": "per",
-                "trial": 1,
+                "trial_index": 1,
             },
         )
-        router.close_run("scn", "per", trial=1)
-        router.open_run("scn", "per", trial=1, num_trials=1)
+        router.close_run("scn", "per", trial_index=1)
+        router.open_run("scn", "per", trial_index=1, num_trials=1)
         self._process(
             router,
             {
@@ -51,20 +51,20 @@ class TestLogRouter:
                 "level": "info",
                 "scenario_id": "scn",
                 "persona_id": "per",
-                "trial": 1,
+                "trial_index": 1,
             },
         )
-        router.close_run("scn", "per", trial=1)
+        router.close_run("scn", "per", trial_index=1)
         content = (tmp_path / "simulate-scn_per-01.log").read_text()
         assert "old attempt" not in content
         assert "new attempt" in content
 
     def test_trial_zero_padding_multi(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scenario", "persona", trial=1, num_trials=10)
+        router.open_run("scenario", "persona", trial_index=1, num_trials=10)
         expected = tmp_path / "simulate-scenario_persona-01.log"
         assert expected.exists()
-        router.open_run("scenario", "persona", trial=10, num_trials=10)
+        router.open_run("scenario", "persona", trial_index=10, num_trials=10)
         expected2 = tmp_path / "simulate-scenario_persona-10.log"
         assert expected2.exists()
 
@@ -77,14 +77,14 @@ class TestLogRouter:
 
     def test_process_routes_to_active_run_file(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scn", "per", trial=1, num_trials=1)
+        router.open_run("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "test message",
             "level": "info",
             "timestamp": "2026-08-05T10:00:00",
             "scenario_id": "scn",
             "persona_id": "per",
-            "trial": 1,
+            "trial_index": 1,
         }
         self._process(router, event_dict)
         router.close_all()
@@ -97,14 +97,14 @@ class TestLogRouter:
         router = LogRouter(
             log_dir=tmp_path, log_format="text", tail_buffers={"w0": tail}
         )
-        router.open_run("scn", "per", trial=1, num_trials=1)
+        router.open_run("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "tail test",
             "level": "warning",
             "timestamp": "2026-08-05T10:00:00",
             "scenario_id": "scn",
             "persona_id": "per",
-            "trial": 1,
+            "trial_index": 1,
             "worker": "w0",
         }
         self._process(router, event_dict)
@@ -118,17 +118,17 @@ class TestLogRouter:
 
     def test_close_run_flushes(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scn", "per", trial=1, num_trials=1)
+        router.open_run("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "flush test",
             "level": "debug",
             "timestamp": "2026-08-05T10:00:00",
             "scenario_id": "scn",
             "persona_id": "per",
-            "trial": 1,
+            "trial_index": 1,
         }
         self._process(router, event_dict)
-        router.close_run("scn", "per", trial=1)
+        router.close_run("scn", "per", trial_index=1)
         log_file = tmp_path / "simulate-scn_per-01.log"
         content = log_file.read_text()
         assert "flush test" in content
@@ -137,14 +137,14 @@ class TestLogRouter:
         import json
 
         router = LogRouter(log_dir=tmp_path, log_format="json")
-        router.open_run("scn", "per", trial=1, num_trials=1)
+        router.open_run("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "json test",
             "level": "info",
             "timestamp": "2026-08-05T10:00:00",
             "scenario_id": "scn",
             "persona_id": "per",
-            "trial": 1,
+            "trial_index": 1,
         }
         self._process(router, event_dict)
         router.close_all()
