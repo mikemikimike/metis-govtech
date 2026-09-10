@@ -10,7 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **Simulation `trial` renamed to 1-based `trial_index`** — the trial counter is now `trial_index` throughout the simulation pipeline and is consistently 1-based (the first trial is `1`), removing the scattered `trial + 1` conversions in run-folder names, per-run log filenames, structlog context, and TUI output. `RunPlanItem` is now a `NamedTuple` (`scenario`, `persona`, `trial_index`) instead of a bare tuple alias, and `run_plan` is a required argument of `run_experiment` / `_run_experiment_async` (no longer lazily re-expanded).
+- **`SimulationState` mutators renamed** — `start_run` → `mark_run_started`, `update_run_turn` → `mark_run_turn`, `complete_run` → `mark_run_completed`, `fail_run` → `mark_run_failed`; all take a 1-based `trial_index`.
+- **JSON orchestration-log field renamed `trial` → `trial_index`** (output-schema change) — the `RUN_STARTED` / `RUN_COMPLETED` records emitted under `--log-format json` now use the key `"trial_index"` instead of `"trial"` (the per-run structlog context key changed to match). The value is unchanged (still 1-based). Text-format logs are unaffected. Any external tooling that parses the JSON orchestration log and keys on the old `"trial"` field must be updated.
+
 ### Fixed
+
+- **Crash tracebacks now persist to per-run text logs** — `LogRouter._format_file_line` appends the rendered `exception` traceback (supplied by `metis-core`'s `format_exc_info` processor) to the per-run text log line when present. Previously an unexpected simulation crash logged via `logger.exception(...)` left only a bare marker line with no stack in the common configuration (text logs, TUI on), forcing a re-run with stderr captured to diagnose. Requires `metis-core` ≥ 0.4.1. JSON per-run logs now carry a clean `exception` string instead of a stringified `exc_info` tuple.
 
 ---
 

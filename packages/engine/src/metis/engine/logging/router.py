@@ -176,7 +176,9 @@ class LogRouter:
         timestamp = event_dict.get("timestamp", "")
         level = event_dict.get("level", "info").upper()
         event = event_dict.get("event", "")
-        return f"[{timestamp}] [{level:<8}] {event}"
+        line = f"[{timestamp}] [{level:<8}] {event}"
+        exception = event_dict.get("exception")
+        return f"{line}\n{exception}" if exception else line
 
 
 def setup_engine_logging(

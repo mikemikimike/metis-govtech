@@ -91,6 +91,7 @@ def run_experiment(
     experiment: Experiment,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
+    *,
     run_plan: list[RunPlanItem],
     output_dir: Path | None = None,
     concurrency: int = 1,

@@ -4,6 +4,14 @@ All notable changes to `metis-core` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] — Unreleased
+
+### Added
+
+- `structlog.processors.format_exc_info` added to the `shared_processors` and `foreign_processors` chains in `configure_logging()` — events carrying `exc_info` (e.g. from `logger.exception(...)` or `logger.error(..., exc_info=True)`) now have their traceback rendered into an `exception` string before the terminal renderer runs. This makes the traceback available to downstream renderers (including `metis-engine`'s per-run file router) and produces a clean `exception` string in the JSON sink instead of a stringified `(type, value, tb)` tuple.
+
+---
+
 ## [0.4.0] — 2026-09-02
 
 ### Added
