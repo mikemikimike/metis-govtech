@@ -15,6 +15,7 @@ from metis.wizard.application.compile import compile_experiment
 from metis.wizard.application.matching import GENERATED_JUDGE_FQN, EmbeddingMatcher
 from metis.wizard.contracts import ChoiceRequest, InterviewState, Option, OptionId
 from metis.wizard.domain.permissions import InterviewStep
+from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import research_assistant
 
 
@@ -33,7 +34,9 @@ def _state_pending_at(stage: InterviewStep) -> InterviewState:
         request_id="req-1",
         options=[Option(id=OptionId(action="accept"), label="Looks right")],
     )
-    return InterviewState(profile=research_assistant(), pending=request)
+    return InterviewState(
+        profile=research_assistant(), context=interview_context(), pending=request
+    )
 
 
 def test_the_spinner_uses_the_package_status_copy_for_the_pending_stage() -> None:
@@ -94,9 +97,17 @@ def test_a_retryable_failure_is_resent_when_the_user_agrees(
         InterviewSuccess,
     )
 
-    start = InterviewStartRequest(description="a helpful research assistant")
+    start = InterviewStartRequest(
+        description="a helpful research assistant",
+        known_capability_ids=[],
+        capability_confidence="low",
+    )
     done = InterviewSuccess(
-        state=InterviewState(profile=research_assistant(), confirmed=True),
+        state=InterviewState(
+            profile=research_assistant(),
+            context=interview_context(),
+            confirmed=True,
+        ),
         stage=InterviewStep.DONE,
         outcome="done",
     )
@@ -157,7 +168,9 @@ def test_a_non_retryable_failure_stops_without_offering_a_retry(
 
     with pytest.raises(typer.Exit):
         cli._drive(
-            InterviewStartRequest(description="x"),
+            InterviewStartRequest(
+                description="x", known_capability_ids=[], capability_confidence="low"
+            ),
             interviewer=StubInterviewer(),
             matcher=None,
             out_dir=tmp_path,

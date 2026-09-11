@@ -1,5 +1,11 @@
 """Serializable contracts exchanged by the wizard and its doors or providers."""
 
+from metis.wizard.contracts.capabilities import (
+    CapabilityCategory,
+    CapabilityCategoryDefinition,
+    CapabilityDefinition,
+    CapabilityId,
+)
 from metis.wizard.contracts.config import InterviewConfig, PerspectiveDefinition
 from metis.wizard.contracts.conversation import (
     AnyCard,
@@ -35,6 +41,8 @@ from metis.wizard.contracts.conversation import (
     options_of,
 )
 from metis.wizard.contracts.interview_state import (
+    CapabilityConfidence,
+    CapabilityEvidence,
     InterviewContext,
     InterviewState,
     Perspective,
@@ -85,6 +93,12 @@ __all__ = [
     "AnyRequest",
     "AnyResponse",
     "Behaviour",
+    "CapabilityCategory",
+    "CapabilityCategoryDefinition",
+    "CapabilityConfidence",
+    "CapabilityDefinition",
+    "CapabilityEvidence",
+    "CapabilityId",
     "BehaviourDraft",
     "BehaviourCard",
     "Card",

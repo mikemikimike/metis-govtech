@@ -21,14 +21,17 @@ from metis.wizard.contracts import (
     ProductProfile,
 )
 from metis.wizard.domain.permissions import InterviewStep
+from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
 
 
 def _start_body() -> dict[str, object]:
-    return InterviewStartRequest(description="A policy research assistant").model_dump(
-        mode="json"
-    )
+    return InterviewStartRequest(
+        description="A policy research assistant",
+        known_capability_ids=[],
+        capability_confidence="low",
+    ).model_dump(mode="json")
 
 
 def _empty_profile() -> dict[str, object]:
@@ -40,6 +43,7 @@ def _empty_profile() -> dict[str, object]:
 def _pending_state() -> InterviewState:
     return InterviewState(
         profile=research_assistant(),
+        context=interview_context(),
         behaviours_confirmed=True,
         pending=ChatRequest(
             prompt="What should change?",
@@ -58,18 +62,28 @@ def test_start_returns_state_with_a_pending_request(client: TestClient) -> None:
     assert body["outcome"] == "awaiting_response"
     assert body["state"]["pending"]["request_id"]
     assert body["state"]["context"]["perspective"] == "end_user"
+    assert body["state"]["context"]["capability_evidence"] == {
+        "known_capability_ids": [],
+        "confidence": "low",
+    }
 
 
 def test_start_records_the_chosen_perspective(client: TestClient) -> None:
     body = {
         "description": "A policy research assistant",
         "perspective": Perspective.SECURITY.value,
+        "known_capability_ids": ["tool_use"],
+        "capability_confidence": "high",
     }
 
     response = client.post("/api/v1/wizard/interview/start", json=body)
 
     assert response.status_code == 200
     assert response.json()["state"]["context"]["perspective"] == "security"
+    assert response.json()["state"]["context"]["capability_evidence"] == {
+        "known_capability_ids": ["tool_use"],
+        "confidence": "high",
+    }
 
 
 def test_a_stale_request_id_is_a_400_with_the_state_echoed_back(
@@ -178,7 +192,8 @@ def test_an_exhausted_model_during_end_is_a_503_with_safe_state(make_client) -> 
                     "users": "Policy analysts",
                 }
             }
-        )
+        ),
+        context=interview_context(),
     )
     response = make_client(DraftUnavailable()).post(
         "/api/v1/wizard/interview/end",
@@ -245,6 +260,7 @@ def test_unexpected_interview_service_faults_are_stable_500_responses(
 def test_end_returns_best_effort_completion(client: TestClient) -> None:
     state = {
         "profile": research_assistant().model_dump(mode="json"),
+        "context": interview_context().model_dump(mode="json"),
         "behaviours_confirmed": True,
         "confirmed": False,
         "history": [],

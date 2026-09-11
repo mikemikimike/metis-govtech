@@ -19,6 +19,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from metis.wizard.contracts.capabilities import CapabilityId
 from metis.wizard.contracts.conversation import AnyRequest
 
 # `profile` is a Pydantic field, so `ProductProfile` must be a runtime import — Pydantic
@@ -46,12 +47,36 @@ class Perspective(StrEnum):
     SECURITY = "security"
 
 
+class CapabilityConfidence(StrEnum):
+    """How complete the user's known-capability selection is."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class CapabilityEvidence(BaseModel):
+    """User-owned capability evidence that travels with an Interview."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    known_capability_ids: list[CapabilityId]
+    confidence: CapabilityConfidence
+
+    @model_validator(mode="after")
+    def _reject_duplicate_capabilities(self) -> CapabilityEvidence:
+        if len(self.known_capability_ids) != len(set(self.known_capability_ids)):
+            raise ValueError("known_capability_ids must not contain duplicates")
+        return self
+
+
 class InterviewContext(BaseModel):
     """User-owned context that travels with an Interview but is not Profile data."""
 
     model_config = ConfigDict(extra="forbid")
 
     perspective: Perspective = Perspective.END_USER
+    capability_evidence: CapabilityEvidence
 
 
 class InterviewState(BaseModel):
@@ -66,7 +91,7 @@ class InterviewState(BaseModel):
     profile: ProductProfile
     # The user's point of view for the opening interview steps. This is deliberately outside
     # ProductProfile: it seeds the interview but is not part of the finished evaluation artifact.
-    context: InterviewContext = Field(default_factory=InterviewContext)
+    context: InterviewContext
     # The measurement-scope lock. The combined Behaviour screen asks the user to pick the
     # behaviours worth measuring; its Continue sets this true. It is not a "the user saw the
     # screen" receipt — Criteria generation reads the measured subset it locks in, and any later

@@ -33,7 +33,10 @@ const state: InterviewState = {
   },
   behaviours_confirmed: false,
   confirmed: false,
-  context: { perspective: "end_user" },
+  context: {
+    perspective: "end_user",
+    capability_evidence: { known_capability_ids: [], confidence: "low" },
+  },
   history: [],
   user_typed: [],
   issued_ids: [],
@@ -78,6 +81,11 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
         id: "bad-record",
         state: {},
       });
+      tx.objectStore("interviews").put({
+        ...healthy,
+        id: "missing-capability-evidence",
+        state: { ...state, context: { perspective: "end_user" } },
+      });
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     };
@@ -88,8 +96,9 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
     (await repository.list()).map((record) => record.id),
     ["healthy-record"],
   );
-  assert.equal(repository.problems.length, 2);
+  assert.equal(repository.problems.length, 3);
   assert.equal(await repository.read("bad-record"), undefined);
+  assert.equal(await repository.read("missing-capability-evidence"), undefined);
 });
 
 test("rejects an invalid update before it can replace a healthy record", async () => {

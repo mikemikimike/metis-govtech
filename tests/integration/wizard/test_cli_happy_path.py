@@ -13,7 +13,7 @@ def test_init_happy_path_writes_experiment_review_and_profile(tmp_path: Path) ->
     app = create_cli_app(ScriptedInterviewer)
     # Two model questions, keep every behaviour measured and continue,
     # continue through criteria, accept personas, then continue through scenarios.
-    answers = ["answer", "answer", "7", "11", "1", "9"]
+    answers = ["", "low", "answer", "answer", "7", "11", "1", "9"]
 
     result = CliRunner().invoke(
         app,

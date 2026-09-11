@@ -22,3 +22,12 @@ def test_wizard_config_returns_package_owned_working_status(
         "security",
     ]
     assert all(item["label"] and item["question"] for item in body["perspectives"])
+    assert [category["id"] for category in body["capability_categories"]] == [
+        "cognitive",
+        "interaction",
+        "operational",
+    ]
+    assert (
+        sum(len(category["capabilities"]) for category in body["capability_categories"])
+        == 12
+    )

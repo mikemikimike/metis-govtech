@@ -31,7 +31,10 @@ const baseState = (): InterviewState => ({
   },
   behaviours_confirmed: false,
   confirmed: false,
-  context: { perspective: "end_user" },
+  context: {
+    perspective: "end_user",
+    capability_evidence: { known_capability_ids: [], confidence: "low" },
+  },
   history: [],
   user_typed: [],
   issued_ids: [],
@@ -140,7 +143,10 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
   };
 
   const repository = new InterviewRepository();
-  const started = await api.start("A support assistant");
+  const started = await api.start("A support assistant", {
+    known_capability_ids: [],
+    confidence: "low",
+  });
   let record = emptyRecord(
     "offline-flow",
     started.state,

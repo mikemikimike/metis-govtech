@@ -158,7 +158,7 @@ def package(
 
 @router.post(
     "/interview/start",
-    summary="Start a wizard Interview from its product description",
+    summary="Start a wizard Interview from its opening evidence",
     response_model=InterviewResult,
     responses={
         400: {"model": InterviewFailure},
@@ -171,7 +171,7 @@ def start(
     body: InterviewStartRequest,
     dependencies: WizardDependencies = Depends(get_dependencies),
 ) -> JSONResponse:
-    """Create client-held Interview state from the user's initial raw description."""
+    """Create client-held Interview state from the complete opening input."""
     result = dependencies.interview_handler(body)
     return _result_response(result)
 

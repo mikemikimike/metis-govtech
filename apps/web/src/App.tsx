@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
+  Check,
   Code2,
   ClipboardCheck,
   PanelLeft,
@@ -11,6 +13,10 @@ import type { LucideIcon } from "lucide-react";
 import type {
   InterviewSummary,
   LocalInterviewRecord,
+  CapabilityCategoryDefinition,
+  CapabilityConfidence,
+  CapabilityEvidence,
+  CapabilityId,
   Perspective,
   PerspectiveDefinition,
   UserResponse,
@@ -20,7 +26,7 @@ import { Composer, Transcript } from "./Conversation";
 import { Done } from "./Done";
 import { Profile, stepPosition } from "./Profile";
 import { InterviewRail } from "./InterviewRail";
-import { cn } from "./ui";
+import { Button, Tooltip, cn } from "./ui";
 import {
   InterviewRepository,
   emptyRecord,
@@ -43,6 +49,29 @@ const DOCUMENT_WIDTH_MAX = 60;
 const SELECTED_INTERVIEW_KEY = "metis-web-selected-interview";
 const repository = new InterviewRepository();
 type WizardConfig = Awaited<ReturnType<typeof api.config>>;
+type OpeningPhase = "describe" | "capabilities";
+export type WizardConfigState =
+  | { status: "loading" }
+  | { status: "ready"; config: WizardConfig }
+  | { status: "error"; message: string };
+export type CapabilityEvidenceDraft = Omit<CapabilityEvidence, "confidence"> & {
+  confidence: CapabilityConfidence | null;
+};
+
+const emptyCapabilityEvidence = (): CapabilityEvidenceDraft => ({
+  known_capability_ids: [],
+  confidence: null,
+});
+
+export function completeCapabilityEvidence(
+  draft: CapabilityEvidenceDraft,
+): CapabilityEvidence | null {
+  if (draft.confidence === null) return null;
+  return {
+    known_capability_ids: draft.known_capability_ids,
+    confidence: draft.confidence,
+  };
+}
 
 const PERSPECTIVE_ICONS: Record<Perspective, LucideIcon> = {
   end_user: UserRound,
@@ -69,9 +98,15 @@ export function App() {
   const [record, setRecord] = useState<LocalInterviewRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [workingStatus, setWorkingStatus] = useState("Working…");
-  const [wizardConfig, setWizardConfig] = useState<WizardConfig | null>(null);
+  const [wizardConfig, setWizardConfig] = useState<WizardConfigState>({
+    status: "loading",
+  });
   const [selectedPerspective, setSelectedPerspective] =
     useState<Perspective>("end_user");
+  const [openingPhase, setOpeningPhase] = useState<OpeningPhase>("describe");
+  const [openingDescription, setOpeningDescription] = useState("");
+  const [capabilityEvidence, setCapabilityEvidence] =
+    useState<CapabilityEvidenceDraft>(emptyCapabilityEvidence);
   const [error, setError] = useState<string | null>(null);
   const [retryIntent, setRetryIntent] = useState<RetryIntent | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -107,15 +142,20 @@ export function App() {
     setShowMetrics(false);
   }, [record?.id]);
 
-  useEffect(() => {
-    void api.config().then(
-      (config) => {
-        setWizardConfig(config);
-        setWorkingStatus(config.working_status);
-      },
-      () => undefined,
-    );
+  const loadWizardConfig = useCallback(async () => {
+    setWizardConfig({ status: "loading" });
+    try {
+      const config = await api.config();
+      setWizardConfig({ status: "ready", config });
+      setWorkingStatus(config.working_status);
+    } catch (cause) {
+      setWizardConfig({ status: "error", message: errorMessage(cause) });
+    }
   }, []);
+
+  useEffect(() => {
+    void loadWizardConfig();
+  }, [loadWizardConfig]);
 
   const refreshList = useCallback(async () => {
     const rows = await repository.list();
@@ -179,20 +219,28 @@ export function App() {
     setRecord(null);
     setError(null);
     setRetryIntent(null);
+    setOpeningPhase("describe");
+    setOpeningDescription("");
+    setCapabilityEvidence(emptyCapabilityEvidence());
     forgetSelectedInterview();
   }, []);
 
   const beginWithMessage = useCallback(
     async (
       description: string,
-      perspective: Perspective = selectedPerspective,
+      perspective: Perspective,
+      evidence: CapabilityEvidence | null,
     ) => {
       if (busy) return;
+      if (evidence === null) {
+        setError("Choose Low, Medium, or High confidence before you start.");
+        return;
+      }
       setBusy(true);
       setError(null);
       setRetryIntent(null);
       try {
-        const result = await api.start(description, perspective);
+        const result = await api.start(description, evidence, perspective);
         const next = emptyRecord(
           crypto.randomUUID(),
           result.state,
@@ -209,7 +257,7 @@ export function App() {
         setBusy(false);
       }
     },
-    [busy, refreshList, selectedPerspective, showError],
+    [busy, refreshList, showError],
   );
 
   const saveResult = useCallback(
@@ -411,13 +459,23 @@ export function App() {
           />
         )}
         {view === null ? (
-          <OpeningScreen
-            config={wizardConfig}
+          <OpeningRoute
+            configState={wizardConfig}
+            onRetry={() => void loadWizardConfig()}
             busy={busy}
+            phase={openingPhase}
+            description={openingDescription}
             perspective={selectedPerspective}
             onPerspective={setSelectedPerspective}
-            onBegin={(description, perspective) =>
-              void beginWithMessage(description, perspective)
+            onContinue={(description) => {
+              setOpeningDescription(description);
+              setOpeningPhase("capabilities");
+            }}
+            onBack={() => setOpeningPhase("describe")}
+            capabilityEvidence={capabilityEvidence}
+            onCapabilityEvidence={setCapabilityEvidence}
+            onBegin={(description, perspective, evidence) =>
+              void beginWithMessage(description, perspective, evidence)
             }
           />
         ) : (
@@ -488,43 +546,344 @@ export function App() {
   );
 }
 
+type OpeningScreenProps = {
+  config: WizardConfig;
+  busy: boolean;
+  phase: OpeningPhase;
+  description: string;
+  perspective: Perspective;
+  onPerspective: (perspective: Perspective) => void;
+  onContinue: (description: string) => void;
+  onBack: () => void;
+  capabilityEvidence: CapabilityEvidenceDraft;
+  onCapabilityEvidence: (evidence: CapabilityEvidenceDraft) => void;
+  onBegin: (
+    description: string,
+    perspective: Perspective,
+    evidence: CapabilityEvidence | null,
+  ) => void;
+};
+
+export function OpeningRoute({
+  configState,
+  onRetry,
+  ...openingProps
+}: Omit<OpeningScreenProps, "config"> & {
+  configState: WizardConfigState;
+  onRetry: () => void;
+}) {
+  if (configState.status !== "ready") {
+    return <OpeningConfigurationState state={configState} onRetry={onRetry} />;
+  }
+  return <OpeningScreen config={configState.config} {...openingProps} />;
+}
+
+export function OpeningConfigurationState({
+  state,
+  onRetry,
+}: {
+  state: Exclude<WizardConfigState, { status: "ready" }>;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-6 py-10">
+      {state.status === "loading" ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading interview options…
+        </p>
+      ) : (
+        <div
+          role="alert"
+          className="flex max-w-md flex-col items-start gap-3 rounded-lg border border-border bg-card p-5"
+        >
+          <p className="text-sm text-foreground">
+            The interview options could not load. {state.message}
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function OpeningScreen({
   config,
   busy,
+  phase,
+  description,
   perspective,
   onPerspective,
+  onContinue,
+  onBack,
+  capabilityEvidence,
+  onCapabilityEvidence,
   onBegin,
-}: {
-  config: WizardConfig | null;
-  busy: boolean;
-  perspective: Perspective;
-  onPerspective: (perspective: Perspective) => void;
-  onBegin: (description: string, perspective: Perspective) => void;
-}) {
+}: OpeningScreenProps) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6">
-      <div className="flex w-full max-w-2xl flex-col gap-6">
-        <h1 className="text-center text-2xl font-semibold text-foreground">
-          {config?.opening_question}
-        </h1>
-        <div className="flex flex-col gap-3">
-          <Composer
-            request={undefined}
-            busy={busy}
-            alwaysEnabled
-            leadingIcon
-            bare
-            placeholder={config?.opening_question}
-            onSend={(description) => onBegin(description, perspective)}
-          />
-          <PerspectivePicker
-            perspectives={config?.perspectives ?? []}
-            selected={perspective}
-            onSelect={onPerspective}
-          />
-        </div>
+    <div className="quiet-scrollbar flex flex-1 overflow-y-auto px-6 py-10">
+      <div
+        key={phase}
+        className={cn(
+          "animate-enter-opening-step mx-auto flex w-full max-w-3xl flex-col",
+          phase === "describe" ? "my-auto gap-8" : "gap-6",
+        )}
+      >
+        {phase === "describe" ? (
+          <>
+            <h1 className="text-center text-2xl font-semibold text-foreground">
+              {config.opening_question}
+            </h1>
+            <div className="flex flex-col gap-4">
+              <Composer
+                request={undefined}
+                busy={busy}
+                alwaysEnabled
+                leadingIcon
+                bare
+                initialText={description}
+                roomy
+                placeholder="Describe your product…"
+                onSend={onContinue}
+              />
+              <PerspectivePicker
+                perspectives={config.perspectives}
+                selected={perspective}
+                onSelect={onPerspective}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <h1 className="text-2xl font-semibold text-foreground">
+                  What can the system do?
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Select the capabilities you know are present.
+                </p>
+              </div>
+              <Button type="button" variant="ghost" onClick={onBack}>
+                <ArrowLeft size={15} strokeWidth={1.75} aria-hidden />
+                Edit product
+              </Button>
+            </div>
+            <div className="flex flex-col gap-4">
+              <CapabilityPicker
+                categories={config.capability_categories}
+                selected={capabilityEvidence.known_capability_ids}
+                onChange={(knownCapabilityIds) =>
+                  onCapabilityEvidence({
+                    ...capabilityEvidence,
+                    known_capability_ids: knownCapabilityIds,
+                  })
+                }
+                disabled={busy}
+                hideLegend
+              />
+              <CapabilityConfidencePicker
+                selected={capabilityEvidence.confidence}
+                onSelect={(confidence) =>
+                  onCapabilityEvidence({ ...capabilityEvidence, confidence })
+                }
+                disabled={busy}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              className="self-end px-4 py-2"
+              disabled={busy || capabilityEvidence.confidence === null}
+              onClick={() =>
+                onBegin(
+                  description,
+                  perspective,
+                  completeCapabilityEvidence(capabilityEvidence),
+                )
+              }
+            >
+              {busy ? "Starting…" : "Start interview"}
+            </Button>
+          </>
+        )}
       </div>
     </div>
+  );
+}
+
+export function CapabilityPicker({
+  categories,
+  selected,
+  onChange,
+  disabled = false,
+  hideLegend = false,
+}: {
+  categories: CapabilityCategoryDefinition[];
+  selected: CapabilityId[];
+  onChange: (capabilities: CapabilityId[]) => void;
+  disabled?: boolean;
+  hideLegend?: boolean;
+}) {
+  const toggle = (id: CapabilityId) =>
+    onChange(
+      selected.includes(id)
+        ? selected.filter((value) => value !== id)
+        : [...selected, id],
+    );
+
+  return (
+    <fieldset className="flex flex-col gap-3">
+      <legend
+        className={cn(
+          "text-sm font-medium text-foreground",
+          hideLegend && "sr-only",
+        )}
+      >
+        What can the system do?
+      </legend>
+      <div className="grid items-start gap-4 md:grid-cols-3">
+        {categories.map((category) => (
+          <div
+            key={category.id}
+            className="overflow-hidden rounded-lg border border-border bg-card"
+          >
+            <div className="flex items-center justify-between border-b border-border bg-muted/45 px-4 py-3">
+              <h2 className="text-sm font-semibold text-foreground">
+                {category.name}
+              </h2>
+              <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                {
+                  category.capabilities.filter((capability) =>
+                    selected.includes(capability.id),
+                  ).length
+                }
+                /{category.capabilities.length}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              {category.capabilities.map((capability) => {
+                const active = selected.includes(capability.id);
+                return (
+                  <Tooltip
+                    key={capability.id}
+                    label={capability.description}
+                    className="w-full border-t border-border first:border-t-0"
+                  >
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={active}
+                      aria-label={`${capability.name}: ${capability.description}`}
+                      disabled={disabled}
+                      onClick={() => toggle(capability.id)}
+                      className={cn(
+                        "flex min-h-12 w-full items-center gap-3 px-4 py-3 text-left",
+                        "transition-colors duration-150",
+                        active
+                          ? "bg-accent/10 text-foreground"
+                          : "bg-card text-card-foreground hover:bg-muted",
+                        "disabled:cursor-not-allowed disabled:opacity-45",
+                      )}
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border",
+                          active
+                            ? "border-accent bg-accent text-accent-foreground"
+                            : "border-input bg-background",
+                        )}
+                      >
+                        {active && <Check size={14} strokeWidth={2.25} />}
+                      </span>
+                      <span className="text-sm font-medium">
+                        {capability.name}
+                      </span>
+                    </button>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+export function CapabilityConfidencePicker({
+  selected,
+  onSelect,
+  disabled = false,
+}: {
+  selected: CapabilityConfidence | null;
+  onSelect: (confidence: CapabilityConfidence) => void;
+  disabled?: boolean;
+}) {
+  const options: Array<{
+    id: CapabilityConfidence;
+    label: string;
+  }> = [
+    { id: "low", label: "Low" },
+    { id: "medium", label: "Medium" },
+    { id: "high", label: "High" },
+  ];
+  return (
+    <fieldset className="rounded-lg border border-border bg-card px-4 py-3">
+      <legend className="sr-only">
+        How confident are you in this selection?
+      </legend>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span aria-hidden className="text-sm font-medium text-foreground">
+          How confident are you in this selection?
+        </span>
+        <div
+          role="radiogroup"
+          aria-label="How confident are you in this selection?"
+          aria-required="true"
+          className="flex flex-wrap gap-2"
+        >
+          {options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={selected === option.id}
+              disabled={disabled}
+              onClick={() => onSelect(option.id)}
+              className={cn(
+                "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors duration-150",
+                selected === option.id
+                  ? "border-accent bg-accent/10 text-foreground"
+                  : "border-border bg-card text-card-foreground hover:border-accent/40 hover:bg-muted",
+                "disabled:cursor-not-allowed disabled:opacity-45",
+              )}
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "flex h-4 w-4 items-center justify-center rounded-full border",
+                  selected === option.id
+                    ? "border-accent"
+                    : "border-muted-foreground/60",
+                )}
+              >
+                {selected === option.id && (
+                  <span className="h-2 w-2 rounded-full bg-accent" />
+                )}
+              </span>
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </fieldset>
   );
 }
 
@@ -559,7 +918,7 @@ export function PerspectivePicker({
               aria-label={`${perspective.label}: ${perspective.question}`}
               onClick={() => onSelect(perspective.id)}
               className={cn(
-                "group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-4 py-3 text-left",
+                "group relative flex w-full items-center gap-3 overflow-hidden rounded-lg border px-4 py-3 text-left",
                 "transition-colors duration-200",
                 active
                   ? "border-accent bg-accent/10 text-foreground"

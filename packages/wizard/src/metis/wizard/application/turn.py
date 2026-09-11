@@ -50,6 +50,7 @@ from metis.wizard.contracts.conversation import (
 )
 from metis.wizard.contracts.interview_state import (
     HISTORY_LIMIT,
+    CapabilityEvidence,
     InterviewContext,
     InterviewState,
     Turn,
@@ -244,7 +245,13 @@ def _start(
     working = _lift(
         InterviewState(
             profile=profile,
-            context=InterviewContext(perspective=request.perspective),
+            context=InterviewContext(
+                perspective=request.perspective,
+                capability_evidence=CapabilityEvidence(
+                    known_capability_ids=request.known_capability_ids,
+                    confidence=request.capability_confidence,
+                ),
+            ),
             history=[Turn(role="user", text=request.description)],
             issued_ids=collect_profile_ids(profile),
         ),

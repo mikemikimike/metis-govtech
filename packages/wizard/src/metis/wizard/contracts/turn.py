@@ -7,24 +7,40 @@ from typing import Annotated, Literal, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from metis.wizard.contracts.capabilities import CapabilityId
 from metis.wizard.contracts.conversation import AnyResponse
-from metis.wizard.contracts.interview_state import InterviewState, Perspective
+from metis.wizard.contracts.interview_state import (
+    CapabilityConfidence,
+    InterviewState,
+    Perspective,
+)
 from metis.wizard.domain.permissions import InterviewStep
 
 
 class InterviewStartRequest(BaseModel):
-    """The first operation, containing the user's raw product description."""
+    """The first operation, containing all opening evidence."""
 
     model_config = ConfigDict(extra="forbid")
 
     description: str
     perspective: Perspective = Perspective.END_USER
+    known_capability_ids: list[CapabilityId]
+    capability_confidence: CapabilityConfidence
 
     @field_validator("description")
     @classmethod
     def _require_description(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("description must not be blank")
+        return value
+
+    @field_validator("known_capability_ids")
+    @classmethod
+    def _reject_duplicate_capabilities(
+        cls, value: list[CapabilityId]
+    ) -> list[CapabilityId]:
+        if len(value) != len(set(value)):
+            raise ValueError("known_capability_ids must not contain duplicates")
         return value
 
 

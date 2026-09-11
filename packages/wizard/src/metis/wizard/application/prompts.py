@@ -15,9 +15,17 @@ from typing import TYPE_CHECKING, Literal, TypeAlias, cast
 
 import yaml
 
-from metis.wizard.application.config import clarify_turn_cap, opening_question
+from metis.wizard.application.config import (
+    clarify_turn_cap,
+    load_config,
+    opening_question,
+)
 from metis.wizard.application.interviewer import ClarifyPhase
-from metis.wizard.contracts.interview_state import InterviewContext, Perspective
+from metis.wizard.contracts.interview_state import (
+    CapabilityConfidence,
+    InterviewContext,
+    Perspective,
+)
 
 if TYPE_CHECKING:
     from metis.wizard.contracts.interview_state import Turn
@@ -43,6 +51,7 @@ _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
             "profile",
             "history",
             "perspective",
+            "capability_evidence",
             "question_number",
             "question_cap",
         }
@@ -52,18 +61,21 @@ _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
             "profile",
             "history",
             "perspective",
+            "capability_evidence",
             "question_number",
             "question_cap",
         }
     ),
-    "behaviours": frozenset({"profile", "history", "perspective"}),
+    "behaviours": frozenset(
+        {"profile", "history", "perspective", "capability_evidence"}
+    ),
     "criteria": frozenset({"profile"}),
     "personas": frozenset({"profile"}),
     "scenarios": frozenset({"profile"}),
     "chat": frozenset({"profile", "step", "text", "scope"}),
     "suggest_criterion": frozenset({"profile", "behaviour_id"}),
 }
-_SYSTEM_PLACEHOLDERS = frozenset({"patch_rules", "primer"})
+_SYSTEM_PLACEHOLDERS = frozenset({"patch_rules", "primer", "arc_catalogue"})
 
 
 class PromptCatalogError(RuntimeError):
@@ -189,7 +201,11 @@ def _system_message(catalog: PromptCatalog) -> str:
     return _substitute(
         catalog.system_template,
         "system.template",
-        {"patch_rules": catalog.patch_rules, "primer": primer()},
+        {
+            "patch_rules": catalog.patch_rules,
+            "primer": primer(),
+            "arc_catalogue": arc_catalogue(),
+        },
     )
 
 
@@ -225,6 +241,51 @@ def _perspective(context: InterviewContext | None) -> str:
             )
         content[perspective] = text.strip()
     return f"{selected.value}\n{content[selected]}"
+
+
+def arc_catalogue() -> str:
+    """Render the fixed ARC catalogue for the general model context."""
+    current = load_config()
+    lines = ["The ARC capability catalogue:"]
+    for category in current.capability_categories:
+        lines.append(f"{category.name} ({category.id.value}):")
+        for capability in category.capabilities:
+            lines.append(
+                f"- {capability.name} [{capability.id.value}]: {capability.description}"
+            )
+    return "\n".join(lines)
+
+
+def _capability_evidence(context: InterviewContext | None) -> str:
+    """Describe the user's capability evidence without treating omissions as negatives."""
+    if context is None:
+        raise PromptCatalogError("capability evidence is required for this model call.")
+    evidence = context.capability_evidence
+    selected = ", ".join(item.value for item in evidence.known_capability_ids) or "none"
+    guidance = {
+        CapabilityConfidence.LOW: (
+            "Treat the selection as possibly incomplete while you infer the provisional "
+            "evaluation map. Consider plausible omitted capabilities across the Clarify "
+            "sequence, but ask about one only when its presence or operation could "
+            "materially change that map."
+        ),
+        CapabilityConfidence.MEDIUM: (
+            "Consider an unselected capability only when it relates to the product "
+            "description or later answers and could materially change the provisional "
+            "evaluation map."
+        ),
+        CapabilityConfidence.HIGH: (
+            "Rely on the selection unless other product evidence suggests an omitted "
+            "capability that could materially change the provisional evaluation map."
+        ),
+    }[evidence.confidence]
+    return (
+        f"Known capability ids selected by the user: {selected}.\n"
+        f"Selection confidence: {evidence.confidence.value}.\n"
+        "Selected capabilities are known present. Unselected capabilities are not known "
+        "absent.\n"
+        f"Guidance: {guidance}"
+    )
 
 
 def _clarify_position(history: list[Turn]) -> tuple[int, int]:
@@ -273,6 +334,7 @@ def clarify(
             "profile": _profile(profile),
             "history": _transcript(history),
             "perspective": _perspective(context),
+            "capability_evidence": _capability_evidence(context),
             "question_number": str(question_number),
             "question_cap": str(question_cap),
         },
@@ -291,6 +353,7 @@ def behaviours(
             "profile": _profile(profile),
             "history": _transcript(history),
             "perspective": _perspective(context),
+            "capability_evidence": _capability_evidence(context),
         },
     )
 
@@ -338,6 +401,7 @@ __all__ = [
     "PERSPECTIVES_DIR",
     "PromptCatalog",
     "PromptCatalogError",
+    "arc_catalogue",
     "behaviours",
     "chat",
     "clarify",

@@ -9,6 +9,9 @@ field set, and that a pending screen rehydrates as its own concrete subclass acr
 import pytest
 
 from metis.wizard.contracts import (
+    CapabilityConfidence,
+    CapabilityEvidence,
+    CapabilityId,
     ChatRequest,
     ChoiceRequest,
     FormField,
@@ -21,6 +24,7 @@ from metis.wizard.contracts import (
 )
 from metis.wizard.contracts.interview_state import InterviewState
 from metis.wizard.domain.permissions import InterviewStep
+from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import research_assistant
 
 
@@ -33,6 +37,7 @@ def test_pending_state_requires_request_identity_and_stage() -> None:
     with pytest.raises(ValueError, match="pending.request_id"):
         InterviewState(
             profile=research_assistant(),
+            context=interview_context(),
             pending=ChoiceRequest(
                 prompt="Do these look right?",
                 options=[Option(id=OptionId(action="accept"), label="Looks right")],
@@ -51,6 +56,7 @@ def test_pending_state_requires_request_identity_and_stage() -> None:
     with pytest.raises(ValueError, match="pending.stage"):
         InterviewState(
             profile=research_assistant(),
+            context=interview_context(),
             pending=ChoiceRequest(
                 prompt="Do these look right?",
                 options=[],
@@ -78,16 +84,37 @@ def test_the_state_carries_only_client_held_control_data() -> None:
     }
 
 
-def test_context_defaults_to_the_end_user_perspective() -> None:
-    state = InterviewState(profile=research_assistant())
+def test_context_and_capability_evidence_are_required() -> None:
+    with pytest.raises(ValueError, match="context"):
+        InterviewState(profile=research_assistant())
 
-    assert state.context == InterviewContext(perspective=Perspective.END_USER)
+    with pytest.raises(ValueError, match="capability_evidence"):
+        InterviewContext(perspective=Perspective.END_USER)
+
+    with pytest.raises(ValueError, match="must not contain duplicates"):
+        CapabilityEvidence(
+            known_capability_ids=[CapabilityId.TOOL_USE, CapabilityId.TOOL_USE],
+            confidence=CapabilityConfidence.LOW,
+        )
+
+    context = InterviewContext(
+        perspective=Perspective.END_USER,
+        capability_evidence=CapabilityEvidence(
+            known_capability_ids=[CapabilityId.TOOL_USE],
+            confidence=CapabilityConfidence.MEDIUM,
+        ),
+    )
+    assert context.capability_evidence.known_capability_ids == [CapabilityId.TOOL_USE]
 
 
 def test_context_round_trips_without_entering_the_profile() -> None:
     state = InterviewState(
         profile=research_assistant(),
-        context=InterviewContext(perspective=Perspective.SECURITY),
+        context=interview_context(
+            perspective=Perspective.SECURITY,
+            known_capability_ids=[CapabilityId.TOOL_USE],
+            confidence=CapabilityConfidence.HIGH,
+        ),
     )
 
     loaded = _roundtrip(state)
@@ -110,6 +137,7 @@ def test_history_is_bounded_to_the_model_context_limit() -> None:
     with pytest.raises(ValueError):
         InterviewState(
             profile=research_assistant(),
+            context=interview_context(),
             history=[Turn(role="user", text=str(index)) for index in range(13)],
         )
 
@@ -118,6 +146,7 @@ def test_a_pending_choice_screen_rehydrates_as_its_subclass() -> None:
     """`Literal` discriminators exist so JSON rebuilds the concrete request, not the base."""
     state = InterviewState(
         profile=research_assistant(),
+        context=interview_context(),
         pending=ChoiceRequest(
             prompt="Do these look right?",
             options=[Option(id=OptionId(action="accept"), label="Looks right")],
@@ -155,7 +184,11 @@ def test_a_targeted_follow_up_keeps_its_target_across_the_wire() -> None:
         ),
     ):
         loaded = _roundtrip(
-            InterviewState(profile=research_assistant(), pending=request)
+            InterviewState(
+                profile=research_assistant(),
+                context=interview_context(),
+                pending=request,
+            )
         )
 
         assert type(loaded.pending) is type(request)

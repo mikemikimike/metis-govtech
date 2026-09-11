@@ -2,8 +2,9 @@
 
 Thin on purpose. The interview state is client-held, so the CLI keeps it in a JSON file and is
 just another door over `handle_interview`: send a concrete lifecycle request, render the pending
-screen, and send the answer back. `init` starts from the user's description; `resume` reloads the
-saved state and answers its pending screen. The corridor both run is the same loop.
+screen, and send the answer back. `init` starts from the user's description and ARC capability
+evidence; `resume` reloads the saved state and answers its pending screen. The corridor both run
+is the same loop.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from typing import TYPE_CHECKING, NoReturn
 
 import typer
 
+from metis.core.console import console
 from metis.wizard import (
     InterviewerUnavailable,
     InterviewFailure,
@@ -285,8 +287,6 @@ def init(
     ),
 ) -> None:
     """Start a new interview."""
-    from rich.console import Console
-
     # Refuse before anything else — the filesystem check costs no model call and needs no
     # credentials, so an accidental re-run of `init` reports the collision rather than
     # overwriting an interview in progress. `--restart` is the one way past this.
@@ -311,9 +311,17 @@ def init(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
 
-    console = Console()
+    from metis.wizard.adapters.cli.opening import read_capability_evidence
+
+    known_capability_ids, capability_confidence = read_capability_evidence(
+        out=console.print
+    )
     state = _drive(
-        InterviewStartRequest(description=description),
+        InterviewStartRequest(
+            description=description,
+            known_capability_ids=known_capability_ids,
+            capability_confidence=capability_confidence,
+        ),
         interviewer=interviewer,
         matcher=_matcher(interviewer),
         out_dir=out_dir,
@@ -331,8 +339,6 @@ def resume(
     ),
 ) -> None:
     """Pick up an interview where it left off."""
-    from rich.console import Console
-
     from metis.wizard.adapters.cli.render import render
 
     path = _state_path(out_dir)
@@ -365,7 +371,6 @@ def resume(
         response=response,
     )
 
-    console = Console()
     state = _drive(
         interview_request,
         interviewer=interviewer,

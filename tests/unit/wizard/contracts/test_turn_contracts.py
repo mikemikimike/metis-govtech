@@ -23,11 +23,13 @@ from metis.wizard.contracts import (
     ProductProfile,
 )
 from metis.wizard.domain.permissions import InterviewStep
+from tests.fixtures.wizard.context import interview_context
 
 
 def _state() -> InterviewState:
     return InterviewState(
         profile=ProductProfile(product=Product(name="n", description="d", users="u")),
+        context=interview_context(),
         pending=ChoiceRequest(
             prompt="Continue?",
             options=[Option(id=OptionId(action="continue"), label="Continue")],
@@ -39,7 +41,11 @@ def _state() -> InterviewState:
 
 def test_each_concrete_request_rebuilds_from_json() -> None:
     requests = [
-        InterviewStartRequest(description="A policy assistant"),
+        InterviewStartRequest(
+            description="A policy assistant",
+            known_capability_ids=[],
+            capability_confidence="low",
+        ),
         InterviewTurnRequest(
             state=_state(), request_id="req-1", response=ChoiceResponse(selected=[])
         ),
@@ -65,7 +71,45 @@ def test_a_turn_keeps_its_typed_response_across_the_wire() -> None:
 
 def test_start_requires_non_blank_description() -> None:
     with pytest.raises(ValidationError):
-        InterviewStartRequest(description="  ")
+        InterviewStartRequest(
+            description="  ", known_capability_ids=[], capability_confidence="low"
+        )
+
+
+@pytest.mark.parametrize("confidence", ["low", "medium", "high"])
+def test_start_requires_explicit_capability_evidence(confidence: str) -> None:
+    request = InterviewStartRequest(
+        description="A policy assistant",
+        known_capability_ids=[],
+        capability_confidence=confidence,
+    )
+
+    assert request.known_capability_ids == []
+    assert request.capability_confidence.value == confidence
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"description": "x", "known_capability_ids": []},
+        {"description": "x", "capability_confidence": "low"},
+        {
+            "description": "x",
+            "known_capability_ids": ["tool_use", "tool_use"],
+            "capability_confidence": "low",
+        },
+        {
+            "description": "x",
+            "known_capability_ids": ["not_a_capability"],
+            "capability_confidence": "low",
+        },
+    ],
+)
+def test_start_rejects_missing_duplicate_or_unknown_capability_input(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        InterviewStartRequest.model_validate(payload)
 
 
 @pytest.mark.parametrize(

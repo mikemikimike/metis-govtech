@@ -210,6 +210,24 @@
   animation: enter-conversation 0.28s ease-out both;
 }
 
+/* The opening flow has two client-side views before the one start request. A short lateral entry
+   confirms that Continue changed the setup view without making it look like the Interview has
+   started. */
+@keyframes enter-opening-step {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-enter-opening-step {
+  animation: enter-opening-step 0.22s ease-out both;
+}
+
 /* Content landing in the document. A row that has just been written rises the last few pixels
    into place instead of appearing cut — the arrival of content is a state change, and this is
    what marks it. It runs on mount and never again: nothing carries a "recently changed" mark

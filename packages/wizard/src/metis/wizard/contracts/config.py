@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from metis.wizard.contracts.capabilities import CapabilityCategoryDefinition
 from metis.wizard.contracts.interview_state import Perspective
 
 
@@ -25,6 +26,7 @@ class InterviewConfig(BaseModel):
     opening_question: str = Field(min_length=1)
     working_status: str = Field(min_length=1)
     perspectives: list[PerspectiveDefinition]
+    capability_categories: list[CapabilityCategoryDefinition]
 
 
 __all__ = ["InterviewConfig", "PerspectiveDefinition"]

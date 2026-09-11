@@ -94,6 +94,36 @@ Give the wizard a plain description of the product to evaluate:
 metis wizard init "A research assistant that answers questions from a company's internal documents and always cites its sources."
 ```
 
+Before the first model question, `init` shows the fixed ARC capability catalogue. It has three
+groups (Cognitive, Interaction, and Operational) and 12 package-owned capabilities. Select known
+capabilities with comma-separated numbers, names, or stable ids. Submit a blank line when you know
+none. The command then asks for one confidence value: `low`, `medium`, or `high`. This value means
+how confident you are that the selection covers all capabilities the system has; it is not a value
+for each capability.
+
+The catalogue is owned by `metis-wizard` in
+`packages/wizard/src/metis/wizard/capabilities.yaml`. Its source is the GovTech Singapore Agentic
+Risk & Capability Framework, with Apache-2.0 attribution. The wizard does not fetch this source at
+run time.
+
+The opening description, selected perspective, and capability evidence give the Interview its
+initial view of the product. During Clarify, the model silently infers a provisional map of the
+product's user workflows, Tasks, and important Behaviours. It asks one question only when the
+answer can materially change that map. A question can examine the most common use case, where a
+capability operates, how agents are ordered or coordinated, where approval applies, or another
+relationship that affects the evaluation. These are examples, not a checklist.
+
+Clarify questions are direct. They do not normally explain why the question was selected. A
+question can briefly name a selected capability when that reference is needed to understand a
+capability-specific question. Clarify ends when the remaining unknowns would not materially change
+the Tasks, Behaviours, their grouping, or their evaluation emphasis, or when the question limit is
+reached.
+
+After Clarify, the wizard groups Tasks by product workflow or user job and drafts a focused set of
+observable Behaviours that are important to evaluate. It does not use ARC categories,
+perspectives, capabilities, or system components as Task groups. Perspective changes emphasis, and
+capability evidence refines what can happen inside a workflow.
+
 The wizard opens an interview in the terminal. It asks about the product's behaviours, the personas
 and scenarios to test, and the criteria that decide a pass. You answer one screen at a time. The
 wizard saves the interview state to `evaluation/interview_state.json` after each turn, so an
@@ -125,6 +155,24 @@ metis wizard init "<description>" --restart
 
 Without `--restart`, `init` refuses to overwrite an interview in progress and points you to
 `resume`.
+
+### Headless start and state
+
+The stateless start operation requires all opening evidence:
+
+```json
+{
+  "description": "A research assistant",
+  "known_capability_ids": ["internet_search_access"],
+  "capability_confidence": "medium"
+}
+```
+
+`known_capability_ids` can be an empty list, but it must be present. The operation rejects unknown
+or duplicate ids. The returned `InterviewState` always contains
+`context.capability_evidence` with the same ids and confidence. This context belongs to the
+Interview, not to `ProductProfile`, and it must be sent unchanged on later turns. There is no
+capability Interview step or migration path for older state.
 
 ### Finish
 

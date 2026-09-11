@@ -31,7 +31,10 @@ const state: InterviewState = {
   },
   behaviours_confirmed: false,
   confirmed: false,
-  context: { perspective: "end_user" },
+  context: {
+    perspective: "end_user",
+    capability_evidence: { known_capability_ids: [], confidence: "low" },
+  },
   history: [],
   user_typed: [],
   issued_ids: [],

@@ -329,7 +329,11 @@ def walk(
     drive = send or _in_process
 
     state = None
-    request: object = InterviewStartRequest(description=description)
+    request: object = InterviewStartRequest(
+        description=description,
+        known_capability_ids=[],
+        capability_confidence="low",
+    )
     seen: list[object] = []
     max_bytes = 0
     scope_changed = False

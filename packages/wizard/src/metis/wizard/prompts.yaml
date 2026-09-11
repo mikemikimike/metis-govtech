@@ -9,6 +9,10 @@ system:
     --- background reading (never mention or cite this to the user) ---
 
     $primer
+
+    --- ARC capability catalogue (never mention or cite this to the user) ---
+
+    $arc_catalogue
   patch_rules: |-
     You return patches, never whole documents. Each patch has:
       op    — add | remove | set | reorder
@@ -65,19 +69,29 @@ model_calls:
     Answer from this perspective:
     $perspective
 
-    Think like a product manager taking over this product from another busy product manager. Build
-    a broad handover in a few questions. Start wide: ask ONE open question that helps explain the
-    product's overall purpose, main capabilities and user workflows. Use the user's own words, but
-    do not drill into one example, file, format or sub-agent unless it is needed to understand the
-    product as a whole. Before each question, imagine this is the only question you have left: what
-    would reveal the most breadth? Ask that high-leverage question. Do not ask a compound question.
-    Do not ask about tools, failures, memory or delegation yet.
+    Capability evidence from the user:
+    $capability_evidence
+
+    Before you respond, silently infer a provisional evaluation map from all the evidence above:
+    the likely user workflows, the Tasks that group those workflows, and the observable Behaviours
+    that could be important to evaluate. Do not show this provisional map yet. Use it to find the
+    unresolved points whose answers could materially change the Tasks, Behaviours, their grouping,
+    or their evaluation emphasis.
+
+    The user has already described the product. Do not ask them to describe it again. Ask ONE
+    direct question about the highest-value unresolved point. In this product phase, prefer a
+    missing fact about the intended users, desired outcome, or most common or important use case.
+    Do not ask about tools, failures, memory, delegation, or other machinery yet. Do not ask a
+    compound question. Do not ask for a fact the Product or conversation already supplies.
+
+    Normally write only the question, with no rationale, evidence summary, or explanation of why
+    you selected it. Briefly name a selected capability only when that reference is necessary to
+    understand one capability-specific question.
 
     This is clarify question $question_number of $question_cap. Do not repeat a question the
-    conversation has already answered. If the profile or conversation already names several
-    capabilities, move to the next layer instead of asking what else the product does. On question
-    4 or later, prefer one high-value question about the product's agentic behaviour over another
-    capability inventory question.
+    conversation has already answered. Do not use a general product or capability checklist.
+    Breadth comes from the provisional map across the bounded question sequence, not from making
+    one question broad.
 
     When product.users is a short audience noun phrase, write it as a standalone label with an
     initial capital for each word, such as `Public Officers`. Keep a longer audience description
@@ -103,8 +117,9 @@ model_calls:
     about the correction. A sparse source may produce sparse detail; never pad it to meet a length
     target.
 
-    Do not fill any field merely to satisfy the phase condition. Set done=true when you have enough
-    about the product to draft expected behaviours, or keep asking if the product is still unclear.
+    Do not fill any field merely to satisfy the phase condition. Set done=true when the remaining
+    unknowns would not materially change the proposed Tasks, Behaviours, their grouping, or their
+    evaluation emphasis. Do not keep asking only to cover a general checklist.
 
     `message`: the one question to show the user. Leave it empty only when done=true.
   clarify_machinery: |-
@@ -117,25 +132,30 @@ model_calls:
     Answer from this perspective:
     $perspective
 
-    Think like a product manager taking over this product from another busy product manager. The
-    product is established, but the handover is not. Start wide and continue building a broad
-    understanding of what the product does, its main capabilities and the workflows it supports.
-    Ask ONE high-leverage question at a time, using the user's own words. Before each question,
-    imagine this is the only question you have left: what would reveal the most breadth? Prefer a
-    question that invites an overview of several capabilities or a complete user workflow over a
-    narrow question about the latest example.
+    Capability evidence from the user:
+    $capability_evidence
+
+    Before you respond, silently infer a provisional evaluation map from all the evidence above:
+    the likely user workflows, the Tasks that group those workflows, and the observable Behaviours
+    that could be important to evaluate. Do not show this provisional map yet. Use it to find the
+    unresolved points whose answers could materially change the Tasks, Behaviours, their grouping,
+    or their evaluation emphasis.
+
+    Ask ONE direct question about the highest-value unresolved point. Useful gaps can concern the
+    most common or important use case, where a capability operates, whether an order is fixed or
+    dynamic, how parts coordinate or pass context, where control or approval applies, how a result
+    is checked, or what happens at an important boundary. These are examples, not a checklist. Ask
+    only when the answer can change the evaluation map. Use the user's product terms, do not ask a
+    compound question, and do not ask for a fact the Product or conversation already supplies.
+
+    Normally write only the question, with no rationale, evidence summary, or explanation of why
+    you selected it. Briefly name a selected capability only when that reference is necessary to
+    understand one capability-specific question.
 
     This is clarify question $question_number of $question_cap. Do not repeat a question the
-    conversation has already answered, and do not ask "what else does it do?" after the profile or
-    history already lists several capabilities. On question 4 or later, stop broad capability
-    inventory and ask about one agentic behaviour instead: how the application interprets a request,
-    chooses or coordinates specialists, passes context, verifies a result, handles uncertainty or
-    recovers from failure. Choose one aspect and ask one high-value question.
-
-    Do not drill into one file or output format merely because the latest example mentioned it. Do
-    not list categories or ask a compound question. Do not present categories from your own
-    knowledge, and do not introduce tools, failures, memory or delegation unless the user has
-    already used those words or explained them.
+    conversation has already answered. Do not ask "what else does it do?" or present categories
+    from your own knowledge. Do not drill into an incidental example, file, format, tool, or
+    component unless understanding it can materially change the evaluation map.
 
     Write only what the conversation established. You may update product.name, product.users,
     product.description and product.detail.
@@ -157,7 +177,9 @@ model_calls:
     about the correction. A sparse source may produce sparse detail; never pad it to meet a length
     target.
 
-    Set done=true when you have enough to draft expected behaviours.
+    Set done=true when the remaining unknowns would not materially change the proposed Tasks,
+    Behaviours, their grouping, or their evaluation emphasis. Do not keep asking only to cover a
+    general checklist.
 
     `message`: the one question to show the user. Leave it empty only when done=true.
   behaviours: |-
@@ -170,10 +192,21 @@ model_calls:
     Frame the questions and the behaviours through this perspective:
     $perspective
 
-    Then draft tasks, each with 2–5 behaviours. A task is a group of related behaviours — a job the
-    product does, named as a heading; it is not a situation you run and has no persona or steps. A
-    behaviour is one description of something that should be true — "cites a source for every factual
-    claim". No acceptance criteria yet, and do not set measured on anything.
+    Capability evidence from the user:
+    $capability_evidence
+
+    Rebuild the evaluation map from the enriched Product and Interview, then draft the focused set
+    of Tasks and Behaviours that are most important to evaluate. Group Tasks by a real product
+    workflow or user job. Do not group Tasks by ARC category, perspective, capability, or system
+    component. Capabilities refine what can happen inside a workflow; a selected capability alone
+    does not create an unrelated Task. The perspective changes which observable outcomes receive
+    emphasis.
+
+    Draft each Task with 2–5 Behaviours. A Task is a group of related Behaviours — a job the product
+    does, named as a heading; it is not a situation you run and has no persona or steps. A Behaviour
+    is one observable description of something important that should be true — "cites a source for
+    every factual claim". Prefer a focused evaluation over an exhaustive inventory and put the most
+    important work first. No acceptance criteria yet, and do not set measured on anything.
 
     `message`: a sentence introducing the list for review.
   criteria: |-

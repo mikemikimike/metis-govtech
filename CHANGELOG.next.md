@@ -41,6 +41,12 @@ _No v1 changes yet._
 
 #### Added
 
+- **ARC capability evidence at Interview start.** The CLI and headless interface now use the final
+  12-capability catalogue in three ordered groups. Start requires `known_capability_ids` and
+  `capability_confidence`, records them in required client-held Interview context, and uses the
+  confidence to guide Clarify and Behaviours probing. Every model call receives a synthesized
+  catalogue background; the values do not enter `ProductProfile`.
+
 - Interview opening now offers End user, Engineer, Compliance, and Security perspectives. The
   selected perspective travels in client-held Interview context and shapes only Clarify and
   Behaviours prompts; labels and questions are package configuration.
@@ -105,6 +111,10 @@ _No v1 changes yet._
 
 #### Added
 
+- **Capability-aware wizard configuration and start.** `/api/v1/wizard/config` serves the ordered
+  ARC capability catalogue, and `/api/v1/wizard/interview/start` accepts the complete description,
+  known capability ids, confidence, and other opening choices.
+
 - **New package: a stateless HTTP door over the wizard.** `POST /api/v1/wizard/interview/start`
   creates state from the raw product description, `POST /api/v1/wizard/interview/turn` applies one
   typed response, and `POST /api/v1/wizard/interview/end` performs best-effort completion.
@@ -137,6 +147,10 @@ _No v1 changes yet._
 ### metis-web
 
 #### Added
+
+- **Grouped capability opening controls.** The opening screen now displays all 12 ARC capabilities,
+  lets the user select known capabilities (including none), requires Low, Medium, or High selection
+  completeness confidence, and sends the full start request in one operation.
 
 - **Standalone browser client.** The wizard UI now lives in `apps/web`, uses generated OpenAPI
   types and the stateless `apps/api` lifecycle routes, and stores local Interviews, fixture Blobs,

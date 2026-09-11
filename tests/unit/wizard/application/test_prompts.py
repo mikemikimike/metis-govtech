@@ -11,11 +11,12 @@ import pytest
 import yaml
 
 from metis.wizard.application import prompts
-from metis.wizard.application.config import opening_question
+from metis.wizard.application.config import load_config, opening_question
 from metis.wizard.contracts import Product, ProductProfile
-from metis.wizard.contracts.interview_state import InterviewContext, Perspective, Turn
+from metis.wizard.contracts.interview_state import Perspective, Turn
 from metis.wizard.domain.applier import apply
 from metis.wizard.domain.patch import Patch, PatchOp
+from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import orca_handover, research_assistant
 
 
@@ -168,9 +169,10 @@ def test_each_model_call_reloads_before_composition(
 
 def _calls_for_name(name: prompts.ModelCall, profile) -> prompts.ModelPrompt:
     history = [Turn(role="assistant", text="question")]
+    context = interview_context()
     composers = {
-        "clarify": lambda: prompts.clarify(profile, history),
-        "behaviours": lambda: prompts.behaviours(profile, history),
+        "clarify": lambda: prompts.clarify(profile, history, context=context),
+        "behaviours": lambda: prompts.behaviours(profile, history, context=context),
         "criteria": lambda: prompts.criteria(profile),
         "personas": lambda: prompts.personas(profile),
         "scenarios": lambda: prompts.scenarios(profile),
@@ -205,6 +207,14 @@ def test_the_primer_reloads_for_the_next_complete_prompt(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     document = _document()
+    from metis.wizard.application import config as config_module
+
+    (tmp_path / config_module.CONFIG_FILE).write_text(
+        config_module._read_config_text(), encoding="utf-8"
+    )
+    (tmp_path / config_module.CAPABILITIES_FILE).write_text(
+        config_module._read_capabilities_text(), encoding="utf-8"
+    )
     (tmp_path / prompts.PROMPTS_FILE).write_text(
         yaml.safe_dump(document, allow_unicode=True, sort_keys=False)
     )
@@ -216,8 +226,8 @@ def test_the_primer_reloads_for_the_next_complete_prompt(
     primer_path.write_text("SECOND PRIMER")
     second = prompts.criteria(research_assistant())
 
-    assert first.system.endswith("FIRST PRIMER")
-    assert second.system.endswith("SECOND PRIMER")
+    assert "FIRST PRIMER" in first.system
+    assert "SECOND PRIMER" in second.system
 
 
 def test_configured_patch_rules_do_not_change_enforcement(
@@ -270,17 +280,59 @@ def test_clarify_selects_distinct_product_and_machinery_templates(
     _install_document(monkeypatch, document)
     empty = ProductProfile(product=Product(name="", users="", description=""))
 
-    product = prompts.clarify(empty, [], "product")
-    machinery = prompts.clarify(research_assistant(), [], "machinery")
+    product = prompts.clarify(empty, [], "product", context=interview_context())
+    machinery = prompts.clarify(
+        research_assistant(), [], "machinery", context=interview_context()
+    )
 
     assert product.name == machinery.name == "clarify"
     assert product.user.endswith("PRODUCT PHASE MARKER")
     assert machinery.user.endswith("MACHINERY PHASE MARKER")
 
 
+def test_early_prompts_build_and_refine_an_evaluation_map() -> None:
+    description = "Routes procurement requests to specialist review agents."
+    profile = ProductProfile(
+        product=Product(
+            name="Procurement review assistant",
+            users="Procurement officers",
+            description=description,
+            detail="Specialist agents review different parts of each request.",
+        )
+    )
+    history = [
+        Turn(role="user", text=description),
+        Turn(role="assistant", text="Which requests are most common?"),
+        Turn(role="user", text="Contract review requests are most common."),
+    ]
+    context = interview_context(
+        perspective=Perspective.ENGINEER,
+        known_capability_ids=["agent_delegation"],
+        confidence="medium",
+    )
+
+    product = prompts.clarify(profile, history, "product", context=context).user
+    machinery = prompts.clarify(profile, history, "machinery", context=context).user
+    behaviours = prompts.behaviours(profile, history, context=context).user
+
+    for clarify in (product, machinery):
+        assert description in clarify
+        assert "Contract review requests are most common." in clarify
+        assert "silently infer a provisional evaluation map" in clarify
+        assert "Ask ONE" in clarify
+        assert "direct question about the highest-value unresolved point" in clarify
+        assert "with no rationale, evidence summary" in clarify
+        assert "Briefly name a selected capability only when" in clarify
+        assert "would not materially change the proposed Tasks" in clarify
+
+    assert "workflow or user job" in behaviours
+    assert "Do not group Tasks by ARC category" in behaviours
+    assert "Prefer a focused evaluation over an exhaustive inventory" in behaviours
+
+
 def test_clarify_and_behaviours_use_only_the_selected_perspective_content() -> None:
-    end_user = InterviewContext(perspective=Perspective.END_USER)
-    security = InterviewContext(perspective=Perspective.SECURITY)
+    end_user = interview_context(perspective=Perspective.END_USER)
+    security = interview_context(perspective=Perspective.SECURITY)
     end_user_prompts = (
         prompts.clarify(research_assistant(), [], context=end_user),
         prompts.behaviours(research_assistant(), [], context=end_user),
@@ -304,6 +356,63 @@ def test_later_prompts_do_not_receive_perspective_content() -> None:
 
     assert "instruction-data separation" not in prompt.user
     assert "$perspective" not in prompt.user
+
+
+def test_clarify_requires_capability_evidence_context() -> None:
+    with pytest.raises(prompts.PromptCatalogError, match="capability evidence"):
+        prompts.clarify(research_assistant(), [])
+
+
+@pytest.mark.parametrize(
+    ("confidence", "guidance"),
+    [
+        ("low", "Treat the selection as possibly incomplete"),
+        ("medium", "Consider an unselected capability only when it relates"),
+        ("high", "Rely on the selection unless other product evidence"),
+    ],
+)
+def test_capability_evidence_rules_are_composed_for_early_prompts(
+    confidence: str, guidance: str
+) -> None:
+    context = interview_context(
+        known_capability_ids=["tool_use"], confidence=confidence
+    )
+    prompt = prompts.clarify(research_assistant(), [], context=context)
+    assert "Known capability ids selected by the user: tool_use." in prompt.user
+    assert "Selected capabilities are known present." in prompt.user
+    assert "Unselected capabilities are not known absent." in prompt.user
+    assert guidance in prompt.user
+    assert "materially change" in prompt.user
+    assert "provisional evaluation map" in prompt.user
+
+    behaviours = prompts.behaviours(research_assistant(), [], context=context)
+    assert "Known capability ids selected by the user: tool_use." in behaviours.user
+
+
+def test_every_model_call_receives_the_complete_ordered_arc_catalogue() -> None:
+    expected_lines = ["The ARC capability catalogue:"]
+    for category in load_config().capability_categories:
+        expected_lines.append(f"{category.name} ({category.id.value}):")
+        expected_lines.extend(
+            f"- {item.name} [{item.id.value}]: {item.description}"
+            for item in category.capabilities
+        )
+    expected_catalogue = "\n".join(expected_lines)
+    prompts_to_check = [
+        prompts.clarify(research_assistant(), [], context=interview_context()),
+        prompts.behaviours(research_assistant(), [], context=interview_context()),
+        prompts.criteria(research_assistant()),
+        prompts.personas(research_assistant()),
+        prompts.scenarios(research_assistant()),
+        prompts.chat(research_assistant(), "criteria", "edit", None),
+        prompts.suggest_criterion(research_assistant(), "EB-1"),
+    ]
+    assert expected_catalogue in prompts_to_check[0].system
+    for prompt in prompts_to_check[1:]:
+        assert "The ARC capability catalogue:" in prompt.system
+
+    assert "Known capability ids selected by the user" not in prompts_to_check[2].user
+    assert "Selection confidence" not in prompts_to_check[2].user
 
 
 def test_a_perspective_edit_affects_the_next_prompt(
@@ -333,13 +442,13 @@ def test_a_perspective_edit_affects_the_next_prompt(
     first = prompts.clarify(
         research_assistant(),
         [],
-        context=InterviewContext(perspective=Perspective.SECURITY),
+        context=interview_context(perspective=Perspective.SECURITY),
     )
     perspective_path.write_text("EDITED SECURITY LENS", encoding="utf-8")
     second = prompts.clarify(
         research_assistant(),
         [],
-        context=InterviewContext(perspective=Perspective.SECURITY),
+        context=interview_context(perspective=Perspective.SECURITY),
     )
 
     assert "EDITED SECURITY LENS" not in first.user
@@ -359,7 +468,7 @@ def test_clarify_is_told_to_merge_a_narrow_follow_up_without_losing_detail(
         ),
     ]
 
-    prompt = prompts.clarify(profile, history, phase)  # type: ignore[arg-type]
+    prompt = prompts.clarify(profile, history, phase, context=interview_context())  # type: ignore[arg-type]
     serialized = json.dumps(profile.model_dump(mode="json"), indent=2)
 
     assert serialized in prompt.user
@@ -378,7 +487,9 @@ def test_clarify_allows_an_explicit_correction_to_remove_detail() -> None:
         )
     ]
 
-    prompt = prompts.clarify(orca_handover(), history, "machinery")
+    prompt = prompts.clarify(
+        orca_handover(), history, "machinery", context=interview_context()
+    )
 
     assert "user: Correction: Criteria Evaluator is not live." in prompt.user
 
@@ -388,7 +499,7 @@ def test_rich_orca_detail_reaches_behaviour_and_scenario_prompts() -> None:
     serialized = json.dumps(profile.model_dump(mode="json"), indent=2)
 
     downstream = (
-        prompts.behaviours(profile, []),
+        prompts.behaviours(profile, [], context=interview_context()),
         prompts.scenarios(profile),
     )
 

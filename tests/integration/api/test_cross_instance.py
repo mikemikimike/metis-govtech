@@ -17,9 +17,11 @@ from tests.fixtures.wizard.scripted import ScriptedInterviewer
 
 
 def _start_body() -> dict[str, object]:
-    return InterviewStartRequest(description="A policy assistant").model_dump(
-        mode="json"
-    )
+    return InterviewStartRequest(
+        description="A policy assistant",
+        known_capability_ids=["tool_use"],
+        capability_confidence="medium",
+    ).model_dump(mode="json")
 
 
 def test_a_fresh_app_continues_an_interview_and_neither_writes_a_state_file(

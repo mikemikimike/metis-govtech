@@ -19,6 +19,7 @@ from metis.wizard.adapters.llm.gateway import (
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import InterviewerOutputError
 from metis.wizard.contracts import ClarifyResult, Product, ProductProfile
+from tests.fixtures.wizard.context import interview_context
 
 
 @dataclass
@@ -108,6 +109,7 @@ def test_gateway_connection_failure_is_a_retryable_interviewer_error() -> None:
         gateway.clarify(
             profile=ProductProfile(product=Product(name="", description="", users="")),
             history=[],
+            context=interview_context(),
         )
 
 
@@ -446,7 +448,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     )
     model, completions = interviewer([bad, empty, good])
 
-    result = model.draft_behaviours(profile, [])
+    result = model.draft_behaviours(profile, [], context=interview_context())
 
     assert len(completions.calls) == 3
     task = result.patches[-1].value
@@ -507,17 +509,18 @@ def test_each_semantic_call_sends_one_complete_named_prompt() -> None:
     from tests.fixtures.wizard.profiles import research_assistant
 
     profile = research_assistant()
+    context = interview_context()
     cases = [
         (
             "clarify",
-            lambda model: model.clarify(profile, []),
-            lambda: prompts.clarify(profile, []),
+            lambda model: model.clarify(profile, [], context=context),
+            lambda: prompts.clarify(profile, [], context=context),
             ClarifyResult(message="", done=True).model_dump_json(),
         ),
         (
             "behaviours",
-            lambda model: model.draft_behaviours(profile, []),
-            lambda: prompts.behaviours(profile, []),
+            lambda model: model.draft_behaviours(profile, [], context=context),
+            lambda: prompts.behaviours(profile, [], context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (

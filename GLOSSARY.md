@@ -4,6 +4,7 @@
 | Profile | The complete evaluation specification for a **target agentic system**, comprising its **tasks** and their **behaviours**, **personas**, and **scenarios**. |
 | Interview | The wizard's guided process that builds a **profile** by asking the user a sequence of questions. |
 | Perspective | The point of view the user answers the **Interview** from (who the evaluation is for), distinct from a **Persona**. |
+| Capability | An ability a **target agentic system** can have, drawn from the ARC framework and distinct from a **Behaviour** or **Task**. |
 | Task | A general description of what the **target agentic system** is expected to accomplish. |
 | Baseline | A scope qualifier for a **behaviour**, **criterion**, or **scorer** that can be applied to every **target agentic system**. Baseline scorers are provided by the library. |
 | Task-specific | A scope qualifier for a **behaviour**, **criterion**, or **scorer** arising from the requirements, constraints, or operating context of a particular **task**. A task-specific scorer is provided by the library where one exists, or otherwise authored directly from its **criterion** as a *custom* scorer. |

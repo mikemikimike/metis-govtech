@@ -12,6 +12,7 @@ from metis.wizard.contracts import (
     ProductProfile,
 )
 from metis.wizard.domain.permissions import InterviewStep
+from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
 
@@ -23,7 +24,9 @@ def edit(path: str, value="reworded") -> Patch:
 
 
 def a_state(step=InterviewStep.CRITERIA) -> DriverState:
-    return DriverState(profile=research_assistant(), step=step)
+    return DriverState(
+        profile=research_assistant(), context=interview_context(), step=step
+    )
 
 
 # ── what asks, and in what order ───────────────────────────────────────────
@@ -195,6 +198,7 @@ def test_chat_on_the_initial_draft_opens_free_text() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = DriverState(
         profile=ProductProfile(product=Product(name="X", description="", users="")),
+        context=interview_context(),
         step=InterviewStep.BEHAVIOURS,
     )
     request = driver.compose(state)
