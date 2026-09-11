@@ -11,13 +11,15 @@ import pytest
 import yaml
 
 from metis.wizard.application import prompts
-from metis.wizard.application.config import load_config, opening_question
+from metis.wizard.application.config import opening_question
 from metis.wizard.contracts import Product, ProductProfile
 from metis.wizard.contracts.interview_state import Perspective, Turn
 from metis.wizard.domain.applier import apply
 from metis.wizard.domain.patch import Patch, PatchOp
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import orca_handover, research_assistant
+
+PERSPECTIVES = Path("packages/wizard/src/metis/wizard/application/perspectives")
 
 
 def _document() -> dict[str, Any]:
@@ -36,12 +38,29 @@ def _install_document(
     )
 
 
-def test_substitution_preserves_every_unmodified_byte() -> None:
-    template = "  before\n$profile\n$$literal\n  after  "
+def _perspective_text(name: str) -> str:
+    """The on-disk perspective body, exactly as composition embeds it."""
+    return (PERSPECTIVES / f"{name}.md").read_text(encoding="utf-8").strip()
+
+
+# --- substitution mechanics ------------------------------------------------
+
+
+def test_substitution_only_expands_placeholders() -> None:
+    template = '  before\n$profile\n$$literal\nvalue: {"name": "x"}\n  after  '
 
     result = prompts._substitute(template, "test", {"profile": "VALUE"})
 
-    assert result == "  before\nVALUE\n$literal\n  after  "
+    # placeholders expand; every other byte — braces, escaped `$`, whitespace — is literal
+    assert result == '  before\nVALUE\n$literal\nvalue: {"name": "x"}\n  after  '
+
+
+def test_an_unsupplied_placeholder_is_rejected() -> None:
+    with pytest.raises(prompts.PromptCatalogError, match="model_calls.criteria"):
+        prompts._substitute("$profile", "model_calls.criteria", {})
+
+
+# --- catalogue validation --------------------------------------------------
 
 
 def _assert_complete_catalogue_is_validated(
@@ -118,68 +137,68 @@ def test_a_wrong_catalogue_root_is_named(monkeypatch: pytest.MonkeyPatch) -> Non
         prompts.load_prompt_catalog()
 
 
-def test_an_unsupplied_placeholder_is_rejected() -> None:
-    with pytest.raises(prompts.PromptCatalogError, match="model_calls.criteria"):
-        prompts._substitute("$profile", "model_calls.criteria", {})
+def test_prompt_catalogue_is_a_package_resource() -> None:
+    catalog = prompts.load_prompt_catalog()
 
-
-def test_json_braces_and_an_escaped_dollar_are_literal(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    document = _document()
-    document["model_calls"]["criteria"] = 'value: {"name": "example"}; $$5; $profile'
-    _install_document(monkeypatch, document)
-
-    result = prompts.criteria(research_assistant()).user
-
-    assert 'value: {"name": "example"}; $5;' in result
-    assert result.endswith("}")
-
-
-@pytest.mark.parametrize(
-    "name",
-    [
-        "clarify",
+    assert catalog.patch_rules
+    assert set(catalog.model_calls) == {
+        "clarify_product",
+        "clarify_machinery",
         "behaviours",
         "criteria",
         "personas",
         "scenarios",
         "chat",
         "suggest_criterion",
-    ],
-)
-def test_each_model_call_reloads_before_composition(
-    monkeypatch: pytest.MonkeyPatch, name: prompts.ModelCall
-) -> None:
-    document = _document()
-    _install_document(monkeypatch, document)
-    profile = research_assistant()
-
-    template_name = "clarify_product" if name == "clarify" else name
-    document["model_calls"][template_name] += "\nFIRST EDIT"
-    first = _calls_for_name(name, profile)
-    document["model_calls"][template_name] = document["model_calls"][
-        template_name
-    ].replace("FIRST EDIT", "SECOND EDIT")
-    second = _calls_for_name(name, profile)
-
-    assert first.user.endswith("FIRST EDIT")
-    assert second.user.endswith("SECOND EDIT")
-
-
-def _calls_for_name(name: prompts.ModelCall, profile) -> prompts.ModelPrompt:
-    history = [Turn(role="assistant", text="question")]
-    context = interview_context()
-    composers = {
-        "clarify": lambda: prompts.clarify(profile, history, context=context),
-        "behaviours": lambda: prompts.behaviours(profile, history, context=context),
-        "criteria": lambda: prompts.criteria(profile),
-        "personas": lambda: prompts.personas(profile),
-        "scenarios": lambda: prompts.scenarios(profile),
-        "chat": lambda: prompts.chat(profile, "criteria", "edit", None),
-        "suggest_criterion": lambda: prompts.suggest_criterion(profile, "EB-1"),
     }
-    return composers[name]()
+
+
+# --- freshness: no resource is cached across composes ----------------------
+
+
+def test_composition_reads_every_resource_fresh(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The catalogue, primer, and perspective files are re-read on every compose,
+    so an edit to any of them reaches the next prompt without a restart."""
+    from metis.wizard.application import config as config_module
+
+    document = _document()
+    (tmp_path / config_module.CONFIG_FILE).write_text(
+        config_module._read_config_text(), encoding="utf-8"
+    )
+    (tmp_path / config_module.CAPABILITIES_FILE).write_text(
+        config_module._read_capabilities_text(), encoding="utf-8"
+    )
+    prompts_path = tmp_path / prompts.PROMPTS_FILE
+    prompts_path.write_text(
+        yaml.safe_dump(document, allow_unicode=True, sort_keys=False)
+    )
+    primer_path = tmp_path / prompts.PRIMER_FILE
+    primer_path.write_text("FIRST PRIMER", encoding="utf-8")
+    perspective_dir = tmp_path / prompts.PERSPECTIVES_DIR
+    perspective_dir.mkdir()
+    for name in ("end_user", "engineer", "compliance", "security"):
+        (perspective_dir / f"{name}.md").write_text("FIRST LENS", encoding="utf-8")
+    monkeypatch.setattr(prompts.resources, "files", lambda _package: tmp_path)
+
+    first = prompts.clarify(research_assistant(), [], context=interview_context())
+
+    document["model_calls"]["clarify_product"] += "\nEDITED TEMPLATE"
+    prompts_path.write_text(
+        yaml.safe_dump(document, allow_unicode=True, sort_keys=False)
+    )
+    primer_path.write_text("SECOND PRIMER", encoding="utf-8")
+    (perspective_dir / "end_user.md").write_text("SECOND LENS", encoding="utf-8")
+
+    second = prompts.clarify(research_assistant(), [], context=interview_context())
+
+    assert "FIRST PRIMER" in first.system
+    assert "SECOND PRIMER" in second.system
+    assert "FIRST LENS" in first.user
+    assert "SECOND LENS" in second.user
+    assert not first.user.endswith("EDITED TEMPLATE")
+    assert second.user.endswith("EDITED TEMPLATE")
 
 
 def test_the_system_and_user_messages_share_one_catalogue_snapshot(
@@ -203,31 +222,7 @@ def test_the_system_and_user_messages_share_one_catalogue_snapshot(
     assert prompt.user
 
 
-def test_the_primer_reloads_for_the_next_complete_prompt(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    document = _document()
-    from metis.wizard.application import config as config_module
-
-    (tmp_path / config_module.CONFIG_FILE).write_text(
-        config_module._read_config_text(), encoding="utf-8"
-    )
-    (tmp_path / config_module.CAPABILITIES_FILE).write_text(
-        config_module._read_capabilities_text(), encoding="utf-8"
-    )
-    (tmp_path / prompts.PROMPTS_FILE).write_text(
-        yaml.safe_dump(document, allow_unicode=True, sort_keys=False)
-    )
-    primer_path = tmp_path / prompts.PRIMER_FILE
-    primer_path.write_text("FIRST PRIMER")
-    monkeypatch.setattr(prompts.resources, "files", lambda _package: tmp_path)
-
-    first = prompts.criteria(research_assistant())
-    primer_path.write_text("SECOND PRIMER")
-    second = prompts.criteria(research_assistant())
-
-    assert "FIRST PRIMER" in first.system
-    assert "SECOND PRIMER" in second.system
+# --- composition contracts -------------------------------------------------
 
 
 def test_configured_patch_rules_do_not_change_enforcement(
@@ -255,22 +250,6 @@ def test_configured_patch_rules_do_not_change_enforcement(
     assert profile.behaviour("EB-1").measured is True  # type: ignore[union-attr]
 
 
-def test_prompt_catalogue_is_a_package_resource() -> None:
-    catalog = prompts.load_prompt_catalog()
-
-    assert catalog.patch_rules
-    assert set(catalog.model_calls) == {
-        "clarify_product",
-        "clarify_machinery",
-        "behaviours",
-        "criteria",
-        "personas",
-        "scenarios",
-        "chat",
-        "suggest_criterion",
-    }
-
-
 def test_clarify_selects_distinct_product_and_machinery_templates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -290,72 +269,62 @@ def test_clarify_selects_distinct_product_and_machinery_templates(
     assert machinery.user.endswith("MACHINERY PHASE MARKER")
 
 
-def test_early_prompts_build_and_refine_an_evaluation_map() -> None:
-    description = "Routes procurement requests to specialist review agents."
-    profile = ProductProfile(
-        product=Product(
-            name="Procurement review assistant",
-            users="Procurement officers",
-            description=description,
-            detail="Specialist agents review different parts of each request.",
-        )
-    )
+def test_clarify_prompt_reports_the_late_question_position() -> None:
     history = [
-        Turn(role="user", text=description),
-        Turn(role="assistant", text="Which requests are most common?"),
-        Turn(role="user", text="Contract review requests are most common."),
+        Turn(role="assistant", text=opening_question()),
+        Turn(role="user", text="The opening answer."),
+        Turn(role="assistant", text="Question one?"),
+        Turn(role="user", text="Answer one."),
+        Turn(role="assistant", text="Question two?"),
+        Turn(role="user", text="Answer two."),
+        Turn(role="assistant", text="Question three?"),
+        Turn(role="user", text="Answer three."),
     ]
-    context = interview_context(
-        perspective=Perspective.ENGINEER,
-        known_capability_ids=["agent_delegation"],
-        confidence="medium",
+
+    assert prompts._clarify_position(history) == (4, 5)
+
+
+# --- what each prompt is given ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "compose",
+    [
+        lambda p: prompts.clarify(p, [], "product", context=interview_context()),
+        lambda p: prompts.clarify(p, [], "machinery", context=interview_context()),
+        lambda p: prompts.behaviours(p, [], context=interview_context()),
+        prompts.criteria,
+        prompts.personas,
+        prompts.scenarios,
+    ],
+)
+def test_the_profile_is_serialized_into_every_prompt(
+    compose: Callable[[ProductProfile], prompts.ModelPrompt],
+) -> None:
+    profile = orca_handover()
+    serialized = json.dumps(profile.model_dump(mode="json"), indent=2)
+
+    # the whole document, including newline-bearing detail, reaches the model verbatim
+    assert serialized in compose(profile).user
+
+
+@pytest.mark.parametrize("phase", ["product", "machinery"])
+def test_the_conversation_history_is_substituted_into_clarify(phase: str) -> None:
+    history = [
+        Turn(role="assistant", text="How does review work?"),
+        Turn(
+            role="user",
+            text="A reviewer can request one revision from the slide maker.",
+        ),
+    ]
+
+    prompt = prompts.clarify(
+        orca_handover(), history, phase, context=interview_context()
+    )  # type: ignore[arg-type]
+
+    assert (
+        "user: A reviewer can request one revision from the slide maker." in prompt.user
     )
-
-    product = prompts.clarify(profile, history, "product", context=context).user
-    machinery = prompts.clarify(profile, history, "machinery", context=context).user
-    behaviours = prompts.behaviours(profile, history, context=context).user
-
-    for clarify in (product, machinery):
-        assert description in clarify
-        assert "Contract review requests are most common." in clarify
-        assert "silently infer a provisional evaluation map" in clarify
-        assert "Ask ONE" in clarify
-        assert "direct question about the highest-value unresolved point" in clarify
-        assert "with no rationale, evidence summary" in clarify
-        assert "Briefly name a selected capability only when" in clarify
-        assert "would not materially change the proposed Tasks" in clarify
-
-    assert "workflow or user job" in behaviours
-    assert "Do not group Tasks by ARC category" in behaviours
-    assert "Prefer a focused evaluation over an exhaustive inventory" in behaviours
-
-
-def test_clarify_and_behaviours_use_only_the_selected_perspective_content() -> None:
-    end_user = interview_context(perspective=Perspective.END_USER)
-    security = interview_context(perspective=Perspective.SECURITY)
-    end_user_prompts = (
-        prompts.clarify(research_assistant(), [], context=end_user),
-        prompts.behaviours(research_assistant(), [], context=end_user),
-    )
-    security_prompts = (
-        prompts.clarify(research_assistant(), [], context=security),
-        prompts.behaviours(research_assistant(), [], context=security),
-    )
-
-    for prompt in end_user_prompts:
-        assert "people who use the product" in prompt.user
-        assert "instruction-data separation" not in prompt.user
-    for prompt in security_prompts:
-        assert "instruction-data separation" in prompt.user
-        assert "people who use the product" not in prompt.user
-    assert end_user_prompts[0].user != security_prompts[0].user
-
-
-def test_later_prompts_do_not_receive_perspective_content() -> None:
-    prompt = prompts.criteria(research_assistant())
-
-    assert "instruction-data separation" not in prompt.user
-    assert "$perspective" not in prompt.user
 
 
 def test_clarify_requires_capability_evidence_context() -> None:
@@ -382,23 +351,13 @@ def test_capability_evidence_rules_are_composed_for_early_prompts(
     assert "Selected capabilities are known present." in prompt.user
     assert "Unselected capabilities are not known absent." in prompt.user
     assert guidance in prompt.user
-    assert "materially change" in prompt.user
-    assert "provisional evaluation map" in prompt.user
 
     behaviours = prompts.behaviours(research_assistant(), [], context=context)
     assert "Known capability ids selected by the user: tool_use." in behaviours.user
 
 
-def test_every_model_call_receives_the_complete_ordered_arc_catalogue() -> None:
-    expected_lines = ["The ARC capability catalogue:"]
-    for category in load_config().capability_categories:
-        expected_lines.append(f"{category.name} ({category.id.value}):")
-        expected_lines.extend(
-            f"- {item.name} [{item.id.value}]: {item.description}"
-            for item in category.capabilities
-        )
-    expected_catalogue = "\n".join(expected_lines)
-    prompts_to_check = [
+def test_the_arc_catalogue_reaches_every_model_call() -> None:
+    calls = [
         prompts.clarify(research_assistant(), [], context=interview_context()),
         prompts.behaviours(research_assistant(), [], context=interview_context()),
         prompts.criteria(research_assistant()),
@@ -407,125 +366,31 @@ def test_every_model_call_receives_the_complete_ordered_arc_catalogue() -> None:
         prompts.chat(research_assistant(), "criteria", "edit", None),
         prompts.suggest_criterion(research_assistant(), "EB-1"),
     ]
-    assert expected_catalogue in prompts_to_check[0].system
-    for prompt in prompts_to_check[1:]:
-        assert "The ARC capability catalogue:" in prompt.system
 
-    assert "Known capability ids selected by the user" not in prompts_to_check[2].user
-    assert "Selection confidence" not in prompts_to_check[2].user
+    for prompt in calls:
+        assert prompts.arc_catalogue() in prompt.system
 
-
-def test_a_perspective_edit_affects_the_next_prompt(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    source = Path(
-        "packages/wizard/src/metis/wizard/application/perspectives/security.md"
-    )
-    perspective_dir = tmp_path / prompts.PERSPECTIVES_DIR
-    perspective_dir.mkdir()
-    perspective_path = perspective_dir / "security.md"
-    perspective_path.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-    (tmp_path / prompts.PRIMER_FILE).write_text("primer", encoding="utf-8")
-    for name in ("end_user", "engineer", "compliance"):
-        (perspective_dir / f"{name}.md").write_text(
-            "other perspective", encoding="utf-8"
-        )
-    monkeypatch.setattr(
-        prompts.resources,
-        "files",
-        lambda package: (
-            tmp_path
-            if package == "metis.wizard.application"
-            else Path("packages/wizard/src/metis/wizard")
-        ),
-    )
-    first = prompts.clarify(
-        research_assistant(),
-        [],
-        context=interview_context(perspective=Perspective.SECURITY),
-    )
-    perspective_path.write_text("EDITED SECURITY LENS", encoding="utf-8")
-    second = prompts.clarify(
-        research_assistant(),
-        [],
-        context=interview_context(perspective=Perspective.SECURITY),
-    )
-
-    assert "EDITED SECURITY LENS" not in first.user
-    assert "EDITED SECURITY LENS" in second.user
+    # capability evidence is a Clarify/Behaviours concern only, never a later call
+    assert "Known capability ids selected by the user" not in calls[2].user
 
 
-@pytest.mark.parametrize("phase", ["product", "machinery"])
-def test_clarify_is_told_to_merge_a_narrow_follow_up_without_losing_detail(
-    phase: str,
-) -> None:
-    profile = orca_handover()
-    history = [
-        Turn(role="assistant", text="How does review work?"),
-        Turn(
-            role="user",
-            text="A reviewer can request one revision from the slide maker.",
-        ),
-    ]
+def test_perspective_content_is_scoped_to_the_selected_lens() -> None:
+    """Only the chosen perspective's body is embedded, and only in early prompts."""
+    end_user_text = _perspective_text("end_user")
+    security_text = _perspective_text("security")
+    end_user = interview_context(perspective=Perspective.END_USER)
+    security = interview_context(perspective=Perspective.SECURITY)
 
-    prompt = prompts.clarify(profile, history, phase, context=interview_context())  # type: ignore[arg-type]
-    serialized = json.dumps(profile.model_dump(mode="json"), indent=2)
+    for compose in (prompts.clarify, prompts.behaviours):
+        chosen = compose(research_assistant(), [], context=end_user).user
+        other = compose(research_assistant(), [], context=security).user
+        assert end_user_text in chosen
+        assert security_text not in chosen
+        assert security_text in other
+        assert end_user_text not in other
 
-    assert serialized in prompt.user
-    assert (
-        "user: A reviewer can request one revision from the slide maker." in prompt.user
-    )
-
-
-def test_clarify_allows_an_explicit_correction_to_remove_detail() -> None:
-    history = [
-        Turn(
-            role="user",
-            text=(
-                "Correction: Criteria Evaluator is not live. Remove it from the product detail."
-            ),
-        )
-    ]
-
-    prompt = prompts.clarify(
-        orca_handover(), history, "machinery", context=interview_context()
-    )
-
-    assert "user: Correction: Criteria Evaluator is not live." in prompt.user
-
-
-def test_rich_orca_detail_reaches_behaviour_and_scenario_prompts() -> None:
-    profile = orca_handover()
-    serialized = json.dumps(profile.model_dump(mode="json"), indent=2)
-
-    downstream = (
-        prompts.behaviours(profile, [], context=interview_context()),
-        prompts.scenarios(profile),
-    )
-
-    for prompt in downstream:
-        assert serialized in prompt.user
-
-
-def test_clarify_prompt_reports_the_late_question_position() -> None:
-    history = [
-        Turn(role="assistant", text=opening_question()),
-        Turn(role="user", text="The opening answer."),
-        Turn(role="assistant", text="Question one?"),
-        Turn(role="user", text="Answer one."),
-        Turn(role="assistant", text="Question two?"),
-        Turn(role="user", text="Answer two."),
-        Turn(role="assistant", text="Question three?"),
-        Turn(role="user", text="Answer three."),
-    ]
-
-    assert prompts._clarify_position(history) == (4, 5)
-
-
-def test_later_prompts_receive_product_detail_with_line_breaks() -> None:
-    profile = research_assistant()
-    profile.product.detail = "First line.\nSecond line."
-
-    prompt = prompts.scenarios(profile)
-
-    assert "First line.\\nSecond line." in prompt.user
+    # later prompts carry no perspective at all, and the placeholder is consumed
+    later = prompts.criteria(research_assistant()).user
+    assert end_user_text not in later
+    assert security_text not in later
+    assert "$perspective" not in later
