@@ -20,6 +20,7 @@ import {
 } from "./storage/repository";
 import { profileHasCriteria } from "./metrics";
 import { downloadArchive } from "./download";
+import { ManualAuthoringEntry, ManualForm } from "./ManualForm";
 import {
   applyEnd,
   applyTurn,
@@ -56,6 +57,7 @@ export function App() {
   const [loaded, setLoaded] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(true);
+  const [manualOpen, setManualOpen] = useState(false);
   const [documentWidth, setDocumentWidth] = useState(DOCUMENT_WIDTH_DEFAULT);
   const [showMetrics, setShowMetrics] = useState(false);
   const [metricCatalogue, setMetricCatalogue] = useState<Awaited<
@@ -135,6 +137,7 @@ export function App() {
 
   const open = useCallback(
     async (id: string) => {
+      setManualOpen(false);
       setBusy(true);
       setError(null);
       setRetryIntent(null);
@@ -152,6 +155,7 @@ export function App() {
     [showError],
   );
   const startNew = useCallback(() => {
+    setManualOpen(false);
     setRecord(null);
     setError(null);
     setRetryIntent(null);
@@ -350,7 +354,7 @@ export function App() {
   );
 
   if (!loaded) return null;
-  const showDocument = view !== null;
+  const showDocument = view !== null && !manualOpen;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -383,7 +387,9 @@ export function App() {
             onRetry={retryIntent ? retry : undefined}
           />
         )}
-        {view === null ? (
+        {manualOpen ? (
+          <ManualForm onBack={() => setManualOpen(false)} />
+        ) : view === null ? (
           <div className="flex flex-1 flex-col items-center justify-center px-6">
             <div className="flex w-full max-w-3xl flex-col gap-8">
               <h1 className="text-center text-2xl font-semibold text-foreground">
@@ -398,6 +404,7 @@ export function App() {
                 placeholder="Tell METIS what this product does…"
                 onSend={beginWithMessage}
               />
+              <ManualAuthoringEntry onOpen={() => setManualOpen(true)} />
             </div>
           </div>
         ) : (
