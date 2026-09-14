@@ -51,6 +51,21 @@ def _render_available_actions(available_actions: list[ActionSlot] | None) -> str
     return "\n" + "\n".join(action_lines) + "\n"
 
 
+def _render_errors(errors: list[str] | None) -> str:
+    """Render prior-turn errors into the prompt's error block.
+
+    Returns an empty string when there are none so the section disappears.
+    Errors can be timeouts or target-unavailable signals, not only rejected
+    uploads, so the wording stays neutral.
+    """
+    if not errors:
+        return ""
+    lines = ["Errors reported on your previous turn — take them into account:"]
+    for err in errors:
+        lines.append(f"  - {err}")
+    return "\n" + "\n".join(lines) + "\n"
+
+
 class HistoryRole(StrEnum):
     """Roles in the user-agent conversation history."""
 
@@ -124,6 +139,7 @@ class UserAgent:
         observation = turn_payload.observation
         target_message = observation.text
         available_actions = observation.available_actions or None
+        errors = observation.errors or None
 
         logger.info(
             "[user_agent] Generating response (turn=%d, history=%d msgs, target_text=%d chars)...",
@@ -141,6 +157,7 @@ class UserAgent:
         user_prompt = self._build_user_prompt(
             target_message,
             available_actions=available_actions,
+            errors=errors,
         )
 
         # Call LLM
@@ -187,11 +204,13 @@ class UserAgent:
         self,
         target_message: str,
         available_actions: list[ActionSlot] | None = None,
+        errors: list[str] | None = None,
     ) -> str:
         """Build the turn-specific instruction prompt (excludes history, which
         is conveyed structurally via multi-turn contents)."""
         return RESPONSE_TURN_PROMPT.format(
             target_message=target_message,
+            errors_section=_render_errors(errors),
             available_actions_section=_render_available_actions(available_actions),
             turn_number=self.turn_count + 1,
         )

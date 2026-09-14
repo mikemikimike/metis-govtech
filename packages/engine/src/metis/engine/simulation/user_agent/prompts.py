@@ -78,7 +78,7 @@ RESPONSE_TURN_PROMPT = """The target AI assistant just sent you the following me
 ---
 {target_message}
 ---
-{available_actions_section}
+{errors_section}{available_actions_section}
 Current turn number: {turn_number}
 
 Based on your persona, scenario, and the conversation so far, \
