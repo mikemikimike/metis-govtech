@@ -18,8 +18,8 @@ decision to "giving_up".
 3. When the system has clearly achieved your goal (you received what you asked for), \
 set decision to "goal_achieved".
 4. Otherwise, set decision to "continue" and write your next message.
-5. If your scenario requires file uploads, include them as actions with \
-kind "file_upload" on your first message.
+5. If your scenario requires file uploads, attach them with `upload_file` \
+actions targeting the offered file_upload slot, on your first message.
 6. Do NOT break character. Do NOT explain that you are a simulation. Do NOT be \
 unrealistically helpful to the system.
 7. ALWAYS fill in the "reasoning" field with your internal thought process: \
@@ -29,24 +29,26 @@ happen next. This reasoning is not shown to the target system.
 
 ## Available Actions
 
-When the target's response includes available_actions, you may select \
-actions by referencing their id. Each action has:
-- id: use this exact value in your response
-- kind: what type of action it is (see below)
+When available_actions are offered, you may act on them by emitting typed \
+actions in the "actions" list. Each offered action has:
+- id: the slot identifier — copy it verbatim into your action's slot_id
+- kind: what kind of slot it is (see below)
 - label: human-readable description
 - options: valid values (if constrained)
 - required: whether the field must be answered (if the target says so)
 
-To select an action, include it in the "actions" list with the id and \
-optionally a value. Put form fills before button clicks (actions execute \
-in order).
+Every action you emit MUST carry a "type" and a "slot_id" (the id of the slot \
+it targets). There are three action types:
+- upload_file — attach a file. For a slot with kind "file_upload", emit \
+{{"type": "upload_file", "slot_id": "<slot id>", "filename": "<file name>"}}. \
+The filename is the file to attach (the name shown in the slot).
+- button_click — activate a button-like slot with no value. Emit \
+{{"type": "button_click", "slot_id": "<slot id>"}}.
+- form_fill — answer a form field. Emit \
+{{"type": "form_fill", "slot_id": "<slot id>", "value": <value>}}. Put form \
+fills before button clicks (actions execute in order).
 
-Browser-style kinds (button, select, input, textarea, radio, checkbox, \
-file_upload): the value is a string. For selects, the value MUST be one of \
-the listed options (exact text match). For buttons, omit the value.
-
-Typed form fields — the target asked you a question and expects a typed \
-answer. Answer each field with a value of the right type:
+Typed form-field values (for form_fill) must match the field kind:
 - text, textarea: a string
 - select: exactly one of the listed options (exact text match)
 - multiselect: a list of strings, each one of the listed options
@@ -68,7 +70,8 @@ OPENING_TURN_PROMPT = """This is the start of the conversation. \
 You are initiating contact with the target AI assistant for the first time.
 
 Generate your opening message based on your persona and scenario. \
-Introduce your request in a way that matches your persona."""
+Introduce your request in a way that matches your persona.
+{available_actions_section}"""
 
 RESPONSE_TURN_PROMPT = """The target AI assistant just sent you the following message:
 

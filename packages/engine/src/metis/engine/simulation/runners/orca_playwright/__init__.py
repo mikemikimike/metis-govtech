@@ -13,11 +13,14 @@ from ...runner import Runner
 from ...types import (
     ActionSlot,
     Artifact,
+    ButtonClickAction,
     ChosenAction,
     FormElement,
+    FormFillAction,
     Observation,
     RunConfig,
     UIState,
+    UploadFileAction,
 )
 from ._auth import login
 from ._page_actions import auto_fill_and_submit, send_message, upload_file
@@ -75,6 +78,15 @@ class OrcaPlaywrightRunner(Runner):
     Note: selectors, auth flow, and page interactions are hardcoded for the
     Orca chat UI. Adapting to other browser targets requires subclassing or
     a new runner.
+
+    Upload-rejection semantics (differs from :class:`OrcaApiRunner` by design):
+    when a turn's upload is invalid, ``send_turn`` returns the error
+    ``Observation`` *before* touching the page, so it does NOT populate
+    ``available_actions`` — those come from a live DOM capture, and validating
+    up front deliberately avoids that round-trip on a turn that will not be
+    submitted. The persona is re-offered the page's slots on the next turn's
+    capture. ``OrcaApiRunner`` derives its slots synchronously and so re-offers
+    them on rejection; that asymmetry is intentional.
     """
 
     def __init__(
@@ -89,16 +101,47 @@ class OrcaPlaywrightRunner(Runner):
         self._fixtures_dir = fixtures_dir
         self._run_dir = run_dir
         self._uploaded_files: set[str] = set()
+        self._fixtures: list[str] = []
 
     async def setup(self, config: RunConfig) -> None:
         """Authenticate and prepare the browser session."""
+        self._fixtures = list(config.fixtures)
         logger.info("[playwright-runner] Setup: logging in...")
         await login(self._page, self._config)
+
+    def _fixture_path(self, name: str) -> Path | None:
+        """``fixtures_dir/name`` if it is a file inside the fixtures directory."""
+        root = self._fixtures_dir.resolve()
+        path = (self._fixtures_dir / name).resolve()
+        if path == root or not path.is_relative_to(root) or not path.is_file():
+            return None
+        return path
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
         """Execute chosen actions, send message, capture and return observation."""
         page = self._page
         config = self._config
+
+        # Validate uploads up front: a file naming a non-scenario fixture or a
+        # missing file is a loud error, never a silent no-op (issue #311).
+        upload_errors: list[str] = []
+        for action in actions:
+            if isinstance(action, UploadFileAction):
+                if action.filename not in self._fixtures:
+                    upload_errors.append(
+                        f"file '{action.filename}' is not a fixture for this scenario"
+                    )
+                elif self._fixture_path(action.filename) is None:
+                    upload_errors.append(
+                        f"file '{action.filename}' not found under the fixtures directory"
+                    )
+        if upload_errors:
+            logger.warning(
+                "[playwright-runner] Upload(s) rejected: %s", "; ".join(upload_errors)
+            )
+            return Observation(
+                errors=["Turn not submitted: " + "; ".join(upload_errors)]
+            )
 
         has_new_file_upload = False
         has_form_submit = False
@@ -107,96 +150,89 @@ class OrcaPlaywrightRunner(Runner):
         if actions:
             logger.info("[playwright-runner] Executing %d action(s)...", len(actions))
         for action_idx, action in enumerate(actions, 1):
-            value = _value_text(action.value)
-            kind = self._infer_action_kind(action)
-
-            if kind == "file_upload":
-                if value and value in self._uploaded_files:
-                    logger.info(
-                        "[playwright-runner]   Action %d: SKIP duplicate upload '%s'",
-                        action_idx,
-                        value,
-                    )
-                    continue
-                file_name = value or action.id
-                file_path = self._fixtures_dir / file_name
-                if not file_path.exists():
-                    logger.warning(
-                        "[playwright-runner]   Action %d: SKIP upload '%s' — file not found",
-                        action_idx,
-                        file_name,
-                    )
-                    continue
-                logger.info(
-                    "[playwright-runner]   Action %d: FILE_UPLOAD '%s'",
-                    action_idx,
-                    file_name,
-                )
-                await upload_file(page, file_path)
-                self._uploaded_files.add(file_name)
-                has_new_file_upload = True
-
-            elif kind == "button":
-                logger.info(
-                    "[playwright-runner]   Action %d: BUTTON_CLICK '%s'",
-                    action_idx,
-                    action.id,
-                )
-                try:
-                    is_css = bool(re.search(r"[.#\[\]=:>~+]", action.id))
-                    if is_css:
-                        await page.locator(action.id).first.click(timeout=5000)
-                    else:
-                        await page.get_by_text(action.id, exact=True).first.click(
-                            timeout=5000
+            match action:
+                case UploadFileAction(filename=filename):
+                    if filename in self._uploaded_files:
+                        logger.info(
+                            "[playwright-runner]   Action %d: SKIP duplicate upload '%s'",
+                            action_idx,
+                            filename,
                         )
-                    await page.wait_for_timeout(1000)
-                except Exception as exc:
-                    logger.warning(
-                        "[playwright-runner]   Action %d: Click FAILED: %s",
+                        continue
+                    # Reuse the path validated up front (guaranteed non-None here).
+                    file_path = self._fixture_path(filename)
+                    if file_path is None:
+                        continue
+                    logger.info(
+                        "[playwright-runner]   Action %d: FILE_UPLOAD '%s'",
                         action_idx,
-                        exc,
+                        filename,
                     )
-                if re.search(
-                    r"submit|generate|run|start|create|analyze|confirm",
-                    action.id,
-                    re.IGNORECASE,
-                ):
-                    has_form_submit = True
+                    await upload_file(page, file_path)
+                    self._uploaded_files.add(filename)
+                    has_new_file_upload = True
 
-            elif kind in ("select", "input", "textarea", "radio", "checkbox"):
-                fill_value = value or ""
-                logger.info(
-                    "[playwright-runner]   Action %d: FORM_FILL '%s' = %r",
-                    action_idx,
-                    action.id,
-                    fill_value,
-                )
-                try:
-                    el = page.locator(action.id).first
-                    tag_name = await el.evaluate("e => e.tagName.toLowerCase()")
-                    if tag_name == "select":
-                        try:
-                            await el.select_option(label=fill_value)
-                        except Exception:
-                            await el.select_option(fill_value)
-                    elif tag_name == "input":
-                        input_type = await el.evaluate("e => e.type")
-                        if input_type in ("radio", "checkbox"):
-                            await el.check()
-                        else:
-                            await el.fill(fill_value)
-                    elif tag_name == "textarea":
-                        await el.fill(fill_value)
-                    else:
-                        await el.click()
-                    await page.wait_for_timeout(500)
-                except Exception as exc:
-                    logger.warning(
-                        "[playwright-runner]   Action %d: FORM_FILL FAILED: %s",
+                case ButtonClickAction(slot_id=selector):
+                    logger.info(
+                        "[playwright-runner]   Action %d: BUTTON_CLICK '%s'",
                         action_idx,
-                        exc,
+                        selector,
                     )
+                    try:
+                        is_css = bool(re.search(r"[.#\[\]=:>~+]", selector))
+                        if is_css:
+                            await page.locator(selector).first.click(timeout=5000)
+                        else:
+                            await page.get_by_text(selector, exact=True).first.click(
+                                timeout=5000
+                            )
+                        await page.wait_for_timeout(1000)
+                    except Exception as exc:
+                        logger.warning(
+                            "[playwright-runner]   Action %d: Click FAILED: %s",
+                            action_idx,
+                            exc,
+                        )
+                    if re.search(
+                        r"submit|generate|run|start|create|analyze|confirm",
+                        selector,
+                        re.IGNORECASE,
+                    ):
+                        has_form_submit = True
+
+                case FormFillAction(slot_id=selector, value=value):
+                    fill_value = _value_text(value) or ""
+                    logger.info(
+                        "[playwright-runner]   Action %d: FORM_FILL '%s' = %r",
+                        action_idx,
+                        selector,
+                        fill_value,
+                    )
+                    try:
+                        el = page.locator(selector).first
+                        tag_name = await el.evaluate("e => e.tagName.toLowerCase()")
+                        if tag_name == "select":
+                            try:
+                                await el.select_option(label=fill_value)
+                            except Exception:
+                                await el.select_option(fill_value)
+                        elif tag_name == "input":
+                            input_type = await el.evaluate("e => e.type")
+                            if input_type in ("radio", "checkbox"):
+                                await el.check()
+                            else:
+                                await el.fill(fill_value)
+                        elif tag_name == "textarea":
+                            await el.fill(fill_value)
+                        else:
+                            await el.click()
+                        await page.wait_for_timeout(500)
+                    except Exception as exc:
+                        logger.warning(
+                            "[playwright-runner]   Action %d: FORM_FILL FAILED: %s",
+                            action_idx,
+                            exc,
+                        )
 
         # Auto-fill if no form submit detected
         if not has_form_submit:
@@ -289,18 +325,6 @@ class OrcaPlaywrightRunner(Runner):
     async def recover(self) -> None:
         """Lightweight page recovery: refresh + wait for chat textarea."""
         await _recover_page(self._page, self._config)
-
-    def _infer_action_kind(self, action: ChosenAction) -> str:
-        """Infer the DOM operation type from an action's id."""
-        aid = action.id.lower()
-        if "file" in aid and "upload" in aid:
-            return "file_upload"
-        if action.value is None and re.search(r"button|btn|submit", aid):
-            return "button"
-        # If the action has a value, it's likely a form fill
-        if action.value is not None:
-            return "input"
-        return "button"
 
     async def _download_artifacts(self, artifacts: list[Artifact]) -> None:
         """Download detected artifacts to disk."""

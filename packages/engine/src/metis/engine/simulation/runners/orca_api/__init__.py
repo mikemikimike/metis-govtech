@@ -59,7 +59,15 @@ from ...exceptions import (
     TargetSessionLostError,
 )
 from ...runner import Runner
-from ...types import ActionSlot, ChosenAction, Observation, RunConfig
+from ...types import (
+    ActionSlot,
+    ButtonClickAction,
+    ChosenAction,
+    FormFillAction,
+    Observation,
+    RunConfig,
+    UploadFileAction,
+)
 from .._http import (
     Clock,
     PollTimeout,
@@ -91,7 +99,15 @@ FormValue = str | list[str] | int | float
 
 
 class OrcaApiRunner(Runner):
-    """One run attempt over ``/api/v1``: one Orca session, one turn per message."""
+    """One run attempt over ``/api/v1``: one Orca session, one turn per message.
+
+    Upload-rejection semantics (differs from :class:`OrcaPlaywrightRunner` by
+    design): its action slots are derived synchronously (no live DOM), so a
+    rejected turn returns an error ``Observation`` that re-offers
+    ``available_actions=self._action_slots()``, letting the persona retry next
+    turn. The Playwright runner omits ``available_actions`` on rejection because
+    it returns before its DOM-capture step; that asymmetry is intentional.
+    """
 
     def __init__(
         self,
@@ -177,41 +193,63 @@ class OrcaApiRunner(Runner):
     ) -> dict[str, Any] | Observation:
         """The ``POST /chat`` body for this turn, or an error ``Observation``.
 
-        Actions whose id names a field of the pending form are form answers;
-        actions naming a fixture (an offered ``file_upload`` slot's id, or the
-        persona's first-turn ``file_upload`` shape with the name as value) are
-        attachments, resolved through the experiment's fixture library and
-        sent as ``files``; any others are skipped with a warning. With a
-        pending form and at least one answer, the body carries typed
-        ``formAnswers`` and no ``message`` — the prose is kept to be reported
-        as discarded. Otherwise the message is sent as usual, whether or not
-        a form is pending ("user ignores the question" is a real behaviour).
-        Required fields left unanswered, a non-numeric answer to a number
-        field, or a fixture Orca rejects come back as an error
-        ``Observation`` with no submit.
+        Actions are partitioned by their typed variant, never by sniffing an
+        id: a :class:`FormFillAction` whose ``slot_id`` names a pending-form
+        field is a form answer; an :class:`UploadFileAction` names a fixture
+        to attach; anything else (a button, a form fill for no pending field)
+        is skipped with a warning. With a pending form and at least one
+        answer, the body carries typed ``formAnswers`` and no ``message`` —
+        the prose is kept to be reported as discarded. Otherwise the message
+        is sent as usual. An upload naming a fixture that is not a scenario
+        fixture, or whose file is missing on disk, comes back as an error
+        ``Observation`` with no submit (loud, never a silent drop); so do a
+        required field left unanswered, a mistyped number, or a fixture Orca
+        rejects.
         """
         self._discarded_message = None
         self._attaching = []
         fields = self._form_fields()
-        # A form action without a value is not an answer; if none carries one
-        # the persona is not answering the form at all.
-        answers = {a.id: a for a in actions if a.id in fields and a.value is not None}
+        offered = set(self._fixtures)
+
+        # Keyed by form-field id (the ``slot_id`` naming a pending-form field).
+        answers: dict[str, FormFillAction] = {}
         attachments: list[str] = []
+        upload_errors: list[str] = []
         skipped: list[str] = []
         for action in actions:
-            if action.id in fields:
-                continue
-            name = self._fixture_name(action)
-            if name is None:
-                skipped.append(action.id)
-            else:
-                attachments.append(name)
+            match action:
+                case FormFillAction(slot_id=slot_id) if slot_id in fields:
+                    answers[slot_id] = action
+                case UploadFileAction(filename=filename):
+                    if filename not in offered:
+                        upload_errors.append(
+                            f"file '{filename}' is not a fixture for this scenario"
+                        )
+                    elif self._fixture_path(filename) is None:
+                        upload_errors.append(
+                            f"file '{filename}' not found under the fixtures directory"
+                        )
+                    else:
+                        attachments.append(filename)
+                case FormFillAction(slot_id=slot_id):
+                    skipped.append(slot_id)
+                case ButtonClickAction(slot_id=slot_id):
+                    skipped.append(slot_id)
         if skipped:
             logger.warning(
-                "[orca-api-runner] Skipping %d action(s) that are neither a "
-                "pending-form field nor a fixture: %s",
+                "[orca-api-runner] Skipping %d action(s) with no matching "
+                "pending-form field: %s",
                 len(skipped),
                 ", ".join(skipped),
+            )
+        if upload_errors:
+            logger.warning(
+                "[orca-api-runner] Upload(s) rejected before submit: %s",
+                "; ".join(upload_errors),
+            )
+            return Observation(
+                errors=["Turn not submitted: " + "; ".join(upload_errors)],
+                available_actions=self._action_slots(),
             )
 
         body: dict[str, Any] = {}
@@ -248,9 +286,8 @@ class OrcaApiRunner(Runner):
             # Orca holds a form until it is answered; this submit answers it.
             self._pending_form = None
         else:
-            # No usable answer (none chosen, or only empty optional fields):
-            # the persona is ignoring the question. Orca rejects an empty
-            # ``formAnswers`` with a 422, so send the message instead.
+            # No usable answer: the persona is ignoring the question. Orca
+            # rejects an empty ``formAnswers`` with a 422, so send the message.
             body["message"] = message
         if self._session_id is not None:
             body["sessionId"] = self._session_id
@@ -417,21 +454,6 @@ class OrcaApiRunner(Runner):
             if name not in self._attached and name not in self._rejected
         ]
 
-    def _fixture_name(self, action: ChosenAction) -> str | None:
-        """The fixture an action names, or ``None`` if it is not an attachment.
-
-        Two shapes are attachments: an offered slot chosen by id (a fixture
-        name), and the persona's first-turn shape — an id reading like
-        ``file_upload`` with the name as the value (the value or, failing
-        that, the id is the name, as in the browser runner).
-        """
-        if action.id in self._fixtures:
-            return action.id
-        lowered = action.id.lower()
-        if "file" in lowered and "upload" in lowered:
-            return _value_text(action.value) or action.id
-        return None
-
     async def _resolve_attachments(
         self, names: list[str]
     ) -> tuple[list[str], list[str]]:
@@ -491,7 +513,7 @@ class OrcaApiRunner(Runner):
         return path
 
     def _typed_form_answers(
-        self, fields: dict[str, dict[str, Any]], answers: dict[str, ChosenAction]
+        self, fields: dict[str, dict[str, Any]], answers: dict[str, FormFillAction]
     ) -> tuple[dict[str, FormValue], list[str]]:
         """Type each answer per its field; report what Orca would reject.
 
@@ -504,7 +526,7 @@ class OrcaApiRunner(Runner):
         problems: list[str] = []
         for field_id, field in fields.items():
             action = answers.get(field_id)
-            if action is None or action.value is None:
+            if action is None:
                 if field.get("required"):
                     problems.append(f"required field '{field_id}' was not answered")
                 continue
@@ -637,15 +659,6 @@ def _option_value(field: dict[str, Any], chosen: str) -> str:
         if label == chosen:
             return value
     return chosen
-
-
-def _value_text(value: str | list[str] | int | float | None) -> str:
-    """A chosen action's value as the one string a fixture name must be."""
-    if value is None:
-        return ""
-    if isinstance(value, list):
-        return ", ".join(map(str, value))
-    return str(value)
 
 
 def _as_number(value: str | list[str] | int | float) -> int | float | None:

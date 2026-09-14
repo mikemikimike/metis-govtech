@@ -33,6 +33,24 @@ logger = get_logger()
 MAX_HISTORY_TURNS = 20
 
 
+def _render_available_actions(available_actions: list[ActionSlot] | None) -> str:
+    """Render offered slots into the prompt's Available Actions block.
+
+    Returns an empty string when there are none so the section disappears.
+    """
+    if not available_actions:
+        return ""
+    action_lines = ["Available actions:"]
+    for slot in available_actions:
+        parts = f'  - id: "{slot.id}", kind: "{slot.kind}", label: "{slot.label}"'
+        if slot.options:
+            parts += f", options: {slot.options}"
+        if slot.required is not None:
+            parts += f", required: {'true' if slot.required else 'false'}"
+        action_lines.append(parts)
+    return "\n" + "\n".join(action_lines) + "\n"
+
+
 class HistoryRole(StrEnum):
     """Roles in the user-agent conversation history."""
 
@@ -73,7 +91,14 @@ class UserAgent:
             self.persona.id,
             USER_AGENT_MODEL,
         )
-        response = await self._call_llm(OPENING_TURN_PROMPT)
+        opening_slots = [
+            ActionSlot(id=name, kind="file_upload", label=f"Attach file '{name}'")
+            for name in self.scenario.fixtures
+        ]
+        opening_prompt = OPENING_TURN_PROMPT.format(
+            available_actions_section=_render_available_actions(opening_slots or None),
+        )
+        response = await self._call_llm(opening_prompt)
         self.turn_count += 1
         self.conversation_history.append(
             HistoryEntry(role=HistoryRole.USER_AGENT, content=response.message)
@@ -143,8 +168,8 @@ class UserAgent:
         if self.scenario.fixtures:
             lines = [
                 "\n## Files to Upload",
-                "The following files are staged and ready to upload. Include them "
-                "as file_upload actions in your **first message**. "
+                "The following files are staged and ready to upload. Attach them "
+                "with `upload_file` actions in your **first message**. "
                 "Do NOT upload any file not in this list:",
             ]
             for f in self.scenario.fixtures:
@@ -165,23 +190,9 @@ class UserAgent:
     ) -> str:
         """Build the turn-specific instruction prompt (excludes history, which
         is conveyed structurally via multi-turn contents)."""
-        available_actions_section = ""
-        if available_actions:
-            action_lines = ["Available actions:"]
-            for slot in available_actions:
-                parts = (
-                    f'  - id: "{slot.id}", kind: "{slot.kind}", label: "{slot.label}"'
-                )
-                if slot.options:
-                    parts += f", options: {slot.options}"
-                if slot.required is not None:
-                    parts += f", required: {'true' if slot.required else 'false'}"
-                action_lines.append(parts)
-            available_actions_section = "\n" + "\n".join(action_lines) + "\n"
-
         return RESPONSE_TURN_PROMPT.format(
             target_message=target_message,
-            available_actions_section=available_actions_section,
+            available_actions_section=_render_available_actions(available_actions),
             turn_number=self.turn_count + 1,
         )
 

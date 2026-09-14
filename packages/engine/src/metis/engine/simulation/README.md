@@ -39,6 +39,13 @@ Workers run concurrently via `asyncio.gather`. Each worker processes its slice o
 
 Charts (screenshotted as PNG) and downloads are captured and stored under the target session ID, which matches the Langfuse `session_id` for trace linking.
 
+### Actions and uploads
+
+Each turn the user agent emits a typed action list (`ChosenAction` — a union of `UploadFileAction`, `ButtonClickAction`, `FormFillAction`); the orchestrator passes it straight to `Runner.send_turn(message, actions)`, and the runner dispatches on the action type. Two properties are deliberate:
+
+- **Uploads are gated by the scenario fixture allow-list, not by the target's per-turn permission.** A `file_upload` slot is offered for each `scenario.fixtures` entry not yet attached (and, in `orca_api`, not yet rejected) — synthetic, not derived from the target's current state. The runner validates an upload only against that allow-list and the file's presence on disk; it does not check whether the target is prompting for a file this turn. This matches Orca, where attaching a file is a composer affordance available on any message.
+- **Only the persona honors conversational "wait" cues.** If the target says "please wait until next turn," that stays natural-language text in the observation — nothing mechanically blocks an upload. The persona LLM is trusted to read the cue and hold the action. A premature upload is discovered only at the transport layer (a backend rejection in `orca_api`, marking the fixture spent; a browser interaction in `orca_playwright`), never pre-empted. A target that truly gated uploads per turn would need runner-level enforcement that does not exist today.
+
 ## Environment variables
 
 | Variable | Required | Purpose |

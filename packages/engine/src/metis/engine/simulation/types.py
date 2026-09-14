@@ -7,7 +7,7 @@ change here, run `make generate-schema` and commit the updated schema files.
 
 import json
 from pathlib import Path
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, Field, GetJsonSchemaHandler, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -18,33 +18,67 @@ _RUN_RECORD_VERSION = 2
 
 
 # ---------------------------------------------------------------------------
-# User Agent Output
+# User Agent Output — self-describing action union
+#
+# Each action carries a ``slot_id`` naming the :class:`ActionSlot` the persona
+# chose from the previous turn's ``Observation.available_actions``. The link is
+# a runtime contract, not a schema constraint: the persona is an LLM and may
+# emit an id that was never offered, so a runner re-validates on dispatch and
+# skips a stray form/button action. What an id denotes is runner-defined (a
+# form-field id, a DOM selector, …).
+#
+# Uploads are the exception: a runner routes on ``filename`` (the fixture),
+# never ``slot_id``. Whether an upload's ``slot_id`` corresponds to a real slot
+# is therefore runner-dependent — the Orca-API runner offers a ``file_upload``
+# slot per fixture (so ``slot_id`` == ``filename`` == the slot id there), while
+# the Playwright runner offers no upload slots at all (its ``available_actions``
+# are DOM form elements only), so an upload's ``slot_id`` matches nothing on
+# offer. Treat ``slot_id`` as advisory for uploads.
 # ---------------------------------------------------------------------------
 
 
-class FileUploadAction(BaseModel):
-    """Upload a fixture file."""
+class UploadFileAction(BaseModel, extra="forbid"):
+    """Attach a fixture file to this turn."""
 
-    type: Literal["file_upload"] = "file_upload"
-    file: str
+    type: Literal["upload_file"] = "upload_file"
+    slot_id: str = Field(
+        description=(
+            "Id of the file_upload ActionSlot chosen. Advisory: runners attach"
+            " by `filename`, and not every runner offers upload slots."
+        )
+    )
+    filename: str = Field(description="Name of the scenario fixture to attach.")
 
 
-class ButtonClickAction(BaseModel):
-    """Click a button by selector."""
+class ButtonClickAction(BaseModel, extra="forbid"):
+    """Activate a button-like offered slot (no payload)."""
 
     type: Literal["button_click"] = "button_click"
-    selector: str
+    slot_id: str = Field(
+        description="Id of the ActionSlot to activate, from available_actions."
+    )
 
 
-class FormFillAction(BaseModel):
-    """Fill a form element by selector."""
+class FormFillAction(BaseModel, extra="forbid"):
+    """Answer an offered form field with a typed value."""
 
     type: Literal["form_fill"] = "form_fill"
-    selector: str
-    value: str
+    slot_id: str = Field(
+        description=(
+            "Id of the form-field ActionSlot to answer, from available_actions."
+        )
+    )
+    value: str | list[str] | int | float = Field(
+        description="The typed answer for the field."
+    )
 
 
-UIAction = FileUploadAction | ButtonClickAction | FormFillAction
+#: The self-describing action union the persona emits. A plain ``anyOf`` union
+#: (each variant carries a ``type`` literal) — NOT a Pydantic discriminated
+#: union: ``Field(discriminator=...)`` emits ``oneOf`` + ``discriminator``,
+#: which is outside OpenAI's strict structured-output subset. Runners dispatch
+#: in Python via ``match`` / ``isinstance``.
+ChosenAction = UploadFileAction | ButtonClickAction | FormFillAction
 
 
 # ---------------------------------------------------------------------------
@@ -60,13 +94,6 @@ class ActionSlot(BaseModel):
     label: str
     options: list[str] | None = None
     required: bool | None = None
-
-
-class ChosenAction(BaseModel):
-    """An action the UserAgent selected from available_actions."""
-
-    id: str
-    value: str | list[str] | int | float | None = None
 
 
 class UserAgentOutput(BaseModel):
@@ -174,8 +201,22 @@ class MetricRef(BaseModel):
       - a single-key mapping: {"metis.library.metrics.TurnBudgetMetric": {"max_turns": 8}}
     """
 
-    fqn: str
-    args: dict = Field(default_factory=dict)
+    fqn: str = Field(
+        description=(
+            "Fully-qualified import path of the metric class to run — a"
+            " MetisTurnMetric or MetisSessionMetric subclass, e.g."
+            " 'metis.library.metrics.RoutingAccuracyMetric'. Resolved at"
+            " runtime via importlib."
+        )
+    )
+    args: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Keyword arguments for the metric's constructor (invoked as"
+            " cls(**args)), mapping each parameter name to its value. Empty"
+            " when the metric takes no configuration."
+        ),
+    )
 
     @classmethod
     def __get_pydantic_json_schema__(
@@ -361,10 +402,10 @@ class RunFailure(BaseModel, extra="ignore"):
 class ConversationTurn(BaseModel, extra="ignore"):
     turn_number: int
     user_message: str
-    target_response: dict = {}
+    target_response: dict[str, Any] = {}
     duration_ms: int = 0
     timestamp: str = ""
-    user_ui_actions: list[dict] = []
+    user_ui_actions: list[dict[str, Any]] = []
     diagnostics: TurnDiagnostics | None = None
 
 

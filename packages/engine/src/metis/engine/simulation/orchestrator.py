@@ -384,9 +384,13 @@ class Orchestrator:
                     )
                 if observation.available_actions:
                     logger.info(
-                        "[turn %d]   Actions available: %d",
+                        "[turn %d]   Actions available: %d (%s)",
                         turn_count,
                         len(observation.available_actions),
+                        ", ".join(
+                            f"{slot.kind}:{slot.label!r}"
+                            for slot in observation.available_actions
+                        ),
                     )
 
                 # Re-check stopping after turn

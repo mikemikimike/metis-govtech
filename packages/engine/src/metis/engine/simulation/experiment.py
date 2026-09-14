@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 
     from .runner import RunnerFactory
 
+
 class RunPlanItem(NamedTuple):
     """One planned run: a scenario × persona pair at a specific trial.
 
@@ -50,6 +51,7 @@ class RunPlanItem(NamedTuple):
     scenario: Scenario
     persona: Persona
     trial_index: int  # 1-based: first trial is 1
+
 
 __all__ = [
     "RunPlanItem",
@@ -306,7 +308,10 @@ async def _worker(
                 )
             if state:
                 state.mark_run_started(
-                    scenario.id, persona.id, trial_index=trial_index, worker_id=worker_id
+                    scenario.id,
+                    persona.id,
+                    trial_index=trial_index,
+                    worker_id=worker_id,
                 )
 
             async with console_lock:

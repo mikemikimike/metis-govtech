@@ -57,6 +57,10 @@ class TestHarnessEventEmission:
         assert run.current_turn == 1
 
         state.mark_run_completed(
-            "scn", "per", trial_index=1, stop_reason="goal_achieved", duration_seconds=100.0
+            "scn",
+            "per",
+            trial_index=1,
+            stop_reason="goal_achieved",
+            duration_seconds=100.0,
         )
         assert state.completed_runs == 1
