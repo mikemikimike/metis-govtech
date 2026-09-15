@@ -4,9 +4,10 @@ from pathlib import Path
 
 from playwright.async_api import Page
 
+from metis.core import Artifact
 from metis.core.logging import get_logger
 
-from ...types import Artifact, UIState
+from ...types import UIState
 from ._config import RetryConfig
 from ._retry import action_retry
 
@@ -46,7 +47,7 @@ _CAPTURE_UI_STATE_JS = """() => {
       artifacts.push({
         name: link.download || link.textContent?.trim() || "file",
         type: "download",
-        url: link.href || undefined,
+        uri: link.href || undefined,
       });
     });
 
@@ -57,7 +58,7 @@ _CAPTURE_UI_STATE_JS = """() => {
       const href = link.href || "";
       if (fileExtPattern.test(href) || href.startsWith("blob:")) {
         const name = link.textContent?.trim() || href.split("/").pop()?.split("?")[0] || "file";
-        artifacts.push({ name, type: "download", url: href });
+        artifacts.push({ name, type: "download", uri: href });
       }
     });
 
@@ -287,14 +288,14 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
         downloadLinks.forEach(link => {
           const name = link.download || link.textContent?.trim() || link.href?.split("/").pop()?.split("?")[0] || "file";
           if (name && name.length < 200 && !found.some(f => f.name === name)) {
-            found.push({ name, type: "download", url: link.href || undefined });
+            found.push({ name, type: "download", uri: link.href || undefined });
           }
         });
         const blobLinks = body.querySelectorAll('a[href^="blob:"]');
         blobLinks.forEach(link => {
           const name = link.download || link.textContent?.trim() || "blob-file";
           if (!found.some(f => f.name === name)) {
-            found.push({ name, type: "download", url: link.href });
+            found.push({ name, type: "download", uri: link.href });
           }
         });
         const allClickables = body.querySelectorAll('button, [role="menuitem"]');

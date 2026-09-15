@@ -25,6 +25,7 @@ from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
 from langfuse.api import ObservationsView, TraceWithDetails
 
+from metis.core import Artifact, uri_to_local_path
 from metis.engine.extractor.types import (
     ChatMessage,
     Delegation,
@@ -33,7 +34,7 @@ from metis.engine.extractor.types import (
     SessionContext,
     ToolCallSummary,
 )
-from metis.engine.simulation.types import CollectedArtifact, Persona, Scenario
+from metis.engine.simulation.types import Persona, Scenario
 from metis.library.metrics._types import (
     ClarificationRequest,
     ConversationalTestCaseMetadata,
@@ -559,7 +560,7 @@ def fetch_by_session_id(
     *,
     limit: int = 50,
     retry_timeout: int = 0,
-    artifacts: list[CollectedArtifact] | None = None,
+    artifacts: list[Artifact] | None = None,
     scenario: Scenario | None = None,
     persona: Persona | None = None,
     stop_reason: str | None = None,
@@ -598,19 +599,24 @@ def fetch_by_session_id(
     # Sort traces chronologically within the session
     traces.sort(key=lambda t: t.timestamp or "")
 
-    session_artifacts: list[CollectedArtifact] = artifacts or []
+    session_artifacts: list[Artifact] = artifacts or []
     # Collect slide/image artifact paths in turn order for multimodal metrics.
     _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+
+    def _local(a: Artifact) -> str | None:
+        p = uri_to_local_path(a.uri)
+        return str(p) if p else None
+
     slide_images = sorted(
         [
             a
             for a in session_artifacts
-            if a.path and a.filename.lower().endswith(_IMAGE_EXTS)
+            if _local(a) and a.name.lower().endswith(_IMAGE_EXTS)
         ],
-        key=lambda a: (a.collected_at_turn, a.filename),
+        key=lambda a: (a.collected_at_turn or 0, a.name),
     )
     slide_image_refs: list[str] | None = (
-        [a.path for a in slide_images] if slide_images else None
+        [p for a in slide_images if (p := _local(a))] if slide_images else None
     )
     test_cases: list[LLMTestCase] = []
     skipped: int = 0

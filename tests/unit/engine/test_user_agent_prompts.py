@@ -6,6 +6,7 @@ import pytest
 
 from metis.engine.simulation.types import (
     ActionSlot,
+    Artifact,
     Observation,
     Persona,
     Scenario,
@@ -15,6 +16,7 @@ from metis.engine.simulation.types import (
 from metis.engine.simulation.user_agent import agent as agent_module
 from metis.engine.simulation.user_agent.agent import (
     UserAgent,
+    _render_artifacts,
     _render_available_actions,
     _render_errors,
 )
@@ -112,3 +114,76 @@ async def test_generate_response_surfaces_errors(monkeypatch) -> None:
         "Turn not submitted: file 'evil.exe' not in scenario fixtures"
         in captured["prompt"]
     )
+
+
+def test_render_artifacts_empty() -> None:
+    assert _render_artifacts(None) == ""
+    assert _render_artifacts({}) == ""
+
+
+def test_render_artifacts_shows_name_and_descriptions_not_uri() -> None:
+    reg = {
+        "abc": Artifact(
+            id="abc",
+            name="Q3_Sales_Merged.csv",
+            type="download",
+            uri="file:///runs/abc/Q3_Sales_Merged.csv",
+            content_description="120 rows x 5 cols; Q3 total 1,234,567",
+            state_description="delivered at turn 3",
+        )
+    }
+    out = _render_artifacts(reg)
+    assert "Q3_Sales_Merged.csv" in out
+    assert "120 rows x 5 cols" in out
+    assert "delivered at turn 3" in out
+    assert "file://" not in out  # never leak the uri
+    assert "/runs/abc/" not in out  # never leak the path
+
+
+def test_agent_registry_accumulates_across_turns() -> None:
+    from metis.engine.simulation.types import Observation
+
+    agent = UserAgent(
+        persona=Persona(id="p", description="a user"),
+        scenario=Scenario(id="s", description="do a thing", persona_refs=["p"]),
+    )
+    a1 = Artifact(id="1", name="a.csv", type="download", content_description="rows")
+    a2 = Artifact(
+        id="2", name="b.csv", type="download", content_description="more rows"
+    )
+    agent._merge_artifacts(Observation(artifacts=[a1]))
+    agent._merge_artifacts(Observation(artifacts=[a2, a1]))  # a1 repeated
+    assert set(agent._artifacts) == {"1", "2"}
+
+
+def test_response_turn_prompt_has_artifacts_placeholder() -> None:
+    from metis.engine.simulation.user_agent.prompts import RESPONSE_TURN_PROMPT
+
+    assert "{artifacts_section}" in RESPONSE_TURN_PROMPT
+
+
+def test_turn_prompt_surfaces_described_artifact_307() -> None:
+    from metis.engine.simulation.types import Artifact, Observation
+
+    agent = UserAgent(
+        persona=Persona(id="p", description="a domain expert"),
+        scenario=Scenario(
+            id="s", description="reconcile the sales data", persona_refs=["p"]
+        ),
+    )
+    art = Artifact(
+        id="art1",
+        name="Q3_Sales_Merged.csv",
+        type="download",
+        uri="file:///runs/x/Q3_Sales_Merged.csv",
+        content_description="2 conflicts reconciled; 120 rows; Q3 total 1,234,567",
+        state_description="delivered at turn 3",
+    )
+    agent._merge_artifacts(Observation(text="Here are your files.", artifacts=[art]))
+    prompt = agent._build_user_prompt(
+        "Here are your files.", artifacts=agent._artifacts
+    )
+    assert "Q3_Sales_Merged.csv" in prompt
+    assert "1,234,567" in prompt
+    assert "do NOT demand" in prompt or "pasted inline" in prompt
+    assert "file://" not in prompt

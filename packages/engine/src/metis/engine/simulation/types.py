@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field, GetJsonSchemaHandler, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
+from metis.core import Artifact
+
 _EXPERIMENT_VERSION = 2
 _RUN_RECORD_VERSION = 2
 
@@ -115,14 +117,6 @@ class UserAgentOutput(BaseModel):
 # ---------------------------------------------------------------------------
 # UI State (captured from the target system)
 # ---------------------------------------------------------------------------
-
-
-class Artifact(BaseModel):
-    """A downloadable item detected in the UI."""
-
-    name: str
-    type: Literal["download", "preview", "chart"]
-    url: str | None = None
 
 
 class FormElement(BaseModel):
@@ -365,12 +359,6 @@ class RunOutcome(BaseModel, extra="ignore"):
     duration_seconds: float
 
 
-class CollectedArtifact(BaseModel, extra="ignore"):
-    filename: str
-    collected_at_turn: int
-    path: str = ""
-
-
 class ActionRetry(BaseModel, extra="ignore"):
     action: str
     attempt: int
@@ -416,7 +404,7 @@ class RunRecord(BaseModel, extra="ignore"):
     config: RunConfig
     outcome: RunOutcome
     conversation: list[ConversationTurn] = []
-    artifacts_collected: list[CollectedArtifact] = []
+    artifacts_collected: list[Artifact] = []
     target_session_id: str | None = None
     attempt_number: int = 1
     total_attempts: int = 1

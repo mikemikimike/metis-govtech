@@ -34,7 +34,7 @@ _VERIFY_PATTERNS = (
 def _verification_evidence(test_case: LLMTestCase) -> str:
     code = "\n".join(get_executed_code(test_case)).lower()
     verify_hits = sorted({p for p in _VERIFY_PATTERNS if p in code})
-    artifacts = [a.get("filename", "") for a in get_artifacts(test_case)]
+    artifacts = [a.name for a in get_artifacts(test_case)]
     lines = [
         "Verification patterns in executed code: "
         + (", ".join(verify_hits) if verify_hits else "none detected"),

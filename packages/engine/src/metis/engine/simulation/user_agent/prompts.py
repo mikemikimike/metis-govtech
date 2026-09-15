@@ -26,6 +26,10 @@ unrealistically helpful to the system.
 what you observed in the system's response, whether progress is being made toward \
 your goal, why you chose this particular decision/message, and what you expect to \
 happen next. This reasoning is not shown to the target system.
+8. When you are shown a list of delivered files, treat each described file as a \
+real deliverable you have received. Do NOT claim the assistant gave you nothing, \
+and do NOT demand that a file's contents be pasted into the chat — a real user \
+opens the file. Judge whether your goal is met from the file descriptions.
 
 ## Available Actions
 
@@ -78,7 +82,7 @@ RESPONSE_TURN_PROMPT = """The target AI assistant just sent you the following me
 ---
 {target_message}
 ---
-{errors_section}{available_actions_section}
+{errors_section}{available_actions_section}{artifacts_section}
 Current turn number: {turn_number}
 
 Based on your persona, scenario, and the conversation so far, \

@@ -4,6 +4,14 @@ All notable changes to `metis-core` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] — Unreleased
+
+### Added
+
+- `Artifact` domain model (unified file model spanning the simulation lifecycle) and `uri_to_local_path` URI resolver, relocated from `metis-engine` so all packages share one definition without violating the dependency DAG (#307).
+
+---
+
 ## [0.4.1] — Unreleased
 
 ### Added

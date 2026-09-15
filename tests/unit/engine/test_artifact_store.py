@@ -7,7 +7,7 @@ from pathlib import Path
 
 from metis.engine.simulation._artifact_store import _save_artifacts, infer_artifact_type
 from metis.engine.simulation.types import (
-    CollectedArtifact,
+    Artifact,
     RunConfig,
     RunOutcome,
     RunRecord,
@@ -41,9 +41,10 @@ class TestSaveArtifacts:
             ),
             conversation=[],
             artifacts_collected=[
-                CollectedArtifact(
-                    filename="report.pdf",
-                    path="artifacts/report.pdf",
+                Artifact(
+                    name="report.pdf",
+                    type="download",
+                    uri="file:///artifacts/report.pdf",
                     collected_at_turn=2,
                 )
             ],

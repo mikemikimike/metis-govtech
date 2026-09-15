@@ -173,3 +173,38 @@ class TestBuildSubmitBody:
         assert isinstance(body, dict)
         assert body["message"] == "hello"
         assert "files" not in body and "formAnswers" not in body
+
+
+@pytest.mark.asyncio
+async def test_collect_artifacts_emits_file_uri_and_skips_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import metis.engine.simulation.runners.orca_api._artifacts as _artifacts_mod
+    from metis.engine.simulation.runners.orca_api._artifacts import collect_artifacts
+
+    async def _fake_download(client: object, url: str, dest: object) -> None:
+        Path(str(dest)).write_bytes(b"a,b\n1,2\n")
+
+    monkeypatch.setattr(_artifacts_mod, "download_to", _fake_download)
+
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir()
+
+    artifacts, notes = await collect_artifacts(
+        client=object(),  # type: ignore[arg-type]
+        files=[
+            {"fileId": "f1", "name": "report.csv"},
+            {"fileId": None, "name": "skipped.csv"},
+        ],
+        artifacts_dir=artifacts_dir,
+    )
+
+    # First entry: downloaded, uri is a file:// URL, file exists on disk
+    assert artifacts[0].uri is not None
+    assert artifacts[0].uri.startswith("file://")
+    assert Path(artifacts_dir / "report.csv").exists()
+
+    # Second entry: no fileId, uri is None, a note was recorded
+    assert artifacts[1].uri is None
+    assert len(notes) == 1
+    assert "skipped.csv" in notes[0]

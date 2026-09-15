@@ -5,6 +5,8 @@ from typing import Any, ClassVar
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 
+from metis.core import uri_to_local_path
+
 from ._extraction import (
     CODE_TOOLS,
     get_artifacts,
@@ -71,26 +73,21 @@ class ReproducibleAnalysisScriptMetric(BaseMetric):
             return self.score
 
         py_artifacts = [
-            a
-            for a in get_artifacts(test_case)
-            if (a.get("filename") or "").lower().endswith(".py")
+            a for a in get_artifacts(test_case) if a.name.lower().endswith(".py")
         ]
         in_outputs = [
             a
             for a in py_artifacts
-            if "outputs/" in (a.get("path") or "").replace("\\", "/").lower()
+            if "outputs/"
+            in (str(uri_to_local_path(a.uri) or "")).replace("\\", "/").lower()
         ]
-        descriptive = [
-            a
-            for a in in_outputs
-            if (a.get("filename") or "").lower() not in _GENERIC_NAMES
-        ]
+        descriptive = [a for a in in_outputs if a.name.lower() not in _GENERIC_NAMES]
         presented_text = _presented_text(test_case)
         presented = [
             a
             for a in descriptive
-            if (a.get("filename") or "").lower() in presented_text
-            or (a.get("filename") or "").rsplit(".", 1)[0].lower() in presented_text
+            if a.name.lower() in presented_text
+            or a.name.rsplit(".", 1)[0].lower() in presented_text
         ]
 
         passed = bool(presented)
@@ -100,19 +97,19 @@ class ReproducibleAnalysisScriptMetric(BaseMetric):
         if not py_artifacts:
             evidence = "no .py script artifact saved this turn."
         elif not in_outputs:
-            names = ", ".join(a.get("filename", "") for a in py_artifacts)
+            names = ", ".join(a.name for a in py_artifacts)
             evidence = f"script(s) saved but not under outputs/: {names}."
         elif not descriptive:
-            names = ", ".join(a.get("filename", "") for a in in_outputs)
+            names = ", ".join(a.name for a in in_outputs)
             evidence = f"script saved to outputs/ but generically named: {names}."
         elif not presented:
-            names = ", ".join(a.get("filename", "") for a in descriptive)
+            names = ", ".join(a.name for a in descriptive)
             evidence = (
                 f"descriptive script saved to outputs/ ({names}) but not "
                 "presented in the response."
             )
         else:
-            names = ", ".join(a.get("filename", "") for a in presented)
+            names = ", ".join(a.name for a in presented)
             evidence = f"descriptive script saved to outputs/ and presented: {names}."
 
         self.reason = evidence

@@ -28,8 +28,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from pydantic import ValidationError
+
+from metis.core import Artifact, uri_to_local_path
+
 from ._types import (
-    ArtifactSummary,
     LlmTestCaseMetadata,
     ObservationSummary,
     OrcaChatMetadata,
@@ -209,9 +212,19 @@ def extract_brief(test_case: LLMTestCase) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def get_artifacts(test_case: LLMTestCase) -> list[ArtifactSummary]:
-    """Collected output artifacts recorded in metadata (may be empty)."""
-    return list(get_metadata(test_case).get("artifacts", []) or [])
+def get_artifacts(test_case: LLMTestCase) -> list[Artifact]:
+    """Collected output artifacts recorded in metadata, validated to Artifact.
+
+    Malformed/legacy dicts are skipped (forward-only policy) so metrics never
+    crash on an old or partial record.
+    """
+    out: list[Artifact] = []
+    for raw in get_metadata(test_case).get("artifacts", []) or []:
+        try:
+            out.append(Artifact.model_validate(raw))
+        except ValidationError:
+            continue
+    return out
 
 
 def get_slide_image_refs(test_case: LLMTestCase) -> list[str] | None:
@@ -222,10 +235,10 @@ def get_slide_image_refs(test_case: LLMTestCase) -> list[str] | None:
 def _artifact_paths(test_case: LLMTestCase, *suffixes: str) -> list[str]:
     out: list[str] = []
     for art in get_artifacts(test_case):
-        path = art.get("path")
-        filename = (art.get("filename") or "").lower()
-        if path and (not suffixes or any(filename.endswith(s) for s in suffixes)):
-            out.append(path)
+        local = uri_to_local_path(art.uri)
+        name = art.name.lower()
+        if local and (not suffixes or any(name.endswith(s) for s in suffixes)):
+            out.append(str(local))
     return out
 
 

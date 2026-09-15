@@ -2,8 +2,8 @@
 
 A settled digest lists the files the turn generated. Each one with a
 ``fileId`` is streamed from ``GET /files/{fileId}/content`` into the run's
-``artifacts/`` directory and reported as a ``download`` artifact whose url is
-the local path — the same shape the browser runner produces, so the
+``artifacts/`` directory and reported as a ``download`` artifact whose uri is
+a ``file://`` URL — the same shape the browser runner produces, so the
 orchestrator, the artifact manifest and artifact-aware metrics need no
 transport-specific change.
 """
@@ -15,9 +15,9 @@ from typing import Any
 
 import httpx
 
+from metis.core import Artifact
 from metis.core.logging import get_logger
 
-from ...types import Artifact
 from .._http import download_to
 
 logger = get_logger()
@@ -43,7 +43,7 @@ async def collect_artifacts(
         file_id = entry.get("fileId")
         name = _local_name(entry.get("name"), file_id)
         if not file_id:
-            artifacts.append(Artifact(name=name, type="download", url=None))
+            artifacts.append(Artifact(name=name, type="download", uri=None))
             notes.append(f"Artifact '{name}' is not downloadable (no fileId)")
             logger.warning("[orca-api-runner] Artifact %r has no fileId; skipped", name)
             continue
@@ -53,7 +53,7 @@ async def collect_artifacts(
             await download_to(client, f"files/{file_id}/content", dest)
         except httpx.HTTPError as exc:
             reason = _describe(exc)
-            artifacts.append(Artifact(name=name, type="download", url=None))
+            artifacts.append(Artifact(name=name, type="download", uri=None))
             notes.append(f"Artifact '{name}' could not be downloaded: {reason}")
             logger.warning(
                 "[orca-api-runner] Artifact %r (file %s) download failed: %s",
@@ -63,7 +63,9 @@ async def collect_artifacts(
             )
             continue
 
-        artifacts.append(Artifact(name=name, type="download", url=str(dest)))
+        artifacts.append(
+            Artifact(name=name, type="download", uri=Path(dest).resolve().as_uri())
+        )
         logger.info("[orca-api-runner] Artifact %r saved to %s", name, dest)
     return artifacts, notes
 

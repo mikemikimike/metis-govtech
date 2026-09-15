@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
+from metis.core import uri_to_local_path
+
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from .types import RunRecord
 
 _TYPE_MAP = {
@@ -48,13 +51,13 @@ def _save_artifacts(record: RunRecord, run_dir: Path) -> dict:
 
     manifest_artifacts = []
     for artifact in record.artifacts_collected:
-        filename = artifact.filename or Path(artifact.path).name
+        local = uri_to_local_path(artifact.uri)
         manifest_artifacts.append(
             {
-                "filename": filename,
-                "type": infer_artifact_type(filename),
+                "filename": artifact.name,
+                "type": infer_artifact_type(artifact.name),
                 "collected_at_turn": artifact.collected_at_turn,
-                "path": artifact.path,
+                "path": str(local) if local else "",
             }
         )
 

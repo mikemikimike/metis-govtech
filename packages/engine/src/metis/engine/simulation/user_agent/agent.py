@@ -10,6 +10,8 @@ from metis.core.logging import get_logger
 
 from ..types import (
     ActionSlot,
+    Artifact,
+    Observation,
     Persona,
     Scenario,
     UserAgentInput,
@@ -49,6 +51,29 @@ def _render_available_actions(available_actions: list[ActionSlot] | None) -> str
             parts += f", required: {'true' if slot.required else 'false'}"
         action_lines.append(parts)
     return "\n" + "\n".join(action_lines) + "\n"
+
+
+def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
+    """Render the cumulative artifact registry into the prompt.
+
+    Compact and description-only: the persona sees each file's id, name, and
+    descriptions — never the uri or the bytes. Empty string when there are
+    none so the section disappears.
+    """
+    if not artifacts:
+        return ""
+    lines = [
+        "Files the assistant has delivered to you so far. Treat each as a real "
+        "file you have received — do NOT claim you got nothing, and do NOT "
+        "demand it be pasted inline; judge sufficiency from the descriptions:"
+    ]
+    for art in artifacts.values():
+        desc = art.content_description or "(no description available)"
+        line = f'  - id: "{art.id}", name: "{art.name}": {desc}'
+        if art.state_description:
+            line += f" [{art.state_description}]"
+        lines.append(line)
+    return "\n" + "\n".join(lines) + "\n"
 
 
 def _render_errors(errors: list[str] | None) -> str:
@@ -93,6 +118,7 @@ class UserAgent:
         self.scenario = scenario
         self.conversation_history: list[HistoryEntry] = []
         self.turn_count = 0
+        self._artifacts: dict[str, Artifact] = {}
         self.client = AsyncOpenAI(
             api_key=USER_AGENT_API_KEY,
             base_url=USER_AGENT_BASE_URL,
@@ -137,6 +163,7 @@ class UserAgent:
             observation and optional session metadata.
         """
         observation = turn_payload.observation
+        self._merge_artifacts(observation)
         target_message = observation.text
         available_actions = observation.available_actions or None
         errors = observation.errors or None
@@ -158,6 +185,7 @@ class UserAgent:
             target_message,
             available_actions=available_actions,
             errors=errors,
+            artifacts=self._artifacts,
         )
 
         # Call LLM
@@ -200,11 +228,25 @@ class UserAgent:
             fixtures_section=fixtures_section,
         )
 
+    def _merge_artifacts(self, observation: Observation) -> None:
+        """Fold this turn's artifacts into the cumulative registry (by id).
+
+        Dedup assumes an artifact keeps a stable ``id`` across turns (the Orca
+        API runner reports the same file identity each turn). The Playwright
+        runner re-scans the DOM and mints a fresh id per capture, so a file
+        that persists across turns may appear under multiple ids; that is a
+        known limitation of the non-primary browser runner, not a correctness
+        issue — the file is still surfaced to the persona.
+        """
+        for artifact in observation.artifacts:
+            self._artifacts[artifact.id] = artifact
+
     def _build_user_prompt(
         self,
         target_message: str,
         available_actions: list[ActionSlot] | None = None,
         errors: list[str] | None = None,
+        artifacts: dict[str, Artifact] | None = None,
     ) -> str:
         """Build the turn-specific instruction prompt (excludes history, which
         is conveyed structurally via multi-turn contents)."""
@@ -212,6 +254,7 @@ class UserAgent:
             target_message=target_message,
             errors_section=_render_errors(errors),
             available_actions_section=_render_available_actions(available_actions),
+            artifacts_section=_render_artifacts(artifacts),
             turn_number=self.turn_count + 1,
         )
 

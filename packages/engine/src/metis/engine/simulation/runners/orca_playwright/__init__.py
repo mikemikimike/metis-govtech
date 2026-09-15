@@ -336,7 +336,7 @@ class OrcaPlaywrightRunner(Runner):
             if artifact.type != "download":
                 continue
             try:
-                url = artifact.url
+                url = artifact.uri
                 name = artifact.name
                 if url:
                     escaped_url = url.replace("\\", "\\\\").replace('"', '\\"')
@@ -356,6 +356,7 @@ class OrcaPlaywrightRunner(Runner):
                         filename = Path(download.suggested_filename or name).name
                         dest_path = artifacts_dir / filename
                         await download.save_as(str(dest_path))
+                        artifact.uri = Path(dest_path).resolve().as_uri()
                     elif url.startswith(("http", "blob:")):
                         async with page.expect_download(timeout=15000) as download_info:
                             await page.evaluate(
@@ -373,6 +374,7 @@ class OrcaPlaywrightRunner(Runner):
                         filename = Path(download.suggested_filename or name).name
                         dest_path = artifacts_dir / filename
                         await download.save_as(str(dest_path))
+                        artifact.uri = Path(dest_path).resolve().as_uri()
             except Exception as exc:
                 logger.warning(
                     "[playwright-runner] Download failed for '%s': %s",

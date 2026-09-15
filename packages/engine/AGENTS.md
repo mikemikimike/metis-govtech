@@ -32,7 +32,7 @@ When modifying `Experiment` or `RunRecord`, check whether the change is **breaki
 
 A breaking change to a nested model bumps the version of the root model that contains it:
 - `Scenario`, `MetricRef`, `Persona` → bump `Experiment`
-- `RunConfig`, `RunOutcome`, `CollectedArtifact`, `ConversationTurn` → bump `RunRecord`
+- `RunConfig`, `RunOutcome`, `Artifact`, `ConversationTurn` → bump `RunRecord`
 
 ### Bump Checklist (applies from v1.0)
 

@@ -5,6 +5,14 @@ All notable changes to `metis-library` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [0.10.0] — Unreleased
+
+### Changed
+
+- **Artifact metrics read the unified `metis.core.Artifact` (issue #307)** — the library's local `ArtifactSummary` TypedDict is removed; `metrics._extraction.get_artifacts` now validates each `metadata["artifacts"]` dict into a `metis.core.Artifact` (skipping malformed/legacy dicts) and returns `list[Artifact]`. `_artifact_paths` and the output-verification, reproducible-analysis-script, and report-format-and-length metrics resolve on-disk paths from the artifact's `file://` `uri` via `metis.core.uri_to_local_path` and read `.name` instead of the old `filename` key. Lockstep with the engine's artifact unification; requires `metis-core` ≥ 0.5.0. Old-shape (`{filename, path}`) metadata is no longer read (forward-only).
+
+---
+
 ## [0.9.0] — 2026-09-03
 
 ### Changed

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
 
+from .artifact_summarizer import summarize_artifact
 from .exceptions import (
     ConsecutiveFailureEscalation,
     PostSubmissionObservationError,
@@ -24,8 +25,8 @@ from .exceptions import (
     TurnRecoverableError,
 )
 from .types import (
+    Artifact,
     ChosenAction,
-    CollectedArtifact,
     ConversationTurn,
     Observation,
     RunConfig,
@@ -79,7 +80,7 @@ class Orchestrator:
         # In-progress state mirrored here so a caller can still build a
         # record if run() raises. run() overwrites these on entry.
         self._conversation: list[ConversationTurn] = []
-        self._artifacts_collected: list[CollectedArtifact] = []
+        self._artifacts_collected: list[Artifact] = []
         self._start_time: float = time.time()
         self._target_session_id: str | None = None
 
@@ -88,7 +89,7 @@ class Orchestrator:
         run_config = self._run_config
         start_time = time.time()
         conversation: list[ConversationTurn] = []
-        artifacts_collected: list[CollectedArtifact] = []
+        artifacts_collected: list[Artifact] = []
         turn_count = 0
         target_session_id: str | None = None
 
@@ -336,6 +337,18 @@ class Orchestrator:
                         turn_count,
                         observation.discarded_message[:80],
                     )
+                # Stamp the turn onto each artifact and enrich downloads with a
+                # digest + descriptions before the turn is recorded, so both
+                # target_response and artifacts_collected carry enriched data.
+                for artifact in observation.artifacts:
+                    artifact.collected_at_turn = turn_count
+                    if artifact.type == "download":
+                        await summarize_artifact(
+                            artifact,
+                            triggering_message=current_message,
+                            turn_number=turn_count,
+                        )
+
                 turn = ConversationTurn(
                     turn_number=turn_count,
                     user_message=current_message,
@@ -349,15 +362,8 @@ class Orchestrator:
                 )
                 conversation.append(turn)
 
-                # Track artifacts
-                for artifact in observation.artifacts:
-                    artifacts_collected.append(
-                        CollectedArtifact(
-                            filename=artifact.name,
-                            collected_at_turn=turn_count,
-                            path=artifact.url or "",
-                        )
-                    )
+                # Track artifacts (already stamped with collected_at_turn above)
+                artifacts_collected.extend(observation.artifacts)
 
                 # Turn summary
                 logger.info(
@@ -502,7 +508,7 @@ class Orchestrator:
         self,
         stop_reason: str,
         conversation: list[ConversationTurn],
-        artifacts_collected: list[CollectedArtifact],
+        artifacts_collected: list[Artifact],
         start_time: float,
         target_session_id: str | None,
     ) -> RunRecord:

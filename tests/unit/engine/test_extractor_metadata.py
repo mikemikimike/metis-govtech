@@ -11,8 +11,8 @@ invented) when the caller does not supply them.
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from metis.core import Artifact
 from metis.engine.extractor.langfuse import fetch_by_session_id
-from metis.engine.simulation.types import CollectedArtifact
 
 
 def _make_trace(trace_id: str, session_id: str) -> SimpleNamespace:
@@ -39,14 +39,23 @@ def test_execution_metadata_reaches_metric_metadata() -> None:
     lf = _make_langfuse([_make_trace("t1", "s1")])
     artifacts = [
         # Out-of-order + mixed types: only images are kept, sorted by turn/name.
-        CollectedArtifact(
-            filename="slide2.png", collected_at_turn=1, path="out/slide2.png"
+        Artifact(
+            name="slide2.png",
+            type="download",
+            collected_at_turn=1,
+            uri="file:///out/slide2.png",
         ),
-        CollectedArtifact(
-            filename="deck.pptx", collected_at_turn=1, path="out/deck.pptx"
+        Artifact(
+            name="deck.pptx",
+            type="download",
+            collected_at_turn=1,
+            uri="file:///out/deck.pptx",
         ),
-        CollectedArtifact(
-            filename="slide1.png", collected_at_turn=0, path="out/slide1.png"
+        Artifact(
+            name="slide1.png",
+            type="download",
+            collected_at_turn=0,
+            uri="file:///out/slide1.png",
         ),
     ]
 
@@ -62,14 +71,14 @@ def test_execution_metadata_reaches_metric_metadata() -> None:
     assert tc.metadata is not None
     assert tc.metadata["stop_reason"] == "goal_achieved"
     assert tc.metadata["cancellation_available"] is True
-    # PPTX excluded; images ordered by (collected_at_turn, filename).
-    assert tc.metadata["slide_image_refs"] == ["out/slide1.png", "out/slide2.png"]
+    # PPTX excluded; images ordered by (collected_at_turn, name).
+    assert tc.metadata["slide_image_refs"] == ["/out/slide1.png", "/out/slide2.png"]
 
     ctc = result.session_test_cases[0]
     assert ctc.metadata is not None
     assert ctc.metadata["stop_reason"] == "goal_achieved"
     assert ctc.metadata["cancellation_available"] is True
-    assert ctc.metadata["slide_image_refs"] == ["out/slide1.png", "out/slide2.png"]
+    assert ctc.metadata["slide_image_refs"] == ["/out/slide1.png", "/out/slide2.png"]
 
 
 def test_missing_execution_metadata_is_marked_unavailable() -> None:
