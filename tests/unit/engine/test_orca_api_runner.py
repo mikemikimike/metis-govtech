@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -208,3 +209,59 @@ async def test_collect_artifacts_emits_file_uri_and_skips_missing(
     assert artifacts[1].uri is None
     assert len(notes) == 1
     assert "skipped.csv" in notes[0]
+
+
+@pytest.mark.asyncio
+async def test_send_turn_appends_submitted_fixtures_as_artifacts(
+    tmp_path, monkeypatch
+) -> None:
+    from metis.engine.simulation.types import Observation
+
+    runner, fixtures_dir = _make_runner(tmp_path, fixtures=["q3.csv"])
+    (fixtures_dir / "q3.csv").write_text("a,b\n1,2\n")
+
+    async def fake_build_submit_body(message, actions):
+        # Simulate the body-builder having staged one fixture this turn.
+        runner._attaching = ["q3.csv"]
+        return {"message": message}
+
+    monkeypatch.setattr(runner, "_build_submit_body", fake_build_submit_body)
+    monkeypatch.setattr(runner, "_submit", AsyncMock(return_value="turn-1"))
+    monkeypatch.setattr(runner, "_await_digest", AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        runner, "_build_observation", AsyncMock(return_value=Observation(text="ok"))
+    )
+
+    obs = await runner.send_turn("hi", [])
+
+    fixtures = [a for a in obs.artifacts if a.source == "fixture"]
+    assert [a.name for a in fixtures] == ["q3.csv"]
+    assert fixtures[0].uri is not None and fixtures[0].uri.startswith("file://")
+    assert runner._attached == {"q3.csv"}  # committed
+    assert runner._attaching == []  # drained
+
+
+@pytest.mark.asyncio
+async def test_send_turn_appends_no_fixtures_when_none_submitted(
+    tmp_path, monkeypatch
+) -> None:
+    # A turn that attached nothing (resolution failed → not in _attaching) must
+    # surface no fixture artifact: no assumed uploads.
+    from metis.engine.simulation.types import Observation
+
+    runner, _ = _make_runner(tmp_path, fixtures=["q3.csv"])
+
+    async def fake_build_submit_body(message, actions):
+        runner._attaching = []
+        return {"message": message}
+
+    monkeypatch.setattr(runner, "_build_submit_body", fake_build_submit_body)
+    monkeypatch.setattr(runner, "_submit", AsyncMock(return_value="turn-1"))
+    monkeypatch.setattr(runner, "_await_digest", AsyncMock(return_value={}))
+    monkeypatch.setattr(
+        runner, "_build_observation", AsyncMock(return_value=Observation(text="ok"))
+    )
+
+    obs = await runner.send_turn("hi", [])
+
+    assert [a for a in obs.artifacts if a.source == "fixture"] == []

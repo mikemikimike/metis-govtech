@@ -126,7 +126,6 @@ def test_render_artifacts_shows_name_and_descriptions_not_uri() -> None:
         "abc": Artifact(
             id="abc",
             name="Q3_Sales_Merged.csv",
-            type="download",
             uri="file:///runs/abc/Q3_Sales_Merged.csv",
             content_description="120 rows x 5 cols; Q3 total 1,234,567",
             state_description="delivered at turn 3",
@@ -147,13 +146,40 @@ def test_agent_registry_accumulates_across_turns() -> None:
         persona=Persona(id="p", description="a user"),
         scenario=Scenario(id="s", description="do a thing", persona_refs=["p"]),
     )
-    a1 = Artifact(id="1", name="a.csv", type="download", content_description="rows")
-    a2 = Artifact(
-        id="2", name="b.csv", type="download", content_description="more rows"
-    )
+    a1 = Artifact(id="1", name="a.csv", content_description="rows")
+    a2 = Artifact(id="2", name="b.csv", content_description="more rows")
     agent._merge_artifacts(Observation(artifacts=[a1]))
     agent._merge_artifacts(Observation(artifacts=[a2, a1]))  # a1 repeated
     assert set(agent._artifacts) == {"1", "2"}
+
+
+def test_render_artifacts_groups_by_source() -> None:
+    from metis.core import Artifact
+    from metis.engine.simulation.user_agent.agent import _render_artifacts
+
+    fixture = Artifact(
+        name="report.txt",
+        source="fixture",
+        uri="file:///tmp/report.txt",
+        at_turn=1,
+        content_description="the input the user uploaded",
+    )
+    target = Artifact(
+        name="report.txt",
+        source="target",
+        uri="file:///tmp/out/report.txt",
+        at_turn=3,
+        content_description="the assistant's generated report",
+        state_description="delivered at turn 3",
+    )
+    out = _render_artifacts({fixture.id: fixture, target.id: target})
+
+    assert "Files you've uploaded" in out
+    assert "Files the assistant has delivered to you" in out
+    assert 'name: "report.txt" (fixture)' in out
+    assert 'name: "report.txt" (delivered turn 3)' in out
+    # empty registry still renders nothing
+    assert _render_artifacts({}) == ""
 
 
 def test_response_turn_prompt_has_artifacts_placeholder() -> None:
@@ -174,7 +200,6 @@ def test_turn_prompt_surfaces_described_artifact_307() -> None:
     art = Artifact(
         id="art1",
         name="Q3_Sales_Merged.csv",
-        type="download",
         uri="file:///runs/x/Q3_Sales_Merged.csv",
         content_description="2 conflicts reconciled; 120 rows; Q3 total 1,234,567",
         state_description="delivered at turn 3",

@@ -10,33 +10,48 @@ none of which may import the engine.
 
 from __future__ import annotations
 
+import mimetypes
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class Artifact(BaseModel):
-    """A downloadable/renderable item produced by the target.
+    """A file crossing the persona<->target boundary.
 
-    One model across the lifecycle: live-detected in the UI, downloaded to
-    disk, then enriched with descriptions and a digest by the summarizer.
-    Enrichment fields stay None for items never downloaded (``preview``/
-    ``chart``) or that could not be downloaded/summarized.
+    One model across the lifecycle and both directions: an inbound fixture
+    (``source="fixture"``) or an outbound target output (``source="target"``),
+    optionally downloaded to disk and enriched with descriptions and a digest.
+    Enrichment fields stay ``None`` until the bytes are in hand and summarized.
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
-    type: Literal["download", "preview", "chart"]
+    source: Literal["fixture", "target"] = "target"
     uri: str | None = None  # file:// for local; s3://, nas:// reserved
-    collected_at_turn: int | None = None
+    at_turn: int | None = None
     content_description: str | None = None  # summarizer-filled; must be fact-rich
     state_description: str | None = None  # e.g. "delivered at turn 3 after ..."
     digest: str | None = None  # e.g. hex SHA-256 of the bytes
     hash_algorithm: str | None = None  # e.g. "SHA256"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def media_type(self) -> str | None:
+        """MIME type inferred from ``name`` (then ``uri``); ``None`` if unknown.
+
+        Single source of truth is the filename, so the format never drifts on
+        rename. Keys off the extension via stdlib ``mimetypes``, so an
+        extensionless locator yields ``None``.
+        """
+        guessed, _ = mimetypes.guess_type(self.name)
+        if guessed is None and self.uri:
+            guessed, _ = mimetypes.guess_type(self.uri)
+        return guessed
 
 
 def uri_to_local_path(uri: str | None) -> Path | None:

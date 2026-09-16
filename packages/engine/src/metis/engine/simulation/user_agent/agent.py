@@ -53,26 +53,48 @@ def _render_available_actions(available_actions: list[ActionSlot] | None) -> str
     return "\n" + "\n".join(action_lines) + "\n"
 
 
-def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
-    """Render the cumulative artifact registry into the prompt.
+def _artifact_line(art: Artifact) -> str:
+    """One registry line: id, name, a direction/turn tag, then the description."""
+    desc = art.content_description or "(no description available)"
+    if art.source == "fixture":
+        tag = "fixture"
+    elif art.at_turn is not None:
+        tag = f"delivered turn {art.at_turn}"
+    else:
+        tag = "delivered"
+    line = f'  - id: "{art.id}", name: "{art.name}" ({tag}): {desc}'
+    if art.state_description:
+        line += f" [{art.state_description}]"
+    return line
 
-    Compact and description-only: the persona sees each file's id, name, and
-    descriptions — never the uri or the bytes. Empty string when there are
-    none so the section disappears.
+
+def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
+    """Render the cumulative artifact registry, grouped by direction.
+
+    Two labelled groups keep the persona from mistaking its own uploaded input
+    for a target deliverable. Same-named files are disambiguated by the per-line
+    tag (source + at_turn). Compact and description-only: never the uri or the
+    bytes. Empty string when there are none so the section disappears.
     """
     if not artifacts:
         return ""
-    lines = [
-        "Files the assistant has delivered to you so far. Treat each as a real "
-        "file you have received — do NOT claim you got nothing, and do NOT "
-        "demand it be pasted inline; judge sufficiency from the descriptions:"
-    ]
-    for art in artifacts.values():
-        desc = art.content_description or "(no description available)"
-        line = f'  - id: "{art.id}", name: "{art.name}": {desc}'
-        if art.state_description:
-            line += f" [{art.state_description}]"
-        lines.append(line)
+    uploaded = [a for a in artifacts.values() if a.source == "fixture"]
+    delivered = [a for a in artifacts.values() if a.source != "fixture"]
+    lines: list[str] = []
+    if uploaded:
+        lines.append(
+            "Files you've uploaded to the assistant. These are your own inputs, "
+            "not deliverables:"
+        )
+        lines.extend(_artifact_line(art) for art in uploaded)
+    if delivered:
+        lines.append(
+            "Files the assistant has delivered to you so far. Treat each as a "
+            "real file you have received — do NOT claim you got nothing, and do "
+            "NOT demand it be pasted inline; judge sufficiency from the "
+            "descriptions:"
+        )
+        lines.extend(_artifact_line(art) for art in delivered)
     return "\n" + "\n".join(lines) + "\n"
 
 
@@ -118,6 +140,8 @@ class UserAgent:
         self.scenario = scenario
         self.conversation_history: list[HistoryEntry] = []
         self.turn_count = 0
+        # Cumulative registry of artifacts surfaced to the persona, keyed by
+        # Artifact.id. Populated turn-by-turn via _merge_artifacts().
         self._artifacts: dict[str, Artifact] = {}
         self.client = AsyncOpenAI(
             api_key=USER_AGENT_API_KEY,

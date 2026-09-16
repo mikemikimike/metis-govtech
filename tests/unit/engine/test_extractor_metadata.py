@@ -41,20 +41,17 @@ def test_execution_metadata_reaches_metric_metadata() -> None:
         # Out-of-order + mixed types: only images are kept, sorted by turn/name.
         Artifact(
             name="slide2.png",
-            type="download",
-            collected_at_turn=1,
+            at_turn=1,
             uri="file:///out/slide2.png",
         ),
         Artifact(
             name="deck.pptx",
-            type="download",
-            collected_at_turn=1,
+            at_turn=1,
             uri="file:///out/deck.pptx",
         ),
         Artifact(
             name="slide1.png",
-            type="download",
-            collected_at_turn=0,
+            at_turn=0,
             uri="file:///out/slide1.png",
         ),
     ]
@@ -71,7 +68,7 @@ def test_execution_metadata_reaches_metric_metadata() -> None:
     assert tc.metadata is not None
     assert tc.metadata["stop_reason"] == "goal_achieved"
     assert tc.metadata["cancellation_available"] is True
-    # PPTX excluded; images ordered by (collected_at_turn, name).
+    # PPTX excluded; images ordered by (at_turn, name).
     assert tc.metadata["slide_image_refs"] == ["/out/slide1.png", "/out/slide2.png"]
 
     ctc = result.session_test_cases[0]
@@ -79,6 +76,37 @@ def test_execution_metadata_reaches_metric_metadata() -> None:
     assert ctc.metadata["stop_reason"] == "goal_achieved"
     assert ctc.metadata["cancellation_available"] is True
     assert ctc.metadata["slide_image_refs"] == ["/out/slide1.png", "/out/slide2.png"]
+
+
+def test_fixture_images_are_excluded_from_slide_refs() -> None:
+    """Persona-uploaded image fixtures must not reach multimodal metric inputs.
+
+    Fixtures now live in ``record.artifacts`` alongside target outputs, so the
+    slide-image filter must drop ``source="fixture"`` entries — otherwise the
+    user's own uploaded PNG would be judged as an assistant deliverable.
+    """
+    lf = _make_langfuse([_make_trace("t1", "s1")])
+    artifacts = [
+        Artifact(
+            name="uploaded.png",
+            source="fixture",
+            at_turn=1,
+            uri="file:///fixtures/uploaded.png",
+        ),
+        Artifact(
+            name="delivered.png",
+            source="target",
+            at_turn=2,
+            uri="file:///out/delivered.png",
+        ),
+    ]
+
+    result = fetch_by_session_id("s1", lf, artifacts=artifacts)
+
+    tc = result.test_cases[0]
+    assert tc.metadata is not None
+    # Only the delivered target image; the fixture upload is excluded.
+    assert tc.metadata["slide_image_refs"] == ["/out/delivered.png"]
 
 
 def test_missing_execution_metadata_is_marked_unavailable() -> None:

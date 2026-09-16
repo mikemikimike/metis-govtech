@@ -50,13 +50,14 @@ def _save_artifacts(record: RunRecord, run_dir: Path) -> dict:
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
     manifest_artifacts = []
-    for artifact in record.artifacts_collected:
+    for artifact in record.artifacts:
         local = uri_to_local_path(artifact.uri)
         manifest_artifacts.append(
             {
                 "filename": artifact.name,
                 "type": infer_artifact_type(artifact.name),
-                "collected_at_turn": artifact.collected_at_turn,
+                "source": artifact.source,
+                "at_turn": artifact.at_turn,
                 "path": str(local) if local else "",
             }
         )

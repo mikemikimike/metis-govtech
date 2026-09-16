@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
-- `Artifact` domain model (unified file model spanning the simulation lifecycle) and `uri_to_local_path` URI resolver, relocated from `metis-engine` so all packages share one definition without violating the dependency DAG (#307).
+- `Artifact` domain model — a single lifecycle-spanning record for any file crossing the persona↔target boundary, inbound (`source="fixture"`) or outbound (`source="target"`), plus the `uri_to_local_path` URI resolver. Relocated from `metis-engine` so all packages share one definition (#307). Fields: `id`, `name`, `source` (default `"target"`), `uri`, `digest`, `hash_algorithm`, `at_turn`, `content_description`, `state_description`, and a derived `media_type` computed field (MIME from `name`/`uri`). The Orca-UI-specific `type` enum was removed and `collected_at_turn` renamed to the direction-neutral `at_turn` (#321).
 
 ---
 

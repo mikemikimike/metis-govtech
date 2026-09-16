@@ -61,6 +61,7 @@ from ...exceptions import (
 from ...runner import Runner
 from ...types import (
     ActionSlot,
+    Artifact,
     ButtonClickAction,
     ChosenAction,
     FormFillAction,
@@ -182,11 +183,26 @@ class OrcaApiRunner(Runner):
         if isinstance(body, Observation):
             return body
         turn_id = await self._submit(body)
-        # Only a submitted attachment stops being offered.
+        # Only a submitted attachment stops being offered. Capture the names
+        # committed this turn — each becomes a source="fixture" artifact on the
+        # observation, so it flows through the SAME channel as target outputs
+        # (the orchestrator enriches it; the persona sees it as a file it has
+        # uploaded). No-assumed-uploads: only post-submit attachments appear.
+        newly_attached = list(self._attaching)
         self._attached.update(self._attaching)
         self._attaching = []
         digest = await self._await_digest(turn_id)
-        return await self._build_observation(digest)
+        observation = await self._build_observation(digest)
+        for name in newly_attached:
+            path = self._fixture_path(name)
+            observation.artifacts.append(
+                Artifact(
+                    name=name,
+                    source="fixture",
+                    uri=path.as_uri() if path is not None else None,
+                )
+            )
+        return observation
 
     async def _build_submit_body(
         self, message: str, actions: list[ChosenAction]

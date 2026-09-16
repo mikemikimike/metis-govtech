@@ -73,7 +73,7 @@ async def test_orchestrator_summarizes_downloads(monkeypatch, tmp_path: Path) ->
     csv_file.write_text("col1,col2\n1,2\n3,4\n5,6\n")
     uri = csv_file.as_uri()
 
-    artifact = Artifact(name="x.csv", type="download", uri=uri)
+    artifact = Artifact(name="x.csv", uri=uri)
     runner = _FakeRunner(artifact)
     scenario = _scenario()
     run_config = RunConfig(persona="p1", scenario="s1")
@@ -89,6 +89,88 @@ async def test_orchestrator_summarizes_downloads(monkeypatch, tmp_path: Path) ->
     record = await orchestrator.run()
 
     assert seen and seen[0][1] == 1
-    art = record.artifacts_collected[0]
+    art = record.artifacts[0]
     assert art.content_description == "3 rows x 2 cols"
-    assert art.collected_at_turn == 1
+    assert art.at_turn == 1
+
+
+@pytest.mark.asyncio
+async def test_fixture_stub_swapped_for_registry_object_and_deduped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from metis.engine.simulation import orchestrator as orch_mod
+
+    # The worker-enriched registry object (has a description; no at_turn yet).
+    registry = Artifact(
+        name="q3.csv",
+        source="fixture",
+        uri="file:///tmp/q3.csv",
+        content_description="Q3 sales, 200 rows.",
+    )
+    orch = Orchestrator(
+        runner=object(),
+        agent=object(),
+        run_config=RunConfig(persona="p", scenario="s", fixtures=["q3.csv"]),
+        scenario=Scenario(
+            id="s", description="d", persona_refs=["p"], fixtures=["q3.csv"]
+        ),
+        run_dir=tmp_path,
+        fixtures_dir=tmp_path,
+        fixture_artifacts=[registry],
+    )
+
+    # summarize_artifact must NOT be called for a fixture.
+    calls: list[str] = []
+
+    async def spy_summarize(artifact, *, triggering_message, turn_number):
+        calls.append(artifact.name)
+
+    monkeypatch.setattr(orch_mod, "summarize_artifact", spy_summarize)
+
+    # The runner emitted a DIFFERENT object (fresh id) with the same name.
+    stub = Artifact(name="q3.csv", source="fixture", uri="file:///tmp/q3.csv")
+    assert stub.id != registry.id
+    obs = Observation(text="ok", artifacts=[stub])
+
+    await orch._enrich_observation_artifacts(obs, turn_count=3, current_message="here")
+
+    # Stub replaced in place by the registry object; at_turn stamped; not summarized.
+    assert obs.artifacts[0] is registry
+    assert registry.at_turn == 3
+    assert calls == []  # fixtures skip summarize
+
+    # Record dedups: registry appears in both _fixture_artifacts and collected.
+    record = orch._build_record("goal_achieved", [], list(obs.artifacts), 0.0, None)
+    ids = [a.id for a in record.artifacts]
+    assert ids.count(registry.id) == 1
+    assert record.artifacts[0].content_description == "Q3 sales, 200 rows."
+
+
+@pytest.mark.asyncio
+async def test_target_artifact_still_stamped_and_summarized(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from metis.engine.simulation import orchestrator as orch_mod
+
+    orch = Orchestrator(
+        runner=object(),
+        agent=object(),
+        run_config=RunConfig(persona="p", scenario="s"),
+        scenario=Scenario(id="s", description="d", persona_refs=["p"]),
+        run_dir=tmp_path,
+        fixtures_dir=tmp_path,
+        fixture_artifacts=[],
+    )
+    calls: list[str] = []
+
+    async def spy_summarize(artifact, *, triggering_message, turn_number):
+        calls.append(artifact.name)
+
+    monkeypatch.setattr(orch_mod, "summarize_artifact", spy_summarize)
+
+    target = Artifact(name="out.csv", source="target", uri="file:///tmp/out.csv")
+    obs = Observation(text="ok", artifacts=[target])
+    await orch._enrich_observation_artifacts(obs, turn_count=2, current_message="go")
+
+    assert target.at_turn == 2
+    assert calls == ["out.csv"]  # targets are summarized

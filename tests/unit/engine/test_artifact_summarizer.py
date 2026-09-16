@@ -22,7 +22,7 @@ async def test_digest_is_sha256_of_bytes(tmp_path: Path, monkeypatch) -> None:
         return ("2 rows x 2 cols", f"delivered at turn {turn_number}")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _fake)
-    art = Artifact(name="data.csv", type="download", uri=f.as_uri())
+    art = Artifact(name="data.csv", uri=f.as_uri())
     await summarize_artifact(art, triggering_message="make a csv", turn_number=3)
 
     assert art.digest == hashlib.sha256(payload).hexdigest()
@@ -41,7 +41,7 @@ async def test_fact_rich_description_from_stubbed_llm(
         return ("2 data rows; totals north=100 south=200", "delivered at turn 2")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _fake)
-    art = Artifact(name="sales.csv", type="download", uri=f.as_uri())
+    art = Artifact(name="sales.csv", uri=f.as_uri())
     await summarize_artifact(art, triggering_message="totals please", turn_number=2)
 
     assert "north=100" in (art.content_description or "")
@@ -57,7 +57,7 @@ async def test_binary_degrades_without_llm(tmp_path: Path, monkeypatch) -> None:
         raise AssertionError("LLM must not be called for binary files")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _boom)
-    art = Artifact(name="deck.pptx", type="download", uri=f.as_uri())
+    art = Artifact(name="deck.pptx", uri=f.as_uri())
     await summarize_artifact(art, triggering_message="make slides", turn_number=1)
 
     assert art.digest is not None
@@ -73,7 +73,7 @@ async def test_llm_failure_never_raises(tmp_path: Path, monkeypatch) -> None:
         raise RuntimeError("provider down")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _fail)
-    art = Artifact(name="notes.txt", type="download", uri=f.as_uri())
+    art = Artifact(name="notes.txt", uri=f.as_uri())
     await summarize_artifact(
         art, triggering_message="save notes", turn_number=1
     )  # no raise
@@ -84,7 +84,107 @@ async def test_llm_failure_never_raises(tmp_path: Path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_missing_file_is_noop(monkeypatch) -> None:
-    art = Artifact(name="gone.csv", type="download", uri="file:///nope/gone.csv")
+    art = Artifact(name="gone.csv", uri="file:///nope/gone.csv")
     await summarize_artifact(art, triggering_message="x", turn_number=1)  # no raise
     assert art.digest is None
     assert art.content_description is None
+
+
+@pytest.mark.asyncio
+async def test_summarize_fixtures_skips_described_and_fills_gaps(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / "notes.txt").write_text("hello world")
+    described = Artifact(
+        name="q3.csv",
+        source="fixture",
+        uri=(tmp_path / "notes.txt").as_uri(),
+        content_description="author supplied",
+    )
+    gap = Artifact(
+        name="notes.txt",
+        source="fixture",
+        uri=(tmp_path / "notes.txt").as_uri(),
+    )
+
+    calls: list[str] = []
+
+    async def fake_summarize(artifact, *, triggering_message, turn_number):
+        calls.append(artifact.name)
+        artifact.content_description = "auto"
+        artifact.state_description = f"delivered at turn {turn_number}"
+
+    monkeypatch.setattr(
+        "metis.engine.simulation.artifact_summarizer.summarize_artifact",
+        fake_summarize,
+    )
+
+    from metis.engine.simulation.artifact_summarizer import summarize_fixture_artifacts
+
+    await summarize_fixture_artifacts([described, gap])
+
+    assert calls == ["notes.txt"]  # described one skipped
+    assert described.content_description == "author supplied"
+    assert gap.content_description == "auto"
+    assert gap.state_description is None  # cleared for fixtures
+
+
+@pytest.mark.asyncio
+async def test_resolve_fixture_descriptions_summarizes_each_unique_once(
+    tmp_path: Path, monkeypatch
+) -> None:
+    (tmp_path / "shared.csv").write_text("a,b\n1,2\n")
+    (tmp_path / "author.csv").write_text("x,y\n3,4\n")
+
+    calls: list[str] = []
+
+    async def fake_summarize(artifact, *, triggering_message, turn_number):
+        calls.append(artifact.name)
+        artifact.content_description = f"auto:{artifact.name}"
+        artifact.state_description = f"delivered at turn {turn_number}"
+
+    monkeypatch.setattr(
+        "metis.engine.simulation.artifact_summarizer.summarize_artifact",
+        fake_summarize,
+    )
+
+    from metis.engine.simulation.artifact_summarizer import (
+        resolve_fixture_descriptions,
+    )
+
+    # "shared.csv" appears in two scenarios; "author.csv" is described in yaml.
+    resolved = await resolve_fixture_descriptions(
+        ["shared.csv", "author.csv", "shared.csv"],
+        tmp_path,
+        {"author.csv": "author supplied"},
+    )
+
+    # Each unique undescribed fixture is summarized exactly once, despite the
+    # duplicate; the author-described one is never summarized.
+    assert calls == ["shared.csv"]
+    assert resolved == {
+        "shared.csv": "auto:shared.csv",
+        "author.csv": "author supplied",
+    }
+
+
+@pytest.mark.asyncio
+async def test_resolve_fixture_descriptions_omits_missing_files(
+    tmp_path: Path, monkeypatch
+) -> None:
+    async def _boom(*a, **k):
+        raise AssertionError("no summarization for a missing file")
+
+    monkeypatch.setattr(
+        "metis.engine.simulation.artifact_summarizer.summarize_artifact",
+        _boom,
+    )
+
+    from metis.engine.simulation.artifact_summarizer import (
+        resolve_fixture_descriptions,
+    )
+
+    # File never staged on disk -> build_fixture_artifacts skips it -> absent
+    # from the map (workers likewise skip it, so the two stay consistent).
+    resolved = await resolve_fixture_descriptions(["ghost.csv"], tmp_path, {})
+    assert resolved == {}

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
 
+from ._fixture_artifacts import build_fixture_artifacts
 from .artifact_summarizer import summarize_artifact
 from .exceptions import (
     ConsecutiveFailureEscalation,
@@ -61,6 +62,7 @@ class Orchestrator:
         scenario: Scenario,
         run_dir: Path,
         fixtures_dir: Path,
+        fixture_artifacts: list[Artifact] | None = None,
         trial_index: int = 1,  # 1-based
         state: SimulationState | None = None,
         tui_ctx: TUIContext | None = None,
@@ -72,6 +74,14 @@ class Orchestrator:
         self._scenario = scenario
         self._run_dir = run_dir
         self._fixtures_dir = fixtures_dir
+        self._fixture_artifacts = (
+            fixture_artifacts
+            if fixture_artifacts is not None
+            else build_fixture_artifacts(run_config.fixtures, fixtures_dir)
+        )
+        # Staged fixtures by logical name — the enrichment loop swaps a
+        # runner-emitted fixture stub for the SAME object recorded here.
+        self._fixtures_by_name = {a.name: a for a in self._fixture_artifacts}
         self._trial_index = trial_index
         self._state = state
         self._tui_ctx = tui_ctx
@@ -340,14 +350,9 @@ class Orchestrator:
                 # Stamp the turn onto each artifact and enrich downloads with a
                 # digest + descriptions before the turn is recorded, so both
                 # target_response and artifacts_collected carry enriched data.
-                for artifact in observation.artifacts:
-                    artifact.collected_at_turn = turn_count
-                    if artifact.type == "download":
-                        await summarize_artifact(
-                            artifact,
-                            triggering_message=current_message,
-                            turn_number=turn_count,
-                        )
+                await self._enrich_observation_artifacts(
+                    observation, turn_count, current_message
+                )
 
                 turn = ConversationTurn(
                     turn_number=turn_count,
@@ -362,7 +367,7 @@ class Orchestrator:
                 )
                 conversation.append(turn)
 
-                # Track artifacts (already stamped with collected_at_turn above)
+                # Track artifacts (already stamped with at_turn above)
                 artifacts_collected.extend(observation.artifacts)
 
                 # Turn summary
@@ -504,6 +509,44 @@ class Orchestrator:
         finally:
             await self._runner.teardown()
 
+    async def _enrich_observation_artifacts(
+        self, observation: Observation, turn_count: int, current_message: str
+    ) -> None:
+        """Stamp + enrich this turn's observation artifacts, in place.
+
+        A ``source="fixture"`` entry is a confirmed upload the runner echoed:
+        swap the runner-emitted stub for the SAME worker-enriched registry
+        object (matched by name), stamp the upload turn, and skip
+        ``summarize_artifact`` — the fixture was described at build time, and
+        re-summarizing would relabel it as a delivered target and re-hash a
+        file already digested. Target downloads keep the stamp-and-summarize
+        path. Swapping the registry object into ``observation.artifacts`` means
+        the record folds one identity per fixture (deduped by id in
+        ``_build_record``) and the UserAgent merges the enriched object.
+        """
+        for i, artifact in enumerate(observation.artifacts):
+            if artifact.source == "fixture":
+                registry = self._fixtures_by_name.get(artifact.name)
+                if registry is None:
+                    # Runner echoed a fixture name we never staged — record the
+                    # un-enriched stub (no digest/description) but flag it, since
+                    # it usually means a fixtures-dir / scenario-list mismatch.
+                    logger.warning(
+                        "[orchestrator] runner echoed unstaged fixture %r; "
+                        "recording the un-enriched stub",
+                        artifact.name,
+                    )
+                    registry = artifact
+                registry.at_turn = turn_count
+                observation.artifacts[i] = registry
+            else:
+                artifact.at_turn = turn_count
+                await summarize_artifact(
+                    artifact,
+                    triggering_message=current_message,
+                    turn_number=turn_count,
+                )
+
     def _build_record(
         self,
         stop_reason: str,
@@ -523,7 +566,11 @@ class Orchestrator:
                 duration_seconds=round(duration_seconds, 1),
             ),
             conversation=conversation,
-            artifacts_collected=artifacts_collected,
+            artifacts=list(
+                {
+                    a.id: a for a in (*self._fixture_artifacts, *artifacts_collected)
+                }.values()
+            ),
         )
 
     def partial_record(self, stop_reason: str) -> RunRecord:

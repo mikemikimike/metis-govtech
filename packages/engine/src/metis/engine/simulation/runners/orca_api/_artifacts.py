@@ -43,7 +43,7 @@ async def collect_artifacts(
         file_id = entry.get("fileId")
         name = _local_name(entry.get("name"), file_id)
         if not file_id:
-            artifacts.append(Artifact(name=name, type="download", uri=None))
+            artifacts.append(Artifact(name=name, uri=None))
             notes.append(f"Artifact '{name}' is not downloadable (no fileId)")
             logger.warning("[orca-api-runner] Artifact %r has no fileId; skipped", name)
             continue
@@ -53,7 +53,7 @@ async def collect_artifacts(
             await download_to(client, f"files/{file_id}/content", dest)
         except httpx.HTTPError as exc:
             reason = _describe(exc)
-            artifacts.append(Artifact(name=name, type="download", uri=None))
+            artifacts.append(Artifact(name=name, uri=None))
             notes.append(f"Artifact '{name}' could not be downloaded: {reason}")
             logger.warning(
                 "[orca-api-runner] Artifact %r (file %s) download failed: %s",
@@ -63,9 +63,7 @@ async def collect_artifacts(
             )
             continue
 
-        artifacts.append(
-            Artifact(name=name, type="download", uri=Path(dest).resolve().as_uri())
-        )
+        artifacts.append(Artifact(name=name, uri=Path(dest).resolve().as_uri()))
         logger.info("[orca-api-runner] Artifact %r saved to %s", name, dest)
     return artifacts, notes
 

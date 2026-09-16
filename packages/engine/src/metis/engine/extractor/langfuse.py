@@ -607,13 +607,21 @@ def fetch_by_session_id(
         p = uri_to_local_path(a.uri)
         return str(p) if p else None
 
+    # Multimodal metrics judge the assistant's delivered visuals, so keep only
+    # source="target" images. Fixtures are the persona's own uploads (now part
+    # of record.artifacts after fixtures were unified into the Artifact model),
+    # not deliverables, and must not be fed in as slide images. Allowlisting
+    # "target" (rather than excluding "fixture") stays precise if new
+    # Artifact.source values are ever introduced.
     slide_images = sorted(
         [
             a
             for a in session_artifacts
-            if _local(a) and a.name.lower().endswith(_IMAGE_EXTS)
+            if a.source == "target"
+            and _local(a)
+            and a.name.lower().endswith(_IMAGE_EXTS)
         ],
-        key=lambda a: (a.collected_at_turn or 0, a.name),
+        key=lambda a: (a.at_turn or 0, a.name),
     )
     slide_image_refs: list[str] | None = (
         [p for a in slide_images if (p := _local(a))] if slide_images else None

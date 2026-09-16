@@ -893,7 +893,7 @@ def _run_evaluation(
                         session_id,
                         langfuse,
                         retry_timeout=langfuse_timeout,
-                        artifacts=record.artifacts_collected,
+                        artifacts=record.artifacts,
                         scenario=scenarios_by_id.get(scenario_id),
                         persona=personas_by_id.get(persona_id),
                         stop_reason=record.outcome.stop_reason,

@@ -333,8 +333,6 @@ class OrcaPlaywrightRunner(Runner):
         artifacts_dir.mkdir(parents=True, exist_ok=True)
 
         for artifact in artifacts:
-            if artifact.type != "download":
-                continue
             try:
                 url = artifact.uri
                 name = artifact.name

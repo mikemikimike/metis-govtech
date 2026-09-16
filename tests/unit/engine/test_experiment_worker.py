@@ -18,6 +18,7 @@ from metis.engine.simulation.experiment import (
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     ChosenAction,
+    Experiment,
     Observation,
     Persona,
     RunConfig,
@@ -105,7 +106,7 @@ def _make_canned_record(scenario: Scenario, persona: Persona) -> RunRecord:
             duration_seconds=0.1,
         ),
         conversation=[],
-        artifacts_collected=[],
+        artifacts=[],
     )
 
 
@@ -134,6 +135,7 @@ class TestWorkerWithMockFactory:
                 worker_runs=worker_runs,
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=console_lock,
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -171,6 +173,7 @@ class TestWorkerWithMockFactory:
                 worker_runs=worker_runs,
                 output_dir=tmp_path,
                 fixtures_dir=fixtures_dir,
+                fixture_content_descriptions={},
                 console_lock=console_lock,
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -217,7 +220,7 @@ def _partial_record(
             duration_seconds=1.0,
         ),
         conversation=[],
-        artifacts_collected=[],
+        artifacts=[],
     )
 
 
@@ -256,6 +259,7 @@ class TestWorkerUnexpectedCrash:
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -304,6 +308,7 @@ class TestWorkerUnexpectedCrash:
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -345,6 +350,7 @@ class TestWorkerUnexpectedCrash:
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -392,6 +398,7 @@ class TestWorkerUnexpectedCrash:
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -436,6 +443,7 @@ class TestWorkerUnexpectedCrash:
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
                 output_dir=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -447,3 +455,117 @@ class TestWorkerUnexpectedCrash:
         assert records[0].outcome.total_turns == 3  # preserved, not 0
         assert len(records[0].prior_failures) == 1
         assert records[0].prior_failures[0].turn_reached == 3
+
+
+class TestFixtureContentDescriptions:
+    def test_experiment_accepts_fixture_content_descriptions(self) -> None:
+        exp = Experiment.model_validate(
+            {
+                "schema_version": 1,
+                "id": "e",
+                "description": "d",
+                "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                "personas": [{"id": "p", "description": "d"}],
+                "scenarios": [
+                    {
+                        "id": "s",
+                        "description": "d",
+                        "persona_refs": ["p"],
+                        "fixtures": ["q3.csv"],
+                    }
+                ],
+                "fixture_content_descriptions": {"q3.csv": "Q3 sales, 200 rows."},
+            }
+        )
+        assert exp.fixture_content_descriptions == {"q3.csv": "Q3 sales, 200 rows."}
+
+    def test_experiment_defaults_fixture_content_descriptions_to_empty(self) -> None:
+        exp = Experiment.model_validate(
+            {
+                "schema_version": 1,
+                "id": "e",
+                "description": "d",
+                "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                "personas": [{"id": "p", "description": "d"}],
+                "scenarios": [{"id": "s", "description": "d", "persona_refs": ["p"]}],
+            }
+        )
+        assert exp.fixture_content_descriptions == {}
+
+    def test_scenario_rejects_duplicate_fixtures(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="duplicate fixture"):
+            Scenario.model_validate(
+                {
+                    "id": "s",
+                    "description": "d",
+                    "persona_refs": ["p"],
+                    "fixtures": ["q3.csv", "q3.csv"],
+                }
+            )
+
+
+@pytest.mark.asyncio
+async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    import metis.engine.simulation.experiment as exp_mod
+    from metis.core import Artifact
+    from metis.engine.simulation.experiment import _worker
+    from metis.engine.simulation.types import (
+        Persona,
+        RunConfig,
+        RunOutcome,
+        RunRecord,
+        Scenario,
+    )
+
+    fixtures_dir = tmp_path / "fixtures"
+    fixtures_dir.mkdir()
+    (fixtures_dir / "q3.csv").write_text("a,b\n1,2\n")
+
+    captured: dict[str, list[Artifact]] = {}
+
+    class FakeOrchestrator:
+        def __init__(self, *, fixture_artifacts, **kwargs):
+            captured["fixture_artifacts"] = fixture_artifacts
+
+        async def run(self):
+            return RunRecord(
+                config=RunConfig(persona="p", scenario="s"),
+                outcome=RunOutcome(
+                    stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+                ),
+            )
+
+    monkeypatch.setattr(exp_mod, "Orchestrator", FakeOrchestrator)
+    monkeypatch.setattr(exp_mod, "UserAgent", lambda **kwargs: object())
+
+    runner = AsyncMock()
+    factory = AsyncMock()
+    factory.create = AsyncMock(return_value=runner)
+
+    scenario = Scenario(
+        id="s", description="d", persona_refs=["p"], fixtures=["q3.csv"]
+    )
+    persona = Persona(id="p", description="d")
+
+    await _worker(
+        worker_id=0,
+        runner_factory=factory,
+        worker_runs=[(scenario, persona, 1)],
+        output_dir=tmp_path,
+        fixtures_dir=fixtures_dir,
+        console_lock=__import__("asyncio").Lock(),
+        started_scenarios=set(),
+        run_max_retries=0,
+        run_retry_delay_seconds=0.0,
+        fixture_content_descriptions={"q3.csv": "Q3 sales, 200 rows."},
+    )
+
+    arts = captured["fixture_artifacts"]
+    assert [a.name for a in arts] == ["q3.csv"]
+    assert arts[0].source == "fixture"
+    assert arts[0].content_description == "Q3 sales, 200 rows."

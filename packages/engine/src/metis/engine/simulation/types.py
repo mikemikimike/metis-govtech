@@ -276,6 +276,21 @@ class Scenario(BaseModel):
     response_wait_ms: int = 300000
     max_run_retries: int | None = None
 
+    @model_validator(mode="after")
+    def _check_unique_fixtures(self) -> Self:
+        seen: set[str] = set()
+        dupes: list[str] = []
+        for name in self.fixtures:
+            if name in seen:
+                dupes.append(name)
+            seen.add(name)
+        if dupes:
+            raise ValueError(
+                f"Scenario '{self.id}' lists duplicate fixture(s): "
+                f"{sorted(set(dupes))}. Each fixture name must appear at most once."
+            )
+        return self
+
 
 class Experiment(BaseModel):
     schema_version: Literal[
@@ -289,6 +304,13 @@ class Experiment(BaseModel):
     )
     personas: list[Persona] = Field(min_length=1)
     scenarios: list[Scenario] = Field(min_length=1)
+    fixture_content_descriptions: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Optional map of fixture filename → Artifact.content_description."
+            " Fixtures not listed here are auto-summarized at run start."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -404,7 +426,7 @@ class RunRecord(BaseModel, extra="ignore"):
     config: RunConfig
     outcome: RunOutcome
     conversation: list[ConversationTurn] = []
-    artifacts_collected: list[Artifact] = []
+    artifacts: list[Artifact] = []
     target_session_id: str | None = None
     attempt_number: int = 1
     total_attempts: int = 1

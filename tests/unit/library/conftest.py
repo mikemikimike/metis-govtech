@@ -36,16 +36,15 @@ def tool_call(name: str, tool_input: dict | str | None = None, output=None) -> d
     return {"name": name, "type": "TOOL", "input": tool_input, "output": output}
 
 
-def artifact(filename: str, path: str, collected_at_turn: int = 0) -> dict:
+def artifact(filename: str, path: str, at_turn: int = 0) -> dict:
     """A serialized metis.core.Artifact dict as stored in metadata['artifacts']."""
     from pathlib import Path
 
     uri = Path(path).resolve().as_uri() if path else None
     return {
         "name": filename,
-        "type": "download",
         "uri": uri,
-        "collected_at_turn": collected_at_turn,
+        "at_turn": at_turn,
     }
 
 

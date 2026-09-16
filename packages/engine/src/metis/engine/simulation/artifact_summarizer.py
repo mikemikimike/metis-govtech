@@ -10,18 +10,16 @@ turn loop.
 
 from __future__ import annotations
 
-import hashlib
 from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
-
-if TYPE_CHECKING:
-    from pathlib import Path
 from pydantic import BaseModel
 
 from metis.core import Artifact, uri_to_local_path
 from metis.core.logging import get_logger
 
+from ._fixture_artifacts import build_fixture_artifacts
+from ._hashing import sha256_file
 from .user_agent.config import (
     USER_AGENT_API_KEY,
     USER_AGENT_BASE_URL,
@@ -29,6 +27,10 @@ from .user_agent.config import (
     USER_AGENT_MODEL,
     USER_AGENT_TEMPERATURE,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from pathlib import Path
 
 logger = get_logger()
 
@@ -62,14 +64,6 @@ _SUMMARIZER_SYSTEM = (
 class _SummaryOut(BaseModel):
     content_description: str
     state_description: str
-
-
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(64 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 async def _summarize_via_llm(
@@ -111,7 +105,7 @@ async def summarize_artifact(
         return
 
     try:
-        artifact.digest = _sha256(path)
+        artifact.digest = sha256_file(path)
         artifact.hash_algorithm = "SHA256"
     except OSError as exc:
         logger.warning(
@@ -157,3 +151,48 @@ async def summarize_artifact(
             f"{suffix or 'text'} file, {size} bytes (auto-summary unavailable)"
         )
         artifact.state_description = f"delivered at turn {turn_number}"
+
+
+async def summarize_fixture_artifacts(fixtures: list[Artifact]) -> None:
+    """Fill ``content_description`` for fixtures the author left undescribed.
+
+    Reuses :func:`summarize_artifact` (the same summarizer target outputs use).
+    Its ``state_description`` is target-facing ("delivered at turn N"), which is
+    wrong for an uploaded fixture, so it is cleared afterward — fixtures are
+    disambiguated for the persona by ``source`` + ``at_turn``, not a state line.
+    Mutates each artifact in place; never raises into the caller.
+    """
+    for artifact in fixtures:
+        if artifact.content_description:
+            continue
+        await summarize_artifact(
+            artifact,
+            triggering_message="(staged fixture, uploaded by the user)",
+            turn_number=0,
+        )
+        artifact.state_description = None
+
+
+async def resolve_fixture_descriptions(
+    fixture_names: Iterable[str],
+    fixtures_dir: Path,
+    author_descriptions: dict[str, str],
+) -> dict[str, str]:
+    """Resolve exactly one ``content_description`` per unique fixture, experiment-wide.
+
+    A fixture's content is invariant across the scenarios that reference it, so
+    it deserves a single description (spec §6). Author-supplied descriptions win;
+    each fixture the author left undescribed is summarized **once here**, before
+    workers fan out — not per run and not per attempt. The returned name→description
+    map is threaded into every per-run :func:`build_fixture_artifacts` call, so no
+    run re-summarizes. Names absent from the map (missing/unreadable on disk) are
+    simply omitted. Never raises into the caller.
+    """
+    unique_names = sorted(set(fixture_names))
+    artifacts = build_fixture_artifacts(unique_names, fixtures_dir, author_descriptions)
+    await summarize_fixture_artifacts(artifacts)
+    return {
+        a.name: a.content_description
+        for a in artifacts
+        if a.content_description is not None
+    }

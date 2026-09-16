@@ -18,6 +18,8 @@ from metis.core.console import console
 from metis.core.logging import get_logger
 
 from ._artifact_store import _save_artifacts
+from ._fixture_artifacts import build_fixture_artifacts
+from .artifact_summarizer import resolve_fixture_descriptions
 from .exceptions import RunRecoverableError
 from .orchestrator import Orchestrator
 from .types import (
@@ -169,6 +171,18 @@ async def _run_experiment_async(
     # Shared across workers so scenario_started fires exactly once
     started_scenarios: set[str] = set()
 
+    # Resolve each undescribed fixture's content_description exactly once, here,
+    # before workers fan out — a fixture's content is invariant across scenarios
+    # and runs, so it is summarized once per experiment (spec §6), not per run or
+    # per attempt. Workers thread this complete map into their per-run Artifact
+    # builds; those builds never re-summarize.
+    all_fixture_names = [
+        name for scenario in experiment.scenarios for name in scenario.fixtures
+    ]
+    resolved_fixture_descriptions = await resolve_fixture_descriptions(
+        all_fixture_names, fixtures_dir, experiment.fixture_content_descriptions
+    )
+
     await runner_factory.start()
     try:
         active_worker_ids: list[int] = []
@@ -183,6 +197,7 @@ async def _run_experiment_async(
                         worker_runs=worker_runs,
                         output_dir=output_dir,
                         fixtures_dir=fixtures_dir,
+                        fixture_content_descriptions=resolved_fixture_descriptions,
                         console_lock=console_lock,
                         started_scenarios=started_scenarios,
                         run_max_retries=run_max_retries,
@@ -232,6 +247,7 @@ async def _worker(
     worker_runs: list[RunPlanItem],
     output_dir: Path | None,
     fixtures_dir: Path,
+    fixture_content_descriptions: dict[str, str],
     console_lock: asyncio.Lock,
     started_scenarios: set[str],
     run_max_retries: int,
@@ -333,6 +349,13 @@ async def _worker(
                 runner = await runner_factory.create(run_dir, fixtures_dir)
                 orchestrator: Orchestrator | None = None  # reset each attempt
 
+                # Descriptions were resolved once per experiment before fan-out;
+                # this only mints a fresh Artifact per attempt (clean at_turn/id)
+                # from that map — no re-summarization here.
+                fixture_artifacts = build_fixture_artifacts(
+                    scenario.fixtures, fixtures_dir, fixture_content_descriptions
+                )
+
                 try:
                     run_config = RunConfig(
                         persona=persona.id,
@@ -349,6 +372,7 @@ async def _worker(
                         scenario=scenario,
                         run_dir=run_dir,
                         fixtures_dir=fixtures_dir,
+                        fixture_artifacts=fixture_artifacts,
                         trial_index=trial_index,
                         state=state,
                         tui_ctx=tui_ctx,
@@ -410,7 +434,7 @@ async def _worker(
                                     duration_seconds=(time.time() - run_start),
                                 ),
                                 conversation=[],
-                                artifacts_collected=[],
+                                artifacts=[],
                                 attempt_number=attempt,
                                 total_attempts=max_attempts,
                                 prior_failures=prior_failures,
@@ -473,7 +497,7 @@ async def _worker(
                                     duration_seconds=(time.time() - run_start),
                                 ),
                                 conversation=[],
-                                artifacts_collected=[],
+                                artifacts=[],
                             )
                         )
                         record.attempt_number = attempt
@@ -550,7 +574,7 @@ async def _worker(
                 record.outcome.duration_seconds,
             )
 
-            if record.artifacts_collected:
+            if record.artifacts:
                 manifest = _save_artifacts(record, run_dir)
                 logger.info(
                     "[experiment] Artifacts: %d saved (target_session: %s)",
