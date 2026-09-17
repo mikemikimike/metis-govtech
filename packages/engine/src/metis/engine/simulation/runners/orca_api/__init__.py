@@ -117,6 +117,7 @@ class OrcaApiRunner(Runner):
         *,
         fixtures_dir: Path,
         run_dir: Path,
+        experiment_root: Path,
         submit_limiter: SubmitRateLimiter | None = None,
         fixture_library: FixtureLibrary | None = None,
         clock: Clock = time.monotonic,
@@ -134,6 +135,7 @@ class OrcaApiRunner(Runner):
         self._config = config
         self._fixtures_dir = fixtures_dir
         self._run_dir = run_dir
+        self._experiment_root = experiment_root
         self._clock = clock
         self._sleep = sleep
         self._submit_limiter = submit_limiter or SubmitRateLimiter(
@@ -199,7 +201,11 @@ class OrcaApiRunner(Runner):
                 Artifact(
                     name=name,
                     source="fixture",
-                    uri=path.as_uri() if path is not None else None,
+                    path=(
+                        path.relative_to(self._experiment_root.resolve()).as_posix()
+                        if path is not None
+                        else None
+                    ),
                 )
             )
         return observation
@@ -414,7 +420,10 @@ class OrcaApiRunner(Runner):
         self._discarded_message = None
 
         artifacts, notes = await collect_artifacts(
-            self._client, digest.get("files") or [], self._run_dir / "artifacts"
+            self._client,
+            digest.get("files") or [],
+            self._run_dir / "artifacts",
+            self._experiment_root,
         )
         return Observation(
             text=text,
@@ -738,7 +747,9 @@ class OrcaApiRunnerFactory:
             sleep=self._sleep,
         )
 
-    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
+    async def create(
+        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+    ) -> Runner:
         if self._client is None or self._fixture_library is None:
             raise RuntimeError("OrcaApiRunnerFactory.create() called before start()")
         return OrcaApiRunner(
@@ -746,6 +757,7 @@ class OrcaApiRunnerFactory:
             self._config,
             fixtures_dir=fixtures_dir,
             run_dir=run_dir,
+            experiment_root=experiment_root,
             submit_limiter=self._submit_limiter,
             fixture_library=self._fixture_library,
             clock=self._clock,

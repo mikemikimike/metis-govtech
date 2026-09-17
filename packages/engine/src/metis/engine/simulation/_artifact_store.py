@@ -6,7 +6,7 @@ import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from metis.core import uri_to_local_path
+from metis.core import resolve_artifact_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -35,7 +35,7 @@ def infer_artifact_type(filename: str) -> str:
     return _TYPE_MAP.get(ext, "unknown")
 
 
-def _save_artifacts(record: RunRecord, run_dir: Path) -> dict:
+def _save_artifacts(record: RunRecord, run_dir: Path, experiment_root: Path) -> dict:
     """Write an artifact manifest for a completed simulation run.
 
     Artifacts are already on disk at their collected paths (written live during
@@ -44,6 +44,8 @@ def _save_artifacts(record: RunRecord, run_dir: Path) -> dict:
 
     :param record: The completed run record.
     :param run_dir: The run folder (``runs/<task>-<persona>-<trial>/``).
+    :param experiment_root: The experiment directory each artifact's ``path`` is
+        relative to.
     :returns: The manifest dict (also written to ``run_dir/artifacts/run-manifest.json``).
     """
     artifacts_dir = run_dir / "artifacts"
@@ -51,7 +53,7 @@ def _save_artifacts(record: RunRecord, run_dir: Path) -> dict:
 
     manifest_artifacts = []
     for artifact in record.artifacts:
-        local = uri_to_local_path(artifact.uri)
+        local = resolve_artifact_path(experiment_root, artifact.path)
         manifest_artifacts.append(
             {
                 "filename": artifact.name,

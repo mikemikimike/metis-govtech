@@ -2,10 +2,10 @@
 
 A settled digest lists the files the turn generated. Each one with a
 ``fileId`` is streamed from ``GET /files/{fileId}/content`` into the run's
-``artifacts/`` directory and reported as a ``download`` artifact whose uri is
-a ``file://`` URL — the same shape the browser runner produces, so the
-orchestrator, the artifact manifest and artifact-aware metrics need no
-transport-specific change.
+``artifacts/`` directory and reported as a ``download`` artifact whose path
+is a POSIX-relative string under the experiment root — the same shape the
+browser runner produces, so the orchestrator, the artifact manifest and
+artifact-aware metrics need no transport-specific change.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ async def collect_artifacts(
     client: httpx.AsyncClient,
     files: list[dict[str, Any]],
     artifacts_dir: Path,
+    experiment_root: Path,
 ) -> tuple[list[Artifact], list[str]]:
     """Download a digest's ``files`` into ``artifacts_dir``.
 
@@ -43,7 +44,7 @@ async def collect_artifacts(
         file_id = entry.get("fileId")
         name = _local_name(entry.get("name"), file_id)
         if not file_id:
-            artifacts.append(Artifact(name=name, uri=None))
+            artifacts.append(Artifact(name=name, path=None))
             notes.append(f"Artifact '{name}' is not downloadable (no fileId)")
             logger.warning("[orca-api-runner] Artifact %r has no fileId; skipped", name)
             continue
@@ -53,7 +54,7 @@ async def collect_artifacts(
             await download_to(client, f"files/{file_id}/content", dest)
         except httpx.HTTPError as exc:
             reason = _describe(exc)
-            artifacts.append(Artifact(name=name, uri=None))
+            artifacts.append(Artifact(name=name, path=None))
             notes.append(f"Artifact '{name}' could not be downloaded: {reason}")
             logger.warning(
                 "[orca-api-runner] Artifact %r (file %s) download failed: %s",
@@ -63,7 +64,15 @@ async def collect_artifacts(
             )
             continue
 
-        artifacts.append(Artifact(name=name, uri=Path(dest).resolve().as_uri()))
+        artifacts.append(
+            Artifact(
+                name=name,
+                path=Path(dest)
+                .resolve()
+                .relative_to(experiment_root.resolve())
+                .as_posix(),
+            )
+        )
         logger.info("[orca-api-runner] Artifact %r saved to %s", name, dest)
     return artifacts, notes
 

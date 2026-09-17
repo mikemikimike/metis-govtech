@@ -126,7 +126,7 @@ def test_render_artifacts_shows_name_and_descriptions_not_uri() -> None:
         "abc": Artifact(
             id="abc",
             name="Q3_Sales_Merged.csv",
-            uri="file:///runs/abc/Q3_Sales_Merged.csv",
+            path="runs/abc/Q3_Sales_Merged.csv",
             content_description="120 rows x 5 cols; Q3 total 1,234,567",
             state_description="delivered at turn 3",
         )
@@ -160,14 +160,14 @@ def test_render_artifacts_groups_by_source() -> None:
     fixture = Artifact(
         name="report.txt",
         source="fixture",
-        uri="file:///tmp/report.txt",
+        path="inputs/report.txt",
         at_turn=1,
         content_description="the input the user uploaded",
     )
     target = Artifact(
         name="report.txt",
         source="target",
-        uri="file:///tmp/out/report.txt",
+        path="runs/out/report.txt",
         at_turn=3,
         content_description="the assistant's generated report",
         state_description="delivered at turn 3",
@@ -200,7 +200,7 @@ def test_turn_prompt_surfaces_described_artifact_307() -> None:
     art = Artifact(
         id="art1",
         name="Q3_Sales_Merged.csv",
-        uri="file:///runs/x/Q3_Sales_Merged.csv",
+        path="runs/x/Q3_Sales_Merged.csv",
         content_description="2 conflicts reconciled; 120 rows; Q3 total 1,234,567",
         state_description="delivered at turn 3",
     )

@@ -110,7 +110,13 @@ def _make_runner(tmp_path, fixtures=()):
     fixtures_dir.mkdir(exist_ok=True)
     run_dir = tmp_path / "run"
     run_dir.mkdir(exist_ok=True)
-    runner = OrcaApiRunner(client, config, fixtures_dir=fixtures_dir, run_dir=run_dir)
+    runner = OrcaApiRunner(
+        client,
+        config,
+        fixtures_dir=fixtures_dir,
+        run_dir=run_dir,
+        experiment_root=tmp_path,
+    )
     runner._fixtures = list(fixtures)
     return runner, fixtures_dir
 
@@ -177,7 +183,7 @@ class TestBuildSubmitBody:
 
 
 @pytest.mark.asyncio
-async def test_collect_artifacts_emits_file_uri_and_skips_missing(
+async def test_collect_artifacts_emits_relative_path_and_skips_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import metis.engine.simulation.runners.orca_api._artifacts as _artifacts_mod
@@ -198,15 +204,15 @@ async def test_collect_artifacts_emits_file_uri_and_skips_missing(
             {"fileId": None, "name": "skipped.csv"},
         ],
         artifacts_dir=artifacts_dir,
+        experiment_root=artifacts_dir.parent,
     )
 
-    # First entry: downloaded, uri is a file:// URL, file exists on disk
-    assert artifacts[0].uri is not None
-    assert artifacts[0].uri.startswith("file://")
+    # First entry: downloaded, path is set, file exists on disk
+    assert artifacts[0].path is not None
     assert Path(artifacts_dir / "report.csv").exists()
 
-    # Second entry: no fileId, uri is None, a note was recorded
-    assert artifacts[1].uri is None
+    # Second entry: no fileId, path is None, a note was recorded
+    assert artifacts[1].path is None
     assert len(notes) == 1
     assert "skipped.csv" in notes[0]
 
@@ -236,7 +242,7 @@ async def test_send_turn_appends_submitted_fixtures_as_artifacts(
 
     fixtures = [a for a in obs.artifacts if a.source == "fixture"]
     assert [a.name for a in fixtures] == ["q3.csv"]
-    assert fixtures[0].uri is not None and fixtures[0].uri.startswith("file://")
+    assert fixtures[0].path is not None
     assert runner._attached == {"q3.csv"}  # committed
     assert runner._attaching == []  # drained
 

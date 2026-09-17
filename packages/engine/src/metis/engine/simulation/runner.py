@@ -52,7 +52,9 @@ class RunnerFactory(Protocol):
         """Acquire shared resources (launch browser, open connection pool)."""
         ...
 
-    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
+    async def create(
+        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+    ) -> Runner:
         """Create a fresh Runner for one attempt."""
         ...
 

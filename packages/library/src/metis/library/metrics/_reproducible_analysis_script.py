@@ -5,8 +5,6 @@ from typing import Any, ClassVar
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
 
-from metis.core import uri_to_local_path
-
 from ._extraction import (
     CODE_TOOLS,
     get_artifacts,
@@ -78,8 +76,7 @@ class ReproducibleAnalysisScriptMetric(BaseMetric):
         in_outputs = [
             a
             for a in py_artifacts
-            if "outputs/"
-            in (str(uri_to_local_path(a.uri) or "")).replace("\\", "/").lower()
+            if "outputs/" in (a.path or "").replace("\\", "/").lower()
         ]
         descriptive = [a for a in in_outputs if a.name.lower() not in _GENERIC_NAMES]
         presented_text = _presented_text(test_case)

@@ -1,4 +1,4 @@
-"""The orchestrator records scenario fixtures as source='fixture' Artifacts (#321)."""
+"""The orchestrator records scenario fixtures as source='fixture' Artifacts (#321, #328)."""
 
 from __future__ import annotations
 
@@ -53,18 +53,19 @@ async def test_fixtures_recorded_in_run_record(tmp_path: Path) -> None:
         scenario=Scenario(id="s1", description="d", persona_refs=["p1"]),
         run_dir=tmp_path,
         fixtures_dir=fixtures_dir,
+        experiment_root=tmp_path,
     )
 
     record = await orchestrator.run()
 
     fixtures = [a for a in record.artifacts if a.source == "fixture"]
     assert [a.name for a in fixtures] == ["input.csv"]
-    assert fixtures[0].uri and fixtures[0].uri.startswith("file://")
+    assert fixtures[0].path == "fixtures/input.csv"
     assert len(fixtures[0].digest or "") == 64
 
 
 def test_orchestrator_uses_supplied_fixture_artifacts(tmp_path: Path) -> None:
-    shared = [Artifact(name="q3.csv", source="fixture", uri="file:///tmp/q3.csv")]
+    shared = [Artifact(name="q3.csv", source="fixture", path="q3.csv")]
     orch = Orchestrator(
         runner=object(),  # unused in this assertion
         agent=object(),
@@ -74,6 +75,7 @@ def test_orchestrator_uses_supplied_fixture_artifacts(tmp_path: Path) -> None:
         ),
         run_dir=tmp_path,
         fixtures_dir=tmp_path,
+        experiment_root=tmp_path,
         fixture_artifacts=shared,
     )
     assert orch._fixture_artifacts is shared

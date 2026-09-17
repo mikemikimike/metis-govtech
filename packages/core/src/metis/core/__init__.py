@@ -2,7 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from metis.core.artifacts import Artifact, uri_to_local_path
+from metis.core.artifacts import Artifact, resolve_artifact_path
 from metis.core.console import console
 from metis.core.logging import configure_logging, get_logger
 from metis.core.models import Status
@@ -19,5 +19,5 @@ __all__ = [
     "configure_logging",
     "console",
     "get_logger",
-    "uri_to_local_path",
+    "resolve_artifact_path",
 ]

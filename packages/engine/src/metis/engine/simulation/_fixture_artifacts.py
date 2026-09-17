@@ -18,23 +18,31 @@ logger = get_logger()
 def build_fixture_artifacts(
     fixtures: list[str],
     fixtures_dir: Path,
+    experiment_root: Path,
     content_descriptions: dict[str, str] | None = None,
 ) -> list[Artifact]:
     """One ``source="fixture"`` Artifact per staged fixture that exists on disk.
 
     Resolves each name under ``fixtures_dir`` (rejecting path escapes and the
-    directory itself), sets a ``file://`` uri, and computes a SHA-256 digest
+    directory itself), sets a relative ``path``, and computes a SHA-256 digest
     from the bytes in hand. ``at_turn`` stays ``None``. ``content_description``
     is set from the optional ``content_descriptions`` map when the name is
     present, else ``None``.
     """
-    root = fixtures_dir.resolve()
+    fixtures_root = fixtures_dir.resolve()
+    experiment_root = experiment_root.resolve()
     artifacts: list[Artifact] = []
     for name in fixtures:
         path = (fixtures_dir / name).resolve()
-        if path == root or not path.is_relative_to(root) or not path.is_file():
+        if (
+            path == fixtures_root
+            or not path.is_relative_to(fixtures_root)
+            or not path.is_file()
+        ):
             logger.warning(
-                "[fixtures] fixture %r not found under %s; not recorded", name, root
+                "[fixtures] fixture %r not found under %s; not recorded",
+                name,
+                fixtures_root,
             )
             continue
         try:
@@ -46,7 +54,7 @@ def build_fixture_artifacts(
             Artifact(
                 name=name,
                 source="fixture",
-                uri=path.as_uri(),
+                path=path.relative_to(experiment_root).as_posix(),
                 digest=digest,
                 hash_algorithm="SHA256" if digest else None,
                 content_description=(content_descriptions or {}).get(name),

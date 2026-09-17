@@ -199,7 +199,7 @@ def generate_report(
         from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
 
         lf = get_langfuse_client()
-        fetch_result = fetch_by_session_id(session_id, lf)
+        fetch_result = fetch_by_session_id(session_id, lf, experiment_root=experiment_dir)
         eval_result = evaluate(fetch_result, metric_refs)
         report_result = generate_report(eval_result, run_id="my-run-001")
         console.print(report_result.html_path)

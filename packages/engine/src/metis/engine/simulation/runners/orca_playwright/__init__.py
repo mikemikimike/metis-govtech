@@ -95,11 +95,13 @@ class OrcaPlaywrightRunner(Runner):
         config: OrcaPlaywrightRunnerConfig,
         fixtures_dir: Path,
         run_dir: Path,
+        experiment_root: Path,
     ) -> None:
         self._page = page
         self._config = config
         self._fixtures_dir = fixtures_dir
         self._run_dir = run_dir
+        self._experiment_root = experiment_root
         self._uploaded_files: set[str] = set()
         self._fixtures: list[str] = []
 
@@ -334,7 +336,7 @@ class OrcaPlaywrightRunner(Runner):
 
         for artifact in artifacts:
             try:
-                url = artifact.uri
+                url = artifact.path
                 name = artifact.name
                 if url:
                     escaped_url = url.replace("\\", "\\\\").replace('"', '\\"')
@@ -354,7 +356,12 @@ class OrcaPlaywrightRunner(Runner):
                         filename = Path(download.suggested_filename or name).name
                         dest_path = artifacts_dir / filename
                         await download.save_as(str(dest_path))
-                        artifact.uri = Path(dest_path).resolve().as_uri()
+                        artifact.path = (
+                            Path(dest_path)
+                            .resolve()
+                            .relative_to(self._experiment_root.resolve())
+                            .as_posix()
+                        )
                     elif url.startswith(("http", "blob:")):
                         async with page.expect_download(timeout=15000) as download_info:
                             await page.evaluate(
@@ -372,7 +379,12 @@ class OrcaPlaywrightRunner(Runner):
                         filename = Path(download.suggested_filename or name).name
                         dest_path = artifacts_dir / filename
                         await download.save_as(str(dest_path))
-                        artifact.uri = Path(dest_path).resolve().as_uri()
+                        artifact.path = (
+                            Path(dest_path)
+                            .resolve()
+                            .relative_to(self._experiment_root.resolve())
+                            .as_posix()
+                        )
             except Exception as exc:
                 logger.warning(
                     "[playwright-runner] Download failed for '%s': %s",

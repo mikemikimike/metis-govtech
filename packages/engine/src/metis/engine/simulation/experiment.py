@@ -179,8 +179,12 @@ async def _run_experiment_async(
     all_fixture_names = [
         name for scenario in experiment.scenarios for name in scenario.fixtures
     ]
+    experiment_root = output_dir if output_dir is not None else Path("results")
     resolved_fixture_descriptions = await resolve_fixture_descriptions(
-        all_fixture_names, fixtures_dir, experiment.fixture_content_descriptions
+        all_fixture_names,
+        fixtures_dir,
+        experiment_root,
+        experiment.fixture_content_descriptions,
     )
 
     await runner_factory.start()
@@ -268,6 +272,7 @@ async def _worker(
 
     try:
         records: list[RunRecord] = []
+        experiment_root = output_dir if output_dir is not None else Path("results")
         for scenario, persona, trial_index in worker_runs:
             if shutdown_event and shutdown_event.is_set():
                 logger.info(
@@ -347,14 +352,19 @@ async def _worker(
             record: RunRecord | None = None
 
             for attempt in range(1, max_attempts + 1):
-                runner = await runner_factory.create(run_dir, fixtures_dir)
+                runner = await runner_factory.create(
+                    run_dir, fixtures_dir, experiment_root
+                )
                 orchestrator: Orchestrator | None = None  # reset each attempt
 
                 # Descriptions were resolved once per experiment before fan-out;
                 # this only mints a fresh Artifact per attempt (clean at_turn/id)
                 # from that map — no re-summarization here.
                 fixture_artifacts = build_fixture_artifacts(
-                    scenario.fixtures, fixtures_dir, fixture_content_descriptions
+                    scenario.fixtures,
+                    fixtures_dir,
+                    experiment_root,
+                    fixture_content_descriptions,
                 )
 
                 try:
@@ -373,6 +383,7 @@ async def _worker(
                         scenario=scenario,
                         run_dir=run_dir,
                         fixtures_dir=fixtures_dir,
+                        experiment_root=experiment_root,
                         fixture_artifacts=fixture_artifacts,
                         trial_index=trial_index,
                         state=state,
@@ -576,7 +587,7 @@ async def _worker(
             )
 
             if record.artifacts:
-                manifest = _save_artifacts(record, run_dir)
+                manifest = _save_artifacts(record, run_dir, experiment_root)
                 logger.info(
                     "[experiment] Artifacts: %d saved (target_session: %s)",
                     len(manifest["artifacts"]),

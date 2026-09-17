@@ -1,4 +1,4 @@
-"""Orchestrator enriches downloaded artifacts before recording the turn (#307)."""
+"""Orchestrator enriches downloaded artifacts before recording the turn (#307, #328)."""
 
 from __future__ import annotations
 
@@ -61,19 +61,20 @@ def _scenario() -> Scenario:
 async def test_orchestrator_summarizes_downloads(monkeypatch, tmp_path: Path) -> None:
     seen: list[tuple[str, int]] = []
 
-    async def _fake_summarize(artifact, *, triggering_message, turn_number):
+    async def _fake_summarize(
+        artifact, *, experiment_root, triggering_message, turn_number
+    ):
         seen.append((triggering_message, turn_number))
         artifact.content_description = "3 rows x 2 cols"
         artifact.state_description = f"delivered at turn {turn_number}"
 
     monkeypatch.setattr(orch_module, "summarize_artifact", _fake_summarize)
 
-    # Create a real file so the URI points to something on disk
+    # Create a real file so the path points to something on disk
     csv_file = tmp_path / "x.csv"
     csv_file.write_text("col1,col2\n1,2\n3,4\n5,6\n")
-    uri = csv_file.as_uri()
 
-    artifact = Artifact(name="x.csv", uri=uri)
+    artifact = Artifact(name="x.csv", path="x.csv")
     runner = _FakeRunner(artifact)
     scenario = _scenario()
     run_config = RunConfig(persona="p1", scenario="s1")
@@ -84,6 +85,7 @@ async def test_orchestrator_summarizes_downloads(monkeypatch, tmp_path: Path) ->
         scenario=scenario,
         run_dir=tmp_path,
         fixtures_dir=tmp_path / "fixtures",
+        experiment_root=tmp_path,
     )
 
     record = await orchestrator.run()
@@ -104,7 +106,7 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
     registry = Artifact(
         name="q3.csv",
         source="fixture",
-        uri="file:///tmp/q3.csv",
+        path="q3.csv",
         content_description="Q3 sales, 200 rows.",
     )
     orch = Orchestrator(
@@ -116,19 +118,22 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
         ),
         run_dir=tmp_path,
         fixtures_dir=tmp_path,
+        experiment_root=tmp_path,
         fixture_artifacts=[registry],
     )
 
     # summarize_artifact must NOT be called for a fixture.
     calls: list[str] = []
 
-    async def spy_summarize(artifact, *, triggering_message, turn_number):
+    async def spy_summarize(
+        artifact, *, experiment_root, triggering_message, turn_number
+    ):
         calls.append(artifact.name)
 
     monkeypatch.setattr(orch_mod, "summarize_artifact", spy_summarize)
 
     # The runner emitted a DIFFERENT object (fresh id) with the same name.
-    stub = Artifact(name="q3.csv", source="fixture", uri="file:///tmp/q3.csv")
+    stub = Artifact(name="q3.csv", source="fixture", path="q3.csv")
     assert stub.id != registry.id
     obs = Observation(text="ok", artifacts=[stub])
 
@@ -159,16 +164,19 @@ async def test_target_artifact_still_stamped_and_summarized(
         scenario=Scenario(id="s", description="d", persona_refs=["p"]),
         run_dir=tmp_path,
         fixtures_dir=tmp_path,
+        experiment_root=tmp_path,
         fixture_artifacts=[],
     )
     calls: list[str] = []
 
-    async def spy_summarize(artifact, *, triggering_message, turn_number):
+    async def spy_summarize(
+        artifact, *, experiment_root, triggering_message, turn_number
+    ):
         calls.append(artifact.name)
 
     monkeypatch.setattr(orch_mod, "summarize_artifact", spy_summarize)
 
-    target = Artifact(name="out.csv", source="target", uri="file:///tmp/out.csv")
+    target = Artifact(name="out.csv", source="target", path="out.csv")
     obs = Observation(text="ok", artifacts=[target])
     await orch._enrich_observation_artifacts(obs, turn_count=2, current_message="go")
 

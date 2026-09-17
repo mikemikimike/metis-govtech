@@ -6,6 +6,8 @@ from unittest.mock import Mock
 
 import pytest
 
+pytest.importorskip("playwright")
+
 from metis.engine.simulation.runners.orca_playwright import OrcaPlaywrightRunner
 from metis.engine.simulation.types import Observation, UploadFileAction
 
@@ -15,7 +17,7 @@ def _make_runner(tmp_path, fixtures=()):
     fixtures_dir.mkdir(exist_ok=True)
     run_dir = tmp_path / "run"
     run_dir.mkdir(exist_ok=True)
-    runner = OrcaPlaywrightRunner(Mock(), Mock(), fixtures_dir, run_dir)
+    runner = OrcaPlaywrightRunner(Mock(), Mock(), fixtures_dir, run_dir, tmp_path)
     runner._fixtures = list(fixtures)
     return runner, fixtures_dir
 

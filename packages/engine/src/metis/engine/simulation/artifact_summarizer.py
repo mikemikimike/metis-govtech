@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
-from metis.core import Artifact, uri_to_local_path
+from metis.core import Artifact, resolve_artifact_path
 from metis.core.logging import get_logger
 
 from ._fixture_artifacts import build_fixture_artifacts
@@ -97,10 +97,14 @@ async def _summarize_via_llm(
 
 
 async def summarize_artifact(
-    artifact: Artifact, *, triggering_message: str, turn_number: int
+    artifact: Artifact,
+    *,
+    experiment_root: Path,
+    triggering_message: str,
+    turn_number: int,
 ) -> None:
     """Enrich ``artifact`` in place. Never raises."""
-    path = uri_to_local_path(artifact.uri)
+    path = resolve_artifact_path(experiment_root, artifact.path)
     if path is None or not path.is_file():
         return
 
@@ -153,7 +157,9 @@ async def summarize_artifact(
         artifact.state_description = f"delivered at turn {turn_number}"
 
 
-async def summarize_fixture_artifacts(fixtures: list[Artifact]) -> None:
+async def summarize_fixture_artifacts(
+    fixtures: list[Artifact], experiment_root: Path
+) -> None:
     """Fill ``content_description`` for fixtures the author left undescribed.
 
     Reuses :func:`summarize_artifact` (the same summarizer target outputs use).
@@ -167,6 +173,7 @@ async def summarize_fixture_artifacts(fixtures: list[Artifact]) -> None:
             continue
         await summarize_artifact(
             artifact,
+            experiment_root=experiment_root,
             triggering_message="(staged fixture, uploaded by the user)",
             turn_number=0,
         )
@@ -176,6 +183,7 @@ async def summarize_fixture_artifacts(fixtures: list[Artifact]) -> None:
 async def resolve_fixture_descriptions(
     fixture_names: Iterable[str],
     fixtures_dir: Path,
+    experiment_root: Path,
     author_descriptions: dict[str, str],
 ) -> dict[str, str]:
     """Resolve exactly one ``content_description`` per unique fixture, experiment-wide.
@@ -189,8 +197,10 @@ async def resolve_fixture_descriptions(
     simply omitted. Never raises into the caller.
     """
     unique_names = sorted(set(fixture_names))
-    artifacts = build_fixture_artifacts(unique_names, fixtures_dir, author_descriptions)
-    await summarize_fixture_artifacts(artifacts)
+    artifacts = build_fixture_artifacts(
+        unique_names, fixtures_dir, experiment_root, author_descriptions
+    )
+    await summarize_fixture_artifacts(artifacts, experiment_root)
     return {
         a.name: a.content_description
         for a in artifacts

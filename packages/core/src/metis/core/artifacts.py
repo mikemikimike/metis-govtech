@@ -1,23 +1,24 @@
-"""The ``Artifact`` domain model and its URI resolver.
+"""The ``Artifact`` domain model and its path resolver.
 
-An Artifact is the single model for a file crossing the persona<->target
-boundary in a simulation: live-detected in the UI, downloaded to disk, then
-enriched with descriptions and a digest. It lives in ``core`` so every package
-shares one definition without violating the dependency DAG — the engine
-produces them, the library reads them, and the wizard may synthesize them,
-none of which may import the engine.
+An ``Artifact`` records a file produced or consumed during a simulation run
+(a fixture supplied to the target, or a document/image the target produced).
+Its ``path`` is a POSIX-style path relative to the experiment root — the
+directory created by ``metis engine simulate`` (or resumed into), containing
+``inputs/`` and ``runs/``. Storing a relative path keeps experiment output
+directories portable: they can be copied, zipped, or moved without breaking
+artifact references baked into ``record.json``.
 """
 
 from __future__ import annotations
 
 import mimetypes
-from pathlib import Path
-from typing import Literal
-from urllib.parse import urlparse
-from urllib.request import url2pathname
+from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, computed_field
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class Artifact(BaseModel):
@@ -32,38 +33,29 @@ class Artifact(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     source: Literal["fixture", "target"] = "target"
-    uri: str | None = None  # file:// for local; s3://, nas:// reserved
+    path: str | None = None
     at_turn: int | None = None
-    content_description: str | None = None  # summarizer-filled; must be fact-rich
-    state_description: str | None = None  # e.g. "delivered at turn 3 after ..."
-    digest: str | None = None  # e.g. hex SHA-256 of the bytes
-    hash_algorithm: str | None = None  # e.g. "SHA256"
+    content_description: str | None = None
+    state_description: str | None = None
+    digest: str | None = None
+    hash_algorithm: str | None = None
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def media_type(self) -> str | None:
-        """MIME type inferred from ``name`` (then ``uri``); ``None`` if unknown.
-
-        Single source of truth is the filename, so the format never drifts on
-        rename. Keys off the extension via stdlib ``mimetypes``, so an
-        extensionless locator yields ``None``.
-        """
+        """Best-effort MIME type guessed from the filename (or path as fallback)."""
         guessed, _ = mimetypes.guess_type(self.name)
-        if guessed is None and self.uri:
-            guessed, _ = mimetypes.guess_type(self.uri)
+        if guessed is None and self.path:
+            guessed, _ = mimetypes.guess_type(self.path)
         return guessed
 
 
-def uri_to_local_path(uri: str | None) -> Path | None:
-    """Return a local ``Path`` for a ``file://`` URI, else ``None``.
+def resolve_artifact_path(experiment_root: Path, path: str | None) -> Path | None:
+    """Resolve an ``Artifact.path`` against the experiment root.
 
-    ``file://`` URIs (produced by the runners for on-disk downloads) resolve
-    to a ``Path``; every other scheme (``s3://``, ``nas://``, ``blob:``,
-    ``http(s)``) returns ``None`` because it is not locally resolvable yet.
+    Returns ``None`` when ``path`` is falsy (no file was recorded for this
+    artifact).
     """
-    if not uri:
+    if not path:
         return None
-    parsed = urlparse(uri)
-    if parsed.scheme != "file":
-        return None
-    return Path(url2pathname(parsed.path))
+    return experiment_root / path

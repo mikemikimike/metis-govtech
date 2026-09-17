@@ -46,7 +46,7 @@ _CAPTURE_UI_STATE_JS = """() => {
     downloadLinks.forEach(link => {
       artifacts.push({
         name: link.download || link.textContent?.trim() || "file",
-        uri: link.href || undefined,
+        path: link.href || undefined,
       });
     });
 
@@ -57,7 +57,7 @@ _CAPTURE_UI_STATE_JS = """() => {
       const href = link.href || "";
       if (fileExtPattern.test(href) || href.startsWith("blob:")) {
         const name = link.textContent?.trim() || href.split("/").pop()?.split("?")[0] || "file";
-        artifacts.push({ name, uri: href });
+        artifacts.push({ name, path: href });
       }
     });
 
@@ -287,14 +287,14 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
         downloadLinks.forEach(link => {
           const name = link.download || link.textContent?.trim() || link.href?.split("/").pop()?.split("?")[0] || "file";
           if (name && name.length < 200 && !found.some(f => f.name === name)) {
-            found.push({ name, uri: link.href || undefined });
+            found.push({ name, path: link.href || undefined });
           }
         });
         const blobLinks = body.querySelectorAll('a[href^="blob:"]');
         blobLinks.forEach(link => {
           const name = link.download || link.textContent?.trim() || "blob-file";
           if (!found.some(f => f.name === name)) {
-            found.push({ name, uri: link.href });
+            found.push({ name, path: link.href });
           }
         });
         const allClickables = body.querySelectorAll('button, [role="menuitem"]');

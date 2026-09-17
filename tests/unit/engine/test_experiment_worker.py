@@ -64,7 +64,9 @@ class MockRunnerFactory:
     async def start(self) -> None:
         self.started = True
 
-    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
+    async def create(
+        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+    ) -> Runner:
         runner = MockRunner()
         self.runners_created.append(runner)
         return runner
@@ -569,3 +571,48 @@ async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
     assert [a.name for a in arts] == ["q3.csv"]
     assert arts[0].source == "fixture"
     assert arts[0].content_description == "Q3 sales, 200 rows."
+
+
+@pytest.mark.asyncio
+async def test_worker_factory_create_receives_experiment_root(
+    simple_scenario: Scenario, simple_persona: Persona, tmp_path: Path
+) -> None:
+    """runner_factory.create() receives output_dir as experiment_root."""
+    factory = MockRunnerFactory()
+    await factory.start()
+
+    worker_runs = [RunPlanItem(simple_scenario, simple_persona, 1)]
+    console_lock = asyncio.Lock()
+    canned = _make_canned_record(simple_scenario, simple_persona)
+
+    captured: dict[str, object] = {}
+
+    class RecordingFactory(MockRunnerFactory):
+        async def create(
+            self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+        ) -> Runner:
+            captured["experiment_root"] = experiment_root
+            return await super().create(run_dir, fixtures_dir, experiment_root)
+
+    factory = RecordingFactory()
+    await factory.start()
+
+    with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
+        mock_orch_instance = AsyncMock()
+        mock_orch_instance.run = AsyncMock(return_value=canned)
+        mock_orch_cls.return_value = mock_orch_instance
+
+        await _worker(
+            worker_id=0,
+            runner_factory=factory,
+            worker_runs=worker_runs,
+            output_dir=tmp_path,
+            fixtures_dir=tmp_path / "fixtures",
+            fixture_content_descriptions={},
+            console_lock=console_lock,
+            started_scenarios=set(),
+            run_max_retries=2,
+            run_retry_delay_seconds=1.0,
+        )
+
+    assert captured["experiment_root"] == tmp_path

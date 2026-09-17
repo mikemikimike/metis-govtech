@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from metis.core import Artifact
 from metis.engine.simulation._artifact_store import _save_artifacts, infer_artifact_type
 from metis.engine.simulation.types import (
-    Artifact,
     RunConfig,
     RunOutcome,
     RunRecord,
@@ -33,6 +33,8 @@ class TestInferArtifactType:
 
 class TestSaveArtifacts:
     def test_writes_manifest(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "runs" / "s1-p1-1"
+        run_dir.mkdir(parents=True)
         record = RunRecord(
             config=RunConfig(persona="p1", scenario="s1", metric_refs=[]),
             target_session_id="sess-abc",
@@ -43,45 +45,40 @@ class TestSaveArtifacts:
             artifacts=[
                 Artifact(
                     name="report.pdf",
-                    uri="file:///artifacts/report.pdf",
+                    path="runs/s1-p1-1/artifacts/report.pdf",
                     at_turn=2,
                 ),
                 Artifact(
                     name="input.csv",
                     source="fixture",
-                    uri="file:///inputs/fixtures/input.csv",
+                    path="inputs/fixtures/input.csv",
                 ),
             ],
         )
-        manifest = _save_artifacts(record, tmp_path)
+        manifest = _save_artifacts(record, run_dir, tmp_path)
         assert manifest["session_id"] == "sess-abc"
         assert len(manifest["artifacts"]) == 2
         assert manifest["artifacts"][0]["type"] == "report"
 
-        manifest_path = tmp_path / "artifacts" / "run-manifest.json"
+        manifest_path = run_dir / "artifacts" / "run-manifest.json"
         assert manifest_path.exists()
         saved = json.loads(manifest_path.read_text())
         assert saved == manifest
 
         by_name = {a["filename"]: a for a in manifest["artifacts"]}
         assert by_name["report.pdf"]["source"] == "target"
+        assert by_name["report.pdf"]["path"] == str(
+            tmp_path / "runs/s1-p1-1/artifacts/report.pdf"
+        )
         assert by_name["input.csv"]["source"] == "fixture"
 
 
 def test_manifest_keeps_logical_name_when_disk_path_is_decollided(tmp_path):
-    from metis.core import Artifact
-    from metis.engine.simulation._artifact_store import _save_artifacts
-    from metis.engine.simulation.types import (
-        RunConfig,
-        RunOutcome,
-        RunRecord,
-    )
-
     # A target file whose on-disk name was de-collided (report.txt -> report-2.txt)
     # while the logical announced name stayed "report.txt".
     disk = tmp_path / "report-2.txt"
     disk.write_text("x")
-    art = Artifact(name="report.txt", source="target", uri=disk.resolve().as_uri())
+    art = Artifact(name="report.txt", source="target", path="report-2.txt")
     record = RunRecord(
         config=RunConfig(persona="p", scenario="s"),
         outcome=RunOutcome(
@@ -90,9 +87,9 @@ def test_manifest_keeps_logical_name_when_disk_path_is_decollided(tmp_path):
         artifacts=[art],
     )
 
-    manifest = _save_artifacts(record, tmp_path)
+    manifest = _save_artifacts(record, tmp_path, tmp_path)
     entry = manifest["artifacts"][0]
 
     assert entry["filename"] == "report.txt"  # logical label, never mutated
-    assert entry["path"].endswith("report-2.txt")  # on-disk truth from uri
+    assert entry["path"].endswith("report-2.txt")  # on-disk truth from path
     assert entry["filename"] != Path(entry["path"]).name  # allowed to diverge

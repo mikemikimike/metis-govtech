@@ -14,6 +14,7 @@ Lower-level extraction helpers are also re-exported for use by metrics.
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from deepeval.test_case import LLMTestCase
@@ -25,7 +26,7 @@ from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
 from langfuse.api import ObservationsView, TraceWithDetails
 
-from metis.core import Artifact, uri_to_local_path
+from metis.core import Artifact, resolve_artifact_path
 from metis.engine.extractor.types import (
     ChatMessage,
     Delegation,
@@ -558,6 +559,7 @@ def fetch_by_session_id(
     session_id: str,
     langfuse: Langfuse,
     *,
+    experiment_root: Path,
     limit: int = 50,
     retry_timeout: int = 0,
     artifacts: list[Artifact] | None = None,
@@ -570,6 +572,8 @@ def fetch_by_session_id(
 
     :param session_id: Langfuse session ID.
     :param langfuse: Initialized Langfuse client.
+    :param experiment_root: Experiment root directory that artifact paths are
+        resolved against before being embedded in test-case metadata.
     :param limit: Max traces to fetch.
     :param retry_timeout: Seconds to poll if no traces found (0 = no retry).
     :param artifacts: Collected artifacts from the session record, injected into
@@ -604,7 +608,7 @@ def fetch_by_session_id(
     _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 
     def _local(a: Artifact) -> str | None:
-        p = uri_to_local_path(a.uri)
+        p = resolve_artifact_path(experiment_root, a.path)
         return str(p) if p else None
 
     # Multimodal metrics judge the assistant's delivered visuals, so keep only
@@ -652,7 +656,10 @@ def fetch_by_session_id(
         tc: LLMTestCase = _trace_to_test_case(ext, session_ctx)
 
         if session_artifacts and tc.metadata is not None:
-            tc.metadata["artifacts"] = [a.model_dump() for a in session_artifacts]
+            tc.metadata["artifacts"] = [
+                a.model_copy(update={"path": _local(a)}).model_dump()
+                for a in session_artifacts
+            ]
         if scenario is not None and tc.metadata is not None:
             tc.metadata["scenario"] = scenario
             tc.metadata["scenario_id"] = scenario.id

@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - `Artifact` domain model — a single lifecycle-spanning record for any file crossing the persona↔target boundary, inbound (`source="fixture"`) or outbound (`source="target"`), plus the `uri_to_local_path` URI resolver. Relocated from `metis-engine` so all packages share one definition (#307). Fields: `id`, `name`, `source` (default `"target"`), `uri`, `digest`, `hash_algorithm`, `at_turn`, `content_description`, `state_description`, and a derived `media_type` computed field (MIME from `name`/`uri`). The Orca-UI-specific `type` enum was removed and `collected_at_turn` renamed to the direction-neutral `at_turn` (#321).
 
+### Changed
+
+- `Artifact.uri` renamed to `Artifact.path` — stores a POSIX-style path relative to the experiment root instead of an absolute `file://` URI, keeping experiment output directories portable when copied or moved
+- `uri_to_local_path(uri)` replaced with `resolve_artifact_path(experiment_root, path)` — plain path-joining against the experiment root, no scheme parsing
+
 ---
 
 ## [0.4.1] — Unreleased

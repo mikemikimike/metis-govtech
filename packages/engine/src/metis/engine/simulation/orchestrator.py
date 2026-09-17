@@ -62,6 +62,7 @@ class Orchestrator:
         scenario: Scenario,
         run_dir: Path,
         fixtures_dir: Path,
+        experiment_root: Path,
         fixture_artifacts: list[Artifact] | None = None,
         trial_index: int = 1,  # 1-based
         state: SimulationState | None = None,
@@ -74,10 +75,13 @@ class Orchestrator:
         self._scenario = scenario
         self._run_dir = run_dir
         self._fixtures_dir = fixtures_dir
+        self._experiment_root = experiment_root
         self._fixture_artifacts = (
             fixture_artifacts
             if fixture_artifacts is not None
-            else build_fixture_artifacts(run_config.fixtures, fixtures_dir)
+            else build_fixture_artifacts(
+                run_config.fixtures, fixtures_dir, self._experiment_root
+            )
         )
         # Staged fixtures by logical name — the enrichment loop swaps a
         # runner-emitted fixture stub for the SAME object recorded here.
@@ -543,6 +547,7 @@ class Orchestrator:
                 artifact.at_turn = turn_count
                 await summarize_artifact(
                     artifact,
+                    experiment_root=self._experiment_root,
                     triggering_message=current_message,
                     turn_number=turn_count,
                 )

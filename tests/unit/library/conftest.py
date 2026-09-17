@@ -37,13 +37,19 @@ def tool_call(name: str, tool_input: dict | str | None = None, output=None) -> d
 
 
 def artifact(filename: str, path: str, at_turn: int = 0) -> dict:
-    """A serialized metis.core.Artifact dict as stored in metadata['artifacts']."""
+    """A serialized metis.core.Artifact dict as stored in metadata['artifacts'].
+
+    By the time metis-library sees this dict, metis-engine's
+    fetch_by_session_id has already resolved ``path`` to an absolute string
+    (metis-library depends only on metis-core, so it never resolves paths
+    itself) — this helper mirrors that by resolving eagerly too.
+    """
     from pathlib import Path
 
-    uri = Path(path).resolve().as_uri() if path else None
+    resolved = str(Path(path).resolve()) if path else None
     return {
         "name": filename,
-        "uri": uri,
+        "path": resolved,
         "at_turn": at_turn,
     }
 

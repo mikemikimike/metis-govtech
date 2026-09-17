@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
-from metis.core import Artifact, uri_to_local_path
+from metis.core import Artifact
 
 from ._types import (
     LlmTestCaseMetadata,
@@ -235,9 +235,11 @@ def get_slide_image_refs(test_case: LLMTestCase) -> list[str] | None:
 def _artifact_paths(test_case: LLMTestCase, *suffixes: str) -> list[str]:
     out: list[str] = []
     for art in get_artifacts(test_case):
-        local = uri_to_local_path(art.uri)
+        if not art.path:
+            continue
+        local = Path(art.path)
         name = art.name.lower()
-        if local and (not suffixes or any(name.endswith(s) for s in suffixes)):
+        if not suffixes or any(name.endswith(s) for s in suffixes):
             out.append(str(local))
     return out
 

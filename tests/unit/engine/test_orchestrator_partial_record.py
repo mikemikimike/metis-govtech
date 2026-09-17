@@ -71,6 +71,7 @@ async def test_partial_record_preserves_completed_turns(tmp_path: Path) -> None:
         scenario=scenario,
         run_dir=tmp_path,
         fixtures_dir=tmp_path / "fixtures",
+        experiment_root=tmp_path,
     )
 
     # Turn 2's send_turn raises; the exception escapes run().
@@ -99,6 +100,7 @@ def test_partial_record_callable_without_run(tmp_path: Path) -> None:
         scenario=scenario,
         run_dir=tmp_path,
         fixtures_dir=tmp_path / "fixtures",
+        experiment_root=tmp_path,
     )
 
     # Do NOT call run(); call partial_record() directly.

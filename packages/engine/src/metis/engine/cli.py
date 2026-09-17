@@ -531,11 +531,11 @@ def _run_simulation(
     else:
         _validate_inputs(target)
         experiment = Experiment.load_file(target / "experiment.yaml")
-        fixtures_dir = target / "fixtures"
         suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
         experiment_dir = project_root / "experiments" / f"{experiment.id}-{suffix}"
         experiment_dir.mkdir(parents=True)
         shutil.copytree(target, experiment_dir / "inputs")
+        fixtures_dir = experiment_dir / "inputs" / "fixtures"
 
     personas_by_id = {persona.id: persona for persona in experiment.personas}
     run_plan = expand_run_plan(experiment, personas_by_id)
@@ -892,6 +892,7 @@ def _run_evaluation(
                     fetch_result = fetch_by_session_id(
                         session_id,
                         langfuse,
+                        experiment_root=experiment_dir,
                         retry_timeout=langfuse_timeout,
                         artifacts=record.artifacts,
                         scenario=scenarios_by_id.get(scenario_id),
