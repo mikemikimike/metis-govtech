@@ -1,8 +1,22 @@
-.PHONY: help install lint lint-fix format format-check fix typecheck check ci test test-unit web-install web-format-check web-typecheck web-test web-build web-check-api web-check clean release-init release-branch release-issue
+.PHONY: help install install-wizard install-engine install-api install-web install-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-init release-branch release-issue
 
 help:
 	@printf "Available targets:\n"
-	@printf "  make install           Install all workspace dependencies (including dev group)\n"
+	@printf "\n"
+	@printf "Install:\n"
+	@printf "  make install              Install all workspace dependencies (including dev group)\n"
+	@printf "  make install-wizard       Install metis-wizard only\n"
+	@printf "  make install-engine       Install metis-engine + Playwright browser\n"
+	@printf "  make install-api          Install metis-api only\n"
+	@printf "  make install-web          Install apps/web dependencies from its lockfile\n"
+	@printf "  make install-playwright   Install Playwright browser binary\n"
+	@printf "\n"
+	@printf "Run (development servers):\n"
+	@printf "  make run                  Show instructions for starting all services\n"
+	@printf "  make run-api              Start the API server on port 8001\n"
+	@printf "  make run-web              Start the web dev server\n"
+	@printf "\n"
+	@printf "Code quality:\n"
 	@printf "  make lint              Run Ruff lint checks\n"
 	@printf "  make lint-fix          Apply Ruff lint autofixes\n"
 	@printf "  make format            Format all Python files with Ruff\n"
@@ -13,8 +27,9 @@ help:
 	@printf "  make test              Run all tests\n"
 	@printf "  make test-unit         Run unit tests only\n"
 	@printf "  make ci                Full CI suite: check + web checks + test\n"
-	@printf "  make web-install       Install apps/web dependencies from its lockfile\n"
-	@printf "  make web-check         Run non-mutating apps/web checks\n"
+	@printf "  make check-web         Run non-mutating apps/web checks\n"
+	@printf "\n"
+	@printf "Other:\n"
 	@printf "  make clean             Remove all generated/cached files\n"
 	@printf "  make release-init      Create release branch + tracking issue (PKG=<name>|APP=<name> VER=<semver>)\n"
 	@printf "  make release-branch    Create release branch only\n"
@@ -22,31 +37,55 @@ help:
 
 install:
 	uv sync --all-packages --group dev --extra test
-	$(MAKE) web-install
-	$(MAKE) -C packages/engine install-playwright
+	$(MAKE) install-web
+	$(MAKE) install-playwright
 
-web-install:
+install-wizard:
+	uv sync --package metis-wizard
+
+install-engine:
+	uv sync --package metis-engine
+	$(MAKE) install-playwright
+
+install-api:
+	uv sync --package metis-api
+
+install-web:
 	npm --prefix apps/web ci
 
-web-format-check:
+install-playwright:
+	uv run playwright install --with-deps chromium
+
+run:
+	@printf "Start each service in its own terminal:\n"
+	@printf "  make run-api    # API server on port 8001\n"
+	@printf "  make run-web    # Web dev server\n"
+
+run-api:
+	PORT=8001 uv run metis-api
+
+run-web:
+	cd apps/web && npm run dev
+
+format-check-web:
 	npm --prefix apps/web run format:check
 
-web-typecheck:
+typecheck-web:
 	npm --prefix apps/web run typecheck
 
-web-test:
+test-web:
 	@temp_dir=$$(mktemp -d); \
 	trap 'rm -rf "$$temp_dir"' EXIT; \
 	ln -s "$$(pwd)/apps/web/node_modules" "$$temp_dir/node_modules"; \
 	METIS_WEB_TEST_CACHE_DIR="$$temp_dir/cache" npm --prefix apps/web test
 
-web-build:
+build-web:
 	npm --prefix apps/web run build
 
-web-check-api:
+check-api-web:
 	npm --prefix apps/web run check:api
 
-web-check: web-format-check web-typecheck web-test web-check-api
+check-web: format-check-web typecheck-web test-web check-api-web
 
 lint:
 	uv run ruff check .
@@ -80,8 +119,8 @@ check:
 
 ci:
 	$(MAKE) check
-	$(MAKE) web-check
-	$(MAKE) web-build
+	$(MAKE) check-web
+	$(MAKE) build-web
 	$(MAKE) test
 	$(MAKE) -C packages/engine check-schema
 	$(MAKE) -C packages/wizard check-schema

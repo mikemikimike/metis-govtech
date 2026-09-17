@@ -26,10 +26,10 @@ make ci             # full CI suite (check + test)
 make clean          # remove generated/cached files
 ```
 
-The browser client is a separate Node project. Run `make web-install` once, then use
-`make web-check` for non-mutating formatting, type checking, tests, and API-contract drift checks.
-Use `make web-build` for the production build. For local development, run
-`PORT=8001 uv run metis-api` and `npm --prefix apps/web run dev` in two terminals. Set
+The browser client is a separate Node project. Run `make install-web` once, then use
+`make check-web` for non-mutating formatting, type checking, tests, and API-contract drift checks.
+Use `make build-web` for the production build. For local development, run
+`make run-api` and `make run-web` in two terminals. Set
 `METIS_API_ORIGIN` when the API is not on port 8001.
 
 Individual targets: `lint`, `lint-fix`, `format`, `format-check`, `typecheck`.
