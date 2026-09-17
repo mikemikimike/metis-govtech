@@ -12,11 +12,14 @@ from __future__ import annotations
 
 import json as json_mod
 import logging
+import os
 import time
 from typing import IO, TYPE_CHECKING, Any, Literal
 
 import structlog
 from rich.text import Text
+
+from metis.core.logging import get_logger
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -24,6 +27,8 @@ if TYPE_CHECKING:
     from structlog.types import EventDict
 
     from metis.engine.tui.tail import TailBuffer
+
+_logger = get_logger(__name__)
 
 _LEVEL_MAP = {
     "debug": logging.DEBUG,
@@ -77,12 +82,31 @@ class LogRouter:
         return f"{scenario_id}:{persona_id}:{trial_index}"
 
     def open_run(
-        self, scenario_id: str, persona_id: str, trial_index: int, num_trials: int
+        self,
+        scenario_id: str,
+        persona_id: str,
+        trial_index: int,
+        num_trials: int,
+        *,
+        run_dir: Path | None = None,
     ) -> None:
         key = self._run_key(scenario_id, persona_id, trial_index)
         filename = _run_log_filename(scenario_id, persona_id, trial_index, num_trials)
         path = self._log_dir / filename
         self._handles[key] = open(path, "w", encoding="utf-8")  # noqa: SIM115
+        if run_dir is not None:
+            try:
+                relative_target = os.path.relpath(path, run_dir)
+                symlink = run_dir / "simulate.log"
+                if symlink.exists() or symlink.is_symlink():
+                    symlink.unlink()
+                symlink.symlink_to(relative_target)
+            except Exception:
+                _logger.debug(
+                    "failed to create simulate.log symlink",
+                    run_dir=str(run_dir),
+                    log_path=str(path),
+                )
 
     def close_run(self, scenario_id: str, persona_id: str, trial_index: int) -> None:
         key = self._run_key(scenario_id, persona_id, trial_index)

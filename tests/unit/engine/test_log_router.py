@@ -214,6 +214,62 @@ class TestLogRouter:
         # Exactly one line (plus the trailing newline written by process()).
         assert content == "[2026-08-05T10:00:00] [INFO    ] ordinary event\n"
 
+    def test_open_run_with_run_dir_creates_symlink(self, tmp_path: Path) -> None:
+        log_dir = tmp_path / "logs"
+        run_dir = tmp_path / "runs" / "my-run"
+        run_dir.mkdir(parents=True)
+        router = LogRouter(log_dir=log_dir, log_format="text")
+        router.open_run("scn", "per", trial_index=1, num_trials=1, run_dir=run_dir)
+        symlink = run_dir / "simulate.log"
+        assert symlink.is_symlink(), "simulate.log should be a symlink"
+        assert symlink.resolve() == (log_dir / "simulate-scn_per-01.log").resolve()
+
+    def test_open_run_with_run_dir_writes_visible_through_symlink(
+        self, tmp_path: Path
+    ) -> None:
+        log_dir = tmp_path / "logs"
+        run_dir = tmp_path / "runs" / "my-run"
+        run_dir.mkdir(parents=True)
+        router = LogRouter(log_dir=log_dir, log_format="text")
+        router.open_run("scn", "per", trial_index=1, num_trials=1, run_dir=run_dir)
+        event_dict = {
+            "event": "hello through symlink",
+            "level": "info",
+            "timestamp": "2026-09-17T10:00:00",
+            "scenario_id": "scn",
+            "persona_id": "per",
+            "trial_index": 1,
+        }
+        self._process(router, event_dict)
+        router.close_all()
+        content = (run_dir / "simulate.log").read_text()
+        assert "hello through symlink" in content
+
+    def test_open_run_without_run_dir_unchanged(self, tmp_path: Path) -> None:
+        router = LogRouter(log_dir=tmp_path, log_format="text")
+        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        # No simulate.log symlink should appear at tmp_path level
+        assert not (tmp_path / "simulate.log").exists()
+        expected_log = tmp_path / "simulate-scn_per-01.log"
+        assert expected_log.exists()
+
+    def test_open_run_symlink_failure_does_not_raise(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        log_dir = tmp_path / "logs"
+        run_dir = tmp_path / "runs" / "my-run"
+        run_dir.mkdir(parents=True)
+        router = LogRouter(log_dir=log_dir, log_format="text")
+        # Make symlink_to raise to simulate e.g. unsupported filesystem
+        from pathlib import Path as _Path
+
+        def broken_symlink(self, *args, **kwargs):
+            raise OSError("symlinks not supported")
+
+        monkeypatch.setattr(_Path, "symlink_to", broken_symlink)
+        # Should not raise — guard swallows the error
+        router.open_run("scn", "per", trial_index=1, num_trials=1, run_dir=run_dir)
+
     def test_json_file_carries_exception_field(self, tmp_path: Path) -> None:
         import json
 

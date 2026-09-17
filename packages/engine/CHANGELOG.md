@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **`simulate.log` symlink in each run folder (issue #327)** — `open_run` now places a relative `simulate.log` symlink inside `runs/<name>/` pointing to the canonical per-run log in `logs/`. The run folder is self-contained for inspection and supports `tail -f runs/<name>/simulate.log` during a live run. Symlink creation is guarded so failures on unsupported filesystems or resume-overwrites are logged at debug and never break the run.
 - **Fixtures recorded in the run record as Artifacts (issue #321)** — inbound scenario fixtures are now captured in `RunRecord.artifacts` as `Artifact(source="fixture", …)` alongside outbound target outputs (`source="target"`), each with a `file://` uri and a SHA-256 digest computed from the staged bytes. A run is now self-describing on its input side. `run-manifest.json` entries gain a `source` field. Authoring is unchanged: `Scenario.fixtures` stays `list[str]`.
 - Optional experiment-level `fixture_content_descriptions` map (filename → fixture
   `Artifact.content_description`); gaps are auto-summarized at run start (#321).

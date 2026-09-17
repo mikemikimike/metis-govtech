@@ -321,6 +321,7 @@ async def _worker(
                     persona.id,
                     trial_index=trial_index,
                     num_trials=scenario.num_trials,
+                    run_dir=run_dir,
                 )
             if state:
                 state.mark_run_started(
