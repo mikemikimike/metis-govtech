@@ -1,15 +1,16 @@
-.PHONY: help install install-wizard install-engine install-api install-web install-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-init release-branch release-issue
+.PHONY: help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-init release-branch release-issue
 
 help:
 	@printf "Available targets:\n"
 	@printf "\n"
 	@printf "Install:\n"
-	@printf "  make install              Install all workspace dependencies (including dev group)\n"
-	@printf "  make install-wizard       Install metis-wizard only\n"
-	@printf "  make install-engine       Install metis-engine + Playwright browser\n"
-	@printf "  make install-api          Install metis-api only\n"
-	@printf "  make install-web          Install apps/web dependencies from its lockfile\n"
-	@printf "  make install-playwright   Install Playwright browser binary\n"
+	@printf "  make install                     Install all workspace dependencies (including dev group)\n"
+	@printf "  make install-wizard              Install metis-wizard only\n"
+	@printf "  make install-engine              Install metis-engine + Playwright browser\n"
+	@printf "  make install-api                 Install metis-api only\n"
+	@printf "  make install-web                 Install apps/web dependencies from its lockfile\n"
+	@printf "  make install-extras              Install all optional extras\n"
+	@printf "  make install-extras-playwright   Install Playwright Python package + Chromium binary\n"
 	@printf "\n"
 	@printf "Run (development servers):\n"
 	@printf "  make run                  Show instructions for starting all services\n"
@@ -38,14 +39,13 @@ help:
 install:
 	uv sync --all-packages --group dev --extra test
 	$(MAKE) install-web
-	$(MAKE) install-playwright
 
 install-wizard:
 	uv sync --package metis-wizard
 
 install-engine:
 	uv sync --package metis-engine
-	$(MAKE) install-playwright
+	$(MAKE) install-extras-playwright
 
 install-api:
 	uv sync --package metis-api
@@ -53,7 +53,10 @@ install-api:
 install-web:
 	npm --prefix apps/web ci
 
-install-playwright:
+install-extras: install-extras-playwright
+
+install-extras-playwright:
+	uv sync --all-packages --group dev --extra test --extra playwright
 	uv run playwright install --with-deps chromium
 
 run:
