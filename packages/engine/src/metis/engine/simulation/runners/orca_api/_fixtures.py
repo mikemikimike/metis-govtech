@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
 
-from ._transport import v1_request
+from ._transport import reason_text, v1_request
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -119,6 +119,31 @@ class FixtureLibrary:
             self._entries[name] = file_id
             return file_id
 
+    def forget(self, name: str) -> bool:
+        """Drop a cached ``fileId`` so the next request re-uploads the fixture.
+
+        For an id Orca no longer honours — a file deleted, or expired 30 days
+        after *upload* rather than after last use, which a long-lived
+        experiment directory outlives. Without this the cache is
+        experiment-scoped, so one dead id is re-sent on every run of every
+        scenario that attaches it, and every one of those submits fails.
+
+        A cached :class:`FixtureRejected` is left in place: that rejection is
+        a property of the file (too large, wrong content type), not of an id,
+        and re-uploading could only earn it again.
+
+        :returns: Whether a usable ``fileId`` was cached under ``name``.
+        """
+        if isinstance(self._entries.get(name), str):
+            del self._entries[name]
+            logger.info(
+                "[orca-api-runner] Forgot cached fileId for fixture %r; "
+                "it will be re-uploaded on next use",
+                name,
+            )
+            return True
+        return False
+
     async def _upload(self, name: str, path: Path) -> str:
         content_type = content_type_for(path)
         content = await asyncio.to_thread(path.read_bytes)
@@ -140,7 +165,7 @@ class FixtureLibrary:
             sleep=self._sleep,
         )
         if response.status_code in (413, 415):
-            raise FixtureRejected(name, response.status_code, _reason(response))
+            raise FixtureRejected(name, response.status_code, reason_text(response))
         response.raise_for_status()
         file_id = str(response.json()["fileId"])
         logger.info("[orca-api-runner] Fixture %r stored as file %s", name, file_id)
@@ -154,18 +179,3 @@ def content_type_for(path: Path) -> str:
         return known
     guessed, _ = mimetypes.guess_type(path.name)
     return guessed or _FALLBACK_CONTENT_TYPE
-
-
-def _reason(response: httpx.Response) -> str:
-    """Orca's human-readable message (``detail`` / ``error``), or the status text."""
-    try:
-        body = response.json()
-    except ValueError:
-        body = None
-    if isinstance(body, dict):
-        for key in ("detail", "error"):
-            value = body.get(key)
-            if isinstance(value, str) and value:
-                return value
-    text = response.text.strip()
-    return text[:200] if text else response.reason_phrase or "no reason given"

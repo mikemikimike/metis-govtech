@@ -35,8 +35,21 @@ submitted.
 
 Turn statuses map as: ``completed``/``needs_input`` → the output is the
 text; ``failed`` and ``cancelled`` → empty text, the reason (and any partial
-output) only in ``errors``; ``exhausted`` (or a submit rejected with 409
-``session_exhausted``) → :class:`TargetSessionEnded`.
+output) only in ``errors``. There is no session-level exhaustion to map — v1
+has no session budget, only a per-call input cap — so two ``failed`` reasons
+are singled out from the rest: the input cap twice in a row ends the run as
+:class:`TargetSessionEnded` (nothing a persona sends can shrink the context
+that caused it, so every later turn would fail the same way), and a rejected
+``X-PlatformAI-Key`` is :class:`AuthLossError`.
+
+Each submit carries the evaluator's own ``X-PlatformAI-Key`` when one is
+configured, which bills the turn to their platform project on a fixed model
+instead of Orca's shared weekly allowance — the allowance matters because
+Orca *silently downgrades to a cheaper model* once it is spent, which would
+change the model under test mid-experiment. The header goes on submits only;
+polling, cancelling and downloading do not take it. The factory reads
+``GET /usage`` once at start so an allowance about to run out is reported
+before the spend rather than inferred from the results afterwards.
 """
 
 from __future__ import annotations
@@ -50,9 +63,11 @@ if TYPE_CHECKING:
 
 import httpx
 
+from metis.core.console import console
 from metis.core.logging import get_logger
 
 from ...exceptions import (
+    AuthLossError,
     ResponseTimeoutError,
     SimulationError,
     TargetSessionEnded,
@@ -78,9 +93,9 @@ from .._http import (
     poll_until,
 )
 from ._artifacts import collect_artifacts
-from ._config import OrcaApiRunnerConfig
+from ._config import PLATFORM_AI_KEY_HEADER, OrcaApiRunnerConfig
 from ._fixtures import FixtureLibrary, FixtureRejected
-from ._transport import v1_request
+from ._transport import reason_text, v1_request
 
 __all__ = [
     "FixtureLibrary",
@@ -97,6 +112,54 @@ _LIST_FIELD_TYPES = frozenset({"multiselect", "dynamic_list"})
 
 #: A form answer as it goes on the wire (typed per Orca field type).
 FormValue = str | list[str] | int | float
+
+#: Lowercase substrings that identify a ``failed`` digest as the per-call
+#: input cap (200,000 tokens by default) rather than a guardrail block or a
+#: stream failure. Orca's spec promises the ``error`` "names the limit" but
+#: publishes no machine-readable code for it, so text is the only signal
+#: there is; every unmatched ``failed`` reason is logged verbatim so a wording
+#: change shows up as a diagnostic instead of as a run burning to its turn
+#: limit. Asking Orca for a code on the digest is tracked in issue #338.
+_INPUT_CAP_MARKERS = ("input cap", "input token", "per-call input", "input limit")
+
+#: Consecutive input-cap failures before the session is called unusable. One
+#: may be a single oversized fixture the persona can drop; two in a row means
+#: the accumulated context is the cause, and no message can shrink that.
+_INPUT_CAP_FAILURE_LIMIT = 2
+
+#: Lowercase marker for a ``failed`` digest caused by the platform key. Covers
+#: both published reasons ("was rejected", "hit its rate limit or budget");
+#: neither recovers inside a run, and Orca does not fall back to its own
+#: gateway, so the turn is not retried against a different payer.
+_PLATFORM_KEY_FAILURE_MARKER = "platformai key"
+
+#: Cancel is best-effort and stops a turn "at its next step", so the digest is
+#: polled this many intervals for confirmation before giving up on it.
+_CANCEL_CONFIRM_POLLS = 5
+
+#: Fraction of the weekly allowance that makes a downgrade mid-experiment
+#: likely enough to warn about. Not a threshold Orca publishes — a run's spend
+#: is not knowable in advance — so it is set where the warning is still useful
+#: (there is room to finish or to fetch a platform key) rather than where the
+#: downgrade is certain.
+_USAGE_WARN_FRACTION = 0.8
+
+
+class _StaleAttachment(Exception):
+    """A submit 404 this runner attributes to an attached ``fileId``.
+
+    Internal to this module: raised by :meth:`OrcaApiRunner._submit` and
+    consumed by :meth:`OrcaApiRunner.send_turn`, never seen by the
+    orchestrator. It exists because Orca answers the same 404 for an unknown
+    session and an unknown attachment — *"an id cannot be probed for
+    existence"* — so the cause has to be inferred from what was sent, and the
+    two causes need opposite handling: a dead session ends the run, a dead
+    fixture id costs one turn.
+    """
+
+    def __init__(self, names: list[str]) -> None:
+        super().__init__(f"Attached file(s) rejected as unknown: {', '.join(names)}")
+        self.names = names
 
 
 class OrcaApiRunner(Runner):
@@ -163,28 +226,40 @@ class OrcaApiRunner(Runner):
         # no form) and the prose the persona sent alongside a form answer.
         self._pending_form: dict[str, Any] | None = None
         self._discarded_message: str | None = None
+        #: Consecutive turns lost to the per-call input cap (see
+        #: ``_INPUT_CAP_FAILURE_LIMIT``); reset by any other settled outcome.
+        self._input_cap_failures = 0
 
     async def setup(self, config: RunConfig) -> None:
         """Record the scenario's response ceiling and fixtures; no session is created eagerly."""
         self._response_wait_ms = config.response_wait_ms
         self._fixtures = list(config.fixtures)
-        logger.info("[orca-api-runner] Setup: session will be minted on first submit")
+        logger.info(
+            "[orca-api-runner] Setup: session will be minted on first submit; "
+            "turns billed to %s",
+            "the evaluator's own PlatformAI key"
+            if self._config.platform_ai_key is not None
+            else "Orca's shared weekly allowance (model may be downgraded)",
+        )
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
         """Submit one turn and return what Orca answered.
 
         Four seams, each a method so transport concerns stay separable:
         build the submit body (form answers, fixture uploads), submit it
-        (rate limits, HTTP resilience), await the digest (polling, response
-        ceiling), map the digest to an ``Observation`` (status mapping,
-        forms, artifacts). A malformed form answer or a rejected fixture is
+        (rate limits, HTTP resilience), poll until the turn settles (response
+        ceiling, cancel on timeout), map the digest to an ``Observation``
+        (status mapping, forms, artifacts). A malformed form answer or a rejected fixture is
         reported as an ``Observation`` from the first seam and never
         submitted.
         """
         body = await self._build_submit_body(message, actions)
         if isinstance(body, Observation):
             return body
-        turn_id = await self._submit(body)
+        try:
+            turn_id = await self._submit(body)
+        except _StaleAttachment as exc:
+            return self._recover_stale_attachments(exc.names)
         # Only a submitted attachment stops being offered. Capture the names
         # committed this turn — each becomes a source="fixture" artifact on the
         # observation, so it flows through the SAME channel as target outputs
@@ -193,7 +268,7 @@ class OrcaApiRunner(Runner):
         newly_attached = list(self._attaching)
         self._attached.update(self._attaching)
         self._attaching = []
-        digest = await self._await_digest(turn_id)
+        digest = await self._poll_until_settled(turn_id)
         observation = await self._build_observation(digest)
         for name in newly_attached:
             path = self._fixture_path(name)
@@ -287,6 +362,27 @@ class OrcaApiRunner(Runner):
                     errors=["Form not submitted: " + "; ".join(problems)],
                     available_actions=self._action_slots(),
                 )
+        # Orca requires exactly one of ``message`` (minLength 1) or
+        # ``formAnswers``, so a blank message with nothing to answer has no
+        # valid body — it would be a 422. Checked before any upload so a turn
+        # the persona has already broken costs no spend, and reported rather
+        # than papered over with substitute text: a blank message is a
+        # persona-side defect, and putting words in its mouth would hide it
+        # from the transcript the evaluation is built on.
+        if not form_answers and not message.strip():
+            logger.warning(
+                "[orca-api-runner] Turn not submitted: the persona produced an "
+                "empty message and no usable form answer"
+            )
+            self._attaching = []
+            return Observation(
+                errors=[
+                    "Turn not submitted: the message was empty and there was no "
+                    "form answer to send in its place"
+                ],
+                available_actions=self._action_slots(),
+            )
+
         if attachments:
             file_ids, rejected = await self._resolve_attachments(attachments)
             if rejected:
@@ -321,18 +417,29 @@ class OrcaApiRunner(Runner):
         Rate limiting and the key-store outage are absorbed by :meth:`_request`.
         What reaches here is mapped: a 409 ``turn_in_progress`` names the turn
         to poll (a runner race never loses a turn, and nothing is resubmitted);
-        a 404 on a session this runner already drove means Orca reaped or
-        deleted it, which only a fresh session can fix — run-level. Anything
+        a 400 is a platform key Orca would not read, which every later submit
+        would repeat — run-level; a 404 is attributed by what was sent (see
+        :meth:`_attribute_submit_404`); a 422 is a schema divergence. Anything
         else unmapped raises ``httpx.HTTPStatusError``.
+
+        :raises _StaleAttachment: the 404 is attributable to an attached file.
         """
         logger.info("[orca-api-runner] Submitting turn...")
-        response = await self._request("POST", "chat", json=body, submit=True)
-        # -- session exhausted: Orca refuses further turns before any spend --
-        if response.status_code == 409 and _error_code(response) == "session_exhausted":
-            raise TargetSessionEnded(
-                f"Orca session {self._session_id} is exhausted: submit rejected"
+        response = await self._request(
+            "POST",
+            "chat",
+            json=body,
+            submit=True,
+            headers=self._platform_ai_headers(),
+        )
+        if response.status_code == 400 and self._config.platform_ai_key is not None:
+            # The config validator rejects everything Orca documents as a 400,
+            # so reaching here means its rules and ours have diverged. Nothing
+            # was started, and the next submit would be identical.
+            raise AuthLossError(
+                "Orca rejected the PlatformAI key as malformed (400); no turn "
+                f"was started. Orca's reason: {reason_text(response)}"
             )
-        # -------------------------------------------------------------------
         if response.status_code == 409 and _error_code(response) == "turn_in_progress":
             in_progress = response.json().get("turnId")
             if in_progress:
@@ -345,10 +452,17 @@ class OrcaApiRunner(Runner):
                 return turn_id
             # Other 409 bodies (e.g. ``no_form_pending``) are not transport
             # races; they fall through to raise_for_status.
-        if response.status_code == 404 and self._session_id is not None:
-            raise TargetSessionLostError(
-                f"Orca session {self._session_id} is gone (404): reaped or "
-                "deleted mid-run"
+        if response.status_code == 404:
+            self._attribute_submit_404(body)
+        if response.status_code == 422:
+            # The body did not match ``ChatSubmitRequest``: a divergence between
+            # this runner and the deployment's schema, not anything the persona
+            # did. Named here so the next such mismatch reads as a protocol
+            # violation instead of a bare, message-less HTTPStatusError.
+            raise SimulationError(
+                "Orca rejected the submit body as invalid (422); the runner and "
+                "the deployment's chat schema have diverged. Orca's reason: "
+                f"{reason_text(response)}"
             )
         response.raise_for_status()
         submitted = response.json()
@@ -359,7 +473,66 @@ class OrcaApiRunner(Runner):
         self._inflight_turn_id = turn_id
         return turn_id
 
-    async def _await_digest(self, turn_id: str) -> dict[str, Any]:
+    def _attribute_submit_404(self, body: dict[str, Any]) -> None:
+        """Decide whether a submit 404 was the session or an attached file.
+
+        Orca answers the same 404 for an unknown, foreign, expired, deleted or
+        malformed ``sessionId`` *or* ``fileId``, deliberately, so that an id
+        cannot be probed for existence. The response therefore cannot be
+        interrogated; what *was sent* is the only evidence available.
+
+        A submit carrying files is attributed to those files, because that is
+        both the recoverable cause and the one that repeats: a dead fixture id
+        lives in an experiment-scoped cache, so blaming the session instead
+        would retry the whole run and re-send the same dead id at the same
+        turn, until the retry budget is gone. When both are dead the fixture
+        is handled first; the next submit then carries no files and the
+        session loss is reported correctly, one turn later.
+
+        A 404 on a first submit that carried no files and had minted no session
+        yet has neither candidate to blame, so this returns and the caller's
+        ``raise_for_status`` reports the 404 as it stands — that combination
+        points at the endpoint (a wrong base URL) rather than at a dead id.
+
+        :raises _StaleAttachment: the submit carried files.
+        :raises TargetSessionLostError: it did not, and a session was in play.
+        """
+        attached: list[str] = list(body.get("files") or [])
+        if attached:
+            raise _StaleAttachment(list(self._attaching))
+        if self._session_id is not None:
+            raise TargetSessionLostError(
+                f"Orca session {self._session_id} is gone (404): reaped or "
+                "deleted mid-run"
+            )
+
+    def _recover_stale_attachments(self, names: list[str]) -> Observation:
+        """Evict the dead ``fileId``s and report the lost turn to the persona.
+
+        The fixtures stay *offered*: nothing is wrong with the files
+        themselves, only with the ids cached for them, so the next turn can
+        attach the same names and the library will upload them again. That is
+        the difference between this and :class:`FixtureRejected`, which is
+        permanent and spends the fixture for the run.
+        """
+        self._attaching = []
+        for name in names:
+            self._fixture_library.forget(name)
+        listed = ", ".join(f"'{name}'" for name in names) or "the attached file(s)"
+        logger.warning(
+            "[orca-api-runner] Submit rejected (404) for attached file(s) %s; "
+            "cached id(s) dropped and the turn was not started",
+            listed,
+        )
+        return Observation(
+            errors=[
+                f"Turn not submitted: Orca no longer recognises {listed}. The "
+                "file(s) will be uploaded again if attached on a later turn."
+            ],
+            available_actions=self._action_slots(),
+        )
+
+    async def _poll_until_settled(self, turn_id: str) -> dict[str, Any]:
         """Poll the turn's digest until its status leaves ``running``.
 
         At the response ceiling the turn is cancelled on Orca *before* the
@@ -386,20 +559,24 @@ class OrcaApiRunner(Runner):
     async def _build_observation(self, digest: dict[str, Any]) -> Observation:
         """Map a settled digest onto the transport-agnostic ``Observation``.
 
-        :raises TargetSessionEnded: when the session's lifetime budget is spent.
+        :raises TargetSessionEnded: the per-call input cap has failed
+            ``_INPUT_CAP_FAILURE_LIMIT`` turns in a row.
+        :raises AuthLossError: the evaluator's platform key was refused.
         """
         status = digest.get("status")
         output: str = digest.get("output") or ""
-        if status == "exhausted":
-            raise TargetSessionEnded(
-                f"Orca session {self._session_id} is exhausted (turn status)"
-            )
 
         text = output
         errors: list[str] = []
+        # Any other settled outcome breaks an input-cap streak: the session
+        # answered, so whatever was too large for one call is not permanent.
+        if status != "failed":
+            self._input_cap_failures = 0
         if status == "failed":
             text = ""
-            errors.append(f"Turn failed: {digest.get('error') or 'no reason given'}")
+            reason = digest.get("error") or "no reason given"
+            self._triage_failure(str(reason))
+            errors.append(f"Turn failed: {reason}")
         elif status == "cancelled":
             # Partial output must never read as the assistant's answer.
             text = ""
@@ -424,6 +601,9 @@ class OrcaApiRunner(Runner):
             digest.get("files") or [],
             self._run_dir / "artifacts",
             self._experiment_root,
+            store_retry_window_s=self._config.store_retry_window_s,
+            clock=self._clock,
+            sleep=self._sleep,
         )
         return Observation(
             text=text,
@@ -432,6 +612,56 @@ class OrcaApiRunner(Runner):
             available_actions=available_actions,
             discarded_message=discarded_message,
         )
+
+    def _triage_failure(self, reason: str) -> None:
+        """Single out the two ``failed`` reasons that must not read as one turn.
+
+        Everything else about a ``failed`` digest is a normal turn error: a
+        guardrail block or a stream failure is genuinely per-turn, retrying
+        the same message is allowed, and the persona should see it and adapt.
+        Two reasons are not per-turn:
+
+        - **The per-call input cap.** The cause is the accumulated session
+          context, which no message the persona can send will shrink, so every
+          later turn fails identically — and because a ``failed`` digest is a
+          *successful* ``send_turn``, the orchestrator's consecutive-failure
+          counter resets each time and the run would burn to its turn limit,
+          paying for every attempt. Counted rather than acted on at once: one
+          oversized call may be a single large fixture.
+        - **A refused platform key.** Orca does not fall back to its own
+          gateway, so the turn is never billed to a payer the evaluator did
+          not choose — and neither a rejection nor a spent platform budget
+          recovers inside a run.
+
+        :raises TargetSessionEnded: the input cap, ``_INPUT_CAP_FAILURE_LIMIT``
+            turns in a row.
+        :raises AuthLossError: the platform key was rejected or is out of
+            allowance.
+        """
+        lowered = reason.lower()
+        if _PLATFORM_KEY_FAILURE_MARKER in lowered:
+            raise AuthLossError(f"Orca refused the PlatformAI key: {reason}")
+        if any(marker in lowered for marker in _INPUT_CAP_MARKERS):
+            self._input_cap_failures += 1
+            logger.warning(
+                "[orca-api-runner] Turn failed on the per-call input cap "
+                "(%d in a row): %s",
+                self._input_cap_failures,
+                reason,
+            )
+            if self._input_cap_failures >= _INPUT_CAP_FAILURE_LIMIT:
+                raise TargetSessionEnded(
+                    f"Orca session {self._session_id} is unusable: the per-call "
+                    f"input cap failed {self._input_cap_failures} turns in a row "
+                    f"({reason})"
+                )
+            return
+        # Not a reason this runner acts on — but the input-cap wording is the
+        # only signal Orca offers for it, so log every other reason verbatim.
+        # A silent change to that wording would otherwise show up as a run
+        # burning to its turn limit rather than as a diagnostic.
+        self._input_cap_failures = 0
+        logger.warning("[orca-api-runner] Turn failed: %s", reason)
 
     # -- forms ----------------------------------------------------------------
 
@@ -583,10 +813,13 @@ class OrcaApiRunner(Runner):
         if not self._config.delete_session_on_teardown or self._session_id is None:
             return
         try:
-            response = await self._client.delete(f"sessions/{self._session_id}")
+            # Through the shared layer, not the raw client: a delete lost to a
+            # throttled read lane would leak the session silently, which is
+            # exactly the kind of failure a 429 retry exists to prevent.
+            response = await self._request("DELETE", f"sessions/{self._session_id}")
             response.raise_for_status()
             logger.info("[orca-api-runner] Deleted session %s", self._session_id)
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, SimulationError) as exc:
             logger.warning(
                 "[orca-api-runner] Could not delete session %s: %s",
                 self._session_id,
@@ -599,6 +832,17 @@ class OrcaApiRunner(Runner):
 
     async def _fetch_digest(self, turn_id: str) -> dict[str, Any]:
         response = await self._request("GET", f"chat/{turn_id}")
+        if response.status_code == 404:
+            # Orca holds a digest only ~10 minutes after its last poll, then
+            # the turnId 404s. The normal loop polls every few seconds and
+            # cannot reach that, so this is here for the paths that poll after
+            # a gap — cancel confirmation today, a resumed turn if one is ever
+            # added. Named explicitly so the next such caller finds the window
+            # written down instead of a bare status error.
+            raise SimulationError(
+                f"Orca no longer has a digest for turn {turn_id} (404): the id "
+                "is unknown, or the digest aged out of its retention window"
+            )
         response.raise_for_status()
         return response.json()
 
@@ -618,15 +862,76 @@ class OrcaApiRunner(Runner):
                 "POST", "chat/cancel", json={"sessionId": self._session_id}
             )
             response.raise_for_status()
-            logger.info(
-                "[orca-api-runner] Cancel for turn %s: %s",
-                turn_id,
-                response.json().get("status"),
-            )
+            status = response.json().get("status")
+            logger.info("[orca-api-runner] Cancel for turn %s: %s", turn_id, status)
         except (httpx.HTTPError, SimulationError) as exc:
             logger.warning(
                 "[orca-api-runner] Could not cancel turn %s: %s", turn_id, exc
             )
+            return
+        if status == "not_running":
+            # Worth its own line: on the response-timeout path it means the
+            # turn settled between the last poll and the cancel, so an answer
+            # was very likely there and has been discarded.
+            logger.info(
+                "[orca-api-runner] Turn %s had already settled when the cancel "
+                "was sent; nothing was stopped",
+                turn_id,
+            )
+            return
+        await self._confirm_cancelled(turn_id)
+
+    async def _confirm_cancelled(self, turn_id: str) -> None:
+        """Poll the digest until it reads ``cancelled``, briefly and best-effort.
+
+        Orca stops a turn "at its next step", so an accepted cancel does not
+        mean the spend has stopped yet — the spec is explicit that a cancel is
+        confirmed by polling, not assumed. Both callers are already on an error
+        path (a response timeout, teardown), so the budget here is a handful of
+        intervals and nothing raises: an unconfirmed cancel is logged for the
+        evaluator, since the alternative is holding a finished run open.
+        """
+        interval_s = self._config.poll_interval_ms / 1000
+        try:
+            digest = await poll_until(
+                lambda: self._fetch_digest(turn_id),
+                lambda d: d.get("status") != "running",
+                interval_s=interval_s,
+                deadline_s=interval_s * _CANCEL_CONFIRM_POLLS,
+            )
+        except PollTimeout:
+            logger.warning(
+                "[orca-api-runner] Cancel for turn %s not confirmed after %.1f s; "
+                "it may still be running",
+                turn_id,
+                interval_s * _CANCEL_CONFIRM_POLLS,
+            )
+            return
+        except (httpx.HTTPError, SimulationError) as exc:
+            logger.warning(
+                "[orca-api-runner] Could not confirm the cancel of turn %s: %s",
+                turn_id,
+                exc,
+            )
+            return
+        logger.info(
+            "[orca-api-runner] Cancel of turn %s confirmed: status=%s",
+            turn_id,
+            digest.get("status"),
+        )
+
+    def _platform_ai_headers(self) -> dict[str, str] | None:
+        """The ``X-PlatformAI-Key`` header for a submit, or ``None`` if unset.
+
+        Built per call and only for the submit lane. The header belongs to
+        ``POST /chat`` alone — polling, cancelling and downloading do not read
+        it — so it is not set on the client, where it would ride along on
+        every request and widen the exposure of a credential for nothing.
+        """
+        key = self._config.platform_ai_key
+        if key is None:
+            return None
+        return {PLATFORM_AI_KEY_HEADER: key.get_secret_value()}
 
     async def _request(
         self,
@@ -634,6 +939,7 @@ class OrcaApiRunner(Runner):
         path: str,
         *,
         json: Any | None = None,
+        headers: dict[str, str] | None = None,
         submit: bool = False,
     ) -> httpx.Response:
         """One v1 call with the shared resilience applied (see :func:`v1_request`).
@@ -648,6 +954,7 @@ class OrcaApiRunner(Runner):
             method,
             path,
             json=json,
+            headers=headers,
             limiter=self._submit_limiter,
             submit=submit,
             store_retry_window_s=self._config.store_retry_window_s,
@@ -746,6 +1053,83 @@ class OrcaApiRunnerFactory:
             clock=self._clock,
             sleep=self._sleep,
         )
+        await self._report_usage()
+
+    async def _report_usage(self) -> None:
+        """Report the key's week-to-date allowance before any spend starts.
+
+        The pre-flight for the silent downgrade: once the weekly allowance is
+        spent, Orca *"downgrades later turns to a cheaper model rather than
+        refusing them"* and says so nowhere in the API. An experiment that
+        crosses its allowance mid-flight therefore swaps the model under test
+        with nothing in the run record to mark where — so the runs before and
+        after are not comparable, and no metric can detect it.
+
+        One read-lane call says so before the spend rather than after. Never
+        blocks: the evaluator may have accepted the downgrade, and the
+        threshold is far too fuzzy to end a run over. Never raises either — a
+        pre-flight that fails must not stop the experiment it was only
+        reporting on.
+        """
+        if self._client is None or self._submit_limiter is None:
+            return
+        try:
+            response = await v1_request(
+                self._client,
+                "GET",
+                "usage",
+                limiter=self._submit_limiter,
+                store_retry_window_s=self._config.store_retry_window_s,
+                clock=self._clock,
+                sleep=self._sleep,
+            )
+            response.raise_for_status()
+            usage = response.json()
+        except (httpx.HTTPError, SimulationError, ValueError) as exc:
+            logger.warning("[orca-api-runner] Could not read GET /usage: %s", exc)
+            return
+
+        # daPct gets its own line rather than being folded into pct: METIS's
+        # data-analysis scenarios spend that allowance specifically, so it can
+        # be the binding constraint while the overall figure still looks fine.
+        fractions = {
+            "overall": usage.get("pct"),
+            "data-analysis": usage.get("daPct"),
+            "doc-generation": usage.get("docPct"),
+        }
+        summary = ", ".join(
+            f"{label} {value:.0%}"
+            for label, value in fractions.items()
+            if isinstance(value, int | float)
+        )
+        logger.info(
+            "[orca-api-runner] Weekly allowance used — %s (tier=%s, resets %s)",
+            summary or "unreported",
+            usage.get("planTier"),
+            usage.get("resetAt"),
+        )
+        if self._config.platform_ai_key is not None:
+            # Billed to the evaluator's own project: outside this allowance
+            # and its downgrades, so the numbers are informational only.
+            return
+        highest = max(
+            (v for v in fractions.values() if isinstance(v, int | float)),
+            default=0.0,
+        )
+        if highest >= _USAGE_WARN_FRACTION:
+            console.print(
+                f"[yellow]Orca weekly allowance is {highest:.0%} used[/yellow] "
+                f"({summary}; resets {usage.get('resetAt')}). No PlatformAI key "
+                "is configured, so turns will be silently downgraded to a "
+                "cheaper model once the allowance is spent — which changes the "
+                "model under test mid-experiment."
+            )
+            logger.warning(
+                "[orca-api-runner] Weekly allowance %.0f%% used with no "
+                "PlatformAI key configured; later turns may run on a "
+                "downgraded model",
+                highest * 100,
+            )
 
     async def create(
         self, run_dir: Path, fixtures_dir: Path, experiment_root: Path

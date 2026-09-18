@@ -25,6 +25,7 @@ async def v1_request(
     *,
     json: Any | None = None,
     files: Any | None = None,
+    headers: dict[str, str] | None = None,
     limiter: SubmitRateLimiter,
     submit: bool = False,
     store_retry_window_s: float,
@@ -43,12 +44,18 @@ async def v1_request(
 
     :param files: An httpx ``files=`` mapping for a multipart upload; give the
         content as bytes so a retried attempt re-sends the same body.
+    :param headers: Per-request headers merged over the client's own — for a
+        header that belongs to one route rather than the whole session, such
+        as ``X-PlatformAI-Key`` on ``POST /chat``. Applied inside ``send`` so
+        a retried attempt carries it too.
     """
 
     async def send() -> httpx.Response:
         if submit:
             await limiter.acquire()
-        return await client.request(method, path, json=json, files=files)
+        return await client.request(
+            method, path, json=json, files=files, headers=headers
+        )
 
     try:
         response = await send_with_backoff(
@@ -75,3 +82,23 @@ async def v1_request(
             f"{store_retry_window_s:g} s"
         )
     return response
+
+
+def reason_text(response: httpx.Response) -> str:
+    """Orca's human-readable message (``detail`` / ``error``), or its status text.
+
+    Every v1 error body is one of these shapes, so both the fixture upload and
+    the turn submit report a rejection with the server's own wording rather
+    than a bare status code.
+    """
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict):
+        for key in ("detail", "error"):
+            value = body.get(key)
+            if isinstance(value, str) and value:
+                return value
+    text = response.text.strip()
+    return text[:200] if text else response.reason_phrase or "no reason given"

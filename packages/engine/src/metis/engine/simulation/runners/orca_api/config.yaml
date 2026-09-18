@@ -1,5 +1,6 @@
 # Orca API runner configuration. Credentials come from the environment
-# (ORCA_API_URL, ORCA_API_KEY); response_wait_ms comes from the scenario.
+# (ORCA_API_URL, ORCA_API_KEY, and the optional ORCA_PLATFORM_AI_KEY);
+# response_wait_ms comes from the scenario.
 
 poll_interval_ms: 3000
 submit_rpm: 6

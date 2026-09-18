@@ -335,9 +335,13 @@ class OrcaPlaywrightRunner(Runner):
         artifacts_dir.mkdir(parents=True, exist_ok=True)
 
         for artifact in artifacts:
+            # The UI capture parks the download href in `path`, but Artifact.path
+            # is contracted to be a path relative to the experiment root — so it
+            # is cleared here and only a completed save_as below may re-set it.
+            url = artifact.path
+            artifact.path = None
+            name = artifact.name
             try:
-                url = artifact.path
-                name = artifact.name
                 if url:
                     escaped_url = url.replace("\\", "\\\\").replace('"', '\\"')
                     escaped_name = name.replace("\\", "\\\\").replace('"', '\\"')
@@ -387,8 +391,9 @@ class OrcaPlaywrightRunner(Runner):
                         )
             except Exception as exc:
                 logger.warning(
-                    "[playwright-runner] Download failed for '%s': %s",
+                    "[playwright-runner] Download failed for '%s' (%s): %s",
                     artifact.name,
+                    url or "no url",
                     exc,
                 )
 

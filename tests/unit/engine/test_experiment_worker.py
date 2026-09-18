@@ -135,7 +135,7 @@ class TestWorkerWithMockFactory:
                 worker_id=0,
                 runner_factory=factory,
                 worker_runs=worker_runs,
-                output_dir=tmp_path,
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=console_lock,
@@ -173,7 +173,7 @@ class TestWorkerWithMockFactory:
                 worker_id=0,
                 runner_factory=factory,
                 worker_runs=worker_runs,
-                output_dir=tmp_path,
+                experiment_root=tmp_path,
                 fixtures_dir=fixtures_dir,
                 fixture_content_descriptions={},
                 console_lock=console_lock,
@@ -259,7 +259,7 @@ class TestWorkerUnexpectedCrash:
                 worker_id=0,
                 runner_factory=factory,
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
-                output_dir=tmp_path,
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
@@ -308,7 +308,7 @@ class TestWorkerUnexpectedCrash:
                 worker_id=0,
                 runner_factory=factory,
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
-                output_dir=tmp_path,
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
@@ -350,7 +350,7 @@ class TestWorkerUnexpectedCrash:
                 worker_id=0,
                 runner_factory=factory,
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
-                output_dir=tmp_path,
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
@@ -398,7 +398,7 @@ class TestWorkerUnexpectedCrash:
                 worker_id=0,
                 runner_factory=factory,
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
-                output_dir=tmp_path,
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
@@ -443,7 +443,7 @@ class TestWorkerUnexpectedCrash:
                 worker_id=0,
                 runner_factory=factory,
                 worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
-                output_dir=tmp_path,
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
@@ -558,7 +558,7 @@ async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
         worker_id=0,
         runner_factory=factory,
         worker_runs=[(scenario, persona, 1)],
-        output_dir=tmp_path,
+        experiment_root=tmp_path,
         fixtures_dir=fixtures_dir,
         console_lock=__import__("asyncio").Lock(),
         started_scenarios=set(),
@@ -577,7 +577,7 @@ async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
 async def test_worker_factory_create_receives_experiment_root(
     simple_scenario: Scenario, simple_persona: Persona, tmp_path: Path
 ) -> None:
-    """runner_factory.create() receives output_dir as experiment_root."""
+    """runner_factory.create() receives the worker's experiment_root."""
     factory = MockRunnerFactory()
     await factory.start()
 
@@ -606,7 +606,7 @@ async def test_worker_factory_create_receives_experiment_root(
             worker_id=0,
             runner_factory=factory,
             worker_runs=worker_runs,
-            output_dir=tmp_path,
+            experiment_root=tmp_path,
             fixtures_dir=tmp_path / "fixtures",
             fixture_content_descriptions={},
             console_lock=console_lock,

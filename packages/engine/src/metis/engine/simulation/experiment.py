@@ -199,7 +199,7 @@ async def _run_experiment_async(
                         worker_id=wid,
                         runner_factory=runner_factory,
                         worker_runs=worker_runs,
-                        output_dir=output_dir,
+                        experiment_root=experiment_root,
                         fixtures_dir=fixtures_dir,
                         fixture_content_descriptions=resolved_fixture_descriptions,
                         console_lock=console_lock,
@@ -249,7 +249,7 @@ async def _worker(
     worker_id: int,
     runner_factory: RunnerFactory,
     worker_runs: list[RunPlanItem],
-    output_dir: Path | None,
+    experiment_root: Path,
     fixtures_dir: Path,
     fixture_content_descriptions: dict[str, str],
     console_lock: asyncio.Lock,
@@ -272,7 +272,6 @@ async def _worker(
 
     try:
         records: list[RunRecord] = []
-        experiment_root = output_dir if output_dir is not None else Path("results")
         for scenario, persona, trial_index in worker_runs:
             if shutdown_event and shutdown_event.is_set():
                 logger.info(
@@ -293,11 +292,7 @@ async def _worker(
             )
 
             folder_name = run_folder_name(scenario, persona, trial_index)
-            run_dir = (
-                (output_dir / "runs" / folder_name)
-                if output_dir
-                else Path("results") / "runs" / folder_name
-            )
+            run_dir = experiment_root / "runs" / folder_name
             run_dir.mkdir(parents=True, exist_ok=True)
 
             # Bind run context for structured logging

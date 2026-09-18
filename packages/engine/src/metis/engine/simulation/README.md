@@ -27,7 +27,7 @@ The two Orca-specific runners under `runners/` are reference implementations for
 | Runner | Transport | Notes |
 |--------|-----------|-------|
 | `orca_playwright` | Playwright (browser) | Drives Orca's web UI via a headless browser. Each worker gets its own browser context with isolated login. |
-| `orca_api` | HTTP (`/api/v1`) | Drives Orca via its key-authenticated REST API. Turns are sequential within a run; concurrency comes from multiple runners sharing a rate limiter and fixture cache via the factory. |
+| `orca_api` | HTTP (`/api/v1`) | Drives Orca via its key-authenticated REST API. Turns are sequential within a run; concurrency comes from multiple runners sharing a rate limiter and fixture cache via the factory. See [`orca_api/README.md`](runners/orca_api/README.md) for the turn lifecycle, identifiers, and v1 endpoint coverage. |
 
 Custom runners are selected via `runner_factory_ref` in `experiment.yaml`. See the [Engine User Guide](../../../../../docs/guide/engine.md#writing-a-custom-runner) for the `Runner` ABC, `RunnerFactory` protocol, and a complete REST example.
 

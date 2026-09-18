@@ -189,7 +189,10 @@ async def test_collect_artifacts_emits_relative_path_and_skips_missing(
     import metis.engine.simulation.runners.orca_api._artifacts as _artifacts_mod
     from metis.engine.simulation.runners.orca_api._artifacts import collect_artifacts
 
-    async def _fake_download(client: object, url: str, dest: object) -> None:
+    async def _fake_download(
+        client: object, url: str, dest: object, **kwargs: object
+    ) -> None:
+        # kwargs: the retry window, clock and sleep the collector now passes.
         Path(str(dest)).write_bytes(b"a,b\n1,2\n")
 
     monkeypatch.setattr(_artifacts_mod, "download_to", _fake_download)
@@ -233,7 +236,7 @@ async def test_send_turn_appends_submitted_fixtures_as_artifacts(
 
     monkeypatch.setattr(runner, "_build_submit_body", fake_build_submit_body)
     monkeypatch.setattr(runner, "_submit", AsyncMock(return_value="turn-1"))
-    monkeypatch.setattr(runner, "_await_digest", AsyncMock(return_value={}))
+    monkeypatch.setattr(runner, "_poll_until_settled", AsyncMock(return_value={}))
     monkeypatch.setattr(
         runner, "_build_observation", AsyncMock(return_value=Observation(text="ok"))
     )
@@ -263,7 +266,7 @@ async def test_send_turn_appends_no_fixtures_when_none_submitted(
 
     monkeypatch.setattr(runner, "_build_submit_body", fake_build_submit_body)
     monkeypatch.setattr(runner, "_submit", AsyncMock(return_value="turn-1"))
-    monkeypatch.setattr(runner, "_await_digest", AsyncMock(return_value={}))
+    monkeypatch.setattr(runner, "_poll_until_settled", AsyncMock(return_value={}))
     monkeypatch.setattr(
         runner, "_build_observation", AsyncMock(return_value=Observation(text="ok"))
     )
