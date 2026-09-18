@@ -27,10 +27,10 @@ For the overall METIS architecture and other packages, see the [project README](
 From the monorepo root:
 
 ```bash
-make install
-```
+make install          # install everything
 
-This installs all workspace dependencies and the Playwright browser binary.
+make install-engine   # install only engine dependencies (includes Playwright)
+```
 
 ### Environment Configuration
 

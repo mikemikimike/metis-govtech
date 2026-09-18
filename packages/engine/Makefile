@@ -1,4 +1,4 @@
-.PHONY: generate-schema check-schema install-playwright
+.PHONY: generate-schema check-schema
 
 generate-schema:
 	uv run python scripts/generate_schema.py
@@ -20,5 +20,3 @@ check-schema:
 	assert actual == expected, 'Schema out of sync — run: make generate-schema'; \
 	print('Schemas OK')"
 
-install-playwright:
-	uv run playwright install --with-deps chromium
