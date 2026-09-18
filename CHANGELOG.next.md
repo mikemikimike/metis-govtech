@@ -22,6 +22,20 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 ## [1.0.0a1] — Unreleased
 
+### Build
+
+#### Changed
+
+- **`make install` no longer installs Playwright unconditionally.** The flat
+  `install-playwright` target is replaced by `install-extras-playwright`, which
+  first syncs `--extra playwright` before running `playwright install`. Use
+  `make install-extras-playwright` (or `make install-engine`) to install the
+  browser binary; `make install-extras` runs all optional extras.
+  `install-playwright` is also removed from `packages/engine/Makefile`.
+  **Note:** #335 makes a parallel fix to `v0.x` using the same
+  `install-extras` model; expect a Makefile conflict when `v0.x` merges into
+  `next` — resolve by keeping `next`'s version.
+
 ### metis-core
 
 _No v1 changes yet._

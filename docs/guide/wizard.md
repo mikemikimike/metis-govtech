@@ -42,10 +42,10 @@ For the overall METIS architecture and other packages, see the [project README](
 From the monorepo root:
 
 ```bash
-make install
-```
+make install          # install everything
 
-This installs all workspace dependencies.
+make install-wizard   # install only wizard dependencies
+```
 
 ### Environment Configuration
 

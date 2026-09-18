@@ -12,14 +12,21 @@ Set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `INTERVIEW_MODEL` in that file. The
 provider names as the wizard. `JUDGE_MODEL` and `USER_AGENT_MODEL` are engine settings and are not
 used by the API.
 
+```bash
+make install          # install everything
+
+make install-api      # install only API dependencies
+make install-web      # install only web dependencies
+```
+
 Then start the processes:
 
 ```bash
 # terminal 1
-PORT=8001 uv run metis-api
+make run-api
 
 # terminal 2
-npm --prefix apps/web run dev
+make run-web
 ```
 
 Set `METIS_API_ORIGIN` when the API uses another origin. Vite proxies `/api` to that origin. The
@@ -31,7 +38,7 @@ so `http://localhost:5173` and `http://127.0.0.1:5173` have separate local Inter
 The package-level `.env.example` files are entry-point templates. They do not require three active
 `.env` files. One root `.env` can contain the union of settings needed by the commands you run.
 
-Use `make web-check` for non-mutating web checks. Use `make web-build` when you need the production
+Use `make check-web` for non-mutating web checks. Use `make build-web` when you need the production
 Vite output. The web requests metric summaries only after a Profile contains a Criterion, and a
 failed metric request does not block the Interview.
 
