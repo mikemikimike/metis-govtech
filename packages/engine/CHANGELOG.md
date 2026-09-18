@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.13.0] — Unreleased
 
+### Removed
+
+- `install-playwright` Makefile target — superseded by root-level `make install-extras-playwright`
+
 ### Added
 
 - **Optional `X-PlatformAI-Key` on Orca submits (issue #338)** — the Orca API runner reads a new optional `ORCA_PLATFORM_AI_KEY` env var into `OrcaApiRunnerConfig.platform_ai_key` (a `SecretStr`) and sends it as `X-PlatformAI-Key` on `POST /chat` only, which bills each turn to the evaluator's own platform project on a fixed model. Without it every turn spends Orca's shared weekly allowance, and Orca *silently downgrades to a cheaper model* once that allowance is spent — changing the model under test mid-experiment with no marker in the run record. Malformed keys (empty, whitespace-bearing, under 8 or over 512 characters) are rejected at config construction rather than on the first submit, and the value is never logged: only the billing mode is, once, at setup. `v1_request` gained an optional `headers` argument, applied per attempt so retries carry it too.

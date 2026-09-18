@@ -32,6 +32,12 @@ make install          # install everything
 make install-engine   # install only engine dependencies (includes Playwright)
 ```
 
+`make install` installs all workspace dependencies but not Playwright. If you need to run simulations (which require a browser), also install the Playwright extra — `make install-engine` already includes it:
+
+```bash
+make install-extras-playwright
+```
+
 ### Environment Configuration
 
 Copy the example environment file and fill in your credentials:
