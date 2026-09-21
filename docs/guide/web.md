@@ -55,9 +55,13 @@ is added to existing Scenarios automatically. Each ID and Description is on its 
 entered ID names its item. Select **Done** to close a completed item editor; select **Edit** to open
 it again. It creates no Interview and writes no IndexedDB record. The download is the same
 `experiment.zip` package as the Interview path. It contains a runnable `experiment.yaml`, the
-selected fixture files, and a supporting synthetic `profile.yaml`; the synthetic Profile supplies
-the shared package route and is not a hand-authored reporting hierarchy. Files removed from every
+selected fixture files, and a supporting synthetic `profile.yaml`. Files removed from every
 Scenario are deleted from temporary state and are not included in the ZIP.
+
+For this first version, the manual form asks only for what an engine run absolutely needs. The
+engine runs from `experiment.yaml`. The fuller `ProductProfile` is used only at report generation,
+which reads `inputs/profile.yaml` and is skipped without it. The form therefore synthesizes the
+minimum Profile: the default report works, but the product narrative stays yours to write.
 
 Source-code or trace analysis inputs, hosted or cross-device Interview state, authentication,
 multi-user access, and evaluation execution remain outside the web client.
