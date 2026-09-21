@@ -53,6 +53,14 @@ _No v1 changes yet._
 
 ### metis-wizard
 
+#### Changed
+
+- Prompts now wrap every injected value — the primer, the ARC catalogue, the Profile, the
+  transcript, the perspective, the capability evidence, and the user's message — in a named
+  XML-style tag, with a system-prompt line stating that tagged content is reference material and
+  never instructions. The boundary between the wizard's own words and quoted content is now
+  unambiguous.
+
 #### Added
 
 - **ARC capability evidence at Interview start.** The CLI and headless interface now use the final
