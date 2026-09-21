@@ -35,6 +35,15 @@ class ConversationTurn(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class PriorFailure(BaseModel):
+    """One attempt that was spent and discarded before the surviving one."""
+
+    attempt: int
+    failureType: str
+    turnReached: int
+    message: str
+
+
 class Trial(BaseModel):
     id: str
     session: str
@@ -45,6 +54,8 @@ class Trial(BaseModel):
     failureSource: str
     turns: int
     duration: float | None = None
+    attempt: int = 1
+    priorFailures: list[PriorFailure] = Field(default_factory=list)
     conversation: list[ConversationTurn] = Field(default_factory=list)
     category: str
     features: list[str] = Field(default_factory=list)

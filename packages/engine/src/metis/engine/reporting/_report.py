@@ -159,6 +159,20 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
                 "failureSource": failure_source,
                 "turns": int(outcome.get("total_turns") or 0),
                 "duration": outcome.get("duration_seconds"),
+                # A retried run is a run whose comparability is worth a second
+                # look: a retry is a free do-over only if the failure was
+                # independent of what the run was doing, which is not obvious
+                # for ConsecutiveFailureEscalation. Issue #346.
+                "attempt": int(record.get("attempt_number") or 1),
+                "priorFailures": [
+                    {
+                        "attempt": int(failure.get("attempt_number") or 0),
+                        "failureType": str(failure.get("failure_type") or "unknown"),
+                        "turnReached": int(failure.get("turn_reached") or 0),
+                        "message": str(failure.get("error_message") or ""),
+                    }
+                    for failure in record.get("prior_failures") or []
+                ],
                 "conversation": [
                     {
                         "turn": int(turn.get("turn_number") or index + 1),
@@ -398,7 +412,11 @@ def build_plan(
         if not sid:
             continue
         personas = list(scenario.get("persona_refs") or plan_personas)
-        trials = int(scenario.get("num_trials", 3))
+        # Mirror metis-engine's Scenario schema default of 1, not the wizard's
+        # domain default of 3: the plan describes what the engine would run,
+        # and a hand-written config that omits the field runs once. Unreachable
+        # for a wizard-generated config, which always writes it explicitly.
+        trials = int(scenario.get("num_trials", 1))
         refs = _metric_refs(scenario)
         # A scenario can ask for a metric no criterion names, so resolve the strays too.
         strays = {fqn for fqn in refs if fqn not in name_of}
