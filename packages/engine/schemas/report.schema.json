@@ -521,35 +521,6 @@
       "title": "PlanScenario",
       "type": "object"
     },
-    "PriorFailure": {
-      "description": "One attempt that was spent and discarded before the surviving one.",
-      "properties": {
-        "attempt": {
-          "title": "Attempt",
-          "type": "integer"
-        },
-        "failureType": {
-          "title": "Failuretype",
-          "type": "string"
-        },
-        "turnReached": {
-          "title": "Turnreached",
-          "type": "integer"
-        },
-        "message": {
-          "title": "Message",
-          "type": "string"
-        }
-      },
-      "required": [
-        "attempt",
-        "failureType",
-        "turnReached",
-        "message"
-      ],
-      "title": "PriorFailure",
-      "type": "object"
-    },
     "ResultTable": {
       "properties": {
         "features": {
@@ -668,13 +639,6 @@
           "default": 1,
           "title": "Attempt",
           "type": "integer"
-        },
-        "priorFailures": {
-          "items": {
-            "$ref": "#/$defs/PriorFailure"
-          },
-          "title": "Priorfailures",
-          "type": "array"
         },
         "conversation": {
           "items": {
@@ -817,13 +781,6 @@
           "default": 1,
           "title": "Attempt",
           "type": "integer"
-        },
-        "priorFailures": {
-          "items": {
-            "$ref": "#/$defs/PriorFailure"
-          },
-          "title": "Priorfailures",
-          "type": "array"
         },
         "conversation": {
           "items": {

@@ -163,16 +163,14 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
                 # look: a retry is a free do-over only if the failure was
                 # independent of what the run was doing, which is not obvious
                 # for ConsecutiveFailureEscalation. Issue #346.
+                #
+                # The flag only, deliberately. `attempt` already says how many
+                # attempts were spent, and the per-attempt detail (failure type,
+                # turn reached, message) stays in the run's `record.json`, which
+                # is not a published schema. report.schema.json is audited by
+                # downstream consumers, so every field in it is a contract to
+                # keep — not somewhere to mirror data nothing renders.
                 "attempt": int(record.get("attempt_number") or 1),
-                "priorFailures": [
-                    {
-                        "attempt": int(failure.get("attempt_number") or 0),
-                        "failureType": str(failure.get("failure_type") or "unknown"),
-                        "turnReached": int(failure.get("turn_reached") or 0),
-                        "message": str(failure.get("error_message") or ""),
-                    }
-                    for failure in record.get("prior_failures") or []
-                ],
                 "conversation": [
                     {
                         "turn": int(turn.get("turn_number") or index + 1),

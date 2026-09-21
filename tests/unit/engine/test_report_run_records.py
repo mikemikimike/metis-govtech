@@ -26,16 +26,15 @@ def _write_record(root: Path, folder: str, record: dict) -> None:
     (run / "record.json").write_text(json.dumps(record))
 
 
-def test_a_clean_run_reports_attempt_one_and_no_failures(tmp_path: Path) -> None:
+def test_a_clean_run_reports_attempt_one(tmp_path: Path) -> None:
     _write_record(tmp_path, "s-p-1", _BASE)
 
     _, trials = _load_run_records(tmp_path)
 
     assert trials[0]["attempt"] == 1
-    assert trials[0]["priorFailures"] == []
 
 
-def test_a_retried_run_reports_its_attempt_and_its_failures(tmp_path: Path) -> None:
+def test_a_retried_run_reports_its_attempt(tmp_path: Path) -> None:
     _write_record(
         tmp_path,
         "s-p-1",
@@ -59,17 +58,14 @@ def test_a_retried_run_reports_its_attempt_and_its_failures(tmp_path: Path) -> N
     _, trials = _load_run_records(tmp_path)
 
     assert trials[0]["attempt"] == 2
-    assert trials[0]["priorFailures"] == [
-        {
-            "attempt": 1,
-            "failureType": "ConsecutiveFailureEscalation",
-            "turnReached": 0,
-            "message": "2 consecutive turn failures",
-        }
-    ]
+    # The per-attempt detail is deliberately NOT mirrored into the report: it
+    # stays in record.json, which is not a published schema, while every field
+    # of report.schema.json is a contract downstream consumers audit. A record
+    # carrying prior_failures must still load and must not leak them here.
+    assert "priorFailures" not in trials[0]
 
 
-def test_trial_model_defaults_the_new_fields(tmp_path: Path) -> None:
+def test_trial_model_defaults_the_attempt_field(tmp_path: Path) -> None:
     """Reports written before this change must still parse."""
     trial = Trial(
         id="s-p-1",
@@ -84,7 +80,6 @@ def test_trial_model_defaults_the_new_fields(tmp_path: Path) -> None:
     )
 
     assert trial.attempt == 1
-    assert trial.priorFailures == []
 
 
 def test_scenario_without_num_trials_plans_one_trial() -> None:
