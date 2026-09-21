@@ -428,8 +428,17 @@ class RunRecord(BaseModel, extra="ignore"):
     conversation: list[ConversationTurn] = []
     artifacts: list[Artifact] = []
     target_session_id: str | None = None
+    # attempt_number is telemetry: which attempt produced this record.
+    # max_allowed_attempts is configuration: 1 + the run's retry budget.
+    # A record with attempt_number=1 and max_allowed_attempts=3 succeeded on
+    # the first try under a budget of three — it did not take three attempts.
+    # prior_failures holds one RunFailure per attempt that failed. It is not
+    # strictly "prior": on a record whose retry budget ran out, the failure of
+    # this record's own attempt is appended before the record is stamped, so the
+    # last entry can describe attempt_number itself. Never compute attempts-made
+    # as 1 + len(prior_failures).
     attempt_number: int = 1
-    total_attempts: int = 1
+    max_allowed_attempts: int = 1
     prior_failures: list[RunFailure] = Field(default_factory=list)
 
     @model_validator(mode="before")

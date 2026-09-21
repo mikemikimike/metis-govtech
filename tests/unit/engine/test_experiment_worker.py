@@ -320,7 +320,7 @@ class TestWorkerUnexpectedCrash:
         assert instance.run.await_count == 2
         assert records[0].outcome.stop_reason == "goal_achieved"
         assert records[0].attempt_number == 2
-        assert records[0].total_attempts == 2
+        assert records[0].max_allowed_attempts == 2
         assert len(records[0].prior_failures) == 1
         assert records[0].prior_failures[0].turn_reached == 2
 

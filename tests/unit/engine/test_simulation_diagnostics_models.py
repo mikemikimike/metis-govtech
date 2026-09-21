@@ -103,7 +103,7 @@ class TestRunRecordExtension:
             }
         )
         assert record.attempt_number == 1
-        assert record.total_attempts == 1
+        assert record.max_allowed_attempts == 1
         assert record.prior_failures == []
 
     def test_schema_version_is_2(self) -> None:

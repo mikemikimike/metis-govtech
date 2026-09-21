@@ -387,7 +387,7 @@ async def _worker(
                     )
                     record = await orchestrator.run()
                     record.attempt_number = attempt
-                    record.total_attempts = max_attempts
+                    record.max_allowed_attempts = max_attempts
                     record.prior_failures = prior_failures
                     break
                 except RunRecoverableError as exc:
@@ -424,7 +424,7 @@ async def _worker(
                         if partial is not None:
                             record = partial
                             record.attempt_number = attempt
-                            record.total_attempts = max_attempts
+                            record.max_allowed_attempts = max_attempts
                             record.prior_failures = prior_failures
                         else:
                             record = RunRecord(
@@ -443,7 +443,7 @@ async def _worker(
                                 conversation=[],
                                 artifacts=[],
                                 attempt_number=attempt,
-                                total_attempts=max_attempts,
+                                max_allowed_attempts=max_attempts,
                                 prior_failures=prior_failures,
                             )
                     else:
@@ -508,7 +508,7 @@ async def _worker(
                             )
                         )
                         record.attempt_number = attempt
-                        record.total_attempts = max_attempts
+                        record.max_allowed_attempts = max_attempts
                         record.prior_failures = prior_failures
                         break
 

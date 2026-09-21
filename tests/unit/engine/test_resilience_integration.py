@@ -160,7 +160,7 @@ class TestDiagnosticsWiring:
                 },
                 "conversation": [turn.model_dump()],
                 "attempt_number": 2,
-                "total_attempts": 3,
+                "max_allowed_attempts": 3,
                 "prior_failures": [
                     {
                         "attempt_number": 1,

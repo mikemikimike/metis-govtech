@@ -32,7 +32,7 @@ class TestRunRetryBehavior:
                     "duration_seconds": 45.0,
                 },
                 "attempt_number": 3,
-                "total_attempts": 3,
+                "max_allowed_attempts": 3,
                 "prior_failures": [
                     {
                         "attempt_number": 1,
@@ -52,7 +52,7 @@ class TestRunRetryBehavior:
             }
         )
         assert record.attempt_number == 3
-        assert record.total_attempts == 3
+        assert record.max_allowed_attempts == 3
         assert len(record.prior_failures) == 2
         assert record.prior_failures[0].failure_type == "auth_loss"
 
