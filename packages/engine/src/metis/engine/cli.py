@@ -623,6 +623,7 @@ def _run_simulation(
         log_format=log_format,
         tail_buffers=tail_buffers,
         use_tui=use_tui,
+        append=resume,
     )
     orchestration_logger = OrchestrationLogger(
         log_dir=resolved_log_dir, log_format=log_format, append=resume

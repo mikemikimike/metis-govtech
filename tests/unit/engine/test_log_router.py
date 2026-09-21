@@ -65,6 +65,41 @@ class TestLogRouter:
         assert "old attempt" not in content
         assert "new attempt" in content
 
+    def test_append_router_keeps_the_previous_log(self, tmp_path: Path) -> None:
+        """A resumed process must not destroy the interrupted run's log."""
+        first = LogRouter(log_dir=tmp_path, log_format="text")
+        first.open_run("scn", "per", trial_index=1, num_trials=1)
+        self._process(
+            first,
+            {
+                "event": "old process",
+                "level": "info",
+                "scenario_id": "scn",
+                "persona_id": "per",
+                "trial_index": 1,
+            },
+        )
+        first.close_run("scn", "per", trial_index=1)
+
+        resumed = LogRouter(log_dir=tmp_path, log_format="text", append=True)
+        resumed.open_run("scn", "per", trial_index=1, num_trials=1)
+        self._process(
+            resumed,
+            {
+                "event": "resumed process",
+                "level": "info",
+                "scenario_id": "scn",
+                "persona_id": "per",
+                "trial_index": 1,
+            },
+        )
+        resumed.close_run("scn", "per", trial_index=1)
+
+        content = (tmp_path / "simulate-scn_per-01.log").read_text()
+        assert "old process" in content
+        assert "resumed process" in content
+        assert content.index("old process") < content.index("resumed process")
+
     def test_trial_zero_padding_multi(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
         router.open_run("scenario", "persona", trial_index=1, num_trials=10)
@@ -322,3 +357,21 @@ class TestTracebackEndToEnd:
         assert "worker crash" in content
         assert "Traceback (most recent call last):" in content
         assert "RuntimeError: kaboom-e2e" in content
+
+
+class TestAppendWiring:
+    """setup_engine_logging reconfigures structlog globally, so reset after each."""
+
+    def teardown_method(self) -> None:
+        structlog.reset_defaults()
+        logging.getLogger().handlers.clear()
+
+    def test_setup_engine_logging_passes_append_through(self, tmp_path: Path) -> None:
+        """Reads the private flag deliberately. Observing it behaviourally would
+        mean driving two full setup/teardown cycles against one directory, which
+        tests structlog's global reconfiguration rather than the passthrough."""
+        router = setup_engine_logging(tmp_path, log_format="text", append=True)
+        try:
+            assert router._append is True
+        finally:
+            teardown_engine_logging(router)

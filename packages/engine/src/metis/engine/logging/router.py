@@ -69,6 +69,7 @@ class LogRouter:
         log_format: Literal["text", "json"] = "text",
         tail_buffers: dict[str, TailBuffer] | None = None,
         fallback_renderer: Any = None,
+        append: bool = False,
     ) -> None:
         self._log_dir = log_dir
         self._log_format = log_format
@@ -76,6 +77,7 @@ class LogRouter:
         self._fallback_renderer = fallback_renderer
         self._handles: dict[str, IO[str]] = {}
         self._start_time = time.monotonic()
+        self._append = append
         log_dir.mkdir(parents=True, exist_ok=True)
 
     def _run_key(self, scenario_id: str, persona_id: str, trial_index: int) -> str:
@@ -93,7 +95,12 @@ class LogRouter:
         key = self._run_key(scenario_id, persona_id, trial_index)
         filename = _run_log_filename(scenario_id, persona_id, trial_index, num_trials)
         path = self._log_dir / filename
-        self._handles[key] = open(path, "w", encoding="utf-8")  # noqa: SIM115
+        # Truncate for a fresh experiment; append when resuming, where this
+        # file already holds the interrupted process's account of the run and
+        # is the only record of the attempt whose artifacts were moved aside
+        # (issue #346). Matches OrchestrationLogger's handling of simulate.log.
+        mode = "a" if self._append else "w"
+        self._handles[key] = open(path, mode, encoding="utf-8")  # noqa: SIM115
         if run_dir is not None:
             try:
                 relative_target = os.path.relpath(path, run_dir)
@@ -210,6 +217,7 @@ def setup_engine_logging(
     log_format: Literal["text", "json"] = "text",
     tail_buffers: dict[str, TailBuffer] | None = None,
     use_tui: bool = True,
+    append: bool = False,
 ) -> LogRouter:
     """Create a LogRouter and install it as structlog's renderer.
 
@@ -218,6 +226,9 @@ def setup_engine_logging(
     When use_tui=False, core's renderer is kept as fallback so events
     still appear on stderr.
     Must be called AFTER configure_logging().
+
+    ``append`` keeps an existing per-run log rather than truncating it; pass
+    the resume flag so a resumed run does not erase the earlier process's log.
     """
     config = structlog.get_config()
     current_processors = list(config.get("processors", []))
@@ -232,6 +243,7 @@ def setup_engine_logging(
         log_format=log_format,
         tail_buffers=tail_buffers,
         fallback_renderer=fallback,
+        append=append,
     )
 
     # Replace the last processor (the renderer) with our router
