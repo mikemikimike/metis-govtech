@@ -71,7 +71,8 @@ _No v1 changes yet._
 
 - Interview opening now offers End user, Engineer, Compliance, and Security perspectives. The
   selected perspective travels in client-held Interview context and shapes only Clarify and
-  Behaviours prompts; labels and questions are package configuration.
+  Behaviours prompts; labels and questions are package configuration. The web client asks for it;
+  the CLI always uses End user.
 
 - **JSON schema for `profile.yaml`.** `packages/wizard/schemas/profile.schema.json` is generated
   from the `ProductProfile` model and CI-guarded by `make check-schema`, giving schema-aware

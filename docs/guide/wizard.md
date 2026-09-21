@@ -106,7 +106,11 @@ The catalogue is owned by `metis-wizard` in
 Risk & Capability Framework, with Apache-2.0 attribution. The wizard does not fetch this source at
 run time.
 
-The opening description, selected perspective, and capability evidence give the Interview its
+`init` does not ask who the evaluation is for. It always uses the End user perspective. To evaluate
+from the Engineer, Compliance, or Security perspective, use the web client, or send `perspective` in
+a headless start request (see [Headless start and state](#headless-start-and-state)).
+
+The opening description, the perspective, and the capability evidence give the Interview its
 initial view of the product. During Clarify, the model silently infers a provisional map of the
 product's user workflows, Tasks, and important Behaviours. It asks one question only when the
 answer can materially change that map. A question can examine the most common use case, where a
@@ -158,19 +162,26 @@ Without `--restart`, `init` refuses to overwrite an interview in progress and po
 
 ### Headless start and state
 
-The stateless start operation requires all opening evidence:
+The stateless start operation carries all opening evidence:
 
 ```json
 {
   "description": "A research assistant",
+  "perspective": "end_user",
   "known_capability_ids": ["internet_search_access"],
   "capability_confidence": "medium"
 }
 ```
 
-`known_capability_ids` can be an empty list, but it must be present. The operation rejects unknown
-or duplicate ids. The returned `InterviewState` always contains
-`context.capability_evidence` with the same ids and confidence. This context belongs to the
+`known_capability_ids` and `capability_confidence` are required. `known_capability_ids` can be an
+empty list, but it must be present. The operation rejects unknown or duplicate ids.
+
+`perspective` is optional. If you do not send it, the Interview uses `end_user`. The other values
+are `engineer`, `compliance`, and `security`. Read the labels and questions for all four from
+`GET /api/v1/wizard/config`.
+
+The returned `InterviewState` always contains `context.perspective` and
+`context.capability_evidence` with the values from the start request. This context belongs to the
 Interview, not to `ProductProfile`, and it must be sent unchanged on later turns. There is no
 capability Interview step or migration path for older state.
 
