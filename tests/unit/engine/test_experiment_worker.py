@@ -616,3 +616,164 @@ async def test_worker_factory_create_receives_experiment_root(
         )
 
     assert captured["experiment_root"] == tmp_path
+
+
+class TestAttemptScopedArtifacts:
+    """A retry must not write on top of the previous attempt's downloads (#346)."""
+
+    @pytest.mark.asyncio
+    async def test_retry_moves_the_failed_attempt_artifacts_aside(
+        self, simple_persona: Persona, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import metis.engine.simulation.experiment as exp_mod
+
+        scenario = Scenario(
+            id="test-scenario",
+            description="s",
+            persona_refs=["tester"],
+            num_trials=1,
+            max_turns=5,
+            max_run_retries=1,  # -> max_attempts == 2
+            metric_refs=[],
+        )
+        seen: list[int] = []
+
+        class FakeOrchestrator:
+            """Downloads report.pdf, then fails on attempt 1 and succeeds on 2."""
+
+            def __init__(self, *, run_dir: Path, **kwargs: object) -> None:
+                self._run_dir = run_dir
+                seen.append(len(seen) + 1)
+                self._attempt = len(seen)
+
+            async def run(self) -> RunRecord:
+                artifacts = self._run_dir / "artifacts"
+                artifacts.mkdir(parents=True, exist_ok=True)
+                (artifacts / "report.pdf").write_text(f"attempt {self._attempt}")
+                if self._attempt == 1:
+                    raise ConsecutiveFailureEscalation("2 consecutive turn failures")
+                return _make_canned_record(scenario, simple_persona)
+
+            def partial_record(self, stop_reason: str) -> RunRecord:
+                return _partial_record(
+                    scenario, simple_persona, turns=0, stop_reason=stop_reason
+                )
+
+        monkeypatch.setattr(exp_mod, "Orchestrator", FakeOrchestrator)
+        monkeypatch.setattr(exp_mod, "UserAgent", lambda **kwargs: object())
+
+        factory = MockRunnerFactory()
+        await factory.start()
+
+        records = await _worker(
+            worker_id=0,
+            runner_factory=factory,
+            worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+            experiment_root=tmp_path,
+            fixtures_dir=tmp_path / "fixtures",
+            fixture_content_descriptions={},
+            console_lock=asyncio.Lock(),
+            started_scenarios=set(),
+            run_max_retries=2,
+            run_retry_delay_seconds=0.0,
+        )
+
+        assert records[0].attempt_number == 2
+        run_dir = tmp_path / "runs" / run_folder_name(scenario, simple_persona, 1)
+        artifacts = run_dir / "artifacts"
+        # The surviving attempt's file, under its own name.
+        assert (artifacts / "report.pdf").read_text() == "attempt 2"
+        assert not (artifacts / "report-2.pdf").exists()
+        assert sorted(p.name for p in artifacts.iterdir()) == ["report.pdf"]
+        # Attempt 1's download is kept, not deleted.
+        superseded = list(run_dir.glob("artifacts-superseded-*"))
+        assert len(superseded) == 1
+        assert (superseded[0] / "report.pdf").read_text() == "attempt 1"
+
+    @pytest.mark.asyncio
+    async def test_resumed_run_starts_at_attempt_one_and_keeps_old_artifacts(
+        self, simple_persona: Persona, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Two successive _worker calls on one experiment_root == a --resume.
+
+        Pins the documented semantics: the attempt counter is per-process, so a
+        resumed run starts at attempt 1 with an empty prior_failures list even
+        though an earlier process already spent attempts on it. The previous
+        process's downloads are moved aside rather than written over.
+        """
+        import metis.engine.simulation.experiment as exp_mod
+
+        scenario = Scenario(
+            id="test-scenario",
+            description="s",
+            persona_refs=["tester"],
+            num_trials=1,
+            max_turns=5,
+            max_run_retries=0,  # one attempt per process
+            metric_refs=[],
+        )
+        label = ["first process"]
+        should_fail = [True]
+
+        class FakeOrchestrator:
+            def __init__(self, *, run_dir: Path, **kwargs: object) -> None:
+                self._run_dir = run_dir
+
+            async def run(self) -> RunRecord:
+                artifacts = self._run_dir / "artifacts"
+                artifacts.mkdir(parents=True, exist_ok=True)
+                (artifacts / "report.pdf").write_text(label[0])
+                if should_fail[0]:
+                    raise ConsecutiveFailureEscalation("2 consecutive turn failures")
+                return _make_canned_record(scenario, simple_persona)
+
+            def partial_record(self, stop_reason: str) -> RunRecord:
+                return _partial_record(
+                    scenario, simple_persona, turns=0, stop_reason=stop_reason
+                )
+
+        monkeypatch.setattr(exp_mod, "Orchestrator", FakeOrchestrator)
+        monkeypatch.setattr(exp_mod, "UserAgent", lambda **kwargs: object())
+
+        factory = MockRunnerFactory()
+        await factory.start()
+
+        first = await _worker(
+            worker_id=0,
+            runner_factory=factory,
+            worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+            experiment_root=tmp_path,
+            fixtures_dir=tmp_path / "fixtures",
+            fixture_content_descriptions={},
+            console_lock=asyncio.Lock(),
+            started_scenarios=set(),
+            run_max_retries=2,
+            run_retry_delay_seconds=0.0,
+        )
+        assert first[0].outcome.stop_reason == "system_error"
+
+        label[0] = "second process"
+        should_fail[0] = False
+        # Same experiment_root, so the same run_dir — this is what --resume does.
+        second = await _worker(
+            worker_id=0,
+            runner_factory=factory,
+            worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+            experiment_root=tmp_path,
+            fixtures_dir=tmp_path / "fixtures",
+            fixture_content_descriptions={},
+            console_lock=asyncio.Lock(),
+            started_scenarios=set(),
+            run_max_retries=2,
+            run_retry_delay_seconds=0.0,
+        )
+
+        assert second[0].outcome.stop_reason == "goal_achieved"
+        assert second[0].attempt_number == 1  # per-process, not a lifetime total
+        assert second[0].prior_failures == []
+
+        run_dir = tmp_path / "runs" / run_folder_name(scenario, simple_persona, 1)
+        assert (run_dir / "artifacts" / "report.pdf").read_text() == "second process"
+        superseded = list(run_dir.glob("artifacts-superseded-*"))
+        assert len(superseded) == 1
+        assert (superseded[0] / "report.pdf").read_text() == "first process"

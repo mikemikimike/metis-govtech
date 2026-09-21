@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from metis.core import resolve_artifact_path
+from metis.core.logging import get_logger
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -27,6 +28,63 @@ _TYPE_MAP = {
     "csv": "data",
     "json": "data",
 }
+
+logger = get_logger()
+
+
+def quarantine_stale_artifacts(
+    run_dir: Path, *, now: datetime | None = None
+) -> Path | None:
+    """Move a populated ``run_dir/artifacts/`` aside so an attempt starts clean.
+
+    A run directory belongs to one scenario × persona × trial, but every
+    *attempt* at that run writes its downloads into the same ``artifacts/``
+    folder, and nothing cleared it between attempts (issue #346). The API
+    runner's collision handling then stored attempt 2's ``report.pdf`` as
+    ``report-2.pdf`` — a name implying a duplicate when it is the only good
+    copy — while the browser runner's ``save_as`` overwrote attempt 1's file
+    in place. Either way the surviving ``record.json`` describes one attempt
+    and the folder holds the debris of several.
+
+    The trigger is the folder's contents rather than the attempt counter,
+    because ``--resume`` re-runs a ``system_error`` run in a **new process**
+    whose counter starts at 1 again while the folder still holds the previous
+    process's downloads. An interrupted run is the same case with no
+    ``record.json`` at all, so its files are referenced by nothing.
+
+    The destination is ``artifacts-superseded-<UTC timestamp>``, named for the
+    moment of the move rather than for an attempt number: an attempt that
+    downloaded nothing leaves an empty folder, which is skipped, so a
+    quarantine counter is not an attempt counter and ``failed-attempt-1``
+    would be free to name attempt 2's files. The ``artifacts-`` prefix says
+    which directory was superseded and sorts the folder next to it.
+
+    :param run_dir: The run folder (``runs/<scenario>-<persona>-<trial>/``).
+    :param now: Timestamp for the destination name. Defaults to the current
+        UTC time; injected by tests for a deterministic name.
+    :returns: The directory the artifacts were moved to, or ``None`` when
+        there was nothing to move — no ``artifacts/`` yet, or an empty one.
+        Never deletes anything.
+    """
+    artifacts_dir = run_dir / "artifacts"
+    if not artifacts_dir.is_dir() or not any(artifacts_dir.iterdir()):
+        return None
+
+    stamp = (now or datetime.now(tz=UTC)).strftime("%Y%m%dT%H%M%SZ")
+    stem = f"artifacts-superseded-{stamp}"
+    dest = run_dir / stem
+    suffix = 2
+    while dest.exists():
+        dest = run_dir / f"{stem}-{suffix}"
+        suffix += 1
+
+    artifacts_dir.rename(dest)
+    logger.info(
+        "[experiment] Moved a previous attempt's artifacts aside",
+        run_dir=str(run_dir),
+        moved_to=dest.name,
+    )
+    return dest
 
 
 def infer_artifact_type(filename: str) -> str:

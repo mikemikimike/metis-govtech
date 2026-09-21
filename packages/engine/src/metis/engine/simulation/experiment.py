@@ -17,7 +17,7 @@ import structlog
 from metis.core.console import console
 from metis.core.logging import get_logger
 
-from ._artifact_store import _save_artifacts
+from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
 from ._fixture_artifacts import build_fixture_artifacts
 from .artifact_summarizer import resolve_fixture_descriptions
 from .exceptions import RunRecoverableError
@@ -338,6 +338,24 @@ async def _worker(
                     console.print(f"  [w{worker_id}] {scenario.id} × {persona.id} ...")
 
             run_start = time.time()
+            # The attempt counter is per-process and per-run. A --resume redoes
+            # a run in a new process, which starts it at attempt 1 with a fresh
+            # budget and an empty prior_failures, so attempt_number means
+            # "attempts in this process", never a lifetime total.
+            #
+            # The earlier process's history is dropped rather than merged, for a
+            # different reason in each of the two resume cases. An interrupted
+            # run never wrote a record.json, so its attempts are genuinely
+            # unrecoverable. A system_error run did write one, and
+            # _classify_resume_runs in cli.py reads it to decide the run needs
+            # redoing at all — so that record's attempt_number and prior_failures
+            # are in hand at that moment, and are deliberately discarded when the
+            # redone run overwrites the file. Carrying them forward is deferred,
+            # not impossible.
+            #
+            # Consequence worth knowing: a run that spent attempts, was
+            # interrupted, then succeeded after a --resume reports attempt 1, so
+            # the report's "retried" marker does not fire for it. Issue #346.
             max_attempts = 1 + (
                 scenario.max_run_retries
                 if scenario.max_run_retries is not None
@@ -347,6 +365,16 @@ async def _worker(
             record: RunRecord | None = None
 
             for attempt in range(1, max_attempts + 1):
+                # Every attempt at this run shares run_dir, so a retry used to
+                # download into the previous attempt's artifacts/ — renamed to
+                # "-N" by the API runner, overwritten by the browser runner.
+                # Both derive that directory from run_dir at download time
+                # rather than caching a handle, so moving it aside before the
+                # runner exists is enough to give this attempt a clean one.
+                # Keyed on the directory's contents, not on `attempt`, so a
+                # resumed run (a new process, counter back at 1) is covered
+                # too. Issue #346.
+                quarantine_stale_artifacts(run_dir)
                 runner = await runner_factory.create(
                     run_dir, fixtures_dir, experiment_root
                 )
