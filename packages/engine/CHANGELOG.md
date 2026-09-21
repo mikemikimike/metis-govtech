@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **A warning when the session sweep drops a generated file it cannot fetch** — a `Session.files` entry marked `generated` with a null `fileId` was skipped by `collect_session_artifacts` with no log, no note and no artifact, while the digest lane records all three for the same condition. It was the only branch in that loop leaving no trace, and since an entry with no `fileId` has no identity the sweep cannot tell whether the digest lane reported the same file — so when the digest omitted it too, nothing in the run mentioned it at all. Now warned about by name. Still log-only and still unrecorded: an entry with no `fileId` has no identity, so an artifact minted here would reconcile against nothing and double-report whatever the digest lane already recorded.
+
+- **A warning when one Orca `fileId` names two different files** — `reconcile_by_identity` now logs a warning if a second artifact lands on an id already held under a different filename, which breaks the uniqueness contract documented on `Artifact.external_id`: a file does not rename itself while keeping its id. Detection only — the two still merge and one is still lost, because uniqueness is a property of the set and nothing can validate it from a single record — but the collapse stops being silent, which is the whole cost of a target that reuses ids.
+
+- **`Artifact.external_id` propagated from Orca `fileId` on downloaded artifacts** — `collect_artifacts` now records the entry's `fileId` as `external_id` on every artifact it builds: successfully downloaded files, HTTP-error failures, and network-error failures all carry the id so a later re-check can retry exactly those entries by target identity rather than by filename. An entry whose `fileId` is `null` keeps `external_id=None` — there is nothing to record. `run-manifest.json` artifact entries gain a corresponding `"external_id"` key.
+- **`Artifact.external_id` propagated from Orca `fileId` on uploaded fixture artifacts** — `send_turn`'s post-submit fixture artifact recording now stamps each fixture `Artifact` with `external_id` from `FixtureLibrary.cached_file_id`, a new non-uploading, non-raising cache lookup. A cached rejection yields `None` rather than re-raising; an absent name yields `None`. The Orca-agnostic `build_fixture_artifacts` path is unchanged.
+
 - **Optional `X-PlatformAI-Key` on Orca submits (issue #338)** — the Orca API runner reads a new optional `ORCA_PLATFORM_AI_KEY` env var into `OrcaApiRunnerConfig.platform_ai_key` (a `SecretStr`) and sends it as `X-PlatformAI-Key` on `POST /chat` only, which bills each turn to the evaluator's own platform project on a fixed model. Without it every turn spends Orca's shared weekly allowance, and Orca *silently downgrades to a cheaper model* once that allowance is spent — changing the model under test mid-experiment with no marker in the run record. Malformed keys (empty, whitespace-bearing, under 8 or over 512 characters) are rejected at config construction rather than on the first submit, and the value is never logged: only the billing mode is, once, at setup. `v1_request` gained an optional `headers` argument, applied per attempt so retries carry it too.
 - **`GET /usage` pre-flight (issue #338)** — `OrcaApiRunnerFactory.start()` now reads the key's week-to-date allowance once and logs the tier, `resetAt`, and the overall / data-analysis / document-generation percentages. When no platform key is configured and any of them is at or above 80%, a console warning names `resetAt` and the downgrade consequence. Never blocks, and never raises: an unreadable pre-flight is a warning, not a failed experiment.
 
@@ -32,6 +39,97 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Artifact model unified; `Artifact.url` → `Artifact.uri`; model relocated to `metis-core` (issue #307)** — `Artifact` and `CollectedArtifact` are merged into one lifecycle-spanning `Artifact` (`id`, `name`, `source`, `uri`, `at_turn`, `content_description`, `state_description`, `digest`, `hash_algorithm`, and a derived `media_type`), now hosted in `metis.core` (with `uri_to_local_path`) so the engine, library, and wizard share one definition. Both runners now emit a `file://` URI for on-disk downloads (the Playwright runner normalizes `uri` after `save_as`). Requires `metis-core` ≥ 0.5.0. No `schema_version` bump (v0.x policy) — **forward-only: old result files in the `{filename, path}` shape are not migrated** and need a re-run to re-evaluate.
 
 ### Fixed
+
+- **The persona's artifact registry dedupes by target identity, not by record
+  id** — `UserAgent._merge_artifacts` keyed the cumulative registry on
+  `Artifact.id`, a uuid minted per record, so the same file could occupy two
+  slots. That is not hypothetical: a failed download is reported again on
+  purpose, because the runner withholds its `fileId` from `_downloaded_file_ids`
+  so the next turn retries it, and keyed by uuid the turn-3 failure and the
+  turn-4 success both persisted for the rest of the run. The key is now
+  `source` plus `external_id` where there is one — `source` included so an
+  uploaded fixture and a deliverable sharing a `fileId` cannot collapse into one
+  entry and relabel the persona's own input — and a record with no `path` never
+  displaces one that has a file, the same rule `reconcile_by_identity` applies
+  within a single turn. Without an `external_id` the uuid remains the key: the
+  Playwright runner mints a fresh id per DOM capture and has no identity to
+  reconcile on, which is why the delivered-files header states absence rather
+  than a count.
+
+- **Raw Orca `fileId`s no longer leak into the simulated user's prompt** — a
+  per-file "could not be downloaded" note carried the file's id inside its own
+  text (`Artifact 'chart.vl.json' (file 8f3c2a1e-…) could not be downloaded`),
+  because `reconcile_by_identity` has to match a note to its file by identity
+  and Orca reuses names across revisions. Those notes become
+  `Observation.errors`, which is rendered into the persona's prompt, so a
+  simulated user was shown a backend identifier no real user of a chat product
+  would ever see — the same fidelity rule the runner already enforced for
+  sweep-level failures. Notes are now `ArtifactNote(text, file_id)` pairs:
+  reconciliation reads the id field directly and only `text` is copied into the
+  observation. The substring scan that recovered the id from the note text, and
+  the `note_marker` helper that embedded it, are both gone.
+
+- **The persona's artifact registry is now authoritative (issue #337)** —
+  **behaviour change, affects every scenario.** Nothing previously told the
+  simulated user that the delivered-files list was exhaustive, so it could
+  accept the list *and* believe files named only in the target's prose without
+  the two ever conflicting. In one recorded run the persona's reasoning credits
+  the assistant having "said it generated charts" and returns `goal_achieved`
+  for a run that captured no charts at all. Rule 8 and the delivered-files
+  header now state that the list is every file received and that a file claimed
+  but absent was not received, to be challenged in character. Phrased as
+  absence rather than a count, because the browser runner can surface one
+  persisting file under several ids. For that claim to be true, a `path=None`
+  artifact — a file the target produced but the runner could not fetch, recorded
+  so the failure stays auditable and the download is retried — is now excluded
+  from the delivered group: listing one under "this is every file you have
+  received" asserted a delivery that never happened, which is the same false
+  pass in a new shape. The persona still learns of the failure through
+  `Observation.errors`. Expect runs against an over-claiming
+  target to yield `continue` or `giving_up` where they previously yielded
+  `goal_achieved` — the correct direction, but it moves
+  `CapabilityHonestyMetric`, `SessionActionHonestyMetric` and
+  `AbandonmentMetric`, so results are not comparable with experiments recorded
+  before this change.
+
+- **The artifact summarizer no longer restates a document's claims about other
+  files (issue #337)** — `summarize_artifact` is strictly per-artifact and was
+  behaving correctly, but delivered documents frequently contain a manifest of
+  their siblings (one recorded `ANALYSIS_SUMMARY.txt` lists four `.vl.json`
+  charts with per-chart descriptions, none of which were ever captured). Asked
+  for "the headings and the key claims", the summarizer faithfully copied that
+  manifest into `content_description`, which `_render_artifacts` then presents
+  to the persona as METIS's own record of what it holds. The prompt now scopes
+  the description to the single file's contents while keeping the fact-rich
+  figures the persona needs to judge sufficiency.
+
+- **Generated files omitted from the turn digest are now recovered (issue #337)**
+  — Orca's `TurnDigest.files` is documented as "a file the turn generated" but
+  excludes Vega-Lite chart specs, which `GET /sessions/{id}` lists as
+  `source: "generated"` with working `fileId`s. Verified on two sessions
+  fifteen days apart: the digest is the generated set with every `.vl.json`
+  removed and nothing else. `OrcaApiRunner` now reconciles each settled turn
+  against the session and downloads what it does not already hold, so chart
+  metrics stop skipping for lack of input they should have had. The sweep is
+  additive and quiet — a failed session read logs a warning and leaves the
+  digest's own artifacts untouched, and it no-ops before the first submit.
+  `Session.files` carries no turn attribution, so a file first surfaced by the
+  sweep is attributed to the turn that surfaced it. Fixing the digest upstream
+  would not make this redundant: reconciliation is what makes the runner robust
+  to the next under-report.
+
+- **Artifact downloads dedupe by file identity, not filename (issue #337)** —
+  Orca's digest re-lists a file's `fileId` on every later turn, and
+  `_unused_path` dedupes by filename collision, so the same bytes were fetched
+  and stored repeatedly: 307 collision pairs across 20 runs in the recorded
+  experiments, 306 of them byte-identical, 15,258,949 wasted bytes, one file
+  stored eight times in a single run. `collect_artifacts` now takes a
+  `seen_file_ids` set and skips an id it already holds. The rename rule is
+  unchanged and still load-bearing — exactly one of those 307 pairs was
+  genuinely different, because an immutable-file system represents a revised
+  document as a new `fileId` reusing the name, and that one is still kept.
+  Redundant downloads also stop misleading the summarizer into describing a
+  stale copy as a fresh deliverable.
 
 - **A failed artifact download no longer leaves a URL in `Artifact.path`** — the Playwright runner's UI capture parks a download `href` in `path` for the download step to consume, but when the download failed (or no matching link was visible) that HTTP/`blob:` URL survived into the run record, where `resolve_artifact_path` would join it onto the experiment root and yield a nonsense location instead of reporting no file. `path` is now cleared before each download attempt and only a completed `save_as` sets it, so an undownloadable artifact is recorded by name with no path — the same shape the API runner already produces. The failing URL is named in the existing warning.
 

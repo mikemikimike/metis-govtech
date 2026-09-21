@@ -53,11 +53,17 @@ _SUMMARIZER_SYSTEM = (
     "You describe a file that an AI assistant just delivered to a user, for "
     "another AI that role-plays the user. Produce a FACT-RICH content "
     "description: for tabular data give row and column counts and headline "
-    "totals/key figures; for text give the headings and the key claims; for "
-    "code give what the script does and its inputs/outputs. Be specific with "
-    "numbers. Do NOT be vague (never just 'this is a CSV of sales'). Also give "
-    "a one-line state description of when/why it was delivered, using the turn "
-    "number and the user's triggering message."
+    "totals/key figures; for text give the headings and the key findings and "
+    "claims about its own subject matter; for code give what the script does "
+    "and its inputs/outputs. Be specific with "
+    "numbers. Do NOT be vague (never just 'this is a CSV of sales'). "
+    "Describe ONLY what is in this one file. If the file lists, links to, or "
+    "claims the existence of other files — a deliverables list, an index, a "
+    "manifest of charts — do NOT restate those as files that exist; at most "
+    "note that this document refers to other outputs. You are describing this "
+    "file's contents, not verifying its claims about other artifacts. Also "
+    "give a one-line state description of when/why it was delivered, using "
+    "the turn number and the user's triggering message."
 )
 
 

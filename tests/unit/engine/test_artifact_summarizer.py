@@ -9,7 +9,10 @@ import pytest
 
 from metis.core import Artifact
 from metis.engine.simulation import artifact_summarizer as summ
-from metis.engine.simulation.artifact_summarizer import summarize_artifact
+from metis.engine.simulation.artifact_summarizer import (
+    _SUMMARIZER_SYSTEM,
+    summarize_artifact,
+)
 
 
 @pytest.mark.asyncio
@@ -201,3 +204,19 @@ async def test_resolve_fixture_descriptions_omits_missing_files(
     # from the map (workers likewise skip it, so the two stay consistent).
     resolved = await resolve_fixture_descriptions(["ghost.csv"], tmp_path, tmp_path, {})
     assert resolved == {}
+
+
+class TestSummarizerScope:
+    def test_prompt_forbids_restating_other_files(self) -> None:
+        """A document's own manifest of siblings must not become METIS's claim."""
+        prompt = _SUMMARIZER_SYSTEM.lower()
+        assert "only what is in this one file" in prompt
+        assert "other file" in prompt or "sibling" in prompt
+        assert "claims" in prompt
+
+    def test_prompt_still_demands_specific_figures(self) -> None:
+        """Over-restricting loses the detail the persona judges sufficiency from."""
+        prompt = _SUMMARIZER_SYSTEM.lower()
+        assert "fact-rich" in prompt
+        assert "row and column counts" in prompt
+        assert "be specific with numbers" in prompt

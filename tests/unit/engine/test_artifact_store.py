@@ -93,3 +93,22 @@ def test_manifest_keeps_logical_name_when_disk_path_is_decollided(tmp_path):
     assert entry["filename"] == "report.txt"  # logical label, never mutated
     assert entry["path"].endswith("report-2.txt")  # on-disk truth from path
     assert entry["filename"] != Path(entry["path"]).name  # allowed to diverge
+
+
+def test_manifest_carries_external_id(tmp_path: Path) -> None:
+    """Built field-by-field, so the new field needs a deliberate line."""
+    record = RunRecord(
+        config=RunConfig(persona="p", scenario="s"),
+        outcome=RunOutcome(
+            stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+        ),
+        artifacts=[
+            Artifact(name="chart.vl.json", external_id="73da06dac970f8a9", path=None),
+            Artifact(name="local.png", path=None),
+        ],
+    )
+    manifest = _save_artifacts(record, tmp_path / "run", tmp_path)
+    assert [a["external_id"] for a in manifest["artifacts"]] == [
+        "73da06dac970f8a9",
+        None,
+    ]

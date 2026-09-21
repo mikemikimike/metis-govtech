@@ -75,11 +75,27 @@ def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
     for a target deliverable. Same-named files are disambiguated by the per-line
     tag (source + at_turn). Compact and description-only: never the uri or the
     bytes. Empty string when there are none so the section disappears.
+
+    The delivered group is presented as exhaustive, which is what lets the
+    persona disbelieve a file named only in the target's prose. Stated as
+    absence rather than as a count on purpose: ``Artifact.external_id`` is
+    optional, and a file reported without one can appear under several record
+    ids, so any count would be wrong (see :meth:`UserAgent._merge_artifacts`).
+
+    That exhaustiveness claim is why a ``path=None`` entry is excluded: those
+    are files the target produced but this runner could not fetch, recorded so
+    the failure is auditable and the download retried. Listing one here would
+    assert the persona received a file that never arrived — the same false pass
+    the closure sentence exists to prevent (issue #337). The persona still
+    hears about the failure through ``Observation.errors``, in terms a real
+    user could perceive.
     """
     if not artifacts:
         return ""
     uploaded = [a for a in artifacts.values() if a.source == "fixture"]
-    delivered = [a for a in artifacts.values() if a.source != "fixture"]
+    delivered = [
+        a for a in artifacts.values() if a.source != "fixture" and a.path is not None
+    ]
     lines: list[str] = []
     if uploaded:
         lines.append(
@@ -92,9 +108,16 @@ def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
             "Files the assistant has delivered to you so far. Treat each as a "
             "real file you have received — do NOT claim you got nothing, and do "
             "NOT demand it be pasted inline; judge sufficiency from the "
-            "descriptions:"
+            "descriptions. This is every file you have received: a file the "
+            "assistant's message claims to have delivered but which is absent "
+            "here did not reach you:"
         )
         lines.extend(_artifact_line(art) for art in delivered)
+    if not lines:
+        # Every artifact was filtered out (e.g. the only entries are failed
+        # downloads). Same contract as the no-artifacts case: no section at all,
+        # rather than two bare newlines in the middle of the prompt.
+        return ""
     return "\n" + "\n".join(lines) + "\n"
 
 
@@ -141,7 +164,9 @@ class UserAgent:
         self.conversation_history: list[HistoryEntry] = []
         self.turn_count = 0
         # Cumulative registry of artifacts surfaced to the persona, keyed by
-        # Artifact.id. Populated turn-by-turn via _merge_artifacts().
+        # target-side identity where there is one (see _merge_artifacts, which
+        # populates it turn-by-turn). The keys are internal: every consumer
+        # reads .values().
         self._artifacts: dict[str, Artifact] = {}
         self.client = AsyncOpenAI(
             api_key=USER_AGENT_API_KEY,
@@ -253,17 +278,42 @@ class UserAgent:
         )
 
     def _merge_artifacts(self, observation: Observation) -> None:
-        """Fold this turn's artifacts into the cumulative registry (by id).
+        """Fold this turn's artifacts into the cumulative registry.
 
-        Dedup assumes an artifact keeps a stable ``id`` across turns (the Orca
-        API runner reports the same file identity each turn). The Playwright
-        runner re-scans the DOM and mints a fresh id per capture, so a file
-        that persists across turns may appear under multiple ids; that is a
-        known limitation of the non-primary browser runner, not a correctness
-        issue — the file is still surfaced to the persona.
+        Dedup is by the file's identity on the target's side rather than by the
+        record: ``Artifact.id`` is minted per record while ``external_id`` names
+        the file itself (see :class:`~metis.core.artifacts.Artifact`), so keying
+        on the record id lets one file occupy two slots. A runner may report the
+        same file on more than one turn — a retrieval that failed is expected to
+        be retried — so a single file can arrive first as a record with no
+        ``path`` and later as one that has the file, and keyed by record id both
+        would persist for the rest of the run.
+
+        ``source`` joins ``external_id`` in the key because the two directions
+        are rendered as separate groups and nothing promises a target draws the
+        ids for files it was given and files it produced from disjoint
+        namespaces. Collapsing the two would relabel the persona's own input as
+        something the assistant delivered.
+
+        A record with no ``path`` never displaces one that has a file, so which
+        of the two arrives last does not decide what the persona is told it
+        received.
+
+        ``external_id`` is optional, and a record without one has no identity to
+        key on: it falls back to its own id, which means repeated reports of one
+        such file cannot be collapsed. That is why the delivered-files header
+        states absence rather than a count (see :func:`_render_artifacts`).
         """
         for artifact in observation.artifacts:
-            self._artifacts[artifact.id] = artifact
+            key = (
+                f"{artifact.source}:{artifact.external_id}"
+                if artifact.external_id is not None
+                else artifact.id
+            )
+            held = self._artifacts.get(key)
+            if held is not None and held.path is not None and artifact.path is None:
+                continue
+            self._artifacts[key] = artifact
 
     def _build_user_prompt(
         self,

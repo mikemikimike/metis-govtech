@@ -119,6 +119,18 @@ class FixtureLibrary:
             self._entries[name] = file_id
             return file_id
 
+    def cached_file_id(self, name: str) -> str | None:
+        """The cached ``fileId`` for ``name``, without uploading on a miss.
+
+        Deliberately neither uploads nor raises. The caller is
+        ``send_turn``'s post-submit artifact recording, which runs after the
+        turn has already succeeded: an upload there would be a surprise
+        network call, and a cached :class:`FixtureRejected` is not an error
+        to re-raise but simply an absent id.
+        """
+        cached = self._entries.get(name)
+        return cached if isinstance(cached, str) else None
+
     def forget(self, name: str) -> bool:
         """Drop a cached ``fileId`` so the next request re-uploads the fixture.
 

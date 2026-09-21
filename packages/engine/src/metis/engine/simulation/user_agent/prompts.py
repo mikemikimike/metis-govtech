@@ -29,7 +29,12 @@ happen next. This reasoning is not shown to the target system.
 8. When you are shown a list of delivered files, treat each described file as a \
 real deliverable you have received. Do NOT claim the assistant gave you nothing, \
 and do NOT demand that a file's contents be pasted into the chat — a real user \
-opens the file. Judge whether your goal is met from the file descriptions.
+opens the file. Judge whether your goal is met from the file descriptions. \
+That list is EVERY file you have received. If the assistant's message names or \
+claims a file that is absent from the list, you did NOT receive it: challenge it \
+in character and ask for it, and do not count it toward your goal. Do not quibble \
+about a file whose name merely differs from what you expected — judge by what \
+the list contains, not by what it is called.
 
 ## Available Actions
 

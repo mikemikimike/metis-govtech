@@ -56,3 +56,26 @@ def test_resolve_artifact_path_joins_relative_path(tmp_path: Path) -> None:
 def test_resolve_artifact_path_none_when_path_falsy(tmp_path: Path) -> None:
     assert resolve_artifact_path(tmp_path, None) is None
     assert resolve_artifact_path(tmp_path, "") is None
+
+
+class TestExternalId:
+    def test_defaults_to_none(self) -> None:
+        """A runner with no target-side identifier leaves it unset."""
+        assert Artifact(name="chart.vl.json").external_id is None
+
+    def test_round_trips_through_serialization(self) -> None:
+        """record.json must carry it, or a completed run cannot be re-checked."""
+        artifact = Artifact(name="chart.vl.json", external_id="73da06dac970f8a9")
+        assert Artifact.model_validate(artifact.model_dump()).external_id == (
+            "73da06dac970f8a9"
+        )
+
+    def test_is_independent_of_the_metis_id(self) -> None:
+        """The uuid4 identifies the record; external_id identifies the file."""
+        artifact = Artifact(name="chart.vl.json", external_id="73da06dac970f8a9")
+        assert artifact.id != artifact.external_id
+
+    def test_existing_records_without_the_field_still_load(self) -> None:
+        """Additive and optional: no schema_version bump, old records keep working."""
+        legacy = {"id": "abc", "name": "report.txt", "source": "target", "path": None}
+        assert Artifact.model_validate(legacy).external_id is None

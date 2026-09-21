@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **`Artifact.external_id`** — the target system's own identifier for a file
+  (Orca's `fileId`). Optional and additive, so `RunRecord.schema_version` stays
+  `1` and existing `record.json` files load unchanged. Named target-agnostically
+  because `metis-core` has zero workspace dependencies. Two payoffs: a collector
+  can dedupe by file identity instead of filename, and a completed run becomes
+  re-checkable against the target while its session is still in retention
+  (issue #337 §0). The field doc states the uniqueness contract the dedupe rests
+  on: an id must name exactly one file within its `source`, including across the
+  target's own revisions of a file, and a runner that cannot promise that must
+  leave the field `None`. Nothing enforces it — uniqueness is a property of the
+  set, not of one record — and a target that reused one id across different
+  files would make them collapse into a single record and disappear from the run.
 - `Artifact` domain model — a single lifecycle-spanning record for any file crossing the persona↔target boundary, inbound (`source="fixture"`) or outbound (`source="target"`), plus the `uri_to_local_path` URI resolver. Relocated from `metis-engine` so all packages share one definition (#307). Fields: `id`, `name`, `source` (default `"target"`), `uri`, `digest`, `hash_algorithm`, `at_turn`, `content_description`, `state_description`, and a derived `media_type` computed field (MIME from `name`/`uri`). The Orca-UI-specific `type` enum was removed and `collected_at_turn` renamed to the direction-neutral `at_turn` (#321).
 
 ### Changed

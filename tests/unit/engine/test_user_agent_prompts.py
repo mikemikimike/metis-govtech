@@ -20,6 +20,7 @@ from metis.engine.simulation.user_agent.agent import (
     _render_available_actions,
     _render_errors,
 )
+from metis.engine.simulation.user_agent.prompts import SYSTEM_PROMPT_TEMPLATE
 
 
 def test_render_available_actions_empty() -> None:
@@ -212,3 +213,211 @@ def test_turn_prompt_surfaces_described_artifact_307() -> None:
     assert "1,234,567" in prompt
     assert "do NOT demand" in prompt or "pasted inline" in prompt
     assert "file://" not in prompt
+
+
+class TestRegistryIsAuthoritative:
+    def test_rule_8_states_the_list_is_exhaustive(self) -> None:
+        """Without closure the persona can believe both the list and the prose."""
+        rules = SYSTEM_PROMPT_TEMPLATE.lower()
+        assert "every file" in rules
+        assert "was not received" in rules or "did not receive" in rules
+        assert "challenge" in rules
+
+    def test_rule_8_is_not_phrased_as_a_count(self) -> None:
+        """The browser runner can list one file under several ids."""
+        rules = SYSTEM_PROMPT_TEMPLATE.lower()
+        assert "exactly" not in rules.split("## available actions")[0]
+
+    def test_rule_8_still_forbids_demanding_inline_contents(self) -> None:
+        """The original purpose of rule 8 must survive the addition."""
+        rules = SYSTEM_PROMPT_TEMPLATE.lower()
+        assert "pasted into the chat" in rules
+        assert "a real user opens the file" in rules
+
+    def test_delivered_header_states_the_closure(self) -> None:
+        artifacts = {
+            # A path is what makes this a file the persona actually received;
+            # path-less entries are failed downloads and are excluded below.
+            "a": Artifact(
+                id="a",
+                name="report.txt",
+                path="a/report.txt",
+                content_description="A report",
+            ),
+        }
+        rendered = _render_artifacts(artifacts)
+        assert "every file" in rendered.lower()
+        assert "report.txt" in rendered
+
+    def test_uploaded_header_is_unchanged(self) -> None:
+        """Closure applies to deliverables; the persona's own inputs are separate."""
+        artifacts = {
+            "a": Artifact(id="a", name="sales.csv", source="fixture"),
+        }
+        rendered = _render_artifacts(artifacts)
+        assert "your own inputs" in rendered.lower()
+        assert "every file" not in rendered.lower()
+
+    def test_a_failed_download_is_not_listed_as_delivered(self) -> None:
+        """A ``path=None`` entry under "every file you have received" is a lie.
+
+        The runner records the failure so it stays auditable and gets retried,
+        but the persona must not be able to count it toward its goal (#337).
+        """
+        artifacts = {
+            "ok": Artifact(
+                id="ok",
+                name="report.txt",
+                path="a/report.txt",
+                content_description="A repair guide.",
+            ),
+            "bad": Artifact(id="bad", name="chart.vl.json", external_id="f-9"),
+        }
+        assert artifacts["bad"].path is None
+        rendered = _render_artifacts(artifacts)
+        assert "report.txt" in rendered
+        assert "chart.vl.json" not in rendered
+        # The failed entry's giveaway: no file means no description to render.
+        assert "(no description available)" not in rendered
+
+    def test_the_delivered_group_disappears_when_every_download_failed(self) -> None:
+        """The closure header must not appear over an empty delivered list.
+
+        And the whole section must vanish, not collapse to bare newlines: the
+        filter creates a case the no-artifacts guard never saw, where the
+        registry is non-empty but nothing in it is renderable.
+        """
+        artifacts = {
+            "bad": Artifact(id="bad", name="chart.vl.json", external_id="f-9"),
+        }
+        assert _render_artifacts(artifacts) == ""
+
+    def test_a_retried_download_appears_once_it_succeeds(self) -> None:
+        """Exclusion is by path, not by name: the retry must still be shown."""
+        artifacts = {
+            "bad": Artifact(id="bad", name="chart.vl.json", external_id="f-9"),
+            "good": Artifact(
+                id="good",
+                name="chart.vl.json",
+                path="a/chart.vl.json",
+                external_id="f-9",
+                content_description="A bar chart of Q3 revenue.",
+            ),
+        }
+        rendered = _render_artifacts(artifacts)
+        assert rendered.count("chart.vl.json") == 1
+        assert "A bar chart of Q3 revenue." in rendered
+
+
+class TestRegistryKeysOnIdentity:
+    """The cumulative registry dedupes by target-side identity, not by uuid.
+
+    ``Artifact.id`` is minted per record, so it cannot collapse two records of
+    one file. Across turns that matters because a failed download is reported
+    again on purpose: the runner withholds its ``fileId`` from
+    ``_downloaded_file_ids`` precisely so the next turn retries it.
+    """
+
+    @staticmethod
+    def _agent() -> UserAgent:
+        return UserAgent(
+            persona=Persona(id="p", description="a user"),
+            scenario=Scenario(id="s", description="do a thing", persona_refs=["p"]),
+        )
+
+    def test_a_successful_retry_replaces_the_earlier_failure(self) -> None:
+        """Turn 3 fails, turn 4 succeeds: one entry, holding the file."""
+        from metis.engine.simulation.types import Observation
+
+        agent = self._agent()
+        failed = Artifact(name="chart.vl.json", external_id="f-9", at_turn=3)
+        recovered = Artifact(
+            name="chart.vl.json",
+            external_id="f-9",
+            path="runs/x/chart.vl.json",
+            at_turn=4,
+            content_description="A bar chart of Q3 revenue.",
+        )
+        assert failed.id != recovered.id  # a fresh uuid per record
+
+        agent._merge_artifacts(Observation(artifacts=[failed]))
+        agent._merge_artifacts(Observation(artifacts=[recovered]))
+
+        assert len(agent._artifacts) == 1
+        (held,) = agent._artifacts.values()
+        assert held.path == "runs/x/chart.vl.json"
+
+    def test_a_later_path_less_record_never_downgrades_a_received_file(self) -> None:
+        """The reverse order must not replace a real file with a placeholder.
+
+        Same rule :func:`reconcile_by_identity` applies within a turn: a record
+        with no ``path`` loses to one that has a file, whichever arrives last.
+        """
+        from metis.engine.simulation.types import Observation
+
+        agent = self._agent()
+        received = Artifact(
+            name="chart.vl.json",
+            external_id="f-9",
+            path="runs/x/chart.vl.json",
+            content_description="A bar chart of Q3 revenue.",
+        )
+        stale = Artifact(name="chart.vl.json", external_id="f-9")
+
+        agent._merge_artifacts(Observation(artifacts=[received]))
+        agent._merge_artifacts(Observation(artifacts=[stale]))
+
+        assert len(agent._artifacts) == 1
+        (held,) = agent._artifacts.values()
+        assert held.path == "runs/x/chart.vl.json"
+
+    def test_an_upload_and_a_deliverable_sharing_a_file_id_stay_apart(self) -> None:
+        """Direction is part of the identity, because the groups render apart.
+
+        Folding an uploaded fixture into a deliverable would relabel the
+        persona's own input as something the assistant produced — under a
+        header promising the list is every file it received.
+        """
+        from metis.engine.simulation.types import Observation
+
+        agent = self._agent()
+        uploaded = Artifact(
+            name="sales.csv",
+            source="fixture",
+            external_id="f-up",
+            path="inputs/sales.csv",
+            content_description="The user's own spreadsheet.",
+        )
+        delivered = Artifact(
+            name="sales.csv",
+            source="target",
+            external_id="f-up",
+            path="runs/x/sales.csv",
+            content_description="The assistant's echo of it.",
+        )
+
+        agent._merge_artifacts(Observation(artifacts=[uploaded, delivered]))
+
+        assert len(agent._artifacts) == 2
+        rendered = _render_artifacts(agent._artifacts)
+        assert "Files you've uploaded" in rendered
+        assert "Files the assistant has delivered to you" in rendered
+
+    def test_without_an_external_id_the_uuid_is_still_the_key(self) -> None:
+        """``external_id`` is optional, and without one there is nothing to
+        dedupe on, so repeats occupy separate slots.
+
+        Pinned rather than fixed: a runner that cannot name the file on the
+        target's side leaves the registry no identity to reconcile, which is
+        why the delivered header states absence rather than a count.
+        """
+        from metis.engine.simulation.types import Observation
+
+        agent = self._agent()
+        first = Artifact(name="report.txt", path="runs/x/report.txt", at_turn=2)
+        again = Artifact(name="report.txt", path="runs/x/report.txt", at_turn=3)
+
+        agent._merge_artifacts(Observation(artifacts=[first]))
+        agent._merge_artifacts(Observation(artifacts=[again]))
+
+        assert set(agent._artifacts) == {first.id, again.id}

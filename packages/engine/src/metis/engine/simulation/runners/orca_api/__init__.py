@@ -61,6 +61,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from ._artifacts import ArtifactNote
+
 import httpx
 
 from metis.core.console import console
@@ -92,7 +94,11 @@ from .._http import (
     build_client,
     poll_until,
 )
-from ._artifacts import collect_artifacts
+from ._artifacts import (
+    collect_artifacts,
+    collect_session_artifacts,
+    reconcile_by_identity,
+)
 from ._config import PLATFORM_AI_KEY_HEADER, OrcaApiRunnerConfig
 from ._fixtures import FixtureLibrary, FixtureRejected
 from ._transport import reason_text, v1_request
@@ -229,6 +235,11 @@ class OrcaApiRunner(Runner):
         #: Consecutive turns lost to the per-call input cap (see
         #: ``_INPUT_CAP_FAILURE_LIMIT``); reset by any other settled outcome.
         self._input_cap_failures = 0
+        #: ``fileId``s downloaded in this run, so a digest re-listing a file
+        #: across turns costs nothing. Per-runner rather than per-experiment on
+        #: purpose: a retried attempt mints a new Orca session, so regenerated
+        #: same-named files carry new ids and *should* be stored alongside.
+        self._downloaded_file_ids: set[str] = set()
 
     async def setup(self, config: RunConfig) -> None:
         """Record the scenario's response ceiling and fixtures; no session is created eagerly."""
@@ -276,6 +287,7 @@ class OrcaApiRunner(Runner):
                 Artifact(
                     name=name,
                     source="fixture",
+                    external_id=self._fixture_library.cached_file_id(name),
                     path=(
                         path.relative_to(self._experiment_root.resolve()).as_posix()
                         if path is not None
@@ -596,22 +608,133 @@ class OrcaApiRunner(Runner):
         discarded_message = self._discarded_message
         self._discarded_message = None
 
+        # The live ``_downloaded_file_ids`` is passed here, with no staging copy
+        # — the opposite of the sweep below, deliberately. An exception escaping
+        # this call ends the attempt *and* this runner: ``experiment.py`` builds
+        # a fresh runner, and so a fresh set, for the retry, so an id stranded
+        # in it cannot outlive the failure. Only the sweep swallows its
+        # exceptions and carries the same set into the next turn, which is the
+        # sole reason it needs the copy.
         artifacts, notes = await collect_artifacts(
             self._client,
             digest.get("files") or [],
             self._run_dir / "artifacts",
             self._experiment_root,
+            seen_file_ids=self._downloaded_file_ids,
             store_retry_window_s=self._config.store_retry_window_s,
             clock=self._clock,
             sleep=self._sleep,
         )
+        recovered, recovery_notes = await self._reconcile_session_artifacts()
+
+        # One record per file identity across both lanes: a file the digest
+        # lane failed on is retried by the sweep, so the same ``fileId`` can
+        # arrive twice in one turn — once recovered and once not, or twice
+        # unrecovered. See :func:`reconcile_by_identity` for which survives.
+        artifacts, notes = reconcile_by_identity(
+            [*artifacts, *recovered], [*notes, *recovery_notes]
+        )
+
+        # Only the note's text crosses into the observation: ``file_id`` is
+        # reconciliation bookkeeping, and ``errors`` is rendered into the
+        # simulated user's prompt, where a raw Orca file id is something no
+        # real user would ever be shown.
         return Observation(
             text=text,
             artifacts=artifacts,
-            errors=[*errors, *notes],
+            errors=[*errors, *(note.text for note in notes)],
             available_actions=available_actions,
             discarded_message=discarded_message,
         )
+
+    async def _reconcile_session_artifacts(
+        self,
+    ) -> tuple[list[Artifact], list[ArtifactNote]]:
+        """Recover generated files the turn digest omitted.
+
+        Swallows every failure except lost authentication: a session read that
+        fails leaves the digest's own artifacts untouched and logs a warning,
+        because a recovery mechanism that can lose a turn is worse than the gap
+        it closes. :exc:`AuthLossError` is the one exception, deliberately
+        re-raised — a 401 means the key is gone, so every later call in the run
+        would fail the same way and continuing would produce a run of empty
+        turns that looked like a target with nothing to say. A no-op before the
+        first submit, when there is no session to read. Note that a throttled session read retries per
+        ``Retry-After``, which may add latency on a congested lane.
+
+        A sweep-level failure is logged and **not** returned as a note.
+        ``Observation.errors`` is not a diagnostics channel: it is rendered
+        into the simulated user's prompt under "Errors reported on your
+        previous turn", and this runner's own reconciliation vocabulary is
+        something no real user would ever see. The structured log keeps these
+        for post-hoc analysis, which is where they belong. The per-*artifact*
+        notes from :func:`collect_artifacts` are still returned — an
+        undownloaded deliverable is something a user could plausibly notice —
+        but only their ``text`` reaches the observation; the ``file_id`` each
+        :class:`ArtifactNote` carries stays on this side of the boundary.
+        """
+        if self._session_id is None:
+            return [], []
+        try:
+            response = await self._request("GET", f"sessions/{self._session_id}")
+            response.raise_for_status()
+            body = response.json()
+            session_files = body.get("files") if isinstance(body, dict) else None
+            if not isinstance(session_files, list):
+                logger.warning(
+                    "[orca-api-runner] Session %s returned no usable file list; "
+                    "skipping reconciliation",
+                    self._session_id,
+                )
+                return [], []
+            # Use a staging copy so a mid-loop exception (e.g. OSError on write)
+            # cannot permanently strand ids in self._downloaded_file_ids.  If
+            # collect_session_artifacts raises, the copy is discarded and the
+            # real set is untouched, so the next turn retries the failed files.
+            staging = set(self._downloaded_file_ids)
+            recovered, recovery_notes = await collect_session_artifacts(
+                self._client,
+                session_files,
+                self._run_dir / "artifacts",
+                self._experiment_root,
+                seen_file_ids=staging,
+                store_retry_window_s=self._config.store_retry_window_s,
+                clock=self._clock,
+                sleep=self._sleep,
+            )
+            # Merge only successfully-downloaded ids back into the real set.
+            # collect_artifacts adds to the staging set, but we read from the
+            # returned artifacts to stay correct if the internal behaviour changes.
+            for art in recovered:
+                if art.path is not None and art.external_id is not None:
+                    self._downloaded_file_ids.add(art.external_id)
+            return recovered, recovery_notes
+        except AuthLossError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - a recovery must not lose the turn
+            if (
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code == 404
+            ):
+                # The same platform state the submit path names at
+                # :meth:`_attribute_submit_404`, said the same way here so the
+                # log does not read as an unexplained failure. Deliberately not
+                # escalated to ``TargetSessionLostError``: Orca answers 404 as a
+                # blanket refusal to confirm any id, and this sweep runs *after*
+                # a turn that already succeeded, so raising would end healthy
+                # runs on a blip.
+                logger.warning(
+                    "[orca-api-runner] Orca session %s answered 404 on the "
+                    "reconciliation read (reaped, deleted, or simply not "
+                    "confirmed); the turn's own artifacts are unaffected",
+                    self._session_id,
+                )
+                return [], []
+            logger.exception(
+                "[orca-api-runner] Session %s reconciliation failed",
+                self._session_id,
+            )
+            return [], []
 
     def _triage_failure(self, reason: str) -> None:
         """Single out the two ``failed`` reasons that must not read as one turn.

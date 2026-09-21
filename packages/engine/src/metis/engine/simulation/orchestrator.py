@@ -527,6 +527,11 @@ class Orchestrator:
         path. Swapping the registry object into ``observation.artifacts`` means
         the record folds one identity per fixture (deduped by id in
         ``_build_record``) and the UserAgent merges the enriched object.
+
+        The swap discards the stub, so anything the stub alone knows has to be
+        carried across it. ``external_id`` is the only such field: the registry
+        object is built at staging time, before any target session exists, so
+        the target's own file id can only come from the runner's echo.
         """
         for i, artifact in enumerate(observation.artifacts):
             if artifact.source == "fixture":
@@ -541,6 +546,11 @@ class Orchestrator:
                         artifact.name,
                     )
                     registry = artifact
+                if artifact.external_id is not None:
+                    # Guarded, not unconditional: a runner that re-echoes an
+                    # upload without an id must not blank the id an earlier turn
+                    # established.
+                    registry.external_id = artifact.external_id
                 registry.at_turn = turn_count
                 observation.artifacts[i] = registry
             else:

@@ -182,3 +182,92 @@ async def test_target_artifact_still_stamped_and_summarized(
 
     assert target.at_turn == 2
     assert calls == ["out.csv"]  # targets are summarized
+
+
+def _fixture_swap_orchestrator(tmp_path: Path, registry: Artifact) -> Orchestrator:
+    return Orchestrator(
+        runner=object(),
+        agent=object(),
+        run_config=RunConfig(persona="p", scenario="s", fixtures=[registry.name]),
+        scenario=Scenario(
+            id="s", description="d", persona_refs=["p"], fixtures=[registry.name]
+        ),
+        run_dir=tmp_path,
+        fixtures_dir=tmp_path,
+        experiment_root=tmp_path,
+        fixture_artifacts=[registry],
+    )
+
+
+@pytest.mark.asyncio
+async def test_fixture_external_id_survives_the_registry_swap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The stub is the only object that can know the target's file id (#337).
+
+    The registry object is built at staging time, before a session exists, so
+    without carrying the field across the swap every fixture reaches
+    ``record.json`` and ``run-manifest.json`` with ``external_id: null`` no
+    matter what the runner stamped.
+    """
+    registry = Artifact(
+        name="q3.csv",
+        source="fixture",
+        path="q3.csv",
+        content_description="Q3 sales, 200 rows.",
+    )
+    assert registry.external_id is None
+    orch = _fixture_swap_orchestrator(tmp_path, registry)
+
+    async def spy_summarize(
+        artifact, *, experiment_root, triggering_message, turn_number
+    ):
+        raise AssertionError("fixtures must not be summarized")
+
+    monkeypatch.setattr(orch_module, "summarize_artifact", spy_summarize)
+
+    stub = Artifact(
+        name="q3.csv", source="fixture", path="q3.csv", external_id="orca-file-77"
+    )
+    obs = Observation(text="ok", artifacts=[stub])
+    await orch._enrich_observation_artifacts(obs, turn_count=1, current_message="here")
+
+    assert obs.artifacts[0] is registry
+    assert registry.external_id == "orca-file-77"
+
+    # The field has to reach the record, which is the whole point of stamping it.
+    record = orch._build_record("goal_achieved", [], list(obs.artifacts), 0.0, None)
+    assert [a.external_id for a in record.artifacts] == ["orca-file-77"]
+
+
+@pytest.mark.asyncio
+async def test_a_later_echo_without_an_id_does_not_blank_the_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The carry is guarded, so the copy cannot lose an established id."""
+    registry = Artifact(name="q3.csv", source="fixture", path="q3.csv")
+    orch = _fixture_swap_orchestrator(tmp_path, registry)
+
+    async def spy_summarize(
+        artifact, *, experiment_root, triggering_message, turn_number
+    ):
+        raise AssertionError("fixtures must not be summarized")
+
+    monkeypatch.setattr(orch_module, "summarize_artifact", spy_summarize)
+
+    with_id = Artifact(
+        name="q3.csv", source="fixture", path="q3.csv", external_id="orca-file-77"
+    )
+    await orch._enrich_observation_artifacts(
+        Observation(text="ok", artifacts=[with_id]), turn_count=1, current_message="a"
+    )
+    assert registry.external_id == "orca-file-77"
+
+    without_id = Artifact(name="q3.csv", source="fixture", path="q3.csv")
+    await orch._enrich_observation_artifacts(
+        Observation(text="ok", artifacts=[without_id]),
+        turn_count=2,
+        current_message="b",
+    )
+    assert registry.external_id == "orca-file-77"
+    assert registry.at_turn == 2
