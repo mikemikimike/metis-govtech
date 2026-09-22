@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
+import { synthesizeManualProfile } from "../manual.ts";
 import { api, TransportError, type InterviewState } from "./api.ts";
 
 const originalFetch = globalThis.fetch;
@@ -116,7 +117,7 @@ test("sends the selected perspective and capability evidence when an Interview b
   });
 });
 
-test("packages the Profile and fixtures as multipart and returns binary content", async () => {
+test("packages a synthesized manual Profile and its fixtures as multipart", async () => {
   let received: FormData | undefined;
   globalThis.fetch = async (input, init) => {
     assert.equal(String(input), "/api/v1/wizard/package");
@@ -129,15 +130,36 @@ test("packages the Profile and fixtures as multipart and returns binary content"
     });
   };
 
-  const fixture = new File(["policy"], "policy.pdf", {
+  const profile = synthesizeManualProfile({
+    id: "manual-test",
+    description: "A manual experiment.",
+    personas: [{ id: "reviewer", description: "A reviewer." }],
+    scenarios: [
+      {
+        id: "check-answer",
+        description: "Check one answer.",
+        num_trials: 1,
+        persona_refs: ["reviewer"],
+        fixtures: ["policy.pdf"],
+        scorers: [
+          {
+            fqn: "metis.library.metrics.TurnBudgetMetric",
+            name: "Turn budget",
+            description: "Checks the turn budget.",
+          },
+        ],
+      },
+    ],
+  });
+  const policy = new File(["policy"], "policy.pdf", {
     type: "application/pdf",
   });
-  const archive = await api.package(state.profile, [
-    { name: fixture.name, blob: fixture },
+  const archive = await api.package(profile, [
+    { name: policy.name, blob: policy },
   ]);
 
   assert.equal(await archive.text(), "zip bytes");
-  assert.equal(received?.get("profile"), JSON.stringify(state.profile));
+  assert.equal(received?.get("profile"), JSON.stringify(profile));
   assert.equal((received?.get("files") as File).name, "policy.pdf");
 });
 

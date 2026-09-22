@@ -43,6 +43,7 @@ import {
 } from "./storage/repository";
 import { profileHasCriteria } from "./metrics";
 import { downloadArchive } from "./download";
+import { ManualAuthoringEntry, ManualForm } from "./ManualForm";
 import {
   applyEnd,
   applyTurn,
@@ -127,6 +128,7 @@ export function App() {
   const [loaded, setLoaded] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(true);
+  const [manualOpen, setManualOpen] = useState(false);
   const [documentWidth, setDocumentWidth] = useState(DOCUMENT_WIDTH_DEFAULT);
   const [showMetrics, setShowMetrics] = useState(false);
   const [metricCatalogue, setMetricCatalogue] = useState<Awaited<
@@ -225,6 +227,7 @@ export function App() {
 
   const open = useCallback(
     async (id: string) => {
+      setManualOpen(false);
       setBusy(true);
       setError(null);
       setRetryIntent(null);
@@ -242,6 +245,7 @@ export function App() {
     [showError],
   );
   const startNew = useCallback(() => {
+    setManualOpen(false);
     setRecord(null);
     setError(null);
     setRetryIntent(null);
@@ -451,7 +455,7 @@ export function App() {
   );
 
   if (!loaded) return null;
-  const showDocument = view !== null;
+  const showDocument = view !== null && !manualOpen;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
@@ -484,7 +488,9 @@ export function App() {
             onRetry={retryIntent ? retry : undefined}
           />
         )}
-        {view === null ? (
+        {manualOpen ? (
+          <ManualForm onBack={() => setManualOpen(false)} />
+        ) : view === null ? (
           <OpeningRoute
             configState={wizardConfig}
             onRetry={() => void loadWizardConfig()}
@@ -503,6 +509,7 @@ export function App() {
             onBegin={(description, perspective, evidence) =>
               void beginWithMessage(description, perspective, evidence)
             }
+            onManualOpen={() => setManualOpen(true)}
           />
         ) : (
           <>
@@ -584,6 +591,7 @@ type OpeningScreenProps = {
   onBack: () => void;
   capabilityEvidence: CapabilityEvidenceDraft;
   onCapabilityEvidence: (evidence: CapabilityEvidenceDraft) => void;
+  onManualOpen: () => void;
   onBegin: (
     description: string,
     perspective: Perspective,
@@ -650,6 +658,7 @@ export function OpeningScreen({
   onBack,
   capabilityEvidence,
   onCapabilityEvidence,
+  onManualOpen,
   onBegin,
 }: OpeningScreenProps) {
   return (
@@ -683,6 +692,7 @@ export function OpeningScreen({
                 selected={perspective}
                 onSelect={onPerspective}
               />
+              <ManualAuthoringEntry onOpen={onManualOpen} />
             </div>
           </>
         ) : (

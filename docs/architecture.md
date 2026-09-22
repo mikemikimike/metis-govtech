@@ -207,6 +207,16 @@ sends only the client-held `InterviewState` and typed responses to lifecycle rou
 are sent only for a request-scoped package operation. It MUST NOT depend on server Interview
 resources, wizard static assets, or an embedded wizard runtime.
 
+It MUST offer two authoring paths: the guided Interview, and a manual form for a user who already
+knows the scorers to run. The manual form MUST stay flat: it MUST NOT surface Task, Behaviour, or
+Criterion. It MUST build a valid `ProductProfile` in the browser and submit it to the existing
+package route, and it MUST NOT add a route or create an Interview record. Server-side validation in
+`metis-wizard` stays authoritative for both paths.
+
+In this first version the manual form collects only what an engine run absolutely needs. The engine
+runs from `experiment.yaml`; the fuller `ProductProfile` is consumed only at report generation, which
+reads `inputs/profile.yaml`. The synthesized Profile is therefore minimal by design.
+
 The normal local run uses two processes: `PORT=8001 uv run metis-api` and
 `npm --prefix apps/web run dev`.
 The Vite proxy uses `METIS_API_ORIGIN`, defaulting to `http://127.0.0.1:8001`.

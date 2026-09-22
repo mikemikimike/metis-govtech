@@ -183,6 +183,9 @@ _No v1 changes yet._
   output are retired.
 - **Metric details.** The Profile pane can request the optional metric catalogue once per page load
   through `GET /api/v1/metrics`; the rest of the Interview remains usable when that route fails.
+- **Manual experiment authoring.** The opening screen now offers a stateless form for experiment
+  identity, personas, scenarios, scorers, and fixture files. It builds an engine-ready
+  `experiment.zip` through the existing package route without creating an Interview record.
 
 #### Changed
 
@@ -193,8 +196,14 @@ _No v1 changes yet._
   completed Interview and reports that the specification is ready without an automatic compile or
   download. The output action downloads one portable `experiment.zip` with the local fixture files.
   Review actions are disabled when their required Profile content is incomplete.
+- **Refined manual authoring layout.** The manual form now presents one top-level Experiment editor,
+  keeps each ID and Description on its own line, uses the entered ID as each item heading, and
+  starts with empty Persona and Scenario collections. Header actions add and focus a new item. New
+  Scenarios select all named Personas, and a new Persona is added to existing Scenarios. The manual
+  form now gives each item a clear surface and a Done action that closes the editor into a compact
+  summary. The manual data and package contract are unchanged.
 
 #### Deferred
 
-- Direct authoring, source analysis, hosted state, authentication, and evaluation execution remain
-  outside this change.
+- Source analysis, hosted state, authentication, and evaluation execution remain outside this
+  change.

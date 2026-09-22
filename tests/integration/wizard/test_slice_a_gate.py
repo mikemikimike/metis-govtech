@@ -12,16 +12,18 @@ part is the one that matters most here — metric FQNs are strings until run tim
 a compiled file is invisible until something tries to import it.
 """
 
+import io
+import json
 import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
 
+from metis.wizard import ProductProfile, SpecificationFixture, package_specification
 from metis.wizard.application.compile import (
-    build_experiment_document,
     write_experiment,
     write_review,
-    write_specification,
 )
 from tests.fixtures.wizard.profiles import CITATION_METRIC, research_assistant
 
@@ -85,36 +87,45 @@ def test_the_gate_would_catch_an_unimportable_metric(tmp_path: Path) -> None:
     assert exit_info.value.code == 1
 
 
-def test_an_extracted_specification_passes_the_engine_input_gate(
+def test_the_manual_profile_package_passes_the_engine_input_gate(
     tmp_path: Path,
+    repo_root: Path,
 ) -> None:
-    """The ZIP is not just well formed; its extracted root is a real engine input directory."""
+    """The web transform's shared Profile produces the complete runnable package."""
     from metis.engine.cli import _validate_inputs
 
-    document = build_experiment_document(
-        experiment_id="specification-gate",
-        description="CSV and text fixtures",
-        personas=[{"id": "p", "description": "A person."}],
-        scenarios=[
-            {
-                "id": "S-1",
-                "description": "Read the inputs.",
-                "num_trials": 1,
-                "persona_refs": ["p"],
-                "metric_refs": [],
-                "fixtures": ["data.csv", "notes.txt"],
-            }
+    profile_path = repo_root / "tests/fixtures/wizard/manual_profile.json"
+    profile = ProductProfile.model_validate(json.loads(profile_path.read_text()))
+    archive_bytes = package_specification(
+        profile,
+        [
+            SpecificationFixture("policy.pdf", io.BytesIO(b"policy")),
+            SpecificationFixture("notes.txt", io.BytesIO(b"notes")),
         ],
     )
-    fixture_dir = tmp_path / "source" / "fixtures"
-    fixture_dir.mkdir(parents=True)
-    (fixture_dir / "data.csv").write_text("name,value\nalpha,1\n")
-    (fixture_dir / "notes.txt").write_text("fixture notes\n")
     archive = tmp_path / "experiment.zip"
-    write_specification(document, fixture_dir, archive)
+    archive.write_bytes(archive_bytes)
 
     extracted = tmp_path / "extracted"
     with zipfile.ZipFile(archive) as specification:
+        assert set(specification.namelist()) == {
+            "experiment.yaml",
+            "profile.yaml",
+            "fixtures/",
+            "fixtures/notes.txt",
+            "fixtures/policy.pdf",
+        }
         specification.extractall(extracted)
 
+    experiment = yaml.safe_load((extracted / "experiment.yaml").read_text())
+    metrics = {
+        scenario["id"]: scenario["metric_refs"] for scenario in experiment["scenarios"]
+    }
+    assert metrics == {
+        "supported-answer": [
+            "metis.library.metrics.SynthesisFaithfulnessMetric",
+            "metis.library.metrics.TurnBudgetMetric",
+        ],
+        "short-recovery": ["metis.library.metrics.TurnBudgetMetric"],
+    }
     _validate_inputs(extracted)

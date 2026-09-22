@@ -7,6 +7,17 @@ The browser owns local Interview records and the display transcript in IndexedDB
 `InterviewState` is sent back to the API unchanged; browser IDs, timestamps, and transcript entries
 never enter that state.
 
+The client has two authoring paths. The Interview is the guided path. The manual form
+(`ManualForm.tsx`, with its pure logic in `manual.ts` and its file rules in `fixture-policy.ts`) is
+the direct path for a user who already knows the scorers to run. Keep the manual form flat: do not
+show Task, Behaviour, or Criterion. It builds a `ProductProfile` in the browser and sends it to the
+existing package route, so it needs no new route and no Interview record. `docs/guide/web.md`
+describes it for the user.
+
+For this first version, the manual form asks only for what an engine run absolutely needs. The
+engine runs from `experiment.yaml`; the fuller `ProductProfile` is used only at report generation.
+The synthesized Profile is minimal for that reason, not by oversight.
+
 Render requests by their discriminator and supplied fields. Do not derive stages, apply patches, or
 recreate wizard validation rules in TypeScript. Regenerate `src/generated/api.ts` from FastAPI's
 runtime OpenAPI document with `npm run generate:api`; `npm run check:api` fails when the committed

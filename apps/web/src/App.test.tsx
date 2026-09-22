@@ -93,6 +93,7 @@ test("blocks the opening form until configuration is ready and offers retry", ()
     onPerspective: () => undefined,
     onContinue: () => undefined,
     onBack: () => undefined,
+    onManualOpen: () => undefined,
     capabilityEvidence: {
       known_capability_ids: [],
       confidence: null,
@@ -223,6 +224,7 @@ test("loads opening choices and sends complete start evidence on begin", async (
       onBack: () => {
         phase = "describe";
       },
+      onManualOpen: () => undefined,
       capabilityEvidence: evidence,
       onCapabilityEvidence: (next) => {
         evidence = next;
