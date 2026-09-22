@@ -1,7 +1,9 @@
 import type {
+  ChoiceRequest,
   InterviewResult,
   InterviewState,
   LocalInterviewRecord,
+  Option,
   PresentationView,
   TranscriptEntry,
   UserResponse,
@@ -69,6 +71,47 @@ function resolvedRequest(
   return next;
 }
 
+function optionsOf(request: ChoiceRequest): Option[] {
+  const options = [...request.options];
+  request.warnings.forEach((warning) => options.push(...warning.options));
+  request.cards.forEach((card) => {
+    options.push(...card.options);
+    card.components.forEach((component) => {
+      if (component.type === "options") options.push(...component.options);
+    });
+  });
+  return options;
+}
+
+function refreshesCurrentChoice(
+  request: WizardRequest,
+  response: UserResponse,
+  nextRequest: WizardRequest | null,
+): boolean {
+  const selected = response.type === "choice" ? (response.selected ?? []) : [];
+  if (
+    request.type !== "choice" ||
+    response.type !== "choice" ||
+    nextRequest?.type !== "choice" ||
+    nextRequest.stage !== request.stage ||
+    selected.length === 0
+  )
+    return false;
+
+  const current = new Map(
+    optionsOf(request).map((option) => [optionKey(option.id), option]),
+  );
+  const returned = new Set(
+    optionsOf(nextRequest).map((option) => optionKey(option.id)),
+  );
+  return selected.every((key) => {
+    const option = current.get(key);
+    return (
+      option?.selected != null && option.patch != null && returned.has(key)
+    );
+  });
+}
+
 export function applyTurn(
   record: LocalInterviewRecord,
   result: InterviewResult,
@@ -85,7 +128,19 @@ export function applyTurn(
   );
   const responseAdvancesRequest =
     nextState.pending?.request_id !== record.state.pending?.request_id;
-  if (pending && pending.kind === "interaction" && responseAdvancesRequest) {
+  const refreshesChoice =
+    pending?.kind === "interaction" &&
+    refreshesCurrentChoice(pending.request, response, nextState.pending);
+  if (pending?.kind === "interaction" && refreshesChoice && nextState.pending) {
+    pending.request_id = nextState.pending.request_id;
+    pending.request = clone(nextState.pending);
+    pending.status = "pending";
+    delete pending.response;
+  } else if (
+    pending &&
+    pending.kind === "interaction" &&
+    responseAdvancesRequest
+  ) {
     pending.request = resolvedRequest(pending.request, response);
     pending.response = response;
     pending.status = "answered";

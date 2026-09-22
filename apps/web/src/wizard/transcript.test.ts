@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { InterviewState, InterviewSuccess } from "../transport/api.ts";
+import type {
+  ChoiceRequest,
+  InterviewState,
+  InterviewSuccess,
+} from "../transport/api.ts";
 import { emptyRecord } from "../storage/repository.ts";
 import {
   applyEnd,
@@ -76,6 +80,86 @@ test("transcript projects start and one answered turn without changing API state
   );
   assert.equal(toPresentation(next).requests.length, 3);
   assert.equal(record.state.pending?.request_id, "req-1");
+});
+
+test("choice toggles update the current transcript screen in place", () => {
+  const behaviourScreen = (
+    requestId: string,
+    selected: boolean,
+  ): ChoiceRequest => ({
+    type: "choice",
+    prompt: "Choose behaviours",
+    title: "Behaviours",
+    step: 2,
+    steps: 5,
+    state: "pending",
+    request_id: requestId,
+    stage: "behaviours",
+    options: [],
+    multi: true,
+    cards: [
+      {
+        kind: "standard",
+        id: "EB-1",
+        title: "Cite sources",
+        selected,
+        components: [],
+        options: [
+          {
+            id: { action: "tick", target: "EB-1" },
+            label: "Measure this",
+            patch: {
+              op: "set",
+              path: "tasks[T-1].behaviours[EB-1].measured",
+              value: !selected,
+              origin: "wizard",
+            },
+            selected,
+            primary: false,
+            enabled: true,
+          },
+        ],
+        blocking: false,
+      },
+    ],
+    warnings: [],
+    footer: null,
+    instruction: null,
+  });
+  const first = behaviourScreen("choice-1", true);
+  const second = behaviourScreen("choice-2", false);
+  const initialState = { ...state, pending: first };
+  const record = emptyRecord("toggle-test", initialState, "behaviours", [
+    {
+      kind: "interaction",
+      request_id: first.request_id,
+      request: first,
+      status: "pending",
+    },
+  ]);
+
+  const next = applyTurn(
+    record,
+    success({ ...initialState, pending: second }),
+    { type: "choice", selected: ["tick:EB-1"] },
+  );
+
+  assert.equal(next.transcript.length, 1);
+  const current = next.transcript[0];
+  assert.equal(
+    current?.kind === "interaction" ? current.request_id : undefined,
+    "choice-2",
+  );
+  assert.equal(
+    current?.kind === "interaction" ? current.status : undefined,
+    "pending",
+  );
+  assert.equal(
+    current?.kind === "interaction" && current.request.type === "choice"
+      ? current.request.cards[0]?.selected
+      : undefined,
+    false,
+  );
 });
 
 test("failed end leaves the pending display entry available", () => {
