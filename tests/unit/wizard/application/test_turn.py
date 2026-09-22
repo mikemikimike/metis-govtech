@@ -110,10 +110,10 @@ def test_start_records_a_perspective_and_reuses_it_on_the_next_turn() -> None:
             super().__init__()
             self.seen: list[Perspective] = []
 
-        def clarify(self, profile, history, phase="product", context=None):
+        def clarify(self, profile, history, context=None):
             assert context is not None
             self.seen.append(context.perspective)
-            return super().clarify(profile, history, phase, context)
+            return super().clarify(profile, history, context)
 
     interviewer = RecordingInterviewer()
     started = _start(interviewer=interviewer, perspective=Perspective.SECURITY)
@@ -260,7 +260,7 @@ def test_a_behaviour_measurement_change_stays_pending_before_continue() -> None:
 
 
 class ClarifyUnavailable(ScriptedInterviewer):
-    def clarify(self, profile, history, phase="product", context=None):
+    def clarify(self, profile, history, context=None):
         raise InterviewerOutputError("three attempts, all failed")
 
 

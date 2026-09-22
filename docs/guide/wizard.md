@@ -111,16 +111,19 @@ from the Engineer, Compliance, or Security perspective, use the web client, or s
 a headless start request (see [Headless start and state](#headless-start-and-state)).
 
 The opening description, the perspective, and the capability evidence give the Interview its
-initial view of the product. During Clarify, the model silently infers a provisional map of the
-product's user workflows, Tasks, and important Behaviours. It asks one question only when the
-answer can materially change that map. A question can examine the most common use case, where a
-capability operates, how agents are ordered or coordinated, where approval applies, or another
-relationship that affects the evaluation. These are examples, not a checklist.
+initial view of the product. During Clarify, the model silently identifies the distinct things the
+product does from that evidence and the conversation. It covers those things widely before it
+examines one closely. A part that the opening evidence explains clearly enough for a provisional
+evaluation map already counts as covered; the wizard does not ask a redundant question only to mark
+it as covered. A question about how something the product does works, including its tools, failures,
+memory, delegation, coordination, or control, can come at any point when it is the most important
+unclear part. These are examples, not a checklist.
 
-Clarify questions are direct. They do not normally explain why the question was selected. A
-question can briefly name a selected capability when that reference is needed to understand a
-capability-specific question. Clarify ends when the remaining unknowns would not materially change
-the Tasks, Behaviours, their grouping, or their evaluation emphasis, or when the question limit is
+Clarify questions are direct. They do not normally explain why the question was selected. When a
+brief understanding check would widen or deepen what it knows, the model may state what it takes
+the product to be and invite one correction. The check is brief and is not a formal Task list;
+Clarify owns the Product, while the later Behaviours step owns Tasks and Behaviours. Clarify ends
+when every established part of what the product does is covered or when the question limit is
 reached.
 
 After Clarify, the wizard groups Tasks by product workflow or user job and drafts a focused set of
@@ -182,8 +185,8 @@ are `engineer`, `compliance`, and `security`. Read the labels and questions for 
 
 The returned `InterviewState` always contains `context.perspective` and
 `context.capability_evidence` with the values from the start request. This context belongs to the
-Interview, not to `ProductProfile`, and it must be sent unchanged on later turns. There is no
-capability Interview step or migration path for older state.
+Interview, not to `ProductProfile`, and it must be sent unchanged on later turns. Capability
+evidence is opening context, not a separate Interview step.
 
 ### Finish
 

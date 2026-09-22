@@ -49,7 +49,7 @@ def empty_state(step=InterviewStep.CLARIFY, history=None) -> ApplicationDriverSt
 class NeverDone(ScriptedInterviewer):
     """A model that always says it needs one more question."""
 
-    def clarify(self, profile, history, phase="product", context=None):
+    def clarify(self, profile, history, context=None):
         self.calls.append("clarify")
         from metis.wizard.contracts import ClarifyResult
 
@@ -112,10 +112,10 @@ def test_clarify_commits_product_but_not_behaviours() -> None:
     assert state.profile.scenarios == []
 
 
-def test_a_thin_answer_leaves_the_product_gate_closed() -> None:
+def test_a_thin_answer_writes_no_product_fields() -> None:
     @dataclass
     class ThinInterviewer(ScriptedInterviewer):
-        def clarify(self, profile, history, phase="product", context=None):
+        def clarify(self, profile, history, context=None):
             from metis.wizard.contracts import ClarifyResult
 
             return ClarifyResult(message="Tell me a little more.", done=False)
@@ -134,7 +134,7 @@ def test_a_thin_answer_leaves_the_product_gate_closed() -> None:
 def test_clarify_rejects_a_non_product_patch() -> None:
     @dataclass
     class WritesABehaviour(NeverDone):
-        def clarify(self, profile, history, phase="product", context=None):
+        def clarify(self, profile, history, context=None):
             from metis.wizard.contracts import ClarifyResult
 
             return ClarifyResult(
@@ -925,8 +925,8 @@ def test_criteria_drafting_cannot_write_outside_the_measured_gaps() -> None:
     """The full Profile is model context, but only measured gaps are writable output."""
 
     class ScopeBreakingInterviewer(ScriptedInterviewer):
-        def draft_criteria(self, profile):
-            result = super().draft_criteria(profile)
+        def draft_criteria(self, profile, context=None):
+            result = super().draft_criteria(profile, context=context)
             result.patches.append(
                 Patch(
                     op=PatchOp.ADD,
@@ -961,10 +961,10 @@ def test_criteria_drafting_cannot_write_outside_the_measured_gaps() -> None:
 class BrokenInterviewer(ScriptedInterviewer):
     """Every attempt already failed inside the client."""
 
-    def draft_personas(self, profile):
+    def draft_personas(self, profile, context=None):
         raise ModelOutputError("three attempts, all malformed")
 
-    def chat(self, profile, step, text, target):
+    def chat(self, profile, step, text, target, context=None):
         raise ModelOutputError("three attempts, all malformed")
 
 
@@ -1034,7 +1034,7 @@ class RewordingInterviewer(ScriptedInterviewer):
     """A chat that rewords one criterion, the way the model is told to when the user asks
     for a different metric — it never touches metric_fqn itself."""
 
-    def chat(self, profile, step, text, target):
+    def chat(self, profile, step, text, target, context=None):
         self.calls.append("chat")
         from metis.wizard.contracts import Patch, PatchOp
 
@@ -1108,7 +1108,7 @@ class ReachesAcrossInterviewer(ScriptedInterviewer):
     land; the sibling edit should be dropped, because the user opened this chat on one card.
     """
 
-    def chat(self, profile, step, text, target):
+    def chat(self, profile, step, text, target, context=None):
         self.calls.append("chat")
         from metis.wizard.contracts import Patch, PatchOp
 
@@ -1201,23 +1201,23 @@ def test_suggest_one_for_me_adds_exactly_one_criterion_and_matches_it() -> None:
 
 @dataclass
 class SuggestsNothing(ScriptedInterviewer):
-    def suggest_criterion(self, profile, behaviour_id):
+    def suggest_criterion(self, profile, behaviour_id, context=None):
         self.calls.append("suggest_criterion")
         return StepResult(message="Nothing to add.", patches=[])
 
 
 @dataclass
 class SuggestsTwo(ScriptedInterviewer):
-    def suggest_criterion(self, profile, behaviour_id):
+    def suggest_criterion(self, profile, behaviour_id, context=None):
         self.calls.append("suggest_criterion")
-        one = super().suggest_criterion(profile, behaviour_id)
+        one = super().suggest_criterion(profile, behaviour_id, context=context)
         one.patches.append(one.patches[0].model_copy())  # a second add — not allowed
         return one
 
 
 @dataclass
 class SuggestsElsewhere(ScriptedInterviewer):
-    def suggest_criterion(self, profile, behaviour_id):
+    def suggest_criterion(self, profile, behaviour_id, context=None):
         self.calls.append("suggest_criterion")
         from metis.wizard.contracts import Patch, PatchOp
 

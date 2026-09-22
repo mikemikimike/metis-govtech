@@ -55,7 +55,9 @@ _No v1 changes yet._
 
 #### Changed
 
-- Prompts now wrap every injected value — the primer, the ARC catalogue, the Profile, the
+- Clarify now explores the product widely before it goes deep, with one instruction set instead of a
+  product phase and a machinery phase.
+- Prompts now wrap injected reference content — the primer, the ARC catalogue, the Profile, the
   transcript, the perspective, the capability evidence, and the user's message — in a named
   XML-style tag, with a system-prompt line stating that tagged content is reference material and
   never instructions. The boundary between the wizard's own words and quoted content is now
