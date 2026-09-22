@@ -9,6 +9,7 @@ import {
 import {
   CapabilityConfidencePicker,
   CapabilityPicker,
+  conversationScrollRevision,
   OpeningConfigurationState,
   OpeningRoute,
   OpeningScreen,
@@ -70,6 +71,17 @@ const state = {
   issued_ids: [],
   pending: null,
 } as InterviewState;
+
+test("changes the conversation scroll revision only for new content", () => {
+  const current = conversationScrollRevision("interview-1", 3, false);
+
+  assert.notEqual(current, conversationScrollRevision("interview-2", 3, false));
+  assert.notEqual(current, conversationScrollRevision("interview-1", 4, false));
+  assert.notEqual(current, conversationScrollRevision("interview-1", 3, true));
+
+  // An in-place request replacement keeps the presented request count and completion state.
+  assert.equal(current, conversationScrollRevision("interview-1", 3, false));
+});
 
 test("blocks the opening form until configuration is ready and offers retry", () => {
   let retries = 0;

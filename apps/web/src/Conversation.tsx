@@ -59,9 +59,6 @@ export function Transcript({
         return (
           <div
             key={i}
-            // The shell scrolls to the newest step's first block by finding the last one of
-            // these markers; the divider and the marker are the same element.
-            data-step-start={startsStep ? "" : undefined}
             className={cn(startsStep && "border-t border-border pt-8")}
           >
             <RequestBlock request={request} busy={busy} onRespond={onRespond} />

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowLeft,
   Check,
@@ -90,6 +97,14 @@ type RetryIntent =
   | { kind: "end" }
   | { kind: "package"; record: LocalInterviewRecord };
 
+export function conversationScrollRevision(
+  interviewId: string | null,
+  requestCount: number,
+  done: boolean,
+): string {
+  return `${interviewId ?? "opening"}:${requestCount}:${done ? "complete" : "active"}`;
+}
+
 export function App() {
   const [interviews, setInterviews] = useState<InterviewSummary[]>([]);
   const [storageProblems, setStorageProblems] = useState<
@@ -126,6 +141,12 @@ export function App() {
   const restored = useRef(false);
 
   const view = useMemo(() => record && toPresentation(record), [record]);
+  const conversationScrollRef = useRef<HTMLDivElement | null>(null);
+  const conversationRevision = conversationScrollRevision(
+    view?.id ?? null,
+    view?.requests.length ?? 0,
+    view?.done ?? false,
+  );
   const pending = record?.state.pending ?? undefined;
   const metricByFqn = useMemo(
     () =>
@@ -141,6 +162,11 @@ export function App() {
   useEffect(() => {
     setShowMetrics(false);
   }, [record?.id]);
+
+  useLayoutEffect(() => {
+    const container = conversationScrollRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
+  }, [conversationRevision]);
 
   const loadWizardConfig = useCallback(async () => {
     setWizardConfig({ status: "loading" });
@@ -482,6 +508,7 @@ export function App() {
           <>
             <div
               key={view.id}
+              ref={conversationScrollRef}
               className="quiet-scrollbar animate-enter-conversation flex-1 overflow-y-auto py-10"
             >
               <div className="mx-auto flex w-4/5 flex-col gap-8">
