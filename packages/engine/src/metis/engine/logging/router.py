@@ -19,7 +19,7 @@ from typing import IO, TYPE_CHECKING, Any, Literal
 import structlog
 from rich.text import Text
 
-from metis.core.logging import get_logger
+from metis.core.logging import get_logger, iso_timestamp
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -101,6 +101,9 @@ class LogRouter:
         # (issue #346). Matches OrchestrationLogger's handling of simulate.log.
         mode = "a" if self._append else "w"
         self._handles[key] = open(path, mode, encoding="utf-8")  # noqa: SIM115
+        if self._append and path.stat().st_size > 0:
+            stamp = iso_timestamp()
+            self._handles[key].write(f"\n--- [RESUMED {stamp}] ---\n\n")
         if run_dir is not None:
             try:
                 relative_target = os.path.relpath(path, run_dir)

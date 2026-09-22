@@ -374,7 +374,12 @@ async def _worker(
                 # Keyed on the directory's contents, not on `attempt`, so a
                 # resumed run (a new process, counter back at 1) is covered
                 # too. Issue #346.
-                quarantine_stale_artifacts(run_dir)
+                quarantine_dest = quarantine_stale_artifacts(run_dir)
+                if quarantine_dest is not None:
+                    logger.info(
+                        "[experiment] Previous artifacts moved to %s",
+                        quarantine_dest.name,
+                    )
                 runner = await runner_factory.create(
                     run_dir, fixtures_dir, experiment_root
                 )
