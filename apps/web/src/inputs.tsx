@@ -6,6 +6,7 @@ export function NumberInput({
   min = 1,
   max,
   disabled = false,
+  ariaLabel,
   onChange,
   onCommit,
 }: {
@@ -13,6 +14,7 @@ export function NumberInput({
   min?: number;
   max?: number;
   disabled?: boolean;
+  ariaLabel?: string;
   onChange: (value: number) => void;
   onCommit?: (value: number) => void;
 }) {
@@ -40,6 +42,7 @@ export function NumberInput({
       </Stepper>
       <input
         type="number"
+        aria-label={ariaLabel}
         min={min}
         max={max}
         value={value}

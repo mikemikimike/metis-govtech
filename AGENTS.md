@@ -85,7 +85,10 @@ Key invariants:
 - **metis-insights:** Trajectory diagnostics and compliance analytics. CLI: `metis insights report --results-file <path>`.
 - **apps/web:** React browser client. It calls `apps/api` over HTTP and stores Interview records and
   the display transcript in browser-local IndexedDB. It does not import Python packages or use the
-  wizard's retired server/static-web path.
+  wizard's retired server/static-web path. It gives the user two ways to author an experiment: the
+  guided Interview, and a manual form for a user who already knows the scorers to run. The manual
+  form is flat — it never shows Task, Behaviour, or Criterion — and it builds its own
+  `ProductProfile` in the browser, which it sends to the existing package route.
 
 ## Contributing
 

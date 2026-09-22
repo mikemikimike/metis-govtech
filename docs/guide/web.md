@@ -45,13 +45,26 @@ failed metric request does not block the Interview.
 The web gets its busy message from `GET /api/v1/wizard/config`. The wizard package owns this text
 in `packages/wizard/src/metis/wizard/config.yaml` with the other Interview status messages.
 
-The web client does not provide these features yet:
+The opening screen also offers **Write it yourself** for users who already know the experiment
+they want to run. This manual path asks for an experiment ID and description, personas, scenarios,
+trial counts, persona references, fixture files, and scorers from the installed scorer catalogue.
+The form presents one Experiment editor: set its details first, then add Personas and Scenarios.
+A new form starts with empty Persona and Scenario collections. Use the add action in each section
+header to create an item. A new Scenario selects all named Personas by default, and a new Persona
+is added to existing Scenarios automatically. Each ID and Description is on its own line, and the
+entered ID names its item. Select **Done** to close a completed item editor; select **Edit** to open
+it again. It creates no Interview and writes no IndexedDB record. The download is the same
+`experiment.zip` package as the Interview path. It contains a runnable `experiment.yaml`, the
+selected fixture files, and a supporting synthetic `profile.yaml`. Files removed from every
+Scenario are deleted from temporary state and are not included in the ZIP.
 
-- direct Profile or experiment authoring outside the wizard conversation;
-- source-code or trace analysis inputs;
-- hosted or cross-device Interview state;
-- authentication and multi-user access;
-- evaluation execution.
+For this first version, the manual form asks only for what an engine run absolutely needs. The
+engine runs from `experiment.yaml`. The fuller `ProductProfile` is used only at report generation,
+which reads `inputs/profile.yaml` and is skipped without it. The form therefore synthesizes the
+minimum Profile: the default report works, but the product narrative stays yours to write.
+
+Source-code or trace analysis inputs, hosted or cross-device Interview state, authentication,
+multi-user access, and evaluation execution remain outside the web client.
 
 When you finish the Interview, the browser client ends and packages it through two API operations.
 It first sends the Interview state to `POST /api/v1/wizard/interview/end`, which completes and
@@ -62,5 +75,5 @@ returns one `experiment.zip` package to download. For an Interview that is alrea
 selected during the Interview. The API packages these bytes for one request and retains no fixture
 files. Evaluation execution is not a web control in this change.
 
-These are deferred changes. They must use new API contracts when they are added; do not restore the
-retired wizard-owned web server or Python static output.
+Future changes must use new API contracts when they are added; do not restore the retired
+wizard-owned web server or Python static output.
