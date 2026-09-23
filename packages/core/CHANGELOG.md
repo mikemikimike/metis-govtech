@@ -4,7 +4,7 @@ All notable changes to `metis-core` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.5.0] — Unreleased
+## [0.5.0] — 2026-09-23
 
 ### Added
 
@@ -20,19 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   leave the field `None`. Nothing enforces it — uniqueness is a property of the
   set, not of one record — and a target that reused one id across different
   files would make them collapse into a single record and disappear from the run.
-- `Artifact` domain model — a single lifecycle-spanning record for any file crossing the persona↔target boundary, inbound (`source="fixture"`) or outbound (`source="target"`), plus the `uri_to_local_path` URI resolver. Relocated from `metis-engine` so all packages share one definition (#307). Fields: `id`, `name`, `source` (default `"target"`), `uri`, `digest`, `hash_algorithm`, `at_turn`, `content_description`, `state_description`, and a derived `media_type` computed field (MIME from `name`/`uri`). The Orca-UI-specific `type` enum was removed and `collected_at_turn` renamed to the direction-neutral `at_turn` (#321).
-
-### Changed
-
-- `Artifact.uri` renamed to `Artifact.path` — stores a POSIX-style path relative to the experiment root instead of an absolute `file://` URI, keeping experiment output directories portable when copied or moved
-- `uri_to_local_path(uri)` replaced with `resolve_artifact_path(experiment_root, path)` — plain path-joining against the experiment root, no scheme parsing
-
----
-
-## [0.4.1] — Unreleased
-
-### Added
-
+- `Artifact` domain model — a single lifecycle-spanning record for any file crossing the persona↔target boundary, inbound (`source="fixture"`) or outbound (`source="target"`), plus the `resolve_artifact_path(experiment_root, path)` resolver. Relocated from `metis-engine` so all packages share one definition (#307). Fields: `id`, `name`, `source` (default `"target"`), `path`, `digest`, `hash_algorithm`, `at_turn`, `content_description`, `state_description`, and a derived `media_type` computed field (MIME from `name`/`path`). `path` holds a POSIX-style path relative to the experiment root, keeping experiment output directories portable when copied or moved, and `resolve_artifact_path` is plain path-joining against that root — no scheme parsing. The Orca-UI-specific `type` enum was removed and `collected_at_turn` renamed to the direction-neutral `at_turn` (#321).
 - `structlog.processors.format_exc_info` added to the `shared_processors` and `foreign_processors` chains in `configure_logging()` — events carrying `exc_info` (e.g. from `logger.exception(...)` or `logger.error(..., exc_info=True)`) now have their traceback rendered into an `exception` string before the terminal renderer runs. This makes the traceback available to downstream renderers (including `metis-engine`'s per-run file router) and produces a clean `exception` string in the JSON sink instead of a stringified `(type, value, tb)` tuple.
 
 ---
