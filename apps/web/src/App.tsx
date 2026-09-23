@@ -1,8 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PanelLeft, PanelRight } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ArrowLeft,
+  Check,
+  Code2,
+  ClipboardCheck,
+  PanelLeft,
+  PanelRight,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type {
   InterviewSummary,
   LocalInterviewRecord,
+  CapabilityCategoryDefinition,
+  CapabilityConfidence,
+  CapabilityEvidence,
+  CapabilityId,
+  Perspective,
+  PerspectiveDefinition,
   UserResponse,
 } from "./transport/api";
 import { api, TransportError, toSummary } from "./transport/api";
@@ -10,7 +33,7 @@ import { Composer, Transcript } from "./Conversation";
 import { Done } from "./Done";
 import { Profile, stepPosition } from "./Profile";
 import { InterviewRail } from "./InterviewRail";
-import { cn } from "./ui";
+import { Button, Tooltip, cn } from "./ui";
 import {
   InterviewRepository,
   emptyRecord,
@@ -33,6 +56,37 @@ const DOCUMENT_WIDTH_MIN = 24;
 const DOCUMENT_WIDTH_MAX = 60;
 const SELECTED_INTERVIEW_KEY = "metis-web-selected-interview";
 const repository = new InterviewRepository();
+type WizardConfig = Awaited<ReturnType<typeof api.config>>;
+type OpeningPhase = "describe" | "capabilities";
+export type WizardConfigState =
+  | { status: "loading" }
+  | { status: "ready"; config: WizardConfig }
+  | { status: "error"; message: string };
+export type CapabilityEvidenceDraft = Omit<CapabilityEvidence, "confidence"> & {
+  confidence: CapabilityConfidence | null;
+};
+
+const emptyCapabilityEvidence = (): CapabilityEvidenceDraft => ({
+  known_capability_ids: [],
+  confidence: null,
+});
+
+export function completeCapabilityEvidence(
+  draft: CapabilityEvidenceDraft,
+): CapabilityEvidence | null {
+  if (draft.confidence === null) return null;
+  return {
+    known_capability_ids: draft.known_capability_ids,
+    confidence: draft.confidence,
+  };
+}
+
+const PERSPECTIVE_ICONS: Record<Perspective, LucideIcon> = {
+  end_user: UserRound,
+  engineer: Code2,
+  compliance: ClipboardCheck,
+  security: ShieldCheck,
+};
 
 type RetryIntent =
   | {
@@ -44,6 +98,14 @@ type RetryIntent =
   | { kind: "end" }
   | { kind: "package"; record: LocalInterviewRecord };
 
+export function conversationScrollRevision(
+  interviewId: string | null,
+  requestCount: number,
+  done: boolean,
+): string {
+  return `${interviewId ?? "opening"}:${requestCount}:${done ? "complete" : "active"}`;
+}
+
 export function App() {
   const [interviews, setInterviews] = useState<InterviewSummary[]>([]);
   const [storageProblems, setStorageProblems] = useState<
@@ -52,6 +114,15 @@ export function App() {
   const [record, setRecord] = useState<LocalInterviewRecord | null>(null);
   const [busy, setBusy] = useState(false);
   const [workingStatus, setWorkingStatus] = useState("Working…");
+  const [wizardConfig, setWizardConfig] = useState<WizardConfigState>({
+    status: "loading",
+  });
+  const [selectedPerspective, setSelectedPerspective] =
+    useState<Perspective>("end_user");
+  const [openingPhase, setOpeningPhase] = useState<OpeningPhase>("describe");
+  const [openingDescription, setOpeningDescription] = useState("");
+  const [capabilityEvidence, setCapabilityEvidence] =
+    useState<CapabilityEvidenceDraft>(emptyCapabilityEvidence);
   const [error, setError] = useState<string | null>(null);
   const [retryIntent, setRetryIntent] = useState<RetryIntent | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -72,6 +143,12 @@ export function App() {
   const restored = useRef(false);
 
   const view = useMemo(() => record && toPresentation(record), [record]);
+  const conversationScrollRef = useRef<HTMLDivElement | null>(null);
+  const conversationRevision = conversationScrollRevision(
+    view?.id ?? null,
+    view?.requests.length ?? 0,
+    view?.done ?? false,
+  );
   const pending = record?.state.pending ?? undefined;
   const metricByFqn = useMemo(
     () =>
@@ -88,12 +165,25 @@ export function App() {
     setShowMetrics(false);
   }, [record?.id]);
 
-  useEffect(() => {
-    void api.config().then(
-      (config) => setWorkingStatus(config.working_status),
-      () => undefined,
-    );
+  useLayoutEffect(() => {
+    const container = conversationScrollRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
+  }, [conversationRevision]);
+
+  const loadWizardConfig = useCallback(async () => {
+    setWizardConfig({ status: "loading" });
+    try {
+      const config = await api.config();
+      setWizardConfig({ status: "ready", config });
+      setWorkingStatus(config.working_status);
+    } catch (cause) {
+      setWizardConfig({ status: "error", message: errorMessage(cause) });
+    }
   }, []);
+
+  useEffect(() => {
+    void loadWizardConfig();
+  }, [loadWizardConfig]);
 
   const refreshList = useCallback(async () => {
     const rows = await repository.list();
@@ -159,17 +249,28 @@ export function App() {
     setRecord(null);
     setError(null);
     setRetryIntent(null);
+    setOpeningPhase("describe");
+    setOpeningDescription("");
+    setCapabilityEvidence(emptyCapabilityEvidence());
     forgetSelectedInterview();
   }, []);
 
   const beginWithMessage = useCallback(
-    async (description: string) => {
+    async (
+      description: string,
+      perspective: Perspective,
+      evidence: CapabilityEvidence | null,
+    ) => {
       if (busy) return;
+      if (evidence === null) {
+        setError("Choose Low, Medium, or High confidence before you start.");
+        return;
+      }
       setBusy(true);
       setError(null);
       setRetryIntent(null);
       try {
-        const result = await api.start(description);
+        const result = await api.start(description, evidence, perspective);
         const next = emptyRecord(
           crypto.randomUUID(),
           result.state,
@@ -390,27 +491,31 @@ export function App() {
         {manualOpen ? (
           <ManualForm onBack={() => setManualOpen(false)} />
         ) : view === null ? (
-          <div className="flex flex-1 flex-col items-center justify-center px-6">
-            <div className="flex w-full max-w-3xl flex-col gap-8">
-              <h1 className="text-center text-2xl font-semibold text-foreground">
-                Describe the product you want to evaluate
-              </h1>
-              <Composer
-                request={undefined}
-                busy={busy}
-                alwaysEnabled
-                leadingIcon
-                bare
-                placeholder="Tell METIS what this product does…"
-                onSend={beginWithMessage}
-              />
-              <ManualAuthoringEntry onOpen={() => setManualOpen(true)} />
-            </div>
-          </div>
+          <OpeningRoute
+            configState={wizardConfig}
+            onRetry={() => void loadWizardConfig()}
+            busy={busy}
+            phase={openingPhase}
+            description={openingDescription}
+            perspective={selectedPerspective}
+            onPerspective={setSelectedPerspective}
+            onContinue={(description) => {
+              setOpeningDescription(description);
+              setOpeningPhase("capabilities");
+            }}
+            onBack={() => setOpeningPhase("describe")}
+            capabilityEvidence={capabilityEvidence}
+            onCapabilityEvidence={setCapabilityEvidence}
+            onBegin={(description, perspective, evidence) =>
+              void beginWithMessage(description, perspective, evidence)
+            }
+            onManualOpen={() => setManualOpen(true)}
+          />
         ) : (
           <>
             <div
               key={view.id}
+              ref={conversationScrollRef}
               className="quiet-scrollbar animate-enter-conversation flex-1 overflow-y-auto py-10"
             >
               <div className="mx-auto flex w-4/5 flex-col gap-8">
@@ -472,6 +577,415 @@ export function App() {
           />
         ))}
     </div>
+  );
+}
+
+type OpeningScreenProps = {
+  config: WizardConfig;
+  busy: boolean;
+  phase: OpeningPhase;
+  description: string;
+  perspective: Perspective;
+  onPerspective: (perspective: Perspective) => void;
+  onContinue: (description: string) => void;
+  onBack: () => void;
+  capabilityEvidence: CapabilityEvidenceDraft;
+  onCapabilityEvidence: (evidence: CapabilityEvidenceDraft) => void;
+  onManualOpen: () => void;
+  onBegin: (
+    description: string,
+    perspective: Perspective,
+    evidence: CapabilityEvidence | null,
+  ) => void;
+};
+
+export function OpeningRoute({
+  configState,
+  onRetry,
+  ...openingProps
+}: Omit<OpeningScreenProps, "config"> & {
+  configState: WizardConfigState;
+  onRetry: () => void;
+}) {
+  if (configState.status !== "ready") {
+    return <OpeningConfigurationState state={configState} onRetry={onRetry} />;
+  }
+  return <OpeningScreen config={configState.config} {...openingProps} />;
+}
+
+export function OpeningConfigurationState({
+  state,
+  onRetry,
+}: {
+  state: Exclude<WizardConfigState, { status: "ready" }>;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-6 py-10">
+      {state.status === "loading" ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading interview options…
+        </p>
+      ) : (
+        <div
+          role="alert"
+          className="flex max-w-md flex-col items-start gap-3 rounded-lg border border-border bg-card p-5"
+        >
+          <p className="text-sm text-foreground">
+            The interview options could not load. {state.message}
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function OpeningScreen({
+  config,
+  busy,
+  phase,
+  description,
+  perspective,
+  onPerspective,
+  onContinue,
+  onBack,
+  capabilityEvidence,
+  onCapabilityEvidence,
+  onManualOpen,
+  onBegin,
+}: OpeningScreenProps) {
+  return (
+    <div className="quiet-scrollbar flex flex-1 overflow-y-auto px-6 py-10">
+      <div
+        key={phase}
+        className={cn(
+          "animate-enter-opening-step mx-auto flex w-full max-w-3xl flex-col",
+          phase === "describe" ? "my-auto gap-8" : "gap-6",
+        )}
+      >
+        {phase === "describe" ? (
+          <>
+            <h1 className="text-center text-2xl font-semibold text-foreground">
+              {config.opening_question}
+            </h1>
+            <div className="flex flex-col gap-4">
+              <Composer
+                request={undefined}
+                busy={busy}
+                alwaysEnabled
+                leadingIcon
+                bare
+                initialText={description}
+                roomy
+                placeholder="Describe your product…"
+                onSend={onContinue}
+              />
+              <PerspectivePicker
+                perspectives={config.perspectives}
+                selected={perspective}
+                onSelect={onPerspective}
+              />
+              <ManualAuthoringEntry onOpen={onManualOpen} />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <h1 className="text-2xl font-semibold text-foreground">
+                  What can the system do?
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Select the capabilities you know are present.
+                </p>
+              </div>
+              <Button type="button" variant="ghost" onClick={onBack}>
+                <ArrowLeft size={15} strokeWidth={1.75} aria-hidden />
+                Edit product
+              </Button>
+            </div>
+            <div className="flex flex-col gap-4">
+              <CapabilityPicker
+                categories={config.capability_categories}
+                selected={capabilityEvidence.known_capability_ids}
+                onChange={(knownCapabilityIds) =>
+                  onCapabilityEvidence({
+                    ...capabilityEvidence,
+                    known_capability_ids: knownCapabilityIds,
+                  })
+                }
+                disabled={busy}
+                hideLegend
+              />
+              <CapabilityConfidencePicker
+                selected={capabilityEvidence.confidence}
+                onSelect={(confidence) =>
+                  onCapabilityEvidence({ ...capabilityEvidence, confidence })
+                }
+                disabled={busy}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              className="self-end px-4 py-2"
+              disabled={busy || capabilityEvidence.confidence === null}
+              onClick={() =>
+                onBegin(
+                  description,
+                  perspective,
+                  completeCapabilityEvidence(capabilityEvidence),
+                )
+              }
+            >
+              {busy ? "Starting…" : "Start interview"}
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function CapabilityPicker({
+  categories,
+  selected,
+  onChange,
+  disabled = false,
+  hideLegend = false,
+}: {
+  categories: CapabilityCategoryDefinition[];
+  selected: CapabilityId[];
+  onChange: (capabilities: CapabilityId[]) => void;
+  disabled?: boolean;
+  hideLegend?: boolean;
+}) {
+  const toggle = (id: CapabilityId) =>
+    onChange(
+      selected.includes(id)
+        ? selected.filter((value) => value !== id)
+        : [...selected, id],
+    );
+
+  return (
+    <fieldset className="flex flex-col gap-3">
+      <legend
+        className={cn(
+          "text-sm font-medium text-foreground",
+          hideLegend && "sr-only",
+        )}
+      >
+        What can the system do?
+      </legend>
+      <div className="grid items-start gap-4 md:grid-cols-3">
+        {categories.map((category) => (
+          <div
+            key={category.id}
+            className="overflow-hidden rounded-lg border border-border bg-card"
+          >
+            <div className="flex items-center justify-between border-b border-border bg-muted/45 px-4 py-3">
+              <h2 className="text-sm font-semibold text-foreground">
+                {category.name}
+              </h2>
+              <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                {
+                  category.capabilities.filter((capability) =>
+                    selected.includes(capability.id),
+                  ).length
+                }
+                /{category.capabilities.length}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              {category.capabilities.map((capability) => {
+                const active = selected.includes(capability.id);
+                return (
+                  <Tooltip
+                    key={capability.id}
+                    label={capability.description}
+                    className="w-full border-t border-border first:border-t-0"
+                  >
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={active}
+                      aria-label={`${capability.name}: ${capability.description}`}
+                      disabled={disabled}
+                      onClick={() => toggle(capability.id)}
+                      className={cn(
+                        "flex min-h-12 w-full items-center gap-3 px-4 py-3 text-left",
+                        "transition-colors duration-150",
+                        active
+                          ? "bg-accent/10 text-foreground"
+                          : "bg-card text-card-foreground hover:bg-muted",
+                        "disabled:cursor-not-allowed disabled:opacity-45",
+                      )}
+                    >
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border",
+                          active
+                            ? "border-accent bg-accent text-accent-foreground"
+                            : "border-input bg-background",
+                        )}
+                      >
+                        {active && <Check size={14} strokeWidth={2.25} />}
+                      </span>
+                      <span className="text-sm font-medium">
+                        {capability.name}
+                      </span>
+                    </button>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+export function CapabilityConfidencePicker({
+  selected,
+  onSelect,
+  disabled = false,
+}: {
+  selected: CapabilityConfidence | null;
+  onSelect: (confidence: CapabilityConfidence) => void;
+  disabled?: boolean;
+}) {
+  const options: Array<{
+    id: CapabilityConfidence;
+    label: string;
+  }> = [
+    { id: "low", label: "Low" },
+    { id: "medium", label: "Medium" },
+    { id: "high", label: "High" },
+  ];
+  return (
+    <fieldset className="rounded-lg border border-border bg-card px-4 py-3">
+      <legend className="sr-only">
+        How confident are you in this selection?
+      </legend>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <span aria-hidden className="text-sm font-medium text-foreground">
+          How confident are you in this selection?
+        </span>
+        <div
+          role="radiogroup"
+          aria-label="How confident are you in this selection?"
+          aria-required="true"
+          className="flex flex-wrap gap-2"
+        >
+          {options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={selected === option.id}
+              disabled={disabled}
+              onClick={() => onSelect(option.id)}
+              className={cn(
+                "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors duration-150",
+                selected === option.id
+                  ? "border-accent bg-accent/10 text-foreground"
+                  : "border-border bg-card text-card-foreground hover:border-accent/40 hover:bg-muted",
+                "disabled:cursor-not-allowed disabled:opacity-45",
+              )}
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "flex h-4 w-4 items-center justify-center rounded-full border",
+                  selected === option.id
+                    ? "border-accent"
+                    : "border-muted-foreground/60",
+                )}
+              >
+                {selected === option.id && (
+                  <span className="h-2 w-2 rounded-full bg-accent" />
+                )}
+              </span>
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </fieldset>
+  );
+}
+
+export function PerspectivePicker({
+  perspectives,
+  selected,
+  onSelect,
+}: {
+  perspectives: PerspectiveDefinition[];
+  selected: Perspective;
+  onSelect: (perspective: Perspective) => void;
+}) {
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-2">
+      <legend className="text-sm text-muted-foreground">
+        Who is this evaluation for?
+      </legend>
+      <div
+        role="radiogroup"
+        aria-label="Who is this evaluation for?"
+        className="flex flex-col gap-2"
+      >
+        {perspectives.map((perspective) => {
+          const Icon = PERSPECTIVE_ICONS[perspective.id];
+          const active = perspective.id === selected;
+          return (
+            <button
+              key={perspective.id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              aria-label={`${perspective.label}: ${perspective.question}`}
+              onClick={() => onSelect(perspective.id)}
+              className={cn(
+                "group relative flex w-full items-center gap-3 overflow-hidden rounded-lg border px-4 py-3 text-left",
+                "transition-colors duration-200",
+                active
+                  ? "border-accent bg-accent/10 text-foreground"
+                  : "border-border bg-card text-card-foreground hover:border-accent/40 hover:bg-accent/10",
+              )}
+            >
+              <Icon
+                size={18}
+                strokeWidth={1.75}
+                aria-hidden
+                className={cn(
+                  "shrink-0 transition-colors duration-200",
+                  active
+                    ? "text-accent"
+                    : "text-muted-foreground group-hover:text-accent group-focus-visible:text-accent",
+                )}
+              />
+              <span className="relative block h-5 min-w-0 flex-1">
+                <span className="absolute inset-0 flex items-center truncate text-sm font-medium leading-5 transition-all duration-200 group-hover:-translate-y-full group-hover:opacity-0 group-focus-visible:-translate-y-full group-focus-visible:opacity-0">
+                  {perspective.label}
+                </span>
+                <span className="absolute inset-0 flex translate-y-full items-center truncate text-xs leading-5 text-muted-foreground opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
+                  {perspective.question}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

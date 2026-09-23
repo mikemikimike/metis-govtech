@@ -11,8 +11,9 @@ import yaml
 
 from metis.wizard.application import config
 from metis.wizard.application.driver import DriverState, StepDriver
-from metis.wizard.contracts.interview_state import Turn
+from metis.wizard.contracts.interview_state import Perspective, Turn
 from metis.wizard.domain.permissions import InterviewStep
+from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
 
@@ -25,6 +26,12 @@ _EXPECTED_STATUSES = {
     "done": "Finishing up…",
 }
 _EXPECTED_WORKING_STATUS = "Working on your Interview…"
+_EXPECTED_PERSPECTIVES = {
+    "end_user",
+    "engineer",
+    "compliance",
+    "security",
+}
 
 
 def _document() -> dict[str, Any]:
@@ -39,6 +46,22 @@ def _install_document(
     monkeypatch.setattr(
         config,
         "_read_config_text",
+        lambda: yaml.safe_dump(document, allow_unicode=True, sort_keys=False),
+    )
+
+
+def _capability_document() -> dict[str, Any]:
+    value = yaml.safe_load(config._read_capabilities_text())
+    assert isinstance(value, dict)
+    return value
+
+
+def _install_capability_document(
+    monkeypatch: pytest.MonkeyPatch, document: dict[str, Any]
+) -> None:
+    monkeypatch.setattr(
+        config,
+        "_read_capabilities_text",
         lambda: yaml.safe_dump(document, allow_unicode=True, sort_keys=False),
     )
 
@@ -88,6 +111,18 @@ def _restore_removed_status(document: dict[str, Any]) -> None:
     document["statuses"]["prioritise"] = "Choosing what to measure…"
 
 
+def _remove_perspective(document: dict[str, Any]) -> None:
+    document["perspectives"] = document["perspectives"][:-1]
+
+
+def _duplicate_perspective(document: dict[str, Any]) -> None:
+    document["perspectives"].append(document["perspectives"][0].copy())
+
+
+def _unknown_perspective(document: dict[str, Any]) -> None:
+    document["perspectives"][0]["id"] = "business"
+
+
 @pytest.mark.parametrize(
     ("change", "broken_key"),
     [
@@ -98,6 +133,9 @@ def _restore_removed_status(document: dict[str, Any]) -> None:
         (_remove_working_status, "statuses.working"),
         (_blank_working_status, "statuses.working"),
         (_restore_removed_status, "statuses.prioritise"),
+        (_remove_perspective, "perspectives"),
+        (_duplicate_perspective, "perspectives[4].id"),
+        (_unknown_perspective, "perspectives[0].id"),
     ],
 )
 def test_interview_validation_cases(
@@ -173,6 +211,7 @@ def test_a_limit_edit_affects_an_active_interview(
     _install_document(monkeypatch, document)
     state = DriverState(
         profile=research_assistant(),
+        context=interview_context(),
         step=InterviewStep.CLARIFY,
         history=[
             Turn(role="assistant", text=config.opening_question()),
@@ -199,3 +238,135 @@ def test_interview_configuration_is_a_package_resource() -> None:
     assert loaded.opening_question
     assert loaded.working_status
     assert set(loaded.statuses) == set(InterviewStep)
+    assert {item.id.value for item in loaded.perspectives} == _EXPECTED_PERSPECTIVES
+
+
+def test_the_final_arc_catalogue_and_metadata_are_validated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loaded = config.load_config()
+    expected = [
+        (
+            "cognitive",
+            [
+                (
+                    "planning_goal_management",
+                    "Planning & Goal Management",
+                    "Builds, tracks, and adjusts multi-step plans to meet goals.",
+                ),
+                (
+                    "agent_delegation",
+                    "Agent Delegation",
+                    "Assigns work to other agents and coordinates their work.",
+                ),
+                (
+                    "tool_use",
+                    "Tool Use",
+                    "Selects and sequences suitable tools for a task.",
+                ),
+            ],
+        ),
+        (
+            "interaction",
+            [
+                (
+                    "multimodal_understanding_generation",
+                    "Multimodal Understanding & Generation",
+                    "Understands or creates natural language, images, audio, or video.",
+                ),
+                (
+                    "official_communication",
+                    "Official Communication",
+                    "Sends authoritative external communications for an organisation without prior human approval.",
+                ),
+                (
+                    "business_transactions",
+                    "Business Transactions",
+                    "Starts, authorises, or executes binding payments, purchases, reservations, or service commitments.",
+                ),
+                (
+                    "internet_search_access",
+                    "Internet & Search Access",
+                    "Searches, browses, and retrieves information from the Internet.",
+                ),
+                (
+                    "computer_use",
+                    "Computer Use",
+                    "Operates a graphical computer interface with pointer and keyboard actions.",
+                ),
+                (
+                    "other_programmatic_interfaces",
+                    "Other Programmatic Interfaces",
+                    "Uses APIs, SDKs, backend services, and other non-graphical interfaces.",
+                ),
+            ],
+        ),
+        (
+            "operational",
+            [
+                ("code_execution", "Code Execution", "Writes, runs, and debugs code."),
+                (
+                    "file_data_management",
+                    "File & Data Management",
+                    "Creates, reads, changes, organises, and queries files or data stores.",
+                ),
+                (
+                    "system_management",
+                    "System Management",
+                    "Manages and configures technical systems, infrastructure, resources, and access.",
+                ),
+            ],
+        ),
+    ]
+    actual = [
+        (
+            category.id.value,
+            [
+                (item.id.value, item.name, item.description)
+                for item in category.capabilities
+            ],
+        )
+        for category in loaded.capability_categories
+    ]
+    assert actual == expected
+    assert [category.name for category in loaded.capability_categories] == [
+        "Cognitive",
+        "Interaction",
+        "Operational",
+    ]
+    assert loaded.capability_source == (
+        "https://github.com/govtech-responsibleai/agentic-risk-capability-framework"
+    )
+    assert loaded.capability_attribution == (
+        "GovTech Singapore, Agentic Risk & Capability Framework"
+    )
+    assert loaded.capability_license == "Apache-2.0"
+
+    broken = _capability_document()
+    broken["categories"][0]["capabilities"].pop()
+    _install_capability_document(monkeypatch, broken)
+    with pytest.raises(config.ConfigError, match=config.CAPABILITIES_FILE):
+        config.load_config()
+
+
+def test_public_client_configuration_exposes_the_opening_copy_and_perspectives() -> (
+    None
+):
+    client_config = config.interview_client_config()
+
+    assert client_config.opening_question
+    assert client_config.working_status == _EXPECTED_WORKING_STATUS
+    assert {item.id for item in client_config.perspectives} == {
+        Perspective(item) for item in _EXPECTED_PERSPECTIVES
+    }
+
+
+def test_a_perspective_label_edit_affects_the_next_client_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    document = _document()
+    _install_document(monkeypatch, document)
+
+    document["perspectives"][0]["label"] = "People who use it"
+
+    assert config.interview_client_config().perspectives[0].label == "People who use it"

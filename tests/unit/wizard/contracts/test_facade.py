@@ -72,7 +72,11 @@ def test_the_facade_entrypoint_starts_a_serializable_interview() -> None:
     from tests.fixtures.wizard.scripted import ScriptedInterviewer
 
     result = handle_interview(
-        InterviewStartRequest(description="A research assistant"),
+        InterviewStartRequest(
+            description="A research assistant",
+            known_capability_ids=[],
+            capability_confidence="low",
+        ),
         interviewer=ScriptedInterviewer(),
         matcher=None,
     )

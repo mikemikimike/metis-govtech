@@ -40,8 +40,8 @@ fixture validation, or compilation rule lives here.
 `MetricSummary` values from the public wizard facade only. It does not read Interview state or write
 files.
 
-`GET /api/v1/wizard/config` returns package-owned presentation text from the public wizard facade.
-The API transports this text but does not own or copy it.
+`GET /api/v1/wizard/config` returns package-owned opening copy, working status, and perspective
+definitions from the public wizard facade. The API transports this text but does not own or copy it.
 
 ## Testing
 

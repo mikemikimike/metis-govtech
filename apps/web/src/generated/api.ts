@@ -72,8 +72,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Start a wizard Interview from its product description
-         * @description Create client-held Interview state from the user's initial raw description.
+         * Start a wizard Interview from its opening evidence
+         * @description Create client-held Interview state from the complete opening input.
          */
         post: operations["start_api_v1_wizard_interview_start_post"];
         delete?: never;
@@ -228,6 +228,55 @@ export interface components {
             /** Files */
             files?: string[] | null;
         };
+        /**
+         * CapabilityCategory
+         * @description The three categories in the final ARC capability catalogue.
+         * @enum {string}
+         */
+        CapabilityCategory: "cognitive" | "interaction" | "operational";
+        /**
+         * CapabilityCategoryDefinition
+         * @description An ordered category and its ordered capability definitions.
+         */
+        CapabilityCategoryDefinition: {
+            id: components["schemas"]["CapabilityCategory"];
+            /** Name */
+            name: string;
+            /** Capabilities */
+            capabilities: components["schemas"]["CapabilityDefinition"][];
+        };
+        /**
+         * CapabilityConfidence
+         * @description How complete the user's known-capability selection is.
+         * @enum {string}
+         */
+        CapabilityConfidence: "low" | "medium" | "high";
+        /**
+         * CapabilityDefinition
+         * @description The public display definition for one capability.
+         */
+        CapabilityDefinition: {
+            id: components["schemas"]["CapabilityId"];
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+        };
+        /**
+         * CapabilityEvidence
+         * @description User-owned capability evidence that travels with an Interview.
+         */
+        CapabilityEvidence: {
+            /** Known Capability Ids */
+            known_capability_ids: components["schemas"]["CapabilityId"][];
+            confidence: components["schemas"]["CapabilityConfidence"];
+        };
+        /**
+         * CapabilityId
+         * @description A stable METIS id for one ARC capability.
+         * @enum {string}
+         */
+        CapabilityId: "planning_goal_management" | "agent_delegation" | "tool_use" | "multimodal_understanding_generation" | "official_communication" | "business_transactions" | "internet_search_access" | "computer_use" | "other_programmatic_interfaces" | "code_execution" | "file_data_management" | "system_management";
         /**
          * CardDivider
          * @description A hairline rule between the component groups above and below it. Shape, not domain: the
@@ -491,11 +540,26 @@ export interface components {
         };
         /**
          * InterviewConfig
-         * @description Package-owned presentation text needed by an Interview client.
+         * @description Package-owned values that a wizard door needs to render its opening screen.
          */
         InterviewConfig: {
+            /** Opening Question */
+            opening_question: string;
             /** Working Status */
             working_status: string;
+            /** Perspectives */
+            perspectives: components["schemas"]["PerspectiveDefinition"][];
+            /** Capability Categories */
+            capability_categories: components["schemas"]["CapabilityCategoryDefinition"][];
+        };
+        /**
+         * InterviewContext
+         * @description User-owned context that travels with an Interview but is not Profile data.
+         */
+        InterviewContext: {
+            /** @default end_user */
+            perspective: components["schemas"]["Perspective"];
+            capability_evidence: components["schemas"]["CapabilityEvidence"];
         };
         /**
          * InterviewEndRequest
@@ -531,11 +595,16 @@ export interface components {
         };
         /**
          * InterviewStartRequest
-         * @description The first operation, containing the user's raw product description.
+         * @description The first operation, containing all opening evidence.
          */
         InterviewStartRequest: {
             /** Description */
             description: string;
+            /** @default end_user */
+            perspective: components["schemas"]["Perspective"];
+            /** Known Capability Ids */
+            known_capability_ids: components["schemas"]["CapabilityId"][];
+            capability_confidence: components["schemas"]["CapabilityConfidence"];
         };
         /**
          * InterviewState
@@ -546,6 +615,7 @@ export interface components {
          */
         InterviewState: {
             profile: components["schemas"]["ProductProfile"];
+            context: components["schemas"]["InterviewContext"];
             /**
              * Behaviours Confirmed
              * @default false
@@ -716,6 +786,23 @@ export interface components {
             name: string;
             /** Description */
             description: string;
+        };
+        /**
+         * Perspective
+         * @description The point of view from which the user answers the Interview.
+         * @enum {string}
+         */
+        Perspective: "end_user" | "engineer" | "compliance" | "security";
+        /**
+         * PerspectiveDefinition
+         * @description The user-facing label and question for one Interview perspective.
+         */
+        PerspectiveDefinition: {
+            id: components["schemas"]["Perspective"];
+            /** Label */
+            label: string;
+            /** Question */
+            question: string;
         };
         /** Product */
         Product: {

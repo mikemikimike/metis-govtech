@@ -1,5 +1,12 @@
 """Serializable contracts exchanged by the wizard and its doors or providers."""
 
+from metis.wizard.contracts.capabilities import (
+    CapabilityCategory,
+    CapabilityCategoryDefinition,
+    CapabilityDefinition,
+    CapabilityId,
+)
+from metis.wizard.contracts.config import InterviewConfig, PerspectiveDefinition
 from metis.wizard.contracts.conversation import (
     AnyCard,
     AnyCardComponent,
@@ -33,7 +40,14 @@ from metis.wizard.contracts.conversation import (
     editable_fields_of,
     options_of,
 )
-from metis.wizard.contracts.interview_state import InterviewState, Turn
+from metis.wizard.contracts.interview_state import (
+    CapabilityConfidence,
+    CapabilityEvidence,
+    InterviewContext,
+    InterviewState,
+    Perspective,
+    Turn,
+)
 from metis.wizard.contracts.metric_spec import MetricParam, MetricSpec
 from metis.wizard.contracts.output import (
     BehaviourDraft,
@@ -79,6 +93,12 @@ __all__ = [
     "AnyRequest",
     "AnyResponse",
     "Behaviour",
+    "CapabilityCategory",
+    "CapabilityCategoryDefinition",
+    "CapabilityConfidence",
+    "CapabilityDefinition",
+    "CapabilityEvidence",
+    "CapabilityId",
     "BehaviourDraft",
     "BehaviourCard",
     "Card",
@@ -102,6 +122,8 @@ __all__ = [
     "FormRequest",
     "FormResponse",
     "InteractionType",
+    "InterviewConfig",
+    "InterviewContext",
     "MetricParam",
     "MetricSpec",
     "Option",
@@ -121,6 +143,8 @@ __all__ = [
     "ScenarioCard",
     "ScenarioDraft",
     "InterviewState",
+    "Perspective",
+    "PerspectiveDefinition",
     "StepResult",
     "StepResultPatch",
     "Task",

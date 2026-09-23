@@ -64,6 +64,10 @@ function validFixture(value: unknown): value is LocalFixture {
 function validState(value: unknown): value is InterviewState {
   if (!value || typeof value !== "object") return false;
   const state = value as Partial<InterviewState>;
+  const context = state.context;
+  if (!context || typeof context !== "object") return false;
+  const evidence = context.capability_evidence;
+  if (!evidence || typeof evidence !== "object") return false;
   return (
     !!state.profile &&
     typeof state.profile === "object" &&
@@ -74,6 +78,8 @@ function validState(value: unknown): value is InterviewState {
     Array.isArray(state.history) &&
     Array.isArray(state.user_typed) &&
     Array.isArray(state.issued_ids) &&
+    Array.isArray(evidence.known_capability_ids) &&
+    typeof evidence.confidence === "string" &&
     (state.pending === null ||
       (typeof state.pending === "object" && state.pending !== null))
   );

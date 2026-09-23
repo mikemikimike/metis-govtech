@@ -26,18 +26,33 @@ from metis.wizard.contracts import (
     ChoiceResponse,
     Option,
     OptionId,
+    Perspective,
     Product,
     ProductProfile,
 )
 from metis.wizard.contracts.interview_state import InterviewState
 from metis.wizard.domain.permissions import InterviewStep
+from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer, ScriptedMatcher
 
 
-def _start(*, interviewer=None):
+def _start(
+    *,
+    interviewer=None,
+    perspective=Perspective.END_USER,
+    known_capability_ids=None,
+    capability_confidence="low",
+):
     return handle_interview(
-        InterviewStartRequest(description="A research assistant"),
+        InterviewStartRequest(
+            description="A research assistant",
+            perspective=perspective,
+            known_capability_ids=(
+                [] if known_capability_ids is None else known_capability_ids
+            ),
+            capability_confidence=capability_confidence,
+        ),
         interviewer=interviewer or ScriptedInterviewer(),
         matcher=None,
     )
@@ -70,6 +85,7 @@ def _empty_profile() -> ProductProfile:
 def _pending_choice(request_id: str = "req-1") -> InterviewState:
     return InterviewState(
         profile=research_assistant(),
+        context=interview_context(),
         pending=ChoiceRequest(
             prompt="Do these look right?",
             options=[Option(id=OptionId(action="continue"), label="Continue")],
@@ -88,9 +104,60 @@ def test_start_records_the_raw_description_as_the_first_user_turn() -> None:
     assert result.state.pending is not None
 
 
+def test_start_records_a_perspective_and_reuses_it_on_the_next_turn() -> None:
+    class RecordingInterviewer(ScriptedInterviewer):
+        def __init__(self) -> None:
+            super().__init__()
+            self.seen: list[Perspective] = []
+
+        def clarify(self, profile, history, context=None):
+            assert context is not None
+            self.seen.append(context.perspective)
+            return super().clarify(profile, history, context)
+
+    interviewer = RecordingInterviewer()
+    started = _start(interviewer=interviewer, perspective=Perspective.SECURITY)
+    assert isinstance(started, InterviewSuccess)
+    assert started.state.context.perspective is Perspective.SECURITY
+
+    continued = _turn(
+        started.state,
+        ChatResponse(text="It answers policy questions."),
+        interviewer=interviewer,
+    )
+
+    assert isinstance(continued, InterviewSuccess)
+    assert interviewer.seen
+    assert all(perspective is Perspective.SECURITY for perspective in interviewer.seen)
+
+
+def test_start_records_capability_evidence_and_keeps_it_on_a_later_turn() -> None:
+    started = _start(
+        known_capability_ids=["tool_use", "internet_search_access"],
+        capability_confidence="medium",
+    )
+    assert isinstance(started, InterviewSuccess)
+    evidence = started.state.context.capability_evidence
+    assert [item.value for item in evidence.known_capability_ids] == [
+        "tool_use",
+        "internet_search_access",
+    ]
+    assert evidence.confidence.value == "medium"
+
+    continued = _turn(
+        started.state,
+        ChatResponse(text="It searches the internal library."),
+    )
+
+    assert isinstance(continued, InterviewSuccess)
+    assert continued.state.context.capability_evidence == evidence
+
+
 def test_start_with_whitespace_is_rejected_before_processing() -> None:
     with pytest.raises(ValueError):
-        InterviewStartRequest(description="  ")
+        InterviewStartRequest(
+            description="  ", known_capability_ids=[], capability_confidence="low"
+        )
 
 
 def test_explicit_none_disables_the_configured_matcher(
@@ -112,6 +179,7 @@ def test_explicit_none_disables_the_configured_matcher(
     profile.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
     state = InterviewState(
         profile=profile,
+        context=interview_context(),
         pending=ChoiceRequest(
             prompt="Review Behaviours",
             options=[Option(id=OptionId(action="continue"), label="Continue")],
@@ -174,7 +242,9 @@ def test_a_behaviour_measurement_change_stays_pending_before_continue() -> None:
     pending = behaviours_screen(profile, "Review Behaviours")
     pending.request_id = "req-behaviours"
     pending.stage = InterviewStep.BEHAVIOURS
-    state = InterviewState(profile=profile, pending=pending)
+    state = InterviewState(
+        profile=profile, context=interview_context(), pending=pending
+    )
 
     result = _turn(
         state,
@@ -190,7 +260,7 @@ def test_a_behaviour_measurement_change_stays_pending_before_continue() -> None:
 
 
 class ClarifyUnavailable(ScriptedInterviewer):
-    def clarify(self, profile, history, phase="product"):
+    def clarify(self, profile, history, context=None):
         raise InterviewerOutputError("three attempts, all failed")
 
 
@@ -214,7 +284,11 @@ def test_end_finishes_a_completable_interview() -> None:
     profile = research_assistant()
     profile.behaviour("EB-1").criteria[0].metric_fqn = None  # type: ignore[union-attr]
     result = _end(
-        InterviewState(profile=profile, behaviours_confirmed=True),
+        InterviewState(
+            profile=profile,
+            context=interview_context(),
+            behaviours_confirmed=True,
+        ),
         matcher=ScriptedMatcher(),
     )
 
@@ -232,6 +306,7 @@ def test_final_continue_completes_a_ready_specification() -> None:
     pending.stage = InterviewStep.SCENARIOS
     state = InterviewState(
         profile=profile,
+        context=interview_context(),
         behaviours_confirmed=True,
         pending=pending,
     )
@@ -247,7 +322,9 @@ def test_final_continue_completes_a_ready_specification() -> None:
 def test_end_on_a_held_gate_preserves_state() -> None:
     profile = research_assistant()
     profile.scenarios = [s for s in profile.scenarios if s.id != "S-2"]
-    state = InterviewState(profile=profile, behaviours_confirmed=True)
+    state = InterviewState(
+        profile=profile, context=interview_context(), behaviours_confirmed=True
+    )
 
     result = _end(state)
 
@@ -259,13 +336,14 @@ def test_end_on_a_held_gate_preserves_state() -> None:
 
 def test_failed_end_preserves_pending_state_for_a_later_turn() -> None:
     class DraftUnavailable(ScriptedInterviewer):
-        def draft_behaviours(self, profile, history):
+        def draft_behaviours(self, profile, history, context=None):
             raise InterviewerOutputError("three attempts, all failed")
 
     state = InterviewState(
         profile=ProductProfile(
             product=Product(name="Tool", description="A tool", users="Analysts")
         ),
+        context=interview_context(),
         pending=ChoiceRequest(
             prompt="Review behaviours",
             options=[Option(id=OptionId(action="continue"), label="Continue")],
@@ -291,7 +369,10 @@ def test_failed_end_preserves_pending_state_for_a_later_turn() -> None:
 def test_end_on_a_completed_state_does_not_call_the_model() -> None:
     interviewer = ScriptedInterviewer()
     state = InterviewState(
-        profile=research_assistant(), behaviours_confirmed=True, confirmed=True
+        profile=research_assistant(),
+        context=interview_context(),
+        behaviours_confirmed=True,
+        confirmed=True,
     )
 
     result = _end(state, interviewer=interviewer)
@@ -311,11 +392,20 @@ def test_end_on_a_completed_state_does_not_call_the_model() -> None:
 @pytest.mark.parametrize(
     ("state", "expected"),
     [
-        (InterviewState(profile=_empty_profile()), InterviewStep.CLARIFY),
-        (InterviewState(profile=research_assistant()), InterviewStep.BEHAVIOURS),
+        (
+            InterviewState(profile=_empty_profile(), context=interview_context()),
+            InterviewStep.CLARIFY,
+        ),
+        (
+            InterviewState(profile=research_assistant(), context=interview_context()),
+            InterviewStep.BEHAVIOURS,
+        ),
         (
             InterviewState(
-                profile=research_assistant(), behaviours_confirmed=True, confirmed=True
+                profile=research_assistant(),
+                context=interview_context(),
+                behaviours_confirmed=True,
+                confirmed=True,
             ),
             InterviewStep.DONE,
         ),
@@ -330,7 +420,9 @@ def test_derive_stage_reads_the_profile_top_to_bottom(
 def test_criteria_precede_personas_when_a_measured_behaviour_lacks_them() -> None:
     profile = research_assistant()
     profile.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
-    state = InterviewState(profile=profile, behaviours_confirmed=True)
+    state = InterviewState(
+        profile=profile, context=interview_context(), behaviours_confirmed=True
+    )
 
     assert derive_stage(state) is InterviewStep.CRITERIA
 
@@ -341,6 +433,7 @@ def test_behaviour_edit_clears_both_confirmation_locks() -> None:
     working = DriverState(
         step=InterviewStep.BEHAVIOURS,
         profile=profile,
+        context=interview_context(),
         behaviours_confirmed=True,
         confirmed=True,
     )

@@ -49,7 +49,11 @@ def test_concrete_request_models_have_flat_required_fields(client: TestClient) -
     schemas = client.get("/openapi.json").json()["components"]["schemas"]
 
     start = schemas["InterviewStartRequest"]
-    assert start["required"] == ["description"]
+    assert start["required"] == [
+        "description",
+        "known_capability_ids",
+        "capability_confidence",
+    ]
     assert start["additionalProperties"] is False
 
     turn = schemas["InterviewTurnRequest"]

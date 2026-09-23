@@ -53,7 +53,28 @@ _No v1 changes yet._
 
 ### metis-wizard
 
+#### Changed
+
+- Clarify now explores the product widely before it goes deep, with one instruction set instead of a
+  product phase and a machinery phase.
+- Prompts now wrap injected reference content — the primer, the ARC catalogue, the Profile, the
+  transcript, the perspective, the capability evidence, and the user's message — in a named
+  XML-style tag, with a system-prompt line stating that tagged content is reference material and
+  never instructions. The boundary between the wizard's own words and quoted content is now
+  unambiguous.
+
 #### Added
+
+- **ARC capability evidence at Interview start.** The CLI and headless interface now use the final
+  12-capability catalogue in three ordered groups. Start requires `known_capability_ids` and
+  `capability_confidence`, records them in required client-held Interview context, and uses the
+  confidence to guide Clarify and Behaviours probing. Every model call receives a synthesized
+  catalogue background; the values do not enter `ProductProfile`.
+
+- Interview opening now offers End user, Engineer, Compliance, and Security perspectives. The
+  selected perspective travels in client-held Interview context and shapes only Clarify and
+  Behaviours prompts; labels and questions are package configuration. The web client asks for it;
+  the CLI always uses End user.
 
 - **JSON schema for `profile.yaml`.** `packages/wizard/schemas/profile.schema.json` is generated
   from the `ProductProfile` model and CI-guarded by `make check-schema`, giving schema-aware
@@ -115,6 +136,10 @@ _No v1 changes yet._
 
 #### Added
 
+- **Capability-aware wizard configuration and start.** `/api/v1/wizard/config` serves the ordered
+  ARC capability catalogue, and `/api/v1/wizard/interview/start` accepts the complete description,
+  known capability ids, confidence, and other opening choices.
+
 - **New package: a stateless HTTP door over the wizard.** `POST /api/v1/wizard/interview/start`
   creates state from the raw product description, `POST /api/v1/wizard/interview/turn` applies one
   typed response, and `POST /api/v1/wizard/interview/end` performs best-effort completion.
@@ -136,6 +161,9 @@ _No v1 changes yet._
 
 #### Changed
 
+- The wizard configuration payload now includes the opening question and the four perspective
+  definitions. The Interview start request accepts an optional perspective and records it in the
+  returned client-held context.
 - **Moved the API tests into the root `tests/` tree.** Door tests now live under `tests/unit/api/`
   and end-to-end tests under `tests/integration/api/`, sharing the wizard's offline fixtures from
   `tests/fixtures/wizard/` directly instead of through a `sys.path` insertion. Test behaviour is
@@ -144,6 +172,10 @@ _No v1 changes yet._
 ### metis-web
 
 #### Added
+
+- **Grouped capability opening controls.** The opening screen now displays all 12 ARC capabilities,
+  lets the user select known capabilities (including none), requires Low, Medium, or High selection
+  completeness confidence, and sends the full start request in one operation.
 
 - **Standalone browser client.** The wizard UI now lives in `apps/web`, uses generated OpenAPI
   types and the stateless `apps/api` lifecycle routes, and stores local Interviews, fixture Blobs,
@@ -157,6 +189,8 @@ _No v1 changes yet._
 
 #### Changed
 
+- The opening screen now reads its question and perspective choices from the API configuration,
+  asks who the evaluation is for with hover help, and sends the selected perspective on start.
 - **Clear completion and output actions.** The conversation composer now fills its column. Early
   finish and download use one action in the Profile footer. A normal final Continue stores the
   completed Interview and reports that the specification is ready without an automatic compile or

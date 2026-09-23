@@ -9,10 +9,10 @@ Every method returns structured output. Nothing here returns prose the caller ha
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from metis.wizard.contracts.interview_state import Turn
+    from metis.wizard.contracts.interview_state import InterviewContext, Turn
     from metis.wizard.contracts.output import ClarifyResult, StepResult
     from metis.wizard.domain.profile import ProductProfile
 
@@ -25,9 +25,6 @@ class InterviewerOutputError(RuntimeError):
     """An interviewer could not return a valid structured result after its retries."""
 
 
-ClarifyPhase: TypeAlias = Literal["product", "machinery"]
-
-
 class Interviewer(Protocol):
     """The model, from the driver's point of view."""
 
@@ -35,37 +32,60 @@ class Interviewer(Protocol):
         self,
         profile: ProductProfile,
         history: list[Turn],
-        phase: ClarifyPhase = "product",
+        context: InterviewContext | None = None,
     ) -> ClarifyResult:
         """One open question, or done. The only step the model may end on its own."""
         ...
 
     def draft_behaviours(
-        self, profile: ProductProfile, history: list[Turn]
+        self,
+        profile: ProductProfile,
+        history: list[Turn],
+        context: InterviewContext | None = None,
     ) -> StepResult:
         """Tasks and behaviours. No criteria yet."""
         ...
 
-    def draft_criteria(self, profile: ProductProfile) -> StepResult:
+    def draft_criteria(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
         """Criteria for every ticked behaviour that lacks them, in one call."""
         ...
 
-    def draft_personas(self, profile: ProductProfile) -> StepResult:
+    def draft_personas(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
         """Archetypes, justified by what the user chose to measure."""
         ...
 
-    def draft_scenarios(self, profile: ProductProfile) -> StepResult:
+    def draft_scenarios(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
         """The whole covering set, in one call."""
         ...
 
     def chat(
-        self, profile: ProductProfile, step: str, text: str, target: str | None
+        self,
+        profile: ProductProfile,
+        step: str,
+        text: str,
+        target: str | None,
+        context: InterviewContext | None = None,
     ) -> StepResult:
         """A free-text exchange, answered with suggested edits as chips."""
         ...
 
     def suggest_criterion(
-        self, profile: ProductProfile, behaviour_id: str
+        self,
+        profile: ProductProfile,
+        behaviour_id: str,
+        context: InterviewContext | None = None,
     ) -> StepResult:
         """Exactly one new criterion for the named behaviour, as a single add patch.
 

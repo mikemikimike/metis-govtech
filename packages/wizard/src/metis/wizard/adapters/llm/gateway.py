@@ -37,7 +37,6 @@ from pydantic import BaseModel, ValidationError
 
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import (
-    ClarifyPhase,
     InterviewerOutputError,
     InterviewerUnavailable,
 )
@@ -47,7 +46,7 @@ from metis.wizard.domain.applier import PatchValueError, validate_model_patches
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from metis.wizard.contracts.interview_state import Turn
+    from metis.wizard.contracts.interview_state import InterviewContext, Turn
     from metis.wizard.domain.profile import ProductProfile
 
 BASE_URL_VAR = "OPENAI_BASE_URL"
@@ -204,10 +203,10 @@ class GatewayInterviewer:
         self,
         profile: ProductProfile,
         history: list[Turn],
-        phase: ClarifyPhase = "product",
+        context: InterviewContext | None = None,
     ) -> ClarifyResult:
         result, _ = self._ask(
-            prompts.clarify(profile, history, phase),
+            prompts.clarify(profile, history, context),
             ClarifyResult,
             validate=lambda candidate: validate_model_patches(
                 profile, candidate.patches
@@ -216,29 +215,52 @@ class GatewayInterviewer:
         return result
 
     def draft_behaviours(
-        self, profile: ProductProfile, history: list[Turn]
+        self,
+        profile: ProductProfile,
+        history: list[Turn],
+        context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.behaviours(profile, history), profile)
+        return self._step(prompts.behaviours(profile, history, context), profile)
 
-    def draft_criteria(self, profile: ProductProfile) -> StepResult:
-        return self._step(prompts.criteria(profile), profile)
+    def draft_criteria(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
+        return self._step(prompts.criteria(profile, context), profile)
 
-    def draft_personas(self, profile: ProductProfile) -> StepResult:
-        return self._step(prompts.personas(profile), profile)
+    def draft_personas(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
+        return self._step(prompts.personas(profile, context), profile)
 
-    def draft_scenarios(self, profile: ProductProfile) -> StepResult:
-        return self._step(prompts.scenarios(profile), profile)
+    def draft_scenarios(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
+        return self._step(prompts.scenarios(profile, context), profile)
 
     def chat(
-        self, profile: ProductProfile, step: str, text: str, target: str | None
+        self,
+        profile: ProductProfile,
+        step: str,
+        text: str,
+        target: str | None,
+        context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.chat(profile, step, text, target), profile)
+        return self._step(prompts.chat(profile, step, text, target, context), profile)
 
     def suggest_criterion(
-        self, profile: ProductProfile, behaviour_id: str
+        self,
+        profile: ProductProfile,
+        behaviour_id: str,
+        context: InterviewContext | None = None,
     ) -> StepResult:
         return self._step(
-            prompts.suggest_criterion(profile, behaviour_id),
+            prompts.suggest_criterion(profile, behaviour_id, context),
             profile,
         )
 

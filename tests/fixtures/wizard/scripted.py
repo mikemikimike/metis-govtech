@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from metis.wizard.application import Turn
-from metis.wizard.application.interviewer import ClarifyPhase
+from metis.wizard.application.config import clarify_turn_cap
 from metis.wizard.application.matching import GENERATED_JUDGE_FQN
 from metis.wizard.contracts import (
     ClarifyResult,
@@ -27,7 +27,7 @@ from metis.wizard.contracts import (
 from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
-    from metis.wizard.contracts import AnyRequest, InterviewState
+    from metis.wizard.contracts import AnyRequest, InterviewContext, InterviewState
 
 
 @dataclass
@@ -41,14 +41,31 @@ class ScriptedInterviewer:
         self,
         profile: ProductProfile,
         history: list[Turn],
-        phase: ClarifyPhase = "product",
+        context: InterviewContext | None = None,
     ) -> ClarifyResult:
         self.calls.append("clarify")
         asked = sum(1 for t in history if t.role == "assistant")
         if history and history[0].text.startswith("Tell me about your product"):
             asked -= 1
         if asked >= self.clarify_questions:
-            return ClarifyResult(message="", done=True)
+            latest_answer = next(
+                (turn.text for turn in reversed(history) if turn.role == "user"),
+                "",
+            )
+            patches = []
+            if latest_answer and self.clarify_questions >= clarify_turn_cap():
+                current_detail = profile.product.detail.strip()
+                merged_detail = "\n".join(
+                    part for part in (current_detail, latest_answer) if part
+                )
+                patches.append(
+                    Patch(
+                        op=PatchOp.SET,
+                        path="product.detail",
+                        value=merged_detail,
+                    )
+                )
+            return ClarifyResult(message="", done=True, patches=patches)
         patches = []
         if not profile.product.description or not profile.product.users:
             patches = [
@@ -80,7 +97,10 @@ class ScriptedInterviewer:
         )
 
     def draft_behaviours(
-        self, profile: ProductProfile, history: list[Turn]
+        self,
+        profile: ProductProfile,
+        history: list[Turn],
+        context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("draft_behaviours")
         return StepResult(
@@ -121,7 +141,11 @@ class ScriptedInterviewer:
             ],
         )
 
-    def draft_criteria(self, profile: ProductProfile) -> StepResult:
+    def draft_criteria(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
         self.calls.append("draft_criteria")
         patches = []
         for behaviour in profile.measured_behaviours():
@@ -142,7 +166,11 @@ class ScriptedInterviewer:
             )
         return StepResult(message="Here are the criteria.", patches=patches)
 
-    def draft_personas(self, profile: ProductProfile) -> StepResult:
+    def draft_personas(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
         self.calls.append("draft_personas")
         return StepResult(
             message="You're measuring citations and recovery, so these will stress both.",
@@ -166,7 +194,11 @@ class ScriptedInterviewer:
             ],
         )
 
-    def draft_scenarios(self, profile: ProductProfile) -> StepResult:
+    def draft_scenarios(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
         self.calls.append("draft_scenarios")
         covered = [b.id for b in profile.measured_behaviours()]
         personas = [p.id for p in profile.personas]
@@ -189,13 +221,21 @@ class ScriptedInterviewer:
         )
 
     def chat(
-        self, profile: ProductProfile, step: str, text: str, target: str | None
+        self,
+        profile: ProductProfile,
+        step: str,
+        text: str,
+        target: str | None,
+        context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("chat")
         return StepResult(message=f"Noted: {text}")
 
     def suggest_criterion(
-        self, profile: ProductProfile, behaviour_id: str
+        self,
+        profile: ProductProfile,
+        behaviour_id: str,
+        context: InterviewContext | None = None,
     ) -> StepResult:
         """One new criterion for the named behaviour — a single add, as the driver requires.
 
@@ -238,8 +278,12 @@ class RejectingInterviewer(ScriptedInterviewer):
     happening in silence.
     """
 
-    def draft_criteria(self, profile: ProductProfile) -> StepResult:
-        result = super().draft_criteria(profile)
+    def draft_criteria(
+        self,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
+        result = super().draft_criteria(profile, context=context)
         result.patches.append(
             Patch(
                 op=PatchOp.SET, path="tasks[T-1].behaviours[EB-2].measured", value=True
@@ -325,7 +369,11 @@ def walk(
     drive = send or _in_process
 
     state = None
-    request: object = InterviewStartRequest(description=description)
+    request: object = InterviewStartRequest(
+        description=description,
+        known_capability_ids=[],
+        capability_confidence="low",
+    )
     seen: list[object] = []
     max_bytes = 0
     scope_changed = False

@@ -42,8 +42,34 @@ Use `make check-web` for non-mutating web checks. Use `make build-web` when you 
 Vite output. The web requests metric summaries only after a Profile contains a Criterion, and a
 failed metric request does not block the Interview.
 
-The web gets its busy message from `GET /api/v1/wizard/config`. The wizard package owns this text
-in `packages/wizard/src/metis/wizard/config.yaml` with the other Interview status messages.
+The web gets its opening question, busy message, perspective labels and questions, and the grouped
+ARC capability catalogue from `GET /api/v1/wizard/config`. The wizard package owns these values in
+`packages/wizard/src/metis/wizard/config.yaml` and
+`packages/wizard/src/metis/wizard/capabilities.yaml`. The perspective prompt content is separate,
+editable files in `packages/wizard/src/metis/wizard/application/perspectives/`.
+
+The opening flow first shows the product question and composer. Four full-width perspective choices
+follow under **Who is this evaluation for?** Each choice shows its configured question on hover and
+keyboard focus. Continue then shows the capability catalogue and confidence choice without calling
+the API. Capability descriptions also appear on hover and keyboard focus. The capability list can
+be empty. Confidence is required and answers how complete the selection is, so the screen does not
+preselect Low, Medium, or High. The catalogue keeps its three configured groups and does not change
+when the perspective changes. **Start interview** sends all opening values in one request.
+
+The browser sends one start request:
+
+```json
+{
+  "description": "A research assistant",
+  "known_capability_ids": ["internet_search_access"],
+  "capability_confidence": "medium",
+  "perspective": "end_user"
+}
+```
+
+The response state carries the opening values at `context.capability_evidence`. The browser keeps
+that state and sends it unchanged on later turns. Capability evidence is not written into the
+Profile or the finished specification.
 
 The opening screen also offers **Write it yourself** for users who already know the experiment
 they want to run. This manual path asks for an experiment ID and description, personas, scenarios,

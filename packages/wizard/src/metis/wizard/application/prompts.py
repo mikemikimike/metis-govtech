@@ -15,8 +15,16 @@ from typing import TYPE_CHECKING, Literal, TypeAlias, cast
 
 import yaml
 
-from metis.wizard.application.config import clarify_turn_cap, opening_question
-from metis.wizard.application.interviewer import ClarifyPhase
+from metis.wizard.application.config import (
+    clarify_turn_cap,
+    load_config,
+    opening_question,
+)
+from metis.wizard.contracts.interview_state import (
+    CapabilityConfidence,
+    InterviewContext,
+    Perspective,
+)
 
 if TYPE_CHECKING:
     from metis.wizard.contracts.interview_state import Turn
@@ -24,6 +32,7 @@ if TYPE_CHECKING:
 
 PROMPTS_FILE = "prompts.yaml"
 PRIMER_FILE = "agentic-primer.md"
+PERSPECTIVES_DIR = "perspectives"
 
 ModelCall: TypeAlias = Literal[
     "clarify",
@@ -36,30 +45,29 @@ ModelCall: TypeAlias = Literal[
 ]
 
 _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
-    "clarify_product": frozenset(
+    "clarify": frozenset(
         {
             "profile",
             "history",
-            "question_number",
+            "perspective",
+            "capability_evidence",
+            "questions_asked",
             "question_cap",
+            "questions_remaining",
         }
     ),
-    "clarify_machinery": frozenset(
-        {
-            "profile",
-            "history",
-            "question_number",
-            "question_cap",
-        }
+    "behaviours": frozenset(
+        {"profile", "history", "perspective", "capability_evidence"}
     ),
-    "behaviours": frozenset({"profile", "history"}),
     "criteria": frozenset({"profile"}),
     "personas": frozenset({"profile"}),
     "scenarios": frozenset({"profile"}),
     "chat": frozenset({"profile", "step", "text", "scope"}),
     "suggest_criterion": frozenset({"profile", "behaviour_id"}),
 }
-_SYSTEM_PLACEHOLDERS = frozenset({"patch_rules", "primer"})
+_SYSTEM_PLACEHOLDERS = frozenset(
+    {"patch_rules", "primer", "arc_catalogue", "perspective"}
+)
 
 
 class PromptCatalogError(RuntimeError):
@@ -181,11 +189,23 @@ def primer() -> str:
         raise PromptCatalogError(f"{PRIMER_FILE} is missing.") from exc
 
 
-def _system_message(catalog: PromptCatalog) -> str:
+def _perspective_id(context: InterviewContext | None) -> str:
+    selected = context.perspective if context is not None else Perspective.END_USER
+    return selected.value
+
+
+def _system_message(
+    catalog: PromptCatalog, context: InterviewContext | None = None
+) -> str:
     return _substitute(
         catalog.system_template,
         "system.template",
-        {"patch_rules": catalog.patch_rules, "primer": primer()},
+        {
+            "patch_rules": catalog.patch_rules,
+            "primer": primer(),
+            "arc_catalogue": arc_catalogue(),
+            "perspective": _perspective_id(context),
+        },
     )
 
 
@@ -197,8 +217,79 @@ def _transcript(history: list[Turn]) -> str:
     return "\n".join(f"{t.role}: {t.text}" for t in history)
 
 
-def _clarify_position(history: list[Turn]) -> tuple[int, int]:
-    """Return the next model question's one-based position and the package cap."""
+def _perspective(context: InterviewContext | None) -> str:
+    """Read all supported perspective files and return the selected one, without caching."""
+    selected = context.perspective if context is not None else Perspective.END_USER
+    try:
+        directory = resources.files("metis.wizard.application").joinpath(
+            PERSPECTIVES_DIR
+        )
+    except (FileNotFoundError, ModuleNotFoundError) as exc:
+        raise PromptCatalogError(f"{PERSPECTIVES_DIR} is missing.") from exc
+    content: dict[Perspective, str] = {}
+    for perspective in Perspective:
+        path = directory.joinpath(f"{perspective.value}.md")
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (FileNotFoundError, ModuleNotFoundError) as exc:
+            raise PromptCatalogError(
+                f"{PERSPECTIVES_DIR}/{perspective.value}.md is missing."
+            ) from exc
+        if not text.strip():
+            raise PromptCatalogError(
+                f"{PERSPECTIVES_DIR}/{perspective.value}.md is empty."
+            )
+        content[perspective] = text.strip()
+    return f"{selected.value}\n{content[selected]}"
+
+
+def arc_catalogue() -> str:
+    """Render the fixed ARC catalogue for the general model context."""
+    current = load_config()
+    lines = ["The ARC capability catalogue:"]
+    for category in current.capability_categories:
+        lines.append(f"{category.name} ({category.id.value}):")
+        for capability in category.capabilities:
+            lines.append(
+                f"- {capability.name} [{capability.id.value}]: {capability.description}"
+            )
+    return "\n".join(lines)
+
+
+def _capability_evidence(context: InterviewContext | None) -> str:
+    """Describe the user's capability evidence without treating omissions as negatives."""
+    if context is None:
+        raise PromptCatalogError("capability evidence is required for this model call.")
+    evidence = context.capability_evidence
+    selected = ", ".join(item.value for item in evidence.known_capability_ids) or "none"
+    guidance = {
+        CapabilityConfidence.LOW: (
+            "Treat the selection as possibly incomplete while you infer the provisional "
+            "evaluation map. Consider plausible omitted capabilities across the Clarify "
+            "sequence, but ask about one only when its presence or operation could "
+            "materially change that map."
+        ),
+        CapabilityConfidence.MEDIUM: (
+            "Consider an unselected capability only when it relates to the product "
+            "description or later answers and could materially change the provisional "
+            "evaluation map."
+        ),
+        CapabilityConfidence.HIGH: (
+            "Rely on the selection unless other product evidence suggests an omitted "
+            "capability that could materially change the provisional evaluation map."
+        ),
+    }[evidence.confidence]
+    return (
+        f"Known capability ids selected by the user: {selected}.\n"
+        f"Selection confidence: {evidence.confidence.value}.\n"
+        "Selected capabilities are known present. Unselected capabilities are not known "
+        "absent.\n"
+        f"Guidance: {guidance}"
+    )
+
+
+def _clarify_progress(history: list[Turn]) -> tuple[int, int, int]:
+    """Return questions asked, the package cap, and questions remaining."""
     asked = sum(1 for turn in history if turn.role == "assistant")
     if (
         history
@@ -206,7 +297,9 @@ def _clarify_position(history: list[Turn]) -> tuple[int, int]:
         and history[0].text == opening_question()
     ):
         asked -= 1
-    return max(1, asked + 1), clarify_turn_cap()
+    cap = clarify_turn_cap()
+    asked = max(0, asked)
+    return asked, cap, max(0, cap - asked)
 
 
 def _compose(
@@ -214,6 +307,7 @@ def _compose(
     values: Mapping[str, str],
     *,
     call_name: ModelCall | None = None,
+    context: InterviewContext | None = None,
 ) -> ModelPrompt:
     """Compose system and user messages from one fresh catalogue snapshot."""
     catalog = load_prompt_catalog()
@@ -224,7 +318,7 @@ def _compose(
     )
     return ModelPrompt(
         name=cast("ModelCall", call_name or template_name),
-        system=_system_message(catalog),
+        system=_system_message(catalog, context),
         user=user,
     )
 
@@ -232,42 +326,66 @@ def _compose(
 def clarify(
     profile: ProductProfile,
     history: list[Turn],
-    phase: ClarifyPhase = "product",
+    context: InterviewContext | None = None,
 ) -> ModelPrompt:
-    template_name = "clarify_product" if phase == "product" else "clarify_machinery"
-    question_number, question_cap = _clarify_position(history)
+    questions_asked, question_cap, questions_remaining = _clarify_progress(history)
     return _compose(
-        template_name,
+        "clarify",
         {
             "profile": _profile(profile),
             "history": _transcript(history),
-            "question_number": str(question_number),
+            "perspective": _perspective(context),
+            "capability_evidence": _capability_evidence(context),
+            "questions_asked": str(questions_asked),
             "question_cap": str(question_cap),
+            "questions_remaining": str(questions_remaining),
         },
         call_name="clarify",
+        context=context,
     )
 
 
-def behaviours(profile: ProductProfile, history: list[Turn]) -> ModelPrompt:
+def behaviours(
+    profile: ProductProfile,
+    history: list[Turn],
+    context: InterviewContext | None = None,
+) -> ModelPrompt:
     return _compose(
-        "behaviours", {"profile": _profile(profile), "history": _transcript(history)}
+        "behaviours",
+        {
+            "profile": _profile(profile),
+            "history": _transcript(history),
+            "perspective": _perspective(context),
+            "capability_evidence": _capability_evidence(context),
+        },
+        context=context,
     )
 
 
-def criteria(profile: ProductProfile) -> ModelPrompt:
-    return _compose("criteria", {"profile": _profile(profile)})
+def criteria(
+    profile: ProductProfile, context: InterviewContext | None = None
+) -> ModelPrompt:
+    return _compose("criteria", {"profile": _profile(profile)}, context=context)
 
 
-def personas(profile: ProductProfile) -> ModelPrompt:
-    return _compose("personas", {"profile": _profile(profile)})
+def personas(
+    profile: ProductProfile, context: InterviewContext | None = None
+) -> ModelPrompt:
+    return _compose("personas", {"profile": _profile(profile)}, context=context)
 
 
-def scenarios(profile: ProductProfile) -> ModelPrompt:
-    return _compose("scenarios", {"profile": _profile(profile)})
+def scenarios(
+    profile: ProductProfile, context: InterviewContext | None = None
+) -> ModelPrompt:
+    return _compose("scenarios", {"profile": _profile(profile)}, context=context)
 
 
 def chat(
-    profile: ProductProfile, step: str, text: str, target: str | None
+    profile: ProductProfile,
+    step: str,
+    text: str,
+    target: str | None,
+    context: InterviewContext | None = None,
 ) -> ModelPrompt:
     scope = f"\nThey are talking about {target}." if target else ""
     return _compose(
@@ -278,24 +396,31 @@ def chat(
             "text": text,
             "scope": scope,
         },
+        context=context,
     )
 
 
-def suggest_criterion(profile: ProductProfile, behaviour_id: str) -> ModelPrompt:
+def suggest_criterion(
+    profile: ProductProfile,
+    behaviour_id: str,
+    context: InterviewContext | None = None,
+) -> ModelPrompt:
     return _compose(
         "suggest_criterion",
         {"profile": _profile(profile), "behaviour_id": behaviour_id},
+        context=context,
     )
 
 
 __all__ = [
     "ModelCall",
     "ModelPrompt",
-    "ClarifyPhase",
     "PROMPTS_FILE",
     "PRIMER_FILE",
+    "PERSPECTIVES_DIR",
     "PromptCatalog",
     "PromptCatalogError",
+    "arc_catalogue",
     "behaviours",
     "chat",
     "clarify",

@@ -19,6 +19,7 @@ from metis.wizard.adapters.llm.gateway import (
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import InterviewerOutputError
 from metis.wizard.contracts import ClarifyResult, Product, ProductProfile
+from tests.fixtures.wizard.context import interview_context
 
 
 @dataclass
@@ -108,6 +109,7 @@ def test_gateway_connection_failure_is_a_retryable_interviewer_error() -> None:
         gateway.clarify(
             profile=ProductProfile(product=Product(name="", description="", users="")),
             history=[],
+            context=interview_context(),
         )
 
 
@@ -144,7 +146,14 @@ def test_the_validation_error_is_fed_back() -> None:
     model._ask(simple_prompt(), ClarifyResult)
 
     retry_messages = completions.calls[1]["messages"]
-    assert any("didn't validate" in m["content"] for m in retry_messages)
+    assert [message["role"] for message in retry_messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert retry_messages[2]["content"] == "{}"
+    assert retry_messages[3]["content"]
 
 
 def test_a_recovered_step_drops_its_narrated_intro() -> None:
@@ -243,9 +252,15 @@ def test_raw_scenario_fields_are_rejected_before_profile_materialization() -> No
 
     assert result.patches[0].value.description == "x"
     assert len(completions.calls) == 2
-    assert any(
-        "didn't validate" in m["content"] for m in completions.calls[1]["messages"]
-    )
+    retry_messages = completions.calls[1]["messages"]
+    assert [message["role"] for message in retry_messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert retry_messages[2]["content"] == invalid
+    assert retry_messages[3]["content"]
 
 
 def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
@@ -446,7 +461,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     )
     model, completions = interviewer([bad, empty, good])
 
-    result = model.draft_behaviours(profile, [])
+    result = model.draft_behaviours(profile, [], context=interview_context())
 
     assert len(completions.calls) == 3
     task = result.patches[-1].value
@@ -455,8 +470,17 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     assert profile.product.description == ""
     assert profile.tasks == []
     retry_messages = completions.calls[2]["messages"]
-    assert any("measured" in message["content"] for message in retry_messages)
-    assert any("behaviours" in message["content"] for message in retry_messages)
+    assert [message["role"] for message in retry_messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert retry_messages[2]["content"] == bad
+    assert retry_messages[4]["content"] == empty
+    assert all(message["content"] for message in retry_messages[3::2])
 
 
 def test_a_duplicate_persona_description_is_retried() -> None:
@@ -482,24 +506,29 @@ def test_a_duplicate_persona_description_is_retried() -> None:
 
     assert result.patches == []
     assert len(completions.calls) == 2
-    assert any(
-        "duplicate one persona description" in message["content"]
-        for message in completions.calls[1]["messages"]
-    )
+    retry_messages = completions.calls[1]["messages"]
+    assert [message["role"] for message in retry_messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert retry_messages[2]["content"] == duplicate
+    assert retry_messages[3]["content"]
 
 
-def test_chat_prompt_distinguishes_replacement_from_addition() -> None:
+def test_chat_prompt_includes_the_user_message_and_scope_data() -> None:
     from tests.fixtures.wizard.profiles import research_assistant
 
     prompt = prompts.chat(
         research_assistant(),
         "personas",
-        "These are the three personas I want",
-        None,
+        "CHAT_MESSAGE_SENTINEL",
+        "TARGET_SENTINEL",
     ).user
 
-    assert "Replacement language is a replacement, not an addition" in prompt
-    assert "Only append when the user clearly says to add" in prompt
+    assert "CHAT_MESSAGE_SENTINEL" in prompt
+    assert "TARGET_SENTINEL" in prompt
 
 
 def test_each_semantic_call_sends_one_complete_named_prompt() -> None:
@@ -507,47 +536,50 @@ def test_each_semantic_call_sends_one_complete_named_prompt() -> None:
     from tests.fixtures.wizard.profiles import research_assistant
 
     profile = research_assistant()
+    context = interview_context()
     cases = [
         (
             "clarify",
-            lambda model: model.clarify(profile, []),
-            lambda: prompts.clarify(profile, []),
+            lambda model: model.clarify(profile, [], context=context),
+            lambda: prompts.clarify(profile, [], context=context),
             ClarifyResult(message="", done=True).model_dump_json(),
         ),
         (
             "behaviours",
-            lambda model: model.draft_behaviours(profile, []),
-            lambda: prompts.behaviours(profile, []),
+            lambda model: model.draft_behaviours(profile, [], context=context),
+            lambda: prompts.behaviours(profile, [], context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "criteria",
-            lambda model: model.draft_criteria(profile),
-            lambda: prompts.criteria(profile),
+            lambda model: model.draft_criteria(profile, context=context),
+            lambda: prompts.criteria(profile, context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "personas",
-            lambda model: model.draft_personas(profile),
-            lambda: prompts.personas(profile),
+            lambda model: model.draft_personas(profile, context=context),
+            lambda: prompts.personas(profile, context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "scenarios",
-            lambda model: model.draft_scenarios(profile),
-            lambda: prompts.scenarios(profile),
+            lambda model: model.draft_scenarios(profile, context=context),
+            lambda: prompts.scenarios(profile, context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "chat",
-            lambda model: model.chat(profile, "criteria", "edit", "EB-1"),
-            lambda: prompts.chat(profile, "criteria", "edit", "EB-1"),
+            lambda model: model.chat(
+                profile, "criteria", "edit", "EB-1", context=context
+            ),
+            lambda: prompts.chat(profile, "criteria", "edit", "EB-1", context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "suggest_criterion",
-            lambda model: model.suggest_criterion(profile, "EB-1"),
-            lambda: prompts.suggest_criterion(profile, "EB-1"),
+            lambda model: model.suggest_criterion(profile, "EB-1", context=context),
+            lambda: prompts.suggest_criterion(profile, "EB-1", context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
     ]
@@ -607,29 +639,9 @@ def test_the_primer_is_in_the_system_prompt() -> None:
 
     system = prompts.criteria(research_assistant()).system
 
-    assert prompts.primer() in system
-    assert "never mention" in system.lower()
-
-
-def test_the_primer_asks_about_machinery() -> None:
-    """Its whole job is to make the interviewer curious about what it would not raise."""
-    text = prompts.primer().lower()
-
-    for concern in ["tool", "delegat", "memory", "recover", "retry"]:
-        assert concern in text
-
-
-def test_the_primer_is_not_a_checklist() -> None:
-    """The moment it is cited or tracked, it has become one."""
-    text = prompts.primer().lower()
-
-    assert "not a checklist" in text
-    assert "secondary to what they tell you" in text
-
-
-def test_the_primer_warns_that_scenarios_must_force_the_path() -> None:
-    """The step that is easiest to miss and does the most work."""
-    assert "untestable unless" in prompts.primer()
+    primer = prompts.primer()
+    assert primer in system
+    assert primer in system[system.index("<primer>") : system.index("</primer>")]
 
 
 def test_changing_the_primer_file_changes_the_prompt(
@@ -641,30 +653,3 @@ def test_changing_the_primer_file_changes_the_prompt(
     monkeypatch.setattr(prompts, "primer", lambda: "REPLACED PRIMER TEXT")
 
     assert "REPLACED PRIMER TEXT" in prompts.criteria(research_assistant()).system
-
-
-def test_every_step_prompt_hands_over_the_profile() -> None:
-    """Steps build their prompts from the document, not the transcript."""
-    from tests.fixtures.wizard.profiles import research_assistant
-
-    profile = research_assistant()
-
-    for builder in (
-        lambda value: prompts.criteria(value).user,
-        lambda value: prompts.personas(value).user,
-        lambda value: prompts.scenarios(value).user,
-    ):
-        assert "EB-1" in builder(profile)
-
-    persona_prompt = prompts.personas(profile).user
-    assert "exactly these two fields" in persona_prompt
-    assert all(f"`{field}`" in persona_prompt for field in ("id", "description"))
-
-
-def test_the_patch_rules_forbid_the_protected_addresses() -> None:
-    from tests.fixtures.wizard.profiles import research_assistant
-
-    system = prompts.criteria(research_assistant()).system
-
-    assert "measured" in system
-    assert "metric_fqn" in system

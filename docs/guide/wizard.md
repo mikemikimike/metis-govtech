@@ -94,6 +94,43 @@ Give the wizard a plain description of the product to evaluate:
 metis wizard init "A research assistant that answers questions from a company's internal documents and always cites its sources."
 ```
 
+Before the first model question, `init` shows the fixed ARC capability catalogue. It has three
+groups (Cognitive, Interaction, and Operational) and 12 package-owned capabilities. Select known
+capabilities with comma-separated numbers, names, or stable ids. Submit a blank line when you know
+none. The command then asks for one confidence value: `low`, `medium`, or `high`. This value means
+how confident you are that the selection covers all capabilities the system has; it is not a value
+for each capability.
+
+The catalogue is owned by `metis-wizard` in
+`packages/wizard/src/metis/wizard/capabilities.yaml`. Its source is the GovTech Singapore Agentic
+Risk & Capability Framework, with Apache-2.0 attribution. The wizard does not fetch this source at
+run time.
+
+`init` does not ask who the evaluation is for. It always uses the End user perspective. To evaluate
+from the Engineer, Compliance, or Security perspective, use the web client, or send `perspective` in
+a headless start request (see [Headless start and state](#headless-start-and-state)).
+
+The opening description, the perspective, and the capability evidence give the Interview its
+initial view of the product. During Clarify, the model silently identifies the distinct things the
+product does from that evidence and the conversation. It covers those things widely before it
+examines one closely. A part that the opening evidence explains clearly enough for a provisional
+evaluation map already counts as covered; the wizard does not ask a redundant question only to mark
+it as covered. A question about how something the product does works, including its tools, failures,
+memory, delegation, coordination, or control, can come at any point when it is the most important
+unclear part. These are examples, not a checklist.
+
+Clarify questions are direct. They do not normally explain why the question was selected. When a
+brief understanding check would widen or deepen what it knows, the model may state what it takes
+the product to be and invite one correction. The check is brief and is not a formal Task list;
+Clarify owns the Product, while the later Behaviours step owns Tasks and Behaviours. Clarify ends
+when every established part of what the product does is covered or when the question limit is
+reached.
+
+After Clarify, the wizard groups Tasks by product workflow or user job and drafts a focused set of
+observable Behaviours that are important to evaluate. It does not use ARC categories,
+perspectives, capabilities, or system components as Task groups. Perspective changes emphasis, and
+capability evidence refines what can happen inside a workflow.
+
 The wizard opens an interview in the terminal. It asks about the product's behaviours, the personas
 and scenarios to test, and the criteria that decide a pass. You answer one screen at a time. The
 wizard saves the interview state to `evaluation/interview_state.json` after each turn, so an
@@ -125,6 +162,31 @@ metis wizard init "<description>" --restart
 
 Without `--restart`, `init` refuses to overwrite an interview in progress and points you to
 `resume`.
+
+### Headless start and state
+
+The stateless start operation carries all opening evidence:
+
+```json
+{
+  "description": "A research assistant",
+  "perspective": "end_user",
+  "known_capability_ids": ["internet_search_access"],
+  "capability_confidence": "medium"
+}
+```
+
+`known_capability_ids` and `capability_confidence` are required. `known_capability_ids` can be an
+empty list, but it must be present. The operation rejects unknown or duplicate ids.
+
+`perspective` is optional. If you do not send it, the Interview uses `end_user`. The other values
+are `engineer`, `compliance`, and `security`. Read the labels and questions for all four from
+`GET /api/v1/wizard/config`.
+
+The returned `InterviewState` always contains `context.perspective` and
+`context.capability_evidence` with the values from the start request. This context belongs to the
+Interview, not to `ProductProfile`, and it must be sent unchanged on later turns. Capability
+evidence is opening context, not a separate Interview step.
 
 ### Finish
 

@@ -19,6 +19,10 @@ const state = {
   },
   behaviours_confirmed: false,
   confirmed: false,
+  context: {
+    perspective: "end_user",
+    capability_evidence: { known_capability_ids: [], confidence: "low" },
+  },
   history: [],
   user_typed: [],
   issued_ids: [],
@@ -48,7 +52,10 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
     });
   };
 
-  await api.start("A support assistant");
+  await api.start("A support assistant", {
+    known_capability_ids: [],
+    confidence: "low",
+  });
   await api.respond(state, "request-1", {
     type: "chat",
     text: "It answers questions",
@@ -71,7 +78,12 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
       "/api/v1/wizard/package",
     ],
   );
-  assert.deepEqual(calls[0]?.body, { description: "A support assistant" });
+  assert.deepEqual(calls[0]?.body, {
+    description: "A support assistant",
+    perspective: "end_user",
+    known_capability_ids: [],
+    capability_confidence: "low",
+  });
   assert.deepEqual(calls[1]?.body, {
     state,
     request_id: "request-1",
@@ -79,6 +91,30 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
   });
   assert.deepEqual(calls[2]?.body, { state });
   assert.deepEqual(calls[3]?.body, state.profile);
+});
+
+test("sends the selected perspective and capability evidence when an Interview begins", async () => {
+  let body: unknown;
+  globalThis.fetch = async (_input, init) => {
+    body = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify(success), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  await api.start(
+    "A support assistant",
+    { known_capability_ids: ["tool_use"], confidence: "medium" },
+    "security",
+  );
+
+  assert.deepEqual(body, {
+    description: "A support assistant",
+    perspective: "security",
+    known_capability_ids: ["tool_use"],
+    capability_confidence: "medium",
+  });
 });
 
 test("packages a synthesized manual Profile and its fixtures as multipart", async () => {
@@ -183,7 +219,7 @@ test("typed failures in a successful HTTP response are still surfaced", async ()
       { status: 200 },
     );
   await assert.rejects(
-    api.start("bad"),
+    api.start("bad", { known_capability_ids: [], confidence: "low" }),
     (cause: unknown) =>
       cause instanceof TransportError &&
       cause.code === "invalid_response" &&

@@ -165,19 +165,21 @@ class StepDriver:
                 return ChatRequest(prompt=config.opening_question())
 
             asked = _clarify_questions_asked(state.history)
-            if asked < config.clarify_turn_cap():
-                phase = (
-                    "product"
-                    if not (profile.product.description and profile.product.users)
-                    else "machinery"
+            cap = config.clarify_turn_cap()
+            if asked <= cap:
+                result = self.interviewer.clarify(
+                    profile,
+                    state.history,
+                    context=state.context,
                 )
-                result = self.interviewer.clarify(profile, state.history, phase)
                 self._run(
                     state,
                     result,
                     allowed_paths=_CLARIFY_PRODUCT_PATHS,
                 )
-                if not result.done and result.message:
+                # The call at the bound is record-only. Its patches are required, but its
+                # message must never become a sixth question or enter the transcript.
+                if asked < cap and not result.done and result.message:
                     return ChatRequest(prompt=result.message)
             # Either the model is finished or the cap is reached. Draft regardless.
             state.step = InterviewStep.BEHAVIOURS
@@ -186,7 +188,11 @@ class StepDriver:
         if step is InterviewStep.BEHAVIOURS:
             if not profile.tasks:
                 self._try(
-                    lambda: self.interviewer.draft_behaviours(profile, state.history),
+                    lambda: self.interviewer.draft_behaviours(
+                        profile,
+                        state.history,
+                        context=state.context,
+                    ),
                     state,
                 )
             return self._attach(
@@ -202,14 +208,24 @@ class StepDriver:
 
         if step is InterviewStep.PERSONAS:
             if not profile.personas:
-                self._try(lambda: self.interviewer.draft_personas(profile), state)
+                self._try(
+                    lambda: self.interviewer.draft_personas(
+                        profile, context=state.context
+                    ),
+                    state,
+                )
             return self._attach(
                 screens.personas_screen(profile, self._message(InterviewStep.PERSONAS))
             )
 
         if step is InterviewStep.SCENARIOS:
             if not profile.scenarios:
-                self._try(lambda: self.interviewer.draft_scenarios(profile), state)
+                self._try(
+                    lambda: self.interviewer.draft_scenarios(
+                        profile, context=state.context
+                    ),
+                    state,
+                )
             return self._attach(
                 screens.scenarios_screen(
                     profile, self._message(InterviewStep.SCENARIOS)
@@ -266,7 +282,13 @@ class StepDriver:
         target = request.target
         before_texts = self._criterion_texts(state)
         try:
-            result = self.interviewer.chat(state.profile, str(state.step), text, target)
+            result = self.interviewer.chat(
+                state.profile,
+                str(state.step),
+                text,
+                target,
+                context=state.context,
+            )
         except InterviewerOutputError as exc:
             self.model_error = exc
             # Keep the direct driver API's warning behavior. The turn transaction checks
@@ -702,7 +724,11 @@ class StepDriver:
             return self._refuse_unresolved_target()
 
         try:
-            result = self.interviewer.suggest_criterion(state.profile, behaviour.id)
+            result = self.interviewer.suggest_criterion(
+                state.profile,
+                behaviour.id,
+                context=state.context,
+            )
         except InterviewerOutputError as exc:
             self.model_error = exc
             return self._refuse_suggestion()
@@ -781,7 +807,9 @@ class StepDriver:
             allowed_paths = frozenset()
         if allowed_paths:
             self._try(
-                lambda: self.interviewer.draft_criteria(state.profile),
+                lambda: self.interviewer.draft_criteria(
+                    state.profile, context=state.context
+                ),
                 state,
                 allowed_paths=allowed_paths,
                 allowed_ops=frozenset({PatchOp.ADD}),
@@ -915,13 +943,20 @@ class StepDriver:
             if question.kind == "criteria":
                 self._run(
                     state,
-                    self.interviewer.draft_criteria(state.profile),
+                    self.interviewer.draft_criteria(
+                        state.profile, context=state.context
+                    ),
                     allowed_paths=self._missing_measured_criteria_paths(state),
                     allowed_ops=frozenset({PatchOp.ADD}),
                 )
                 self.match(state)
             elif question.kind == "scenario":
-                self._run(state, self.interviewer.draft_scenarios(state.profile))
+                self._run(
+                    state,
+                    self.interviewer.draft_scenarios(
+                        state.profile, context=state.context
+                    ),
+                )
             elif question.kind == "tree":
                 state.step = InterviewStep.BEHAVIOURS
         elif action == "edit":

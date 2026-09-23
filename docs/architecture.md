@@ -133,6 +133,15 @@ The wizard exposes a stateless Interview lifecycle interface (`handle_interview`
 travels whole on each operation. The wizard MUST NOT own an HTTP server or a frontend; a web client
 reaches the Interview through `apps/api`. The CLI adapter drives the same lifecycle interface.
 
+The wizard owns the final 12-item ARC capability catalogue in
+`packages/wizard/src/metis/wizard/capabilities.yaml`. It serves the ordered categories through
+`InterviewConfig.capability_categories` and uses the same data to validate the required
+`InterviewStartRequest.known_capability_ids` and to build the general model background. The start
+request also requires `capability_confidence` (`low`, `medium`, or `high`). A returned
+`InterviewState` MUST contain `context.capability_evidence` with these values. Capability evidence
+is client-held Interview context, outside `ProductProfile`; it is not an Interview step and model
+patches MUST NOT write it. An unselected capability is unknown, not evidence of absence.
+
 ---
 
 ### 5.5. `metis-insights`
@@ -171,6 +180,12 @@ responses. No stage, Profile, prompt, matching, fixture validation, or compilati
 the API. The package route accepts a Profile JSON part and request-scoped fixture bytes and returns
 one `experiment.zip`; it retains no uploaded files.
 
+`GET /api/v1/wizard/config` returns the wizard-owned ordered ARC capability categories with the
+opening copy and perspective definitions. `POST /api/v1/wizard/interview/start` accepts the
+description, required known capability ids, required confidence, and any other opening choices,
+then passes them to the wizard facade. The API does not validate or store a separate capability
+catalogue.
+
 **Client-held state boundary.** The service holds only immutable settings and model clients for the
 process lifetime. It holds no Interview state: start creates state, turn carries the complete state
 and one typed response, and end carries the complete state for best-effort completion. The next state
@@ -205,6 +220,8 @@ reads `inputs/profile.yaml`. The synthesized Profile is therefore minimal by des
 The normal local run uses two processes: `PORT=8001 uv run metis-api` and
 `npm --prefix apps/web run dev`.
 The Vite proxy uses `METIS_API_ORIGIN`, defaulting to `http://127.0.0.1:8001`.
+The opening web screen renders the complete ordered capability catalogue and sends the selected
+ids and confidence with the product description in one start request.
 
 ---
 
@@ -403,3 +420,7 @@ Schema versions (for data formats like `experiment.yaml` and `session-record.jso
 The primary user-facing CLI is the unified `metis` command, which composes sub-package CLIs under `metis <package> <subcommand>`.
 
 Per-package standalone commands (e.g., `metis-engine`, `metis-wizard`) MUST also be available for CI or isolated installs.
+
+`metis wizard init` collects the description, a capability selection (including an explicit blank
+selection), and one required confidence value before it sends `InterviewStartRequest`. This input
+does not add a step or confirmation lock.

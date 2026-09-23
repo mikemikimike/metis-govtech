@@ -32,6 +32,7 @@ from pydantic import BaseModel, ValidationError
 from metis.wizard import (
     CompilationError,
     CompileResult,
+    InterviewConfig,
     InterviewEndRequest,
     InterviewErrorCode,
     InterviewFailure,
@@ -42,8 +43,8 @@ from metis.wizard import (
     SpecificationError,
     SpecificationFixture,
     compile_profile,
+    interview_client_config,
     package_specification,
-    working_status,
 )
 
 if TYPE_CHECKING:
@@ -72,12 +73,6 @@ class ServiceError(BaseModel):
     retryable: bool = False
 
 
-class InterviewConfig(BaseModel):
-    """Package-owned presentation text needed by an Interview client."""
-
-    working_status: str
-
-
 def get_dependencies(request: Request) -> WizardDependencies:
     """Return the startup-composed public Interview handler."""
     dependencies = getattr(request.app.state, "wizard_dependencies", None)
@@ -96,7 +91,7 @@ def get_dependencies(request: Request) -> WizardDependencies:
 )
 def config() -> InterviewConfig:
     """Return presentation text without copying it into the HTTP client."""
-    return InterviewConfig(working_status=working_status())
+    return interview_client_config()
 
 
 @router.post(
@@ -163,7 +158,7 @@ def package(
 
 @router.post(
     "/interview/start",
-    summary="Start a wizard Interview from its product description",
+    summary="Start a wizard Interview from its opening evidence",
     response_model=InterviewResult,
     responses={
         400: {"model": InterviewFailure},
@@ -176,7 +171,7 @@ def start(
     body: InterviewStartRequest,
     dependencies: WizardDependencies = Depends(get_dependencies),
 ) -> JSONResponse:
-    """Create client-held Interview state from the user's initial raw description."""
+    """Create client-held Interview state from the complete opening input."""
     result = dependencies.interview_handler(body)
     return _result_response(result)
 

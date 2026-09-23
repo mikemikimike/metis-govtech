@@ -59,9 +59,6 @@ export function Transcript({
         return (
           <div
             key={i}
-            // The shell scrolls to the newest step's first block by finding the last one of
-            // these markers; the divider and the marker are the same element.
-            data-step-start={startsStep ? "" : undefined}
             className={cn(startsStep && "border-t border-border pt-8")}
           >
             <RequestBlock request={request} busy={busy} onRespond={onRespond} />
@@ -745,6 +742,8 @@ export function Composer({
   onSend,
   alwaysEnabled = false,
   placeholder,
+  initialText = "",
+  roomy = false,
   leadingIcon = false,
   bare = false,
 }: {
@@ -755,6 +754,12 @@ export function Composer({
   // way in, always open. Everywhere else the greying rule stands.
   alwaysEnabled?: boolean;
   placeholder?: string;
+  // The opening flow can return from capability selection to the description without losing the
+  // user's draft. Interview replies remain empty on mount.
+  initialText?: string;
+  // Give the opening product prompt enough room for a useful first description. Conversation
+  // replies keep the smaller composer.
+  roomy?: boolean;
   // A pencil-sparkles mark inside the input, left of the text. Only the opening screen's hero
   // composer asks for it; the in-conversation composer leaves it off, so the mark reads as "this
   // is where you begin" rather than decoration on every turn.
@@ -764,7 +769,7 @@ export function Composer({
   // it should fill that column and match their width rather than re-centre itself narrower.
   bare?: boolean;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const enabled = (alwaysEnabled || acceptsChat(request)) && !busy;
   const hint =
     placeholder ?? (enabled ? "Type a reply" : composerHint(request));
@@ -823,7 +828,8 @@ export function Composer({
         // Taller by default and a higher cap: the box showed barely a line, so a
         // paragraph scrolled out of sight while being written. Three lines to start,
         // grows to a comfortable draft before it scrolls.
-        "max-h-64 min-h-[4.5rem] flex-1 resize-none bg-transparent py-2.5",
+        "max-h-64 flex-1 resize-none bg-transparent py-2.5",
+        roomy ? "min-h-32" : "min-h-[4.5rem]",
         "placeholder:text-muted-foreground focus:outline-none",
         "disabled:cursor-not-allowed",
         // A hairline thumb instead of the platform's default bar, which sat wide and opaque
@@ -834,7 +840,7 @@ export function Composer({
       placeholder={hint}
       value={text}
       disabled={!enabled}
-      rows={3}
+      rows={roomy ? 5 : 3}
       onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
       onChange={(e) => setText(e.target.value)}
       onKeyDown={(e) => {

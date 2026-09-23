@@ -5,19 +5,21 @@ operation, applies it, and returns the next value. Nothing here reads or writes 
 that wants to keep the interview between requests serializes this model to JSON and sends it back
 on the next operation, so a CLI and a stateless HTTP server rehydrate mid-conversation the same way.
 
-It carries only what the next operation needs: the Profile being built, the two explicit user
-decisions (`behaviours_confirmed`, `confirmed`), the bounded clarification history, the authorship
-bookkeeping, and at most one pending request. Where the interview *is* — its stage — is not stored:
-it is derived from this evidence, or read from the pending request's own `stage`. See
-`application.turn.derive_stage`.
+It carries only what the next operation needs: the Profile being built, the user-owned Interview
+context, the two explicit user decisions (`behaviours_confirmed`, `confirmed`), the bounded
+clarification history, the authorship bookkeeping, and at most one pending request. Where the
+interview *is* — its stage — is not stored: it is derived from this evidence, or read from the
+pending request's own `stage`. See `application.turn.derive_stage`.
 """
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from metis.wizard.contracts.capabilities import CapabilityId
 from metis.wizard.contracts.conversation import AnyRequest
 
 # `profile` is a Pydantic field, so `ProductProfile` must be a runtime import — Pydantic
@@ -36,6 +38,47 @@ class Turn(BaseModel):
     text: str
 
 
+class Perspective(StrEnum):
+    """The point of view from which the user answers the Interview."""
+
+    END_USER = "end_user"
+    ENGINEER = "engineer"
+    COMPLIANCE = "compliance"
+    SECURITY = "security"
+
+
+class CapabilityConfidence(StrEnum):
+    """How complete the user's known-capability selection is."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class CapabilityEvidence(BaseModel):
+    """User-owned capability evidence that travels with an Interview."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    known_capability_ids: list[CapabilityId]
+    confidence: CapabilityConfidence
+
+    @model_validator(mode="after")
+    def _reject_duplicate_capabilities(self) -> CapabilityEvidence:
+        if len(self.known_capability_ids) != len(set(self.known_capability_ids)):
+            raise ValueError("known_capability_ids must not contain duplicates")
+        return self
+
+
+class InterviewContext(BaseModel):
+    """User-owned context that travels with an Interview but is not Profile data."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    perspective: Perspective = Perspective.END_USER
+    capability_evidence: CapabilityEvidence
+
+
 class InterviewState(BaseModel):
     """One client-held value, serialized to JSON between turns.
 
@@ -46,6 +89,9 @@ class InterviewState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     profile: ProductProfile
+    # The user's point of view for the opening interview steps. This is deliberately outside
+    # ProductProfile: it seeds the interview but is not part of the finished evaluation artifact.
+    context: InterviewContext
     # The measurement-scope lock. The combined Behaviour screen asks the user to pick the
     # behaviours worth measuring; its Continue sets this true. It is not a "the user saw the
     # screen" receipt — Criteria generation reads the measured subset it locks in, and any later

@@ -8,6 +8,7 @@ gate also proves the interview survives the wire. Nothing in this file touches a
 from pathlib import Path
 
 from metis.wizard import compile_profile
+from metis.wizard.application.config import clarify_turn_cap
 from metis.wizard.contracts import (
     ChatRequest,
     ChoiceRequest,
@@ -23,13 +24,14 @@ from tests.fixtures.wizard.scripted import (
 
 
 def test_the_whole_flow_walks_to_done() -> None:
-    interviewer = ScriptedInterviewer()
+    interviewer = ScriptedInterviewer(clarify_questions=clarify_turn_cap())
 
     result = walk(interviewer)
 
     assert result.state.confirmed
     assert result.state.pending is None
     assert result.used_end
+    assert "It answers research questions." in result.state.profile.product.detail
     assert {ChatRequest, ChoiceRequest, FormRequest} <= {
         type(request) for request in result.seen
     }
