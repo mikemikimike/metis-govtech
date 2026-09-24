@@ -65,6 +65,12 @@ _No v1 changes yet._
 
 #### Added
 
+- **Opening documents.** Flat Interview start requests can carry files as `{name, text?}`. The
+  wizard keeps the opening description and document context in client-held state, with supported
+  TXT, Markdown, PDF text-layer, and DOCX extraction through its facade. Prompts receive readable
+  text and identify unread files. New Scenario drafts can suggest any opening file by name, and the
+  existing Scenario review confirms each assignment.
+
 - **ARC capability evidence at Interview start.** The CLI and headless interface now use the final
   12-capability catalogue in three ordered groups. Start requires `known_capability_ids` and
   `capability_confidence`, records them in required client-held Interview context, and uses the
@@ -136,6 +142,10 @@ _No v1 changes yet._
 
 #### Added
 
+- **Request-scoped document extraction.** `POST /api/v1/wizard/documents/extract` returns text or a
+  typed error in the existing failure envelope. It closes uploaded streams and keeps no files or
+  Interview state. The wizard configuration route also exposes the document limits.
+
 - **Capability-aware wizard configuration and start.** `/api/v1/wizard/config` serves the ordered
   ARC capability catalogue, and `/api/v1/wizard/interview/start` accepts the complete description,
   known capability ids, confidence, and other opening choices.
@@ -172,6 +182,9 @@ _No v1 changes yet._
 ### metis-web
 
 #### Added
+
+- **Opening documents.** A plus button in the composer opens a compact document tray. Original files
+  stay in local Interview storage, and only files assigned to Scenarios enter the package.
 
 - **Grouped capability opening controls.** The opening screen now displays all 12 ARC capabilities,
   lets the user select known capabilities (including none), requires Low, Medium, or High selection

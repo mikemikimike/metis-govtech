@@ -6,15 +6,17 @@ from pathlib import Path
 import pytest
 
 from metis.wizard.application.fixtures import (
-    ACCEPTED_FIXTURE_EXTENSIONS,
-    MAX_FIXTURE_BYTES,
     FixtureError,
     FixtureLibrary,
     normalize_upload_name,
 )
+from metis.wizard.domain.documents import (
+    FIXTURE_DOCUMENT_EXTENSIONS,
+    MAX_DOCUMENT_BYTES,
+)
 
 
-@pytest.mark.parametrize("extension", sorted(ACCEPTED_FIXTURE_EXTENSIONS))
+@pytest.mark.parametrize("extension", sorted(FIXTURE_DOCUMENT_EXTENSIONS))
 def test_every_accepted_extension_is_case_insensitive(extension: str) -> None:
     assert (
         normalize_upload_name(f"sample.{extension.upper()}")
@@ -83,7 +85,7 @@ def test_library_reuses_identical_case_folded_uploads(tmp_path: Path) -> None:
 def test_library_enforces_file_count_and_total_bytes(tmp_path: Path) -> None:
     library = FixtureLibrary(tmp_path / "fixtures")
     # One upload just below the limit is valid. The next one crosses it.
-    library.upload([("one.txt", BytesIO(b"x" * (MAX_FIXTURE_BYTES - 1)))])
+    library.upload([("one.txt", BytesIO(b"x" * (MAX_DOCUMENT_BYTES - 1)))])
 
     with pytest.raises(FixtureError, match="bytes"):
         library.upload([("two.txt", BytesIO(b"xx"))])

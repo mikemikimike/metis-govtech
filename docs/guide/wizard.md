@@ -188,6 +188,35 @@ The returned `InterviewState` always contains `context.perspective` and
 Interview, not to `ProductProfile`, and it must be sent unchanged on later turns. Capability
 evidence is opening context, not a separate Interview step.
 
+Start can contain a flat `documents` list. Each item has a canonical `name` and optional extracted
+`text`. Missing text means that no extracted content is available. The API stores the list in
+`state.context.documents` and the description in `state.context.opening_description`. It does not
+store original bytes or let clients change opening documents after start.
+
+Extract text before start with `POST /api/v1/wizard/documents/extract`. Send one or more multipart
+`files` fields. A successful response contains canonical names and extracted text in upload order.
+The operation is stateless and returns all documents or an error for the request. It accepts UTF-8
+TXT, Markdown, PDF text layers, and DOCX body paragraphs and tables. It does not run OCR or read
+scanned PDF images. Files in other accepted formats can be sent at start without `text`.
+
+The wizard configuration response includes `document_limits`:
+
+| Limit | Value |
+|---|---:|
+| Original files | 20 files; 100,000,000 bytes total |
+| Extraction input | 10,000,000 bytes per file; 20,000,000 bytes per request |
+| Extracted text | 40,000 characters per file; 80,000 characters total |
+| DOCX expansion | 50,000,000 bytes; 2,000 archive entries |
+| PDF expansion | 50,000,000 bytes |
+
+Extraction errors use HTTP 400 and include `code`, `message`, and `retryable`. The route does not
+return partial text.
+
+New Scenario drafts can suggest names from the opening document list. The user reviews them under
+**Files sent to your system**. An unconfirmed Interview with opening documents returns this review
+screen with `outcome="awaiting_response"`, even when no files were suggested. The browser keeps the
+originals locally and sends only files that current Scenarios use when it requests a package.
+
 ### Finish
 
 The interview ends when you answer the review screens for the behaviours, personas, scenarios, and

@@ -21,6 +21,7 @@ const state = {
   confirmed: false,
   context: {
     perspective: "end_user",
+    opening_description: "",
     capability_evidence: { known_capability_ids: [], confidence: "low" },
   },
   history: [],
@@ -83,6 +84,7 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
     perspective: "end_user",
     known_capability_ids: [],
     capability_confidence: "low",
+    documents: [],
   });
   assert.deepEqual(calls[1]?.body, {
     state,
@@ -107,6 +109,12 @@ test("sends the selected perspective and capability evidence when an Interview b
     "A support assistant",
     { known_capability_ids: ["tool_use"], confidence: "medium" },
     "security",
+    [
+      {
+        name: "policy.md",
+        text: "Keep user data private.",
+      },
+    ],
   );
 
   assert.deepEqual(body, {
@@ -114,7 +122,69 @@ test("sends the selected perspective and capability evidence when an Interview b
     perspective: "security",
     known_capability_ids: ["tool_use"],
     capability_confidence: "medium",
+    documents: [
+      {
+        name: "policy.md",
+        text: "Keep user data private.",
+      },
+    ],
   });
+});
+
+test("extracts selected interview files as an ordered multipart request", async () => {
+  let received: FormData | undefined;
+  globalThis.fetch = async (input, init) => {
+    assert.equal(String(input), "/api/v1/wizard/documents/extract");
+    assert.equal(init?.method, "POST");
+    assert.ok(init?.body instanceof FormData);
+    received = init.body;
+    return new Response(
+      JSON.stringify({
+        documents: [
+          { name: "first.md", text: "First" },
+          { name: "second.txt", text: "Second" },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  const result = await api.extractDocuments([
+    new File(["First"], "first.md"),
+    new File(["Second"], "second.txt"),
+  ]);
+
+  assert.deepEqual(result.documents, [
+    { name: "first.md", text: "First" },
+    { name: "second.txt", text: "Second" },
+  ]);
+  assert.deepEqual(
+    (received?.getAll("files") as File[]).map((file) => file.name),
+    ["first.md", "second.txt"],
+  );
+});
+
+test("preserves extraction failure details", async () => {
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        type: "failure",
+        code: "encrypted_pdf",
+        message: "locked.pdf: The PDF is encrypted.",
+        retryable: false,
+      }),
+      { status: 400, headers: { "content-type": "application/json" } },
+    );
+
+  await assert.rejects(
+    api.extractDocuments([new File(["locked"], "locked.pdf")]),
+    (cause: unknown) =>
+      cause instanceof TransportError &&
+      cause.status === 400 &&
+      !cause.retryable &&
+      cause.code === "encrypted_pdf" &&
+      cause.message.includes("locked.pdf"),
+  );
 });
 
 test("packages a synthesized manual Profile and its fixtures as multipart", async () => {

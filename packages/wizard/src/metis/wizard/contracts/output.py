@@ -47,6 +47,7 @@ class ScenarioDraft(_StrictDraft):
     description: str
     behaviour_refs: list[str]
     persona_refs: list[str]
+    fixtures: list[str] = Field(default_factory=list)
 
 
 _DRAFT_TYPES = (TaskDraft, BehaviourDraft, CriterionDraft, PersonaDraft, ScenarioDraft)
@@ -94,6 +95,7 @@ def _legacy_value(path: str, value: Any) -> Any:
             description=value["description"],
             behaviour_refs=value.get("behaviour_refs", []),
             persona_refs=value.get("persona_refs", []),
+            fixtures=value.get("fixtures", []),
         )
     return value
 
@@ -148,6 +150,7 @@ class StepResultPatch(BaseModel):
                     "description",
                     "behaviour_refs",
                     "persona_refs",
+                    "fixtures",
                 },
             }.get(field, set())
             semantic = value["value"]

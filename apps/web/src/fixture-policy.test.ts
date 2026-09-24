@@ -42,3 +42,24 @@ test("enforces the fixture count and total byte limits", () => {
     validateFixtureSelection([file("large.txt", FIXTURE_MAX_BYTES + 1)], []),
   );
 });
+
+test("applies configured document formats and limits", () => {
+  const limits = {
+    max_documents: 1,
+    max_initial_bytes: 4,
+    fixture_extensions: ["md"],
+  };
+  assert.deepEqual(
+    validateFixtureSelection([file("notes.md", 4)], [], limits),
+    ["notes.md"],
+  );
+  assert.throws(() =>
+    validateFixtureSelection([file("notes.txt")], [], limits),
+  );
+  assert.throws(() =>
+    validateFixtureSelection([file("notes.md", 5)], [], limits),
+  );
+  assert.throws(() =>
+    validateFixtureSelection([file("notes.md")], [file("other.md")], limits),
+  );
+});

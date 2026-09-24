@@ -45,7 +45,7 @@ function extension(name: string): string {
   return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
-function identity(name: string): string {
+export function fixtureNameIdentity(name: string): string {
   // Uppercase first to cover Unicode folds such as German sharp s, then lower the result.
   return name.normalize("NFC").toUpperCase().toLowerCase();
 }
@@ -53,23 +53,30 @@ function identity(name: string): string {
 export function validateFixtureSelection(
   files: readonly FixtureFileLike[],
   library: readonly FixtureFileLike[],
+  limits: {
+    max_documents: number;
+    max_initial_bytes: number;
+    fixture_extensions?: readonly string[];
+  } = {
+    max_documents: FIXTURE_MAX_FILES,
+    max_initial_bytes: FIXTURE_MAX_BYTES,
+    fixture_extensions: ACCEPTED_FIXTURE_EXTENSIONS,
+  },
 ): string[] {
-  const existing = new Set(library.map((item) => identity(item.name)));
+  const existing = new Set(
+    library.map((item) => fixtureNameIdentity(item.name)),
+  );
   const incoming = new Set<string>();
   const names: string[] = [];
   let total = library.reduce((sum, item) => sum + item.size, 0);
   for (const file of files) {
     const name = normalizeFixtureName(file.name);
-    if (
-      !(ACCEPTED_FIXTURE_EXTENSIONS as readonly string[]).includes(
-        extension(name),
-      )
-    ) {
+    if (!limits.fixture_extensions?.includes(extension(name))) {
       throw new Error(
-        `Unsupported file type. Accepted: ${ACCEPTED_FIXTURE_EXTENSIONS.join(", ")}.`,
+        `Unsupported file type. Accepted: ${limits.fixture_extensions?.join(", ") ?? "none"}.`,
       );
     }
-    const key = identity(name);
+    const key = fixtureNameIdentity(name);
     if (existing.has(key) || incoming.has(key)) {
       throw new Error(`A file named ${name} is already uploaded.`);
     }
@@ -77,13 +84,15 @@ export function validateFixtureSelection(
     names.push(name);
     total += file.size;
   }
-  if (library.length + files.length > FIXTURE_MAX_FILES) {
+  if (library.length + files.length > limits.max_documents) {
     throw new Error(
-      `An experiment can contain at most ${FIXTURE_MAX_FILES} files.`,
+      `An experiment can contain at most ${limits.max_documents} files.`,
     );
   }
-  if (total > FIXTURE_MAX_BYTES) {
-    throw new Error("Fixture files can use at most 100 MB in total.");
+  if (total > limits.max_initial_bytes) {
+    throw new Error(
+      `Fixture files can use at most ${limits.max_initial_bytes / 1_000_000} MB in total.`,
+    );
   }
   return names;
 }

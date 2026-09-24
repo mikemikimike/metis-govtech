@@ -12,7 +12,7 @@ import yaml
 
 from metis.wizard.application import prompts
 from metis.wizard.application.config import opening_question
-from metis.wizard.contracts import Product, ProductProfile
+from metis.wizard.contracts import InterviewDocument, Product, ProductProfile
 from metis.wizard.contracts.interview_state import Perspective, Turn
 from metis.wizard.domain.applier import apply
 from metis.wizard.domain.patch import Patch, PatchOp
@@ -46,9 +46,9 @@ def _perspective_text(name: str) -> str:
 def _xml_content(message: str, tag: str) -> str:
     opening = f"<{tag}>"
     closing = f"</{tag}>"
-    assert message.count(opening) == 1
-    assert message.count(closing) == 1
-    start = message.index(opening) + len(opening)
+    start = message.rfind(opening)
+    assert start >= 0
+    start += len(opening)
     end = message.index(closing, start)
     return message[start:end]
 
@@ -381,8 +381,13 @@ def test_capability_evidence_is_injected_into_early_prompts(builder) -> None:
     assert "tool_use" in _xml_content(prompt.user, "capability_evidence")
 
 
-def test_the_arc_catalogue_reaches_every_model_call() -> None:
+def test_shared_context_reaches_every_model_call() -> None:
     context = interview_context()
+    context.opening_description = "OPENING_SENTINEL"
+    context.documents = [
+        InterviewDocument(name="policy.md", text="DOCUMENT_SENTINEL"),
+        InterviewDocument(name="sample.csv"),
+    ]
     calls = [
         prompts.clarify(research_assistant(), [], context=context),
         prompts.behaviours(research_assistant(), [], context=context),
@@ -393,8 +398,19 @@ def test_the_arc_catalogue_reaches_every_model_call() -> None:
         prompts.suggest_criterion(research_assistant(), "EB-1", context=context),
     ]
 
-    for prompt in calls:
+    for index, prompt in enumerate(calls):
         assert prompts.arc_catalogue() in _xml_content(prompt.system, "arc_catalogue")
+        assert (
+            json.loads(_xml_content(prompt.system, "opening_description"))
+            == "OPENING_SENTINEL"
+        )
+        assert json.loads(_xml_content(prompt.system, "interview_documents")) == [
+            {"name": "policy.md", "text": "DOCUMENT_SENTINEL"},
+            {"name": "sample.csv", "text": None},
+        ]
+        assert json.loads(_xml_content(prompt.system, "available_fixture_names")) == (
+            ["policy.md", "sample.csv"] if index in {4, 5} else []
+        )
 
     # capability evidence is a Clarify/Behaviours concern only, never a later call
     assert "tool_use" not in calls[2].user

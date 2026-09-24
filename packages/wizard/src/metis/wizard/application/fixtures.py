@@ -10,49 +10,38 @@ import filecmp
 import os
 import shutil
 import tempfile
-import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO
 
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
-
-MAX_FIXTURES = 20
-MAX_FIXTURE_BYTES = 100_000_000
-ACCEPTED_FIXTURE_EXTENSIONS = frozenset(
-    {
-        "csv",
-        "pdf",
-        "docx",
-        "xlsx",
-        "pptx",
-        "txt",
-        "json",
-        "png",
-        "jpg",
-        "gif",
-        "webp",
-        "md",
-        "html",
-    }
+from metis.wizard.domain.documents import (
+    FIXTURE_DOCUMENT_EXTENSIONS,
+    MAX_DOCUMENT_BYTES,
+    MAX_DOCUMENTS,
+)
+from metis.wizard.domain.documents import (
+    fixture_name_identity as _identity,
+)
+from metis.wizard.domain.documents import (
+    normalize_fixture_name as _normalize_fixture_name,
 )
 
-_WINDOWS_PUNCTUATION = set('<>:"/\\|?*')
-_WINDOWS_DEVICES = {
-    "CON",
-    "PRN",
-    "AUX",
-    "NUL",
-    *(f"COM{n}" for n in range(1, 10)),
-    *(f"LPT{n}" for n in range(1, 10)),
-}
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
 
 
 class FixtureError(ValueError):
     """A user-correctable fixture policy or storage error."""
+
+
+def normalize_fixture_name(name: str) -> str:
+    """Keep domain validation errors inside the application error contract."""
+    try:
+        return _normalize_fixture_name(name)
+    except ValueError as exc:
+        raise FixtureError(str(exc)) from exc
 
 
 class FixtureMetadata(BaseModel):
@@ -70,47 +59,13 @@ class FixtureCandidate:
     size: int
 
 
-def _identity(name: str) -> str:
-    return unicodedata.normalize("NFC", name).casefold()
-
-
-def normalize_fixture_name(name: str) -> str:
-    """Return a safe logical basename or raise ``FixtureError``.
-
-    The check is deliberately stricter than the host filesystem. A ZIP can move between macOS,
-    Linux and Windows, so a name that works on one host must not create a path or collision on
-    another.
-    """
-
-    if not isinstance(name, str):
-        raise FixtureError("Fixture names must be text.")
-    normalized = unicodedata.normalize("NFC", name.strip())
-    if not normalized or normalized in {".", ".."}:
-        raise FixtureError("Fixture names cannot be blank, '.' or '..'.")
-    if any(separator in normalized for separator in ("/", "\\")):
-        raise FixtureError("Fixture names must be basenames without path separators.")
-    if any(
-        char == "\x00" or unicodedata.category(char).startswith("C")
-        for char in normalized
-    ):
-        raise FixtureError("Fixture names cannot contain control characters.")
-    if any(char in _WINDOWS_PUNCTUATION for char in normalized):
-        raise FixtureError("Fixture names contain characters that are not portable.")
-    if normalized.endswith((".", " ")):
-        raise FixtureError("Fixture names cannot end with a dot or space.")
-    stem = normalized.split(".", 1)[0].upper()
-    if stem in _WINDOWS_DEVICES:
-        raise FixtureError("Fixture names cannot use a reserved device name.")
-    return normalized
-
-
 def normalize_upload_name(name: str) -> str:
     """Normalize and validate an uploaded file name, including its extension."""
 
     normalized = normalize_fixture_name(name)
     extension = Path(normalized).suffix.lower().removeprefix(".")
-    if extension not in ACCEPTED_FIXTURE_EXTENSIONS:
-        accepted = ", ".join(sorted(ACCEPTED_FIXTURE_EXTENSIONS))
+    if extension not in FIXTURE_DOCUMENT_EXTENSIONS:
+        accepted = ", ".join(sorted(FIXTURE_DOCUMENT_EXTENSIONS))
         raise FixtureError(
             f"Unsupported fixture type; accepted extensions: {accepted}."
         )
@@ -140,16 +95,16 @@ def validate_batch(
         incoming_keys.add(key)
         incoming.append(FixtureCandidate(name=name, size=candidate.size))
 
-    if len(existing_items) + len(incoming) > MAX_FIXTURES:
+    if len(existing_items) + len(incoming) > MAX_DOCUMENTS:
         raise FixtureError(
-            f"An experiment can contain at most {MAX_FIXTURES} fixture files."
+            f"An experiment can contain at most {MAX_DOCUMENTS} fixture files."
         )
     total = sum(item.size for item in existing_items) + sum(
         item.size for item in incoming
     )
-    if total > MAX_FIXTURE_BYTES:
+    if total > MAX_DOCUMENT_BYTES:
         raise FixtureError(
-            f"Fixture files can use at most {MAX_FIXTURE_BYTES:,} bytes in total."
+            f"Fixture files can use at most {MAX_DOCUMENT_BYTES:,} bytes in total."
         )
     return incoming
 
@@ -212,9 +167,9 @@ class FixtureLibrary:
                                 "Fixture uploads must provide binary content."
                             )
                         size += len(chunk)
-                        if size > MAX_FIXTURE_BYTES:
+                        if size > MAX_DOCUMENT_BYTES:
                             raise FixtureError(
-                                f"Fixture files can use at most {MAX_FIXTURE_BYTES:,} bytes in total."
+                                f"Fixture files can use at most {MAX_DOCUMENT_BYTES:,} bytes in total."
                             )
                         target.write(chunk)
                 staged.append(FixtureCandidate(name=name, size=size))

@@ -449,7 +449,11 @@ def _scenario_warnings(profile: ProductProfile) -> list[Warning]:
     return warnings
 
 
-def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+def scenarios_screen(
+    profile: ProductProfile,
+    message: str,
+    available_fixture_names: list[str] | None = None,
+) -> ChoiceRequest:
     warnings = _scenario_warnings(profile)
     # The gate reads the one readiness source, not the on-screen warnings. The warnings carry
     # their own fixes and cover only what a person can act on here; readiness is the authoritative
@@ -487,9 +491,10 @@ def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                     max=TRIALS_MAX,
                 ),
                 CardUploadField(
-                    label="Files",
+                    label="Files sent to your system",
                     id=OptionId(action="files", target=scenario.id),
                     value=list(scenario.fixtures),
+                    available=list(available_fixture_names or []),
                 ),
             ],
         )

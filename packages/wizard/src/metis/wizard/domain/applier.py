@@ -165,6 +165,7 @@ def _apply_one(
     *,
     issued_ids: set[str],
     user_typed: set[str] | None,
+    allowed_fixture_names: set[str] | None = None,
 ) -> None:
     # A model can pair a right, unique behaviour id with a wrong task ancestor; correct the
     # ancestor against the behaviour it names before resolving. See `paths.normalise`.
@@ -241,6 +242,7 @@ def _apply_one(
                 patch.origin,
                 issued_ids=issued_ids,
                 user_typed=user_typed,
+                allowed_fixture_names=allowed_fixture_names,
             )
             return
         items.append(_coerce(segment.field, value, patch.origin))
@@ -270,6 +272,7 @@ def apply(
     *,
     issued_ids: set[str] | None = None,
     user_typed: set[str] | None = None,
+    allowed_fixture_names: set[str] | None = None,
 ) -> ApplyResult:
     """Apply what is allowed, report what was not.
 
@@ -291,6 +294,7 @@ def apply(
                 patch,
                 issued_ids=issued_ids,
                 user_typed=user_typed,
+                allowed_fixture_names=allowed_fixture_names,
             )
         except paths.PathError as exc:
             result.rejected.append(Rejection(patch, f"I couldn't apply that: {exc}"))
@@ -329,7 +333,12 @@ def sanitise(patches: Sequence[Any]) -> list[Patch]:
     ]
 
 
-def validate_model_patches(profile: ProductProfile, patches: Sequence[Any]) -> None:
+def validate_model_patches(
+    profile: ProductProfile,
+    patches: Sequence[Any],
+    *,
+    allowed_fixture_names: set[str] | None = None,
+) -> None:
     """Validate model patch values without touching the real profile.
 
     `Patch.value` is necessarily `Any`: its shape depends on the path. Structured output
@@ -353,6 +362,7 @@ def validate_model_patches(profile: ProductProfile, patches: Sequence[Any]) -> N
                 patch,
                 issued_ids=issued_ids,
                 user_typed=user_typed,
+                allowed_fixture_names=allowed_fixture_names,
             )
             # Assignment itself is not validated on Pydantic models. Rebuilding after every
             # patch catches scalar SETs and list-shaped values as well as nested model errors.
@@ -361,7 +371,7 @@ def validate_model_patches(profile: ProductProfile, patches: Sequence[Any]) -> N
             )
         except paths.PathError:
             continue
-        except (ValidationError, TypeError, AttributeError) as exc:
+        except (ValidationError, TypeError, AttributeError, ValueError) as exc:
             raise PatchValueError(
                 f"The patch at {patch.path!r} has a value that does not fit there:\n{exc}"
             ) from exc

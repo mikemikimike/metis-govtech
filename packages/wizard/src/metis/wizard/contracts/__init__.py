@@ -6,7 +6,11 @@ from metis.wizard.contracts.capabilities import (
     CapabilityDefinition,
     CapabilityId,
 )
-from metis.wizard.contracts.config import InterviewConfig, PerspectiveDefinition
+from metis.wizard.contracts.config import (
+    InterviewConfig,
+    InterviewConfigDocumentLimits,
+    PerspectiveDefinition,
+)
 from metis.wizard.contracts.conversation import (
     AnyCard,
     AnyCardComponent,
@@ -39,6 +43,12 @@ from metis.wizard.contracts.conversation import (
     WizardRequestState,
     editable_fields_of,
     options_of,
+)
+from metis.wizard.contracts.documents import (
+    DocumentExtractionErrorCode,
+    DocumentExtractionResult,
+    ExtractedDocument,
+    InterviewDocument,
 )
 from metis.wizard.contracts.interview_state import (
     CapabilityConfidence,
@@ -123,7 +133,12 @@ __all__ = [
     "FormResponse",
     "InteractionType",
     "InterviewConfig",
+    "InterviewConfigDocumentLimits",
     "InterviewContext",
+    "InterviewDocument",
+    "DocumentExtractionErrorCode",
+    "DocumentExtractionResult",
+    "ExtractedDocument",
     "MetricParam",
     "MetricSpec",
     "Option",

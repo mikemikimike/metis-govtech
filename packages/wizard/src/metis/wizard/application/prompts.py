@@ -66,7 +66,15 @@ _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "suggest_criterion": frozenset({"profile", "behaviour_id"}),
 }
 _SYSTEM_PLACEHOLDERS = frozenset(
-    {"patch_rules", "primer", "arc_catalogue", "perspective"}
+    {
+        "patch_rules",
+        "primer",
+        "arc_catalogue",
+        "perspective",
+        "opening_description",
+        "documents",
+        "available_fixtures",
+    }
 )
 
 
@@ -195,7 +203,10 @@ def _perspective_id(context: InterviewContext | None) -> str:
 
 
 def _system_message(
-    catalog: PromptCatalog, context: InterviewContext | None = None
+    catalog: PromptCatalog,
+    context: InterviewContext | None = None,
+    *,
+    available_fixtures: list[str] | None = None,
 ) -> str:
     return _substitute(
         catalog.system_template,
@@ -205,6 +216,18 @@ def _system_message(
             "primer": primer(),
             "arc_catalogue": arc_catalogue(),
             "perspective": _perspective_id(context),
+            "opening_description": json.dumps(
+                context.opening_description if context else "",
+                ensure_ascii=False,
+            ),
+            "documents": json.dumps(
+                [document.model_dump(mode="json") for document in context.documents]
+                if context
+                else [],
+                ensure_ascii=False,
+                indent=2,
+            ),
+            "available_fixtures": json.dumps(available_fixtures or []),
         },
     )
 
@@ -308,6 +331,7 @@ def _compose(
     *,
     call_name: ModelCall | None = None,
     context: InterviewContext | None = None,
+    available_fixtures: list[str] | None = None,
 ) -> ModelPrompt:
     """Compose system and user messages from one fresh catalogue snapshot."""
     catalog = load_prompt_catalog()
@@ -318,7 +342,7 @@ def _compose(
     )
     return ModelPrompt(
         name=cast("ModelCall", call_name or template_name),
-        system=_system_message(catalog, context),
+        system=_system_message(catalog, context, available_fixtures=available_fixtures),
         user=user,
     )
 
@@ -377,7 +401,12 @@ def personas(
 def scenarios(
     profile: ProductProfile, context: InterviewContext | None = None
 ) -> ModelPrompt:
-    return _compose("scenarios", {"profile": _profile(profile)}, context=context)
+    return _compose(
+        "scenarios",
+        {"profile": _profile(profile)},
+        context=context,
+        available_fixtures=context.document_names if context else [],
+    )
 
 
 def chat(
@@ -397,6 +426,7 @@ def chat(
             "scope": scope,
         },
         context=context,
+        available_fixtures=(context.document_names if context is not None else []),
     )
 
 

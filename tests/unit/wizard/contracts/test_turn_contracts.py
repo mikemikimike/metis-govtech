@@ -8,6 +8,7 @@ from metis.wizard.contracts import (
     ChoiceRequest,
     ChoiceResponse,
     CompileResult,
+    InterviewDocument,
     InterviewEndRequest,
     InterviewErrorCode,
     InterviewFailure,
@@ -45,6 +46,10 @@ def test_each_concrete_request_rebuilds_from_json() -> None:
             description="A policy assistant",
             known_capability_ids=[],
             capability_confidence="low",
+            documents=[
+                InterviewDocument(name="policy.md", text="Policy"),
+                InterviewDocument(name="sample.csv"),
+            ],
         ),
         InterviewTurnRequest(
             state=_state(), request_id="req-1", response=ChoiceResponse(selected=[])
@@ -56,6 +61,7 @@ def test_each_concrete_request_rebuilds_from_json() -> None:
     for request in requests:
         rebuilt = adapter.validate_json(adapter.dump_json(request))
         assert type(rebuilt) is type(request)
+        assert rebuilt == request
 
 
 def test_a_turn_keeps_its_typed_response_across_the_wire() -> None:
@@ -84,8 +90,31 @@ def test_start_requires_explicit_capability_evidence(confidence: str) -> None:
         capability_confidence=confidence,
     )
 
+    assert request.documents == []
     assert request.known_capability_ids == []
     assert request.capability_confidence.value == confidence
+
+
+@pytest.mark.parametrize(
+    "documents",
+    [
+        [{"name": "../policy.pdf"}],
+        [{"name": "Policy.pdf"}, {"name": "policy.PDF"}],
+        [{"name": f"file-{i}.txt"} for i in range(21)],
+        [{"name": "policy.txt", "text": "x" * 40_001}],
+        [{"name": f"policy-{i}.txt", "text": "x" * 30_000} for i in range(3)],
+    ],
+)
+def test_start_rejects_unsafe_or_oversized_document_context(
+    documents: list[dict],
+) -> None:
+    with pytest.raises(ValidationError):
+        InterviewStartRequest(
+            description="A policy assistant",
+            known_capability_ids=[],
+            capability_confidence="low",
+            documents=documents,
+        )
 
 
 @pytest.mark.parametrize(

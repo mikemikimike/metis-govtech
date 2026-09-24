@@ -228,7 +228,9 @@ class StepDriver:
                 )
             return self._attach(
                 screens.scenarios_screen(
-                    profile, self._message(InterviewStep.SCENARIOS)
+                    profile,
+                    self._message(InterviewStep.SCENARIOS),
+                    state.context.document_names,
                 )
             )
 
@@ -743,6 +745,7 @@ class StepDriver:
             patches,
             issued_ids=state.issued_ids,
             user_typed=state.user_typed,
+            allowed_fixture_names=set(state.context.document_names),
         )
         if outcome.any_rejected or not outcome.applied:
             # The address passed the shape check but the applier still refused it, or the value
@@ -912,6 +915,7 @@ class StepDriver:
             patches,
             issued_ids=state.issued_ids,
             user_typed=state.user_typed,
+            allowed_fixture_names=set(state.context.document_names),
         )
 
         for rejection in outcome.rejected:

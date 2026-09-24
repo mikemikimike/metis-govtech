@@ -37,6 +37,7 @@ const state: InterviewState = {
   confirmed: false,
   context: {
     perspective: "end_user",
+    opening_description: "",
     capability_evidence: { known_capability_ids: [], confidence: "low" },
   },
   history: [],

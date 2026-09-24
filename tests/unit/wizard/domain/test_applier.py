@@ -112,10 +112,12 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
                         description="exercise it",
                         behaviour_refs=["EB-4"],
                         persona_refs=["impatient-executive-2"],
+                        fixtures=["policy.md"],
                     ),
                 ),
             ]
         ),
+        allowed_fixture_names={"policy.md"},
     )
 
     assert not result.rejected
@@ -125,7 +127,7 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
     assert profile.personas[-1].id == "impatient-executive-2"
     assert profile.scenarios[-1].id == "S-3"
     assert profile.scenarios[-1].num_trials == 3
-    assert profile.scenarios[-1].fixtures == []
+    assert profile.scenarios[-1].fixtures == ["policy.md"]
 
 
 def test_model_whole_entity_set_is_refused() -> None:
@@ -181,8 +183,10 @@ def test_rejecting_a_metric_write_points_at_rewording() -> None:
 # sends rather than the targeted SET it rarely does.
 
 
-def test_a_bundled_scenario_cannot_carry_trials_or_files() -> None:
-    """`add scenarios` is the shape `scenarios_user` asks for. The scenario lands; the two fields don't."""
+def test_an_unavailable_scenario_fixture_rejects_only_its_patch() -> None:
+    """A strict draft cannot turn a model-proposed filename into an uploaded fixture."""
+    from metis.wizard.contracts import ScenarioDraft
+
     profile = research_assistant()
 
     result = apply(
@@ -190,27 +194,53 @@ def test_a_bundled_scenario_cannot_carry_trials_or_files() -> None:
         [
             patch(
                 "scenarios",
-                {
-                    "id": "S-9",
-                    "name": "Spreadsheet analysis",
-                    "description": "Ask for an analysis of an uploaded spreadsheet",
-                    "behaviour_refs": ["EB-1"],
-                    "persona_refs": ["impatient-executive"],
-                    "fixtures": ["malformed_dataset.csv"],
-                    "num_trials": 10,
-                },
+                ScenarioDraft(
+                    name="Spreadsheet analysis",
+                    description="Ask for an analysis of an uploaded spreadsheet",
+                    behaviour_refs=["EB-1"],
+                    persona_refs=["impatient-executive"],
+                    fixtures=["malformed_dataset.csv"],
+                ),
                 op=PatchOp.ADD,
-            )
+            ),
+            patch(
+                "scenarios",
+                ScenarioDraft(
+                    name="Use the policy",
+                    description="Ask a question covered by policy.md.",
+                    behaviour_refs=["EB-1"],
+                    persona_refs=["impatient-executive"],
+                    fixtures=["policy.md"],
+                ),
+                op=PatchOp.ADD,
+            ),
         ],
+        allowed_fixture_names={"policy.md"},
     )
 
-    assert len(result.applied) == 1  # the scenario itself is the model's to draft
-    scenario = profile.scenario("S-9")
+    assert len(result.applied) == 1
+    assert len(result.rejected) == 1
+    assert all(
+        scenario.name != "Spreadsheet analysis" for scenario in profile.scenarios
+    )
+    scenario = profile.scenario("S-3")
     assert scenario is not None
-    assert scenario.description.startswith("Ask for an analysis")
-    assert scenario.behaviour_refs == ["EB-1"]  # what the model does decide, untouched
-    assert scenario.fixtures == []  # no file the user never uploaded
-    assert scenario.num_trials == 3  # the schema default, not the model's number
+    assert scenario.fixtures == ["policy.md"]
+
+
+def test_a_model_cannot_change_fixtures_on_an_existing_scenario() -> None:
+    profile = research_assistant()
+    before = profile.scenario("S-1").fixtures.copy()  # type: ignore[union-attr]
+
+    result = apply(
+        profile,
+        [patch("scenarios[S-1].fixtures", ["policy.md"])],
+        allowed_fixture_names={"policy.md"},
+    )
+
+    assert not result.applied
+    assert result.rejected
+    assert profile.scenario("S-1").fixtures == before  # type: ignore[union-attr]
 
 
 def test_a_bundled_task_cannot_carry_a_tick_or_a_metric() -> None:

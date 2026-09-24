@@ -21,6 +21,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from metis.wizard.contracts.capabilities import CapabilityId
 from metis.wizard.contracts.conversation import AnyRequest
+from metis.wizard.contracts.documents import (
+    InterviewDocument,
+    validate_interview_documents,
+)
 
 # `profile` is a Pydantic field, so `ProductProfile` must be a runtime import — Pydantic
 # resolves the annotation at runtime and a TYPE_CHECKING-only import leaves InterviewState
@@ -77,6 +81,18 @@ class InterviewContext(BaseModel):
 
     perspective: Perspective = Perspective.END_USER
     capability_evidence: CapabilityEvidence
+    opening_description: str = ""
+    documents: list[InterviewDocument] = Field(default_factory=list)
+
+    @property
+    def document_names(self) -> list[str]:
+        """Available originals, derived without adding a field to API state."""
+        return [document.name for document in self.documents]
+
+    @model_validator(mode="after")
+    def _validate_documents(self) -> InterviewContext:
+        validate_interview_documents(self.documents)
+        return self
 
 
 class InterviewState(BaseModel):

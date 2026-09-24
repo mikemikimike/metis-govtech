@@ -14,6 +14,7 @@ def test_the_route_table_is_exactly_health_interview_lifecycle_compile_and_packa
         "/health",
         "/api/v1/metrics",
         "/api/v1/wizard/config",
+        "/api/v1/wizard/documents/extract",
         "/api/v1/wizard/package",
         "/api/v1/wizard/interview/start",
         "/api/v1/wizard/interview/turn",
@@ -55,6 +56,8 @@ def test_concrete_request_models_have_flat_required_fields(client: TestClient) -
         "capability_confidence",
     ]
     assert start["additionalProperties"] is False
+    assert "documents" in start["properties"]
+    assert "documents" not in start["required"]
 
     turn = schemas["InterviewTurnRequest"]
     assert set(turn["required"]) == {"state", "request_id", "response"}

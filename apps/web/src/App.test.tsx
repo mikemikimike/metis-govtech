@@ -10,13 +10,14 @@ import {
   CapabilityConfidencePicker,
   CapabilityPicker,
   conversationScrollRevision,
+  InitialDocumentPicker,
   OpeningConfigurationState,
   OpeningRoute,
   OpeningScreen,
   PerspectivePicker,
   type CapabilityEvidenceDraft,
 } from "./App";
-import { Composer } from "./Conversation";
+import { Composer, FixtureField } from "./Conversation";
 import { api, type InterviewState, type Perspective } from "./transport/api";
 
 const originalFetch = globalThis.fetch;
@@ -49,6 +50,18 @@ function findElement(
   throw new Error("Element not found");
 }
 
+function findElements(
+  node: ReactNode,
+  predicate: (element: TestElement) => boolean,
+): TestElement[] {
+  if (!isValidElement(node)) return [];
+  const element = node as TestElement;
+  const nested = Children.toArray(element.props.children as ReactNode).flatMap(
+    (child) => findElements(child, predicate),
+  );
+  return predicate(element) ? [element, ...nested] : nested;
+}
+
 const state = {
   profile: {
     schema_version: 1,
@@ -61,6 +74,7 @@ const state = {
   confirmed: false,
   context: {
     perspective: "security",
+    opening_description: "",
     capability_evidence: {
       known_capability_ids: ["tool_use"],
       confidence: "medium",
@@ -93,6 +107,13 @@ test("blocks the opening form until configuration is ready and offers retry", ()
     onPerspective: () => undefined,
     onContinue: () => undefined,
     onBack: () => undefined,
+    documents: [],
+    documentTrayOpen: false,
+    onDocumentTrayOpen: () => undefined,
+    documentReads: {},
+    onAddDocuments: () => undefined,
+    onRemoveDocument: () => undefined,
+    onKeepDocumentUnread: () => undefined,
     onManualOpen: () => undefined,
     capabilityEvidence: {
       known_capability_ids: [],
@@ -224,6 +245,13 @@ test("loads opening choices and sends complete start evidence on begin", async (
       onBack: () => {
         phase = "describe";
       },
+      documents: [],
+      documentTrayOpen: false,
+      onDocumentTrayOpen: () => undefined,
+      documentReads: {},
+      onAddDocuments: () => undefined,
+      onRemoveDocument: () => undefined,
+      onKeepDocumentUnread: () => undefined,
       onManualOpen: () => undefined,
       capabilityEvidence: evidence,
       onCapabilityEvidence: (next) => {
@@ -351,7 +379,91 @@ test("loads opening choices and sends complete start evidence on begin", async (
         perspective: "security",
         known_capability_ids: ["tool_use"],
         capability_confidence: "medium",
+        documents: [],
       },
     },
   ]);
+});
+
+test("opening documents show unread status and let users keep a file unread", () => {
+  const config = {
+    opening_question: "What are you building?",
+    working_status: "Working…",
+    perspectives: [],
+    capability_categories: [],
+    document_limits: {
+      max_documents: 20,
+      max_initial_bytes: 100_000_000,
+      max_extraction_file_bytes: 10_000_000,
+      max_extraction_request_bytes: 20_000_000,
+      max_text_characters_per_document: 40_000,
+      max_text_characters_total: 80_000,
+      max_docx_expanded_bytes: 50_000_000,
+      max_docx_archive_entries: 2_000,
+      max_pdf_expanded_bytes: 50_000_000,
+      fixture_extensions: ["txt", "pdf"],
+      extraction_extensions: ["txt", "md", "pdf", "docx"],
+    },
+  } satisfies React.ComponentProps<typeof InitialDocumentPicker>["config"];
+  const file = new File(["evidence"], "policy.txt", { type: "text/plain" });
+  let keptName: string | undefined;
+  const picker = InitialDocumentPicker({
+    config,
+    documents: [file],
+    documentReads: {
+      "policy.txt": {
+        status: "failed",
+        message: "The file could not be read.",
+      },
+    },
+    disabled: false,
+    onAdd: () => undefined,
+    onRemove: () => undefined,
+    onKeepWithoutReading: (name) => {
+      keptName = name;
+    },
+  });
+  const keepButton = findElement(
+    picker,
+    (element) => element.props.children === "Keep without reading",
+  );
+
+  assert.match(JSON.stringify(picker), /Could not read/);
+  (keepButton.props.onClick as () => void)();
+  assert.equal(keptName, "policy.txt");
+});
+
+test("Scenario review exposes early fixture suggestions for user selection", () => {
+  let submitted: { names: string[]; removed: readonly string[] } | undefined;
+  const field = FixtureField({
+    component: {
+      type: "upload",
+      id: { action: "files", target: "S-1" },
+      label: "Files sent to your system",
+      value: ["policy.pdf"],
+      available: ["policy.pdf", "terms.pdf"],
+    },
+    disabled: false,
+    onChange: (names, _files, removed) => {
+      submitted = { names, removed };
+    },
+  });
+  const boxes = findElements(
+    field,
+    (element) => element.type === "input" && element.props.type === "checkbox",
+  );
+
+  assert.deepEqual(
+    boxes.map((box) => box.props.checked),
+    [true, false],
+  );
+  (
+    boxes[1]?.props.onChange as (event: {
+      currentTarget: { checked: boolean };
+    }) => void
+  )({ currentTarget: { checked: true } });
+  assert.deepEqual(submitted, {
+    names: ["policy.pdf", "terms.pdf"],
+    removed: [],
+  });
 });

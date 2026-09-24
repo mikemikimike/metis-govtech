@@ -120,6 +120,7 @@ class CardUploadField(CardComponent):
     type: Literal[CardComponentType.UPLOAD] = CardComponentType.UPLOAD
     id: OptionId
     value: list[str] = Field(default_factory=list)  # ["policy.pdf", "faq.md"]
+    available: list[str] = Field(default_factory=list)
 
     @field_validator("value", mode="before")
     @classmethod

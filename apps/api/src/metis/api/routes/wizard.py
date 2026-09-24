@@ -32,6 +32,9 @@ from pydantic import BaseModel, ValidationError
 from metis.wizard import (
     CompilationError,
     CompileResult,
+    DocumentExtractionError,
+    DocumentExtractionErrorCode,
+    DocumentExtractionResult,
     InterviewConfig,
     InterviewEndRequest,
     InterviewErrorCode,
@@ -43,6 +46,7 @@ from metis.wizard import (
     SpecificationError,
     SpecificationFixture,
     compile_profile,
+    extract_documents,
     interview_client_config,
     package_specification,
 )
@@ -71,6 +75,47 @@ class ServiceError(BaseModel):
     code: str
     message: str
     retryable: bool = False
+
+
+class DocumentExtractionFailure(ServiceError):
+    """The existing API failure shape with a typed document error code."""
+
+    code: DocumentExtractionErrorCode
+
+
+@router.post(
+    "/documents/extract",
+    summary="Extract text from Interview documents",
+    response_model=DocumentExtractionResult,
+    responses={
+        400: {"model": DocumentExtractionFailure},
+        422: {"model": ServiceError},
+        500: {"model": ServiceError},
+    },
+)
+def extract_document_text(
+    files: list[UploadFile] = File(...),
+) -> JSONResponse:
+    """Read selected file streams and return text without retaining files or state."""
+    try:
+        result = extract_documents(
+            SpecificationFixture(name=upload.filename or "", stream=upload.file)
+            for upload in files
+        )
+    except DocumentExtractionError as exc:
+        return JSONResponse(
+            DocumentExtractionFailure(
+                code=exc.code.value,
+                message=f"{exc.filename}: {exc}",
+                retryable=False,
+            ).model_dump(mode="json"),
+            status_code=400,
+        )
+    finally:
+        for upload in files:
+            with suppress(OSError):
+                upload.file.close()
+    return JSONResponse(result.model_dump(mode="json"), status_code=200)
 
 
 def get_dependencies(request: Request) -> WizardDependencies:

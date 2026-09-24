@@ -30,10 +30,11 @@ make run-web
 ```
 
 Set `METIS_API_ORIGIN` when the API uses another origin. Vite proxies `/api` to that origin. The
-browser stores local Interview records, fixture Blobs, and the display transcript in IndexedDB. The
-API receives only the JSON `InterviewState` and the typed response for the current turn. Fixture
-bytes are sent only when the user requests a package. Browser data belongs to the exact web origin,
-so `http://localhost:5173` and `http://127.0.0.1:5173` have separate local Interview lists.
+browser stores local Interview records, initial document originals, fixture Blobs, and the display
+transcript in IndexedDB. The API receives only the JSON `InterviewState` and the typed response for
+the current turn. Original bytes are sent only for text extraction or a package request. Browser
+data belongs to the exact web origin, so `http://localhost:5173` and `http://127.0.0.1:5173` have
+separate local Interview lists.
 
 The package-level `.env.example` files are entry-point templates. They do not require three active
 `.env` files. One root `.env` can contain the union of settings needed by the commands you run.
@@ -70,6 +71,13 @@ The browser sends one start request:
 The response state carries the opening values at `context.capability_evidence`. The browser keeps
 that state and sends it unchanged on later turns. Capability evidence is not written into the
 Profile or the finished specification.
+
+Use the plus button in the opening message to add documents. Explain their purpose in the same
+message when the file name is not sufficient. The browser shows the accepted file types, total size
+limit, and reading status. If it cannot read a file, remove the file or keep it without reading.
+
+The wizard can suggest opening documents for a Scenario. Review these files under **Files sent to
+your system**. The final package contains only files that a Scenario uses.
 
 The opening screen also offers **Write it yourself** for users who already know the experiment
 they want to run. This manual path asks for an experiment ID and description, personas, scenarios,
