@@ -12,7 +12,8 @@ Hierarchy:
     │   ├── ConsecutiveFailureEscalation
     │   └── TargetSessionLostError
     ├── ResponseTimeoutError (record incomplete, continue)
-    └── TargetSessionEnded (clean stop, target exhausted)
+    ├── TargetSessionEnded (clean stop, target exhausted)
+    └── RunnerContractError (engine defect, no retry — system error)
 """
 
 
@@ -70,4 +71,14 @@ class TargetSessionEnded(SimulationError):
     Neither turn- nor run-recoverable: retrying the turn cannot succeed and a
     fresh session would not continue the same conversation. The orchestrator
     ends the run with stop reason target_exhausted and a clean record.
+    """
+
+
+class RunnerContractError(SimulationError):
+    """The runner returned an Observation that violates the runner contract
+    (e.g. the set of ActionResult.action_index values does not match the
+    submitted actions — invariant I1).
+
+    Non-recoverable: a broken runner is an engine defect, not a turn or run
+    failure. The orchestrator does not retry; the run ends as a system error.
     """

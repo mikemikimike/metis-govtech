@@ -11,6 +11,7 @@ from metis.core.logging import get_logger
 
 from ...runner import Runner
 from ...types import (
+    ActionResult,
     ActionSlot,
     Artifact,
     ButtonClickAction,
@@ -48,15 +49,23 @@ def _value_text(value: str | list[str] | int | float | None) -> str | None:
     return str(value)
 
 
-def _ui_state_to_observation(ui_state: UIState) -> Observation:
-    """Convert internal UIState to the transport-agnostic Observation."""
+def _ui_state_to_observation(
+    ui_state: UIState, action_results: list[ActionResult]
+) -> Observation:
+    """Convert internal UIState to the transport-agnostic Observation.
+
+    ``ui_state.errors`` is error text scraped from the page, which no submitted
+    action accounts for, so it becomes a turn-level notice. ``available_actions``
+    stays a list — possibly empty — because the capture really did look.
+    """
     available_actions: list[ActionSlot] = []
     for el in ui_state.form_elements:
         available_actions.append(_form_element_to_action_slot(el))
     return Observation(
         text=ui_state.text,
         artifacts=ui_state.artifacts,
-        errors=ui_state.errors,
+        response_notices=ui_state.errors,
+        action_results=action_results,
         available_actions=available_actions,
         status_labels=ui_state.target_status_labels,
     )
@@ -79,14 +88,10 @@ class OrcaPlaywrightRunner(Runner):
     Orca chat UI. Adapting to other browser targets requires subclassing or
     a new runner.
 
-    Upload-rejection semantics (differs from :class:`OrcaApiRunner` by design):
-    when a turn's upload is invalid, ``send_turn`` returns the error
-    ``Observation`` *before* touching the page, so it does NOT populate
-    ``available_actions`` — those come from a live DOM capture, and validating
-    up front deliberately avoids that round-trip on a turn that will not be
-    submitted. The persona is re-offered the page's slots on the next turn's
-    capture. ``OrcaApiRunner`` derives its slots synchronously and so re-offers
-    them on rejection; that asymmetry is intentional.
+    Upload staging is not this runner's concern: the orchestrator withholds an
+    upload naming a fixture the scenario never staged, so ``send_turn`` is
+    handed only actions worth attempting. The residual ``_fixture_path`` check
+    in the action loop is a re-read at dispatch time, not that gate.
     """
 
     def __init__(
@@ -103,11 +108,14 @@ class OrcaPlaywrightRunner(Runner):
         self._run_dir = run_dir
         self._experiment_root = experiment_root
         self._uploaded_files: set[str] = set()
-        self._fixtures: list[str] = []
 
     async def setup(self, config: RunConfig) -> None:
-        """Authenticate and prepare the browser session."""
-        self._fixtures = list(config.fixtures)
+        """Authenticate and prepare the browser session.
+
+        ``config`` is unused: the staged-fixture list belongs to the
+        orchestrator, which withholds an unstaged upload before dispatch, and
+        this runner reads each file from ``fixtures_dir`` when it uploads it.
+        """
         logger.info("[playwright-runner] Setup: logging in...")
         await login(self._page, self._config)
 
@@ -124,25 +132,24 @@ class OrcaPlaywrightRunner(Runner):
         page = self._page
         config = self._config
 
-        # Validate uploads up front: a file naming a non-scenario fixture or a
-        # missing file is a loud error, never a silent no-op (issue #311).
-        upload_errors: list[str] = []
-        for action in actions:
-            if isinstance(action, UploadFileAction):
-                if action.filename not in self._fixtures:
-                    upload_errors.append(
-                        f"file '{action.filename}' is not a fixture for this scenario"
-                    )
-                elif self._fixture_path(action.filename) is None:
-                    upload_errors.append(
-                        f"file '{action.filename}' not found under the fixtures directory"
-                    )
-        if upload_errors:
-            logger.warning(
-                "[playwright-runner] Upload(s) rejected: %s", "; ".join(upload_errors)
-            )
-            return Observation(
-                errors=["Turn not submitted: " + "; ".join(upload_errors)]
+        # One row per received action (I1). Optimistic: each seam below that
+        # drops an action flips its own row, so a row left untouched really was
+        # delivered. Local rather than instance state — this runner is not being
+        # refactored, and send_turn is the only writer.
+        action_results = [
+            ActionResult(action_index=index, succeeded=True)
+            for index in range(len(actions))
+        ]
+
+        def fail(index: int, detail: str, *, retryable: bool | None = None) -> None:
+            # A fresh row, not model_copy(update=...): model_copy skips
+            # validation, so it would happily produce succeeded=False with an
+            # empty detail, which the model otherwise forbids.
+            action_results[index] = ActionResult(
+                action_index=index,
+                succeeded=False,
+                detail=detail,
+                retryable=retryable,
             )
 
         has_new_file_upload = False
@@ -152,6 +159,7 @@ class OrcaPlaywrightRunner(Runner):
         if actions:
             logger.info("[playwright-runner] Executing %d action(s)...", len(actions))
         for action_idx, action in enumerate(actions, 1):
+            index = action_idx - 1  # action_idx is 1-based for the log lines
             match action:
                 case UploadFileAction(filename=filename):
                     if filename in self._uploaded_files:
@@ -160,10 +168,24 @@ class OrcaPlaywrightRunner(Runner):
                             action_idx,
                             filename,
                         )
+                        fail(
+                            index,
+                            f"Not submitted: file '{filename}' is already attached"
+                            " to this conversation",
+                            retryable=False,
+                        )
                         continue
-                    # Reuse the path validated up front (guaranteed non-None here).
+                    # The orchestrator already confirmed this fixture was staged;
+                    # this is a re-read at dispatch time, so it can still fail if
+                    # the file went away mid-run.
                     file_path = self._fixture_path(filename)
                     if file_path is None:
+                        fail(
+                            index,
+                            f"Not submitted: file '{filename}' was no longer"
+                            " readable under the fixtures directory",
+                            retryable=False,
+                        )
                         continue
                     logger.info(
                         "[playwright-runner]   Action %d: FILE_UPLOAD '%s'",
@@ -194,6 +216,13 @@ class OrcaPlaywrightRunner(Runner):
                             "[playwright-runner]   Action %d: Click FAILED: %s",
                             action_idx,
                             exc,
+                        )
+                        # Retryable: a click the DOM refused may well land once
+                        # the page settles.
+                        fail(
+                            index,
+                            f"Click on '{selector}' failed: {exc}",
+                            retryable=True,
                         )
                     if re.search(
                         r"submit|generate|run|start|create|analyze|confirm",
@@ -234,6 +263,11 @@ class OrcaPlaywrightRunner(Runner):
                             "[playwright-runner]   Action %d: FORM_FILL FAILED: %s",
                             action_idx,
                             exc,
+                        )
+                        fail(
+                            index,
+                            f"Filling '{selector}' failed: {exc}",
+                            retryable=True,
                         )
 
         # Auto-fill if no form submit detected
@@ -307,7 +341,7 @@ class OrcaPlaywrightRunner(Runner):
         except Exception:
             pass
 
-        return _ui_state_to_observation(ui_state)
+        return _ui_state_to_observation(ui_state, action_results)
 
     async def teardown(self) -> None:
         """Close the browser context."""

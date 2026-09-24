@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from metis.core.logging import get_logger
 
 from ..types import (
+    ActionResult,
     ActionSlot,
     Artifact,
     Observation,
@@ -53,6 +54,26 @@ def _render_available_actions(available_actions: list[ActionSlot] | None) -> str
     return "\n" + "\n".join(action_lines) + "\n"
 
 
+def _render_observed_actions(available_actions: list[ActionSlot] | None) -> str:
+    """Render the three states of ``Observation.available_actions``.
+
+    A list of slots renders as the slot list; ``[]`` says the target offers
+    nothing this turn; ``None`` says nobody looked. All three must be
+    distinguishable, because the persona has no other source for what it may
+    do next and an absent block reads to it as "nothing on offer" — so
+    rendering ``[]`` and ``None`` the same way tells it its controls were
+    withdrawn when in fact nobody checked.
+
+    Delegates the non-empty case rather than formatting slots itself, so the
+    opening turn and every later turn describe the same slot identically.
+    """
+    if available_actions is None:
+        return "\nThe actions on offer this turn could not be determined.\n"
+    if not available_actions:
+        return "\nNo actions are on offer this turn.\n"
+    return _render_available_actions(available_actions)
+
+
 def _artifact_line(art: Artifact) -> str:
     """One registry line: id, name, a direction/turn tag, then the description."""
     desc = art.content_description or "(no description available)"
@@ -87,8 +108,8 @@ def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
     the failure is auditable and the download retried. Listing one here would
     assert the persona received a file that never arrived — the same false pass
     the closure sentence exists to prevent (issue #337). The persona still
-    hears about the failure through ``Observation.errors``, in terms a real
-    user could perceive.
+    hears about the failure through ``Observation.response_notices``, in terms
+    a real user could perceive.
     """
     if not artifacts:
         return ""
@@ -121,18 +142,39 @@ def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
     return "\n" + "\n".join(lines) + "\n"
 
 
-def _render_errors(errors: list[str] | None) -> str:
-    """Render prior-turn errors into the prompt's error block.
+def _render_problems(results: list[ActionResult], notices: list[str]) -> str:
+    """Render prior-turn problems into the prompt's problem block.
 
-    Returns an empty string when there are none so the section disappears.
-    Errors can be timeouts or target-unavailable signals, not only rejected
-    uploads, so the wording stays neutral.
+    Two kinds share one block: an action of the persona's that did not happen,
+    and a problem with the reply that no submitted action accounts for. The
+    action rows come first because they are about the persona's own choices,
+    and they carry the ``retryable`` hint so it can tell "try that again" from
+    "that will never work".
+
+    Withheld rows are rendered like any other failure. ``withheld`` marks a
+    rejection made by METIS rather than by the target, which matters to the
+    report's blame attribution and not at all here: an action that did not
+    happen did not happen, and a persona that is not told proceeds believing
+    it did.
+
+    Returns an empty string when there is nothing to report so the section
+    disappears.
     """
-    if not errors:
+    failed = [row for row in results if not row.succeeded]
+    if not failed and not notices:
         return ""
-    lines = ["Errors reported on your previous turn — take them into account:"]
-    for err in errors:
-        lines.append(f"  - {err}")
+    lines = ["Problems reported on your previous turn — take them into account:"]
+    for row in failed:
+        # 1-based: nothing else in the prompt exposes a zero-based index, and
+        # the persona counts the actions it asked for from one.
+        line = f"  - action {row.action_index + 1}: {row.detail}"
+        if row.retryable is True:
+            line += " (you may try this again)"
+        elif row.retryable is False:
+            line += " (trying this again will not help)"
+        lines.append(line)
+    for notice in notices:
+        lines.append(f"  - {notice}")
     return "\n" + "\n".join(lines) + "\n"
 
 
@@ -214,8 +256,7 @@ class UserAgent:
         observation = turn_payload.observation
         self._merge_artifacts(observation)
         target_message = observation.text
-        available_actions = observation.available_actions or None
-        errors = observation.errors or None
+        available_actions = observation.available_actions
 
         logger.info(
             "[user_agent] Generating response (turn=%d, history=%d msgs, target_text=%d chars)...",
@@ -233,7 +274,8 @@ class UserAgent:
         user_prompt = self._build_user_prompt(
             target_message,
             available_actions=available_actions,
-            errors=errors,
+            action_results=observation.action_results,
+            response_notices=observation.response_notices,
             artifacts=self._artifacts,
         )
 
@@ -319,15 +361,18 @@ class UserAgent:
         self,
         target_message: str,
         available_actions: list[ActionSlot] | None = None,
-        errors: list[str] | None = None,
+        action_results: list[ActionResult] | None = None,
+        response_notices: list[str] | None = None,
         artifacts: dict[str, Artifact] | None = None,
     ) -> str:
         """Build the turn-specific instruction prompt (excludes history, which
         is conveyed structurally via multi-turn contents)."""
         return RESPONSE_TURN_PROMPT.format(
             target_message=target_message,
-            errors_section=_render_errors(errors),
-            available_actions_section=_render_available_actions(available_actions),
+            problems_section=_render_problems(
+                action_results or [], response_notices or []
+            ),
+            available_actions_section=_render_observed_actions(available_actions),
             artifacts_section=_render_artifacts(artifacts),
             turn_number=self.turn_count + 1,
         )

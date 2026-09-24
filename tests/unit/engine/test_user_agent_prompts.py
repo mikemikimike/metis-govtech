@@ -1,10 +1,11 @@
-"""Tests for the user-agent action-section renderer, opening slots, and turn-error surfacing (#311, #315)."""
+"""Tests for the user-agent action-section renderer, opening slots, and turn-problem surfacing (#311, #315, #329)."""
 
 from __future__ import annotations
 
 import pytest
 
 from metis.engine.simulation.types import (
+    ActionResult,
     ActionSlot,
     Artifact,
     Observation,
@@ -18,7 +19,8 @@ from metis.engine.simulation.user_agent.agent import (
     UserAgent,
     _render_artifacts,
     _render_available_actions,
-    _render_errors,
+    _render_observed_actions,
+    _render_problems,
 )
 from metis.engine.simulation.user_agent.prompts import SYSTEM_PROMPT_TEMPLATE
 
@@ -37,22 +39,102 @@ def test_render_available_actions_lists_slots() -> None:
     assert "required: true" in out
 
 
-def test_render_errors_empty() -> None:
-    assert _render_errors(None) == ""
-    assert _render_errors([]) == ""
+def test_render_problems_empty() -> None:
+    assert _render_problems([], []) == ""
 
 
-def test_render_errors_lists_each_message() -> None:
-    out = _render_errors(
+def test_render_problems_lists_failed_rows_and_notices() -> None:
+    out = _render_problems(
         [
-            "Turn not submitted: file 'evil.exe' not in scenario fixtures",
-            "Upload timed out after 30s",
-        ]
+            ActionResult(action_index=0, succeeded=True),
+            ActionResult(
+                action_index=1,
+                succeeded=False,
+                detail="Turn not submitted: file 'evil.exe' is not a fixture "
+                "for this scenario",
+                retryable=False,
+            ),
+        ],
+        ["Response timeout — no response received"],
     )
-    assert "Turn not submitted: file 'evil.exe' not in scenario fixtures" in out
-    assert "Upload timed out after 30s" in out
-    # Neutral header — errors are not only rejected uploads.
+    assert "evil.exe" in out
+    assert "Response timeout — no response received" in out
+    # Neutral header — problems are not only rejected uploads.
     assert "previous turn" in out.lower()
+
+
+def test_render_problems_says_nothing_about_a_succeeded_action() -> None:
+    out = _render_problems([ActionResult(action_index=0, succeeded=True)], [])
+    assert out == ""
+
+
+def test_render_problems_passes_on_the_retryable_hint() -> None:
+    again = _render_problems(
+        [ActionResult(action_index=0, succeeded=False, detail="x", retryable=True)], []
+    )
+    never = _render_problems(
+        [ActionResult(action_index=0, succeeded=False, detail="x", retryable=False)], []
+    )
+    silent = _render_problems(
+        [ActionResult(action_index=0, succeeded=False, detail="x")], []
+    )
+    assert again != never != silent
+    assert "again" in again
+
+
+def test_a_withheld_row_still_reaches_the_persona() -> None:
+    """`withheld` keeps a row out of the report's blame attribution. The
+    persona must still be told: an action that did not happen did not happen,
+    and a persona not told proceeds believing its file was attached."""
+    out = _render_problems(
+        [
+            ActionResult(
+                action_index=0,
+                succeeded=False,
+                detail="Turn not submitted: file 'evil.exe' is not a fixture "
+                "for this scenario",
+                withheld=True,
+            )
+        ],
+        [],
+    )
+    assert "evil.exe" in out
+
+
+class TestTheThreeStatesAreDistinguishable:
+    """The persona has no other source for what it may do next, so an absent
+    block reads to it as "nothing on offer"."""
+
+    def test_a_slot_list_renders_the_slots(self) -> None:
+        out = _render_observed_actions(
+            [ActionSlot(id="q1", kind="text", label="Question 1")]
+        )
+        assert 'id: "q1"' in out
+
+    def test_an_empty_list_says_the_target_offers_nothing(self) -> None:
+        assert _render_observed_actions([]) == (
+            "\nNo actions are on offer this turn.\n"
+        )
+
+    def test_none_says_nobody_looked(self) -> None:
+        assert _render_observed_actions(None) == (
+            "\nThe actions on offer this turn could not be determined.\n"
+        )
+
+    def test_the_three_renderings_are_all_different(self) -> None:
+        slots = _render_observed_actions([ActionSlot(id="q1", kind="text", label="Q")])
+        assert (
+            len({slots, _render_observed_actions([]), _render_observed_actions(None)})
+            == 3
+        )
+
+    def test_a_slot_list_renders_identically_for_opening_and_response_turns(
+        self,
+    ) -> None:
+        """One slot-line format, so a scenario's opening prompt and its
+        mid-conversation prompts do not disagree about the same slot."""
+        slots = [ActionSlot(id="sales.csv", kind="file_upload", label="Attach")]
+        assert _render_observed_actions(slots) == _render_available_actions(slots)
 
 
 @pytest.mark.asyncio
@@ -83,7 +165,7 @@ async def test_opening_offers_fixture_upload_slots(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_response_surfaces_errors(monkeypatch) -> None:
+async def test_generate_response_surfaces_problems(monkeypatch) -> None:
     # Stub AsyncOpenAI so no api_key is required; _call_llm is stubbed too.
     monkeypatch.setattr(agent_module, "AsyncOpenAI", lambda **kw: object())
     persona = Persona(id="p", description="a data analyst")
@@ -106,15 +188,24 @@ async def test_generate_response_surfaces_errors(monkeypatch) -> None:
     payload = UserAgentInput(
         observation=Observation(
             text="Your upload was rejected.",
-            errors=["Turn not submitted: file 'evil.exe' not in scenario fixtures"],
+            action_results=[
+                ActionResult(
+                    action_index=0,
+                    succeeded=False,
+                    detail="Turn not submitted: file 'evil.exe' is not a fixture "
+                    "for this scenario",
+                    retryable=False,
+                )
+            ],
+            response_notices=["The assistant's reply was cut short"],
         )
     )
     await ua.generate_response(payload)
 
-    assert (
-        "Turn not submitted: file 'evil.exe' not in scenario fixtures"
-        in captured["prompt"]
-    )
+    assert "evil.exe" in captured["prompt"]
+    assert "The assistant's reply was cut short" in captured["prompt"]
+    # available_actions was left at its default None: nobody looked.
+    assert "could not be determined" in captured["prompt"]
 
 
 def test_render_artifacts_empty() -> None:

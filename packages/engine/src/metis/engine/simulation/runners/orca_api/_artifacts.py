@@ -36,10 +36,10 @@ class ArtifactNote(NamedTuple):
 
     The two fields have different audiences, which is the whole point of the
     type. ``text`` is persona-visible: ``send_turn`` copies it into
-    ``Observation.errors``, which is rendered into the simulated user's prompt.
-    ``file_id`` is the runner's own bookkeeping and must never reach that
-    prompt — a real user of a chat product is never shown a backend file id,
-    and ``Observation.errors`` is not a diagnostics channel (see
+    ``Observation.response_notices``, which is rendered into the simulated
+    user's prompt. ``file_id`` is the runner's own bookkeeping and must never
+    reach that prompt — a real user of a chat product is never shown a backend
+    file id, and ``response_notices`` is not a diagnostics channel (see
     :meth:`OrcaApiRunner._reconcile_session_artifacts`).
 
     The id has to travel alongside the text because
@@ -259,7 +259,7 @@ async def collect_session_artifacts(
         # second phantom beside the digest lane's. Warning rather than debug
         # because, unlike the two cases below, this is a file going missing and
         # not a shape METIS declines to read; log-only because
-        # Observation.errors is the persona's prompt, not a diagnostics channel.
+        # response_notices is the persona's prompt, not a diagnostics channel.
         logger.warning(
             "[orca-api-runner] Session lists %d generated file(s) with no fileId; "
             "unrecoverable and absent from the run: %s",

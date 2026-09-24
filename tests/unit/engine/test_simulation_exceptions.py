@@ -6,6 +6,7 @@ from metis.engine.simulation.exceptions import (
     PageCrashError,
     PostSubmissionObservationError,
     ResponseTimeoutError,
+    RunnerContractError,
     RunRecoverableError,
     SimulationError,
     TargetSessionEnded,
@@ -65,3 +66,20 @@ def test_target_session_ended_is_simulation_error() -> None:
     assert issubclass(TargetSessionEnded, SimulationError)
     assert not issubclass(TargetSessionEnded, TurnRecoverableError)
     assert not issubclass(TargetSessionEnded, RunRecoverableError)
+
+
+def test_runner_contract_error_is_simulation_error() -> None:
+    assert issubclass(RunnerContractError, SimulationError)
+
+
+def test_runner_contract_error_is_caught_by_no_recovery_ladder() -> None:
+    # The point of the class: a broken runner is an engine defect, so no
+    # `except TurnRecoverableError` or `except RunRecoverableError` in the
+    # orchestrator may swallow it and retry.
+    assert not issubclass(RunnerContractError, TurnRecoverableError)
+    assert not issubclass(RunnerContractError, RunRecoverableError)
+
+
+def test_runner_contract_error_carries_its_message() -> None:
+    exc = RunnerContractError("I1: the runner returned 2 rows for 3 actions")
+    assert "2 rows for 3 actions" in str(exc)

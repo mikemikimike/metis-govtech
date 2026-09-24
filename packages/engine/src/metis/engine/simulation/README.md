@@ -29,6 +29,8 @@ The two Orca-specific runners under `runners/` are reference implementations for
 | `orca_playwright` | Playwright (browser) | Drives Orca's web UI via a headless browser. Each worker gets its own browser context with isolated login. |
 | `orca_api` | HTTP (`/api/v1`) | Drives Orca via its key-authenticated REST API. Turns are sequential within a run; concurrency comes from multiple runners sharing a rate limiter and fixture cache via the factory. See [`orca_api/README.md`](runners/orca_api/README.md) for the turn lifecycle, identifiers, and v1 endpoint coverage. |
 
+Both satisfy the normative [runner contract](../../../../../../docs/runner-contract.md); a custom runner must too.
+
 Custom runners are selected via `runner_factory_ref` in `experiment.yaml`. See the [Engine User Guide](../../../../../../docs/guide/engine.md#writing-a-custom-runner) for the `Runner` ABC, `RunnerFactory` protocol, and a complete REST example.
 
 ### Concurrency
@@ -43,7 +45,7 @@ Charts (screenshotted as PNG) and downloads are captured and stored under the ta
 
 Each turn the user agent emits a typed action list (`ChosenAction` — a union of `UploadFileAction`, `ButtonClickAction`, `FormFillAction`); the orchestrator passes it straight to `Runner.send_turn(message, actions)`, and the runner dispatches on the action type. Two properties are deliberate:
 
-- **Uploads are gated by the scenario fixture allow-list, not by the target's per-turn permission.** A `file_upload` slot is offered for each `scenario.fixtures` entry not yet attached (and, in `orca_api`, not yet rejected) — synthetic, not derived from the target's current state. The runner validates an upload only against that allow-list and the file's presence on disk; it does not check whether the target is prompting for a file this turn. This matches Orca, where attaching a file is a composer affordance available on any message.
+- **Uploads are gated by the scenario fixture allow-list, not by the target's per-turn permission.** A `file_upload` slot is offered for each `scenario.fixtures` entry not yet attached (and, in `orca_api`, not yet rejected) — synthetic, not derived from the target's current state. The **caller** validates an upload against that allow-list and the fixture's presence on disk before dispatch, withholding the action and reporting it as `withheld` if it fails; the runner never sees it. Neither side checks whether the target is prompting for a file this turn. This matches Orca, where attaching a file is a composer affordance available on any message.
 - **Only the persona honors conversational "wait" cues.** If the target says "please wait until next turn," that stays natural-language text in the observation — nothing mechanically blocks an upload. The persona LLM is trusted to read the cue and hold the action. A premature upload is discovered only at the transport layer (a backend rejection in `orca_api`, marking the fixture spent; a browser interaction in `orca_playwright`), never pre-empted. A target that truly gated uploads per turn would need runner-level enforcement that does not exist today.
 
 ## Environment variables
@@ -82,6 +84,7 @@ simulation/
 ├── orchestrator.py    — Single-run orchestration (turn loop, retries)
 ├── types.py           — Pydantic models (Experiment, Scenario, Persona, Observation, ...)
 ├── config.py          — Shared configuration (retry defaults)
+├── _contract.py       — Runner↔Observation contract enforcement (see docs/runner-contract.md)
 ├── exceptions.py      — Simulation-specific exceptions
 ├── _artifact_store.py — Artifact capture and storage
 ├── user_agent/        — LLM-powered user agent (persona embodiment)

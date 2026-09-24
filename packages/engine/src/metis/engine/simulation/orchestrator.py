@@ -13,19 +13,23 @@ from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
 
+from ._contract import (
+    merge_withheld,
+    validate_action_results,
+    withhold_unstaged_uploads,
+)
 from ._fixture_artifacts import build_fixture_artifacts
 from .artifact_summarizer import summarize_artifact
 from .exceptions import (
     ConsecutiveFailureEscalation,
-    PostSubmissionObservationError,
     ResponseTimeoutError,
     RunRecoverableError,
     TargetSessionEnded,
     TargetUnavailableError,
-    TransientDOMError,
     TurnRecoverableError,
 )
 from .types import (
+    ActionResult,
     Artifact,
     ChosenAction,
     ConversationTurn,
@@ -49,6 +53,50 @@ if TYPE_CHECKING:
     from .user_agent.agent import UserAgent
 
 logger = get_logger()
+
+_UNDELIVERED_REASON = (
+    "No reply was captured for this turn — the target's response could not be read."
+)
+
+
+def _undelivered_reason(exc: Exception) -> str:
+    """Persona-facing text for a turn whose ``send_turn`` raised.
+
+    Preserves the two strings the ladder already produced where they remain
+    accurate, and falls back to a neutral phrasing for the browser runner's
+    two failure modes. ``PostSubmissionObservationError`` specifically means
+    the message *did* reach the target and only the observation failed, so a
+    reason claiming non-delivery would be a false first-hand report (P2).
+    """
+    if isinstance(exc, ResponseTimeoutError):
+        return "Response timeout — no response received"
+    if isinstance(exc, TargetUnavailableError):
+        return f"Target unavailable — {exc}"
+    return _UNDELIVERED_REASON
+
+
+def _undelivered_observation(actions: list[ChosenAction], reason: str) -> Observation:
+    """The uniform shape for a turn the runner could not complete.
+
+    One ``succeeded=False`` row per submitted action, plus the same text as a
+    ``response_notices`` entry so a consumer reading only notices still sees
+    it. ``retryable`` is ``None`` — I2's "no opinion" — because the caller
+    observed nothing first-hand and has no standing to advise a retry.
+    ``available_actions`` stays ``None``: ``send_turn`` raised, so no page and
+    no payload was ever inspected.
+
+    I1 binds only what a *runner* returns, so this shape is voluntary. It
+    exists so every downstream consumer sees one ``Observation`` shape whether
+    the turn completed or not.
+    """
+    return Observation(
+        response_notices=[reason],
+        action_results=[
+            ActionResult(action_index=index, succeeded=False, detail=reason)
+            for index in range(len(actions))
+        ],
+        available_actions=None,
+    )
 
 
 class Orchestrator:
@@ -255,61 +303,24 @@ class Orchestrator:
                     current_message[:80],
                 )
 
+                # Caller-side rejection: an upload naming a fixture this
+                # scenario never staged is never sent. The runner has no
+                # standing to judge this — only the orchestrator knows what
+                # was staged — and the report must not blame the target for
+                # an action it never received.
+                forwarded, withheld = withhold_unstaged_uploads(
+                    current_actions,
+                    set(self._fixtures_by_name),
+                    set(run_config.fixtures),
+                )
+
                 # Send turn to target via runner
                 try:
                     observation = await self._runner.send_turn(
-                        current_message, current_actions
+                        current_message, forwarded
                     )
+                    validate_action_results(observation, forwarded)
                     consecutive_failures = 0
-                except PostSubmissionObservationError:
-                    try:
-                        await self._runner.recover()
-                        observation = await self._runner.send_turn(current_message, [])
-                        consecutive_failures = 0
-                    except (TurnRecoverableError, ResponseTimeoutError) as inner:
-                        consecutive_failures += 1
-                        if consecutive_failures >= 2:
-                            raise ConsecutiveFailureEscalation(
-                                f"{consecutive_failures} consecutive turn failures"
-                            ) from inner
-                        observation = Observation(
-                            errors=["Response timeout — no response received"]
-                        )
-                except TransientDOMError as exc:
-                    consecutive_failures += 1
-                    if consecutive_failures >= 2:
-                        raise ConsecutiveFailureEscalation(
-                            f"{consecutive_failures} consecutive turn failures"
-                        ) from exc
-                    await self._runner.recover()
-                    try:
-                        observation = await self._runner.send_turn(current_message, [])
-                        consecutive_failures = 0
-                    except (TurnRecoverableError, ResponseTimeoutError) as inner:
-                        consecutive_failures += 1
-                        if consecutive_failures >= 2:
-                            raise ConsecutiveFailureEscalation(
-                                f"{consecutive_failures} consecutive turn failures"
-                            ) from inner
-                        observation = Observation(
-                            errors=["Response timeout — no response received"]
-                        )
-                except ResponseTimeoutError as exc:
-                    consecutive_failures += 1
-                    if consecutive_failures >= 2:
-                        raise ConsecutiveFailureEscalation(
-                            f"{consecutive_failures} consecutive turn failures"
-                        ) from exc
-                    observation = Observation(
-                        errors=["Response timeout — no response received"]
-                    )
-                except TargetUnavailableError as exc:
-                    consecutive_failures += 1
-                    if consecutive_failures >= 2:
-                        raise ConsecutiveFailureEscalation(
-                            f"{consecutive_failures} consecutive turn failures"
-                        ) from exc
-                    observation = Observation(errors=[f"Target unavailable — {exc}"])
                 except TargetSessionEnded as exc:
                     logger.info(
                         "[turn %d] STOP: target_exhausted (%s)", turn_count, exc
@@ -322,7 +333,37 @@ class Orchestrator:
                         target_session_id or await self._runner.get_session_id(),
                     )
                 except RunRecoverableError:
+                    # Escalated by the run layer, never absorbed here. Listed
+                    # before the turn-recoverable handler for the reader's
+                    # sake — the two families are disjoint, so this is
+                    # documentation rather than dispatch.
                     raise
+                except (TurnRecoverableError, ResponseTimeoutError) as exc:
+                    # I4: send_turn raised, so the caller cannot know whether
+                    # the message landed. It is never re-sent for this turn.
+                    consecutive_failures += 1
+                    if consecutive_failures >= 2:
+                        raise ConsecutiveFailureEscalation(
+                            f"{consecutive_failures} consecutive turn failures"
+                        ) from exc
+                    reason = _undelivered_reason(exc)
+                    logger.info("[turn %d] turn not completed: %s", turn_count, reason)
+                    observation = _undelivered_observation(forwarded, reason)
+                    try:
+                        await self._runner.recover()
+                    except Exception as recovery_exc:
+                        # Best-effort housekeeping for the *next* turn. This
+                        # turn's verdict is already decided and must survive.
+                        logger.info(
+                            "[turn %d] recover() failed, continuing: %s",
+                            turn_count,
+                            recovery_exc,
+                        )
+
+                if withheld:
+                    observation.action_results = merge_withheld(
+                        observation.action_results, withheld
+                    )
 
                 send_elapsed = time.time() - turn_start
                 logger.info("[turn %d] send+wait: %.1fs", turn_count, send_elapsed)
@@ -391,11 +432,28 @@ class Orchestrator:
                         turn_count,
                         ", ".join(a.name for a in observation.artifacts),
                     )
-                if observation.errors:
+                if observation.response_notices:
                     logger.info(
-                        "[turn %d]   Errors: %s",
+                        "[turn %d]   Notices: %s",
                         turn_count,
-                        "; ".join(observation.errors),
+                        "; ".join(observation.response_notices),
+                    )
+                # Unlike the persona prompt and the report, this log deliberately
+                # includes withheld rows, marked as such: an operator reading
+                # logs/ needs to see that METIS itself rejected an action, which
+                # is often the actual bug.
+                undelivered = [
+                    row for row in observation.action_results if not row.succeeded
+                ]
+                if undelivered:
+                    logger.info(
+                        "[turn %d]   Actions not delivered: %s",
+                        turn_count,
+                        "; ".join(
+                            f"[{row.action_index}]"
+                            f"{' withheld:' if row.withheld else ''} {row.detail}"
+                            for row in undelivered
+                        ),
                     )
                 if observation.available_actions:
                     logger.info(

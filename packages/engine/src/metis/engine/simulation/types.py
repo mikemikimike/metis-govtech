@@ -142,13 +142,56 @@ class UIState(BaseModel):
     form_elements: list[FormElement] = Field(default_factory=list)
 
 
+class ActionResult(BaseModel):
+    """The runner's first-hand verdict on one action it was handed.
+
+    One row per action the runner received, in the order received, with
+    ``action_index`` equal to the row's own position (invariant I1). The
+    verdict is about *delivery*, not about whether the target liked what was
+    delivered: a file that uploaded cleanly and was then refused by a
+    guardrail is ``succeeded=True`` plus a note in
+    :attr:`Observation.response_notices`.
+    """
+
+    action_index: int
+    succeeded: bool
+    detail: str = ""
+    retryable: bool | None = None
+    withheld: bool = False
+
+    @model_validator(mode="after")
+    def _failure_needs_detail(self) -> Self:
+        if not self.succeeded and not self.detail.strip():
+            raise ValueError(
+                "an ActionResult with succeeded=False MUST carry a non-empty `detail`"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _retryable_only_on_failure(self) -> Self:
+        if self.succeeded and self.retryable is not None:
+            raise ValueError(
+                "`retryable` describes a delivery failure; it MUST be None when"
+                " succeeded is True"
+            )
+        return self
+
+
 class Observation(BaseModel):
-    """What the target system returned after a turn (transport-agnostic)."""
+    """What the target system returned after a turn (transport-agnostic).
+
+    Each field has exactly one owner, and the owner is what the field
+    describes — see ``docs/runner-contract.md``. ``action_results`` belongs to
+    the persona's actions, ``text`` and ``artifacts`` to the target,
+    ``response_notices`` to the turn as a whole, and ``available_actions`` to
+    what the target is offering next.
+    """
 
     text: str = ""
     artifacts: list[Artifact] = Field(default_factory=list)
-    errors: list[str] = Field(default_factory=list)
-    available_actions: list[ActionSlot] = Field(default_factory=list)
+    response_notices: list[str] = Field(default_factory=list)
+    action_results: list[ActionResult] = Field(default_factory=list)
+    available_actions: list[ActionSlot] | None = None
     status_labels: list[str] = Field(default_factory=list)
     discarded_message: str | None = None
 

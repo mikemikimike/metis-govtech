@@ -116,9 +116,7 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
         stop_reason = str(outcome.get("stop_reason") or "unknown")
         conversation = record.get("conversation") or []
         product_errors = [
-            str(error)
-            for turn in conversation
-            for error in ((turn.get("target_response") or {}).get("errors") or [])
+            problem for turn in conversation for problem in _turn_problems(turn)
         ]
         failure_source = _failure_source(
             outcome.get("failure_source") or record.get("failure_source")
@@ -178,18 +176,58 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
                         "product": str(
                             (turn.get("target_response") or {}).get("text") or ""
                         ),
-                        "errors": [
-                            str(error)
-                            for error in (
-                                (turn.get("target_response") or {}).get("errors") or []
-                            )
-                        ],
+                        "errors": _turn_problems(turn),
                     }
                     for index, turn in enumerate(conversation)
                 ],
             }
         )
     return persona_of, trials
+
+
+def _row_index(row: dict) -> int:
+    """``action_index`` if it survived the round trip as an int, else ``0``.
+
+    Coerced rather than trusted for the same reason :func:`_turn_problems`
+    sorts at all: no validator ran on this record, so a missing key or a string
+    must order somewhere rather than raise mid-report.
+    """
+    value = row.get("action_index")
+    return value if isinstance(value, int) else 0
+
+
+def _turn_problems(turn: dict) -> list[str]:
+    """Problem strings from one recorded turn that count against the product.
+
+    Notices first, then the ``detail`` of each failed action row in
+    ``action_index`` order. Three things here look like defensive noise and
+    are not, because this read path never rebuilds the Pydantic model — a
+    record from an older engine, a hand-built fixture or a third-party runner
+    arrives with no validator having run on it:
+
+    - the **sort**, because ``product_errors[-1]`` becomes the report's
+      headline message and I1's ordering guarantee binds only the write path;
+    - the **detail fallback**, because I2's non-empty-detail rule binds only
+      the write path too, and dropping a row with an empty detail would empty
+      ``product_errors`` and flip ``failureSource`` to ``evaluationRunner`` —
+      blaming METIS for the target's own failure;
+    - the **withheld exclusion**, which keeps the opposite misattribution out:
+      an action METIS itself rejected before dispatch never reached the
+      target, so the target cannot be blamed for it.
+    """
+    response = turn.get("target_response") or {}
+    results = sorted(response.get("action_results") or [], key=_row_index)
+    return [
+        *(str(notice) for notice in response.get("response_notices") or []),
+        *(
+            str(
+                row.get("detail")
+                or f"action {row.get('action_index')} failed with no detail recorded"
+            )
+            for row in results
+            if not row.get("succeeded") and not row.get("withheld")
+        ),
+    ]
 
 
 def _failure_source(value: object) -> str | None:

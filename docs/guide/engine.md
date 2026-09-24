@@ -662,8 +662,10 @@ class Runner(ABC):
         - message: the text the simulated user sends
         - actions: list of ChosenAction selected by the UserAgent from
           the previous Observation's available_actions
-        - Returns: an Observation with the target's text reply, any
-          artifacts produced, errors, and the next set of available_actions
+        - Returns: an Observation carrying the target's text reply, any
+          artifacts produced, one ActionResult per action in `actions`,
+          any turn-level notices, and the next set of available_actions.
+          See docs/runner-contract.md for the binding rules.
         """
 
     @abstractmethod
@@ -699,10 +701,20 @@ These Pydantic models are defined in `metis.engine.simulation.types`:
 class Observation(BaseModel):
     text: str = ""  # Target's text reply
     artifacts: list[Artifact] = []  # Downloads/charts produced
-    errors: list[str] = []  # Error messages from the target
-    available_actions: list[ActionSlot] = []  # What the user can do next
+    action_results: list[ActionResult] = []  # One per action you were handed
+    response_notices: list[str] = []  # Turn-level problems, not per-action
+    available_actions: list[ActionSlot] | None = None  # Three-state: list/[]/None
     status_labels: list[str] = []  # Status indicators shown in UI
 ```
+
+`action_results` is per-action and positional: `action_results[i]` is your
+verdict on `actions[i]`, and you owe exactly one row per action you were
+handed — a dropped action is a contract violation the engine will raise on.
+`response_notices` is for turn-level problems that belong to no single action.
+`available_actions` is three-state and the distinction is load-bearing: a list
+of slots means the runner looked and found these available; `[]` means the
+runner looked and found nothing; `None` means nobody looked. The rules are
+normative and live in [runner-contract.md](../runner-contract.md).
 
 **`ActionSlot`** — one available action discovered per-turn:
 
@@ -777,6 +789,7 @@ import httpx
 
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
+    ActionResult,
     ActionSlot,
     ChosenAction,
     Observation,
@@ -822,12 +835,26 @@ class RestRunner(Runner):
         resp = await self._client.post("/chat", json=payload)
         resp.raise_for_status()
         data = resp.json()
+        
+        # Parse available_actions: if the API returns the field, use it (even if []);
+        # if the API does not report available_actions, return None.
+        available_actions = None
+        if "available_actions" in data:
+            available_actions = [
+                ActionSlot(**a) for a in data["available_actions"]
+            ]
+        
         return Observation(
             text=data.get("reply", ""),
-            available_actions=[
-                ActionSlot(**a) for a in data.get("available_actions", [])
+            available_actions=available_actions,
+            # One row per action, in the order you were handed them. Here the
+            # example target accepts or rejects them wholesale, so every row
+            # carries the same verdict; a real runner reports each separately.
+            action_results=[
+                ActionResult(action_index=i, succeeded=True)
+                for i in range(len(actions))
             ],
-            errors=data.get("errors", []),
+            response_notices=data.get("notices", []),
         )
 
     async def teardown(self) -> None:
@@ -868,7 +895,7 @@ Before writing your runner:
 
 1. **Understand the turn loop.** The engine calls `setup()` once, then alternates `send_turn()` until the UserAgent decides to stop, then calls `teardown()`. Your runner must be stateful enough to maintain a conversation session across turns.
 
-2. **Return meaningful `available_actions`.** The UserAgent can only select from actions you surface in the `Observation`. If your target has buttons, file uploads, or forms, expose them as `ActionSlot` entries. If it's purely text-based, return an empty list.
+2. **Return meaningful `available_actions`.** The UserAgent can only select from actions you surface in the `Observation`. If your target has buttons, file uploads, or forms, expose them as `ActionSlot` entries. If it's purely text-based, return an empty list — `[]` means "I looked and there is nothing on offer", which is different from `None`, meaning "I did not look". Return `None` only on a path where you genuinely never inspected the target's state.
 
 3. **Handle `fixtures_dir`.** When a scenario lists fixture files and the UserAgent chooses a `file_upload` action, the file path is relative to `fixtures_dir`. Your runner must handle uploading it (multipart POST, base64 encoding, etc.).
 

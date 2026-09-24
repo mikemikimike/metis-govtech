@@ -6,6 +6,103 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [0.14.0] — Unreleased
 
+### Added
+
+- **The Runner↔Observation contract is now enforced, not documented.**
+  `simulation/_contract.py` checks every `send_turn` return against the action
+  list the runner was handed: one `ActionResult` per action, indices ascending
+  and dense, and no runner-issued `withheld` verdict. A violation raises
+  `RunnerContractError` and ends the run as `system_error` rather than
+  degrading into a report that silently undercounts. Only completeness is
+  checked here — the minimal-verdict rule lives in `ActionResult`'s own
+  validators, so there is exactly one copy of each rule.
+- **Structured per-action results on `Observation`.** A runner now reports one
+  `ActionResult` per action it received — `action_index`, `succeeded`, a
+  `detail` required on failure, an optional `retryable` hint, and a `withheld`
+  flag the caller alone may set — alongside `response_notices` for problems no
+  single action accounts for. `available_actions` is now three-state: a list of
+  offers, `[]` for looked-and-found-none, or `None` for nobody looked.
+
+### Changed
+
+- **Upload validation moved from the runners to the orchestrator.** Both
+  runners separately decided whether an upload named a staged fixture, and each
+  reported the rejection as free text a report consumer could not tell from a
+  target failure. The orchestrator now withholds such an action before
+  `send_turn` — it owns the staged-fixture registry, so it is the only layer
+  that can judge this — and records it as an `ActionResult` with
+  `withheld=True`. The persona still sees why its action did not go out, but
+  the report no longer counts it against the target, which never received it.
+  Surviving actions are renumbered around the withheld positions so the rows
+  the runner returns still line up with what the persona chose.
+- **The Orca API runner reports one result per action.** Every action the
+  runner receives comes back with its own verdict, so a button click this
+  runner cannot perform, a form fill naming no pending field, a duplicate
+  attachment and a fixture Orca rejects are each attributable instead of
+  being logged once and dropped. Turn-level problems — a failed or cancelled
+  status, an artifact that would not download, a submit refused because a
+  cached fileId went stale — move to `response_notices`, and a `failed`
+  status no longer implies its actions failed to arrive.
+- **The persona is told which of its actions failed, and can tell "nobody
+  looked" from "nothing on offer".** The prompt's problem block is built from
+  `action_results` and `response_notices` rather than one flat list, so a
+  rejected upload is attributed to the action that asked for it and carries a
+  retryable hint instead of arriving as anonymous prose. `available_actions`
+  is rendered in all three of its states: previously `[]` and `None` both made
+  the block vanish, which told the persona its controls had been withdrawn
+  when in fact nobody had checked. An action METIS itself withheld is still
+  shown to the persona — it is excluded from the report's blame attribution,
+  not from the persona's knowledge, because a persona not told would proceed
+  believing its file was attached. The opening turn is unchanged.
+- **The report reads failure evidence from the structured channels.** Per-turn
+  problems and the `failureSource` decision now come from `response_notices`
+  plus the `detail` of each failed, non-withheld `action_results` row, sorted
+  by `action_index`, through a single helper shared by the headline message and
+  the per-turn array so the two cannot drift. An action METIS withheld before
+  dispatch no longer counts as a product failure, and a failed row whose
+  `detail` is empty still does — the read path never rebuilds the model, so
+  neither invariant can be assumed here. `report.json` and
+  `report.schema.json` are unchanged. **Forward-only:** a record written
+  before this contract carries only the flat `errors` list, so re-reporting an
+  older run loses its failure attribution and needs a re-run.
+
+### Removed
+
+- **`Observation.errors` is gone.** The free-text list that every runner wrote
+  and the report, the persona prompt and the turn log each parsed differently is
+  replaced by two typed channels: `action_results`, one row per action the
+  runner was handed, and `response_notices` for turn-level problems belonging to
+  no single action. Nothing in the engine reads `errors` any more, and the
+  transitional validator that derived it from the new channels is deleted with
+  it. `UIState.errors` is a different field on a different model and survives —
+  it is the browser runner's raw DOM scrape, which is mapped into
+  `response_notices`. The runner guide's reproduced model and worked example are
+  updated, and both now point at `docs/runner-contract.md` as normative rather
+  than paraphrasing it. **Breaking:** a third-party runner constructing
+  `Observation(errors=[...])` silently loses that text — `Observation` sets no
+  model config, so Pydantic's default `extra="ignore"` drops the unknown keyword
+  rather than raising.
+
+### Fixed
+
+- **A turn whose observation failed after submission is no longer re-sent.**
+  `PostSubmissionObservationError` is raised precisely to report that the
+  message already reached the target, and the orchestrator was using it as a
+  cue to send again — producing a target session one turn longer than the run
+  record described, which silently shifted every turn-indexed metric read back
+  from Langfuse. The recovery ladder now calls `send_turn` at most once per
+  persona turn whatever the exception, and synthesises one `Observation`
+  carrying a failed `ActionResult` per submitted action. The cost is named
+  deliberately: the browser runner's refresh-and-retry for a transient DOM
+  failure is gone, so one class of recoverable turn is now reported as
+  undelivered rather than rescued.
+- **The Playwright runner reports one result per action.** A click or fill the
+  DOM refused, and a duplicate upload, used to be logged at warning level and
+  dropped, so the persona was told its action had been performed. Each now
+  comes back as a failure against the action that asked for it. Error text
+  scraped from the page moves to `response_notices`, where it belongs: no
+  submitted action accounts for it. Fixes #320.
+
 ## [0.13.0] — 2026-09-23
 
 ### Removed

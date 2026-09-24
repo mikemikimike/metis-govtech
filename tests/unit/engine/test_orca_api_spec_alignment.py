@@ -95,7 +95,10 @@ class TestInputCapEscalation:
         )
         assert isinstance(observation, Observation)
         assert observation.text == ""
-        assert observation.errors and "input cap" in observation.errors[0]
+        assert (
+            observation.response_notices
+            and "input cap" in observation.response_notices[0]
+        )
         assert runner._input_cap_failures == 1
 
     @pytest.mark.asyncio
@@ -130,7 +133,10 @@ class TestInputCapEscalation:
         digest = {"status": "failed", "error": "Blocked by a content guardrail"}
         for _ in range(3):
             observation = await runner._build_observation(digest)
-            assert observation.errors and "guardrail" in observation.errors[0]
+            assert (
+                observation.response_notices
+                and "guardrail" in observation.response_notices[0]
+            )
 
     def test_no_session_exhaustion_remains_in_the_runner(self) -> None:
         """v1 has no session budget, so nothing may branch on one."""
@@ -163,7 +169,10 @@ class TestSubmit404Attribution:
 
         observation = await runner.send_turn("hi", [])
 
-        assert observation.errors and "sales.csv" in observation.errors[0]
+        assert (
+            observation.response_notices
+            and "sales.csv" in observation.response_notices[0]
+        )
         # The id is evicted so the next attach re-uploads the file...
         assert "sales.csv" not in runner._fixture_library._entries
         # ...and the fixture is still offered, unlike a rejected one.
@@ -511,7 +520,9 @@ class TestEmptyMessage:
         observation = await runner.send_turn("   ", [])
 
         assert requests == []  # nothing reached the transport
-        assert observation.errors and "empty" in observation.errors[0]
+        assert (
+            observation.response_notices and "empty" in observation.response_notices[0]
+        )
         assert observation.available_actions is not None
 
     @pytest.mark.asyncio

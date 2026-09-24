@@ -42,7 +42,6 @@ class MockRunner(Runner):
         return Observation(
             text="Goal achieved",
             artifacts=[],
-            errors=[],
             available_actions=[],
             status_labels=["completed"],
         )

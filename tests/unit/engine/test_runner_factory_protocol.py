@@ -18,7 +18,7 @@ class FakeRunner(Runner):
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
         return Observation(
-            text="ok", artifacts=[], errors=[], available_actions=[], status_labels=[]
+            text="ok", artifacts=[], available_actions=[], status_labels=[]
         )
 
     async def teardown(self) -> None:

@@ -77,6 +77,7 @@ from ...exceptions import (
 )
 from ...runner import Runner
 from ...types import (
+    ActionResult,
     ActionSlot,
     Artifact,
     ButtonClickAction,
@@ -143,6 +144,14 @@ _PLATFORM_KEY_FAILURE_MARKER = "platformai key"
 #: polled this many intervals for confirmation before giving up on it.
 _CANCEL_CONFIRM_POLLS = 5
 
+#: The verdict on an action that was never dispatched because the turn was
+#: abandoned before it reached Orca. Deliberately generic: the reason belongs to
+#: the turn, and copying it into every row would say it several times over.
+_ABANDONED_DETAIL = (
+    "Not submitted: the turn was abandoned before it reached Orca; see the "
+    "turn's notices for why"
+)
+
 #: Fraction of the weekly allowance that makes a downgrade mid-experiment
 #: likely enough to warn about. Not a threshold Orca publishes — a run's spend
 #: is not knowable in advance — so it is set where the warning is still useful
@@ -171,12 +180,11 @@ class _StaleAttachment(Exception):
 class OrcaApiRunner(Runner):
     """One run attempt over ``/api/v1``: one Orca session, one turn per message.
 
-    Upload-rejection semantics (differs from :class:`OrcaPlaywrightRunner` by
-    design): its action slots are derived synchronously (no live DOM), so a
-    rejected turn returns an error ``Observation`` that re-offers
-    ``available_actions=self._action_slots()``, letting the persona retry next
-    turn. The Playwright runner omits ``available_actions`` on rejection because
-    it returns before its DOM-capture step; that asymmetry is intentional.
+    Action slots are derived synchronously from the staged fixtures and any
+    pending form rather than captured from a live DOM, so this runner can say
+    what is on offer even on a turn it declines to submit — every such return
+    re-offers ``available_actions=self._action_slots()``, letting the persona
+    act on a slot next turn.
     """
 
     def __init__(
@@ -224,6 +232,10 @@ class OrcaApiRunner(Runner):
         self._rejected: set[str] = set()
         #: Fixtures on the body being built; committed to ``_attached`` once submitted.
         self._attaching: list[str] = []
+        #: One row per action this turn, seeded by :meth:`_plan_actions`.
+        #: Initialised here because several tests call ``_build_observation``
+        #: directly, with no ``send_turn`` to seed it.
+        self._action_results: list[ActionResult] = []
         self._session_id: str | None = None
         #: The turn submitted but not yet settled — what a cancel would stop.
         self._inflight_turn_id: str | None = None
@@ -262,8 +274,10 @@ class OrcaApiRunner(Runner):
         ceiling, cancel on timeout), map the digest to an ``Observation``
         (status mapping, forms, artifacts). A malformed form answer or a rejected fixture is
         reported as an ``Observation`` from the first seam and never
-        submitted.
+        submitted. Every return carries one ``ActionResult`` per action in
+        ``actions`` (I1).
         """
+        self._plan_actions(actions)
         body = await self._build_submit_body(message, actions)
         if isinstance(body, Observation):
             return body
@@ -278,7 +292,7 @@ class OrcaApiRunner(Runner):
         # uploaded). No-assumed-uploads: only post-submit attachments appear.
         newly_attached = list(self._attaching)
         self._attached.update(self._attaching)
-        self._attaching = []
+        self._clear_attaching()
         digest = await self._poll_until_settled(turn_id)
         observation = await self._build_observation(digest)
         for name in newly_attached:
@@ -296,6 +310,67 @@ class OrcaApiRunner(Runner):
                 )
             )
         return observation
+
+    def _plan_actions(self, actions: list[ChosenAction]) -> None:
+        """Seed one optimistic row per received action (I1).
+
+        Optimistic because the common path is that everything is delivered;
+        each seam that discovers a problem flips its own row. A row that no
+        seam touches is a genuine success.
+        """
+        self._action_results = [
+            ActionResult(action_index=index, succeeded=True)
+            for index in range(len(actions))
+        ]
+
+    def _fail_action(
+        self, index: int, detail: str, *, retryable: bool | None = None
+    ) -> None:
+        """Replace row ``index`` with a failure carrying ``detail``.
+
+        Constructs a fresh row rather than ``model_copy(update=...)``, which
+        does not re-run validators: a copy with ``succeeded=False`` and an
+        empty ``detail`` would be accepted, and I2 forbids exactly that.
+        """
+        self._action_results[index] = ActionResult(
+            action_index=index, succeeded=False, detail=detail, retryable=retryable
+        )
+
+    def _abandon_turn(self, *, retryable: bool | None = None) -> None:
+        """Fail every row still marked succeeded, leaving attributed rows alone.
+
+        Called when the turn will not be submitted at all. Rows that already
+        carry a specific reason keep it; the rest get ``_ABANDONED_DETAIL``,
+        because "this action did not happen" is all we can honestly say about
+        them.
+        """
+        for index, row in enumerate(self._action_results):
+            if row.succeeded:
+                self._fail_action(index, _ABANDONED_DETAIL, retryable=retryable)
+
+    def _attribute_form_problems(
+        self, problems: list[tuple[str, str]], answer_index: dict[str, int]
+    ) -> list[str]:
+        """Route each form problem to the row that answered that field.
+
+        Returns the problems no row can own — a required field nobody answered
+        has no action to blame, and inventing one would report on something the
+        persona never did.
+        """
+        unattributed: list[str] = []
+        for field_id, problem in problems:
+            index = answer_index.get(field_id)
+            if index is None:
+                unattributed.append(f"Form not submitted: {problem}")
+            else:
+                self._fail_action(
+                    index, f"Form not submitted: {problem}", retryable=True
+                )
+        return unattributed
+
+    def _clear_attaching(self) -> None:
+        """Drop the attachment names that were never committed to ``_attached``."""
+        self._attaching = []
 
     async def _build_submit_body(
         self, message: str, actions: list[ChosenAction]
@@ -316,51 +391,52 @@ class OrcaApiRunner(Runner):
         rejects.
         """
         self._discarded_message = None
-        self._attaching = []
+        self._clear_attaching()
         fields = self._form_fields()
-        offered = set(self._fixtures)
 
         # Keyed by form-field id (the ``slot_id`` naming a pending-form field).
         answers: dict[str, FormFillAction] = {}
-        attachments: list[str] = []
-        upload_errors: list[str] = []
+        answer_index: dict[str, int] = {}
+        attachments: list[tuple[int, str]] = []
         skipped: list[str] = []
-        for action in actions:
+        for index, action in enumerate(actions):
             match action:
                 case FormFillAction(slot_id=slot_id) if slot_id in fields:
+                    if slot_id in answer_index:
+                        # Only the last answer is sent, so the earlier one did
+                        # not happen and must not read as if it had.
+                        self._fail_action(
+                            answer_index[slot_id],
+                            f"Not submitted: a later action in this turn also "
+                            f"answered field '{slot_id}'",
+                            retryable=False,
+                        )
                     answers[slot_id] = action
+                    answer_index[slot_id] = index
                 case UploadFileAction(filename=filename):
-                    if filename not in offered:
-                        upload_errors.append(
-                            f"file '{filename}' is not a fixture for this scenario"
-                        )
-                    elif self._fixture_path(filename) is None:
-                        upload_errors.append(
-                            f"file '{filename}' not found under the fixtures directory"
-                        )
-                    else:
-                        attachments.append(filename)
+                    attachments.append((index, filename))
                 case FormFillAction(slot_id=slot_id):
                     skipped.append(slot_id)
+                    self._fail_action(
+                        index,
+                        f"Not submitted: no pending form field named '{slot_id}'",
+                        retryable=False,
+                    )
                 case ButtonClickAction(slot_id=slot_id):
                     skipped.append(slot_id)
+                    self._fail_action(
+                        index,
+                        f"Not submitted: this target exposes no button '{slot_id}' "
+                        "over its API",
+                        retryable=False,
+                    )
         if skipped:
             logger.warning(
-                "[orca-api-runner] Skipping %d action(s) with no matching "
-                "pending-form field: %s",
+                "[orca-api-runner] Skipping %d action(s) this target's API "
+                "cannot service: %s",
                 len(skipped),
                 ", ".join(skipped),
             )
-        if upload_errors:
-            logger.warning(
-                "[orca-api-runner] Upload(s) rejected before submit: %s",
-                "; ".join(upload_errors),
-            )
-            return Observation(
-                errors=["Turn not submitted: " + "; ".join(upload_errors)],
-                available_actions=self._action_slots(),
-            )
-
         body: dict[str, Any] = {}
         form_answers: dict[str, FormValue] = {}
         if answers:
@@ -368,10 +444,15 @@ class OrcaApiRunner(Runner):
             if problems:
                 logger.warning(
                     "[orca-api-runner] Form answer rejected before submit: %s",
-                    "; ".join(problems),
+                    "; ".join(problem for _, problem in problems),
                 )
+                # Attribute first, abandon second: reversed, the generic detail
+                # would overwrite the specific one.
+                notices = self._attribute_form_problems(problems, answer_index)
+                self._abandon_turn()
                 return Observation(
-                    errors=["Form not submitted: " + "; ".join(problems)],
+                    response_notices=notices,
+                    action_results=self._action_results,
                     available_actions=self._action_slots(),
                 )
         # Orca requires exactly one of ``message`` (minLength 1) or
@@ -386,21 +467,38 @@ class OrcaApiRunner(Runner):
                 "[orca-api-runner] Turn not submitted: the persona produced an "
                 "empty message and no usable form answer"
             )
-            self._attaching = []
+            self._clear_attaching()
+            self._abandon_turn()
             return Observation(
-                errors=[
+                response_notices=[
                     "Turn not submitted: the message was empty and there was no "
                     "form answer to send in its place"
                 ],
+                action_results=self._action_results,
                 available_actions=self._action_slots(),
             )
 
         if attachments:
-            file_ids, rejected = await self._resolve_attachments(attachments)
-            if rejected:
-                self._attaching = []
+            file_ids = await self._resolve_attachments(attachments)
+            # A turn that loses one of its attachments is not the turn the
+            # persona composed, so nothing is submitted. The rows are the
+            # record now, which is why this asks them rather than a list of
+            # rejection strings — but only the attachment rows. Earlier seams
+            # in this method already fail rows for an invented button or a form
+            # field that is not pending, and neither contributes anything to the
+            # body: the message is still exactly what the persona wrote, so it
+            # is sent and the failure is reported to them instead of costing
+            # them the turn.
+            if any(not self._action_results[i].succeeded for i, _ in attachments):
+                self._clear_attaching()
+                self._abandon_turn()
                 return Observation(
-                    errors=rejected, available_actions=self._action_slots()
+                    response_notices=[
+                        "Turn not submitted: an attachment could not be sent, "
+                        "so the turn the persona composed no longer exists"
+                    ],
+                    action_results=self._action_results,
+                    available_actions=self._action_slots(),
                 )
             if file_ids:
                 body["files"] = file_ids
@@ -527,7 +625,7 @@ class OrcaApiRunner(Runner):
         the difference between this and :class:`FixtureRejected`, which is
         permanent and spends the fixture for the run.
         """
-        self._attaching = []
+        self._clear_attaching()
         for name in names:
             self._fixture_library.forget(name)
         listed = ", ".join(f"'{name}'" for name in names) or "the attached file(s)"
@@ -536,11 +634,17 @@ class OrcaApiRunner(Runner):
             "cached id(s) dropped and the turn was not started",
             listed,
         )
+        # A notice rather than a row: this path is reachable with no received
+        # actions at all, because ``_attaching`` can hold names no action in
+        # this turn put there. Rows that do exist are retryable — the same names
+        # can be attached next turn and the library will upload them again.
+        self._abandon_turn(retryable=True)
         return Observation(
-            errors=[
+            response_notices=[
                 f"Turn not submitted: Orca no longer recognises {listed}. The "
                 "file(s) will be uploaded again if attached on a later turn."
             ],
+            action_results=self._action_results,
             available_actions=self._action_slots(),
         )
 
@@ -579,7 +683,11 @@ class OrcaApiRunner(Runner):
         output: str = digest.get("output") or ""
 
         text = output
-        errors: list[str] = []
+        # Turn-level facts only. The action rows are left as the submit seams
+        # set them: a ``failed`` or ``cancelled`` status does not mean an action
+        # failed to arrive, and demoting a delivered action because the target
+        # was later unhappy would be interpreting rather than reporting (P2).
+        notices: list[str] = []
         # Any other settled outcome breaks an input-cap streak: the session
         # answered, so whatever was too large for one call is not permanent.
         if status != "failed":
@@ -588,11 +696,11 @@ class OrcaApiRunner(Runner):
             text = ""
             reason = digest.get("error") or "no reason given"
             self._triage_failure(str(reason))
-            errors.append(f"Turn failed: {reason}")
+            notices.append(f"Turn failed: {reason}")
         elif status == "cancelled":
             # Partial output must never read as the assistant's answer.
             text = ""
-            errors.append(
+            notices.append(
                 "Turn cancelled before completion"
                 + (f"; partial output: {output}" if output else "")
             )
@@ -636,13 +744,14 @@ class OrcaApiRunner(Runner):
         )
 
         # Only the note's text crosses into the observation: ``file_id`` is
-        # reconciliation bookkeeping, and ``errors`` is rendered into the
+        # reconciliation bookkeeping, and the notices are rendered into the
         # simulated user's prompt, where a raw Orca file id is something no
         # real user would ever be shown.
         return Observation(
             text=text,
             artifacts=artifacts,
-            errors=[*errors, *(note.text for note in notes)],
+            response_notices=[*notices, *(note.text for note in notes)],
+            action_results=self._action_results,
             available_actions=available_actions,
             discarded_message=discarded_message,
         )
@@ -663,8 +772,8 @@ class OrcaApiRunner(Runner):
         ``Retry-After``, which may add latency on a congested lane.
 
         A sweep-level failure is logged and **not** returned as a note.
-        ``Observation.errors`` is not a diagnostics channel: it is rendered
-        into the simulated user's prompt under "Errors reported on your
+        ``response_notices`` is not a diagnostics channel: it is rendered
+        into the simulated user's prompt under "Problems reported on your
         previous turn", and this runner's own reconciliation vocabulary is
         something no real user would ever see. The structured log keeps these
         for post-hoc analysis, which is where they belong. The per-*artifact*
@@ -833,31 +942,43 @@ class OrcaApiRunner(Runner):
         ]
 
     async def _resolve_attachments(
-        self, names: list[str]
-    ) -> tuple[list[str], list[str]]:
-        """``fileId``s for the fixtures to attach this turn, plus rejection errors.
+        self, attachments: list[tuple[int, str]]
+    ) -> list[str]:
+        """``fileId``s for the fixtures to attach this turn.
 
-        A name already attached in this run (or twice in one turn) is skipped;
-        one with no file under the fixtures directory is skipped with a
-        warning; one Orca rejects contributes an error and no id, and is
-        reported once per run — a later attempt at the same name is skipped
-        with a warning so a persona that keeps trying does not stall the
-        run. Every resolvable name is still uploaded (and cached) even when
-        another is rejected, so the evaluator sees all the problems at once
-        and a rerun re-sends nothing.
+        Every name that does not resolve fails its own action row rather than
+        being skipped with a log line: a persona that attached a file and was
+        told nothing would attach it again. A name already attached in this run
+        (or twice in one turn), one with no file under the fixtures directory,
+        and one Orca has already rejected each fail for their own reason; a
+        fresh rejection is recorded once per run so a persona that keeps trying
+        does not stall it. Every resolvable name is still uploaded (and cached)
+        even when another is rejected, so the evaluator sees all the problems at
+        once and a rerun re-sends nothing.
         """
         file_ids: list[str] = []
-        errors: list[str] = []
-        for name in names:
+        for index, name in attachments:
             if name in self._attached or name in self._attaching:
                 logger.info(
                     "[orca-api-runner] Fixture %r already attached; skipped", name
+                )
+                self._fail_action(
+                    index,
+                    f"Not submitted: file '{name}' is already attached to this "
+                    "conversation",
+                    retryable=False,
                 )
                 continue
             if name in self._rejected:
                 logger.warning(
                     "[orca-api-runner] Fixture %r was already rejected by Orca; skipped",
                     name,
+                )
+                self._fail_action(
+                    index,
+                    f"Not submitted: file '{name}' was already rejected by the "
+                    "target earlier in this run",
+                    retryable=False,
                 )
                 continue
             path = self._fixture_path(name)
@@ -867,20 +988,29 @@ class OrcaApiRunner(Runner):
                     name,
                     self._fixtures_dir,
                 )
+                self._fail_action(
+                    index,
+                    f"Not submitted: file '{name}' not found under the fixtures "
+                    "directory",
+                    retryable=False,
+                )
                 continue
             try:
                 file_id = await self._fixture_library.file_id(name, path)
             except FixtureRejected as exc:
                 logger.warning("[orca-api-runner] %s", exc)
                 self._rejected.add(name)
-                errors.append(
+                # Not retryable: the fixture is spent for the rest of the run.
+                self._fail_action(
+                    index,
                     f"Turn not submitted: file '{name}' rejected by Orca "
-                    f"({exc.status}): {exc.reason}"
+                    f"({exc.status}): {exc.reason}",
+                    retryable=False,
                 )
                 continue
             file_ids.append(file_id)
             self._attaching.append(name)
-        return file_ids, errors
+        return file_ids
 
     def _fixture_path(self, name: str) -> Path | None:
         """``fixtures_dir/name`` if it is a file inside the fixtures directory."""
@@ -892,8 +1022,12 @@ class OrcaApiRunner(Runner):
 
     def _typed_form_answers(
         self, fields: dict[str, dict[str, Any]], answers: dict[str, FormFillAction]
-    ) -> tuple[dict[str, FormValue], list[str]]:
+    ) -> tuple[dict[str, FormValue], list[tuple[str, str]]]:
         """Type each answer per its field; report what Orca would reject.
+
+        Each problem is paired with the field id it is about, so the caller can
+        blame the action that answered that field — or, when no action did,
+        report it as a fact about the turn instead.
 
         ``number`` → int/float (numeric strings coerced); ``multiselect`` /
         ``dynamic_list`` → list of strings (a lone value wrapped); anything
@@ -901,12 +1035,14 @@ class OrcaApiRunner(Runner):
         value is accepted as is.
         """
         typed: dict[str, FormValue] = {}
-        problems: list[str] = []
+        problems: list[tuple[str, str]] = []
         for field_id, field in fields.items():
             action = answers.get(field_id)
             if action is None:
                 if field.get("required"):
-                    problems.append(f"required field '{field_id}' was not answered")
+                    problems.append(
+                        (field_id, f"required field '{field_id}' was not answered")
+                    )
                 continue
             kind = field.get("type")
             value = action.value
@@ -914,7 +1050,10 @@ class OrcaApiRunner(Runner):
                 number = _as_number(value)
                 if number is None:
                     problems.append(
-                        f"field '{field_id}' expects a number, got {value!r}"
+                        (
+                            field_id,
+                            f"field '{field_id}' expects a number, got {value!r}",
+                        )
                     )
                     continue
                 typed[field_id] = number

@@ -18,7 +18,6 @@ from metis.engine.simulation.runners.orca_api._fixtures import content_type_for
 from metis.engine.simulation.types import (
     ButtonClickAction,
     FormFillAction,
-    Observation,
     UploadFileAction,
 )
 
@@ -138,25 +137,6 @@ class TestBuildSubmitBody:
         assert "message" not in body
 
     @pytest.mark.asyncio
-    async def test_upload_naming_non_fixture_is_loud_error(self, tmp_path) -> None:
-        runner, _ = _make_runner(tmp_path, fixtures=["sales.csv"])
-        result = await runner._build_submit_body(
-            "hi", [UploadFileAction(slot_id="ghost.csv", filename="ghost.csv")]
-        )
-        assert isinstance(result, Observation)
-        assert result.errors and "ghost.csv" in result.errors[0]
-
-    @pytest.mark.asyncio
-    async def test_upload_missing_file_is_loud_error(self, tmp_path) -> None:
-        runner, _ = _make_runner(tmp_path, fixtures=["sales.csv"])
-        # "sales.csv" is a scenario fixture but no file was written to disk.
-        result = await runner._build_submit_body(
-            "hi", [UploadFileAction(slot_id="sales.csv", filename="sales.csv")]
-        )
-        assert isinstance(result, Observation)
-        assert result.errors and "sales.csv" in result.errors[0]
-
-    @pytest.mark.asyncio
     async def test_valid_upload_attaches_file(self, tmp_path, monkeypatch) -> None:
         runner, fixtures_dir = _make_runner(tmp_path, fixtures=["sales.csv"])
         (fixtures_dir / "sales.csv").write_text("a,b\n1,2\n")
@@ -165,9 +145,12 @@ class TestBuildSubmitBody:
             return "file-123"
 
         monkeypatch.setattr(runner._fixture_library, "file_id", fake_file_id)
-        body = await runner._build_submit_body(
-            "hi", [UploadFileAction(slot_id="sales.csv", filename="sales.csv")]
-        )
+        actions = [UploadFileAction(slot_id="sales.csv", filename="sales.csv")]
+        # send_turn plans the rows before building the body, and the attachment
+        # guard reads the row belonging to each upload, so a body built without
+        # planned rows is a state the runner cannot reach.
+        runner._plan_actions(actions)
+        body = await runner._build_submit_body("hi", actions)
         assert isinstance(body, dict)
         assert body["files"] == ["file-123"]
         assert body["message"] == "hi"
@@ -175,9 +158,9 @@ class TestBuildSubmitBody:
     @pytest.mark.asyncio
     async def test_button_click_is_skipped_message_sent(self, tmp_path) -> None:
         runner, _ = _make_runner(tmp_path)
-        body = await runner._build_submit_body(
-            "hello", [ButtonClickAction(slot_id="run")]
-        )
+        actions = [ButtonClickAction(slot_id="run")]
+        runner._plan_actions(actions)
+        body = await runner._build_submit_body("hello", actions)
         assert isinstance(body, dict)
         assert body["message"] == "hello"
         assert "files" not in body and "formAnswers" not in body

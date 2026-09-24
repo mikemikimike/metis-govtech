@@ -19,6 +19,10 @@ class Runner(ABC):
 
     The runner does not know about personas, scenarios, or the UserAgent.
     It does not manage the turn loop or stopping conditions.
+
+    Implementations MUST satisfy the runner contract in
+    ``docs/runner-contract.md``, which is normative for every runner in this
+    repository or outside it.
     """
 
     @abstractmethod
@@ -27,7 +31,19 @@ class Runner(ABC):
 
     @abstractmethod
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
-        """Deliver user message + chosen actions to the target, return observation."""
+        """Deliver user message + chosen actions to the target, return observation.
+
+        Contract obligations (``docs/runner-contract.md``):
+
+        - **I1** — the returned ``Observation.action_results`` MUST hold exactly
+          one ``ActionResult`` per action in ``actions``, ordered so that
+          ``action_results[i].action_index == i``. Never drop an action silently.
+        - **I3** — after this returns, the target session MUST be usable next
+          turn. A runner that knows its session is dead MUST raise instead,
+          even when it holds a good account of the turn.
+        - **I4** — this MAY be assumed to be called at most once per persona
+          turn, so an implementation need not tolerate or detect a re-send.
+        """
 
     @abstractmethod
     async def teardown(self) -> None:

@@ -199,9 +199,9 @@ class TestSweepFailsQuietly:
             "ANALYSIS_SUMMARY.txt",
             "q3_revenue_analysis.py",
         }
-        # Log-only: Observation.errors is the persona's prompt, not a
+        # Log-only: response_notices is the persona's prompt, not a
         # diagnostics channel, and a sweep failure is METIS-internal.
-        assert observation.errors == []
+        assert observation.response_notices == []
 
     @pytest.mark.asyncio
     async def test_a_malformed_session_body_never_raises(
@@ -226,7 +226,7 @@ class TestSweepFailsQuietly:
         assert stub_download == []
         # Log-only, as for any other sweep-level failure.
         assert observation.artifacts == []
-        assert observation.errors == []
+        assert observation.response_notices == []
 
     @pytest.mark.asyncio
     async def test_an_entry_without_a_file_id_is_skipped(
@@ -338,7 +338,7 @@ class TestSweepDeduplicateMerge:
         assert fail_artifacts[0].path is not None
 
         # The stale failure note is gone, and no sweep-internal note replaces it.
-        assert observation.errors == []
+        assert observation.response_notices == []
 
     @pytest.mark.asyncio
     async def test_a_file_failing_on_both_lanes_is_recorded_once(
@@ -385,17 +385,17 @@ class TestSweepDeduplicateMerge:
         assert len(observation.artifacts) == 1
         assert observation.artifacts[0].external_id == "f-fail"
         assert observation.artifacts[0].path is None
-        assert len(observation.errors) == 1
-        assert "could not be downloaded" in observation.errors[0]
+        assert len(observation.response_notices) == 1
+        assert "could not be downloaded" in observation.response_notices[0]
 
     @pytest.mark.asyncio
     async def test_the_persona_is_never_shown_a_raw_orca_file_id(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """``Observation.errors`` is prompt text, not a diagnostics channel.
+        """``response_notices`` is prompt text, not a diagnostics channel.
 
-        It is rendered under "Errors reported on your previous turn — take them
-        into account", and no real user of a chat product is ever shown a
+        It is rendered under "Problems reported on your previous turn — take
+        them into account", and no real user of a chat product is ever shown a
         backend file id. The id still has to travel with the note so both
         collection lanes' diagnostics can be reconciled by identity rather than
         by name; it rides in ``ArtifactNote.file_id``, which stops at the
@@ -431,9 +431,9 @@ class TestSweepDeduplicateMerge:
             }
         )
 
-        assert observation.errors  # the failure is still reported
-        assert all(file_id not in err for err in observation.errors)
-        assert all("(file " not in err for err in observation.errors)
+        assert observation.response_notices  # the failure is still reported
+        assert all(file_id not in err for err in observation.response_notices)
+        assert all("(file " not in err for err in observation.response_notices)
         # And the id is not lost — it is on the artifact, where a re-check reads it.
         assert observation.artifacts[0].external_id == file_id
 
@@ -522,6 +522,6 @@ class TestSweepDeduplicateMerge:
         ]
         assert len(orphans) == 1
         assert orphans[0].path is None
-        assert observation.errors == [
+        assert observation.response_notices == [
             "Artifact 'report.txt' is not downloadable (no fileId)"
         ]
