@@ -1,20 +1,27 @@
-"""HTTP routes for the wizard Interview lifecycle, compilation, and package download.
+"""HTTP routes for the wizard Interview lifecycle, document extraction, compilation and download.
 
 This router is a thin HTTP adapter over the metis-wizard package. It parses a typed request body,
 calls the wizard's public facade, and maps the typed result onto an HTTP status code — it adds no
 behaviour of its own. Every stage, Profile, prompt, matching and compilation rule lives in
 metis-wizard.
 
+Document extraction stands outside the Interview lifecycle. It reads the uploaded file streams,
+returns their text, and retains neither the files nor any state, so the caller holds the result.
+
 For what the interview does and how to use it, see the wizard user guide: ``docs/guide/wizard.md``.
 
 Status mapping (from the design):
 
-| result                                          | status |
-|-------------------------------------------------|-------:|
-| successful start, turn, end, or compile        |    200 |
-| valid JSON with invalid state or stale id       |    400 |
-| exhausted model retries, unchanged state        |    503 |
-| unexpected non-retryable failure                |    500 |
+| result                                           | status |
+|--------------------------------------------------|-------:|
+| successful start, turn, end, compile, or extract |    200 |
+| valid JSON with invalid state or stale id        |    400 |
+| unreadable or unsupported document upload        |    400 |
+| exhausted model retries, unchanged state         |    503 |
+| unexpected non-retryable failure                 |    500 |
+
+A 400 carries a typed code: an `InterviewErrorCode` from the lifecycle routes, and a
+`DocumentExtractionErrorCode` from the extraction route.
 
 Request/Profile schema failures become 422 through the app's validation handler.
 """
