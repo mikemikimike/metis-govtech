@@ -197,7 +197,11 @@ def test_the_question_is_asked_before_the_next_screen() -> None:
 def test_chat_on_the_initial_draft_opens_free_text() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = DriverState(
-        profile=ProductProfile(product=Product(name="X", description="", users="")),
+        profile=ProductProfile(
+            product=Product(
+                name="X", description="Answers research questions.", users=""
+            )
+        ),
         context=interview_context(),
         step=InterviewStep.BEHAVIOURS,
     )

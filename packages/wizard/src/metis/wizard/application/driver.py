@@ -186,6 +186,11 @@ class StepDriver:
             step = InterviewStep.BEHAVIOURS
 
         if step is InterviewStep.BEHAVIOURS:
+            # A model can finish clarification without filling required Product fields.
+            # Collect them directly so the review cannot strand the user at Continue.
+            completion = screens.product_completion_form(profile)
+            if completion is not None:
+                return completion
             if not profile.tasks:
                 self._try(
                     lambda: self.interviewer.draft_behaviours(
@@ -378,6 +383,27 @@ class StepDriver:
         rewrite it. Everything created here is stamped FORM."""
         values = getattr(response, "values", {}) or {}
         profile = state.profile
+
+        if state.step is InterviewStep.BEHAVIOURS and request.target is None:
+            completion = screens.product_completion_form(profile)
+            if completion is not None and request.fields == completion.fields:
+                apply(
+                    profile,
+                    [
+                        Patch(
+                            op=PatchOp.SET,
+                            path=field.id,
+                            value=values[field.id],
+                            origin=PatchOrigin.WIZARD,
+                        )
+                        for field in completion.fields
+                        if isinstance(values.get(field.id), str)
+                        and values[field.id].strip()
+                    ],
+                    issued_ids=state.issued_ids,
+                    user_typed=state.user_typed,
+                )
+                return
 
         # A target keeps a manual child attached to the parent that offered the action. The
         # current step tells us which parent type the opaque id names.

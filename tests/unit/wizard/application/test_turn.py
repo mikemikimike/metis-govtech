@@ -24,9 +24,14 @@ from metis.wizard.contracts import (
     ChatResponse,
     ChoiceRequest,
     ChoiceResponse,
+    ClarifyResult,
+    FormRequest,
+    FormResponse,
     InterviewDocument,
     Option,
     OptionId,
+    Patch,
+    PatchOp,
     Perspective,
     Product,
     ProductProfile,
@@ -301,6 +306,41 @@ def test_end_finishes_a_completable_interview() -> None:
     assert result.state.confirmed
     assert result.state.pending is None
     assert result.state.profile.behaviour("EB-1").criteria[0].metric_fqn  # type: ignore[union-attr]
+
+
+def test_missing_product_details_can_be_completed_before_review() -> None:
+    class IncompleteInterviewer(ScriptedInterviewer):
+        def clarify(self, profile, history, context=None):
+            return ClarifyResult(
+                done=True,
+                message="",
+                patches=[
+                    Patch(op=PatchOp.SET, path=f"product.{key}", value="")
+                    for key in ("name", "description")
+                ],
+            )
+
+    interviewer = IncompleteInterviewer()
+    started = _start(interviewer=interviewer)
+    assert isinstance(started, InterviewSuccess)
+    assert isinstance(started.state.pending, FormRequest)
+    completed = _turn(
+        started.state,
+        FormResponse(
+            values={
+                "product.name": "Policy assistant",
+                "product.description": "Answers policy questions.",
+            }
+        ),
+        interviewer=interviewer,
+    )
+    assert isinstance(completed, InterviewSuccess)
+    assert isinstance(completed.state.pending, ChoiceRequest)
+    continued = _turn(
+        completed.state, ChoiceResponse(selected=["continue"]), interviewer=interviewer
+    )
+    assert isinstance(continued, InterviewSuccess)
+    assert continued.stage is InterviewStep.CRITERIA
 
 
 @pytest.mark.parametrize("suggested_files", [[], ["policy.pdf"]])

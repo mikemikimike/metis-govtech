@@ -53,6 +53,11 @@ _No v1 changes yet._
 
 ### metis-wizard
 
+#### Fixed
+
+- An Interview asks for a missing product name or description before behaviour review, so an
+  incomplete model response cannot leave Continue blocked.
+
 #### Changed
 
 - Clarify now explores the product widely before it goes deep, with one instruction set instead of a

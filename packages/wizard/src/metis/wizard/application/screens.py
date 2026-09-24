@@ -27,6 +27,8 @@ from metis.wizard.contracts.conversation import (
     CardText,
     CardUploadField,
     ChoiceRequest,
+    FormField,
+    FormRequest,
     Option,
     OptionId,
     ScenarioCard,
@@ -140,6 +142,23 @@ BEHAVIOUR_INSTRUCTION = (
     "Every behaviour starts selected for measurement. Clear any you don't want to measure. "
     'To leave comments, choose "Chat about it" first; the next prompt accepts text.'
 )
+
+
+def product_completion_form(profile: ProductProfile) -> FormRequest | None:
+    """Ask for required Product fields that the model did not supply."""
+    fields: list[FormField] = []
+    if not profile.product.name.strip():
+        fields.append(
+            FormField(id="product.name", label="Product name", multiline=False)
+        )
+    if not profile.product.description.strip():
+        fields.append(FormField(id="product.description", label="Product description"))
+    if not fields:
+        return None
+    return FormRequest(
+        prompt="Enter the missing product details to continue to the behaviour review.",
+        fields=fields,
+    )
 
 
 def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
