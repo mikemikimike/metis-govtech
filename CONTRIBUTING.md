@@ -219,11 +219,31 @@ When adding a new workspace package:
 
 ## Pull Requests
 
+### Changelog entries
+
+Describe the final result of the PR relative to its target branch. Update entries during
+development and review them before merge.
+
+- Compare the final code with the PR base. Use the commit history to identify intermediate
+  changes, then combine entries that describe the same feature.
+- If the PR adds A and later removes A, omit both entries. If it adds A and later replaces A
+  with B, describe B as the addition.
+- If A exists in the PR base and the PR removes or replaces it, keep the removal or change
+  entry. Keep migration information for existing users.
+- Describe a new feature and its final behaviour in one entry. A correction to that feature
+  within the same PR belongs in that entry.
+- Use one heading for each change type within each package and version section.
+- Preserve released history and unrelated entries from other PRs. Correct an earlier
+  unreleased entry only when its PR history confirms the error.
+
+These rules apply to both package changelogs and the combined pre-release changelog.
+
 ### Before Opening
 
 - [ ] `make check` passes locally
 - [ ] New code has tests
 - [ ] No unrelated changes bundled in
+- [ ] Changelog entries follow the [final-result rules](#changelog-entries)
 
 ### What Reviewers Look For
 

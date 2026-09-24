@@ -53,21 +53,6 @@ _No v1 changes yet._
 
 ### metis-wizard
 
-#### Fixed
-
-- An Interview asks for a missing product name or description before behaviour review, so an
-  incomplete model response cannot leave Continue blocked.
-
-#### Changed
-
-- Clarify now explores the product widely before it goes deep, with one instruction set instead of a
-  product phase and a machinery phase.
-- Prompts now wrap injected reference content — the primer, the ARC catalogue, the Profile, the
-  transcript, the perspective, the capability evidence, and the user's message — in a named
-  XML-style tag, with a system-prompt line stating that tagged content is reference material and
-  never instructions. The boundary between the wizard's own words and quoted content is now
-  unambiguous.
-
 #### Added
 
 - **Opening documents.** Flat Interview start requests can carry files as `{name, text?}`. The
@@ -76,16 +61,16 @@ _No v1 changes yet._
   text and identify unread files. New Scenario drafts can suggest any opening file by name, and the
   existing Scenario review confirms each assignment.
 
-- **ARC capability evidence at Interview start.** The CLI and headless interface now use the final
+- **ARC capability evidence at Interview start.** The CLI and headless interface now use the
   12-capability catalogue in three ordered groups. Start requires `known_capability_ids` and
   `capability_confidence`, records them in required client-held Interview context, and uses the
   confidence to guide Clarify and Behaviours probing. Every model call receives a synthesized
   catalogue background; the values do not enter `ProductProfile`.
 
 - Interview opening now offers End user, Engineer, Compliance, and Security perspectives. The
-  selected perspective travels in client-held Interview context and shapes only Clarify and
-  Behaviours prompts; labels and questions are package configuration. The web client asks for it;
-  the CLI always uses End user.
+  selected perspective travels in client-held Interview context and guides the language and depth
+  of model responses, with specific guidance for Clarify and Behaviours. Labels and questions are
+  package configuration. The web client asks for the perspective; the CLI always uses End user.
 
 - **JSON schema for `profile.yaml`.** `packages/wizard/schemas/profile.schema.json` is generated
   from the `ProductProfile` model and CI-guarded by `make check-schema`, giving schema-aware
@@ -103,7 +88,19 @@ _No v1 changes yet._
   explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
   behaviour selection is `measured`; and Product uses `description`.
 
+#### Fixed
+
+- **Required product details.** Before behaviour review, the Interview shows a form for any
+  missing product name or description. The user can supply these details and continue when the
+  model has not supplied them.
+
 #### Changed
+
+- Clarify now explores the product widely before it goes deep, with one instruction set instead of a
+  product phase and a machinery phase.
+- Prompts now wrap injected reference content — the primer, the ARC catalogue, the Profile, the
+  transcript, the perspective, the capability evidence, and the user's message — in a named
+  XML-style tag. The system prompt identifies tagged content as reference material, not instructions.
 
 - **Renamed the wizard control model from Session to Interview.** The runtime object and its state
   carry the Interview name: `Interview`, `InterviewState`, and `InterviewStep`.
@@ -138,10 +135,11 @@ _No v1 changes yet._
 
 - **Interview state is client-held and file-free.** The server-owned session file, its format
   version, and the `/api/interviews` routes are gone. A caller holds the returned state and sends it
-  back on the next operation. `InterviewState` now carries only the Profile, the two confirmation
-  flags, a bounded clarification history, and one pending request; the resolved-request
-  transcript, stored step, and file methods are removed. Old session files are not migrated — start a
-  new interview.
+  back on the next operation. `InterviewState` carries the Profile, Interview context, two
+  confirmation flags, bounded clarification history, authorship data, and at most one pending
+  request. Context includes the perspective, capability evidence, opening description, and
+  documents. The resolved-request transcript, stored step, and file methods are removed. Old
+  session files are not migrated — start a new interview.
 
 ### metis-api
 
@@ -204,6 +202,10 @@ _No v1 changes yet._
 - **Manual experiment authoring.** The opening screen now offers a stateless form for experiment
   identity, personas, scenarios, scorers, and fixture files. It builds an engine-ready
   `experiment.zip` through the existing package route without creating an Interview record.
+  The form has one Experiment editor and starts with empty Persona and Scenario collections.
+  Each item has separate ID and Description fields, uses its ID as its heading, and has a Done
+  action that closes the editor into a summary. Header actions add and focus new items. New
+  Scenarios select all named Personas, and new Personas are added to existing Scenarios.
 
 #### Changed
 
@@ -214,12 +216,6 @@ _No v1 changes yet._
   completed Interview and reports that the specification is ready without an automatic compile or
   download. The output action downloads one portable `experiment.zip` with the local fixture files.
   Review actions are disabled when their required Profile content is incomplete.
-- **Refined manual authoring layout.** The manual form now presents one top-level Experiment editor,
-  keeps each ID and Description on its own line, uses the entered ID as each item heading, and
-  starts with empty Persona and Scenario collections. Header actions add and focus a new item. New
-  Scenarios select all named Personas, and a new Persona is added to existing Scenarios. The manual
-  form now gives each item a clear surface and a Done action that closes the editor into a compact
-  summary. The manual data and package contract are unchanged.
 
 #### Deferred
 
