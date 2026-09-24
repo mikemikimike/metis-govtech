@@ -70,27 +70,8 @@ function success(
   };
 }
 
-test("runs an offline document start, reload, review, end and package flow", async () => {
-  const initialDocuments: InterviewDocument[] = [
-    {
-      name: "policy.md",
-      text: "The policy text.",
-    },
-    {
-      name: "notes.txt",
-      text: "Interview notes.",
-    },
-  ];
-  const emptyStartState = baseState();
-  const startState: InterviewState = {
-    ...emptyStartState,
-    context: {
-      ...emptyStartState.context,
-      opening_description: "A support assistant",
-      documents: [...initialDocuments],
-    },
-  };
-  const choice: ChoiceRequest = {
+function choiceRequest(): ChoiceRequest {
+  return {
     type: "choice",
     prompt: "Choose a goal",
     title: "Behaviours",
@@ -113,7 +94,10 @@ test("runs an offline document start, reload, review, end and package flow", asy
     footer: null,
     instruction: null,
   };
-  const form: FormRequest = {
+}
+
+function formRequest(): FormRequest {
+  return {
     type: "form",
     prompt: "Name the behaviour",
     title: "Behaviours",
@@ -126,23 +110,47 @@ test("runs an offline document start, reload, review, end and package flow", asy
     target: "B-1",
     answer: {},
   };
+}
+
+const policyScenario = (fixtures: string[]) => ({
+  id: "S-1",
+  name: "Check policy",
+  description: "Ask about one policy rule.",
+  behaviour_refs: [],
+  persona_refs: [],
+  fixtures,
+  num_trials: 1,
+});
+
+test("runs an offline document start, reload, review, end and package flow", async () => {
+  const initialDocuments: InterviewDocument[] = [
+    {
+      name: "policy.md",
+      text: "The policy text.",
+    },
+    {
+      name: "notes.txt",
+      text: "Interview notes.",
+    },
+  ];
+  const emptyStartState = baseState();
+  const startState: InterviewState = {
+    ...emptyStartState,
+    context: {
+      ...emptyStartState.context,
+      opening_description: "A support assistant",
+      documents: [...initialDocuments],
+    },
+  };
+  const choice = choiceRequest();
+  const form = formRequest();
   const draftState: InterviewState = {
     ...startState,
     pending: null,
     confirmed: false,
     profile: {
       ...startState.profile,
-      scenarios: [
-        {
-          id: "S-1",
-          name: "Check policy",
-          description: "Ask about one policy rule.",
-          behaviour_refs: [],
-          persona_refs: [],
-          fixtures: ["policy.md"],
-          num_trials: 1,
-        },
-      ],
+      scenarios: [policyScenario(["policy.md"])],
     },
   };
 
@@ -376,4 +384,140 @@ test("runs an offline document start, reload, review, end and package flow", asy
   assert.equal(withFixture.state.confirmed, true);
   assert.equal(withFixture.transcript.at(-1)?.kind, "interaction");
   await repository.delete("offline-flow");
+});
+
+test("runs an offline start, chat, choice, form, reload, end and package flow", async () => {
+  const startState = baseState();
+  const choice = choiceRequest();
+  const form = formRequest();
+  const finalState: InterviewState = {
+    ...startState,
+    pending: null,
+    confirmed: true,
+    profile: {
+      ...startState.profile,
+      scenarios: [policyScenario(["policy.pdf"])],
+    },
+  };
+
+  globalThis.fetch = async (input, init) => {
+    const path = String(input);
+    if (path.endsWith("/start"))
+      return new Response(
+        JSON.stringify(success(startState, "awaiting_response")),
+        { status: 200 },
+      );
+    if (path.endsWith("/turn")) {
+      const body = JSON.parse(String(init?.body)) as { request_id: string };
+      const next =
+        body.request_id === "chat-1"
+          ? { ...startState, pending: choice }
+          : body.request_id === "choice-1"
+            ? { ...startState, pending: form }
+            : finalState;
+      return new Response(
+        JSON.stringify(
+          success(next, next.pending ? "awaiting_response" : "done"),
+        ),
+        { status: 200 },
+      );
+    }
+    if (path.endsWith("/end"))
+      return new Response(JSON.stringify(success(finalState, "done")), {
+        status: 200,
+      });
+    if (path.endsWith("/package")) {
+      const body = init?.body as FormData;
+      assert.deepEqual(
+        (body.getAll("files") as File[]).map((file) => file.name),
+        ["policy.pdf"],
+      );
+      return new Response(
+        new Blob(["zip bytes"], { type: "application/zip" }),
+        {
+          status: 200,
+          headers: { "content-type": "application/zip" },
+        },
+      );
+    }
+    throw new Error(`Unexpected API path: ${path}`);
+  };
+
+  const repository = new InterviewRepository();
+  const started = await api.start("A support assistant", {
+    known_capability_ids: [],
+    confidence: "low",
+  });
+  assert.deepEqual(started.state.context.documents ?? [], []);
+  let record = emptyRecord(
+    "offline-plain-flow",
+    started.state,
+    started.stage,
+    startTranscript("A support assistant", started.state),
+  );
+  await repository.put(record);
+  record = applyTurn(
+    record,
+    await api.respond(record.state, "chat-1", {
+      type: "chat",
+      text: "It answers questions",
+    }),
+    { type: "chat", text: "It answers questions" },
+  );
+  record = applyTurn(
+    record,
+    await api.respond(record.state, "choice-1", {
+      type: "choice",
+      selected: ["continue"],
+    }),
+    { type: "choice", selected: ["continue"] },
+  );
+  record = applyTurn(
+    record,
+    await api.respond(record.state, "form-1", {
+      type: "form",
+      values: { name: "Reviewer" },
+    }),
+    { type: "form", values: { name: "Reviewer" } },
+  );
+  await repository.put(record);
+
+  const reloaded = await new InterviewRepository().read("offline-plain-flow");
+  assert.equal(reloaded?.transcript.length, 4);
+  const ended = applyEnd(reloaded!, await api.end(reloaded!.state));
+  const withFixture = addFixtures(ended, [
+    new File(["fixture bytes"], "policy.pdf", { type: "application/pdf" }),
+    new File(["unused later file"], "unused.json", {
+      type: "application/json",
+    }),
+  ]);
+  await repository.put(withFixture);
+  assert.deepEqual(
+    withFixture.fixtures.map((file) => file.name),
+    ["policy.pdf", "unused.json"],
+  );
+  const archive = await api.package(
+    withFixture.state.profile,
+    fixturesForProfile(withFixture),
+  );
+  assert.equal(await archive.text(), "zip bytes");
+  const downloads: string[] = [];
+  downloadArchive(
+    archive,
+    {
+      createElement: () => ({
+        href: "",
+        download: "",
+        click() {
+          downloads.push(this.download);
+        },
+        remove() {},
+      }),
+    } as unknown as Document,
+    { createObjectURL: () => "blob:offline", revokeObjectURL: () => {} },
+  );
+  assert.deepEqual(downloads, ["experiment.zip"]);
+  assert.equal(withFixture.state.confirmed, true);
+  assert.equal(withFixture.transcript.at(-1)?.kind, "interaction");
+  await repository.delete("offline-plain-flow");
 });
