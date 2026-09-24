@@ -82,6 +82,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   `Observation(errors=[...])` silently loses that text — `Observation` sets no
   model config, so Pydantic's default `extra="ignore"` drops the unknown keyword
   rather than raising.
+- **`Runner.recover()` is gone.** The hook was a default no-op with exactly one
+  override (`OrcaPlaywrightRunner`) and exactly two call sites, both removed by
+  the I4 ruling in #329; the one guarded call #329 kept for interim I3 hygiene
+  is deleted here too. The reload it used to perform moves into
+  `OrcaPlaywrightRunner` as a lazy self-heal: a `_page_dirty` flag set when a
+  turn raises, honoured at the top of the *next* `send_turn` rather than on the
+  failing turn's way out, so a run that escalates after two consecutive
+  failures never pays the reload it used to pay on both. `_recover_and_check`
+  (`_recovery.py`), written for a re-send path #329 also deleted, and
+  `TurnDiagnostics.recovered` / `.recovery_found_response`, never assigned
+  anywhere in `packages/`, go with it. **Breaking:** a third-party `Runner`
+  subclass that still overrides `recover()` keeps compiling — Python does not
+  mind an unused method — but it is silently never called again; there is no
+  replacement hook, because session recovery is now understood to be the
+  runner's own internal business (`docs/runner-contract.md`).
 
 ### Fixed
 

@@ -53,9 +53,6 @@ class Runner(ABC):
     async def get_session_id(self) -> str | None:
         """Return the target system's session identifier, if available."""
 
-    async def recover(self) -> None:  # noqa: B027
-        """Attempt lightweight recovery (e.g., page refresh). Default: no-op."""
-
 
 class RunnerFactory(Protocol):
     """Factory that manages shared resources and creates Runner instances.

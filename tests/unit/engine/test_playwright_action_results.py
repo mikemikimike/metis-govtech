@@ -120,3 +120,76 @@ class TestScrapedErrorTextIsATurnNotice:
         ui_state = UIState(text="hi", errors=["Something went wrong"])
         obs = orca_playwright._ui_state_to_observation(ui_state, [])
         assert obs.response_notices == ["Something went wrong"]
+
+
+class TestLazySelfHealing:
+    """I3 hygiene, relocated from the orchestrator's recover() call (#361)."""
+
+    @pytest.mark.asyncio
+    async def test_a_raised_simulation_error_marks_the_page_dirty(
+        self, tmp_path, monkeypatch, quiet_page
+    ) -> None:
+        from metis.engine.simulation.exceptions import TransientDOMError
+
+        async def _boom(_page, _message, _config, timeout_override=None):
+            raise TransientDOMError("locator missing")
+
+        monkeypatch.setattr(orca_playwright, "send_message", _boom)
+        runner, _ = _make_runner(tmp_path)
+
+        assert runner._page_dirty is False
+        with pytest.raises(TransientDOMError):
+            await runner.send_turn("hi", [])
+
+        assert runner._page_dirty is True
+
+    @pytest.mark.asyncio
+    async def test_a_dirty_page_is_reloaded_before_the_next_turn(
+        self, tmp_path, monkeypatch, quiet_page
+    ) -> None:
+        recover_calls: list[object] = []
+
+        async def _fake_recover_page(page, config):
+            recover_calls.append(page)
+
+        monkeypatch.setattr(orca_playwright, "_recover_page", _fake_recover_page)
+        runner, _ = _make_runner(tmp_path)
+        runner._page_dirty = True
+
+        obs = await runner.send_turn("hi", [])
+
+        assert recover_calls == [runner._page]
+        assert runner._page_dirty is False
+        assert obs.text == "ok"
+
+    @pytest.mark.asyncio
+    async def test_a_clean_page_is_not_reloaded(
+        self, tmp_path, monkeypatch, quiet_page
+    ) -> None:
+        recover_calls: list[object] = []
+
+        async def _fake_recover_page(page, config):
+            recover_calls.append(page)
+
+        monkeypatch.setattr(orca_playwright, "_recover_page", _fake_recover_page)
+        runner, _ = _make_runner(tmp_path)
+
+        await runner.send_turn("hi", [])
+
+        assert recover_calls == []
+
+    @pytest.mark.asyncio
+    async def test_a_failed_reload_keeps_the_page_marked_dirty(
+        self, tmp_path, monkeypatch, quiet_page
+    ) -> None:
+        async def _failing_recover_page(page, config):
+            raise RuntimeError("reload timed out")
+
+        monkeypatch.setattr(orca_playwright, "_recover_page", _failing_recover_page)
+        runner, _ = _make_runner(tmp_path)
+        runner._page_dirty = True
+
+        obs = await runner.send_turn("hi", [])
+
+        assert obs.text == "ok"
+        assert runner._page_dirty is True

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
 
+from ...exceptions import SimulationError
 from ...runner import Runner
 from ...types import (
     ActionResult,
@@ -108,6 +109,7 @@ class OrcaPlaywrightRunner(Runner):
         self._run_dir = run_dir
         self._experiment_root = experiment_root
         self._uploaded_files: set[str] = set()
+        self._page_dirty = False
 
     async def setup(self, config: RunConfig) -> None:
         """Authenticate and prepare the browser session.
@@ -128,6 +130,37 @@ class OrcaPlaywrightRunner(Runner):
         return path
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
+        """Deliver a turn, reloading first if a prior turn left the DOM dirty.
+
+        I3: a prior turn left the DOM in an unknown state. Reload before
+        touching it here, on the *next* turn, rather than on the failing
+        turn's way out — so the cost is only paid when there actually is a
+        next turn. #361.
+
+        The reload itself is best-effort: if it fails, the page stays
+        marked dirty so the turn after this one tries again, rather than
+        letting a reload failure crash the run.
+        """
+        if self._page_dirty:
+            try:
+                await _recover_page(self._page, self._config)
+            except Exception as exc:
+                logger.warning(
+                    "[playwright-runner] Page recovery failed, will retry"
+                    " next turn: %s",
+                    exc,
+                )
+            else:
+                self._page_dirty = False
+        try:
+            return await self._send_turn(message, actions)
+        except SimulationError:
+            self._page_dirty = True
+            raise
+
+    async def _send_turn(
+        self, message: str, actions: list[ChosenAction]
+    ) -> Observation:
         """Execute chosen actions, send message, capture and return observation."""
         page = self._page
         config = self._config
@@ -357,10 +390,6 @@ class OrcaPlaywrightRunner(Runner):
         except Exception:
             pass
         return None
-
-    async def recover(self) -> None:
-        """Lightweight page recovery: refresh + wait for chat textarea."""
-        await _recover_page(self._page, self._config)
 
     async def _download_artifacts(self, artifacts: list[Artifact]) -> None:
         """Download detected artifacts to disk."""

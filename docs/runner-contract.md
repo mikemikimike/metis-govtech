@@ -203,6 +203,18 @@ holding both MUST prefer the post-condition.
 A runner whose transport exposes no notion of offered actions reports `None`
 every turn; that is accurate, not a deficiency.
 
+**A persona's repeated message is not a caller-directed retry.** I4 forbids the
+*caller* from re-sending a turn, but nothing stops the *persona* from choosing,
+as an ordinary next turn, a message that repeats or resembles the one that just
+failed — that arrives at the callee as a plain `send_turn` call, indistinguishable
+from any other. A runner's I3 recovery MUST NOT be conditioned on recognising
+such a repeat: the contract gives a runner no standing to infer persona intent
+from `message`, so a runner's own housekeeping between turns MUST trigger on the
+fact that a next `send_turn` call arrived, not on what it contains. A runner
+that defers a fix from a failing `send_turn` call to the start of the next one
+— reloading a page lazily, say — MUST apply that fix on every next call
+unconditionally, whether or not that call happens to look like a retry.
+
 ## 7. Conformance
 
 I1 is machine-checked at run time: the orchestrator validates every returned

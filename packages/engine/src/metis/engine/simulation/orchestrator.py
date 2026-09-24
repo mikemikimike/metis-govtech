@@ -341,6 +341,8 @@ class Orchestrator:
                 except (TurnRecoverableError, ResponseTimeoutError) as exc:
                     # I4: send_turn raised, so the caller cannot know whether
                     # the message landed. It is never re-sent for this turn.
+                    # I3 hygiene for the *next* turn is now the runner's own
+                    # business (docs/runner-contract.md) — see #361.
                     consecutive_failures += 1
                     if consecutive_failures >= 2:
                         raise ConsecutiveFailureEscalation(
@@ -349,16 +351,6 @@ class Orchestrator:
                     reason = _undelivered_reason(exc)
                     logger.info("[turn %d] turn not completed: %s", turn_count, reason)
                     observation = _undelivered_observation(forwarded, reason)
-                    try:
-                        await self._runner.recover()
-                    except Exception as recovery_exc:
-                        # Best-effort housekeeping for the *next* turn. This
-                        # turn's verdict is already decided and must survive.
-                        logger.info(
-                            "[turn %d] recover() failed, continuing: %s",
-                            turn_count,
-                            recovery_exc,
-                        )
 
                 if withheld:
                     observation.action_results = merge_withheld(

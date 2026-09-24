@@ -143,8 +143,6 @@ class TestDiagnosticsWiring:
                         duration_ms=1000,
                     )
                 ],
-                recovered=True,
-                recovery_found_response=None,
                 duration_ms=3000,
             ),
         )

@@ -50,84 +50,6 @@ class TestRecoverPage:
         page.wait_for_selector.assert_called_once_with("textarea", timeout=10000)
 
 
-class TestRecoverAndCheck:
-    @pytest.mark.asyncio
-    async def test_returns_ui_state_when_message_found(self) -> None:
-        pytest.importorskip("playwright")
-        from metis.engine.simulation.runners.orca_playwright._config import (
-            OrcaPlaywrightRunnerConfig,
-        )
-        from metis.engine.simulation.runners.orca_playwright._recovery import (
-            _recover_and_check,
-        )
-        from metis.engine.simulation.types import UIState
-
-        page = MagicMock()
-        page.reload = AsyncMock()
-        page.wait_for_selector = AsyncMock()
-        page.evaluate = AsyncMock(return_value="Hello, how can I help you today?")
-
-        config = OrcaPlaywrightRunnerConfig(
-            url="http://test.com",
-            auth={"username": "u", "password": "p"},
-        )
-
-        mock_ui_state = UIState(text="response from assistant")
-
-        with (
-            patch(
-                "metis.engine.simulation.runners.orca_playwright._recovery.dismiss_modals",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "metis.engine.simulation.runners.orca_playwright._recovery.capture_ui_state",
-                new_callable=AsyncMock,
-                return_value=mock_ui_state,
-            ),
-        ):
-            result = await _recover_and_check(
-                page, config, "Hello, how can I help you today?"
-            )
-
-        assert result == mock_ui_state
-
-    @pytest.mark.asyncio
-    async def test_returns_none_when_message_not_found(self) -> None:
-        pytest.importorskip("playwright")
-        from metis.engine.simulation.runners.orca_playwright._config import (
-            OrcaPlaywrightRunnerConfig,
-        )
-        from metis.engine.simulation.runners.orca_playwright._recovery import (
-            _recover_and_check,
-        )
-        from metis.engine.simulation.types import UIState
-
-        page = MagicMock()
-        page.reload = AsyncMock()
-        page.wait_for_selector = AsyncMock()
-        page.evaluate = AsyncMock(return_value="Some other message entirely")
-
-        config = OrcaPlaywrightRunnerConfig(
-            url="http://test.com",
-            auth={"username": "u", "password": "p"},
-        )
-
-        with (
-            patch(
-                "metis.engine.simulation.runners.orca_playwright._recovery.dismiss_modals",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "metis.engine.simulation.runners.orca_playwright._recovery.capture_ui_state",
-                new_callable=AsyncMock,
-                return_value=UIState(text="whatever"),
-            ),
-        ):
-            result = await _recover_and_check(page, config, "My actual sent message")
-
-        assert result is None
-
-
 class TestConsecutiveFailureEscalation:
     @pytest.mark.asyncio
     async def test_escalates_after_consecutive_failures(self) -> None:
@@ -258,8 +180,6 @@ class _ScriptedRunner(Runner):
     def __init__(self, script: list[Observation | Exception]) -> None:
         self._script = list(script)
         self.sent: list[tuple[str, int]] = []
-        self.recover_calls = 0
-        self.recover_raises: Exception | None = None
 
     async def setup(self, config: RunConfig) -> None:
         return None
@@ -270,11 +190,6 @@ class _ScriptedRunner(Runner):
         if isinstance(outcome, Exception):
             raise outcome
         return outcome
-
-    async def recover(self) -> None:
-        self.recover_calls += 1
-        if self.recover_raises is not None:
-            raise self.recover_raises
 
     async def teardown(self) -> None:
         return None
@@ -373,23 +288,6 @@ class TestI4DeliveryMultiplicity:
         assert response["action_results"][0]["succeeded"] is False
         assert response["action_results"][0]["detail"]
         assert response["response_notices"]
-
-    @pytest.mark.asyncio
-    async def test_a_failed_recover_does_not_discard_the_decided_turn(
-        self, tmp_path
-    ) -> None:
-        """recover() is best-effort housekeeping, not part of the verdict."""
-        from metis.engine.simulation.exceptions import TransientDOMError
-
-        runner = _ScriptedRunner([TransientDOMError("locator missing")])
-        runner.recover_raises = RuntimeError("page is gone")
-        orch = _orchestrator(runner, _GivingUpAgent(replies=1), tmp_path)
-
-        record = await orch.run()
-
-        assert runner.recover_calls == 1
-        assert record.outcome.stop_reason == "user_abandoned"
-        assert len(record.conversation) == 1
 
 
 class TestEscalation:

@@ -682,13 +682,6 @@ class Runner(ABC):
         The engine stores this in the run record for trace extraction.
         Return None if your system has no concept of sessions.
         """
-
-    async def recover(self) -> None:
-        """Attempt lightweight recovery after a transient error.
-
-        Default: no-op. Override to implement retry logic (e.g., refresh
-        a page, reconnect a WebSocket). Called before re-attempting a turn.
-        """
 ```
 
 #### Key Types

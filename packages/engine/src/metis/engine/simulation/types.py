@@ -437,8 +437,6 @@ class TurnDiagnostics(BaseModel, extra="ignore"):
     failure_type: str | None = None
     submission_phase: Literal["pre", "post", "n/a"] = "n/a"
     action_retries: list[ActionRetry] = Field(default_factory=list)
-    recovered: bool = False
-    recovery_found_response: bool | None = None
     duration_ms: int = 0
     discarded_message: str | None = None
 
