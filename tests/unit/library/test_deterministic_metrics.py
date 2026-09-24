@@ -4,6 +4,8 @@ Covers the trigger/skip and pass/fail contracts of the code-graded metrics
 added by the align-csv-metric-coverage change.
 """
 
+import pytest
+
 from metis.library.metrics import (
     AbandonmentMetric,
     CancellationMetric,
@@ -27,18 +29,23 @@ def test_reproducible_script_skips_without_code_execution():
     assert metric.reason.startswith("SKIPPED")
 
 
-def test_reproducible_script_passes_when_descriptive_and_presented():
+@pytest.mark.parametrize("directory", ["outputs", "runs/orca/artifacts", "custom"])
+@pytest.mark.parametrize("absolute", [True, False])
+def test_reproducible_script_passes_when_descriptive_and_presented(
+    tmp_path, monkeypatch, directory, absolute
+):
+    monkeypatch.chdir(tmp_path)
+    script = tmp_path / directory / "sales_trend_analysis.py"
+    script.parent.mkdir(parents=True)
+    script.write_text("x = 1\n")
+    path = str(script if absolute else script.relative_to(tmp_path))
     metric = ReproducibleAnalysisScriptMetric()
     metric.measure(
         make_case(
             actual_output="I saved the reproducible script sales_trend_analysis.py.",
             metadata={
                 "tool_calls": [tool_call("execute_python", {"code": "print(1)"})],
-                "artifacts": [
-                    artifact(
-                        "sales_trend_analysis.py", "outputs/sales_trend_analysis.py"
-                    )
-                ],
+                "artifacts": [{"name": script.name, "path": path}],
             },
         )
     )
@@ -47,14 +54,16 @@ def test_reproducible_script_passes_when_descriptive_and_presented():
     assert metric.skipped is False
 
 
-def test_reproducible_script_fails_on_generic_name():
+def test_reproducible_script_fails_on_generic_name(tmp_path):
+    script = tmp_path / "script.py"
+    script.write_text("x = 1\n")
     metric = ReproducibleAnalysisScriptMetric()
     metric.measure(
         make_case(
             actual_output="Saved script.py.",
             metadata={
                 "tool_calls": [tool_call("execute_python", {"code": "x=1"})],
-                "artifacts": [artifact("script.py", "outputs/script.py")],
+                "artifacts": [artifact("script.py", str(script))],
             },
         )
     )
@@ -63,33 +72,37 @@ def test_reproducible_script_fails_on_generic_name():
     assert "generically named" in metric.reason
 
 
-def test_reproducible_script_fails_when_not_under_outputs():
+@pytest.mark.parametrize("kind", ["missing", "directory", "no_path"])
+def test_reproducible_script_requires_a_file(tmp_path, kind):
+    script = tmp_path / "outputs" / "revenue_breakdown.py"
+    if kind == "directory":
+        script.mkdir(parents=True)
+    path = str(script) if kind != "no_path" else None
     metric = ReproducibleAnalysisScriptMetric()
     metric.measure(
         make_case(
             actual_output="Saved revenue_breakdown.py.",
             metadata={
                 "tool_calls": [tool_call("execute_python", {"code": "x=1"})],
-                "artifacts": [
-                    artifact("revenue_breakdown.py", "tmp/revenue_breakdown.py")
-                ],
+                "artifacts": [{"name": "revenue_breakdown.py", "path": path}],
             },
         )
     )
     assert metric.success is False
-    assert "not under outputs/" in metric.reason
+    assert metric.score == 0.0
+    assert "no .py script file found" in metric.reason
 
 
-def test_reproducible_script_fails_when_not_presented():
+def test_reproducible_script_fails_when_not_presented(tmp_path):
+    script = tmp_path / "revenue_breakdown.py"
+    script.write_text("x = 1\n")
     metric = ReproducibleAnalysisScriptMetric()
     metric.measure(
         make_case(
             actual_output="Analysis complete.",
             metadata={
                 "tool_calls": [tool_call("execute_python", {"code": "x=1"})],
-                "artifacts": [
-                    artifact("revenue_breakdown.py", "outputs/revenue_breakdown.py")
-                ],
+                "artifacts": [artifact("revenue_breakdown.py", str(script))],
             },
         )
     )

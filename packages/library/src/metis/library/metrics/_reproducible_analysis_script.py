@@ -1,5 +1,6 @@
 """Reproducible Analysis Script metric (M-DA-23)."""
 
+from pathlib import Path
 from typing import Any, ClassVar
 
 from deepeval.metrics import BaseMetric
@@ -44,8 +45,11 @@ class ReproducibleAnalysisScriptMetric(BaseMetric):
     """Did the agent save and present a descriptively-named analysis script?
 
     Deterministic (M-DA-23). Applicable only to a turn that called
-    ``execute_python``. Requires a ``.py`` script saved under ``outputs/`` with
-    a descriptive (non-generic) name that is referenced in the response.
+    ``execute_python``. Requires an existing ``.py`` script file with a
+    descriptive (non-generic) name that is referenced in the response.
+    Any directory is accepted. The engine resolves artifact paths against the
+    experiment root; direct callers can supply absolute paths or paths relative
+    to the current working directory.
     Skips when no code execution occurred on the turn.
     """
 
@@ -73,12 +77,8 @@ class ReproducibleAnalysisScriptMetric(BaseMetric):
         py_artifacts = [
             a for a in get_artifacts(test_case) if a.name.lower().endswith(".py")
         ]
-        in_outputs = [
-            a
-            for a in py_artifacts
-            if "outputs/" in (a.path or "").replace("\\", "/").lower()
-        ]
-        descriptive = [a for a in in_outputs if a.name.lower() not in _GENERIC_NAMES]
+        saved_scripts = [a for a in py_artifacts if a.path and Path(a.path).is_file()]
+        descriptive = [a for a in saved_scripts if a.name.lower() not in _GENERIC_NAMES]
         presented_text = _presented_text(test_case)
         presented = [
             a
@@ -93,21 +93,20 @@ class ReproducibleAnalysisScriptMetric(BaseMetric):
 
         if not py_artifacts:
             evidence = "no .py script artifact saved this turn."
-        elif not in_outputs:
+        elif not saved_scripts:
             names = ", ".join(a.name for a in py_artifacts)
-            evidence = f"script(s) saved but not under outputs/: {names}."
+            evidence = f"no .py script file found at the recorded paths: {names}."
         elif not descriptive:
-            names = ", ".join(a.name for a in in_outputs)
-            evidence = f"script saved to outputs/ but generically named: {names}."
+            names = ", ".join(a.name for a in saved_scripts)
+            evidence = f"script saved but generically named: {names}."
         elif not presented:
             names = ", ".join(a.name for a in descriptive)
             evidence = (
-                f"descriptive script saved to outputs/ ({names}) but not "
-                "presented in the response."
+                f"descriptive script saved ({names}) but not presented in the response."
             )
         else:
             names = ", ".join(a.name for a in presented)
-            evidence = f"descriptive script saved to outputs/ and presented: {names}."
+            evidence = f"descriptive script saved and presented: {names}."
 
         self.reason = evidence
         return self.score

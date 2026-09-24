@@ -5,6 +5,12 @@ All notable changes to `metis-library` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [Unreleased]
+
+### Fixed
+
+- `ReproducibleAnalysisScriptMetric` accepts existing script files in any directory, including Orca's `artifacts/` directory. Absolute paths and paths relative to the current working directory are supported. Missing files and directories fail the file check; descriptive names and response references are still required (#366).
+
 ## [0.10.0] — 2026-09-23
 
 ### Changed
