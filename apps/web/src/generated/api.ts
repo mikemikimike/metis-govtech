@@ -94,6 +94,8 @@ export interface paths {
         /**
          * Start a wizard Interview from its opening evidence
          * @description Create client-held Interview state from the complete opening input.
+         *
+         *     Save the complete `state` from the success response. It is the state for the first turn.
          */
         post: operations["start_api_v1_wizard_interview_start_post"];
         delete?: never;
@@ -114,6 +116,9 @@ export interface paths {
         /**
          * Answer the pending request in one wizard Interview
          * @description Apply one typed response to the client's complete current Interview state.
+         *
+         *     Send the latest full state and its pending request id. Replace the saved state with the state
+         *     from each successful response.
          */
         post: operations["turn_api_v1_wizard_interview_turn_post"];
         delete?: never;
@@ -134,6 +139,8 @@ export interface paths {
         /**
          * Best-effort finish one wizard Interview
          * @description Run best-effort completion on the client's complete current Interview state.
+         *
+         *     Save the returned state. An `awaiting_response` result contains another screen to answer.
          */
         post: operations["end_api_v1_wizard_interview_end_post"];
         delete?: never;
@@ -1298,7 +1305,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description The first client-held state and pending screen. */
             200: {
                 headers: {
                     [name: string]: unknown;

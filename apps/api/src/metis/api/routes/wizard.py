@@ -8,7 +8,7 @@ metis-wizard.
 Document extraction stands outside the Interview lifecycle. It reads the uploaded file streams,
 returns their text, and retains neither the files nor any state, so the caller holds the result.
 
-For what the interview does and how to use it, see the wizard user guide: ``docs/guide/wizard.md``.
+For the lifecycle and complete client examples, see ``docs/guide/wizard/api.md``.
 
 Status mapping (from the design):
 
@@ -30,9 +30,10 @@ from __future__ import annotations
 
 import json
 from contextlib import suppress
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
+from fastapi.openapi.models import Example
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ValidationError
 
@@ -48,6 +49,8 @@ from metis.wizard import (
     InterviewFailure,
     InterviewResult,
     InterviewStartRequest,
+    InterviewState,
+    InterviewSuccess,
     InterviewTurnRequest,
     ProductProfile,
     SpecificationError,
@@ -87,7 +90,152 @@ class ServiceError(BaseModel):
 class DocumentExtractionFailure(ServiceError):
     """The existing API failure shape with a typed document error code."""
 
-    code: DocumentExtractionErrorCode
+    code: DocumentExtractionErrorCode  # pyright: ignore[reportIncompatibleVariableOverride]
+
+
+def _example_state(pending: dict[str, object] | None) -> InterviewState:
+    """Build one small, schema-valid state for the OpenAPI lifecycle examples."""
+    return InterviewState.model_validate(
+        {
+            "profile": {
+                "product": {
+                    "name": "Research assistant",
+                    "users": "Policy analysts",
+                    "description": "Answers policy questions from approved sources.",
+                }
+            },
+            "context": {
+                "perspective": "end_user",
+                "capability_evidence": {
+                    "known_capability_ids": ["internet_search_access"],
+                    "confidence": "medium",
+                },
+                "opening_description": "A research assistant for policy analysts.",
+                "documents": [],
+            },
+            "pending": pending,
+        }
+    )
+
+
+_CHAT_STATE = _example_state(
+    {
+        "type": "chat",
+        "prompt": "Who uses the assistant, and what decisions does it support?",
+        "request_id": "req-chat-example",
+        "stage": "clarify",
+    }
+)
+_CHOICE_STATE = _example_state(
+    {
+        "type": "choice",
+        "prompt": "Review the proposed Behaviours.",
+        "request_id": "req-choice-example",
+        "stage": "behaviours",
+        "options": [
+            {
+                "id": {"action": "continue"},
+                "label": "Continue",
+                "primary": True,
+            }
+        ],
+    }
+)
+_FORM_STATE = _example_state(
+    {
+        "type": "form",
+        "prompt": "Add the missing product details.",
+        "request_id": "req-form-example",
+        "stage": "clarify",
+        "fields": [
+            {
+                "id": "product_name",
+                "label": "Product name",
+                "multiline": False,
+            },
+            {
+                "id": "product_description",
+                "label": "Product description",
+            },
+        ],
+    }
+)
+
+_START_EXAMPLES: dict[str, Example] = {
+    "research_assistant": Example(
+        summary="Start with the complete opening evidence",
+        value=InterviewStartRequest.model_validate(
+            {
+                "description": "A research assistant for policy analysts.",
+                "perspective": "end_user",
+                "known_capability_ids": ["internet_search_access"],
+                "capability_confidence": "medium",
+            }
+        ).model_dump(mode="json"),
+    ),
+}
+_TURN_EXAMPLES: dict[str, Example] = {
+    "chat": Example(
+        summary="Answer a chat screen",
+        value=InterviewTurnRequest.model_validate(
+            {
+                "state": _CHAT_STATE,
+                "request_id": "req-chat-example",
+                "response": {
+                    "type": "chat",
+                    "text": "Policy analysts use it to compare new guidance.",
+                },
+            }
+        ).model_dump(mode="json"),
+    ),
+    "choice": Example(
+        summary="Choose an option offered by a choice screen",
+        value=InterviewTurnRequest.model_validate(
+            {
+                "state": _CHOICE_STATE,
+                "request_id": "req-choice-example",
+                "response": {"type": "choice", "selected": ["continue"]},
+            }
+        ).model_dump(mode="json"),
+    ),
+    "form": Example(
+        summary="Submit the fields offered by a form screen",
+        value=InterviewTurnRequest.model_validate(
+            {
+                "state": _FORM_STATE,
+                "request_id": "req-form-example",
+                "response": {
+                    "type": "form",
+                    "values": {
+                        "product_name": "Policy research assistant",
+                        "product_description": (
+                            "Answers policy questions from approved sources."
+                        ),
+                    },
+                },
+            }
+        ).model_dump(mode="json"),
+    ),
+}
+_END_EXAMPLES: dict[str, Example] = {
+    "finish_latest_state": Example(
+        summary="Ask for best-effort completion with the latest state",
+        value=InterviewEndRequest(state=_CHAT_STATE).model_dump(mode="json"),
+    ),
+}
+_AWAITING_RESPONSE_EXAMPLE = InterviewSuccess.model_validate(
+    {
+        "state": _CHAT_STATE,
+        "stage": "clarify",
+        "outcome": "awaiting_response",
+    }
+).model_dump(mode="json")
+_RETRYABLE_FAILURE_EXAMPLE = InterviewFailure(
+    code=InterviewErrorCode.MODEL_UNAVAILABLE,
+    message="The Interview model is temporarily unavailable.",
+    retryable=True,
+    state=_CHAT_STATE,
+).model_dump(mode="json")
 
 
 @router.post(
@@ -112,7 +260,7 @@ def extract_document_text(
     except DocumentExtractionError as exc:
         return JSONResponse(
             DocumentExtractionFailure(
-                code=exc.code.value,
+                code=exc.code,
                 message=f"{exc.filename}: {exc}",
                 retryable=False,
             ).model_dump(mode="json"),
@@ -213,6 +361,19 @@ def package(
     summary="Start a wizard Interview from its opening evidence",
     response_model=InterviewResult,
     responses={
+        200: {
+            "description": "The first client-held state and pending screen.",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "awaiting_response": {
+                            "summary": "Save the returned state before the next turn",
+                            "value": _AWAITING_RESPONSE_EXAMPLE,
+                        }
+                    }
+                }
+            },
+        },
         400: {"model": InterviewFailure},
         422: {"model": ServiceError},
         500: {"model": InterviewFailure},
@@ -220,10 +381,16 @@ def package(
     },
 )
 def start(
-    body: InterviewStartRequest,
+    body: Annotated[
+        InterviewStartRequest,
+        Body(openapi_examples=_START_EXAMPLES),
+    ],
     dependencies: WizardDependencies = Depends(get_dependencies),
 ) -> JSONResponse:
-    """Create client-held Interview state from the complete opening input."""
+    """Create client-held Interview state from the complete opening input.
+
+    Save the complete `state` from the success response. It is the state for the first turn.
+    """
     result = dependencies.interview_handler(body)
     return _result_response(result)
 
@@ -236,14 +403,33 @@ def start(
         400: {"model": InterviewFailure},
         422: {"model": ServiceError},
         500: {"model": InterviewFailure},
-        503: {"model": InterviewFailure},
+        503: {
+            "model": InterviewFailure,
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "retry_latest_state": {
+                            "summary": "Keep the safe state and retry later",
+                            "value": _RETRYABLE_FAILURE_EXAMPLE,
+                        }
+                    }
+                }
+            },
+        },
     },
 )
 def turn(
-    body: InterviewTurnRequest,
+    body: Annotated[
+        InterviewTurnRequest,
+        Body(openapi_examples=_TURN_EXAMPLES),
+    ],
     dependencies: WizardDependencies = Depends(get_dependencies),
 ) -> JSONResponse:
-    """Apply one typed response to the client's complete current Interview state."""
+    """Apply one typed response to the client's complete current Interview state.
+
+    Send the latest full state and its pending request id. Replace the saved state with the state
+    from each successful response.
+    """
     result = dependencies.interview_handler(body)
     return _result_response(result)
 
@@ -260,10 +446,16 @@ def turn(
     },
 )
 def end(
-    body: InterviewEndRequest,
+    body: Annotated[
+        InterviewEndRequest,
+        Body(openapi_examples=_END_EXAMPLES),
+    ],
     dependencies: WizardDependencies = Depends(get_dependencies),
 ) -> JSONResponse:
-    """Run best-effort completion on the client's complete current Interview state."""
+    """Run best-effort completion on the client's complete current Interview state.
+
+    Save the returned state. An `awaiting_response` result contains another screen to answer.
+    """
     result = dependencies.interview_handler(body)
     return _result_response(result)
 
