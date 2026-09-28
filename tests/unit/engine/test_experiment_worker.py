@@ -507,6 +507,88 @@ class TestFixtureContentDescriptions:
                 }
             )
 
+    def test_scenario_rejects_duplicate_persona_refs(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="duplicate persona_ref"):
+            Scenario.model_validate(
+                {
+                    "id": "s1",
+                    "description": "d",
+                    "persona_refs": ["p1", "p1"],
+                }
+            )
+
+    def test_scenario_dedupes_repeated_ref_in_error_message(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match=r"\['p1'\]"):
+            Scenario.model_validate(
+                {
+                    "id": "s1",
+                    "description": "d",
+                    "persona_refs": ["p1", "p1", "p1"],
+                }
+            )
+
+    def test_scenario_names_all_distinct_duplicated_refs(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match=r"\['p1', 'p2'\]"):
+            Scenario.model_validate(
+                {
+                    "id": "s1",
+                    "description": "d",
+                    "persona_refs": ["p1", "p1", "p2", "p2"],
+                }
+            )
+
+    def test_experiment_rejects_scenario_with_duplicate_persona_refs(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="duplicate persona_ref"):
+            Experiment.model_validate(
+                {
+                    "schema_version": 1,
+                    "id": "e",
+                    "description": "d",
+                    "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                    "personas": [{"id": "p1", "description": "d"}],
+                    "scenarios": [
+                        {
+                            "id": "s1",
+                            "description": "d",
+                            "persona_refs": ["p1", "p1"],
+                        }
+                    ],
+                }
+            )
+
+    def test_scenario_accepts_unique_persona_refs_reused_across_scenarios(
+        self,
+    ) -> None:
+        exp = Experiment.model_validate(
+            {
+                "schema_version": 1,
+                "id": "e",
+                "description": "d",
+                "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                "personas": [
+                    {"id": "p1", "description": "d"},
+                    {"id": "p2", "description": "d"},
+                ],
+                "scenarios": [
+                    {"id": "s1", "description": "d", "persona_refs": ["p1", "p2"]},
+                    {"id": "s2", "description": "d", "persona_refs": ["p1"]},
+                ],
+            }
+        )
+        assert [s.persona_refs for s in exp.scenarios] == [["p1", "p2"], ["p1"]]
+
 
 @pytest.mark.asyncio
 async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):

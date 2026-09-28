@@ -25,6 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **A scenario listing the same `persona_ref` twice now fails to load,
+  where it previously ran (issue #356). Behaviour change.** This is a
+  deliberate rejection, not a silent dedupe: a duplicated ref is a config
+  its author did not mean to write, and `num_trials` is the supported way
+  to ask for repeated runs of one persona. A config that relied on the old
+  silent-duplicate behaviour was already producing fewer surviving results
+  than its `num_trials` claimed — the second run silently overwrote the
+  first's `record.json` — so this closes a gap rather than changing a
+  working config's output.
 - **Upload validation moved from the runners to the orchestrator.** Both
   runners separately decided whether an upload named a staged fixture, and each
   reported the rejection as free text a report consumer could not tell from a
@@ -100,6 +109,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Fixed
 
+- **`Scenario` rejects a `persona_ref` repeated within one scenario (issue
+  #356).** `persona_refs` had no uniqueness constraint, and nothing
+  downstream deduplicated it: a repeated ref planned the same run twice, and
+  because a run folder's name is a pure function of `(scenario.id,
+  persona.id, trial_index)`, both copies resolved to the same `run_dir` and
+  overwrote or interleaved with each other depending on how `_distribute_runs`
+  happened to split them across workers. Not observed in any experiment on
+  disk — every config to date is wizard-generated, and the wizard cannot
+  emit a duplicate. `Scenario` now rejects it at load time, via a new
+  `@model_validator(mode="after")` mirroring the existing
+  `_check_unique_fixtures` check on the same model.
 - **A turn whose observation failed after submission is no longer re-sent.**
   `PostSubmissionObservationError` is raised precisely to report that the
   message already reached the target, and the orchestrator was using it as a

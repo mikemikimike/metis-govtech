@@ -339,6 +339,21 @@ class Scenario(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _check_unique_persona_refs(self) -> Self:
+        seen: set[str] = set()
+        dupes: list[str] = []
+        for ref in self.persona_refs:
+            if ref in seen:
+                dupes.append(ref)
+            seen.add(ref)
+        if dupes:
+            raise ValueError(
+                f"Scenario '{self.id}' lists duplicate persona_ref(s): "
+                f"{sorted(set(dupes))}. Each persona_ref must appear at most once."
+            )
+        return self
+
 
 class Experiment(BaseModel):
     schema_version: Literal[
