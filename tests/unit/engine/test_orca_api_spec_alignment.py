@@ -179,6 +179,7 @@ class TestSubmit404Attribution:
         assert "sales.csv" not in runner._attached
         assert runner._attaching == []
         assert any(slot.id == "sales.csv" for slot in observation.available_actions)
+        assert observation.delivered is False  # I5: Orca rejected the request
 
     @pytest.mark.asyncio
     async def test_404_on_a_submit_without_files_blames_the_session(
@@ -524,6 +525,7 @@ class TestEmptyMessage:
             observation.response_notices and "empty" in observation.response_notices[0]
         )
         assert observation.available_actions is not None
+        assert observation.delivered is False  # I5: nothing was ever sent
 
     @pytest.mark.asyncio
     async def test_blank_message_with_a_form_answer_is_submitted(
@@ -542,6 +544,24 @@ class TestEmptyMessage:
         )
         assert isinstance(body, dict)
         assert body["formAnswers"] == {"q1": "answer"}
+
+    @pytest.mark.asyncio
+    async def test_delivered_is_false_even_when_an_unrelated_action_already_failed(
+        self, tmp_path: Path
+    ) -> None:
+        """The turn-level delivered=False must not disturb a sibling action's
+        own failure detail — the two channels have different owners (I1 vs I5)."""
+        from metis.engine.simulation.types import ButtonClickAction
+
+        runner = _make_runner(tmp_path)
+        actions = [ButtonClickAction(slot_id="invented")]
+        runner._plan_actions(actions)
+        observation = await runner._build_submit_body("   ", actions)
+
+        assert isinstance(observation, Observation)
+        assert observation.delivered is False
+        assert not observation.action_results[0].succeeded
+        assert "invented" in observation.action_results[0].detail
 
     @pytest.mark.asyncio
     async def test_blank_message_costs_no_upload(
@@ -566,3 +586,59 @@ class TestEmptyMessage:
         )
         assert isinstance(result, Observation)
         assert uploads == []
+
+
+# -- 8. a malformed form answer falls back to the message, never abandons ----
+
+
+class TestFormAnswerFailureFallsBackToMessage:
+    """Orca's schema accepts ``message`` alone while a form is pending — a
+    plain message just leaves the question open, and Orca may ask it again
+    (Orca API v1 spec, ``POST /api/v1/chat``: ``message`` and ``formAnswers``
+    are mutually exclusive, and a form stays pending until answered). A
+    locally-invalid form answer therefore has no basis to abandon the turn:
+    the message is a request Orca would accept on its own, so it is
+    submitted instead of nothing at all."""
+
+    @pytest.mark.asyncio
+    async def test_a_mistyped_answer_does_not_abandon_the_turn(
+        self, tmp_path: Path
+    ) -> None:
+        from metis.engine.simulation.types import FormFillAction
+
+        runner = _make_runner(tmp_path)
+        runner._pending_form = {
+            "stepId": "step-1",
+            "fields": [{"id": "qty", "type": "number", "label": "How many?"}],
+        }
+        actions = [FormFillAction(slot_id="qty", value="lots")]
+        runner._plan_actions(actions)
+        body = await runner._build_submit_body("please just use the default", actions)
+        assert isinstance(body, dict)
+        assert body["message"] == "please just use the default"
+
+    @pytest.mark.asyncio
+    async def test_a_correctly_typed_answer_alongside_a_bad_one_is_still_discarded(
+        self, tmp_path: Path
+    ) -> None:
+        """Whether Orca accepts a partial formAnswers is not documented, so
+        the runner never risks it: any problem discards the whole dict."""
+        from metis.engine.simulation.types import FormFillAction
+
+        runner = _make_runner(tmp_path)
+        runner._pending_form = {
+            "stepId": "step-1",
+            "fields": [
+                {"id": "qty", "type": "number", "label": "How many?"},
+                {"id": "note", "type": "text", "label": "Note"},
+            ],
+        }
+        actions = [
+            FormFillAction(slot_id="qty", value="lots"),
+            FormFillAction(slot_id="note", value="fine"),
+        ]
+        runner._plan_actions(actions)
+        body = await runner._build_submit_body("fallback text", actions)
+        assert isinstance(body, dict)
+        assert "formAnswers" not in body
+        assert body["message"] == "fallback text"

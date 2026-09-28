@@ -183,8 +183,12 @@ class Observation(BaseModel):
     Each field has exactly one owner, and the owner is what the field
     describes — see ``docs/runner-contract.md``. ``action_results`` belongs to
     the persona's actions, ``text`` and ``artifacts`` to the target,
-    ``response_notices`` to the turn as a whole, and ``available_actions`` to
-    what the target is offering next.
+    ``response_notices`` to the turn as a whole, ``available_actions`` to
+    what the target is offering next, and ``delivered`` to whether this turn
+    was actually submitted to the target and accepted by it, as opposed to
+    being declined or rejected — a post-condition on the outcome, not a
+    claim about how many transport operations the runner used to reach it
+    (I5).
     """
 
     text: str = ""
@@ -194,6 +198,7 @@ class Observation(BaseModel):
     available_actions: list[ActionSlot] | None = None
     status_labels: list[str] = Field(default_factory=list)
     discarded_message: str | None = None
+    delivered: bool = True
 
 
 # ---------------------------------------------------------------------------

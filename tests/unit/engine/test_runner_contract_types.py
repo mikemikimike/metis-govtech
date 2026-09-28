@@ -62,3 +62,7 @@ class TestObservationChannels:
         obs = Observation()
         assert obs.response_notices == []
         assert obs.action_results == []
+
+    def test_delivered_defaults_to_true(self) -> None:
+        # I5: the common case is that nothing about the turn is in question.
+        assert Observation().delivered is True

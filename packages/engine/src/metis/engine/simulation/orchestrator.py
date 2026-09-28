@@ -22,6 +22,7 @@ from ._fixture_artifacts import build_fixture_artifacts
 from .artifact_summarizer import summarize_artifact
 from .exceptions import (
     ConsecutiveFailureEscalation,
+    PostSubmissionObservationError,
     ResponseTimeoutError,
     RunRecoverableError,
     TargetSessionEnded,
@@ -64,9 +65,10 @@ def _undelivered_reason(exc: Exception) -> str:
 
     Preserves the two strings the ladder already produced where they remain
     accurate, and falls back to a neutral phrasing for the browser runner's
-    two failure modes. ``PostSubmissionObservationError`` specifically means
-    the message *did* reach the target and only the observation failed, so a
-    reason claiming non-delivery would be a false first-hand report (P2).
+    two failure modes. ``PostSubmissionObservationError`` and
+    ``ResponseTimeoutError`` specifically mean the message *did* reach the
+    target and only the observation failed, so a reason claiming
+    non-delivery would be a false first-hand report (P2).
     """
     if isinstance(exc, ResponseTimeoutError):
         return "Response timeout — no response received"
@@ -75,7 +77,9 @@ def _undelivered_reason(exc: Exception) -> str:
     return _UNDELIVERED_REASON
 
 
-def _undelivered_observation(actions: list[ChosenAction], reason: str) -> Observation:
+def _undelivered_observation(
+    actions: list[ChosenAction], reason: str, *, delivered: bool
+) -> Observation:
     """The uniform shape for a turn the runner could not complete.
 
     One ``succeeded=False`` row per submitted action, plus the same text as a
@@ -83,7 +87,12 @@ def _undelivered_observation(actions: list[ChosenAction], reason: str) -> Observ
     it. ``retryable`` is ``None`` — I2's "no opinion" — because the caller
     observed nothing first-hand and has no standing to advise a retry.
     ``available_actions`` stays ``None``: ``send_turn`` raised, so no page and
-    no payload was ever inspected.
+    no payload was ever inspected. ``delivered`` (I5) is the caller's to set:
+    ``send_turn`` raised either way, but a ``PostSubmissionObservationError``
+    or a ``ResponseTimeoutError`` — both raised only after the runner's
+    submission step already committed — means the message already reached
+    the target before the observation failed, so ``delivered=True`` there is
+    the first-hand fact, not a guess.
 
     I1 binds only what a *runner* returns, so this shape is voluntary. It
     exists so every downstream consumer sees one ``Observation`` shape whether
@@ -96,6 +105,7 @@ def _undelivered_observation(actions: list[ChosenAction], reason: str) -> Observ
             for index in range(len(actions))
         ],
         available_actions=None,
+        delivered=delivered,
     )
 
 
@@ -350,7 +360,12 @@ class Orchestrator:
                         ) from exc
                     reason = _undelivered_reason(exc)
                     logger.info("[turn %d] turn not completed: %s", turn_count, reason)
-                    observation = _undelivered_observation(forwarded, reason)
+                    delivered = isinstance(
+                        exc, (PostSubmissionObservationError, ResponseTimeoutError)
+                    )
+                    observation = _undelivered_observation(
+                        forwarded, reason, delivered=delivered
+                    )
 
                 if withheld:
                     observation.action_results = merge_withheld(

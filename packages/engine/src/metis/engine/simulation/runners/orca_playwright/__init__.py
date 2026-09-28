@@ -58,6 +58,8 @@ def _ui_state_to_observation(
     ``ui_state.errors`` is error text scraped from the page, which no submitted
     action accounts for, so it becomes a turn-level notice. ``available_actions``
     stays a list — possibly empty — because the capture really did look.
+    ``delivered`` is always ``True`` (I5): this runner has no seam that
+    declines a turn before sending it.
     """
     available_actions: list[ActionSlot] = []
     for el in ui_state.form_elements:
@@ -69,6 +71,7 @@ def _ui_state_to_observation(
         action_results=action_results,
         available_actions=available_actions,
         status_labels=ui_state.target_status_labels,
+        delivered=True,
     )
 
 

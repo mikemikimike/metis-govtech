@@ -107,6 +107,35 @@ call — retries, re-resolutions, polls, uploads — is the runner's own busines
 and is not observable to the caller. This invariant constrains only the number
 of `send_turn` calls the caller makes.
 
+### I5 — Delivery disclosure
+
+`Observation.delivered` reports whether this turn was actually submitted to
+the target and accepted by it, as opposed to being declined by the runner or
+rejected by the target — the same meaning I2 gives `succeeded`, but for the
+turn as a whole rather than per action. Like I3, this is a post-condition on
+the outcome, not a claim about mechanism: how many transport operations a
+runner needs to submit a turn — one request, several, a multi-step handshake
+— is the runner's own business (P1), same as the internal calls it makes to
+resolve or upload an attachment before `action_results` ever sees them.
+`True` says nothing about whether the target liked the reply; `False` says
+the runner chose, or was forced by a check it can run without touching the
+transport, not to submit anything this turn.
+
+A runner MUST NOT set `delivered=False` merely because part of the turn could
+not be honoured, when a different valid request still exists. A malformed
+form answer, an attachment that failed to resolve, an invented button — none
+of these make every possible request for the turn invalid; they cost only
+their own `ActionResult` row (I2), and the runner MUST submit whatever
+request is still valid rather than discarding the turn. `delivered=False` is
+for the turn that has no valid request left to send at all — an empty
+message with no form answer to send in its place, for instance, which Orca's
+own schema rejects outright (`## 6`).
+
+`delivered` defaults to `True`, matching the common case where nothing about
+the turn is in question. A runner that declines MUST set it to `False`
+explicitly at the point of decline; relying on the default there would
+silently misreport a turn nothing was ever sent for as delivered.
+
 ## 4. Return or raise
 
 Returning an `Observation` asserts two things: *I have a first-hand account of
@@ -137,6 +166,7 @@ could not tell its own rejected upload from the target's outage.
 | `text`, `artifacts` | what the target said and produced | the target |
 | `response_notices` | problems with this turn's reply that no submitted action accounts for | the turn |
 | `available_actions` | what the target offers next | the target |
+| `delivered` | whether this turn was actually submitted to the target and accepted (I5) | the turn |
 | raise-or-return | whether a first-hand account exists at all | the runner |
 
 An `ActionResult` row is five fields:
@@ -199,6 +229,15 @@ and raising from the runner puts the failure where the defect is.
 post-condition on the session, not on the quality of the report, and a runner
 holding both MUST prefer the post-condition.
 
+**A message is always valid while a form is pending.** Orca's schema accepts
+`message` alone or `formAnswers` alone, never both and never neither — a form
+left pending does not narrow that requirement, and Orca leaves the question
+open and may ask it again rather than rejecting a plain message in its place
+*(Orca API v1 spec, `POST /api/v1/chat`)*. A runner whose typed form answer
+fails validation locally therefore has one lawful move: discard the answer
+and fall through to the message, never abandon the turn — the same request
+Orca would have accepted had the persona sent prose to begin with.
+
 **Nobody looked at what is on offer.** `available_actions` is `None`, never `[]`.
 A runner whose transport exposes no notion of offered actions reports `None`
 every turn; that is accurate, not a deficiency.
@@ -228,9 +267,9 @@ I2 is partly machine-checked: the `ActionResult` model validators enforce
 "failure implies detail" and "`retryable` is `None` on success" at
 construction time.
 
-I3 and I4 are reviewer-enforced. An executable conformance suite a third-party
-runner can run against itself is issue #358. The precedents are PEP 3333 with
-`wsgiref.validate`, SQLAlchemy's dialect contract with
+I3, I4 and I5 are reviewer-enforced. An executable conformance suite a
+third-party runner can run against itself is issue #358. The precedents are
+PEP 3333 with `wsgiref.validate`, SQLAlchemy's dialect contract with
 `sqlalchemy.testing.suite`, and the Container Storage Interface with
 `csi-sanity`. Until that suite exists, a new runner is reviewed against this
 document by hand.
@@ -242,3 +281,4 @@ document by hand.
 - Issue #315 — wired turn errors into the persona prompt
 - Issue #358 — the executable conformance suite
 - Issue #361 — removes `Runner.recover()`, which I4 orphans
+- Issue #365 — I5, delivery disclosure

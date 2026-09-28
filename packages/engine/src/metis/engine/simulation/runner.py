@@ -43,6 +43,11 @@ class Runner(ABC):
           even when it holds a good account of the turn.
         - **I4** — this MAY be assumed to be called at most once per persona
           turn, so an implementation need not tolerate or detect a re-send.
+        - **I5** — ``Observation.delivered`` MUST report whether this turn
+          was actually submitted to the target and accepted by it, as
+          opposed to being declined or rejected — a post-condition on the
+          outcome, not on how many transport operations that took — set
+          explicitly wherever it is ``False``; the default is ``True``.
         """
 
     @abstractmethod

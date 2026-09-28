@@ -30,8 +30,8 @@ library on first use anywhere in the experiment — the factory's
 :class:`FixtureLibrary` caches the ``fileId`` per name, so every run reuses
 it — and attached to the submit via ``files``. An unknown name is skipped
 with a warning, as in the browser runner; a fixture Orca rejects (413 / 415)
-is reported as an observation error with Orca's reason and the turn is not
-submitted.
+fails only its own action row (I5) — the message still goes out, with
+whichever other attachments resolved.
 
 Turn statuses map as: ``completed``/``needs_input`` → the output is the
 text; ``failed`` and ``cancelled`` → empty text, the reason (and any partial
@@ -244,6 +244,11 @@ class OrcaApiRunner(Runner):
         # no form) and the prose the persona sent alongside a form answer.
         self._pending_form: dict[str, Any] | None = None
         self._discarded_message: str | None = None
+        #: Form-answer problems no action row can own (I5): a bad answer
+        #: costs its own row and falls back to the message, but a required
+        #: field nobody answered has no row to blame. Stashed here so it
+        #: still reaches the eventual digest-based Observation.
+        self._pre_submit_notices: list[str] = []
         #: Consecutive turns lost to the per-call input cap (see
         #: ``_INPUT_CAP_FAILURE_LIMIT``); reset by any other settled outcome.
         self._input_cap_failures = 0
@@ -385,12 +390,18 @@ class OrcaApiRunner(Runner):
         answer, the body carries typed ``formAnswers`` and no ``message`` —
         the prose is kept to be reported as discarded. Otherwise the message
         is sent as usual. An upload naming a fixture that is not a scenario
-        fixture, or whose file is missing on disk, comes back as an error
-        ``Observation`` with no submit (loud, never a silent drop); so do a
-        required field left unanswered, a mistyped number, or a fixture Orca
-        rejects.
+        fixture, or whose file is missing on disk, fails only its own action
+        row — the message still goes out (I5). A required field left
+        unanswered or a mistyped answer falls through the same way — Orca
+        accepts the message alone while the form stays pending — with the
+        problem surfacing as a notice once the turn settles, never
+        abandoning the turn. The whole ``formAnswers`` batch is discarded
+        when any one field has a problem, so every row that answered a
+        field — not only the one(s) a problem can be blamed on — is failed
+        to match (I2): a valid sibling answer never reaches Orca either.
         """
         self._discarded_message = None
+        self._pre_submit_notices = []
         self._clear_attaching()
         fields = self._form_fields()
 
@@ -446,15 +457,27 @@ class OrcaApiRunner(Runner):
                     "[orca-api-runner] Form answer rejected before submit: %s",
                     "; ".join(problem for _, problem in problems),
                 )
-                # Attribute first, abandon second: reversed, the generic detail
-                # would overwrite the specific one.
-                notices = self._attribute_form_problems(problems, answer_index)
-                self._abandon_turn()
-                return Observation(
-                    response_notices=notices,
-                    action_results=self._action_results,
-                    available_actions=self._action_slots(),
+                # I5: a bad answer costs its own row, never the turn. Orca
+                # accepts a message alone while a form is pending, so the
+                # runner falls back to it rather than risk a partial
+                # formAnswers submit Orca's schema does not document either
+                # way — every correctly-typed answer is discarded along with
+                # the bad one. I2: discarded means not delivered, so every
+                # sibling row loses its optimistic succeeded=True too, not
+                # only the row(s) _attribute_form_problems could blame.
+                bad_fields = {field_id for field_id, _ in problems}
+                self._pre_submit_notices = self._attribute_form_problems(
+                    problems, answer_index
                 )
+                for field_id, index in answer_index.items():
+                    if field_id not in bad_fields:
+                        self._fail_action(
+                            index,
+                            "Form not submitted: discarded along with a "
+                            "sibling answer this form batch rejected",
+                            retryable=True,
+                        )
+                form_answers = {}
         # Orca requires exactly one of ``message`` (minLength 1) or
         # ``formAnswers``, so a blank message with nothing to answer has no
         # valid body — it would be a 422. Checked before any upload so a turn
@@ -469,37 +492,25 @@ class OrcaApiRunner(Runner):
             )
             self._clear_attaching()
             self._abandon_turn()
+            notices = [
+                *self._pre_submit_notices,
+                "Turn not submitted: the message was empty and there was no "
+                "form answer to send in its place",
+            ]
+            self._pre_submit_notices = []
             return Observation(
-                response_notices=[
-                    "Turn not submitted: the message was empty and there was no "
-                    "form answer to send in its place"
-                ],
+                response_notices=notices,
                 action_results=self._action_results,
                 available_actions=self._action_slots(),
+                delivered=False,
             )
 
         if attachments:
             file_ids = await self._resolve_attachments(attachments)
-            # A turn that loses one of its attachments is not the turn the
-            # persona composed, so nothing is submitted. The rows are the
-            # record now, which is why this asks them rather than a list of
-            # rejection strings — but only the attachment rows. Earlier seams
-            # in this method already fail rows for an invented button or a form
-            # field that is not pending, and neither contributes anything to the
-            # body: the message is still exactly what the persona wrote, so it
-            # is sent and the failure is reported to them instead of costing
-            # them the turn.
-            if any(not self._action_results[i].succeeded for i, _ in attachments):
-                self._clear_attaching()
-                self._abandon_turn()
-                return Observation(
-                    response_notices=[
-                        "Turn not submitted: an attachment could not be sent, "
-                        "so the turn the persona composed no longer exists"
-                    ],
-                    action_results=self._action_results,
-                    available_actions=self._action_slots(),
-                )
+            # I5: a failed attachment costs only its own row. The message the
+            # persona wrote is still a valid request on its own, so it goes
+            # out with whichever attachments did resolve — never withheld for
+            # a sibling this run could not produce.
             if file_ids:
                 body["files"] = file_ids
         if form_answers:
@@ -646,6 +657,7 @@ class OrcaApiRunner(Runner):
             ],
             action_results=self._action_results,
             available_actions=self._action_slots(),
+            delivered=False,
         )
 
     async def _poll_until_settled(self, turn_id: str) -> dict[str, Any]:
@@ -687,7 +699,11 @@ class OrcaApiRunner(Runner):
         # set them: a ``failed`` or ``cancelled`` status does not mean an action
         # failed to arrive, and demoting a delivered action because the target
         # was later unhappy would be interpreting rather than reporting (P2).
-        notices: list[str] = []
+        # Pre-submit notices come first: they describe a problem this same
+        # turn's body could not include (a form field nobody answered), not
+        # one that happened after Orca saw it.
+        notices: list[str] = list(self._pre_submit_notices)
+        self._pre_submit_notices = []
         # Any other settled outcome breaks an input-cap streak: the session
         # answered, so whatever was too large for one call is not permanent.
         if status != "failed":

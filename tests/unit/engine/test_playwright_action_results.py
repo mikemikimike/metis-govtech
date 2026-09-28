@@ -121,6 +121,16 @@ class TestScrapedErrorTextIsATurnNotice:
         obs = orca_playwright._ui_state_to_observation(ui_state, [])
         assert obs.response_notices == ["Something went wrong"]
 
+    def test_delivered_true_is_stated_explicitly_not_left_to_the_default(self) -> None:
+        """I5: this runner has no seam that declines a turn before sending it,
+        but the value is still written at the call site rather than assumed —
+        so a future change to the field's default cannot silently misreport
+        this runner as having declined."""
+        import inspect
+
+        source = inspect.getsource(orca_playwright._ui_state_to_observation)
+        assert "delivered=True" in source
+
 
 class TestLazySelfHealing:
     """I3 hygiene, relocated from the orchestrator's recover() call (#361)."""

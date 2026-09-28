@@ -112,7 +112,9 @@ class TestUndeliveredObservation:
             UploadFileAction(slot_id="s0", filename="sales.csv"),
             ButtonClickAction(slot_id="b0"),
         ]
-        obs = _undelivered_observation(actions, "Response timeout — no reply")
+        obs = _undelivered_observation(
+            actions, "Response timeout — no reply", delivered=False
+        )
 
         assert [r.action_index for r in obs.action_results] == [0, 1]
         assert all(r.succeeded is False for r in obs.action_results)
@@ -124,19 +126,23 @@ class TestUndeliveredObservation:
         from metis.engine.simulation.orchestrator import _undelivered_observation
         from metis.engine.simulation.types import ButtonClickAction
 
-        obs = _undelivered_observation([ButtonClickAction(slot_id="b")], "gone")
+        obs = _undelivered_observation(
+            [ButtonClickAction(slot_id="b")], "gone", delivered=False
+        )
         assert obs.action_results[0].retryable is None
 
     def test_the_reason_is_also_a_response_notice(self) -> None:
         from metis.engine.simulation.orchestrator import _undelivered_observation
 
-        obs = _undelivered_observation([], "Target unavailable — 503")
+        obs = _undelivered_observation([], "Target unavailable — 503", delivered=False)
         assert obs.response_notices == ["Target unavailable — 503"]
 
     def test_no_actions_yields_a_notice_and_no_rows(self) -> None:
         from metis.engine.simulation.orchestrator import _undelivered_observation
 
-        obs = _undelivered_observation([], "Response timeout — no reply")
+        obs = _undelivered_observation(
+            [], "Response timeout — no reply", delivered=False
+        )
         assert obs.action_results == []
         assert obs.response_notices == ["Response timeout — no reply"]
 
@@ -145,14 +151,79 @@ class TestUndeliveredObservation:
 
         # send_turn raised, so no DOM and no API payload was ever inspected.
         # `[]` would claim an observation that never happened.
-        assert _undelivered_observation([], "gone").available_actions is None
+        obs = _undelivered_observation([], "gone", delivered=False)
+        assert obs.available_actions is None
 
     def test_no_row_is_withheld_because_the_persona_did_nothing_wrong(self) -> None:
         from metis.engine.simulation.orchestrator import _undelivered_observation
         from metis.engine.simulation.types import ButtonClickAction
 
-        obs = _undelivered_observation([ButtonClickAction(slot_id="b")], "gone")
+        obs = _undelivered_observation(
+            [ButtonClickAction(slot_id="b")], "gone", delivered=False
+        )
         assert obs.action_results[0].withheld is False
+
+    def test_delivered_is_false_because_send_turn_never_returned(self) -> None:
+        from metis.engine.simulation.orchestrator import _undelivered_observation
+
+        obs = _undelivered_observation([], "gone", delivered=False)
+        assert obs.delivered is False
+
+    def test_delivered_false_survives_into_the_persisted_run_record(self) -> None:
+        # Review Focus: unlike discarded_message, delivered is NOT excluded
+        # from the dump that lands in ConversationTurn.target_response.
+        from metis.engine.simulation.orchestrator import _undelivered_observation
+
+        dumped = _undelivered_observation([], "gone", delivered=False).model_dump()
+        assert dumped["delivered"] is False
+
+    def test_delivered_is_true_when_the_message_already_reached_the_target(
+        self,
+    ) -> None:
+        """A PostSubmissionObservationError means send_turn raised only after
+        the message was irreversibly sent — delivered stays True (I5)."""
+        from metis.engine.simulation.exceptions import (
+            PostSubmissionObservationError,
+            ResponseTimeoutError,
+        )
+        from metis.engine.simulation.orchestrator import (
+            _undelivered_observation,
+            _undelivered_reason,
+        )
+
+        exc = PostSubmissionObservationError("lost the reply after submit")
+        obs = _undelivered_observation(
+            [],
+            _undelivered_reason(exc),
+            delivered=isinstance(
+                exc, (PostSubmissionObservationError, ResponseTimeoutError)
+            ),
+        )
+        assert obs.delivered is True
+
+    def test_delivered_is_true_when_a_response_timeout_follows_submission(
+        self,
+    ) -> None:
+        """Both runners raise ResponseTimeoutError only after the message was
+        already submitted and accepted — delivered stays True (I5)."""
+        from metis.engine.simulation.exceptions import (
+            PostSubmissionObservationError,
+            ResponseTimeoutError,
+        )
+        from metis.engine.simulation.orchestrator import (
+            _undelivered_observation,
+            _undelivered_reason,
+        )
+
+        exc = ResponseTimeoutError("Turn t1 still running after 60000 ms")
+        obs = _undelivered_observation(
+            [],
+            _undelivered_reason(exc),
+            delivered=isinstance(
+                exc, (PostSubmissionObservationError, ResponseTimeoutError)
+            ),
+        )
+        assert obs.delivered is True
 
 
 def _conforming(actions: list[ChosenAction], text: str = "ok") -> Observation:
