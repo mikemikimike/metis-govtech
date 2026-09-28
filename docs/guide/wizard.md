@@ -1,258 +1,88 @@
-# Wizard User Guide
+# METIS Wizard
 
-## Introduction
+The METIS Wizard turns a description of a target agentic system into an evaluation specification.
+The METIS Engine runs that specification.
 
-metis-wizard turns a prose description of your product into an evaluation specification. You answer
-an interview about what the product does and how it must behave. The wizard then writes three files:
+## Choose an interface
 
-- `experiment.yaml` — personas, scenarios, and metrics.
-- `profile.yaml` — tasks, behaviours, criteria, and metrics.
-- `review.md` — a human-readable summary of the specification.
+| Interface | Best for | Who saves Interview state? | Finished output |
+|---|---|---|---|
+| [CLI](wizard/cli.md) | A person working in a terminal | The CLI saves a local JSON file | Files in an output directory |
+| [Web](wizard/web.md) | A person who wants a guided browser flow | The browser saves data in IndexedDB | `experiment.zip` download |
+| [API](wizard/api.md) | A service or custom client | Your client saves the returned JSON state | YAML strings or `experiment.zip` |
 
-You can run the wizard two ways:
+- The CLI runs the Wizard logic on your computer. It does not need the API server.
+- The web client uses the Wizard API.
+- The API does not save an Interview between requests. A custom client must save each returned
+  `state` object and send the whole object with the next request.
 
-- **As a CLI tool** — an interactive terminal interview. This guide covers it.
-- **In the browser** — the same interview over the `metis-api` service. See the
-  [web client guide](web.md).
+## What the Interview builds
 
-Both doors drive the same interview. The interview state is client-held, so nothing is stored on a
-server between turns.
+Example evaluation details for a research assistant:
 
-By the end of this guide you will have:
+| Term | Example |
+|---|---|
+| Task | Answer policy questions. |
+| Behaviour | Cite sources in each answer. |
+| Criterion | Each citation supports the answer. |
+| Persona | A policy analyst who needs to check a new rule. |
+| Scenario | Ask how a new leave policy applies to a part-time employee. |
+| Scorer | A check that compares the answer with its cited sources. |
 
-- A working local installation.
-- A completed evaluation specification produced by an interview.
-- The knowledge to run the wizard against your own product.
+The Interview produces two documents:
 
-For the overall METIS architecture and other packages, see the [project README](../../README.md).
+| Document | Contents |
+|---|---|
+| Profile | The product and its users, Tasks, Behaviours, the Criteria for each measured Behaviour, Personas, Scenarios, and the scorers selected for the Criteria |
+| Experiment | The Personas, Scenarios, fixtures, trial counts, and scorers that the Engine runs |
 
----
+The interface guides give the exact files or archive that each interface produces.
 
-## Prerequisites & Setup
+## Interview flow
 
-### Requirements
+1. Describe the target system. In the web client and the API, you can also add documents.
+2. Select the evaluation Perspective (who the evaluation is for, such as an end user or an
+   engineer). Web and API only. The CLI always uses End user.
+3. Select the known ARC capabilities and a confidence value.
+4. Answer clarification questions.
+5. Review the Behaviours to measure and their Criteria.
+6. Review the Personas and Scenarios.
+7. Finish and validate the specification.
+8. Compile or package the result.
 
-- Python >= 3.11
-- [uv](https://docs.astral.sh/uv/) (workspace and package manager)
-- GNU Make
-- An OpenAI-wire-compatible model provider (for example, Platform AI)
+Other paths:
 
-### Install
+- The web client and the API can finish early. See [web](wizard/web.md#finish-and-download) and
+  [API](wizard/api.md#finish-early).
+- The web client has a manual path for a user who already knows the Experiment to run. It does
+  not use the Interview. See [Write the Experiment directly](wizard/web.md#write-the-experiment-directly).
 
-From the monorepo root:
+The Wizard saves the description, Perspective, capabilities, and documents in the Interview state.
+They are not separate fields in the Profile.
 
-```bash
-make install          # install everything
+## ARC capability catalogue
 
-make install-wizard   # install only wizard dependencies
-```
+- 12 capabilities in three groups: Cognitive, Interaction, and Operational.
+- METIS owns a fixed copy. It does not fetch the catalogue at run time.
+- Source: the GovTech Singapore Agentic Risk & Capability Framework, with Apache-2.0 attribution.
 
-### Environment Configuration
+## How the Interview uses your answers
 
-The interview calls a model, so it needs provider credentials. Copy the example environment file
-and fill in your credentials:
+- Clarification covers the main things the system does first, then asks for detail where needed.
+  It does not ask again about what the description or documents already explain.
+- Tasks are grouped by the work the system does for its users.
+- The Perspective sets which Behaviours matter most. The capabilities show what the system can do
+  in each Task.
 
-```bash
-cp packages/wizard/.env.example .env
-```
+## Run the evaluation
 
-The wizard requires these variables:
-
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `OPENAI_API_KEY` | Yes | Provider API key for the interview model |
-| `OPENAI_BASE_URL` | Yes | Full OpenAI-compatible endpoint of your provider |
-| `INTERVIEW_MODEL` | No | The wizard's model on that provider (a provider default applies if unset) |
-
-Optional tracing variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | _(unset)_ | Self-hosted Langfuse tracing. Tracing stays off unless all three are set. |
-
-The wizard reads `.env` files only inside the project, and an existing environment variable always
-wins over the file.
-
-### Verify Installation
-
-```bash
-metis wizard init --help
-```
-
-You should see the `init` command's help text. `metis wizard` composes into the unified CLI; the
-package also installs a standalone `metis-wizard` entry point.
-
----
-
-## Run an Interview
-
-### Start
-
-Give the wizard a plain description of the product to evaluate:
-
-```bash
-metis wizard init "A research assistant that answers questions from a company's internal documents and always cites its sources."
-```
-
-Before the first model question, `init` shows the fixed ARC capability catalogue. It has three
-groups (Cognitive, Interaction, and Operational) and 12 package-owned capabilities. Select known
-capabilities with comma-separated numbers, names, or stable ids. Submit a blank line when you know
-none. The command then asks for one confidence value: `low`, `medium`, or `high`. This value means
-how confident you are that the selection covers all capabilities the system has; it is not a value
-for each capability.
-
-The catalogue is owned by `metis-wizard` in
-`packages/wizard/src/metis/wizard/capabilities.yaml`. Its source is the GovTech Singapore Agentic
-Risk & Capability Framework, with Apache-2.0 attribution. The wizard does not fetch this source at
-run time.
-
-`init` does not ask who the evaluation is for. It always uses the End user perspective. To evaluate
-from the Engineer, Compliance, or Security perspective, use the web client, or send `perspective` in
-a headless start request (see [Headless start and state](#headless-start-and-state)).
-
-The opening description, the perspective, and the capability evidence give the Interview its
-initial view of the product. During Clarify, the model silently identifies the distinct things the
-product does from that evidence and the conversation. It covers those things widely before it
-examines one closely. A part that the opening evidence explains clearly enough for a provisional
-evaluation map already counts as covered; the wizard does not ask a redundant question only to mark
-it as covered. A question about how something the product does works, including its tools, failures,
-memory, delegation, coordination, or control, can come at any point when it is the most important
-unclear part. These are examples, not a checklist.
-
-Clarify questions are direct. They do not normally explain why the question was selected. When a
-brief understanding check would widen or deepen what it knows, the model may state what it takes
-the product to be and invite one correction. The check is brief and is not a formal Task list;
-Clarify owns the Product, while the later Behaviours step owns Tasks and Behaviours. Clarify ends
-when every established part of what the product does is covered or when the question limit is
-reached.
-
-After Clarify, the wizard groups Tasks by product workflow or user job and drafts a focused set of
-observable Behaviours that are important to evaluate. It does not use ARC categories,
-perspectives, capabilities, or system components as Task groups. Perspective changes emphasis, and
-capability evidence refines what can happen inside a workflow.
-
-The wizard opens an interview in the terminal. It asks about the product's behaviours, the personas
-and scenarios to test, and the criteria that decide a pass. You answer one screen at a time. The
-wizard saves the interview state to `evaluation/interview_state.json` after each turn, so an
-interrupted run is never lost.
-
-By default the wizard writes to the `evaluation/` directory. Use `--out-dir` to choose another
-location:
-
-```bash
-metis wizard init "<description>" --out-dir my-eval
-```
-
-### Resume
-
-If you close the terminal mid-interview, continue from the saved state:
-
-```bash
-metis wizard resume            # reads evaluation/interview_state.json
-metis wizard resume --out-dir my-eval
-```
-
-### Restart
-
-To discard an interview already in progress and start over:
-
-```bash
-metis wizard init "<description>" --restart
-```
-
-Without `--restart`, `init` refuses to overwrite an interview in progress and points you to
-`resume`.
-
-### Headless start and state
-
-The stateless start operation carries all opening evidence:
-
-```json
-{
-  "description": "A research assistant",
-  "perspective": "end_user",
-  "known_capability_ids": ["internet_search_access"],
-  "capability_confidence": "medium"
-}
-```
-
-`known_capability_ids` and `capability_confidence` are required. `known_capability_ids` can be an
-empty list, but it must be present. The operation rejects unknown or duplicate ids.
-
-`perspective` is optional. If you do not send it, the Interview uses `end_user`. The other values
-are `engineer`, `compliance`, and `security`. Read the labels and questions for all four from
-`GET /api/v1/wizard/config`.
-
-The returned `InterviewState` always contains `context.perspective` and
-`context.capability_evidence` with the values from the start request. This context belongs to the
-Interview, not to `ProductProfile`, and it must be sent unchanged on later turns. Capability
-evidence is opening context, not a separate Interview step.
-
-Start can contain a flat `documents` list. Each item has a canonical `name` and optional extracted
-`text`. Missing text means that no extracted content is available. The API stores the list in
-`state.context.documents` and the description in `state.context.opening_description`. It does not
-store original bytes or let clients change opening documents after start.
-
-Extract text before start with `POST /api/v1/wizard/documents/extract`. Send one or more multipart
-`files` fields. A successful response contains canonical names and extracted text in upload order.
-The operation is stateless and returns all documents or an error for the request. It accepts UTF-8
-TXT, Markdown, PDF text layers, and DOCX body paragraphs and tables. It does not run OCR or read
-scanned PDF images. Files in other accepted formats can be sent at start without `text`.
-
-The wizard configuration response includes `document_limits`:
-
-| Limit | Value |
-|---|---:|
-| Original files | 20 files; 100,000,000 bytes total |
-| Extraction input | 10,000,000 bytes per file; 20,000,000 bytes per request |
-| Extracted text | 40,000 characters per file; 80,000 characters total |
-| DOCX expansion | 50,000,000 bytes; 2,000 archive entries |
-| PDF expansion | 50,000,000 bytes |
-
-Extraction errors use HTTP 400 and include `code`, `message`, and `retryable`. The route does not
-return partial text.
-
-New Scenario drafts can suggest names from the opening document list. The user reviews them under
-**Files sent to your system**. An unconfirmed Interview with opening documents returns this review
-screen with `outcome="awaiting_response"`, even when no files were suggested. The browser keeps the
-originals locally and sends only files that current Scenarios use when it requests a package.
-
-### Finish
-
-The interview ends when you answer the review screens for the behaviours, personas, scenarios, and
-criteria. The wizard checks that the specification is runnable, then writes the output files (see
-below).
-
----
-
-## Outputs
-
-When the interview finishes, the wizard writes three files beside each other in the output
-directory and removes `interview_state.json` (the interview is done, so there is nothing to
-resume):
-
-```
-evaluation/
-├── experiment.yaml    # Personas, scenarios, and metrics
-├── profile.yaml       # Tasks, behaviours, criteria, and metrics
-└── review.md          # A human-readable summary of the specification
-```
-
-The wizard also prints how many trials the specification runs, so you know the size of the
-evaluation before you start it.
-
-To run the specification, pass the output directory to the engine:
+The CLI writes the files to `evaluation/` by default. From the web client or the API, extract
+`experiment.zip` into a directory, such as `evaluation/`. Then run the specification with the
+Engine:
 
 ```bash
 metis engine run --input-dir evaluation/
 ```
 
-See the [engine guide](engine.md) for the evaluation run and the [report guide](report.md) for the
+See the [Engine guide](engine.md) for the evaluation run and the [Report guide](report.md) for the
 results.
-
----
-
-## Next Steps
-
-- Run the specification and read the results — see the [engine guide](engine.md).
-- Use the same interview in the browser — see the [web client guide](web.md).

@@ -70,10 +70,11 @@ make install
 
 ### Usage
 
-See individual package READMEs for usage instructions:
+See the user guides for usage instructions:
 
-- [`packages/engine/README.md`](packages/engine/README.md) — evaluation engine
-- [`packages/wizard/README.md`](packages/wizard/README.md) — config generator
+- [`docs/guide/engine.md`](docs/guide/engine.md) — evaluation engine (package details in
+  [`packages/engine/README.md`](packages/engine/README.md))
+- [`docs/guide/wizard.md`](docs/guide/wizard.md) — Wizard CLI, web, and API
 
 ## Development
 

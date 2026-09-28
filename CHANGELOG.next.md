@@ -84,6 +84,9 @@ _No v1 changes yet._
   read from bounded streams.
   `derive_stage` computes progress from the Profile and two confirmation flags, so no stage is stored.
   The Interview state travels whole in each request and is never written to a file.
+- **Wizard interface guides.** The Wizard guide now has separate CLI, web, and API paths. The API
+  guide explains requests and responses through a worked Interview, with document handling and
+  error recovery references.
 - **Standardized wizard profile nodes.** Tasks, behaviours, criteria, personas, and scenarios use
   explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
   behaviour selection is `measured`; and Product uses `description`.

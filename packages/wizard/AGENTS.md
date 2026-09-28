@@ -15,6 +15,9 @@ The design record lives in these files:
 - `openspec/changes/` — the active and archived proposals, designs, and delta specs. This is the
   living design record for each wizard change.
 
+The user guide starts at `docs/guide/wizard.md`. Interface-specific instructions live in
+`docs/guide/wizard/cli.md`, `docs/guide/wizard/web.md`, and `docs/guide/wizard/api.md`.
+
 ## Working style
 
 **Build the service before the frontend.** The interview lives in the application/contracts/domain

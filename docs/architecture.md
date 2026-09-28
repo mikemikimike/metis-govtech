@@ -278,8 +278,8 @@ tests/
     └── experiment.yaml
 ```
 
-The web client workflow and its deferred features are documented in
-[`docs/guide/web.md`](guide/web.md).
+The web client workflow and its deferred features are documented in the
+[Wizard web guide](guide/wizard/web.md).
 
 ### Rules
 
