@@ -1,7 +1,13 @@
 """The ``Artifact`` domain model and its path resolver.
 
-An ``Artifact`` records a file produced or consumed during a simulation run
-(a fixture supplied to the target, or a document/image the target produced).
+An ``Artifact`` is a file crossing the persona<->target boundary — uploaded
+by the persona (``source="fixture"``) or produced by the target
+(``source="target"``). ``state`` (#351) says what METIS actually knows about
+it: ``"received"`` means the bytes are on disk at ``path``; ``"unfetched"``
+means the target has this file (an ``external_id`` was observed) but METIS
+failed to download it, which is retryable; ``"unavailable"`` means there is
+nothing to retry.
+
 Its ``path`` is a POSIX-style path relative to the experiment root — the
 directory created by ``metis engine simulate`` (or resumed into), containing
 ``inputs/`` and ``runs/``. Storing a relative path keeps experiment output
@@ -12,10 +18,10 @@ artifact references baked into ``record.json``.
 from __future__ import annotations
 
 import mimetypes
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Self
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -24,10 +30,12 @@ if TYPE_CHECKING:
 class Artifact(BaseModel):
     """A file crossing the persona<->target boundary.
 
-    One model across the lifecycle and both directions: an inbound fixture
-    (``source="fixture"``) or an outbound target output (``source="target"``),
-    optionally downloaded to disk and enriched with descriptions and a digest.
-    Enrichment fields stay ``None`` until the bytes are in hand and summarized.
+    ``state`` is required, with no default: a construction site that
+    forgets to set it fails loudly instead of silently claiming the file
+    was received. The validator below is one-directional — a path-bearing
+    artifact is not required to be ``"received"`` (the Playwright runner
+    legitimately holds a ``path`` mid-capture before state is decided) —
+    but ``"received"`` always requires a ``path``.
 
     ``id`` identifies this record; ``external_id`` identifies the *file* on the
     target's side, which is what makes a completed run re-checkable against the
@@ -37,6 +45,7 @@ class Artifact(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     source: Literal["fixture", "target"] = "target"
+    state: Literal["received", "unfetched", "unavailable"]
     #: The target system's own identifier for this file (Orca's ``fileId``).
     #: Target-agnostic by name because ``metis-core`` must not know about Orca.
     #: ``None`` for runners with no such identifier, such as the browser runner.
@@ -61,10 +70,24 @@ class Artifact(BaseModel):
     digest: str | None = None
     hash_algorithm: str | None = None
 
+    @model_validator(mode="after")
+    def _received_requires_path(self) -> Self:
+        if self.state == "received" and self.path is None:
+            raise ValueError(
+                "an Artifact with state='received' MUST carry a non-None `path`"
+            )
+        return self
+
     @computed_field
     @property
     def media_type(self) -> str | None:
-        """Best-effort MIME type guessed from the filename (or path as fallback)."""
+        """Best-effort MIME type guessed from the filename (or path as fallback).
+
+        None unless state=="received": a file METIS never got has no bytes,
+        so a guessed MIME type would misrepresent it as one that exists.
+        """
+        if self.state != "received":
+            return None
         guessed, _ = mimetypes.guess_type(self.name)
         if guessed is None and self.path:
             guessed, _ = mimetypes.guess_type(self.path)
@@ -74,8 +97,8 @@ class Artifact(BaseModel):
 def resolve_artifact_path(experiment_root: Path, path: str | None) -> Path | None:
     """Resolve an ``Artifact.path`` against the experiment root.
 
-    Returns ``None`` when ``path`` is falsy (no file was recorded for this
-    artifact).
+    Returns None for a falsy path (covers both the unset and empty-string
+    cases) rather than joining onto an empty relative path.
     """
     if not path:
         return None

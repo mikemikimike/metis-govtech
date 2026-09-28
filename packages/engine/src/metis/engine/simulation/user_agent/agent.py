@@ -103,19 +103,22 @@ def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
     optional, and a file reported without one can appear under several record
     ids, so any count would be wrong (see :meth:`UserAgent._merge_artifacts`).
 
-    That exhaustiveness claim is why a ``path=None`` entry is excluded: those
-    are files the target produced but this runner could not fetch, recorded so
-    the failure is auditable and the download retried. Listing one here would
-    assert the persona received a file that never arrived — the same false pass
-    the closure sentence exists to prevent (issue #337). The persona still
-    hears about the failure through ``Observation.response_notices``, in terms
-    a real user could perceive.
+    That exhaustiveness claim is why an entry is excluded unless
+    ``state == "received"``: an ``unfetched`` artifact is a file the target
+    has that this runner failed to download, recorded so the failure is
+    auditable and the download retried, and an ``unavailable`` artifact is one
+    there is nothing left to retry for — a path-bearing ``unfetched`` record is
+    excluded just the same as one with no ``path`` at all. Listing either here
+    would assert the persona received a file that never arrived — the same
+    false pass the closure sentence exists to prevent (issue #337). The persona
+    still hears about the failure through ``Observation.response_notices``, in
+    terms a real user could perceive.
     """
     if not artifacts:
         return ""
     uploaded = [a for a in artifacts.values() if a.source == "fixture"]
     delivered = [
-        a for a in artifacts.values() if a.source != "fixture" and a.path is not None
+        a for a in artifacts.values() if a.source != "fixture" and a.state == "received"
     ]
     lines: list[str] = []
     if uploaded:
@@ -337,9 +340,12 @@ class UserAgent:
         namespaces. Collapsing the two would relabel the persona's own input as
         something the assistant delivered.
 
-        A record with no ``path`` never displaces one that has a file, so which
-        of the two arrives last does not decide what the persona is told it
-        received.
+        A held record already at ``state == "received"`` is never displaced by
+        an incoming record that is not, so which of the two arrives last does
+        not decide what the persona is told it received — the deciding factor
+        is ``state``, not whether a ``path`` is present. A held ``"unfetched"``
+        record can carry a non-``None`` ``path`` and still be replaced by a
+        later record, since it is ``state``, not ``path``, that is checked.
 
         ``external_id`` is optional, and a record without one has no identity to
         key on: it falls back to its own id, which means repeated reports of one
@@ -353,7 +359,11 @@ class UserAgent:
                 else artifact.id
             )
             held = self._artifacts.get(key)
-            if held is not None and held.path is not None and artifact.path is None:
+            if (
+                held is not None
+                and held.state == "received"
+                and artifact.state != "received"
+            ):
                 continue
             self._artifacts[key] = artifact
 

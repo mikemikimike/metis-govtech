@@ -17,6 +17,7 @@ def test_builds_one_artifact_per_existing_fixture(tmp_path: Path) -> None:
 
     assert [a.name for a in arts] == ["input.csv", "brief.pdf"]
     assert all(a.source == "fixture" for a in arts)
+    assert all(a.state == "received" for a in arts)
     assert [a.path for a in arts] == ["fixtures/input.csv", "fixtures/brief.pdf"]
     assert all(len(a.digest or "") == 64 for a in arts)
     assert all(a.hash_algorithm == "SHA256" for a in arts)

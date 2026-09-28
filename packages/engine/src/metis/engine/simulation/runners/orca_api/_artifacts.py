@@ -106,7 +106,7 @@ async def collect_artifacts(
         file_id = entry.get("fileId")
         name = _local_name(entry.get("name"), file_id)
         if not file_id:
-            artifacts.append(Artifact(name=name, path=None))
+            artifacts.append(Artifact(name=name, path=None, state="unavailable"))
             notes.append(
                 ArtifactNote(f"Artifact '{name}' is not downloadable (no fileId)")
             )
@@ -138,7 +138,11 @@ async def collect_artifacts(
                     f"'{name}'"
                 ) from exc
             reason = _describe(exc)
-            artifacts.append(Artifact(name=name, path=None, external_id=str(file_id)))
+            artifacts.append(
+                Artifact(
+                    name=name, path=None, external_id=str(file_id), state="unfetched"
+                )
+            )
             notes.append(
                 ArtifactNote(
                     f"Artifact '{name}' could not be downloaded: {reason}",
@@ -154,7 +158,11 @@ async def collect_artifacts(
             continue
         except httpx.HTTPError as exc:
             reason = _describe(exc)
-            artifacts.append(Artifact(name=name, path=None, external_id=str(file_id)))
+            artifacts.append(
+                Artifact(
+                    name=name, path=None, external_id=str(file_id), state="unfetched"
+                )
+            )
             notes.append(
                 ArtifactNote(
                     f"Artifact '{name}' could not be downloaded: {reason}",
@@ -177,6 +185,7 @@ async def collect_artifacts(
                 .resolve()
                 .relative_to(experiment_root.resolve())
                 .as_posix(),
+                state="received",
             )
         )
         if seen_file_ids is not None:
@@ -354,7 +363,7 @@ def reconcile_by_identity(
                 merged[index].name,
                 artifact.name,
             )
-        if merged[index].path is None and artifact.path is not None:
+        if merged[index].state != "received" and artifact.state == "received":
             merged[index] = artifact
 
     # A file that arrived needs no diagnostic; one that did not needs exactly
@@ -368,7 +377,7 @@ def reconcile_by_identity(
         if note.file_id is None or index is None:
             kept_notes.append(note)
             continue
-        if merged[index].path is not None or note.file_id in explained:
+        if merged[index].state == "received" or note.file_id in explained:
             continue
         explained.add(note.file_id)
         kept_notes.append(note)

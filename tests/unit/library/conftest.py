@@ -51,6 +51,7 @@ def artifact(filename: str, path: str, at_turn: int = 0) -> dict:
         "name": filename,
         "path": resolved,
         "at_turn": at_turn,
+        "state": "received",
     }
 
 

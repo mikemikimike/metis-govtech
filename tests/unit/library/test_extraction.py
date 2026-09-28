@@ -15,7 +15,7 @@ def _case(artifacts: list[dict]) -> LLMTestCase:
 
 
 def test_get_artifacts_validates_to_core_artifact() -> None:
-    tc = _case([{"name": "out.csv", "path": "/tmp/out.csv"}])
+    tc = _case([{"name": "out.csv", "path": "/tmp/out.csv", "state": "received"}])
     arts = get_artifacts(tc)
     assert len(arts) == 1
     assert isinstance(arts[0], Artifact)
@@ -25,7 +25,12 @@ def test_get_artifacts_validates_to_core_artifact() -> None:
 
 def test_get_artifacts_skips_malformed_dicts() -> None:
     # missing required 'name' -> skipped, not raised
-    tc = _case([{"path": "/tmp/x"}, {"name": "ok.csv"}])
+    tc = _case(
+        [
+            {"path": "/tmp/x", "state": "unavailable"},
+            {"name": "ok.csv", "path": "/tmp/ok.csv", "state": "received"},
+        ]
+    )
     arts = get_artifacts(tc)
     assert [a.name for a in arts] == ["ok.csv"]
 
@@ -34,14 +39,37 @@ def test_get_artifacts_empty_when_absent() -> None:
     assert get_artifacts(LLMTestCase(input="i", actual_output="o")) == []
 
 
+def test_get_artifacts_silently_drops_a_dict_missing_state() -> None:
+    """Review Focus: a real, otherwise-valid dict missing the new required
+    `state` key is swallowed by get_artifacts' except ValidationError:
+    continue, not surfaced as an error."""
+    tc = _case([{"name": "report.csv", "path": "report.csv"}])
+    assert get_artifacts(tc) == []
+
+
 def test_artifact_paths_resolve_from_path(tmp_path: Path) -> None:
     deck = tmp_path / "slides.pptx"
     deck.write_bytes(b"PK\x03\x04")
-    tc = _case([{"name": "slides.pptx", "path": str(deck)}])
+    tc = _case([{"name": "slides.pptx", "path": str(deck), "state": "received"}])
     assert _artifact_paths(tc, ".pptx") == [str(deck)]
     assert _artifact_paths(tc, ".csv") == []
 
 
 def test_artifact_paths_skips_when_path_absent() -> None:
-    tc = _case([{"name": "remote.csv", "path": None}])
+    tc = _case([{"name": "remote.csv", "path": None, "state": "unavailable"}])
     assert _artifact_paths(tc, ".csv") == []
+
+
+def test_artifact_paths_skips_a_path_bearing_record_not_yet_received(
+    tmp_path: Path,
+) -> None:
+    """A record can carry a path while state != "received" (e.g. a runner
+    holding a path mid-capture before state is decided — see Artifact's own
+    docstring). This is the one shape that discriminates the old
+    `if not art.path` gate from the new `if art.state != "received"` gate:
+    a path-bearing artifact must still be excluded when its state isn't
+    "received"."""
+    deck = tmp_path / "slides.pptx"
+    deck.write_bytes(b"PK\x03\x04")
+    tc = _case([{"name": "slides.pptx", "path": str(deck), "state": "unfetched"}])
+    assert _artifact_paths(tc, ".pptx") == []

@@ -117,6 +117,7 @@ def _save_artifacts(record: RunRecord, run_dir: Path, experiment_root: Path) -> 
                 "filename": artifact.name,
                 "type": infer_artifact_type(artifact.name),
                 "source": artifact.source,
+                "state": artifact.state,
                 "external_id": artifact.external_id,
                 "at_turn": artifact.at_turn,
                 "path": str(local) if local else "",

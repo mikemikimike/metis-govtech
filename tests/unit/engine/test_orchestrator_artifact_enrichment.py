@@ -74,7 +74,7 @@ async def test_orchestrator_summarizes_downloads(monkeypatch, tmp_path: Path) ->
     csv_file = tmp_path / "x.csv"
     csv_file.write_text("col1,col2\n1,2\n3,4\n5,6\n")
 
-    artifact = Artifact(name="x.csv", path="x.csv")
+    artifact = Artifact(name="x.csv", path="x.csv", state="received")
     runner = _FakeRunner(artifact)
     scenario = _scenario()
     run_config = RunConfig(persona="p1", scenario="s1")
@@ -108,6 +108,7 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
         source="fixture",
         path="q3.csv",
         content_description="Q3 sales, 200 rows.",
+        state="received",
     )
     orch = Orchestrator(
         runner=object(),
@@ -133,7 +134,7 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
     monkeypatch.setattr(orch_mod, "summarize_artifact", spy_summarize)
 
     # The runner emitted a DIFFERENT object (fresh id) with the same name.
-    stub = Artifact(name="q3.csv", source="fixture", path="q3.csv")
+    stub = Artifact(name="q3.csv", source="fixture", path="q3.csv", state="received")
     assert stub.id != registry.id
     obs = Observation(text="ok", artifacts=[stub])
 
@@ -176,7 +177,7 @@ async def test_target_artifact_still_stamped_and_summarized(
 
     monkeypatch.setattr(orch_mod, "summarize_artifact", spy_summarize)
 
-    target = Artifact(name="out.csv", source="target", path="out.csv")
+    target = Artifact(name="out.csv", source="target", path="out.csv", state="received")
     obs = Observation(text="ok", artifacts=[target])
     await orch._enrich_observation_artifacts(obs, turn_count=2, current_message="go")
 
@@ -215,6 +216,7 @@ async def test_fixture_external_id_survives_the_registry_swap(
         source="fixture",
         path="q3.csv",
         content_description="Q3 sales, 200 rows.",
+        state="received",
     )
     assert registry.external_id is None
     orch = _fixture_swap_orchestrator(tmp_path, registry)
@@ -227,7 +229,11 @@ async def test_fixture_external_id_survives_the_registry_swap(
     monkeypatch.setattr(orch_module, "summarize_artifact", spy_summarize)
 
     stub = Artifact(
-        name="q3.csv", source="fixture", path="q3.csv", external_id="orca-file-77"
+        name="q3.csv",
+        source="fixture",
+        path="q3.csv",
+        external_id="orca-file-77",
+        state="received",
     )
     obs = Observation(text="ok", artifacts=[stub])
     await orch._enrich_observation_artifacts(obs, turn_count=1, current_message="here")
@@ -245,7 +251,9 @@ async def test_a_later_echo_without_an_id_does_not_blank_the_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The carry is guarded, so the copy cannot lose an established id."""
-    registry = Artifact(name="q3.csv", source="fixture", path="q3.csv")
+    registry = Artifact(
+        name="q3.csv", source="fixture", path="q3.csv", state="received"
+    )
     orch = _fixture_swap_orchestrator(tmp_path, registry)
 
     async def spy_summarize(
@@ -256,14 +264,20 @@ async def test_a_later_echo_without_an_id_does_not_blank_the_id(
     monkeypatch.setattr(orch_module, "summarize_artifact", spy_summarize)
 
     with_id = Artifact(
-        name="q3.csv", source="fixture", path="q3.csv", external_id="orca-file-77"
+        name="q3.csv",
+        source="fixture",
+        path="q3.csv",
+        external_id="orca-file-77",
+        state="received",
     )
     await orch._enrich_observation_artifacts(
         Observation(text="ok", artifacts=[with_id]), turn_count=1, current_message="a"
     )
     assert registry.external_id == "orca-file-77"
 
-    without_id = Artifact(name="q3.csv", source="fixture", path="q3.csv")
+    without_id = Artifact(
+        name="q3.csv", source="fixture", path="q3.csv", state="received"
+    )
     await orch._enrich_observation_artifacts(
         Observation(text="ok", artifacts=[without_id]),
         turn_count=2,

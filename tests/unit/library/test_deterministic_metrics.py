@@ -45,7 +45,7 @@ def test_reproducible_script_passes_when_descriptive_and_presented(
             actual_output="I saved the reproducible script sales_trend_analysis.py.",
             metadata={
                 "tool_calls": [tool_call("execute_python", {"code": "print(1)"})],
-                "artifacts": [{"name": script.name, "path": path}],
+                "artifacts": [{"name": script.name, "path": path, "state": "received"}],
             },
         )
     )
@@ -78,13 +78,48 @@ def test_reproducible_script_requires_a_file(tmp_path, kind):
     if kind == "directory":
         script.mkdir(parents=True)
     path = str(script) if kind != "no_path" else None
+    state = "unavailable" if kind == "no_path" else "received"
     metric = ReproducibleAnalysisScriptMetric()
     metric.measure(
         make_case(
             actual_output="Saved revenue_breakdown.py.",
             metadata={
                 "tool_calls": [tool_call("execute_python", {"code": "x=1"})],
-                "artifacts": [{"name": "revenue_breakdown.py", "path": path}],
+                "artifacts": [
+                    {"name": "revenue_breakdown.py", "path": path, "state": state}
+                ],
+            },
+        )
+    )
+    assert metric.success is False
+    assert metric.score == 0.0
+    assert "no .py script file found" in metric.reason
+
+
+def test_reproducible_script_excludes_a_path_bearing_record_not_yet_received(
+    tmp_path,
+):
+    """Mirrors test_artifact_paths_skips_a_path_bearing_record_not_yet_received
+    in test_extraction.py: a script artifact can carry a real, existing path
+    while state != "received" (mid-capture case). The new gate
+    (`a.state == "received"`) must exclude it even though the old gate
+    (`a.path and Path(a.path).is_file()`) would have included it, since the
+    file genuinely exists on disk."""
+    script_path = tmp_path / "analysis.py"
+    script_path.write_text("# script")
+    metric = ReproducibleAnalysisScriptMetric()
+    metric.measure(
+        make_case(
+            actual_output="Saved analysis.py.",
+            metadata={
+                "tool_calls": [tool_call("execute_python", {"code": "x=1"})],
+                "artifacts": [
+                    {
+                        "name": "analysis.py",
+                        "path": str(script_path),
+                        "state": "unfetched",
+                    }
+                ],
             },
         )
     )

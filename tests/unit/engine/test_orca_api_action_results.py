@@ -234,14 +234,13 @@ class TestFormProblemAttribution:
         assert observation.delivered is True
 
     @pytest.mark.asyncio
-    async def test_an_unanswered_required_field_is_a_notice_even_with_an_empty_message(
+    async def test_an_unanswered_required_field_survives_an_also_empty_message(
         self, tmp_path: Path
     ) -> None:
-        """The empty-message early return must not swallow a pre-submit notice.
-
-        Nothing is left to send this turn (I5: delivered=False), but the
-        problem that made the form answer unusable must still surface.
-        """
+        """The empty-message early return in ``_build_submit_body`` skips
+        ``_build_observation`` entirely — the only other place that ever
+        drains ``_pre_submit_notices`` — so a required-field notice stashed
+        just before it must be taken here or it is lost for good."""
         runner = _make_runner(tmp_path)
         runner._pending_form = {
             "stepId": "step-1",
@@ -252,11 +251,12 @@ class TestFormProblemAttribution:
         }
         actions = [FormFillAction(slot_id="qty", value="lots")]
         runner._plan_actions(actions)
-        result = await runner._build_submit_body("   ", actions)
-        assert isinstance(result, Observation)
-        assert result.delivered is False
-        assert any("required field 'why'" in n for n in result.response_notices)
-        assert any("empty" in n for n in result.response_notices)
+        body = await runner._build_submit_body("   ", actions)
+        assert isinstance(body, Observation)
+        assert body.delivered is False
+        assert any("required field 'why'" in n for n in body.response_notices)
+        assert any("message was empty" in n for n in body.response_notices)
+        assert runner._pre_submit_notices == []
 
 
 class TestStatusIsNotAnActionFailure:

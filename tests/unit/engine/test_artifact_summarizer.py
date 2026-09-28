@@ -25,7 +25,7 @@ async def test_digest_is_sha256_of_bytes(tmp_path: Path, monkeypatch) -> None:
         return ("2 rows x 2 cols", f"delivered at turn {turn_number}")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _fake)
-    art = Artifact(name="data.csv", path="data.csv")
+    art = Artifact(name="data.csv", path="data.csv", state="received")
     await summarize_artifact(
         art, experiment_root=tmp_path, triggering_message="make a csv", turn_number=3
     )
@@ -46,7 +46,7 @@ async def test_fact_rich_description_from_stubbed_llm(
         return ("2 data rows; totals north=100 south=200", "delivered at turn 2")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _fake)
-    art = Artifact(name="sales.csv", path="sales.csv")
+    art = Artifact(name="sales.csv", path="sales.csv", state="received")
     await summarize_artifact(
         art, experiment_root=tmp_path, triggering_message="totals please", turn_number=2
     )
@@ -64,7 +64,7 @@ async def test_binary_degrades_without_llm(tmp_path: Path, monkeypatch) -> None:
         raise AssertionError("LLM must not be called for binary files")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _boom)
-    art = Artifact(name="deck.pptx", path="deck.pptx")
+    art = Artifact(name="deck.pptx", path="deck.pptx", state="received")
     await summarize_artifact(
         art, experiment_root=tmp_path, triggering_message="make slides", turn_number=1
     )
@@ -82,7 +82,7 @@ async def test_llm_failure_never_raises(tmp_path: Path, monkeypatch) -> None:
         raise RuntimeError("provider down")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _fail)
-    art = Artifact(name="notes.txt", path="notes.txt")
+    art = Artifact(name="notes.txt", path="notes.txt", state="received")
     await summarize_artifact(
         art, experiment_root=tmp_path, triggering_message="save notes", turn_number=1
     )  # no raise
@@ -93,12 +93,32 @@ async def test_llm_failure_never_raises(tmp_path: Path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_missing_file_is_noop(tmp_path: Path) -> None:
-    art = Artifact(name="gone.csv", path="nope/gone.csv")
+    art = Artifact(name="gone.csv", path="nope/gone.csv", state="received")
     await summarize_artifact(
         art, experiment_root=tmp_path, triggering_message="x", turn_number=1
     )  # no raise
     assert art.digest is None
     assert art.content_description is None
+
+
+@pytest.mark.asyncio
+async def test_state_gate_is_checked_before_touching_disk(tmp_path: Path) -> None:
+    """The new early-return fires on state alone, even for a file that
+    genuinely exists on disk — proving it's a real gate, not a restatement
+    of the is_file() check test_missing_file_is_noop already covers."""
+    real_file = tmp_path / "notes.txt"
+    real_file.write_text("hello")
+    artifact = Artifact(
+        name="notes.txt", path="notes.txt", state="unfetched", external_id="f-1"
+    )
+    await summarize_artifact(
+        artifact,
+        experiment_root=tmp_path,
+        triggering_message="here you go",
+        turn_number=1,
+    )
+    assert artifact.content_description is None
+    assert artifact.digest is None
 
 
 @pytest.mark.asyncio
@@ -110,12 +130,14 @@ async def test_summarize_fixtures_skips_described_and_fills_gaps(
         name="q3.csv",
         source="fixture",
         path="notes.txt",
+        state="received",
         content_description="author supplied",
     )
     gap = Artifact(
         name="notes.txt",
         source="fixture",
         path="notes.txt",
+        state="received",
     )
 
     calls: list[str] = []

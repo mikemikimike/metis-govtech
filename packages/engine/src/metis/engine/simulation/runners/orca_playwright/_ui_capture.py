@@ -225,6 +225,8 @@ async def capture_ui_state(page: Page, config: RetryConfig | None = None) -> UIS
     async def _capture() -> UIState:
         logger.debug("[ui_capture] Evaluating UI state extraction JS...")
         raw = await page.evaluate(_CAPTURE_UI_STATE_JS)
+        for entry in raw.get("artifacts", []) or []:
+            entry.setdefault("state", "unfetched")
         state = UIState.model_validate(raw)
         logger.debug(
             "[ui_capture] Captured: text=%d chars, artifacts=%d, forms=%d, errors=%d, labels=%d",
@@ -313,7 +315,9 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
     await page.keyboard.press("Escape")
     await page.wait_for_timeout(500)
 
-    artifacts = [Artifact.model_validate(a) for a in raw_artifacts]
+    artifacts = [
+        Artifact.model_validate({**a, "state": "unfetched"}) for a in raw_artifacts
+    ]
     if artifacts:
         logger.info(
             "[artifacts_panel] Found %d artifact(s): %s",

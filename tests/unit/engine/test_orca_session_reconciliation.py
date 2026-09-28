@@ -99,7 +99,7 @@ class TestSweepRecoversOmittedFiles:
             "q3_revenue_analysis.py",
             "q3_revenue_by_region.vl.json",
         ]
-        assert all(a.path is not None for a in observation.artifacts)
+        assert all(a.state == "received" for a in observation.artifacts)
 
     @pytest.mark.asyncio
     async def test_uploaded_files_are_not_swept(
@@ -156,7 +156,7 @@ class TestSweepRecoversOmittedFiles:
         recovered = [a for a in observation.artifacts if a.external_id in chart_ids]
         assert len(recovered) == 2
         assert all(a.source == "target" for a in recovered)
-        assert all(a.path is not None for a in recovered)
+        assert all(a.state == "received" for a in recovered)
 
 
 class TestSweepFailsQuietly:
@@ -335,7 +335,7 @@ class TestSweepDeduplicateMerge:
         # Exactly one artifact for f-fail, with a real path
         fail_artifacts = [a for a in observation.artifacts if a.external_id == "f-fail"]
         assert len(fail_artifacts) == 1
-        assert fail_artifacts[0].path is not None
+        assert fail_artifacts[0].state == "received"
 
         # The stale failure note is gone, and no sweep-internal note replaces it.
         assert observation.response_notices == []
@@ -384,7 +384,7 @@ class TestSweepDeduplicateMerge:
 
         assert len(observation.artifacts) == 1
         assert observation.artifacts[0].external_id == "f-fail"
-        assert observation.artifacts[0].path is None
+        assert observation.artifacts[0].state != "received"
         assert len(observation.response_notices) == 1
         assert "could not be downloaded" in observation.response_notices[0]
 
@@ -453,9 +453,17 @@ class TestSweepDeduplicateMerge:
         merged, notes = reconcile_by_identity(
             [
                 Artifact(
-                    name="summary.txt", external_id="reused", path="a/summary.txt"
+                    name="summary.txt",
+                    external_id="reused",
+                    path="a/summary.txt",
+                    state="received",
                 ),
-                Artifact(name="script.py", external_id="reused", path="a/script.py"),
+                Artifact(
+                    name="script.py",
+                    external_id="reused",
+                    path="a/script.py",
+                    state="received",
+                ),
             ],
             [],
         )
@@ -512,7 +520,7 @@ class TestSweepDeduplicateMerge:
         # artifact, with a path, and its stale note dropped.
         recovered = [a for a in observation.artifacts if a.external_id == "f-1"]
         assert len(recovered) == 1
-        assert recovered[0].path is not None
+        assert recovered[0].state == "received"
 
         # The null-fileId sibling survives *with* its own diagnostic.
         orphans = [
@@ -521,7 +529,7 @@ class TestSweepDeduplicateMerge:
             if a.external_id is None and a.name == "report.txt"
         ]
         assert len(orphans) == 1
-        assert orphans[0].path is None
+        assert orphans[0].state != "received"
         assert observation.response_notices == [
             "Artifact 'report.txt' is not downloadable (no fileId)"
         ]

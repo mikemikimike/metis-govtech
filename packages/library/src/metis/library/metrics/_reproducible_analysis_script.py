@@ -1,7 +1,7 @@
 """Reproducible Analysis Script metric (M-DA-23)."""
 
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from deepeval.metrics import BaseMetric
 from deepeval.test_case import LLMTestCase
@@ -77,7 +77,11 @@ class ReproducibleAnalysisScriptMetric(BaseMetric):
         py_artifacts = [
             a for a in get_artifacts(test_case) if a.name.lower().endswith(".py")
         ]
-        saved_scripts = [a for a in py_artifacts if a.path and Path(a.path).is_file()]
+        saved_scripts = [
+            a
+            for a in py_artifacts
+            if a.state == "received" and Path(cast("str", a.path)).is_file()
+        ]
         descriptive = [a for a in saved_scripts if a.name.lower() not in _GENERIC_NAMES]
         presented_text = _presented_text(test_case)
         presented = [

@@ -110,6 +110,8 @@ async def summarize_artifact(
     turn_number: int,
 ) -> None:
     """Enrich ``artifact`` in place. Never raises."""
+    if artifact.state != "received":
+        return
     path = resolve_artifact_path(experiment_root, artifact.path)
     if path is None or not path.is_file():
         return

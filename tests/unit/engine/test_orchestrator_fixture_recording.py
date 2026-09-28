@@ -65,7 +65,9 @@ async def test_fixtures_recorded_in_run_record(tmp_path: Path) -> None:
 
 
 def test_orchestrator_uses_supplied_fixture_artifacts(tmp_path: Path) -> None:
-    shared = [Artifact(name="q3.csv", source="fixture", path="q3.csv")]
+    shared = [
+        Artifact(name="q3.csv", source="fixture", path="q3.csv", state="received")
+    ]
     orch = Orchestrator(
         runner=object(),  # unused in this assertion
         agent=object(),

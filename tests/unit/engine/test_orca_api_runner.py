@@ -198,8 +198,8 @@ async def test_collect_artifacts_emits_relative_path_and_skips_missing(
     assert artifacts[0].path is not None
     assert Path(artifacts_dir / "report.csv").exists()
 
-    # Second entry: no fileId, path is None, a note was recorded
-    assert artifacts[1].path is None
+    # Second entry: no fileId, unavailable (not retryable), a note was recorded
+    assert artifacts[1].state == "unavailable"
     assert len(notes) == 1
     assert "skipped.csv" in notes[0].text
 
@@ -229,7 +229,7 @@ async def test_send_turn_appends_submitted_fixtures_as_artifacts(
 
     fixtures = [a for a in obs.artifacts if a.source == "fixture"]
     assert [a.name for a in fixtures] == ["q3.csv"]
-    assert fixtures[0].path is not None
+    assert fixtures[0].state == "received"
     assert runner._attached == {"q3.csv"}  # committed
     assert runner._attaching == []  # drained
 
@@ -343,6 +343,7 @@ class TestExternalIdIsRecorded:
         )
 
         assert artifacts[0].path is None
+        assert artifacts[0].state == "unavailable"  # no fileId, nothing to retry
         assert artifacts[0].external_id is None
         assert notes and "not downloadable" in notes[0].text
         assert notes[0].file_id is None  # no identity to reconcile on
@@ -367,7 +368,7 @@ class TestExternalIdIsRecorded:
             tmp_path,
         )
 
-        assert artifacts[0].path is None
+        assert artifacts[0].state == "unfetched"  # download failed, but retryable
         assert artifacts[0].external_id == "73da06dac970f8a9"
         assert notes and "could not be downloaded" in notes[0].text
         # The id travels with the note, not only in the log: notes are
@@ -404,7 +405,7 @@ class TestIdentityDedupe:
         )
 
         assert len(downloads) == 1
-        assert first[0].path is not None
+        assert first[0].state == "received"
         assert second == []  # already held; nothing new to report this turn
         assert not (artifacts_dir / "analysis_script-2.py").exists()
 
@@ -447,6 +448,7 @@ class TestIdentityDedupe:
 
         # Revision is kept with its new identity.
         assert revised[0].external_id == "file-2"
+        assert revised[0].state == "received"
         original = artifacts_dir / "Q3_Analysis_Methodology.md"
         revision = artifacts_dir / "Q3_Analysis_Methodology-2.md"
         assert original.exists()
@@ -489,7 +491,8 @@ class TestIdentityDedupe:
         )
 
         assert len(attempts) == 2
-        assert recovered[0].path is not None
+        assert recovered[0].state == "received"
+        assert "file-1" in seen
 
     @pytest.mark.asyncio
     async def test_omitting_the_set_preserves_the_old_behaviour(
@@ -512,7 +515,7 @@ class TestIdentityDedupe:
             httpx.AsyncClient(), entry, artifacts_dir, tmp_path
         )
 
-        assert again[0].path is not None
+        assert again[0].state == "received"
         assert (artifacts_dir / "chart.vl-2.json").exists()
 
     @pytest.mark.asyncio

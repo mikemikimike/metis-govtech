@@ -235,9 +235,9 @@ def get_slide_image_refs(test_case: LLMTestCase) -> list[str] | None:
 def _artifact_paths(test_case: LLMTestCase, *suffixes: str) -> list[str]:
     out: list[str] = []
     for art in get_artifacts(test_case):
-        if not art.path:
+        if art.state != "received":
             continue
-        local = Path(art.path)
+        local = Path(cast("str", art.path))
         name = art.name.lower()
         if not suffixes or any(name.endswith(s) for s in suffixes):
             out.append(str(local))

@@ -47,11 +47,13 @@ class TestSaveArtifacts:
                     name="report.pdf",
                     path="runs/s1-p1-1/artifacts/report.pdf",
                     at_turn=2,
+                    state="received",
                 ),
                 Artifact(
                     name="input.csv",
                     source="fixture",
                     path="inputs/fixtures/input.csv",
+                    state="received",
                 ),
             ],
         )
@@ -71,6 +73,7 @@ class TestSaveArtifacts:
             tmp_path / "runs/s1-p1-1/artifacts/report.pdf"
         )
         assert by_name["input.csv"]["source"] == "fixture"
+        assert by_name["report.pdf"]["state"] == "received"
 
 
 def test_manifest_keeps_logical_name_when_disk_path_is_decollided(tmp_path):
@@ -78,7 +81,9 @@ def test_manifest_keeps_logical_name_when_disk_path_is_decollided(tmp_path):
     # while the logical announced name stayed "report.txt".
     disk = tmp_path / "report-2.txt"
     disk.write_text("x")
-    art = Artifact(name="report.txt", source="target", path="report-2.txt")
+    art = Artifact(
+        name="report.txt", source="target", path="report-2.txt", state="received"
+    )
     record = RunRecord(
         config=RunConfig(persona="p", scenario="s"),
         outcome=RunOutcome(
@@ -103,8 +108,13 @@ def test_manifest_carries_external_id(tmp_path: Path) -> None:
             stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
         ),
         artifacts=[
-            Artifact(name="chart.vl.json", external_id="73da06dac970f8a9", path=None),
-            Artifact(name="local.png", path=None),
+            Artifact(
+                name="chart.vl.json",
+                external_id="73da06dac970f8a9",
+                path=None,
+                state="unfetched",
+            ),
+            Artifact(name="local.png", path=None, state="unavailable"),
         ],
     )
     manifest = _save_artifacts(record, tmp_path / "run", tmp_path)

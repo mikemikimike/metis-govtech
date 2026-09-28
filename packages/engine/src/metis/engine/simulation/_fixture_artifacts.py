@@ -54,6 +54,7 @@ def build_fixture_artifacts(
             Artifact(
                 name=name,
                 source="fixture",
+                state="received",
                 path=path.relative_to(experiment_root).as_posix(),
                 digest=digest,
                 hash_algorithm="SHA256" if digest else None,

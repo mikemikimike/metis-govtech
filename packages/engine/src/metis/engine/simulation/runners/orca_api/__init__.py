@@ -312,6 +312,7 @@ class OrcaApiRunner(Runner):
                         if path is not None
                         else None
                     ),
+                    state="received" if path is not None else "unavailable",
                 )
             )
         return observation
@@ -492,12 +493,18 @@ class OrcaApiRunner(Runner):
             )
             self._clear_attaching()
             self._abandon_turn()
-            notices = [
-                *self._pre_submit_notices,
-                "Turn not submitted: the message was empty and there was no "
-                "form answer to send in its place",
-            ]
+            # Pre-submit notices come first, same ordering as _build_observation:
+            # they describe why form_answers ended up empty (e.g. a required
+            # field nobody answered), which is the cause of this abandonment,
+            # not a consequence of it. This early return skips
+            # _build_observation entirely, so nothing else will ever surface
+            # them — they must be taken here or lost.
+            notices = list(self._pre_submit_notices)
             self._pre_submit_notices = []
+            notices.append(
+                "Turn not submitted: the message was empty and there was no "
+                "form answer to send in its place"
+            )
             return Observation(
                 response_notices=notices,
                 action_results=self._action_results,
@@ -831,7 +838,7 @@ class OrcaApiRunner(Runner):
             # collect_artifacts adds to the staging set, but we read from the
             # returned artifacts to stay correct if the internal behaviour changes.
             for art in recovered:
-                if art.path is not None and art.external_id is not None:
+                if art.state == "received" and art.external_id is not None:
                     self._downloaded_file_ids.add(art.external_id)
             return recovered, recovery_notes
         except AuthLossError:

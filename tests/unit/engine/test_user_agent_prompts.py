@@ -221,6 +221,7 @@ def test_render_artifacts_shows_name_and_descriptions_not_uri() -> None:
             path="runs/abc/Q3_Sales_Merged.csv",
             content_description="120 rows x 5 cols; Q3 total 1,234,567",
             state_description="delivered at turn 3",
+            state="received",
         )
     }
     out = _render_artifacts(reg)
@@ -238,8 +239,10 @@ def test_agent_registry_accumulates_across_turns() -> None:
         persona=Persona(id="p", description="a user"),
         scenario=Scenario(id="s", description="do a thing", persona_refs=["p"]),
     )
-    a1 = Artifact(id="1", name="a.csv", content_description="rows")
-    a2 = Artifact(id="2", name="b.csv", content_description="more rows")
+    a1 = Artifact(id="1", name="a.csv", content_description="rows", state="unavailable")
+    a2 = Artifact(
+        id="2", name="b.csv", content_description="more rows", state="unavailable"
+    )
     agent._merge_artifacts(Observation(artifacts=[a1]))
     agent._merge_artifacts(Observation(artifacts=[a2, a1]))  # a1 repeated
     assert set(agent._artifacts) == {"1", "2"}
@@ -255,6 +258,7 @@ def test_render_artifacts_groups_by_source() -> None:
         path="inputs/report.txt",
         at_turn=1,
         content_description="the input the user uploaded",
+        state="received",
     )
     target = Artifact(
         name="report.txt",
@@ -263,6 +267,7 @@ def test_render_artifacts_groups_by_source() -> None:
         at_turn=3,
         content_description="the assistant's generated report",
         state_description="delivered at turn 3",
+        state="received",
     )
     out = _render_artifacts({fixture.id: fixture, target.id: target})
 
@@ -295,6 +300,7 @@ def test_turn_prompt_surfaces_described_artifact_307() -> None:
         path="runs/x/Q3_Sales_Merged.csv",
         content_description="2 conflicts reconciled; 120 rows; Q3 total 1,234,567",
         state_description="delivered at turn 3",
+        state="received",
     )
     agent._merge_artifacts(Observation(text="Here are your files.", artifacts=[art]))
     prompt = agent._build_user_prompt(
@@ -334,6 +340,7 @@ class TestRegistryIsAuthoritative:
                 name="report.txt",
                 path="a/report.txt",
                 content_description="A report",
+                state="received",
             ),
         }
         rendered = _render_artifacts(artifacts)
@@ -343,7 +350,9 @@ class TestRegistryIsAuthoritative:
     def test_uploaded_header_is_unchanged(self) -> None:
         """Closure applies to deliverables; the persona's own inputs are separate."""
         artifacts = {
-            "a": Artifact(id="a", name="sales.csv", source="fixture"),
+            "a": Artifact(
+                id="a", name="sales.csv", source="fixture", state="unavailable"
+            ),
         }
         rendered = _render_artifacts(artifacts)
         assert "your own inputs" in rendered.lower()
@@ -361,10 +370,13 @@ class TestRegistryIsAuthoritative:
                 name="report.txt",
                 path="a/report.txt",
                 content_description="A repair guide.",
+                state="received",
             ),
-            "bad": Artifact(id="bad", name="chart.vl.json", external_id="f-9"),
+            "bad": Artifact(
+                id="bad", name="chart.vl.json", external_id="f-9", state="unfetched"
+            ),
         }
-        assert artifacts["bad"].path is None
+        assert artifacts["bad"].state != "received"
         rendered = _render_artifacts(artifacts)
         assert "report.txt" in rendered
         assert "chart.vl.json" not in rendered
@@ -379,25 +391,51 @@ class TestRegistryIsAuthoritative:
         registry is non-empty but nothing in it is renderable.
         """
         artifacts = {
-            "bad": Artifact(id="bad", name="chart.vl.json", external_id="f-9"),
+            "bad": Artifact(
+                id="bad", name="chart.vl.json", external_id="f-9", state="unfetched"
+            ),
         }
         assert _render_artifacts(artifacts) == ""
 
     def test_a_retried_download_appears_once_it_succeeds(self) -> None:
         """Exclusion is by path, not by name: the retry must still be shown."""
         artifacts = {
-            "bad": Artifact(id="bad", name="chart.vl.json", external_id="f-9"),
+            "bad": Artifact(
+                id="bad", name="chart.vl.json", external_id="f-9", state="unfetched"
+            ),
             "good": Artifact(
                 id="good",
                 name="chart.vl.json",
                 path="a/chart.vl.json",
                 external_id="f-9",
                 content_description="A bar chart of Q3 revenue.",
+                state="received",
             ),
         }
         rendered = _render_artifacts(artifacts)
         assert rendered.count("chart.vl.json") == 1
         assert "A bar chart of Q3 revenue." in rendered
+
+    def test_a_path_bearing_record_not_yet_received_is_not_delivered(self) -> None:
+        """``state``, not ``path``, decides delivery.
+
+        A runner may legitimately hold a ``path`` before ``state`` is decided
+        — e.g. the Playwright runner mid-capture — so a record can carry a
+        file on disk while still being ``"unfetched"``. This is the one shape
+        that tells the current ``state == "received"`` filter apart from the
+        old ``path is not None`` filter it replaced: the old filter would
+        have wrongly counted this row as delivered.
+        """
+        artifacts = {
+            "mid_capture": Artifact(
+                id="mid_capture",
+                name="chart.vl.json",
+                path="tmp/chart.vl.json",
+                external_id="f-9",
+                state="unfetched",
+            ),
+        }
+        assert _render_artifacts(artifacts) == ""
 
 
 class TestRegistryKeysOnIdentity:
@@ -421,13 +459,16 @@ class TestRegistryKeysOnIdentity:
         from metis.engine.simulation.types import Observation
 
         agent = self._agent()
-        failed = Artifact(name="chart.vl.json", external_id="f-9", at_turn=3)
+        failed = Artifact(
+            name="chart.vl.json", external_id="f-9", at_turn=3, state="unfetched"
+        )
         recovered = Artifact(
             name="chart.vl.json",
             external_id="f-9",
             path="runs/x/chart.vl.json",
             at_turn=4,
             content_description="A bar chart of Q3 revenue.",
+            state="received",
         )
         assert failed.id != recovered.id  # a fresh uuid per record
 
@@ -452,8 +493,9 @@ class TestRegistryKeysOnIdentity:
             external_id="f-9",
             path="runs/x/chart.vl.json",
             content_description="A bar chart of Q3 revenue.",
+            state="received",
         )
-        stale = Artifact(name="chart.vl.json", external_id="f-9")
+        stale = Artifact(name="chart.vl.json", external_id="f-9", state="unfetched")
 
         agent._merge_artifacts(Observation(artifacts=[received]))
         agent._merge_artifacts(Observation(artifacts=[stale]))
@@ -461,6 +503,36 @@ class TestRegistryKeysOnIdentity:
         assert len(agent._artifacts) == 1
         (held,) = agent._artifacts.values()
         assert held.path == "runs/x/chart.vl.json"
+
+    def test_a_held_path_bearing_but_not_received_record_still_gets_replaced(
+        self,
+    ) -> None:
+        """The downgrade guard keys on ``state``, not ``path``.
+
+        A held record can carry a ``path`` without being ``"received"`` — a
+        runner may hold a path mid-capture before state is decided (see
+        :class:`~metis.core.artifacts.Artifact`). The old guard
+        (``held.path is not None and artifact.path is None``) would have
+        mistaken that for an already-received file and refused the update;
+        the current guard (``held.state == "received"``) does not.
+        """
+        from metis.engine.simulation.types import Observation
+
+        agent = self._agent()
+        held = Artifact(
+            name="chart.vl.json",
+            external_id="f-9",
+            path="tmp/chart.vl.json",
+            state="unfetched",
+        )
+        later = Artifact(name="chart.vl.json", external_id="f-9", state="unavailable")
+
+        agent._merge_artifacts(Observation(artifacts=[held]))
+        agent._merge_artifacts(Observation(artifacts=[later]))
+
+        assert len(agent._artifacts) == 1
+        (kept,) = agent._artifacts.values()
+        assert kept.state == "unavailable"
 
     def test_an_upload_and_a_deliverable_sharing_a_file_id_stay_apart(self) -> None:
         """Direction is part of the identity, because the groups render apart.
@@ -478,6 +550,7 @@ class TestRegistryKeysOnIdentity:
             external_id="f-up",
             path="inputs/sales.csv",
             content_description="The user's own spreadsheet.",
+            state="received",
         )
         delivered = Artifact(
             name="sales.csv",
@@ -485,6 +558,7 @@ class TestRegistryKeysOnIdentity:
             external_id="f-up",
             path="runs/x/sales.csv",
             content_description="The assistant's echo of it.",
+            state="received",
         )
 
         agent._merge_artifacts(Observation(artifacts=[uploaded, delivered]))
@@ -505,8 +579,12 @@ class TestRegistryKeysOnIdentity:
         from metis.engine.simulation.types import Observation
 
         agent = self._agent()
-        first = Artifact(name="report.txt", path="runs/x/report.txt", at_turn=2)
-        again = Artifact(name="report.txt", path="runs/x/report.txt", at_turn=3)
+        first = Artifact(
+            name="report.txt", path="runs/x/report.txt", at_turn=2, state="received"
+        )
+        again = Artifact(
+            name="report.txt", path="runs/x/report.txt", at_turn=3, state="received"
+        )
 
         agent._merge_artifacts(Observation(artifacts=[first]))
         agent._merge_artifacts(Observation(artifacts=[again]))

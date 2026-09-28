@@ -4,6 +4,25 @@ All notable changes to `metis-core` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] — 2026-09-28
+
+### Added
+
+- **`Artifact.state`** (`Literal["received", "unfetched", "unavailable"]`,
+  required, no default) — says what METIS actually knows about a file,
+  replacing the undocumented convention of inferring failure from
+  `path is None`. `"received"` means the file is on disk at `path`;
+  `"unfetched"` means the target reported the file (`external_id` set) but
+  the runner hasn't gotten its bytes yet, retryable; `"unavailable"` means
+  METIS has no reason to believe the file exists at all. A one-directional
+  `model_validator(mode="after")` enforces `state == "received"` implies
+  `path is not None` — never the reverse, since an `"unfetched"` record may
+  legitimately carry a `path` mid-capture before its state is decided
+  (#351). Breaking: existing `Artifact(...)` call sites and any
+  `record.json` missing `state` now fail validation; `RunRecord.schema_version`
+  itself is untouched, since no code re-loads persisted records into this
+  model directly.
+
 ## [0.5.0] — 2026-09-23
 
 ### Added

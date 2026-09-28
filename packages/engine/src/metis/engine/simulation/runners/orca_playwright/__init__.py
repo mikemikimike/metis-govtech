@@ -432,6 +432,7 @@ class OrcaPlaywrightRunner(Runner):
                             .relative_to(self._experiment_root.resolve())
                             .as_posix()
                         )
+                        artifact.state = "received"
                     elif url.startswith(("http", "blob:")):
                         async with page.expect_download(timeout=15000) as download_info:
                             await page.evaluate(
@@ -455,6 +456,7 @@ class OrcaPlaywrightRunner(Runner):
                             .relative_to(self._experiment_root.resolve())
                             .as_posix()
                         )
+                        artifact.state = "received"
             except Exception as exc:
                 logger.warning(
                     "[playwright-runner] Download failed for '%s' (%s): %s",

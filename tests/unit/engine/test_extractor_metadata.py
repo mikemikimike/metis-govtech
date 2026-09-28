@@ -44,16 +44,19 @@ def test_execution_metadata_reaches_metric_metadata(tmp_path: Path) -> None:
             name="slide2.png",
             at_turn=1,
             path="out/slide2.png",
+            state="received",
         ),
         Artifact(
             name="deck.pptx",
             at_turn=1,
             path="out/deck.pptx",
+            state="received",
         ),
         Artifact(
             name="slide1.png",
             at_turn=0,
             path="out/slide1.png",
+            state="received",
         ),
     ]
 
@@ -97,12 +100,14 @@ def test_fixture_images_are_excluded_from_slide_refs(tmp_path: Path) -> None:
             source="fixture",
             at_turn=1,
             path="fixtures/uploaded.png",
+            state="received",
         ),
         Artifact(
             name="delivered.png",
             source="target",
             at_turn=2,
             path="out/delivered.png",
+            state="received",
         ),
     ]
 
@@ -145,7 +150,7 @@ def test_metadata_artifacts_carry_absolute_resolved_path(tmp_path: Path) -> None
     """
     lf = _make_langfuse([_make_trace("t1", "s1")])
     artifacts = [
-        Artifact(name="deck.pptx", path="out/deck.pptx", at_turn=1),
+        Artifact(name="deck.pptx", path="out/deck.pptx", at_turn=1, state="received"),
     ]
     (tmp_path / "out").mkdir()
     (tmp_path / "out" / "deck.pptx").write_bytes(b"PK\x03\x04")
