@@ -33,6 +33,8 @@ type BinaryResponse<O, Status extends PropertyKey = 200> = O extends {
 type StartOperation = operations["start_api_v1_wizard_interview_start_post"];
 type TurnOperation = operations["turn_api_v1_wizard_interview_turn_post"];
 type EndOperation = operations["end_api_v1_wizard_interview_end_post"];
+type ExtractDocumentsOperation =
+  operations["extract_document_text_api_v1_wizard_documents_extract_post"];
 type CompileOperation = operations["compile__api_v1_wizard_compile_post"];
 type MetricsOperation = operations["metrics_api_v1_metrics_get"];
 type ConfigOperation = operations["config_api_v1_wizard_config_get"];
@@ -41,6 +43,7 @@ type PackageWireRequest = Schema["Body_package_api_v1_wizard_package_post"];
 
 export type InterviewStep = Schema["InterviewStep"];
 export type Perspective = Schema["Perspective"];
+export type InterviewDocument = Schema["InterviewDocument"];
 export type PerspectiveDefinition = Schema["PerspectiveDefinition"];
 export type CapabilityCategory = Schema["CapabilityCategory"];
 export type CapabilityCategoryDefinition =
@@ -153,6 +156,7 @@ export type TurnRequest = Schema["InterviewTurnRequest"];
 export type TurnResponse = JsonResponse<TurnOperation>;
 export type EndRequest = Schema["InterviewEndRequest"];
 export type EndResponse = JsonResponse<EndOperation>;
+export type ExtractDocumentsResponse = JsonResponse<ExtractDocumentsOperation>;
 export type CompileResponse = JsonResponse<CompileOperation>;
 export type MetricsResponse = JsonResponse<MetricsOperation>;
 export type ConfigResponse = JsonResponse<ConfigOperation>;
@@ -176,7 +180,11 @@ function normalizeComponent(component: GeneratedCardComponent): CardComponent {
   if (component.type === "options")
     return { ...component, options: component.options ?? [] };
   if (component.type === "upload")
-    return { ...component, value: component.value ?? [] };
+    return {
+      ...component,
+      value: component.value ?? [],
+      available: component.available ?? [],
+    };
   return component;
 }
 
@@ -272,7 +280,7 @@ export interface InteractionEntry {
 }
 export type TranscriptEntry = InitialDescriptionEntry | InteractionEntry;
 export interface LocalInterviewRecord {
-  storage_version: 3;
+  storage_version: 4;
   id: string;
   created_at: number;
   updated_at: number;
@@ -389,12 +397,14 @@ export const api = {
     description: string,
     capabilityEvidence: CapabilityEvidence,
     perspective: Perspective = "end_user",
+    documents: InterviewDocument[] = [],
   ) => {
     const body: StartRequest = {
       description,
       perspective,
       known_capability_ids: capabilityEvidence.known_capability_ids,
       capability_confidence: capabilityEvidence.confidence,
+      documents,
     };
     return result(
       await call<StartResponse>("/api/v1/wizard/interview/start", {
@@ -432,6 +442,14 @@ export const api = {
     }),
   metrics: () => call<MetricsResponse>("/api/v1/metrics"),
   config: () => call<ConfigResponse>("/api/v1/wizard/config"),
+  extractDocuments: (files: readonly File[]) => {
+    const form = new FormData();
+    for (const file of files) form.append("files", file, file.name);
+    return call<ExtractDocumentsResponse>("/api/v1/wizard/documents/extract", {
+      method: "POST",
+      body: form,
+    });
+  },
   package: (profile: ProductProfile, files: readonly PackageFile[]) => {
     const form = new FormData();
     form.append("profile", JSON.stringify(profile));

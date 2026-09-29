@@ -68,6 +68,60 @@ def test_start_returns_state_with_a_pending_request(client: TestClient) -> None:
     }
 
 
+def test_extract_returns_text_in_upload_order_without_server_state(
+    make_client,
+) -> None:
+    extracted = make_client().post(
+        "/api/v1/wizard/documents/extract",
+        files=[
+            ("files", ("second.txt", b"Second document", "text/plain")),
+            ("files", ("first.md", b"# First document", "text/markdown")),
+        ],
+    )
+
+    assert extracted.status_code == 200
+    assert extracted.json() == {
+        "documents": [
+            {"name": "second.txt", "text": "Second document"},
+            {"name": "first.md", "text": "# First document"},
+        ]
+    }
+
+    started = make_client().post(
+        "/api/v1/wizard/interview/start",
+        json={
+            **_start_body(),
+            "documents": [extracted.json()["documents"][0]],
+        },
+    )
+    assert started.status_code == 200
+    state = started.json()["state"]
+    assert state["context"]["opening_description"] == _start_body()["description"]
+    assert state["context"]["documents"] == [
+        {"name": "second.txt", "text": "Second document"}
+    ]
+
+
+def test_extract_returns_typed_file_error_and_no_partial_result(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/wizard/documents/extract",
+        files=[
+            ("files", ("readable.txt", b"Some text", "text/plain")),
+            ("files", ("archive.xlsx", b"not read as text", "application/zip")),
+        ],
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "type": "failure",
+        "code": "unsupported_file_type",
+        "message": "archive.xlsx: Interview text is supported only for TXT, Markdown, PDF, and DOCX files.",
+        "retryable": False,
+    }
+
+
 def test_start_records_the_chosen_perspective(client: TestClient) -> None:
     body = {
         "description": "A policy research assistant",

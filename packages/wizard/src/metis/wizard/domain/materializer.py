@@ -6,6 +6,10 @@ import re
 import unicodedata
 from typing import Any
 
+from metis.wizard.domain.documents import (
+    fixture_name_identity,
+    normalize_fixture_name,
+)
 from metis.wizard.domain.patch import PatchOrigin
 from metis.wizard.domain.profile import (
     Behaviour,
@@ -153,6 +157,7 @@ def add_scenario(
     *,
     issued_ids: set[str],
     user_typed: set[str] | None = None,
+    allowed_fixture_names: set[str] | None = None,
 ) -> Scenario:
     behaviour_ids = {b.id for b in profile.behaviours()}
     persona_ids = {p.id for p in profile.personas}
@@ -161,13 +166,32 @@ def add_scenario(
     if unknown_behaviours or unknown_personas:
         missing = sorted(unknown_behaviours | unknown_personas)
         raise ValueError(f"scenario references unknown ids: {', '.join(missing)}")
+    available = {
+        fixture_name_identity(name): normalize_fixture_name(name)
+        for name in (allowed_fixture_names or set())
+    }
+    fixtures: list[str] = []
+    seen_fixtures: set[str] = set()
+    if origin is not PatchOrigin.MODEL and draft.fixtures:
+        raise ValueError("Only a model Scenario draft can suggest fixtures.")
+    for raw_name in draft.fixtures:
+        name = normalize_fixture_name(raw_name)
+        if name != raw_name:
+            raise ValueError("scenario fixture names must already be normalized")
+        identity = fixture_name_identity(name)
+        if identity in seen_fixtures:
+            raise ValueError(f"scenario fixture '{name}' is duplicated")
+        if identity not in available:
+            raise ValueError(f"scenario fixture '{name}' is not available")
+        seen_fixtures.add(identity)
+        fixtures.append(available[identity])
     scenario = Scenario(
         id=_next_numeric(issued_ids, "S"),
         name=draft.name,
         description=draft.description,
         behaviour_refs=list(draft.behaviour_refs),
         persona_refs=list(draft.persona_refs),
-        fixtures=[],
+        fixtures=fixtures,
         num_trials=3,
     )
     _record(issued_ids, user_typed, scenario.id, origin)

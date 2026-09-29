@@ -76,14 +76,14 @@ def test_the_opening_question_costs_no_model_call() -> None:
 
 
 def test_a_model_that_never_stops_is_stopped() -> None:
-    """An interview that never ends is not recoverable; a thin first draft is."""
+    """Clarification ends at the cap, even if required details still need a form."""
     driver = StepDriver(interviewer=NeverDone())
     history = after_opening(*(f"q{i}" for i in range(clarify_turn_cap())))
     state = empty_state(history=history)
 
     driver.compose(state)
 
-    assert state.step is InterviewStep.BEHAVIOURS  # drafted regardless
+    assert state.step is InterviewStep.BEHAVIOURS
 
 
 def test_below_the_cap_it_keeps_asking() -> None:

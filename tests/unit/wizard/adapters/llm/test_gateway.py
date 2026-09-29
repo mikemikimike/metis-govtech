@@ -18,7 +18,12 @@ from metis.wizard.adapters.llm.gateway import (
 )
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import InterviewerOutputError
-from metis.wizard.contracts import ClarifyResult, Product, ProductProfile
+from metis.wizard.contracts import (
+    ClarifyResult,
+    InterviewDocument,
+    Product,
+    ProductProfile,
+)
 from tests.fixtures.wizard.context import interview_context
 
 
@@ -349,11 +354,46 @@ def test_model_schema_has_no_persisted_or_runtime_fields() -> None:
         "measured",
         "metric_fqn",
         "metric_args",
-        "fixtures",
         "num_trials",
         "origin",
         "options",
     }
+
+
+def test_raw_scenario_fixtures_are_retried_until_they_match_the_context() -> None:
+    from tests.fixtures.wizard.profiles import research_assistant
+
+    profile = research_assistant()
+    context = interview_context()
+    context.documents = [InterviewDocument(name="policy.md")]
+    bad = json.dumps(
+        {
+            "message": "Attach the file.",
+            "patches": [
+                {
+                    "op": "add",
+                    "path": "scenarios",
+                    "value": {
+                        "name": "Use the policy",
+                        "description": "Ask about a policy rule.",
+                        "behaviour_refs": ["EB-1"],
+                        "persona_refs": ["impatient-executive"],
+                        "fixtures": ["unknown.csv"],
+                    },
+                }
+            ],
+        }
+    )
+    good = bad.replace("unknown.csv", "policy.md")
+    model, completions = interviewer([bad, good])
+
+    result = model.draft_scenarios(profile, context=context)
+
+    assert len(completions.calls) == 2
+    assert result.patches[0].value.fixtures == ["policy.md"]
+    retry = completions.calls[1]["messages"]
+    assert retry[2]["content"] == bad
+    assert "unknown.csv" in retry[3]["content"]
 
 
 def test_model_origin_is_not_part_of_provider_schema() -> None:

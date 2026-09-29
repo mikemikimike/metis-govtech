@@ -31,3 +31,12 @@ def test_wizard_config_returns_package_owned_working_status(
         sum(len(category["capabilities"]) for category in body["capability_categories"])
         == 12
     )
+    assert body["document_limits"]["max_documents"] == 20
+    assert body["document_limits"]["max_extraction_file_bytes"] == 10_000_000
+    assert body["document_limits"]["max_text_characters_total"] == 80_000
+    assert body["document_limits"]["extraction_extensions"] == [
+        "docx",
+        "md",
+        "pdf",
+        "txt",
+    ]

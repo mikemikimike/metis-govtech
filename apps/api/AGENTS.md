@@ -61,6 +61,8 @@ through the engine gate. Do not repeat every driver example.
 
 ## Package-Specific Notes
 
+- The client implementation guide is `docs/guide/wizard/api.md`. Keep its state loop and examples
+  aligned with the OpenAPI document when the HTTP contract changes.
 - The API uses the same `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `INTERVIEW_MODEL` names as the
   wizard. `JUDGE_MODEL` and `USER_AGENT_MODEL` belong to the engine. For monorepo development, keep
   one active `.env` at the repository root; `apps/api/.env.example` is the API-specific template.

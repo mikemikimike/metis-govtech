@@ -251,6 +251,8 @@ def _start(
                     known_capability_ids=request.known_capability_ids,
                     confidence=request.capability_confidence,
                 ),
+                opening_description=request.description,
+                documents=request.documents,
             ),
             history=[Turn(role="user", text=request.description)],
             issued_ids=collect_profile_ids(profile),
@@ -353,6 +355,20 @@ def _finish(
     working.pending = None
     gaps = _completion_gaps(working.profile)
     if working.step is InterviewStep.DONE and not gaps:
+        if not original.confirmed and working.context.documents:
+            # Early fixture names and model suggestions are proposals. Even a complete
+            # Profile must pass through the existing Scenario review before it is confirmed.
+            working.step = InterviewStep.SCENARIOS
+            try:
+                working.pending = driver.compose(working)
+            except InterviewerOutputError:
+                return _model_unavailable(original)
+            except Exception as exc:
+                return _internal_error(original, exc)
+            if driver.model_error is not None:
+                return _model_unavailable(original)
+            _record_assistant(working)
+            return _awaiting(working)
         working.confirmed = True
         return _done(working)
     return InterviewFailure(

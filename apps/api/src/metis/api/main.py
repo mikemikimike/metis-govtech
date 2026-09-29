@@ -34,6 +34,18 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+_OPENAPI_TAGS = [
+    {
+        "name": "wizard",
+        "description": (
+            "Drive one stateless Wizard Interview. Start returns client-held state. "
+            "For each turn, save the complete returned state, read its pending screen, and send "
+            "that state with the matching request id and response. End can return another "
+            "pending screen. Compile or package the Profile after outcome is done."
+        ),
+    }
+]
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -45,7 +57,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app(interview_handler: InterviewHandler | None = None) -> FastAPI:
     """Assemble the API for production or with an injected handler for offline tests."""
-    app = FastAPI(title="METIS API", version=__version__, lifespan=_lifespan)
+    app = FastAPI(
+        title="METIS API",
+        version=__version__,
+        lifespan=_lifespan,
+        openapi_tags=_OPENAPI_TAGS,
+    )
     if interview_handler is not None:
         app.state.wizard_dependencies = WizardDependencies(
             interview_handler=interview_handler

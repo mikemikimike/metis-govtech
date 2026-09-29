@@ -15,6 +15,9 @@ The design record lives in these files:
 - `openspec/changes/` — the active and archived proposals, designs, and delta specs. This is the
   living design record for each wizard change.
 
+The user guide starts at `docs/guide/wizard.md`. Interface-specific instructions live in
+`docs/guide/wizard/cli.md`, `docs/guide/wizard/web.md`, and `docs/guide/wizard/api.md`.
+
 ## Working style
 
 **Build the service before the frontend.** The interview lives in the application/contracts/domain
@@ -102,6 +105,14 @@ Dependencies point inward: adapters depend on application/contracts/domain, appl
 on contracts/domain, and contracts depend on domain. Adapter siblings never import one another;
 `bootstrap.py` is the sole exception because it composes the production CLI.
 
+## POC testing policy
+
+Keep tests small and focused while the wizard is a POC with no dependants. Cover the main user
+workflow and failures that would lose user data, bypass user review, or exceed processing limits.
+Use representative cases; exhaustive edge-case matrices are not a release requirement. Add a test
+only when it protects an outcome not already covered. Test count and coverage percentage are not
+goals. Reassess this policy when the wizard has released users or dependants.
+
 ## Testing
 
 `make test` runs the root `tests/` tree. The wizard's unit tests live under `tests/unit/wizard/`
@@ -111,12 +122,9 @@ fixtures under `tests/fixtures/wizard/`.
 Keep the suite organised around the wizard's stable contracts, not around the sequence of fixes
 that produced them:
 
-- Every new wizard capability needs regression coverage for its intended user outcome. A new
-  control, for example, needs a test showing that activating it performs its promised action.
 - Give each behaviour cluster one authoritative application/domain test module. Extend an existing
   parametrized workflow matrix before creating another narrowly named test.
-- A change to labels, actions, request context, or door behaviour should update the current
-  contract test and remove superseded assertions; do not retain tests as change archaeology.
+- When behaviour changes, update the existing contract tests and remove obsolete coverage.
 - Test shared interview behaviour at the driver/interview layer. Door tests should prove that the CLI
   and HTTP adapters preserve that behaviour, using representative or parametrized cases instead of
   repeating every driver example.
@@ -128,11 +136,16 @@ that produced them:
 - Multiple OpenSpec scenarios can be covered by one table-driven test. Implementation tasks do not
   each require their own test.
 
-When fixing layered behaviour, modify the authoritative test, add a parameter row if needed, and
-delete obsolete coverage in the same change. Do not add separate tests for every incidental failure
-found while building the feature, such as an unwanted popup or double-click effect. Add a new test
-function when the behaviour is a distinct part of the intended final contract, a safety invariant,
-or a boundary risk.
+Keep prompt tests lean so wording can change quickly:
+
+- Keep prompt composition coverage in `tests/unit/wizard/application/test_prompts.py`. Check
+  catalogue loading, template substitution, and required context with unique test values.
+- Avoid full-prompt snapshots and assertions on instruction sentences, examples, or prose order.
+  Wording-only edits should not require test edits. Change tests when the contract changes.
+- Test patch permissions, reference validation, and state changes at their owning layers. Do not
+  repeat prompt text assertions in gateway, driver, API, or browser tests.
+- Check model response quality with representative output review or focused evaluations. A test
+  that finds an instruction in a prompt does not prove that the model follows it.
 
 Two integration tests are gates rather than unit tests:
 
@@ -140,8 +153,8 @@ Two integration tests are gates rather than unit tests:
   actually loads, via the engine's own `_validate_inputs`. No model call anywhere in it.
 - **`tests/integration/wizard/test_slice_b_gate.py`** — the whole interview walks to DONE on `ScriptedInterviewer`,
   with no network. That stand-in in `tests/fixtures/wizard/scripted.py` is **not a throwaway**: it is
-  the regression suite for the prompts and the matcher, and the only way to exercise the
-  corridor without paying per test run. Keep it working.
+  the offline regression suite for Interview flow and matching. It does not test whether a live model
+  follows the prompts. Keep it working.
 
 `tests/fixtures/wizard/golden_experiment.yaml` is a golden file. Regenerate with
 `uv run python tests/fixtures/wizard/regenerate_golden.py` — and read the diff before

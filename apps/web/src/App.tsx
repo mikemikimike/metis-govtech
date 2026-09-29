@@ -15,6 +15,7 @@ import {
   PanelRight,
   ShieldCheck,
   UserRound,
+  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
@@ -24,12 +25,14 @@ import type {
   CapabilityConfidence,
   CapabilityEvidence,
   CapabilityId,
+  InterviewDocument,
   Perspective,
   PerspectiveDefinition,
   UserResponse,
 } from "./transport/api";
 import { api, TransportError, toSummary } from "./transport/api";
 import { Composer, Transcript } from "./Conversation";
+import { AddDocuments, DocumentTray } from "./DocumentTray";
 import { Done } from "./Done";
 import { Profile, stepPosition } from "./Profile";
 import { InterviewRail } from "./InterviewRail";
@@ -37,10 +40,16 @@ import { Button, Tooltip, cn } from "./ui";
 import {
   InterviewRepository,
   emptyRecord,
+  addFixtures,
+  fixturesForProfile,
   removeUnreferencedFixtures,
   type LocalStorageProblem,
   withProvisionalFixtures,
 } from "./storage/repository";
+import {
+  normalizeFixtureName,
+  validateFixtureSelection,
+} from "./fixture-policy";
 import { profileHasCriteria } from "./metrics";
 import { downloadArchive } from "./download";
 import { ManualAuthoringEntry, ManualForm } from "./ManualForm";
@@ -58,6 +67,10 @@ const SELECTED_INTERVIEW_KEY = "metis-web-selected-interview";
 const repository = new InterviewRepository();
 type WizardConfig = Awaited<ReturnType<typeof api.config>>;
 type OpeningPhase = "describe" | "capabilities";
+type OpeningDocumentRead =
+  | { status: "reading" | "not_read" | "kept" }
+  | { status: "read"; text: string }
+  | { status: "failed"; message: string };
 export type WizardConfigState =
   | { status: "loading" }
   | { status: "ready"; config: WizardConfig }
@@ -70,6 +83,26 @@ const emptyCapabilityEvidence = (): CapabilityEvidenceDraft => ({
   known_capability_ids: [],
   confidence: null,
 });
+
+function fileExtension(name: string): string {
+  return name.split(".").at(-1)?.toLowerCase() ?? "";
+}
+
+function unicodeLength(value: string): number {
+  return Array.from(value).length;
+}
+
+async function extractOpeningDocuments(
+  file: File,
+  maxFileBytes: number,
+): Promise<string> {
+  if (file.size > maxFileBytes)
+    throw new Error(`${file.name} is larger than the text-reading limit.`);
+  const result = await api.extractDocuments([file]);
+  const document = result.documents.find((item) => item.name === file.name);
+  if (!document) throw new Error(`No text was returned for ${file.name}.`);
+  return document.text;
+}
 
 export function completeCapabilityEvidence(
   draft: CapabilityEvidenceDraft,
@@ -121,6 +154,13 @@ export function App() {
     useState<Perspective>("end_user");
   const [openingPhase, setOpeningPhase] = useState<OpeningPhase>("describe");
   const [openingDescription, setOpeningDescription] = useState("");
+  const [openingDocuments, setOpeningDocuments] = useState<File[]>([]);
+  // An extraction response belongs only to the opening session that requested it.
+  const openingGeneration = useRef(0);
+  const [documentTrayOpen, setDocumentTrayOpen] = useState(false);
+  const [openingDocumentReads, setOpeningDocumentReads] = useState<
+    Record<string, OpeningDocumentRead>
+  >({});
   const [capabilityEvidence, setCapabilityEvidence] =
     useState<CapabilityEvidenceDraft>(emptyCapabilityEvidence);
   const [error, setError] = useState<string | null>(null);
@@ -245,14 +285,111 @@ export function App() {
     [showError],
   );
   const startNew = useCallback(() => {
+    openingGeneration.current += 1;
     setManualOpen(false);
     setRecord(null);
     setError(null);
     setRetryIntent(null);
     setOpeningPhase("describe");
     setOpeningDescription("");
+    setOpeningDocuments([]);
+    setDocumentTrayOpen(false);
+    setOpeningDocumentReads({});
     setCapabilityEvidence(emptyCapabilityEvidence());
     forgetSelectedInterview();
+  }, []);
+
+  const addOpeningDocuments = useCallback(
+    (files: readonly File[]) => {
+      try {
+        if (
+          wizardConfig.status !== "ready" ||
+          !wizardConfig.config.document_limits
+        )
+          throw new Error("Document limits are not available yet.");
+        const limits = wizardConfig.config.document_limits;
+        const names = validateFixtureSelection(files, openingDocuments, limits);
+        const normalized = files.map((file, index) => {
+          const name = names[index] ?? normalizeFixtureName(file.name);
+          return name === file.name
+            ? file
+            : new File([file], name, {
+                type: file.type,
+                lastModified: file.lastModified,
+              });
+        });
+        const reads: Record<string, OpeningDocumentRead> = {};
+        for (const file of normalized) {
+          const canRead = limits.extraction_extensions?.includes(
+            fileExtension(file.name),
+          );
+          reads[file.name] = !canRead
+            ? { status: "not_read" }
+            : file.size > limits.max_extraction_file_bytes
+              ? {
+                  status: "failed",
+                  message: "This file is larger than the text-reading limit.",
+                }
+              : { status: "reading" };
+        }
+        setOpeningDocuments((current) => [...current, ...normalized]);
+        setOpeningDocumentReads((current) => ({ ...current, ...reads }));
+        setError(null);
+        setRetryIntent(null);
+        for (const file of normalized) {
+          if (reads[file.name]?.status !== "reading") continue;
+          const generation = openingGeneration.current;
+          void extractOpeningDocuments(
+            file,
+            limits.max_extraction_file_bytes,
+          ).then(
+            (text) => {
+              if (generation !== openingGeneration.current) return;
+              setOpeningDocumentReads((current) => ({
+                ...current,
+                [file.name]: { status: "read", text },
+              }));
+            },
+            (cause: unknown) => {
+              if (generation !== openingGeneration.current) return;
+              setOpeningDocumentReads((current) => ({
+                ...current,
+                [file.name]: {
+                  status: "failed",
+                  message: errorMessage(cause),
+                },
+              }));
+            },
+          );
+        }
+      } catch (cause) {
+        setError(errorMessage(cause));
+        setRetryIntent(null);
+      }
+    },
+    [openingDocuments, wizardConfig],
+  );
+
+  const removeOpeningDocument = useCallback((name: string) => {
+    setOpeningDocuments((current) =>
+      current.filter((file) => file.name !== name),
+    );
+    setOpeningDocumentReads((current) => {
+      const next = { ...current };
+      delete next[name];
+      return next;
+    });
+    setError(null);
+    setRetryIntent(null);
+  }, []);
+
+  const keepOpeningDocumentWithoutReading = useCallback((name: string) => {
+    setOpeningDocumentReads((current) => ({
+      ...current,
+      [name]: { status: "kept" },
+    }));
+    setError(null);
+    setRetryIntent(null);
   }, []);
 
   const beginWithMessage = useCallback(
@@ -270,15 +407,63 @@ export function App() {
       setError(null);
       setRetryIntent(null);
       try {
-        const result = await api.start(description, evidence, perspective);
-        const next = emptyRecord(
+        const limits =
+          wizardConfig.status === "ready"
+            ? wizardConfig.config.document_limits
+            : undefined;
+        if (openingDocuments.length > 0 && !limits)
+          throw new Error("Document limits are not available yet.");
+        if (limits) validateFixtureSelection(openingDocuments, [], limits);
+        const unresolved = openingDocuments.filter((file) => {
+          const status = openingDocumentReads[file.name]?.status;
+          return status === "reading" || status === "failed";
+        });
+        if (unresolved.length > 0) {
+          setOpeningPhase("describe");
+          setDocumentTrayOpen(true);
+          setError(
+            "Wait for files to finish reading. For a file that could not be read, choose Keep without reading or remove it.",
+          );
+          return;
+        }
+        const totalText = openingDocuments.reduce((total, file) => {
+          const read = openingDocumentReads[file.name];
+          return (
+            total + (read?.status === "read" ? unicodeLength(read.text) : 0)
+          );
+        }, 0);
+        if (limits && totalText > limits.max_text_characters_total) {
+          setOpeningPhase("describe");
+          setDocumentTrayOpen(true);
+          setError(
+            `Document text is above ${limits.max_text_characters_total.toLocaleString()} characters. Remove a file or keep it without reading.`,
+          );
+          return;
+        }
+        const documents: InterviewDocument[] = openingDocuments.map((file) => {
+          const read = openingDocumentReads[file.name];
+          return {
+            name: file.name,
+            ...(read?.status === "read" ? { text: read.text } : {}),
+          };
+        });
+        const result = await api.start(
+          description,
+          evidence,
+          perspective,
+          documents,
+        );
+        const started = emptyRecord(
           crypto.randomUUID(),
           result.state,
           result.stage,
           startTranscript(description, result.state),
         );
+        const next = addFixtures(started, openingDocuments);
         await repository.put(next);
         setRecord(next);
+        setOpeningDocuments([]);
+        setOpeningDocumentReads({});
         rememberSelectedInterview(next.id);
         await refreshList();
       } catch (cause) {
@@ -287,7 +472,14 @@ export function App() {
         setBusy(false);
       }
     },
-    [busy, refreshList, showError],
+    [
+      busy,
+      openingDocuments,
+      openingDocumentReads,
+      refreshList,
+      showError,
+      wizardConfig,
+    ],
   );
 
   const saveResult = useCallback(
@@ -309,7 +501,7 @@ export function App() {
     async (localRecord: LocalInterviewRecord) => {
       const archive = await api.package(
         localRecord.state.profile,
-        localRecord.fixtures,
+        fixturesForProfile(localRecord),
       );
       downloadArchive(archive);
     },
@@ -504,6 +696,13 @@ export function App() {
               setOpeningPhase("capabilities");
             }}
             onBack={() => setOpeningPhase("describe")}
+            documents={openingDocuments}
+            documentTrayOpen={documentTrayOpen}
+            onDocumentTrayOpen={setDocumentTrayOpen}
+            documentReads={openingDocumentReads}
+            onAddDocuments={addOpeningDocuments}
+            onRemoveDocument={removeOpeningDocument}
+            onKeepDocumentUnread={keepOpeningDocumentWithoutReading}
             capabilityEvidence={capabilityEvidence}
             onCapabilityEvidence={setCapabilityEvidence}
             onBegin={(description, perspective, evidence) =>
@@ -589,6 +788,13 @@ type OpeningScreenProps = {
   onPerspective: (perspective: Perspective) => void;
   onContinue: (description: string) => void;
   onBack: () => void;
+  documents: File[];
+  documentTrayOpen: boolean;
+  onDocumentTrayOpen: (open: boolean) => void;
+  documentReads: Record<string, OpeningDocumentRead>;
+  onAddDocuments: (files: readonly File[]) => void;
+  onRemoveDocument: (name: string) => void;
+  onKeepDocumentUnread: (name: string) => void;
   capabilityEvidence: CapabilityEvidenceDraft;
   onCapabilityEvidence: (evidence: CapabilityEvidenceDraft) => void;
   onManualOpen: () => void;
@@ -656,6 +862,13 @@ export function OpeningScreen({
   onPerspective,
   onContinue,
   onBack,
+  documents,
+  documentTrayOpen,
+  onDocumentTrayOpen,
+  documentReads,
+  onAddDocuments,
+  onRemoveDocument,
+  onKeepDocumentUnread,
   capabilityEvidence,
   onCapabilityEvidence,
   onManualOpen,
@@ -676,17 +889,53 @@ export function OpeningScreen({
               {config.opening_question}
             </h1>
             <div className="flex flex-col gap-4">
-              <Composer
-                request={undefined}
-                busy={busy}
-                alwaysEnabled
-                leadingIcon
-                bare
-                initialText={description}
-                roomy
-                placeholder="Describe your product…"
-                onSend={onContinue}
-              />
+              <div className="flex flex-col">
+                <div className="relative z-10">
+                  <Composer
+                    request={undefined}
+                    busy={busy}
+                    alwaysEnabled
+                    leadingIcon
+                    bare
+                    initialText={description}
+                    roomy
+                    placeholder="Describe your system and attached documents…"
+                    onSend={onContinue}
+                    sourceControl={
+                      <div className="flex items-center gap-2">
+                        <AddDocuments
+                          onOpen={() => onDocumentTrayOpen(!documentTrayOpen)}
+                          disabled={busy}
+                          expanded={documentTrayOpen}
+                        />
+                        {documents.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => onDocumentTrayOpen(true)}
+                            className="text-xs text-muted-foreground hover:text-foreground"
+                          >
+                            {documents.length}{" "}
+                            {documents.length === 1 ? "document" : "documents"}
+                          </button>
+                        )}
+                      </div>
+                    }
+                  />
+                </div>
+                {documentTrayOpen && (
+                  <DocumentTray onClose={() => onDocumentTrayOpen(false)}>
+                    <InitialDocumentPicker
+                      config={config}
+                      documents={documents}
+                      documentReads={documentReads}
+                      disabled={busy}
+                      onAdd={onAddDocuments}
+                      onRemove={onRemoveDocument}
+                      onKeepWithoutReading={onKeepDocumentUnread}
+                    />
+                  </DocumentTray>
+                )}
+              </div>
               <PerspectivePicker
                 perspectives={config.perspectives}
                 selected={perspective}
@@ -749,6 +998,131 @@ export function OpeningScreen({
             </Button>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+export function InitialDocumentPicker({
+  config,
+  documents,
+  documentReads,
+  disabled,
+  onAdd,
+  onRemove,
+  onKeepWithoutReading,
+}: {
+  config: WizardConfig;
+  documents: readonly File[];
+  documentReads: Record<string, OpeningDocumentRead>;
+  disabled: boolean;
+  onAdd: (files: readonly File[]) => void;
+  onRemove: (name: string) => void;
+  onKeepWithoutReading: (name: string) => void;
+}) {
+  const limits = config.document_limits;
+  if (!limits || !limits.fixture_extensions || !limits.extraction_extensions)
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        Document limits are not available. Try again before adding files.
+      </p>
+    );
+  const fixtureExtensions = limits.fixture_extensions;
+  const totalText = documents.reduce((total, file) => {
+    const read = documentReads[file.name];
+    return total + (read?.status === "read" ? unicodeLength(read.text) : 0);
+  }, 0);
+  const textLimitExceeded = totalText > limits.max_text_characters_total;
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <label
+          className={cn(
+            "relative inline-flex items-center rounded-md border border-border px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-within:ring-2 focus-within:ring-ring",
+            disabled ? "cursor-not-allowed opacity-45" : "cursor-pointer",
+          )}
+        >
+          Choose documents
+          <input
+            type="file"
+            multiple
+            aria-label="Choose documents"
+            disabled={disabled}
+            accept={fixtureExtensions
+              .map((extension) => `.${extension}`)
+              .join(",")}
+            onChange={(event) => {
+              onAdd([...(event.currentTarget.files ?? [])]);
+              event.currentTarget.value = "";
+            }}
+            className="sr-only"
+          />
+        </label>
+        {documents.length === 0 && (
+          <span className="text-xs text-muted-foreground">No files chosen</span>
+        )}
+      </div>
+      {documents.length > 0 && (
+        <ul className="flex flex-col divide-y divide-border">
+          {documents.map((file) => {
+            const read = documentReads[file.name] ?? { status: "not_read" };
+            return (
+              <li
+                key={file.name}
+                className="flex flex-wrap items-center gap-x-4 gap-y-2 py-2"
+              >
+                <span
+                  className="min-w-0 flex-1 truncate text-sm text-foreground"
+                  title={file.name}
+                >
+                  {file.name}
+                </span>
+                <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
+                  {read.status === "failed" ? (
+                    <span className="max-w-full text-destructive">
+                      Could not read: {read.message}
+                    </span>
+                  ) : (
+                    <span aria-live="polite">
+                      {read.status === "reading"
+                        ? "Reading…"
+                        : read.status === "read"
+                          ? "Read"
+                          : read.status === "kept"
+                            ? "Kept without reading"
+                            : "Not read"}
+                    </span>
+                  )}
+                  {(read.status === "failed" ||
+                    (textLimitExceeded && read.status === "read")) && (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onKeepWithoutReading(file.name)}
+                      className="rounded-md px-2 py-1 text-foreground underline decoration-border underline-offset-2 hover:bg-background disabled:opacity-40"
+                    >
+                      Keep without reading
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={disabled || read.status === "reading"}
+                  onClick={() => onRemove(file.name)}
+                  aria-label={`Remove ${file.name}`}
+                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-background hover:text-foreground disabled:opacity-40"
+                >
+                  <X size={14} strokeWidth={1.75} aria-hidden />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+        <p>Accepted file types: {fixtureExtensions.join(", ")}.</p>
+        <p>File size: {limits.max_initial_bytes / 1_000_000} MB total.</p>
       </div>
     </div>
   );

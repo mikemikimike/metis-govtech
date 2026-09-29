@@ -3,6 +3,7 @@
 | Target Agentic System | The agentic system under evaluation, considered at a specific version or configuration. |
 | Profile | The complete evaluation specification for a **target agentic system**, comprising its **tasks** and their **behaviours**, **personas**, and **scenarios**. |
 | Interview | The wizard's guided process that builds a **profile** by asking the user a sequence of questions. |
+| Document | A user-supplied file that can inform **evaluation planning** and may be sent to the target agentic system as a **fixture** for a **scenario**. |
 | Perspective | The point of view the user answers the **Interview** from (who the evaluation is for), distinct from a **Persona**. |
 | Capability | An ability a **target agentic system** can have, drawn from the ARC framework and distinct from a **Behaviour** or **Task**. |
 | Task | A general description of what the **target agentic system** is expected to accomplish. |
@@ -12,7 +13,7 @@
 | Criterion | A specific, assessable property used to determine whether a **behaviour** was exhibited in an individual **trial**. |
 | Scenario | A concrete instantiation of a **task**, specifying the particular situation and conditions in which the agent is evaluated. |
 | Persona | A concrete simulated user whose characteristics and behaviour are relevant to an evaluation interaction. |
-| Fixture | A reusable artefact or piece of environment state used to instantiate or execute a **test case**. It may be supplied by the user or generated dynamically. |
+| Fixture | An artefact or piece of environment state supplied to a **scenario** to instantiate or execute a **test case**. It may be supplied by the user or generated dynamically. A fixture is an input, not an expected answer or scoring rule. |
 | Test Case | A complete specification of a particular evaluation condition, combining a **scenario**, a **persona** (where applicable), **fixtures**, and any conditions required for execution. |
 | Trial | One execution of a **test case** against a **target agentic system**, producing a **trace** and evaluation outputs. |
 | Run | A grouping of repeated **trials** of the same **test case**. |

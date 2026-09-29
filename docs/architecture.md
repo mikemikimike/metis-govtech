@@ -204,7 +204,7 @@ wizard.
 MUST communicate exclusively with `apps/api` via REST. MUST NOT import or depend on any Python package directly.
 The browser owns the local Interview record, fixture Blobs, and display transcript in IndexedDB. It
 sends only the client-held `InterviewState` and typed responses to lifecycle routes; fixture bytes
-are sent only for a request-scoped package operation. It MUST NOT depend on server Interview
+are sent only for request-scoped text extraction or packaging. It MUST NOT depend on server Interview
 resources, wizard static assets, or an embedded wizard runtime.
 
 It MUST offer two authoring paths: the guided Interview, and a manual form for a user who already
@@ -278,8 +278,8 @@ tests/
     └── experiment.yaml
 ```
 
-The web client workflow and its deferred features are documented in
-[`docs/guide/web.md`](guide/web.md).
+The web client workflow and its deferred features are documented in the
+[Wizard web guide](guide/wizard/web.md).
 
 ### Rules
 

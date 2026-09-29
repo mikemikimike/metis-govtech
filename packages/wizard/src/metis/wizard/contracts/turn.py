@@ -9,6 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from metis.wizard.contracts.capabilities import CapabilityId
 from metis.wizard.contracts.conversation import AnyResponse
+from metis.wizard.contracts.documents import (
+    InterviewDocument,
+    validate_interview_documents,
+)
 from metis.wizard.contracts.interview_state import (
     CapabilityConfidence,
     InterviewState,
@@ -26,6 +30,7 @@ class InterviewStartRequest(BaseModel):
     perspective: Perspective = Perspective.END_USER
     known_capability_ids: list[CapabilityId]
     capability_confidence: CapabilityConfidence
+    documents: list[InterviewDocument] = Field(default_factory=list)
 
     @field_validator("description")
     @classmethod
@@ -42,6 +47,13 @@ class InterviewStartRequest(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("known_capability_ids must not contain duplicates")
         return value
+
+    @field_validator("documents")
+    @classmethod
+    def _validate_documents(
+        cls, value: list[InterviewDocument]
+    ) -> list[InterviewDocument]:
+        return validate_interview_documents(value)
 
 
 class _InterviewStateRequest(BaseModel):

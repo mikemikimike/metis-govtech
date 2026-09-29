@@ -11,14 +11,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from metis.wizard.application.fixtures import (
-    MAX_FIXTURE_BYTES,
-    MAX_FIXTURES,
     FixtureCandidate,
     FixtureError,
     normalize_fixture_name,
     normalize_upload_name,
     validate_batch,
 )
+from metis.wizard.domain.documents import MAX_DOCUMENT_BYTES, MAX_DOCUMENTS
 
 from .experiment import to_yaml
 
@@ -143,9 +142,9 @@ def _bounded_fixture_list(
 
     items: list[SpecificationFixture] = []
     for fixture in fixtures:
-        if len(items) >= MAX_FIXTURES:
+        if len(items) >= MAX_DOCUMENTS:
             raise SpecificationError(
-                f"An experiment can contain at most {MAX_FIXTURES} fixture files."
+                f"An experiment can contain at most {MAX_DOCUMENTS} fixture files."
             )
         items.append(fixture)
     return items
@@ -182,7 +181,7 @@ def _read_fixture_stream(
     if not callable(read):
         raise SpecificationError("Fixture content must be a binary stream.")
     while True:
-        remaining = MAX_FIXTURE_BYTES - total_size
+        remaining = MAX_DOCUMENT_BYTES - total_size
         try:
             chunk = read(min(1024 * 1024, remaining + 1))
         except OSError as exc:
@@ -191,7 +190,7 @@ def _read_fixture_stream(
             raise SpecificationError("Fixture content must be binary bytes.")
         if len(chunk) > remaining:
             raise SpecificationError(
-                f"Fixture files can use at most {MAX_FIXTURE_BYTES:,} bytes in total."
+                f"Fixture files can use at most {MAX_DOCUMENT_BYTES:,} bytes in total."
             )
         if not chunk:
             return output.getvalue(), total_size

@@ -15,6 +15,7 @@ build/
 # JavaScript
 node_modules/
 *.tsbuildinfo
+.vite/
 
 # Testing
 .pytest_cache/

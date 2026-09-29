@@ -107,6 +107,8 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 - Release workflow: develop on `release/<package>/v<semver>` branch → merge to `main` → tag the merge commit (`<package>/v<semver>`)
 - Every merge to `main` MUST be tagged with a version bump for the affected package(s)
 - Each package maintains a `CHANGELOG.md` — write entries during development, not at merge time
+- When editing a changelog or preparing a PR, follow the
+  [changelog entry rules](CONTRIBUTING.md#changelog-entries) and check entries against the final PR diff.
 - **⚠️ v1 pre-release (temporary, remove at graduation):** development currently targets the long-lived
   `next` branch. There, package versions are frozen at `1.0.0a1` and changelog entries go in the root
   `CHANGELOG.next.md` — **not** the per-package `CHANGELOG.md` files. This note and every other `next`

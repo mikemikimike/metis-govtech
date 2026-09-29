@@ -22,6 +22,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/wizard/documents/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract text from Interview documents
+         * @description Read selected file streams and return text without retaining files or state.
+         */
+        post: operations["extract_document_text_api_v1_wizard_documents_extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wizard/config": {
         parameters: {
             query?: never;
@@ -74,6 +94,8 @@ export interface paths {
         /**
          * Start a wizard Interview from its opening evidence
          * @description Create client-held Interview state from the complete opening input.
+         *
+         *     Save the complete `state` from the success response. It is the state for the first turn.
          */
         post: operations["start_api_v1_wizard_interview_start_post"];
         delete?: never;
@@ -94,6 +116,9 @@ export interface paths {
         /**
          * Answer the pending request in one wizard Interview
          * @description Apply one typed response to the client's complete current Interview state.
+         *
+         *     Send the latest full state and its pending request id. Replace the saved state with the state
+         *     from each successful response.
          */
         post: operations["turn_api_v1_wizard_interview_turn_post"];
         delete?: never;
@@ -114,6 +139,8 @@ export interface paths {
         /**
          * Best-effort finish one wizard Interview
          * @description Run best-effort completion on the client's complete current Interview state.
+         *
+         *     Save the returned state. An `awaiting_response` result contains another screen to answer.
          */
         post: operations["end_api_v1_wizard_interview_end_post"];
         delete?: never;
@@ -220,6 +247,11 @@ export interface components {
              * @default false
              */
             blocking: boolean;
+        };
+        /** Body_extract_document_text_api_v1_wizard_documents_extract_post */
+        Body_extract_document_text_api_v1_wizard_documents_extract_post: {
+            /** Files */
+            files: string[];
         };
         /** Body_package_api_v1_wizard_package_post */
         Body_package_api_v1_wizard_package_post: {
@@ -353,6 +385,8 @@ export interface components {
             id: components["schemas"]["OptionId"];
             /** Value */
             value?: string[];
+            /** Available */
+            available?: string[];
         };
         /** ChatRequest */
         ChatRequest: {
@@ -479,6 +513,50 @@ export interface components {
             then: string;
         };
         /**
+         * DocumentExtractionErrorCode
+         * @description Stable causes returned when an uploaded Interview document cannot be read.
+         * @enum {string}
+         */
+        DocumentExtractionErrorCode: "too_many_documents" | "invalid_filename" | "unsupported_file_type" | "file_too_large" | "request_too_large" | "malformed_file" | "encrypted_pdf" | "empty_document" | "text_too_large";
+        /**
+         * DocumentExtractionFailure
+         * @description The existing API failure shape with a typed document error code.
+         */
+        DocumentExtractionFailure: {
+            /**
+             * Type
+             * @default failure
+             * @constant
+             */
+            type: "failure";
+            code: components["schemas"]["DocumentExtractionErrorCode"];
+            /** Message */
+            message: string;
+            /**
+             * Retryable
+             * @default false
+             */
+            retryable: boolean;
+        };
+        /**
+         * DocumentExtractionResult
+         * @description An all-or-nothing extraction response in upload order.
+         */
+        DocumentExtractionResult: {
+            /** Documents */
+            documents: components["schemas"]["ExtractedDocument"][];
+        };
+        /**
+         * ExtractedDocument
+         * @description One extracted file returned to the caller that owns the original bytes.
+         */
+        ExtractedDocument: {
+            /** Name */
+            name: string;
+            /** Text */
+            text: string;
+        };
+        /**
          * FormField
          * @description Only ever text — form input is used exactly as the user wrote it.
          */
@@ -551,6 +629,62 @@ export interface components {
             perspectives: components["schemas"]["PerspectiveDefinition"][];
             /** Capability Categories */
             capability_categories: components["schemas"]["CapabilityCategoryDefinition"][];
+            document_limits?: components["schemas"]["InterviewConfigDocumentLimits"];
+        };
+        /**
+         * InterviewConfigDocumentLimits
+         * @description File and text limits a wizard door needs before it accepts uploads.
+         */
+        InterviewConfigDocumentLimits: {
+            /**
+             * Max Documents
+             * @default 20
+             */
+            max_documents: number;
+            /**
+             * Max Initial Bytes
+             * @default 100000000
+             */
+            max_initial_bytes: number;
+            /**
+             * Max Extraction File Bytes
+             * @default 10000000
+             */
+            max_extraction_file_bytes: number;
+            /**
+             * Max Extraction Request Bytes
+             * @default 20000000
+             */
+            max_extraction_request_bytes: number;
+            /**
+             * Max Text Characters Per Document
+             * @default 40000
+             */
+            max_text_characters_per_document: number;
+            /**
+             * Max Text Characters Total
+             * @default 80000
+             */
+            max_text_characters_total: number;
+            /**
+             * Max Docx Expanded Bytes
+             * @default 50000000
+             */
+            max_docx_expanded_bytes: number;
+            /**
+             * Max Docx Archive Entries
+             * @default 2000
+             */
+            max_docx_archive_entries: number;
+            /**
+             * Max Pdf Expanded Bytes
+             * @default 50000000
+             */
+            max_pdf_expanded_bytes: number;
+            /** Fixture Extensions */
+            fixture_extensions?: string[];
+            /** Extraction Extensions */
+            extraction_extensions?: string[];
         };
         /**
          * InterviewContext
@@ -560,6 +694,23 @@ export interface components {
             /** @default end_user */
             perspective: components["schemas"]["Perspective"];
             capability_evidence: components["schemas"]["CapabilityEvidence"];
+            /**
+             * Opening Description
+             * @default
+             */
+            opening_description: string;
+            /** Documents */
+            documents?: components["schemas"]["InterviewDocument"][];
+        };
+        /**
+         * InterviewDocument
+         * @description One opening file, with extracted text when a reader supplied it.
+         */
+        InterviewDocument: {
+            /** Name */
+            name: string;
+            /** Text */
+            text?: string | null;
         };
         /**
          * InterviewEndRequest
@@ -605,6 +756,8 @@ export interface components {
             /** Known Capability Ids */
             known_capability_ids: components["schemas"]["CapabilityId"][];
             capability_confidence: components["schemas"]["CapabilityConfidence"];
+            /** Documents */
+            documents?: components["schemas"]["InterviewDocument"][];
         };
         /**
          * InterviewState
@@ -1008,6 +1161,57 @@ export interface operations {
             };
         };
     };
+    extract_document_text_api_v1_wizard_documents_extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_extract_document_text_api_v1_wizard_documents_extract_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentExtractionResult"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentExtractionFailure"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+        };
+    };
     config_api_v1_wizard_config_get: {
         parameters: {
             query?: never;
@@ -1101,7 +1305,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description The first client-held state and pending screen. */
             200: {
                 headers: {
                     [name: string]: unknown;

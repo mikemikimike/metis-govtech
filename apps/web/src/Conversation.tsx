@@ -459,7 +459,7 @@ function ComponentBlock({
   return <FormRow label={component.label}>{value}</FormRow>;
 }
 
-function FixtureField({
+export function FixtureField({
   component,
   disabled,
   onChange,
@@ -478,6 +478,14 @@ function FixtureField({
   };
 
   const names = component.value;
+  const available = component.available ?? [];
+  const toggle = (name: string, checked: boolean) => {
+    const next = checked
+      ? [...names, name]
+      : names.filter((item) => item !== name);
+    const removed = names.filter((item) => !next.includes(item));
+    onChange(next, [], removed);
+  };
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -501,6 +509,25 @@ function FixtureField({
             </li>
           ))}
         </ul>
+      )}
+      {available.length > 0 && (
+        <fieldset className="flex flex-col gap-1.5 rounded-md border border-border p-2">
+          <legend className="px-1 text-xs font-medium text-muted-foreground">
+            Available early files
+          </legend>
+          {available.map((name) => (
+            <label key={name} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={names.includes(name)}
+                disabled={disabled}
+                onChange={(event) => toggle(name, event.currentTarget.checked)}
+                className="h-4 w-4 accent-[hsl(var(--accent))]"
+              />
+              <span>{name}</span>
+            </label>
+          ))}
+        </fieldset>
       )}
       <input
         type="file"
@@ -746,6 +773,7 @@ export function Composer({
   roomy = false,
   leadingIcon = false,
   bare = false,
+  sourceControl,
 }: {
   request: WizardRequest | undefined;
   busy: boolean;
@@ -768,6 +796,7 @@ export function Composer({
   // opening screen already lays the composer inside a sized column alongside the entry cards, so
   // it should fill that column and match their width rather than re-centre itself narrower.
   bare?: boolean;
+  sourceControl?: ReactNode;
 }) {
   const [text, setText] = useState(initialText);
   const enabled = (alwaysEnabled || acceptsChat(request)) && !busy;
@@ -867,14 +896,30 @@ export function Composer({
   const pill = (
     <div
       className={cn(
-        "flex items-end gap-2 rounded-2xl border border-input bg-card p-2 pl-4",
+        "flex rounded-2xl border border-input bg-card p-2 pl-4",
+        sourceControl ? "flex-col gap-1" : "items-end gap-2",
         "transition-colors focus-within:border-accent",
         !enabled && "opacity-70",
       )}
     >
-      {leading}
-      {textarea}
-      {sendButton}
+      {sourceControl ? (
+        <>
+          <div className="flex w-full items-start gap-2">
+            {leading}
+            {textarea}
+          </div>
+          <div className="flex w-full items-center justify-between gap-2">
+            {sourceControl}
+            {sendButton}
+          </div>
+        </>
+      ) : (
+        <>
+          {leading}
+          {textarea}
+          {sendButton}
+        </>
+      )}
     </div>
   );
 

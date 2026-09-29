@@ -27,6 +27,8 @@ from metis.wizard.contracts.conversation import (
     CardText,
     CardUploadField,
     ChoiceRequest,
+    FormField,
+    FormRequest,
     Option,
     OptionId,
     ScenarioCard,
@@ -140,6 +142,23 @@ BEHAVIOUR_INSTRUCTION = (
     "Every behaviour starts selected for measurement. Clear any you don't want to measure. "
     'To leave comments, choose "Chat about it" first; the next prompt accepts text.'
 )
+
+
+def product_completion_form(profile: ProductProfile) -> FormRequest | None:
+    """Ask for required Product fields that the model did not supply."""
+    fields: list[FormField] = []
+    if not profile.product.name.strip():
+        fields.append(
+            FormField(id="product.name", label="Product name", multiline=False)
+        )
+    if not profile.product.description.strip():
+        fields.append(FormField(id="product.description", label="Product description"))
+    if not fields:
+        return None
+    return FormRequest(
+        prompt="Enter the missing product details to continue to the behaviour review.",
+        fields=fields,
+    )
 
 
 def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
@@ -449,7 +468,11 @@ def _scenario_warnings(profile: ProductProfile) -> list[Warning]:
     return warnings
 
 
-def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+def scenarios_screen(
+    profile: ProductProfile,
+    message: str,
+    available_fixture_names: list[str] | None = None,
+) -> ChoiceRequest:
     warnings = _scenario_warnings(profile)
     # The gate reads the one readiness source, not the on-screen warnings. The warnings carry
     # their own fixes and cover only what a person can act on here; readiness is the authoritative
@@ -487,9 +510,10 @@ def scenarios_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                     max=TRIALS_MAX,
                 ),
                 CardUploadField(
-                    label="Files",
+                    label="Files sent to your system",
                     id=OptionId(action="files", target=scenario.id),
                     value=list(scenario.fixtures),
+                    available=list(available_fixture_names or []),
                 ),
             ],
         )

@@ -35,6 +35,7 @@ const state: InterviewState = {
   confirmed: false,
   context: {
     perspective: "end_user",
+    opening_description: "",
     capability_evidence: { known_capability_ids: [], confidence: "low" },
   },
   history: [],
@@ -42,6 +43,64 @@ const state: InterviewState = {
   issued_ids: [],
   pending: null,
 };
+
+test("migrates saved Interviews with their description and fixture bytes", async () => {
+  const request = fakeIndexedDB.open("metis-web", 2);
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    request.onupgradeneeded = () =>
+      request.result.createObjectStore("interviews", { keyPath: "id" });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const bytes = new Blob(["policy bytes"], { type: "text/markdown" });
+  const oldRecord = {
+    ...emptyRecord("legacy-opening-files", state, "clarify", []),
+    storage_version: 3,
+    transcript: [
+      {
+        kind: "initial_description",
+        id: "initial-message",
+        description: "The opening explanation.",
+      },
+    ],
+    state: {
+      ...state,
+      context: {
+        perspective: "end_user",
+        capability_evidence: {
+          known_capability_ids: [],
+          confidence: "low",
+        },
+      },
+    },
+    fixtures: [
+      {
+        name: "policy.md",
+        type: "text/markdown",
+        size: bytes.size,
+        blob: bytes,
+      },
+    ],
+  };
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction("interviews", "readwrite");
+    transaction.objectStore("interviews").put(oldRecord);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
+
+  const migrated = await new InterviewRepository().read("legacy-opening-files");
+
+  assert.equal(migrated?.storage_version, 4);
+  assert.equal(
+    migrated?.state.context.opening_description,
+    "The opening explanation.",
+  );
+  assert.deepEqual(migrated?.state.context.documents, []);
+  assert.equal(await migrated?.fixtures[0]?.blob.text(), "policy bytes");
+  await new InterviewRepository().delete("legacy-opening-files");
+});
 
 test("local repository creates, orders, reads and deletes browser records", async () => {
   const repository = new InterviewRepository();
@@ -58,7 +117,7 @@ test("local repository creates, orders, reads and deletes browser records", asyn
     (await repository.list()).map((record) => record.id),
     ["storage-test-b", "storage-test-a"],
   );
-  assert.equal((await repository.read("storage-test-a"))?.storage_version, 3);
+  assert.equal((await repository.read("storage-test-a"))?.storage_version, 4);
   await repository.delete("storage-test-a");
   assert.equal(await repository.read("storage-test-a"), undefined);
   await repository.delete("storage-test-b");
@@ -69,7 +128,7 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
   const healthy = emptyRecord("healthy-record", state, "clarify", []);
   await repository.put(healthy);
   await new Promise<void>((resolve, reject) => {
-    const request = fakeIndexedDB.open("metis-web", 2);
+    const request = fakeIndexedDB.open("metis-web", 3);
     request.onsuccess = () => {
       const tx = request.result.transaction("interviews", "readwrite");
       tx.objectStore("interviews").put({
@@ -127,6 +186,27 @@ test("stores fixture Blobs with one local Interview and restores them", async ()
   assert.equal(restored?.fixtures[0]?.name, "policy.pdf");
   assert.equal(await restored?.fixtures[0]?.blob.text(), "fixture bytes");
   await repository.delete("fixture-record");
+});
+
+test("later uploads cannot replace an opening original with the same name", () => {
+  const started = emptyRecord(
+    "initial-name-conflict",
+    {
+      ...state,
+      context: {
+        ...state.context,
+        documents: [{ name: "policy.md" }],
+      },
+    },
+    "clarify",
+    [],
+  );
+  const initial = addFixtures(started, [new File(["original"], "policy.md")]);
+
+  assert.throws(
+    () => addFixtures(initial, [new File(["replacement"], "policy.md")]),
+    /cannot be replaced/,
+  );
 });
 
 test("fixture Blobs are isolated between local Interviews", async () => {

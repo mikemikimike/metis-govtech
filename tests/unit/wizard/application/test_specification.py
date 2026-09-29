@@ -151,6 +151,12 @@ def test_in_memory_packager_includes_unreferenced_fixtures() -> None:
         assert archive.read("fixtures/notes.txt") == b"unreferenced notes"
 
 
+@pytest.mark.parametrize("name", ["../invoice.pdf", "CON.txt", "", "bad\\name.pdf"])
+def test_in_memory_packager_rejects_invalid_scenario_references(name: str) -> None:
+    with pytest.raises(SpecificationError):
+        build_specification_archive(_document(name), [])
+
+
 def test_in_memory_packager_keeps_an_empty_fixture_directory() -> None:
     archive_bytes = build_specification_archive(_document(), [])
 
@@ -217,7 +223,7 @@ def test_in_memory_packager_rejects_excess_fixture_parts_before_reading() -> Non
 def test_in_memory_packager_reads_fixture_content_with_a_bound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(specification_module, "MAX_FIXTURE_BYTES", 8)
+    monkeypatch.setattr(specification_module, "MAX_DOCUMENT_BYTES", 8)
     stream = GuardedStream(b"123456789")
 
     with pytest.raises(SpecificationError, match="at most 8"):

@@ -182,12 +182,21 @@ class GatewayInterviewer:
             f"Last error: {last_error}"
         )
 
-    def _step(self, prompt: prompts.ModelPrompt, profile: ProductProfile) -> StepResult:
+    def _step(
+        self,
+        prompt: prompts.ModelPrompt,
+        profile: ProductProfile,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
         result, recovered = self._ask(
             prompt,
             StepResult,
             validate=lambda candidate: validate_model_patches(
-                profile, candidate.patches
+                profile,
+                candidate.patches,
+                allowed_fixture_names=set(
+                    context.document_names if context is not None else []
+                ),
             ),
         )
         # A recovered turn's intro tends to narrate the correction it just made — detail the
@@ -209,7 +218,11 @@ class GatewayInterviewer:
             prompts.clarify(profile, history, context),
             ClarifyResult,
             validate=lambda candidate: validate_model_patches(
-                profile, candidate.patches
+                profile,
+                candidate.patches,
+                allowed_fixture_names=set(
+                    context.document_names if context is not None else []
+                ),
             ),
         )
         return result
@@ -220,28 +233,30 @@ class GatewayInterviewer:
         history: list[Turn],
         context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.behaviours(profile, history, context), profile)
+        return self._step(
+            prompts.behaviours(profile, history, context), profile, context
+        )
 
     def draft_criteria(
         self,
         profile: ProductProfile,
         context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.criteria(profile, context), profile)
+        return self._step(prompts.criteria(profile, context), profile, context)
 
     def draft_personas(
         self,
         profile: ProductProfile,
         context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.personas(profile, context), profile)
+        return self._step(prompts.personas(profile, context), profile, context)
 
     def draft_scenarios(
         self,
         profile: ProductProfile,
         context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.scenarios(profile, context), profile)
+        return self._step(prompts.scenarios(profile, context), profile, context)
 
     def chat(
         self,
@@ -251,7 +266,9 @@ class GatewayInterviewer:
         target: str | None,
         context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.chat(profile, step, text, target, context), profile)
+        return self._step(
+            prompts.chat(profile, step, text, target, context), profile, context
+        )
 
     def suggest_criterion(
         self,
@@ -262,6 +279,7 @@ class GatewayInterviewer:
         return self._step(
             prompts.suggest_criterion(profile, behaviour_id, context),
             profile,
+            context,
         )
 
     # ── embeddings, for the matcher ────────────────────────────────────────

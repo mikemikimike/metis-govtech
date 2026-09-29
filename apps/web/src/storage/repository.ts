@@ -5,11 +5,12 @@ import type {
   LocalInterviewRecord,
   TranscriptEntry,
 } from "../transport/api.ts";
+import { fixtureNameIdentity } from "../fixture-policy.ts";
 
 const DB_NAME = "metis-web";
 const STORE_NAME = "interviews";
-const DB_VERSION = 2;
-const STORAGE_VERSION = 3 as const;
+const DB_VERSION = 3;
+const STORAGE_VERSION = 4 as const;
 const INTERVIEW_STEPS: readonly InterviewStep[] = [
   "clarify",
   "behaviours",
@@ -102,6 +103,44 @@ function validTranscriptEntry(value: unknown): value is TranscriptEntry {
     !!entry.request &&
     typeof entry.request === "object"
   );
+}
+
+function currentRecord(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
+  const rawState = value.state;
+  if (!rawState || typeof rawState !== "object") return value;
+  const state = rawState as Record<string, unknown>;
+  const rawContext = state.context;
+  if (!rawContext || typeof rawContext !== "object") return value;
+  const context = rawContext as Record<string, unknown>;
+  const openingEntry = Array.isArray(value.transcript)
+    ? value.transcript.find(
+        (entry) =>
+          !!entry &&
+          typeof entry === "object" &&
+          (entry as Record<string, unknown>).kind === "initial_description" &&
+          typeof (entry as Record<string, unknown>).description === "string",
+      )
+    : undefined;
+  return {
+    ...value,
+    storage_version: STORAGE_VERSION,
+    state: {
+      ...state,
+      context: {
+        ...context,
+        opening_description:
+          typeof context.opening_description === "string"
+            ? context.opening_description
+            : openingEntry
+              ? (openingEntry as Record<string, string>).description
+              : "",
+        documents: Array.isArray(context.documents) ? context.documents : [],
+      },
+    },
+    fixtures: Array.isArray(value.fixtures) ? value.fixtures : [],
+  };
 }
 
 const memory = new Map<string, LocalInterviewRecord>();
@@ -227,15 +266,11 @@ export class InterviewRepository {
           const current = cursor.result;
           if (!current) return;
           const value = current.value as Partial<LocalInterviewRecord>;
-          if (
-            (value as { storage_version?: number }).storage_version === 2 &&
-            !Array.isArray(value.fixtures)
-          ) {
-            current.update({
-              ...value,
-              storage_version: STORAGE_VERSION,
-              fixtures: [],
-            });
+          const storageVersion = (value as { storage_version?: number })
+            .storage_version;
+          if (storageVersion === 2 || storageVersion === 3) {
+            const row = value as unknown as Record<string, unknown>;
+            current.update(currentRecord(row));
           }
           current.continue();
         };
@@ -275,6 +310,19 @@ export function addFixtures(
 ): LocalInterviewRecord {
   const fixtures = [...record.fixtures];
   for (const file of files) {
+    const existing = fixtures.find(
+      (fixture) =>
+        fixtureNameIdentity(fixture.name) === fixtureNameIdentity(file.name),
+    );
+    const isOpeningDocument = (record.state.context.documents ?? []).some(
+      (document) =>
+        fixtureNameIdentity(document.name) === fixtureNameIdentity(file.name),
+    );
+    if (existing && isOpeningDocument) {
+      throw new Error(
+        `The initial document ${existing.name} cannot be replaced by a later upload.`,
+      );
+    }
     const next: LocalFixture = {
       name: file.name,
       type: file.type,
@@ -316,9 +364,27 @@ export function removeUnreferencedFixtures(
     record.state.profile.scenarios.flatMap((scenario) => scenario.fixtures),
   );
   const removable = new Set(names.filter((name) => !references.has(name)));
+  const openingDocuments = new Set(
+    (record.state.context.documents ?? []).map((document) =>
+      fixtureNameIdentity(document.name),
+    ),
+  );
   if (removable.size === 0) return record;
   return {
     ...record,
-    fixtures: record.fixtures.filter((fixture) => !removable.has(fixture.name)),
+    fixtures: record.fixtures.filter(
+      (fixture) =>
+        !removable.has(fixture.name) ||
+        openingDocuments.has(fixtureNameIdentity(fixture.name)),
+    ),
   };
+}
+
+export function fixturesForProfile(
+  record: LocalInterviewRecord,
+): LocalFixture[] {
+  const references = new Set(
+    record.state.profile.scenarios.flatMap((scenario) => scenario.fixtures),
+  );
+  return record.fixtures.filter((fixture) => references.has(fixture.name));
 }

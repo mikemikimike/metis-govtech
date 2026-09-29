@@ -24,13 +24,19 @@ from metis.wizard.contracts import (
     ChatResponse,
     ChoiceRequest,
     ChoiceResponse,
+    ClarifyResult,
+    FormRequest,
+    FormResponse,
+    InterviewDocument,
     Option,
     OptionId,
+    Patch,
+    PatchOp,
     Perspective,
     Product,
     ProductProfile,
 )
-from metis.wizard.contracts.interview_state import InterviewState
+from metis.wizard.contracts.interview_state import HISTORY_LIMIT, InterviewState, Turn
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import research_assistant
@@ -43,6 +49,7 @@ def _start(
     perspective=Perspective.END_USER,
     known_capability_ids=None,
     capability_confidence="low",
+    documents=None,
 ):
     return handle_interview(
         InterviewStartRequest(
@@ -52,6 +59,7 @@ def _start(
                 [] if known_capability_ids is None else known_capability_ids
             ),
             capability_confidence=capability_confidence,
+            documents=documents or [],
         ),
         interviewer=interviewer or ScriptedInterviewer(),
         matcher=None,
@@ -101,6 +109,7 @@ def test_start_records_the_raw_description_as_the_first_user_turn() -> None:
     assert isinstance(result, InterviewSuccess)
     assert result.state.history[0].role == "user"
     assert result.state.history[0].text == "A research assistant"
+    assert result.state.context.opening_description == "A research assistant"
     assert result.state.pending is not None
 
 
@@ -297,6 +306,104 @@ def test_end_finishes_a_completable_interview() -> None:
     assert result.state.confirmed
     assert result.state.pending is None
     assert result.state.profile.behaviour("EB-1").criteria[0].metric_fqn  # type: ignore[union-attr]
+
+
+def test_missing_product_details_can_be_completed_before_review() -> None:
+    class IncompleteInterviewer(ScriptedInterviewer):
+        def clarify(self, profile, history, context=None):
+            return ClarifyResult(
+                done=True,
+                message="",
+                patches=[
+                    Patch(op=PatchOp.SET, path=f"product.{key}", value="")
+                    for key in ("name", "description")
+                ],
+            )
+
+    interviewer = IncompleteInterviewer()
+    started = _start(interviewer=interviewer)
+    assert isinstance(started, InterviewSuccess)
+    assert isinstance(started.state.pending, FormRequest)
+    completed = _turn(
+        started.state,
+        FormResponse(
+            values={
+                "product.name": "Policy assistant",
+                "product.description": "Answers policy questions.",
+            }
+        ),
+        interviewer=interviewer,
+    )
+    assert isinstance(completed, InterviewSuccess)
+    assert isinstance(completed.state.pending, ChoiceRequest)
+    continued = _turn(
+        completed.state, ChoiceResponse(selected=["continue"]), interviewer=interviewer
+    )
+    assert isinstance(continued, InterviewSuccess)
+    assert continued.stage is InterviewStep.CRITERIA
+
+
+@pytest.mark.parametrize("suggested_files", [[], ["policy.pdf"]])
+def test_documents_survive_turns_and_require_file_review(
+    suggested_files: list[str],
+) -> None:
+    documents = [
+        InterviewDocument(name="policy.pdf", text="POLICY_CONTEXT_SENTINEL"),
+        InterviewDocument(name="terms.md"),
+    ]
+
+    class FixtureInterviewer(ScriptedInterviewer):
+        def clarify(self, profile, history, context=None):
+            assert context is not None and context.documents == documents
+            return super().clarify(profile, history, context)
+
+        def draft_scenarios(self, profile, context=None):
+            result = super().draft_scenarios(profile, context)
+            result.patches[0].value = result.patches[0].value.model_copy(
+                update={"fixtures": suggested_files}
+            )
+            return result
+
+    interviewer = FixtureInterviewer()
+    started = _start(interviewer=interviewer, documents=documents)
+    assert isinstance(started, InterviewSuccess)
+    state = InterviewState.model_validate_json(started.state.model_dump_json())
+    state.history = [Turn(role="user", text=f"Note {i}") for i in range(HISTORY_LIMIT)]
+    continued = _turn(
+        state,
+        ChatResponse(text="It answers policy questions."),
+        interviewer=interviewer,
+    )
+    assert isinstance(continued, InterviewSuccess)
+    assert len(continued.state.history) == HISTORY_LIMIT
+    assert continued.state.context.documents == documents
+
+    review = _end(continued.state, interviewer=interviewer, matcher=ScriptedMatcher())
+    assert isinstance(review, InterviewSuccess)
+    assert review.outcome == "awaiting_response"
+    assert review.stage is InterviewStep.SCENARIOS
+    assert not review.state.confirmed
+    assert review.state.profile.scenario("S-1").fixtures == suggested_files
+    uploads = [
+        component
+        for card in review.state.pending.cards
+        for component in card.components
+        if component.type == "upload"
+    ]
+    assert uploads and uploads[0].available == ["policy.pdf", "terms.md"]
+
+    selected = _turn(
+        review.state,
+        ChoiceResponse(values={"files:S-1": ["terms.md"]}),
+        interviewer=interviewer,
+    )
+    assert isinstance(selected, InterviewSuccess)
+    assert selected.state.profile.scenario("S-1").fixtures == ["terms.md"]
+    done = _turn(
+        selected.state, ChoiceResponse(selected=["continue"]), interviewer=interviewer
+    )
+    assert isinstance(done, InterviewSuccess)
+    assert done.outcome == "done" and done.state.confirmed
 
 
 def test_final_continue_completes_a_ready_specification() -> None:
