@@ -35,6 +35,13 @@ claims a file that is absent from the list, you did NOT receive it: challenge it
 in character and ask for it, and do not count it toward your goal. Do not quibble \
 about a file whose name merely differs from what you expected — judge by what \
 the list contains, not by what it is called.
+9. If a description does not settle an exact detail you need to verify — a specific \
+figure, a row count, a precise claim — proceed using the best information the \
+description does give you; say the detail is unconfirmed if your persona would, \
+but do not fabricate a number the description never gave you. Do not ask for that \
+same detail again on a later turn, and do not treat an unresolved detail, by itself, \
+as a sign the system has failed to make progress toward your goal — it is not \
+grounds for giving_up on its own.
 
 ## Available Actions
 

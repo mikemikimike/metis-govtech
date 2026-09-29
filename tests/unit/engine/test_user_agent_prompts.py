@@ -438,6 +438,41 @@ class TestRegistryIsAuthoritative:
         assert _render_artifacts(artifacts) == ""
 
 
+class TestUnresolvedDetailGuidance:
+    def test_rule_8_tells_persona_to_proceed_on_best_available_info(self) -> None:
+        """A description that doesn't state an exact figure must not stall the turn."""
+        rules = SYSTEM_PROMPT_TEMPLATE.lower()
+        assert "does not settle" in rules
+        assert "best information" in rules
+        assert "do not ask for that same detail again" in rules
+
+    def test_rule_8_rules_out_giving_up_over_one_unresolved_detail(self) -> None:
+        """An unresolved detail alone must not end the run early."""
+        rules = SYSTEM_PROMPT_TEMPLATE.lower()
+        assert "not grounds for giving_up on its own" in rules
+
+    def test_rule_8_original_guarantees_survive(self) -> None:
+        """The #337 closure/exhaustiveness guarantees must still hold after this addition."""
+        rules = SYSTEM_PROMPT_TEMPLATE.lower()
+        assert "every file" in rules
+        assert "pasted into the chat" in rules
+        assert "a real user opens the file" in rules
+
+    def test_rule_8_addition_stays_before_available_actions(self) -> None:
+        """The new sentences belong to rule 8, not spilled past the next heading."""
+        rules = SYSTEM_PROMPT_TEMPLATE.lower()
+        before_heading = rules.split("## available actions")[0]
+        assert "does not settle" in before_heading
+        assert "not grounds for giving_up on its own" in before_heading
+
+    def test_rule_8_addition_does_not_demand_fabricated_figures(self) -> None:
+        """Proceeding on best-available info must not read as license to invent a number."""
+        rules = SYSTEM_PROMPT_TEMPLATE.lower()
+        assert "make up" not in rules
+        assert "invent" not in rules
+        assert "guess a" not in rules
+
+
 class TestRegistryKeysOnIdentity:
     """The cumulative registry dedupes by target-side identity, not by uuid.
 
