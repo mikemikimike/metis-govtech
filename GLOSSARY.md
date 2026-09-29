@@ -1,16 +1,16 @@
 | Term | Definition |
 |------|------------|
 | Target Agentic System | The agentic system under evaluation, considered at a specific version or configuration. |
-| Profile | The complete evaluation specification for a **target agentic system**, comprising its **features** and their **behaviours**, **personas**, and **scenarios**. |
+| Profile | The complete evaluation specification for a **target agentic system**, comprising its **features** and their **expected behaviours**, **personas**, and **scenarios**. |
 | Interview | The wizard's guided process that builds a **profile** by asking the user a sequence of questions. |
 | Document | A user-supplied file that can inform **evaluation planning** and may be sent to the target agentic system as a **fixture** for a **scenario**. |
 | Perspective | The point of view the user answers the **Interview** from (who the evaluation is for), distinct from a **Persona**. |
-| Capability | An ability a **target agentic system** can have, drawn from the ARC framework and distinct from a **Behaviour** or **Feature**. |
+| Capability | An ability a **target agentic system** can have, drawn from the ARC framework and distinct from an **Expected Behaviour** or **Feature**. |
 | Feature | A product function or user workflow that the **target agentic system** is expected to perform, such as creating slide decks. |
-| Baseline | A scope qualifier for a **behaviour**, **criterion**, or **grader** that can be applied to every **target agentic system**. Baseline graders are provided by the library. |
-| Feature-specific | A scope qualifier for a **behaviour**, **criterion**, or **grader** arising from the requirements, constraints, or operating context of a particular **feature**. A feature-specific grader is provided by the library where one exists, or otherwise authored directly from its **criterion** as a *custom* grader. |
-| Behaviour | An expected **behaviour** describing how the agent should act while performing a **feature**. |
-| Criterion | A specific, assessable property used to determine whether a **behaviour** was exhibited in an individual **trial**. |
+| Baseline | A scope qualifier for an **expected behaviour**, **criterion**, or **grader** that can be applied to every **target agentic system**. Baseline graders are provided by the library. |
+| Feature-specific | A scope qualifier for an **expected behaviour**, **criterion**, or **grader** arising from the requirements, constraints, or operating context of a particular **feature**. A feature-specific grader is provided by the library where one exists, or otherwise authored directly from its **criterion** as a *custom* grader. |
+| Expected Behaviour | An expected behaviour describing how the agent should act while performing a **feature**. |
+| Criterion | A specific, assessable property used to determine whether an **expected behaviour** was exhibited in an individual **trial**. |
 | Scenario | A concrete instantiation of a **feature**, specifying the particular situation and conditions in which the agent is evaluated. |
 | Persona | A concrete simulated user whose characteristics and behaviour are relevant to an evaluation interaction. |
 | Fixture | An artefact or piece of environment state supplied to a **scenario** to instantiate or execute a **test case**. It may be supplied by the user or generated dynamically. A fixture is an input, not an expected answer or scoring rule. |
@@ -27,14 +27,16 @@
 | Test-Time Evals | Evaluations that measure a target model or **target agentic system** against curated datasets before release. |
 | Run-Time Evals | Evaluations that continuously measure live traffic and real user interaction as a target model or **target agentic system** runs. |
 
+Note: **Expected Behaviour** corresponds to the `Behaviour` data models.
+
 ## Baseline and Feature-specific
 
-**Baseline** — applies to any **target agentic system**, whatever the feature. Baseline behaviour should include baseline criteria and graders. Baseline graders should come from the library.
+**Baseline** — applies to any **target agentic system**, whatever the feature. Baseline expected behaviour should include baseline criteria and graders. Baseline graders should come from the library.
 
 - fluency — is the response grammatically correct and natural?
 - instruction following — did the agent do what the user asked?
 
-**Feature-specific** — exists only because of the feature. Feature-specific behaviour should include feature-specific criteria and graders. These may or may not come from the library.
+**Feature-specific** — exists only because of the feature. Feature-specific expected behaviour should include feature-specific criteria and graders. These may or may not come from the library.
 
 Example: a slide-making agent.
 
