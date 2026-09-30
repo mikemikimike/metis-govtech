@@ -192,6 +192,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   without `ensure_ascii=False` (or are ASCII config/schema files), so the
   files were already pure ASCII — this is defense-in-depth, not a
   live-bug fix, for consistency with the writers that are.
+- **`tc.metadata["artifacts"]` is scoped to artifacts known by that turn, not
+  the full session list (issue #383).** Every turn's `LLMTestCase` in
+  `extractor/langfuse.py` used to see the entire session artifact list,
+  unfiltered by `at_turn` — a turn-1 test case could see a file the target
+  hadn't produced until turn 5. Any metric reading `metadata["artifacts"]` to
+  reason about what was available at a turn was silently working with future
+  information. The per-turn assignment now keeps an artifact only when
+  `at_turn is None` (session-level recoveries with no turn attribution) or
+  `at_turn <= turn_idx`, mirroring the scoping `_latest_target_pdf_path`
+  already applies at the metric layer.
 
 ## [0.13.0] — 2026-09-23
 

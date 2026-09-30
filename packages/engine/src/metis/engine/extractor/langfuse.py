@@ -636,6 +636,7 @@ def fetch_by_session_id(
             tc.metadata["artifacts"] = [
                 a.model_copy(update={"path": _local(a)}).model_dump()
                 for a in session_artifacts
+                if a.at_turn is None or a.at_turn <= turn_idx
             ]
         if scenario is not None and tc.metadata is not None:
             tc.metadata["scenario"] = scenario
