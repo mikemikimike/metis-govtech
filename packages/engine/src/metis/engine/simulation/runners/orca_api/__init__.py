@@ -13,9 +13,14 @@ is retried with backoff for ``store_retry_window_s`` and only then becomes a
 turn failure, a 401 is run-level auth loss, a 404 on a session the runner was
 driving is run-recoverable (the experiment runner retries with a fresh
 session), and a 409 ``turn_in_progress`` polls the named turn instead of
-resubmitting. A turn still running at the scenario's ``response_wait_ms`` is
-cancelled on Orca before the response timeout is raised, and teardown cancels
-any turn still in flight so no spend continues after the run ends.
+resubmitting. A 503 or transport error surfacing while polling a turn this
+run's own submit minted is reported as delivered (I5): the message reached
+Orca, and only the status read failed. That guarantee does not extend to a
+turn adopted via 409 — it can be an unrelated, still-draining prior turn
+(see the cancel note below) — so the same failure there leaves delivery
+unconfirmed. A turn still running at the scenario's ``response_wait_ms`` is
+cancelled on Orca before the response timeout is raised, and teardown
+cancels any turn still in flight so no spend continues after the run ends.
 
 Orca's typed forms (a ``needs_input`` digest) are offered to the persona as
 one action slot per field — ``kind`` is Orca's field type verbatim and
@@ -70,10 +75,12 @@ from metis.core.logging import get_logger
 
 from ...exceptions import (
     AuthLossError,
+    PostSubmissionObservationError,
     ResponseTimeoutError,
     SimulationError,
     TargetSessionEnded,
     TargetSessionLostError,
+    TargetUnavailableError,
 )
 from ...runner import Runner
 from ...types import (
@@ -287,7 +294,7 @@ class OrcaApiRunner(Runner):
         if isinstance(body, Observation):
             return body
         try:
-            turn_id = await self._submit(body)
+            turn_id, submit_confirmed = await self._submit(body)
         except _StaleAttachment as exc:
             return self._recover_stale_attachments(exc.names)
         # Only a submitted attachment stops being offered. Capture the names
@@ -298,7 +305,7 @@ class OrcaApiRunner(Runner):
         newly_attached = list(self._attaching)
         self._attached.update(self._attaching)
         self._clear_attaching()
-        digest = await self._poll_until_settled(turn_id)
+        digest = await self._poll_until_settled(turn_id, submit_confirmed)
         observation = await self._build_observation(digest)
         for name in newly_attached:
             path = self._fixture_path(name)
@@ -539,7 +546,7 @@ class OrcaApiRunner(Runner):
             body["sessionId"] = self._session_id
         return body
 
-    async def _submit(self, body: dict[str, Any]) -> str:
+    async def _submit(self, body: dict[str, Any]) -> tuple[str, bool]:
         """``POST /chat``; records a newly minted session id; returns the turn id.
 
         Rate limiting and the key-store outage are absorbed by :meth:`_request`.
@@ -549,6 +556,17 @@ class OrcaApiRunner(Runner):
         would repeat — run-level; a 404 is attributed by what was sent (see
         :meth:`_attribute_submit_404`); a 422 is a schema divergence. Anything
         else unmapped raises ``httpx.HTTPStatusError``.
+
+        The second return value is ``True`` only when *this call itself*
+        caused Orca to mint a new turn for the current message — the normal
+        202 path, where the response body's ``turnId`` is that new turn. On a
+        409 it is ``False``: this call minted nothing: the named turn already
+        existed before this request was sent, and it can be an unrelated turn
+        still draining after a best-effort cancel (see
+        :meth:`_cancel_inflight_turn`) rather than one carrying the current
+        message. Callers use it to decide whether a later digest-read failure
+        can be attributed to *this* message's delivery (see
+        :meth:`_fetch_digest`).
 
         :raises _StaleAttachment: the 404 is attributable to an attached file.
         """
@@ -577,7 +595,7 @@ class OrcaApiRunner(Runner):
                     turn_id,
                 )
                 self._inflight_turn_id = turn_id
-                return turn_id
+                return turn_id, False
             # Other 409 bodies (e.g. ``no_form_pending``) are not transport
             # races; they fall through to raise_for_status.
         if response.status_code == 404:
@@ -599,7 +617,7 @@ class OrcaApiRunner(Runner):
             self._session_id = submitted["sessionId"]
             logger.info("[orca-api-runner] Session minted: %s", self._session_id)
         self._inflight_turn_id = turn_id
-        return turn_id
+        return turn_id, True
 
     def _attribute_submit_404(self, body: dict[str, Any]) -> None:
         """Decide whether a submit 404 was the session or an attached file.
@@ -667,15 +685,18 @@ class OrcaApiRunner(Runner):
             delivered=False,
         )
 
-    async def _poll_until_settled(self, turn_id: str) -> dict[str, Any]:
+    async def _poll_until_settled(
+        self, turn_id: str, submit_confirmed: bool
+    ) -> dict[str, Any]:
         """Poll the turn's digest until its status leaves ``running``.
 
         At the response ceiling the turn is cancelled on Orca *before* the
-        timeout is raised, so an abandoned turn stops spending.
+        timeout is raised, so an abandoned turn stops spending. ``submit_confirmed``
+        is threaded to :meth:`_fetch_digest` unchanged — see :meth:`_submit`.
         """
         try:
             digest = await poll_until(
-                lambda: self._fetch_digest(turn_id),
+                lambda: self._fetch_digest(turn_id, submit_confirmed),
                 lambda d: d.get("status") != "running",
                 interval_s=self._config.poll_interval_ms / 1000,
                 deadline_s=self._response_wait_ms / 1000,
@@ -1115,8 +1136,52 @@ class OrcaApiRunner(Runner):
         """Orca's ``sessionId`` — the key assessment uses to fetch Langfuse traces."""
         return self._session_id
 
-    async def _fetch_digest(self, turn_id: str) -> dict[str, Any]:
-        response = await self._request("GET", f"chat/{turn_id}")
+    async def _fetch_digest(
+        self, turn_id: str, submit_confirmed: bool = False
+    ) -> dict[str, Any]:
+        """``GET /chat/{turn_id}``, for a turn a prior submit already returned.
+
+        Called from :meth:`_poll_until_settled` (the normal loop, which always
+        passes ``submit_confirmed``) and :meth:`_confirm_cancelled` (an
+        already-failing path, which swallows every ``SimulationError`` as
+        best-effort and leaves it at its conservative default).
+
+        ``submit_confirmed`` is ``True`` only when *this* run's own submit
+        minted ``turn_id`` as a new turn (the normal 202 path), rather than
+        adopting an already-existing one from a 409 ``turn_in_progress``. Only
+        then does a 503 that outlasts the retry window, or a raw transport
+        error, unambiguously mean the current message reached Orca and only
+        this status read failed — the opposite delivery fact from the same
+        error at :meth:`_submit`. It is re-raised as
+        :class:`PostSubmissionObservationError` so the orchestrator's I5
+        delivery disclosure reports ``delivered=True`` instead of the
+        submit-lane default of ``False`` (issue #374).
+
+        When the turn was adopted via 409, that guarantee does not hold — the
+        named turn already existed before this submit and can belong to an
+        unrelated, still-draining prior message (see
+        :meth:`_cancel_inflight_turn`), so the current message's delivery is
+        unconfirmed and the raw ``TargetUnavailableError`` propagates, falling
+        back to the submit lane's ``delivered=False`` default.
+        """
+        try:
+            response = await self._request("GET", f"chat/{turn_id}")
+        except TargetUnavailableError as exc:
+            if not submit_confirmed:
+                logger.warning(
+                    "[orca-api-runner] Digest read for turn %s failed; this "
+                    "turn was adopted via 409 turn_in_progress, so the "
+                    "current message's delivery is unconfirmed: %s",
+                    turn_id,
+                    exc,
+                )
+                raise
+            logger.warning(
+                "[orca-api-runner] Digest read for turn %s failed after submit: %s",
+                turn_id,
+                exc,
+            )
+            raise PostSubmissionObservationError(str(exc)) from exc
         if response.status_code == 404:
             # Orca holds a digest only ~10 minutes after its last poll, then
             # the turnId 404s. The normal loop polls every few seconds and

@@ -137,6 +137,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   comes back as a failure against the action that asked for it. Error text
   scraped from the page moves to `response_notices`, where it belongs: no
   submitted action accounts for it. Fixes #320.
+- **A poll-lane 503/transport error on the Orca API runner no longer reports
+  `delivered=False` (issue #374).** `_fetch_digest` is only ever called with
+  a `turn_id` a prior submit already returned, so a 503 that outlasts the
+  retry window, or a raw transport error, while reading that turn's digest
+  means the message already reached Orca — only the follow-up status read
+  failed. It now raises `PostSubmissionObservationError` instead of the
+  shared `TargetUnavailableError` the submit lane still raises for the same
+  failure, so the orchestrator's I5 delivery disclosure reports the
+  first-hand fact instead of the submit-lane default. That guarantee holds
+  only when the current submit's own request minted a new turn — `_submit`
+  now reports this via a `submit_confirmed` flag threaded through
+  `_poll_until_settled`/`_fetch_digest`, because a turn adopted via 409
+  `turn_in_progress` minted nothing: it names a turn that already existed
+  before this submit, and can be an unrelated, still-draining prior turn
+  (one whose best-effort cancel didn't land before the next submit), in
+  which case the same failure leaves delivery unconfirmed and the raw
+  `TargetUnavailableError` propagates instead.
 
 ## [0.13.0] — 2026-09-23
 

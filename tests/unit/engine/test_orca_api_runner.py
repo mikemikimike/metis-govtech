@@ -219,7 +219,7 @@ async def test_send_turn_appends_submitted_fixtures_as_artifacts(
         return {"message": message}
 
     monkeypatch.setattr(runner, "_build_submit_body", fake_build_submit_body)
-    monkeypatch.setattr(runner, "_submit", AsyncMock(return_value="turn-1"))
+    monkeypatch.setattr(runner, "_submit", AsyncMock(return_value=("turn-1", True)))
     monkeypatch.setattr(runner, "_poll_until_settled", AsyncMock(return_value={}))
     monkeypatch.setattr(
         runner, "_build_observation", AsyncMock(return_value=Observation(text="ok"))
@@ -250,7 +250,7 @@ async def test_submitted_fixture_artifact_carries_the_file_id(
         return {"message": message}
 
     monkeypatch.setattr(runner, "_build_submit_body", fake_build_submit_body)
-    monkeypatch.setattr(runner, "_submit", AsyncMock(return_value="turn-1"))
+    monkeypatch.setattr(runner, "_submit", AsyncMock(return_value=("turn-1", True)))
     monkeypatch.setattr(runner, "_poll_until_settled", AsyncMock(return_value={}))
     monkeypatch.setattr(
         runner, "_build_observation", AsyncMock(return_value=Observation(text="ok"))
@@ -294,7 +294,7 @@ async def test_send_turn_appends_no_fixtures_when_none_submitted(
         return {"message": message}
 
     monkeypatch.setattr(runner, "_build_submit_body", fake_build_submit_body)
-    monkeypatch.setattr(runner, "_submit", AsyncMock(return_value="turn-1"))
+    monkeypatch.setattr(runner, "_submit", AsyncMock(return_value=("turn-1", True)))
     monkeypatch.setattr(runner, "_poll_until_settled", AsyncMock(return_value={}))
     monkeypatch.setattr(
         runner, "_build_observation", AsyncMock(return_value=Observation(text="ok"))
@@ -544,3 +544,171 @@ class TestIdentityDedupe:
         assert len(downloads) == 1
         assert len(first.artifacts) == 1
         assert second.artifacts == []
+
+
+class TestFetchDigestPollLaneDelivery:
+    """A TargetUnavailableError from the digest read means the turn already
+    reached Orca (I5) only when this run's own submit minted the turn —
+    ``submit_confirmed=True``. A turn adopted via 409 turn_in_progress can be
+    an unrelated, still-draining prior turn, so the same failure there must
+    leave delivery unconfirmed instead."""
+
+    @pytest.mark.asyncio
+    async def test_becomes_post_submission_observation_error_when_submit_confirmed(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        from metis.engine.simulation.exceptions import (
+            PostSubmissionObservationError,
+            TargetUnavailableError,
+        )
+
+        runner, _ = _make_runner(tmp_path)
+        monkeypatch.setattr(
+            runner,
+            "_request",
+            AsyncMock(
+                side_effect=TargetUnavailableError(
+                    "Orca key store unavailable (503) for longer than 30 s"
+                )
+            ),
+        )
+
+        with pytest.raises(PostSubmissionObservationError) as excinfo:
+            await runner._fetch_digest("turn-1", submit_confirmed=True)
+
+        assert "503" in str(excinfo.value)
+
+    @pytest.mark.asyncio
+    async def test_stays_target_unavailable_when_turn_was_adopted_via_409(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """A turn adopted via 409 turn_in_progress may belong to an unrelated
+        prior message (e.g. one whose cancel didn't land in time), so a
+        digest-read failure on it must not be promoted to delivered=True."""
+        from metis.engine.simulation.exceptions import TargetUnavailableError
+
+        runner, _ = _make_runner(tmp_path)
+        monkeypatch.setattr(
+            runner,
+            "_request",
+            AsyncMock(
+                side_effect=TargetUnavailableError(
+                    "Orca key store unavailable (503) for longer than 30 s"
+                )
+            ),
+        )
+
+        with pytest.raises(TargetUnavailableError) as excinfo:
+            await runner._fetch_digest("turn-1", submit_confirmed=False)
+
+        assert "503" in str(excinfo.value)
+
+
+class TestPollLaneUnavailabilityDeliversTrue:
+    """End-to-end through the real 503-retry-window logic in _transport.py."""
+
+    @staticmethod
+    def _stalled_digest_runner(tmp_path: Path) -> OrcaApiRunner:
+        config = OrcaApiRunnerConfig(
+            base_url="https://orca.example.com",
+            api_key="test-key",
+            poll_interval_ms=1,
+            store_retry_window_s=0.0,
+        )
+        client = httpx.AsyncClient(
+            base_url="https://orca.example.com/api/v1/",
+            transport=httpx.MockTransport(lambda request: httpx.Response(503)),
+        )
+        for directory in ("fixtures", "run"):
+            (tmp_path / directory).mkdir(exist_ok=True)
+        return OrcaApiRunner(
+            client,
+            config,
+            fixtures_dir=tmp_path / "fixtures",
+            run_dir=tmp_path / "run",
+            experiment_root=tmp_path,
+        )
+
+    @pytest.mark.asyncio
+    async def test_polling_a_submitted_turn_through_a_persistent_503(
+        self, tmp_path: Path
+    ) -> None:
+        from metis.engine.simulation.exceptions import PostSubmissionObservationError
+
+        runner = self._stalled_digest_runner(tmp_path)
+
+        with pytest.raises(PostSubmissionObservationError):
+            await runner._poll_until_settled("turn-1", True)
+
+    @pytest.mark.asyncio
+    async def test_cancel_confirmation_still_swallows_it(self, tmp_path: Path) -> None:
+        """_confirm_cancelled already treats every SimulationError as
+        best-effort; the new exception type must not change that (it is a
+        SimulationError subclass too)."""
+        runner = self._stalled_digest_runner(tmp_path)
+
+        await runner._confirm_cancelled("turn-1")  # must not raise
+
+
+class TestConflictAdoptedTurnDoesNotDeliverOnDigestFailure:
+    """A 409 turn_in_progress on submit can adopt an unrelated, still-draining
+    prior turn (e.g. one whose best-effort cancel didn't land in time — see
+    _cancel_inflight_turn), not one this submit itself created. When the
+    subsequent digest read then fails, the current message's delivery is
+    unconfirmed, so the raw TargetUnavailableError must reach the caller
+    instead of being promoted to PostSubmissionObservationError."""
+
+    @staticmethod
+    def _runner_409_then_persistent_503(tmp_path: Path) -> OrcaApiRunner:
+        config = OrcaApiRunnerConfig(
+            base_url="https://orca.example.com",
+            api_key="test-key",
+            poll_interval_ms=1,
+            store_retry_window_s=0.0,
+        )
+        calls = {"n": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return httpx.Response(
+                    409,
+                    json={"error": "turn_in_progress", "turnId": "earlier-turn"},
+                )
+            return httpx.Response(503)
+
+        client = httpx.AsyncClient(
+            base_url="https://orca.example.com/api/v1/",
+            transport=httpx.MockTransport(handler),
+        )
+        for directory in ("fixtures", "run"):
+            (tmp_path / directory).mkdir(exist_ok=True)
+        return OrcaApiRunner(
+            client,
+            config,
+            fixtures_dir=tmp_path / "fixtures",
+            run_dir=tmp_path / "run",
+            experiment_root=tmp_path,
+        )
+
+    @pytest.mark.asyncio
+    async def test_submit_returns_the_adopted_turn_unconfirmed(
+        self, tmp_path: Path
+    ) -> None:
+        runner = self._runner_409_then_persistent_503(tmp_path)
+
+        turn_id, submit_confirmed = await runner._submit({"message": "hi"})
+
+        assert turn_id == "earlier-turn"
+        assert submit_confirmed is False
+
+    @pytest.mark.asyncio
+    async def test_send_turn_leaves_delivery_unconfirmed_on_409_then_503(
+        self, tmp_path: Path
+    ) -> None:
+        from metis.engine.simulation.exceptions import TargetUnavailableError
+
+        runner = self._runner_409_then_persistent_503(tmp_path)
+
+        with pytest.raises(TargetUnavailableError):
+            await runner.send_turn("hi", [])
