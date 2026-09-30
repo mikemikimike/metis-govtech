@@ -137,7 +137,7 @@ async def summarize_artifact(
         return
 
     try:
-        text = path.read_text(errors="replace")[:_MAX_SUMMARIZE_BYTES]
+        text = path.read_text(encoding="utf-8", errors="replace")[:_MAX_SUMMARIZE_BYTES]
     except OSError as exc:
         logger.warning(
             "[artifact-summarizer] read failed for %s: %s", artifact.name, exc

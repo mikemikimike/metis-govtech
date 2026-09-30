@@ -134,6 +134,6 @@ def _save_artifacts(record: RunRecord, run_dir: Path, experiment_root: Path) -> 
     }
 
     manifest_path = artifacts_dir / "run-manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2))
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     return manifest

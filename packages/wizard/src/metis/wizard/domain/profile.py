@@ -170,7 +170,9 @@ class ProductProfile(BaseModel):
 
     @classmethod
     def load(cls, path: Path) -> Self:
-        return cls.model_validate(yaml.safe_load(Path(path).read_text()))
+        return cls.model_validate(
+            yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+        )
 
     def to_yaml(self) -> str:
         """Serialize the portable profile with the shared YAML format."""
@@ -182,7 +184,11 @@ class ProductProfile(BaseModel):
         )
 
     def save(self, path: Path) -> None:
-        Path(path).write_text(self.to_yaml())
+        # encoding is explicit — write_text() otherwise falls back to the platform
+        # locale encoding (cp1252 on Windows), and allow_unicode=True means any
+        # non-ASCII character a person typed into product.description/detail or a
+        # criterion's given/when/then can crash the write on that platform.
+        Path(path).write_text(self.to_yaml(), encoding="utf-8")
 
 
 def collect_profile_ids(profile: ProductProfile) -> set[str]:

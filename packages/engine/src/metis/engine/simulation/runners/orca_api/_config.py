@@ -100,7 +100,7 @@ class OrcaApiRunnerConfig(BaseModel):
         if path is None:
             path = Path(__file__).parent / "config.yaml"
         base_url, api_key = _require_env()
-        raw = yaml.safe_load(path.read_text()) or {}
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         raw["base_url"] = base_url
         raw["api_key"] = api_key
         # Optional, and unset is a legitimate mode (the shared allowance), so

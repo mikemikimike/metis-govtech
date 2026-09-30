@@ -69,7 +69,7 @@ def load_report_sources(
     try:
         import yaml
 
-        profile = yaml.safe_load(profile_path.read_text())
+        profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         logger.warning("profile_unreadable", path=str(profile_path), error=str(exc))
         return None
@@ -80,7 +80,9 @@ def load_report_sources(
         try:
             import yaml
 
-            experiment = yaml.safe_load(experiment_path.read_text()) or {}
+            experiment = (
+                yaml.safe_load(experiment_path.read_text(encoding="utf-8")) or {}
+            )
         except (OSError, ValueError) as exc:
             logger.warning(
                 "experiment_unreadable",
@@ -102,7 +104,7 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
     trials: list[dict] = []
     for record_path in sorted(run_dir.glob("runs/*/record.json")):
         try:
-            record = json.loads(record_path.read_text())
+            record = json.loads(record_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             logger.debug("record_unreadable", path=str(record_path), error=str(exc))
             continue
@@ -266,7 +268,7 @@ def _legacy_failure_details(
         run_dir / "logs" / f"simulate-{scenario}_{persona}-{int(trial_text):02d}.log"
     )
     try:
-        log_text = log_path.read_text()
+        log_text = log_path.read_text(encoding="utf-8")
     except OSError:
         return None, None
 

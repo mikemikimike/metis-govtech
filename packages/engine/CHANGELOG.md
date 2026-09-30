@@ -154,6 +154,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   (one whose best-effort cancel didn't land before the next submit), in
   which case the same failure leaves delivery unconfirmed and the raw
   `TargetUnavailableError` propagates instead.
+- **`save_report()` writes the HTML/JSON report as UTF-8, not the platform
+  locale (issue #385).** `Path.write_text()` with no `encoding=` falls back
+  to the OS locale — `cp1252` on Windows — and the report page's template
+  contains a literal `→` outside that codec, so the write opened the file,
+  truncated it to 0 bytes, then raised `UnicodeEncodeError`, which
+  `generate_report()`'s blanket `except` swallowed, leaving a 0-byte
+  `report.html` behind a logged `report_failed`. Both writes in
+  `save_report()` now pass `encoding="utf-8"` explicitly.
+- **`Experiment.load_file()` and `load_report_sources()` read
+  `experiment.yaml`/`profile.yaml` as UTF-8 (issue #385).** These are the
+  read-side mirrors of `metis-wizard`'s `write_experiment()`/
+  `ProductProfile.save()` — both now pass `encoding="utf-8"` explicitly,
+  matching the writers.
+- **Remaining run-record and config reads/writes now pin UTF-8 too
+  (issue #385).** `_save_run_record()`, `RunRecord.load_file()`,
+  `_save_artifacts()`'s manifest write, the artifact summarizer's read,
+  the Orca runner config readers, `load_report_sources()`'s remaining
+  reads, and the schema-generation dev script all now pass
+  `encoding="utf-8"` explicitly. These serialize through `json.dumps()`
+  without `ensure_ascii=False` (or are ASCII config/schema files), so the
+  files were already pure ASCII — this is defense-in-depth, not a
+  live-bug fix, for consistency with the writers that are.
 
 ## [0.13.0] — 2026-09-23
 

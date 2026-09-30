@@ -418,7 +418,7 @@ class Experiment(BaseModel):
     def load_file(cls, path: Path) -> Self:
         import yaml
 
-        return cls.model_validate(yaml.safe_load(path.read_text()))
+        return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
 # ---------------------------------------------------------------------------
@@ -517,5 +517,5 @@ class RunRecord(BaseModel, extra="ignore"):
 
     @classmethod
     def load_file(cls, path: Path) -> Self:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             return cls.model_validate(json.load(fh))

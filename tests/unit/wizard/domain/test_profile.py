@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import jsonschema
+import pytest
 
 import metis.wizard
 from metis.wizard.contracts import ProductProfile
@@ -115,3 +116,32 @@ def test_full_profile_validates_against_committed_schema() -> None:
     jsonschema.validate(
         instance=research_assistant().model_dump(mode="json"), schema=schema
     )
+
+
+def test_save_and_load_round_trip_survives_non_ascii(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A product description the interview or a hand-authored profile wrote can
+    contain any character a person can type — not just ASCII. save()/load()
+    must round-trip it exactly, and never rely on the platform's locale
+    encoding to do so (issue #385)."""
+    import pathlib
+
+    original_write_text = pathlib.Path.write_text
+    encodings_used: list[str | None] = []
+
+    def spy_write_text(self: pathlib.Path, data: str, *args: object, **kwargs: object):
+        encodings_used.append(kwargs.get("encoding"))  # type: ignore[arg-type]
+        return original_write_text(self, data, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pathlib.Path, "write_text", spy_write_text)
+
+    profile = research_assistant()
+    profile.product.description = "Swipe to metric → see detail"
+    path = tmp_path / "profile.yaml"
+
+    profile.save(path)
+
+    assert encodings_used == ["utf-8"]
+    assert "→" in path.read_text(encoding="utf-8")
+    assert ProductProfile.load(path) == profile

@@ -643,7 +643,7 @@ def _distribute_runs(
 def _save_run_record(record: RunRecord, run_dir: Path) -> None:
     """Save a run record as record.json inside the run folder."""
     filepath = run_dir / "record.json"
-    filepath.write_text(json.dumps(record.model_dump(), indent=2))
+    filepath.write_text(json.dumps(record.model_dump(), indent=2), encoding="utf-8")
 
 
 def _scenario_just_completed(state: SimulationState, scenario_id: str) -> bool:
