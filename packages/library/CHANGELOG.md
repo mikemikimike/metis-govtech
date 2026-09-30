@@ -5,7 +5,11 @@ All notable changes to `metis-library` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
-## [Unreleased]
+## [0.11.0] — Unreleased
+
+### Changed
+
+- **`SlideVisualQualityMetric` renders slides itself, no engine-supplied images (issue #381, rescoped from #380)** — the metric now locates the most recently delivered `source="target"` artifact whose name ends in `.pdf` (turn-scoped; latest `at_turn` wins) and rasterizes each page to PNG via the new `pymupdf` dependency, instead of reading pre-rendered paths from `metadata["slide_image_refs"]`. New helpers in `_extraction.py`: `_latest_target_pdf_path`, `render_pdf_slides`, `get_deck_slide_images`. A target deck delivered only as `.pptx`, with no accompanying `.pdf`, has no local conversion path — METIS does not shell out to a system-level renderer such as LibreOffice for this — so the metric skips it, same as when no deck artifact exists at all. `pymupdf` is AGPL-3.0/commercial dual-licensed (Artifex); flagged for sign-off as a new runtime dependency of `metis-library`.
 
 ### Fixed
 

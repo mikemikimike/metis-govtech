@@ -36,7 +36,9 @@ def tool_call(name: str, tool_input: dict | str | None = None, output=None) -> d
     return {"name": name, "type": "TOOL", "input": tool_input, "output": output}
 
 
-def artifact(filename: str, path: str, at_turn: int = 0) -> dict:
+def artifact(
+    filename: str, path: str, at_turn: int = 0, *, source: str = "target"
+) -> dict:
     """A serialized metis.core.Artifact dict as stored in metadata['artifacts'].
 
     By the time metis-library sees this dict, metis-engine's
@@ -52,6 +54,7 @@ def artifact(filename: str, path: str, at_turn: int = 0) -> dict:
         "path": resolved,
         "at_turn": at_turn,
         "state": "received",
+        "source": source,
     }
 
 
@@ -122,6 +125,24 @@ def pptx_factory(tmp_path: Path):
 
     def _make(slides: list[list[str]], name: str = "deck.pptx") -> Path:
         return write_pptx(tmp_path / name, slides)
+
+    return _make
+
+
+@pytest.fixture
+def pdf_factory(tmp_path: Path):
+    """Factory that writes a minimal N-page PDF and returns its path."""
+
+    def _make(name: str = "deck.pdf", pages: int = 1) -> Path:
+        import pymupdf
+
+        doc = pymupdf.open()
+        for _ in range(pages):
+            doc.new_page()
+        p = tmp_path / name
+        doc.save(p)
+        doc.close()
+        return p
 
     return _make
 

@@ -10,7 +10,7 @@ from ._base import (
     _ContextAwareGEval,
     mark_skipped,
 )
-from ._extraction import get_slide_image_refs
+from ._extraction import get_deck_slide_images
 from ._judge import _get_judge_model
 
 
@@ -38,10 +38,23 @@ class SlideVisualQualityMetric(MetisTurnMetric):
 
     Multimodal judge-graded across four dimensions: (1) layout consistency;
     (2) text-visual balance; (3) decorative restraint; (4) text legibility.
-    Reads the engine-supplied pre-rendered slide images via
-    ``get_slide_image_refs`` and judges them directly. Skips when no slide
-    images are available (for example, a PPTX-only trace with no rendered
-    images).
+    Reads the most recently delivered target deck artifact that is already a
+    ``.pdf`` and renders each page via ``pymupdf`` (see
+    ``get_deck_slide_images``). A target artifact delivered only as
+    ``.pptx``, with no accompanying ``.pdf``, has no local conversion path —
+    METIS does not shell out to a system-level renderer for this — so that
+    case always skips too, same as when no deck artifact exists at all. This
+    is a real, current limitation, not a hypothetical one.
+
+    The PDF is rasterized to PNGs rather than handed to the judge as-is:
+    DeepEval's multimodal test case is built from ``MLLMImage``, which is
+    typed around image formats, not documents, so the judge model never
+    sees a PDF as such regardless of whether the model behind it could
+    otherwise read one. Rendering ourselves also fixes the DPI explicitly
+    (see ``render_pdf_slides``) and gives a stable, ordered list of
+    per-page images to match the judge criteria's own "look at the slide
+    images, in order" framing — both of which a model's internal PDF
+    rasterizer would leave opaque.
     """
 
     tags: ClassVar[tuple[str, ...]] = ("presentation", "per-turn", "judge-graded")
@@ -102,11 +115,11 @@ class SlideVisualQualityMetric(MetisTurnMetric):
     async def a_measure(
         self, test_case: LLMTestCase, *args: Any, **kwargs: Any
     ) -> float:
-        refs = get_slide_image_refs(test_case)
+        refs = get_deck_slide_images(test_case)
         if not refs:
             return mark_skipped(
                 self,
-                "no rendered slide images available; visual quality "
+                "no renderable PDF deck artifact available; visual quality "
                 "cannot be assessed.",
             )
         geval = self._get_geval()
