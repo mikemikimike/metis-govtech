@@ -834,6 +834,20 @@ def build_report(
         )
     trial_successes = sum(t["category"] == "succeeded" for t in trials)
     trial_rate = round(100 * trial_successes / len(trials)) if trials else None
+    trial_rate_fraction = trial_successes / len(trials) if trials else None
+
+    # The scenario axis, once, shared by `axes.S` and the headline metric
+    # pass rate below — the same total the page's JS used to recompute from
+    # `axes.S` on every load.
+    scenario_axis_rows = axis_rows("S", scenarios, len(personas))
+    metric_pass_total = sum(row["pass"] for row in scenario_axis_rows)
+    metric_ran_total = sum(row["ran"] for row in scenario_axis_rows)
+    metric_rate = (
+        round(100 * metric_pass_total / metric_ran_total) if metric_ran_total else None
+    )
+    metric_rate_fraction = (
+        metric_pass_total / metric_ran_total if metric_ran_total else None
+    )
 
     table_features = [
         {
@@ -890,6 +904,20 @@ def build_report(
             "rate": trial_rate,
             "items": trials,
         },
+        "scores": {
+            "metricPassRate": {
+                "rate": metric_rate,
+                "pass": metric_pass_total,
+                "ran": metric_ran_total,
+                "status": status(metric_rate_fraction),
+            },
+            "trialSuccess": {
+                "rate": trial_rate,
+                "successful": trial_successes,
+                "attempted": len(trials),
+                "status": status(trial_rate_fraction),
+            },
+        },
         "plan": build_plan(experiment, rows, name_of),
         "personas": personas,
         "scenarios": scenarios,
@@ -899,7 +927,7 @@ def build_report(
         },
         "axes": {
             "P": axis_rows("P", personas, len(scenarios)),
-            "S": axis_rows("S", scenarios, len(personas)),
+            "S": scenario_axis_rows,
         },
         "behaviourTotal": len(out_behaviours),
         "personasRun": sorted({r["persona"] for r in rows if r["persona"]}),

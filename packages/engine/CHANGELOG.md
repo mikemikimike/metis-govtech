@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- **`report.json` now carries the two headline scores report.html already
+  showed (issue #369).** A new `scores` field gives
+  `scores.metricPassRate` and `scores.trialSuccess`, each with a
+  `rate`/`status` plus the counts behind it, so a CI/CD pipeline or another
+  agent can read a pass/fail verdict without re-deriving it from `axes.S`
+  and `trials`. report.html now reads from this field too, instead of
+  recomputing the metric rate client-side — one source of truth for both
+  numbers.
 - **The Runner↔Observation contract is now enforced, not documented.**
   `simulation/_contract.py` checks every `send_turn` return against the action
   list the runner was handed: one `ActionResult` per action, indices ascending

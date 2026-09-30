@@ -115,8 +115,6 @@ function setResultView(view){
 document.getElementById("tree-tab").onclick=()=>setResultView("tree");
 document.getElementById("table-tab").onclick=()=>setResultView("table");
 
-const scenarioTotals=(V.axes?.S||[]).reduce((a,row)=>({pass:a.pass+(row.pass||0),ran:a.ran+(row.ran||0)}),{pass:0,ran:0});
-const metricRate=scenarioTotals.ran?Math.round(100*scenarioTotals.pass/scenarioTotals.ran):null;
 const summaryCard=(label,rate,detail,threshold)=>{
  const status=rate==null?"notEvaluated":rate>=threshold?"pass":"fail";
  const marker=Math.max(0,Math.min(100,threshold));
@@ -125,11 +123,13 @@ const summaryCard=(label,rate,detail,threshold)=>{
   <div class="summary-detail">${esc(detail)}</div>`;
 };
 const trials=V.trials||{attempted:0,successful:0,rate:null,items:[]};
+const trialScore=V.scores?.trialSuccess||{rate:null,successful:0,attempted:0};
+const metricScore=V.scores?.metricPassRate||{rate:null,pass:0,ran:0};
 const scoredFeatures=allFeatures.filter(feature=>feature.rate!=null),belowFeatures=scoredFeatures.filter(feature=>feature.rate<TH);
 if(!scoredFeatures.length)document.getElementById("executive-summary").textContent="No feature score was evaluated.";
 else{const lowestFeature=scoredFeatures.reduce((lowest,feature)=>feature.rate<lowest.rate?feature:lowest),featureScores=scoredFeatures.length===1?"feature score":"feature scores";document.getElementById("executive-summary").textContent=belowFeatures.length?`${belowFeatures.length} of ${scoredFeatures.length} ${featureScores} ${belowFeatures.length===1?"is":"are"} below the ${TH}% threshold; ${lowestFeature.name} is lowest at ${lowestFeature.rate}%.`:`All ${scoredFeatures.length} ${featureScores} ${scoredFeatures.length===1?"meets":"meet"} the ${TH}% threshold; ${lowestFeature.name} is lowest at ${lowestFeature.rate}%.`}
-document.getElementById("trial-summary").innerHTML=summaryCard("Trial success",trials.rate,`${trials.successful} of ${trials.attempted} trials passed`,TH);
-document.getElementById("metric-summary").innerHTML=summaryCard("Evaluated metric pass rate",metricRate,`${scenarioTotals.pass} of ${scenarioTotals.ran} results passed`,TH);
+document.getElementById("trial-summary").innerHTML=summaryCard("Trial success",trialScore.rate,`${trialScore.successful} of ${trialScore.attempted} trials passed`,TH);
+document.getElementById("metric-summary").innerHTML=summaryCard("Evaluated metric pass rate",metricScore.rate,`${metricScore.pass} of ${metricScore.ran} results passed`,TH);
 
 const tip=document.getElementById("tree-tip");
 const showTip=(event,html)=>{tip.innerHTML=html;tip.classList.add("on");const r=tip.getBoundingClientRect();tip.style.left=Math.min(event.clientX+12,innerWidth-r.width-12)+"px";tip.style.top=Math.max(12,event.clientY-r.height-12)+"px"};
