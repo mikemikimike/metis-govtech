@@ -139,7 +139,6 @@ class LlmTestCaseMetadata(TypedDict):
     # Observable execution metadata (engine-supplied):
     stop_reason: NotRequired[str | None]
     cancellation_available: NotRequired[bool | None]
-    slide_image_refs: NotRequired[list[str] | None]
     # Injected from experiment configuration at fetch time:
     persona: NotRequired[object]
     scenario: NotRequired[object]
@@ -171,7 +170,6 @@ class ConversationalTestCaseMetadata(TypedDict):
     # --- Observable execution state (set in fetch_by_session_id) ---
     stop_reason: str | None
     cancellation_available: bool | None
-    slide_image_refs: list[str] | None
 
     # --- Injected from experiment configuration when available ---
     scenario: NotRequired[object]

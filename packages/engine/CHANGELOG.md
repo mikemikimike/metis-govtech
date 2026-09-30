@@ -114,6 +114,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   mind an unused method — but it is silently never called again; there is no
   replacement hook, because session recovery is now understood to be the
   runner's own internal business (`docs/runner-contract.md`).
+- **`slide_image_refs` is gone (issue #382).** The Langfuse extractor no
+  longer assembles an image-named-artifact list or writes it into
+  `LLMTestCase`/`ConversationalTestCase` metadata — `SlideVisualQualityMetric`
+  stopped reading it once it started rendering slides on demand (#381),
+  leaving nothing left to populate it for. `_IMAGE_EXTS` and the
+  `slide_images`/`slide_image_refs` assembly in `fetch_by_session_id`, and
+  the `slide_image_refs` parameter on `_session_to_conversational_test_case`,
+  are deleted; `fetch_by_session_id`'s own signature is unchanged.
 
 ### Fixed
 

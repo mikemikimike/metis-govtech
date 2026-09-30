@@ -232,11 +232,6 @@ def get_artifacts(test_case: LLMTestCase) -> list[Artifact]:
     return out
 
 
-def get_slide_image_refs(test_case: LLMTestCase) -> list[str] | None:
-    """Ordered pre-rendered slide-image paths (engine-supplied), or None."""
-    return get_metadata(test_case).get("slide_image_refs")
-
-
 def _artifact_paths(test_case: LLMTestCase, *suffixes: str) -> list[str]:
     out: list[str] = []
     for art in get_artifacts(test_case):

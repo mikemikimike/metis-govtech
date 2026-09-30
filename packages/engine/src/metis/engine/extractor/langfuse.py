@@ -446,7 +446,6 @@ def _session_to_conversational_test_case(
     *,
     stop_reason: str | None = None,
     cancellation_available: bool | None = None,
-    slide_image_refs: list[str] | None = None,
 ) -> ConversationalTestCase | None:
     """Convert pre-extracted trace data into a ConversationalTestCase.
 
@@ -468,7 +467,6 @@ def _session_to_conversational_test_case(
         trace_ids=[],
         stop_reason=stop_reason,
         cancellation_available=cancellation_available,
-        slide_image_refs=slide_image_refs,
     )
 
     for ext in extractions:
@@ -604,32 +602,11 @@ def fetch_by_session_id(
     traces.sort(key=lambda t: t.timestamp or "")
 
     session_artifacts: list[Artifact] = artifacts or []
-    # Collect slide/image artifact paths in turn order for multimodal metrics.
-    _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 
     def _local(a: Artifact) -> str | None:
         p = resolve_artifact_path(experiment_root, a.path)
         return str(p) if p else None
 
-    # Multimodal metrics judge the assistant's delivered visuals, so keep only
-    # source="target" images. Fixtures are the persona's own uploads (now part
-    # of record.artifacts after fixtures were unified into the Artifact model),
-    # not deliverables, and must not be fed in as slide images. Allowlisting
-    # "target" (rather than excluding "fixture") stays precise if new
-    # Artifact.source values are ever introduced.
-    slide_images = sorted(
-        [
-            a
-            for a in session_artifacts
-            if a.source == "target"
-            and _local(a)
-            and a.name.lower().endswith(_IMAGE_EXTS)
-        ],
-        key=lambda a: (a.at_turn or 0, a.name),
-    )
-    slide_image_refs: list[str] | None = (
-        [p for a in slide_images if (p := _local(a))] if slide_images else None
-    )
     test_cases: list[LLMTestCase] = []
     skipped: int = 0
     prior_turns: list[PriorTurn] = []
@@ -668,7 +645,6 @@ def fetch_by_session_id(
         if tc.metadata is not None:
             tc.metadata["stop_reason"] = stop_reason
             tc.metadata["cancellation_available"] = cancellation_available
-            tc.metadata["slide_image_refs"] = slide_image_refs
 
         test_cases.append(tc)
 
@@ -697,7 +673,6 @@ def fetch_by_session_id(
         extractions,
         stop_reason=stop_reason,
         cancellation_available=cancellation_available,
-        slide_image_refs=slide_image_refs,
     )
     if ctc:
         if scenario is not None and ctc.metadata is not None:
