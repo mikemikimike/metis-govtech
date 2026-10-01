@@ -40,8 +40,8 @@ class InterviewStep(StrEnum):
 # result to those four paths before applying it; the global owner lookup remains what lets a later
 # step correct an earlier step's fields.
 # Note that each step owns both the *container* and its *elements*. ADD addresses the list
-# it appends to (`tasks`, `tasks[T-1].behaviours`), while SET and REMOVE address an element
-# (`tasks[T-1]`). Listing only one of the two silently forbids half the operations.
+# it appends to (`features`, `features[F-1].behaviours`), while SET and REMOVE address an element
+# (`features[F-1]`). Listing only one of the two silently forbids half the operations.
 StepPermissions: dict[InterviewStep, list[str]] = {
     InterviewStep.CLARIFY: [
         "product.name",
@@ -50,22 +50,22 @@ StepPermissions: dict[InterviewStep, list[str]] = {
         "product.detail",
     ],
     InterviewStep.BEHAVIOURS: [
-        "tasks",
-        "tasks[*]",
-        "tasks[*].name",
-        "tasks[*].description",
-        "tasks[*].behaviours",
-        "tasks[*].behaviours[*]",
-        "tasks[*].behaviours[*].name",
-        "tasks[*].behaviours[*].description",
+        "features",
+        "features[*]",
+        "features[*].name",
+        "features[*].description",
+        "features[*].behaviours",
+        "features[*].behaviours[*]",
+        "features[*].behaviours[*].name",
+        "features[*].behaviours[*].description",
     ],
     InterviewStep.CRITERIA: [
-        "tasks[*].behaviours[*].criteria",
-        "tasks[*].behaviours[*].criteria[*]",
-        "tasks[*].behaviours[*].criteria[*].name",
-        "tasks[*].behaviours[*].criteria[*].description.given",
-        "tasks[*].behaviours[*].criteria[*].description.when",
-        "tasks[*].behaviours[*].criteria[*].description.then",
+        "features[*].behaviours[*].criteria",
+        "features[*].behaviours[*].criteria[*]",
+        "features[*].behaviours[*].criteria[*].name",
+        "features[*].behaviours[*].criteria[*].description.given",
+        "features[*].behaviours[*].criteria[*].description.when",
+        "features[*].behaviours[*].criteria[*].description.then",
     ],
     InterviewStep.PERSONAS: [
         "personas",
@@ -85,7 +85,7 @@ StepPermissions: dict[InterviewStep, list[str]] = {
 
 
 def _glob_to_regex(glob: str) -> re.Pattern[str]:
-    """`tasks[*].behaviours[*]` matches `tasks[T-1].behaviours[EB-4]`.
+    """`features[*].behaviours[*]` matches `features[F-1].behaviours[EB-4]`.
 
     `*` stands for one id inside brackets and never spans a `.`, so a glob for a behaviour
     cannot accidentally match something nested deeper under it.

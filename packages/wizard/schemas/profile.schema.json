@@ -97,6 +97,36 @@
       "title": "CriterionDescription",
       "type": "object"
     },
+    "Feature": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "behaviours": {
+          "items": {
+            "$ref": "#/$defs/Behaviour"
+          },
+          "title": "Behaviours",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "Feature",
+      "type": "object"
+    },
     "Persona": {
       "description": "A user type whose stable id can differ from its display name.",
       "properties": {
@@ -197,54 +227,24 @@
       ],
       "title": "Scenario",
       "type": "object"
-    },
-    "Task": {
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "description": {
-          "title": "Description",
-          "type": "string"
-        },
-        "behaviours": {
-          "items": {
-            "$ref": "#/$defs/Behaviour"
-          },
-          "title": "Behaviours",
-          "type": "array"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "description"
-      ],
-      "title": "Task",
-      "type": "object"
     }
   },
-  "description": "The whole document. Every task in it was discovered from the interview.",
+  "description": "The whole document. Every feature in it was discovered from the interview.",
   "properties": {
     "schema_version": {
-      "const": 1,
-      "default": 1,
+      "const": 2,
+      "default": 2,
       "title": "Schema Version",
       "type": "integer"
     },
     "product": {
       "$ref": "#/$defs/Product"
     },
-    "tasks": {
+    "features": {
       "items": {
-        "$ref": "#/$defs/Task"
+        "$ref": "#/$defs/Feature"
       },
-      "title": "Tasks",
+      "title": "Features",
       "type": "array"
     },
     "personas": {
@@ -265,6 +265,6 @@
   "required": [
     "product"
   ],
-  "title": "ProductProfile v1",
+  "title": "ProductProfile v2",
   "type": "object"
 }

@@ -79,14 +79,14 @@ export function synthesizeManualProfile(
   });
 
   return {
-    schema_version: 1,
+    schema_version: 2,
     product: {
       name: experiment.id.trim(),
       description,
       users: "The personas defined in this manual experiment.",
       detail: "",
     },
-    tasks: [
+    features: [
       {
         id: "EP-1",
         name: "Manual experiment",

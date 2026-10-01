@@ -29,8 +29,8 @@ class PatchOrigin(StrEnum):
     it. Both are right, and together they would reject the user's own tick — the two patches
     are byte-identical, and an address check cannot see the difference:
 
-        the model's attempt   SET  tasks[…].behaviours[EB-1].measured = True
-        the user's click      SET  tasks[…].behaviours[EB-1].measured = True
+        the model's attempt   SET  features[…].behaviours[EB-1].measured = True
+        the user's click      SET  features[…].behaviours[EB-1].measured = True
 
     The wizard composed one of them, and knows it did, at the moment it drew the option. So
     the check reads origin first.
@@ -42,7 +42,7 @@ class PatchOrigin(StrEnum):
 
 class Patch(BaseModel):
     op: PatchOp
-    path: str  # "tasks[T-2].behaviours[EB-4].criteria[AC-4-1]"
+    path: str  # "features[F-2].behaviours[EB-4].criteria[AC-4-1]"
     value: Any = None
     # The safe default is to check it. Nothing the model returns is ever marked WIZARD:
     # origin is stamped by the code that builds the patch, and is stripped from structured

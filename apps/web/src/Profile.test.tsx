@@ -10,7 +10,7 @@ function profile(
   product: Partial<ProductProfile["product"]> = {},
 ): ProductProfile {
   return {
-    schema_version: 1,
+    schema_version: 2,
     product: {
       name: "",
       users: "",
@@ -18,7 +18,7 @@ function profile(
       detail: "",
       ...product,
     },
-    tasks: [],
+    features: [],
     personas: [],
     scenarios: [],
   };
@@ -108,9 +108,9 @@ test("the document keeps node names and descriptions in their presentation roles
       name: "Research assistant",
       description: "Answers questions.",
     }),
-    tasks: [
+    features: [
       {
-        id: "T-1",
+        id: "F-1",
         name: "Answer quality",
         description: "Answer accurately and cite useful evidence.",
         behaviours: [
@@ -172,9 +172,9 @@ test("the document keeps node names and descriptions in their presentation roles
 
 test("hides metric identifiers and shows only the human summary when enabled", () => {
   const value = profile();
-  value.tasks = [
+  value.features = [
     {
-      id: "T-1",
+      id: "F-1",
       name: "Answer quality",
       description: "Answer accurately.",
       behaviours: [
@@ -243,7 +243,7 @@ test("the generic form renderer transports names, descriptions, and opaque targe
               multiline: true,
             },
           ],
-          target: "T-2",
+          target: "F-2",
           answer: {},
           request_id: "form-1",
           stage: "behaviours",
@@ -259,7 +259,7 @@ test("the generic form renderer transports names, descriptions, and opaque targe
   assert.match(markup, />Description<\/span>/);
   assert.match(markup, /<textarea/);
   assert.match(markup, /<input/);
-  assert.doesNotMatch(markup, /T-2/);
+  assert.doesNotMatch(markup, /F-2/);
 });
 
 test("wizard upload fields render a working local file control", () => {

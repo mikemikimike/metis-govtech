@@ -36,7 +36,7 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
         path = patch.path
 
         if path in PRODUCT_WIDE:
-            has_derived_work = bool(profile.tasks) or bool(profile.scenarios)
+            has_derived_work = bool(profile.features) or bool(profile.scenarios)
             if not has_derived_work:
                 continue
             key = ("tree", "product")
@@ -90,14 +90,16 @@ def clear_for_regeneration(
 
     elif impact.kind == "tree":
         keep = user_typed or set()
-        profile.tasks = [task for task in profile.tasks if task.id in keep]
+        profile.features = [
+            feature for feature in profile.features if feature.id in keep
+        ]
         profile.scenarios = [
             scenario for scenario in profile.scenarios if scenario.id in keep
         ]
 
 
 def _behaviour_id(path: str) -> str | None:
-    """Extract ``EB-*`` from ``tasks[T-1].behaviours[EB-4].description``."""
+    """Extract ``EB-*`` from ``features[F-1].behaviours[EB-4].description``."""
     marker = "behaviours["
     if marker not in path:
         return None

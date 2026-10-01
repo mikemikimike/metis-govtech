@@ -201,8 +201,8 @@ of the library.
 - **Paths resolve by real id only.** Paths address by id (`behaviours[EB-1]`); a numeric bracket
   such as `behaviours[0]` is rejected rather than treated as a positional fallback. This keeps
   edits and references stable when lists are reordered.
-- **`ADD` addresses the container** (`tasks`, `scenarios`), `SET`/`REMOVE` an element
-  (`tasks[T-1]`). `StepPermissions` must list both or half the operations are silently
+- **`ADD` addresses the container** (`features`, `scenarios`), `SET`/`REMOVE` an element
+  (`features[F-1]`). `StepPermissions` must list both or half the operations are silently
   forbidden.
 - **Strict drafts own the boundary.** Provider JSON is parsed into strict, model-only draft
   models (`extra="forbid"`) before any persisted profile object exists. The application

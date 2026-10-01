@@ -9,12 +9,12 @@ from metis.wizard.domain.profile import (
     Behaviour,
     Criterion,
     CriterionDescription,
+    Feature,
     Persona,
     Product,
     ProductProfile,
     ProfileNode,
     Scenario,
-    Task,
 )
 from metis.wizard.domain.types import InteractionType
 
@@ -33,6 +33,6 @@ __all__ = [
     "Scenario",
     "InterviewStep",
     "StepPermissions",
-    "Task",
+    "Feature",
     "owner_of",
 ]

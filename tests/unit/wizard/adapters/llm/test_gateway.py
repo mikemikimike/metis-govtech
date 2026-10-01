@@ -277,7 +277,7 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
             "patches": [
                 {
                     "op": "add",
-                    "path": "tasks",
+                    "path": "features",
                     "value": {
                         "name": "Safety",
                         "behaviours": [
@@ -299,7 +299,7 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
             "patches": [
                 {
                     "op": "add",
-                    "path": "tasks",
+                    "path": "features",
                     "value": {
                         "name": "Safety",
                         "description": "Safety behaviours",
@@ -422,12 +422,12 @@ def test_model_origin_is_not_part_of_provider_schema() -> None:
 
 
 def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
-    """The patch envelope is valid, but its value is not a Task.
+    """The patch envelope is valid, but its value is not a Feature.
 
     The model-facing schema and domain validation belong inside the same retry loop. The
     failed attempt must not apply its earlier product edit to the real profile.
     """
-    from metis.wizard.contracts import Product, ProductProfile, TaskDraft
+    from metis.wizard.contracts import FeatureDraft, Product, ProductProfile
 
     profile = ProductProfile(product=Product(name="X", description="", users=""))
     bad = json.dumps(
@@ -441,7 +441,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
                 },
                 {
                     "op": "add",
-                    "path": "tasks",
+                    "path": "features",
                     "value": {
                         "name": "Routing",
                         "description": "Routing requests.",
@@ -463,7 +463,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
             "patches": [
                 {
                     "op": "add",
-                    "path": "tasks",
+                    "path": "features",
                     "value": {
                         "name": "Routing",
                         "description": "Routing requests.",
@@ -484,7 +484,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
                 },
                 {
                     "op": "add",
-                    "path": "tasks",
+                    "path": "features",
                     "value": {
                         "name": "Routing",
                         "description": "Routing requests.",
@@ -504,11 +504,11 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     result = model.draft_behaviours(profile, [], context=interview_context())
 
     assert len(completions.calls) == 3
-    task = result.patches[-1].value
-    assert isinstance(task, TaskDraft)
-    assert task.behaviours[0].description
+    feature = result.patches[-1].value
+    assert isinstance(feature, FeatureDraft)
+    assert feature.behaviours[0].description
     assert profile.product.description == ""
-    assert profile.tasks == []
+    assert profile.features == []
     retry_messages = completions.calls[2]["messages"]
     assert [message["role"] for message in retry_messages] == [
         "system",

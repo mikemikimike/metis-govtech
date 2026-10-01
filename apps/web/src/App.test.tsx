@@ -64,9 +64,9 @@ function findElements(
 
 const state = {
   profile: {
-    schema_version: 1,
+    schema_version: 2,
     product: { name: "", users: "", description: "", detail: "" },
-    tasks: [],
+    features: [],
     personas: [],
     scenarios: [],
   },
@@ -194,7 +194,7 @@ test("loads opening choices and sends complete start evidence on begin", async (
                   id: "tool_use",
                   name: "Tool Use",
                   description:
-                    "Selects and sequences suitable tools for a task.",
+                    "Selects and sequences suitable tools for a feature.",
                 },
               ],
             },
@@ -335,7 +335,7 @@ test("loads opening choices and sends complete start evidence on begin", async (
     (element) =>
       element.type === "button" &&
       element.props["aria-label"] ===
-        "Tool Use: Selects and sequences suitable tools for a task.",
+        "Tool Use: Selects and sequences suitable tools for a feature.",
   );
   assert.equal(toolUse.props.role, "checkbox");
   assert.equal(toolUse.props["aria-checked"], false);

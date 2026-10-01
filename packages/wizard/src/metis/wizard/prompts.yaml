@@ -62,16 +62,16 @@ system:
   patch_rules: |-
     You return patches, never whole documents. Each patch has:
       op    — add | remove | set | reorder
-      path  — an address, e.g. tasks[T-1].behaviours[EB-4].description
+      path  — an address, e.g. features[F-1].behaviours[EB-4].description
       value — the new value
 
-    Address existing nodes by id, never by position — `tasks[T-1]`, never `tasks[0]`. Ids,
+    Address existing nodes by id, never by position — `features[F-1]`, never `features[0]`. Ids,
     defaults and authorship are assigned by the wizard when an item is created; never include them
     in a draft. Ids never contain a dot — a dot separates path segments.
 
-    A **task** here is a general description of areas that a target agentic system is expected to
-    accomplish, such as "Draft reports", "Create slides", or "Handle a refund". It directly maps
-    to a group of expected behaviours describing how the agent should act while performing a task.
+    A **feature** is a product function or user workflow that a target agentic system is expected to
+    perform, such as "Draft reports", "Create slides", or "Handle a refund". It directly maps
+    to a group of expected behaviours describing how the agent should act while performing a feature.
     Each behaviour can then be mapped to a set of acceptance or success criteria, which is a specific,
     assessable property used to determine whether a behaviour was exhibited.
 
@@ -83,10 +83,10 @@ system:
 
     To create something, `add` to its **container** with the whole object as the value, children
     included inline — never `set` an id that does not exist yet (`set` changes a field that is
-    already there; it cannot create). One task with its behaviours is a single patch:
+    already there; it cannot create). One feature with its behaviours is a single patch:
 
       op: add
-      path: tasks
+      path: features
       value: {"name": "…",
               "description": "…",
               "behaviours": [{"name": "…", "description": "…"}]}
@@ -140,17 +140,17 @@ model_calls:
 
     ## Instructions:
     Before you respond, internally build a broad picture of the product from all the evidence above.
-    Identify the distinct tasks the product does from the Product, the Conversation so far, and the other
-    evidence. Ensure that you cover as many tasks the system is capable of doing before you examine
-    any task closely. Your goal is to understand what features the product has within $question_cap
+    Identify the distinct features the product provides from the Product, the Conversation so far, and the other
+    evidence. Cover the features the system provides before you examine
+    any feature closely. Your goal is to understand what features the product has within $question_cap
     questions. Think about what's the next best question to ask to optimise coverage.
 
-    Tasks are general tasks that a target agentic system is expected to accomplish, represented by
-    groups of related Behaviours that the later Behaviours step will evaluate.
+    Features are product functions or user workflows that a target agentic system is expected to
+    perform. Each feature has related Behaviours that the later Behaviours step will evaluate.
 
     A capability is a general ability the product can use. Capability selection is evidence, but selection
-    alone does not establish that the product does a specific thing or create a Task. Firstly,
-    depending on the confidence, the evidence could be wrong. Secondly, you will need to determine which tasks/behaviours have access to such capabilities through the interview.
+    alone does not establish that the product does a specific thing or create a Feature. Firstly,
+    depending on the confidence, the evidence could be wrong. Secondly, you will need to determine which features/behaviours have access to such capabilities through the interview.
 
     Ask ONE direct question. It can ask who uses the product, what outcome matters, how something
     the product does runs from end to end, which capabilities it uses, how parts coordinate, where
@@ -165,7 +165,7 @@ model_calls:
     question(s) remaining. If questions remain, normally write only the next question, with no
     rationale or explanation. You may also choose to do an understanding check with one sentence that
     states, in your own words, what you understand the product to do and then ask the user for
-    corrections or insights. Keep that check brief and do not present a formal list of Tasks. Briefly
+    corrections or insights. Keep that check brief and do not present a formal list of Features. Briefly
     name a selected capability only when it is necessary to understand one capability-specific question.
 
     If no questions remain, this is a record-only pass after the final user answer. Do not ask a
@@ -234,13 +234,13 @@ model_calls:
     </capability_evidence>
 
     Rebuild the evaluation map from the enriched Product and Interview, then draft the focused set
-    of Tasks and Behaviours that are most important to evaluate. Group Tasks by a real product
-    workflow or user job. Do not group Tasks by ARC category, perspective, capability, or system
+    of Features and Behaviours that are most important to evaluate. Group Features by a real product
+    workflow or user job. Do not group Features by ARC category, perspective, capability, or system
     component. Capabilities refine what can happen inside a workflow; a selected capability alone
-    does not create an unrelated Task. The perspective changes which observable outcomes receive
+    does not create an unrelated Feature. The perspective changes which observable outcomes receive
     emphasis.
 
-    Draft each Task with 2–5 Behaviours. A Task is a group of related Behaviours — a job the product
+    Draft each Feature with 2–5 Behaviours. A Feature is a group of related Behaviours — a job the product
     does, named as a heading; it is not a situation you run and has no persona or steps. A Behaviour
     is one observable description of something important that should be true — "cites a source for
     every factual claim". Prefer a focused evaluation over an exhaustive inventory and put the most
@@ -381,7 +381,7 @@ model_calls:
     reporting period, example value, named person, exact file name or requested presentation
     content.
 
-    Return a single add patch to `tasks[…].behaviours[$behaviour_id].criteria` and nothing else:
+    Return a single add patch to `features[…].behaviours[$behaviour_id].criteria` and nothing else:
     no edits to any other behaviour, no second criterion, no changes elsewhere in the document.
     Give / when / then. The criterion must test one quality only and be concrete enough that someone
     reading a trace or generated output could say whether it held. Make it suitable for evaluation

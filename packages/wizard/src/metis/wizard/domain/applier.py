@@ -32,10 +32,10 @@ from metis.wizard.domain.permissions import owner_of
 from metis.wizard.domain.profile import (
     Behaviour,
     Criterion,
+    Feature,
     Persona,
     ProductProfile,
     Scenario,
-    Task,
     collect_profile_ids,
 )
 
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 # What a list of each name holds, so an ADD patch can build the right object from a dict.
 _LIST_TYPES: dict[str, type] = {
-    "tasks": Task,
+    "features": Feature,
     "behaviours": Behaviour,
     "criteria": Criterion,
     "personas": Persona,
@@ -126,7 +126,7 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
     # that compatibility safe; provider JSON is already rejected by strict drafts before here.
     if origin is PatchOrigin.MODEL and isinstance(value, dict):
         allowed = {
-            "tasks": {"id", "name", "description", "behaviours"},
+            "features": {"id", "name", "description", "behaviours"},
             "behaviours": {"id", "name", "description", "criteria"},
             "criteria": {"id", "name", "description"},
             "personas": {"id", "name", "description"},
@@ -167,7 +167,7 @@ def _apply_one(
     user_typed: set[str] | None,
     allowed_fixture_names: set[str] | None = None,
 ) -> None:
-    # A model can pair a right, unique behaviour id with a wrong task ancestor; correct the
+    # A model can pair a right, unique behaviour id with a wrong feature ancestor; correct the
     # ancestor against the behaviour it names before resolving. See `paths.normalise`.
     path = paths.normalise(profile, patch.path)
     parent, segment = paths.resolve_parent(profile, path)
@@ -178,7 +178,7 @@ def _apply_one(
                 parent, segment.field, _coerce(segment.field, patch.value, patch.origin)
             )
         else:
-            # Replacing a whole element by id, e.g. SET tasks[T-1].behaviours[EB-4].
+            # Replacing a whole element by id, e.g. SET features[F-1].behaviours[EB-4].
             items = getattr(parent, segment.field)
             replacement = _coerce(segment.field, patch.value, patch.origin)
             for i, item in enumerate(items):
@@ -192,8 +192,8 @@ def _apply_one(
         if not isinstance(items, list):
             raise paths.PathError(f"{patch.path!r}: cannot ADD to a non-list.")
         value = patch.value
-        if _draft(value, "TaskDraft") and segment.field == "tasks":
-            materializer.add_task(
+        if _draft(value, "FeatureDraft") and segment.field == "features":
+            materializer.add_feature(
                 profile,
                 value,
                 patch.origin,

@@ -2,7 +2,7 @@
 
 A tree plus two reference lists:
 
-    tasks → behaviours → criteria     what should be true
+    features → behaviours → criteria     what should be true
     personas, scenarios               how we'll check it
 
 `ProductProfile` is a pure artefact. It carries no step, no history and no interview id, so it
@@ -23,7 +23,7 @@ DescriptionT = TypeVar("DescriptionT")
 
 # The profile.yaml schema version. Bump when a change makes an old profile fail to load; see
 # packages/wizard/schemas/README.md for the rules.
-_PROFILE_VERSION = 1
+_PROFILE_VERSION = 2
 
 
 class ProfileNode(BaseModel, Generic[DescriptionT]):
@@ -68,7 +68,7 @@ class Behaviour(ProfileNode[str]):
     criteria: list[Criterion] = Field(default_factory=list)
 
 
-class Task(ProfileNode[str]):
+class Feature(ProfileNode[str]):
     behaviours: list[Behaviour] = Field(default_factory=list)
 
 
@@ -88,14 +88,14 @@ class Scenario(ProfileNode[str]):
 
 
 class ProductProfile(BaseModel):
-    """The whole document. Every task in it was discovered from the interview."""
+    """The whole document. Every feature in it was discovered from the interview."""
 
     # First field so it leads the serialized YAML, as experiment.yaml does. The profile is
     # machine-written and round-trips through this model, so the version is defaulted rather
     # than required: a profile without the key still loads and is stamped on the next save.
-    schema_version: Literal[1] = _PROFILE_VERSION
+    schema_version: Literal[2] = _PROFILE_VERSION
     product: Product
-    tasks: list[Task] = Field(default_factory=list)
+    features: list[Feature] = Field(default_factory=list)
     personas: list[Persona] = Field(default_factory=list)
     scenarios: list[Scenario] = Field(default_factory=list)
 
@@ -117,23 +117,29 @@ class ProductProfile(BaseModel):
 
     def behaviours(self) -> list[Behaviour]:
         """Every behaviour, in document order."""
-        return [b for task in self.tasks for b in task.behaviours]
+        return [b for feature in self.features for b in feature.behaviours]
 
     def measured_behaviours(self) -> list[Behaviour]:
         """The behaviours the user chose to measure."""
-        return [b for task in self.tasks for b in task.behaviours if b.measured]
+        return [
+            b for feature in self.features for b in feature.behaviours if b.measured
+        ]
 
     def behaviour(self, behaviour_id: str) -> Behaviour | None:
         return next((b for b in self.behaviours() if b.id == behaviour_id), None)
 
-    def task(self, task_id: str) -> Task | None:
-        """One task by id — symmetric with `behaviour`, `persona` and `scenario`."""
-        return next((t for t in self.tasks if t.id == task_id), None)
+    def feature(self, feature_id: str) -> Feature | None:
+        """One feature by id — symmetric with `behaviour`, `persona` and `scenario`."""
+        return next((t for t in self.features if t.id == feature_id), None)
 
-    def task_of(self, behaviour_id: str) -> Task | None:
-        """Which task owns a behaviour — symmetric with `task` and `behaviour`."""
+    def feature_of(self, behaviour_id: str) -> Feature | None:
+        """Which feature owns a behaviour — symmetric with `feature` and `behaviour`."""
         return next(
-            (t for t in self.tasks if any(b.id == behaviour_id for b in t.behaviours)),
+            (
+                t
+                for t in self.features
+                if any(b.id == behaviour_id for b in t.behaviours)
+            ),
             None,
         )
 
@@ -182,7 +188,7 @@ class ProductProfile(BaseModel):
 def collect_profile_ids(profile: ProductProfile) -> set[str]:
     """Return every node and reference id present in a profile."""
     ids = {
-        *(task.id for task in profile.tasks),
+        *(feature.id for feature in profile.features),
         *(behaviour.id for behaviour in profile.behaviours()),
         *(
             criterion.id

@@ -108,7 +108,7 @@ class ScriptedInterviewer:
             patches=[
                 Patch(
                     op=PatchOp.ADD,
-                    path="tasks",
+                    path="features",
                     value={
                         "name": "Answer quality",
                         "description": "Answer research questions accurately and with useful evidence.",
@@ -126,7 +126,7 @@ class ScriptedInterviewer:
                 ),
                 Patch(
                     op=PatchOp.ADD,
-                    path="tasks",
+                    path="features",
                     value={
                         "name": "Recovery",
                         "description": "Recover safely when document search cannot complete.",
@@ -151,11 +151,11 @@ class ScriptedInterviewer:
         for behaviour in profile.measured_behaviours():
             if behaviour.criteria:
                 continue
-            task = profile.task_of(behaviour.id)
+            feature = profile.feature_of(behaviour.id)
             patches.append(
                 Patch(
                     op=PatchOp.ADD,
-                    path=f"tasks[{task.id}].behaviours[{behaviour.id}].criteria",
+                    path=f"features[{feature.id}].behaviours[{behaviour.id}].criteria",
                     value={
                         "given": "a question it can answer",
                         "when": "the answer comes back",
@@ -242,13 +242,13 @@ class ScriptedInterviewer:
         The materializer assigns the criterion id after validating this semantic draft.
         """
         self.calls.append("suggest_criterion")
-        task = profile.task_of(behaviour_id)
+        feature = profile.feature_of(behaviour_id)
         return StepResult(
             message="Here's one more you might want.",
             patches=[
                 Patch(
                     op=PatchOp.ADD,
-                    path=f"tasks[{task.id}].behaviours[{behaviour_id}].criteria",
+                    path=f"features[{feature.id}].behaviours[{behaviour_id}].criteria",
                     value={
                         "name": "Consistent follow-up",
                         "given": "a follow-up on the same topic",
@@ -286,7 +286,9 @@ class RejectingInterviewer(ScriptedInterviewer):
         result = super().draft_criteria(profile, context=context)
         result.patches.append(
             Patch(
-                op=PatchOp.SET, path="tasks[T-1].behaviours[EB-2].measured", value=True
+                op=PatchOp.SET,
+                path="features[F-1].behaviours[EB-2].measured",
+                value=True,
             )
         )
         return result

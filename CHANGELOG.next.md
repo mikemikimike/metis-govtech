@@ -48,6 +48,8 @@ _No v1 changes yet._
 
 #### Changed
 
+- Rename report Task groups to Features, including report JSON fields and report labels (#392).
+
 - Report generation now reads named Behaviours, measured state, and structured Criteria from
   normalized `profile.yaml` files.
 
@@ -135,6 +137,10 @@ _No v1 changes yet._
   now shows five steps.
 
 #### Breaking
+
+- Rename the wizard `Task` and `TaskDraft` models to `Feature` and `FeatureDraft`. Profiles use
+  `features`, patch paths use `features[...]`, and new feature IDs use `F-`. Profile schema
+  version 2, prompts, API types, browser forms, and reports use the glossary term (#392).
 
 - **Interview state is client-held and file-free.** The server-owned session file, its format
   version, and the `/api/interviews` routes are gone. A caller holds the returned state and sends it

@@ -72,8 +72,8 @@ function validState(value: unknown): value is InterviewState {
   return (
     !!state.profile &&
     typeof state.profile === "object" &&
-    state.profile.schema_version === 1 &&
-    Array.isArray(state.profile.tasks) &&
+    state.profile.schema_version === 2 &&
+    Array.isArray(state.profile.features) &&
     Array.isArray(state.profile.personas) &&
     Array.isArray(state.profile.scenarios) &&
     Array.isArray(state.history) &&

@@ -10,7 +10,7 @@ never enter that state.
 The client has two authoring paths. The Interview is the guided path. The manual form
 (`ManualForm.tsx`, with its pure logic in `manual.ts` and its file rules in `fixture-policy.ts`) is
 the direct path for a user who already knows the scorers to run. Keep the manual form flat: do not
-show Task, Behaviour, or Criterion. It builds a `ProductProfile` in the browser and sends it to the
+show Feature, Behaviour, or Criterion. It builds a `ProductProfile` in the browser and sends it to the
 existing package route, so it needs no new route and no Interview record.
 `docs/guide/wizard/web.md` describes it for the user.
 

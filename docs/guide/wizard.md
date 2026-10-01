@@ -22,7 +22,7 @@ Example evaluation details for a research assistant:
 
 | Term | Example |
 |---|---|
-| Task | Answer policy questions. |
+| Feature | Answer policy questions. |
 | Behaviour | Cite sources in each answer. |
 | Criterion | Each citation supports the answer. |
 | Persona | A policy analyst who needs to check a new rule. |
@@ -33,7 +33,7 @@ The Interview produces two documents:
 
 | Document | Contents |
 |---|---|
-| Profile | The product and its users, Tasks, Behaviours, the Criteria for each measured Behaviour, Personas, Scenarios, and the scorers selected for the Criteria |
+| Profile | The product and its users, Features, Behaviours, the Criteria for each measured Behaviour, Personas, Scenarios, and the scorers selected for the Criteria |
 | Experiment | The Personas, Scenarios, fixtures, trial counts, and scorers that the Engine runs |
 
 The interface guides give the exact files or archive that each interface produces.
@@ -70,9 +70,9 @@ They are not separate fields in the Profile.
 
 - Clarification covers the main things the system does first, then asks for detail where needed.
   It does not ask again about what the description or documents already explain.
-- Tasks are grouped by the work the system does for its users.
+- Features are grouped by the work the system does for its users.
 - The Perspective sets which Behaviours matter most. The capabilities show what the system can do
-  in each Task.
+  in each Feature.
 
 ## Run the evaluation
 

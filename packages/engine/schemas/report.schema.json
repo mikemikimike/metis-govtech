@@ -393,6 +393,56 @@
       "title": "EvidenceItem",
       "type": "object"
     },
+    "Feature": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "behaviours": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Behaviours",
+          "type": "array"
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rate"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "behaviours"
+      ],
+      "title": "Feature",
+      "type": "object"
+    },
     "Plan": {
       "properties": {
         "personas": {
@@ -473,11 +523,11 @@
     },
     "ResultTable": {
       "properties": {
-        "tasks": {
+        "features": {
           "items": {
-            "$ref": "#/$defs/ResultTableTask"
+            "$ref": "#/$defs/ResultTableFeature"
           },
-          "title": "Tasks",
+          "title": "Features",
           "type": "array"
         },
         "rows": {
@@ -489,7 +539,7 @@
         }
       },
       "required": [
-        "tasks",
+        "features",
         "rows"
       ],
       "title": "ResultTable",
@@ -511,6 +561,32 @@
         "metric"
       ],
       "title": "ResultTableColumn",
+      "type": "object"
+    },
+    "ResultTableFeature": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/ResultTableColumn"
+          },
+          "title": "Columns",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "columns"
+      ],
+      "title": "ResultTableFeature",
       "type": "object"
     },
     "ResultTableRow": {
@@ -570,11 +646,11 @@
           "title": "Category",
           "type": "string"
         },
-        "tasks": {
+        "features": {
           "items": {
             "type": "string"
           },
-          "title": "Tasks",
+          "title": "Features",
           "type": "array"
         },
         "results": {
@@ -597,32 +673,6 @@
         "category"
       ],
       "title": "ResultTableRow",
-      "type": "object"
-    },
-    "ResultTableTask": {
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "columns": {
-          "items": {
-            "$ref": "#/$defs/ResultTableColumn"
-          },
-          "title": "Columns",
-          "type": "array"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "columns"
-      ],
-      "title": "ResultTableTask",
       "type": "object"
     },
     "Routing": {
@@ -657,56 +707,6 @@
         }
       },
       "title": "Routing",
-      "type": "object"
-    },
-    "Task": {
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "behaviours": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Behaviours",
-          "type": "array"
-        },
-        "rate": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rate"
-        },
-        "status": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Status"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "behaviours"
-      ],
-      "title": "Task",
       "type": "object"
     },
     "Timings": {
@@ -783,11 +783,11 @@
           "title": "Category",
           "type": "string"
         },
-        "tasks": {
+        "features": {
           "items": {
             "type": "string"
           },
-          "title": "Tasks",
+          "title": "Features",
           "type": "array"
         },
         "results": {
@@ -1037,11 +1037,11 @@
       "title": "Scenariosrun",
       "type": "array"
     },
-    "tasks": {
+    "features": {
       "items": {
-        "$ref": "#/$defs/Task"
+        "$ref": "#/$defs/Feature"
       },
-      "title": "Tasks",
+      "title": "Features",
       "type": "array"
     },
     "behaviours": {
@@ -1093,7 +1093,7 @@
     "behaviourTotal",
     "personasRun",
     "scenariosRun",
-    "tasks",
+    "features",
     "behaviours",
     "criteria",
     "resultTable",

@@ -15,7 +15,7 @@ The chain, from the spec to a score::
 Two roll-ups answer two questions, so both are kept:
 
 * The spec tree is **worst of**. A behaviour is only as strong as its weakest criterion,
-  and a task is only as strong as its weakest behaviour. That is a compliance question.
+  and a feature is only as strong as its weakest behaviour. That is a compliance question.
 * The persona axis and the scenario axis are a **plain pass rate**, counted once per
   metric result. That is a difficulty question. One result can attribute to several
   criteria, so a count of attributions would make a busy persona look busier than it is.
@@ -454,8 +454,8 @@ def build_report(
 
     criteria: dict[str, dict] = {}
     behaviour_of: dict[str, str] = {}
-    for task in profile.get("tasks") or []:
-        for behaviour in task.get("behaviours") or []:
+    for feature in profile.get("features") or []:
+        for behaviour in feature.get("behaviours") or []:
             for criterion in behaviour.get("criteria") or []:
                 criteria[criterion["id"]] = criterion
                 behaviour_of[criterion["id"]] = behaviour["id"]
@@ -661,8 +661,8 @@ def build_report(
         }
 
     out_behaviours: dict[str, dict] = {}
-    for task in profile.get("tasks") or []:
-        for behaviour in task.get("behaviours") or []:
+    for feature in profile.get("features") or []:
+        for behaviour in feature.get("behaviours") or []:
             live = [
                 out_criteria[c["id"]]["rate"]
                 for c in behaviour.get("criteria") or []
@@ -680,18 +680,18 @@ def build_report(
                 "status": status(min(live) / 100 if live else None),
             }
 
-    out_tasks = []
-    for task in profile.get("tasks") or []:
+    out_features = []
+    for feature in profile.get("features") or []:
         live = [
             out_behaviours[b["id"]]["rate"]
-            for b in task.get("behaviours") or []
+            for b in feature.get("behaviours") or []
             if out_behaviours[b["id"]]["rate"] is not None
         ]
-        out_tasks.append(
+        out_features.append(
             {
-                "id": task["id"],
-                "name": task.get("name", task["id"]),
-                "behaviours": [b["id"] for b in task.get("behaviours") or []],
+                "id": feature["id"],
+                "name": feature.get("name", feature["id"]),
+                "behaviours": [b["id"] for b in feature.get("behaviours") or []],
                 "rate": min(live) if live else None,
                 "status": status(min(live) / 100 if live else None),
             }
@@ -741,17 +741,17 @@ def build_report(
             i["id"]: _clean_prose(i.get("description")) for i in items if i.get("id")
         }
 
-    task_of_behaviour = {
-        behaviour["id"]: task.get("name", task["id"])
-        for task in profile.get("tasks") or []
-        for behaviour in task.get("behaviours") or []
+    feature_of_behaviour = {
+        behaviour["id"]: feature.get("name", feature["id"])
+        for feature in profile.get("features") or []
+        for behaviour in feature.get("behaviours") or []
     }
-    tasks_of_scenario = {
+    features_of_scenario = {
         scenario["id"]: list(
             dict.fromkeys(
-                task_of_behaviour[behaviour_id]
+                feature_of_behaviour[behaviour_id]
                 for behaviour_id in scenario.get("behaviour_refs") or []
-                if behaviour_id in task_of_behaviour
+                if behaviour_id in feature_of_behaviour
             )
         )
         for scenario in profile.get("scenarios") or []
@@ -773,29 +773,29 @@ def build_report(
             {
                 **item,
                 "category": category,
-                "tasks": tasks_of_scenario.get(scenario_id, []),
+                "features": features_of_scenario.get(scenario_id, []),
             }
         )
     trial_successes = sum(t["category"] == "succeeded" for t in trials)
     trial_rate = round(100 * trial_successes / len(trials)) if trials else None
 
-    table_tasks = [
+    table_features = [
         {
-            "id": task["id"],
-            "name": task.get("name", task["id"]),
+            "id": feature["id"],
+            "name": feature.get("name", feature["id"]),
             "columns": [
                 {
                     "criterion": criterion["id"],
                     "metric": out_criteria[criterion["id"]]["metric"],
                 }
-                for behaviour in task.get("behaviours") or []
+                for behaviour in feature.get("behaviours") or []
                 for criterion in behaviour.get("criteria") or []
                 if per_criterion[criterion["id"]]["session"]
             ],
         }
-        for task in profile.get("tasks") or []
+        for feature in profile.get("features") or []
     ]
-    table_tasks = [task for task in table_tasks if task["columns"]]
+    table_features = [feature for feature in table_features if feature["columns"]]
 
     table_rows = []
     for trial in trials:
@@ -848,10 +848,10 @@ def build_report(
         "behaviourTotal": len(out_behaviours),
         "personasRun": sorted({r["persona"] for r in rows if r["persona"]}),
         "scenariosRun": sorted({r["scenario"] for r in rows if r["scenario"]}),
-        "tasks": out_tasks,
+        "features": out_features,
         "behaviours": out_behaviours,
         "criteria": out_criteria,
-        "resultTable": {"tasks": table_tasks, "rows": table_rows},
+        "resultTable": {"features": table_features, "rows": table_rows},
         "unmapped": [
             {"metric": name, **bucket, "why": unmapped_reason.get(name, "")}
             for name, bucket in sorted(unmapped.items())

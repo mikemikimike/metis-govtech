@@ -116,12 +116,12 @@ def profile_readiness(profile: ProductProfile) -> list[MissingData]:
             )
         )
 
-    if not profile.tasks or not profile.behaviours():
+    if not profile.features or not profile.behaviours():
         gaps.append(
             MissingData(
                 code=MissingDataCode.BEHAVIOURS_INCOMPLETE,
                 stage=InterviewStep.BEHAVIOURS,
-                message="At least one Task and Behaviour are required.",
+                message="At least one Feature and Behaviour are required.",
             )
         )
     elif not profile.measured_behaviours():

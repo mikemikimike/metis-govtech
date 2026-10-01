@@ -4,12 +4,12 @@ import type { ProductProfile } from "./transport/api.ts";
 import { profileHasCriteria } from "./metrics.ts";
 
 const profile: ProductProfile = {
-  schema_version: 1,
+  schema_version: 2,
   product: { name: "", users: "", description: "", detail: "" },
-  tasks: [
+  features: [
     {
-      id: "T-1",
-      name: "Task",
+      id: "F-1",
+      name: "Feature",
       description: "",
       behaviours: [
         {
@@ -30,12 +30,12 @@ test("metric loading waits until the Profile contains a Criterion", () => {
   assert.equal(profileHasCriteria(profile), false);
   const withCriterion: ProductProfile = {
     ...profile,
-    tasks: [
+    features: [
       {
-        ...profile.tasks[0]!,
+        ...profile.features[0]!,
         behaviours: [
           {
-            ...profile.tasks[0]!.behaviours[0]!,
+            ...profile.features[0]!.behaviours[0]!,
             criteria: [
               {
                 id: "C-1",

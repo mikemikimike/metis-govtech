@@ -63,11 +63,11 @@ from metis.wizard.contracts.output import (
     BehaviourDraft,
     ClarifyResult,
     CriterionDraft,
+    FeatureDraft,
     PersonaDraft,
     ScenarioDraft,
     StepResult,
     StepResultPatch,
-    TaskDraft,
 )
 from metis.wizard.contracts.turn import (
     CompileResult,
@@ -88,12 +88,12 @@ from metis.wizard.domain.profile import (
     Behaviour,
     Criterion,
     CriterionDescription,
+    Feature,
     Persona,
     Product,
     ProductProfile,
     ProfileNode,
     Scenario,
-    Task,
 )
 from metis.wizard.domain.types import InteractionType
 
@@ -162,8 +162,8 @@ __all__ = [
     "PerspectiveDefinition",
     "StepResult",
     "StepResultPatch",
-    "Task",
-    "TaskDraft",
+    "Feature",
+    "FeatureDraft",
     "Turn",
     "InterviewEndRequest",
     "InterviewErrorCode",

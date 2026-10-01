@@ -24,7 +24,7 @@ DOMAIN_WORDS = [
     "behaviour",
     "criterion",
     "criteria",
-    "task",
+    "feature",
     "persona",
     "scenario",
     "measured",
@@ -136,7 +136,7 @@ def test_selection_state_and_components_draw() -> None:
     section = "Answer quality"
 
     # The heading is finished text the door does not interpret, underlined to its own width so
-    # a task stands apart from the behaviours nested under it.
+    # a feature stands apart from the behaviours nested under it.
     assert f"{section}\n{'─' * len(section)}" in text
 
     assert "  [x] Cites a source" in text  # card checkbox, indented under its section

@@ -11,9 +11,9 @@ afterEach(() => {
 
 const state = {
   profile: {
-    schema_version: 1,
+    schema_version: 2,
     product: { name: "", users: "", description: "", detail: "" },
-    tasks: [],
+    features: [],
     personas: [],
     scenarios: [],
   },

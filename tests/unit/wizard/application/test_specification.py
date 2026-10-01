@@ -69,7 +69,7 @@ def test_specification_has_engine_input_shape_and_opaque_bytes(tmp_path: Path) -
             "fixtures/policy.html",
         ]
         assert archive.read("fixtures/policy.html") == b"<script>alert(1)</script>"
-        assert "tasks:" not in archive.read("experiment.yaml").decode()
+        assert "features:" not in archive.read("experiment.yaml").decode()
 
 
 def test_specification_keeps_an_explicit_empty_fixtures_directory(

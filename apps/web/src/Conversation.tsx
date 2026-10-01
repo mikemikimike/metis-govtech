@@ -315,7 +315,7 @@ function CardBlock({
           <div className="flex items-center justify-between gap-3">
             <span className="font-medium text-foreground">{card.title}</span>
             {/* The id keeps its own gutter: it never shrinks and never wraps, so a short
-                  identifier like EB-1 or T-1 reads on one line however long the title runs. */}
+                  identifier like EB-1 or F-1 reads on one line however long the title runs. */}
             <Mono className="shrink-0 whitespace-nowrap">{card.id}</Mono>
           </div>
 
@@ -388,7 +388,7 @@ function ComponentBlock({
 
       case "options":
         // A chip row. Each chip carries its own `selected`, so it toggles in place and posts
-        // its action on click — a "T-1 covers EB-4" reference is one such chip.
+        // its action on click — a "F-1 covers EB-4" reference is one such chip.
         return (
           <div className="flex w-full flex-wrap gap-1.5">
             {component.options.map((o) => (

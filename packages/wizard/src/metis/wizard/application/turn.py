@@ -454,7 +454,7 @@ def _reconcile_locks(working: DriverState, before: ProductProfile) -> None:
     """Clear the confirmation locks that an accepted mutation invalidates.
 
     Any change to the Profile clears the final `confirmed` lock, so an earlier sign-off can never
-    cover new content. A change to the measurement scope itself — the Task or Behaviour set, or a
+    cover new content. A change to the measurement scope itself — the Feature or Behaviour set, or a
     measured flag — also clears `behaviours_confirmed`, so re-scoping demands a fresh Continue.
     """
     if working.profile == before:
@@ -471,7 +471,10 @@ def _scope_signature(profile: ProductProfile) -> object:
             (behaviour.id, behaviour.name, behaviour.description, behaviour.measured)
             for behaviour in profile.behaviours()
         ),
-        tuple((task.id, task.name, task.description) for task in profile.tasks),
+        tuple(
+            (feature.id, feature.name, feature.description)
+            for feature in profile.features
+        ),
     )
 
 

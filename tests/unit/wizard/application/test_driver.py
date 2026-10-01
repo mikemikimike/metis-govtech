@@ -108,7 +108,7 @@ def test_clarify_commits_product_but_not_behaviours() -> None:
     assert state.profile.product.users == "Policy analysts"
     assert state.profile.product.description
     assert state.profile.product.detail
-    assert state.profile.tasks == []
+    assert state.profile.features == []
     assert state.profile.scenarios == []
 
 
@@ -143,7 +143,7 @@ def test_clarify_rejects_a_non_product_patch() -> None:
                 patches=[
                     {
                         "op": "set",
-                        "path": "tasks[T-1].name",
+                        "path": "features[F-1].name",
                         "value": "Not during clarify",
                     }
                 ],
@@ -154,7 +154,7 @@ def test_clarify_rejects_a_non_product_patch() -> None:
 
     driver.compose(state)
 
-    assert state.profile.tasks == []
+    assert state.profile.features == []
 
 
 def test_model_drafts_cannot_change_interview_context() -> None:
@@ -361,8 +361,8 @@ def test_the_persona_add_form_keeps_the_name_and_description_and_generates_an_id
     assert added.id in state.user_typed
 
 
-def test_the_behaviour_add_form_is_scoped_to_the_selected_task() -> None:
-    """A manual Behaviour keeps the Task target from the screen through submission."""
+def test_the_behaviour_add_form_is_scoped_to_the_selected_feature() -> None:
+    """A manual Behaviour keeps the Feature target from the screen through submission."""
     from metis.wizard.contracts import FormResponse
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
@@ -377,14 +377,14 @@ def test_the_behaviour_add_form_is_scoped_to_the_selected_task() -> None:
     add = next(
         option
         for option in screen.options
-        if option.id.action == "add" and option.id.target == "T-2"
+        if option.id.action == "add" and option.id.target == "F-2"
     )
     driver.handle(state, screen, ChoiceResponse(selected=[str(add.id)]))
 
     form = state.pending
-    assert form is not None and form.target == "T-2"
+    assert form is not None and form.target == "F-2"
     assert [field.id for field in form.fields] == ["name", "description"]
-    before_t1 = [behaviour.id for behaviour in profile.task("T-1").behaviours]  # type: ignore[union-attr]
+    before_t1 = [behaviour.id for behaviour in profile.feature("F-1").behaviours]  # type: ignore[union-attr]
     driver.handle(
         state,
         form,
@@ -396,19 +396,23 @@ def test_the_behaviour_add_form_is_scoped_to_the_selected_task() -> None:
         ),
     )
 
-    added = profile.task("T-2").behaviours[-1]  # type: ignore[union-attr]
+    added = profile.feature("F-2").behaviours[-1]  # type: ignore[union-attr]
     assert (added.id, added.name, added.description) == (
         "EB-4",
         "Recover gracefully",
         "Stops safely after a failed search.",
     )
     assert added.measured is True
-    assert [behaviour.id for behaviour in profile.task("T-1").behaviours] == before_t1  # type: ignore[union-attr]
+    assert [
+        behaviour.id for behaviour in profile.feature("F-1").behaviours
+    ] == before_t1  # type: ignore[union-attr]
     assert {"EB-4"} <= state.issued_ids
     assert {"EB-4"} <= state.user_typed
 
 
-def test_a_behaviour_form_with_a_stale_or_missing_task_target_changes_nothing() -> None:
+def test_a_behaviour_form_with_a_stale_or_missing_feature_target_changes_nothing() -> (
+    None
+):
     from metis.wizard.contracts import FormField, FormRequest, FormResponse
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
@@ -417,7 +421,7 @@ def test_a_behaviour_form_with_a_stale_or_missing_task_target_changes_nothing() 
     before = profile.model_copy(deep=True)
     form = FormRequest(
         prompt="Add a Behaviour",
-        target="T-404",
+        target="F-404",
         fields=[
             FormField(id="name", label="Name"),
             FormField(id="description", label="Description"),
@@ -930,7 +934,7 @@ def test_criteria_drafting_cannot_write_outside_the_measured_gaps() -> None:
             result.patches.append(
                 Patch(
                     op=PatchOp.ADD,
-                    path="tasks[T-1].behaviours[EB-2].criteria",
+                    path="features[F-1].behaviours[EB-2].criteria",
                     value={
                         "name": "Unselected addition",
                         "given": "an answer",
@@ -979,7 +983,7 @@ def test_a_total_failure_warns_and_loses_nothing() -> None:
     runtime = [w for w in request.warnings if w.source is WarningSource.RUNTIME]
     assert runtime and "nothing you've decided has been lost" in runtime[0].text.lower()
     assert not runtime[0].blocking
-    assert state.profile.tasks  # the profile is intact
+    assert state.profile.features  # the profile is intact
     assert state.step is InterviewStep.PERSONAS  # and we did not advance past it
 
 
@@ -1026,7 +1030,7 @@ def test_ticking_costs_no_model_call() -> None:
 
 # ── a reworded criterion re-maps its metric, silently ───────────────────────
 
-_AC1 = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].description.then"
+_AC1 = "features[F-1].behaviours[EB-1].criteria[AC-1-1].description.then"
 
 
 @dataclass
@@ -1085,8 +1089,8 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
 
 # ── a scoped criteria chat stays on its own behaviour ────────────────────────
 
-_EB1_THEN = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].description.then"
-_EB2_THEN = "tasks[T-1].behaviours[EB-2].criteria[AC-2-1].description.then"
+_EB1_THEN = "features[F-1].behaviours[EB-1].criteria[AC-1-1].description.then"
+_EB2_THEN = "features[F-1].behaviours[EB-2].criteria[AC-2-1].description.then"
 
 
 def _criterion_action(driver, state, action, label):
@@ -1226,7 +1230,7 @@ class SuggestsElsewhere(ScriptedInterviewer):
             patches=[
                 Patch(
                     op=PatchOp.ADD,
-                    path="tasks[T-1].behaviours[EB-2].criteria",
+                    path="features[F-1].behaviours[EB-2].criteria",
                     value={
                         "id": "AC-2-9",
                         "name": "Wrong target",

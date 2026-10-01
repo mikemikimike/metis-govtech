@@ -60,11 +60,11 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
         out += ["## How it works", "", product.detail, ""]
 
     out += ["## What should be true", ""]
-    for task in profile.tasks:
-        out += [f"### {task.id} · {task.name}", ""]
-        if task.description:
-            out += [task.description, ""]
-        for behaviour in task.behaviours:
+    for feature in profile.features:
+        out += [f"### {feature.id} · {feature.name}", ""]
+        if feature.description:
+            out += [feature.description, ""]
+        for behaviour in feature.behaviours:
             out += _behaviour_lines(behaviour)
         out += [""]
 
@@ -102,7 +102,7 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
     ]
 
     not_measured = [
-        b for task in profile.tasks for b in task.behaviours if not b.measured
+        b for feature in profile.features for b in feature.behaviours if not b.measured
     ]
     if not_measured:
         out += [

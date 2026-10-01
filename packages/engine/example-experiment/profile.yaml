@@ -1,10 +1,10 @@
-schema_version: 1
+schema_version: 2
 product:
   name: Orca
   users: cooperative-delegator, impatient-executive, uncertain-explorer, skeptical-auditor, domain-expert-perfectionist, scope-creeper, boundary-pusher
   detail: Built from the centralized evaluation framework sheets, not from a wizard interview.
   description: End-to-end evaluation of Orca's various capabilities.
-tasks:
+features:
   - id: EP-3
     name: Data Analyst
     behaviours:
