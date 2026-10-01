@@ -106,7 +106,7 @@ export type Criterion = Schema["Criterion"];
 export type Behaviour = Omit<Schema["Behaviour"], "criteria"> & {
   criteria: Criterion[];
 };
-export type Task = Omit<Schema["Task"], "behaviours"> & {
+export type Feature = Omit<Schema["Feature"], "behaviours"> & {
   behaviours: Behaviour[];
 };
 export type Persona = Schema["Persona"];
@@ -121,9 +121,9 @@ export type Scenario = Omit<
 export type Product = Schema["Product"];
 export type ProductProfile = Omit<
   Schema["ProductProfile"],
-  "tasks" | "personas" | "scenarios"
+  "features" | "personas" | "scenarios"
 > & {
-  tasks: Task[];
+  features: Feature[];
   personas: Persona[];
   scenarios: Scenario[];
 };
@@ -219,9 +219,9 @@ function normalizeRequest(
 function normalizeProfile(profile: Schema["ProductProfile"]): ProductProfile {
   return {
     ...profile,
-    tasks: (profile.tasks ?? []).map((task) => ({
-      ...task,
-      behaviours: (task.behaviours ?? []).map((behaviour) => ({
+    features: (profile.features ?? []).map((feature) => ({
+      ...feature,
+      behaviours: (feature.behaviours ?? []).map((behaviour) => ({
         ...behaviour,
         criteria: behaviour.criteria ?? [],
       })),

@@ -27,9 +27,9 @@ const pending = {
 };
 const state: InterviewState = {
   profile: {
-    schema_version: 1,
+    schema_version: 2,
     product: { name: "", users: "", description: "", detail: "" },
-    tasks: [],
+    features: [],
     personas: [],
     scenarios: [],
   },
@@ -111,7 +111,7 @@ test("choice toggles update the current transcript screen in place", () => {
             label: "Measure this",
             patch: {
               op: "set",
-              path: "tasks[T-1].behaviours[EB-1].measured",
+              path: "features[F-1].behaviours[EB-1].measured",
               value: !selected,
               origin: "wizard",
             },

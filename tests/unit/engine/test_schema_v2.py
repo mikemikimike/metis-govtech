@@ -10,7 +10,7 @@ from metis.engine.simulation.types import Experiment
 
 def _base_experiment(**overrides: object) -> dict:
     base: dict = {
-        "schema_version": 1,
+        "schema_version": 2,
         "id": "test",
         "description": "test",
         "runner_factory_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
@@ -24,7 +24,7 @@ def _base_experiment(**overrides: object) -> dict:
 class TestExperimentSchema:
     def test_loads(self) -> None:
         exp = Experiment.model_validate(_base_experiment())
-        assert exp.schema_version == 1
+        assert exp.schema_version == 2
 
     def test_wrong_version_rejected(self) -> None:
         with pytest.raises(ValidationError, match="Unsupported schema_version"):

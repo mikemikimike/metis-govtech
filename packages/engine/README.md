@@ -89,7 +89,7 @@ An experiment is a directory containing `experiment.yaml`, `profile.yaml`, and a
 ```
 my-experiment/
 ├── experiment.yaml      # Personas, tasks, metrics, configuration
-├── profile.yaml         # Tasks, behaviours, criteria, and metrics
+├── profile.yaml         # Features, behaviours, criteria, and metrics
 └── fixtures/            # Files uploaded during simulation
     └── data.csv
 ```

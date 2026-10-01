@@ -15,10 +15,10 @@ from metis.wizard.domain.profile import (
     Behaviour,
     Criterion,
     CriterionDescription,
+    Feature,
     Persona,
     ProductProfile,
     Scenario,
-    Task,
 )
 
 
@@ -58,23 +58,23 @@ def _record(
         user_typed.add(node_id)
 
 
-def add_task(
+def add_feature(
     profile: ProductProfile,
     draft: Any,
     origin: PatchOrigin,
     *,
     issued_ids: set[str],
     user_typed: set[str] | None = None,
-) -> Task:
-    task = Task(
-        id=_next_numeric(issued_ids, "T"),
+) -> Feature:
+    feature = Feature(
+        id=_next_numeric(issued_ids, "F"),
         name=draft.name,
         description=draft.description,
         behaviours=[],
     )
-    _record(issued_ids, user_typed, task.id, origin)
+    _record(issued_ids, user_typed, feature.id, origin)
     for behaviour_draft in draft.behaviours:
-        task.behaviours.append(
+        feature.behaviours.append(
             add_behaviour(
                 profile,
                 behaviour_draft,
@@ -83,8 +83,8 @@ def add_task(
                 user_typed=user_typed,
             )
         )
-    profile.tasks.append(task)
-    return task
+    profile.features.append(feature)
+    return feature
 
 
 def add_behaviour(

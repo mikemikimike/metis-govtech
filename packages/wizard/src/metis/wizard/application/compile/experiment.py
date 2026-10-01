@@ -24,14 +24,14 @@ import yaml
 if TYPE_CHECKING:
     from metis.wizard.domain.profile import Behaviour, ProductProfile, Scenario
 
-# The engine declares `schema_version: Literal[1]` with no default and requires it. A file
+# The engine declares `schema_version: Literal[2]` with no default and requires it. A file
 # without it is one the engine refuses to load, so the compiler states it explicitly rather
 # than defaulting it — when the engine bumps, this has to move with it, visibly.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_FILENAME = "experiment.schema.json"
 
-# The engine v1 schema requires runner_factory_ref, and its loader resolves the FQN to a
+# The engine schema requires runner_factory_ref, and its loader resolves the FQN to a
 # real class. There is one runner factory today, so the compiler stamps it as a default
 # rather than asking the user — the interview is about product behaviour, not the runner.
 # This is a plain string, not an import of engine code, so it keeps the same arrangement

@@ -556,6 +556,17 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** Feature */
+        Feature: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Behaviours */
+            behaviours?: components["schemas"]["Behaviour"][];
+        };
         /**
          * FormField
          * @description Only ever text — form input is used exactly as the user wrote it.
@@ -920,8 +931,8 @@ export interface components {
          *     it. Both are right, and together they would reject the user's own tick — the two patches
          *     are byte-identical, and an address check cannot see the difference:
          *
-         *         the model's attempt   SET  tasks[…].behaviours[EB-1].measured = True
-         *         the user's click      SET  tasks[…].behaviours[EB-1].measured = True
+         *         the model's attempt   SET  features[…].behaviours[EB-1].measured = True
+         *         the user's click      SET  features[…].behaviours[EB-1].measured = True
          *
          *     The wizard composed one of them, and knows it did, at the moment it drew the option. So
          *     the check reads origin first.
@@ -973,18 +984,18 @@ export interface components {
         };
         /**
          * ProductProfile
-         * @description The whole document. Every task in it was discovered from the interview.
+         * @description The whole document. Every feature in it was discovered from the interview.
          */
         ProductProfile: {
             /**
              * Schema Version
-             * @default 1
+             * @default 2
              * @constant
              */
-            schema_version: 1;
+            schema_version: 2;
             product: components["schemas"]["Product"];
-            /** Tasks */
-            tasks?: components["schemas"]["Task"][];
+            /** Features */
+            features?: components["schemas"]["Feature"][];
             /** Personas */
             personas?: components["schemas"]["Persona"][];
             /** Scenarios */
@@ -1065,17 +1076,6 @@ export interface components {
              * @default false
              */
             retryable: boolean;
-        };
-        /** Task */
-        Task: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string;
-            /** Behaviours */
-            behaviours?: components["schemas"]["Behaviour"][];
         };
         /** Turn */
         Turn: {

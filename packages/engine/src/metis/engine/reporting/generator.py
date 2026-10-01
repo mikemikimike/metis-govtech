@@ -171,7 +171,7 @@ def save_report(
 
     logger.info(
         "report_written",
-        tasks=len(report["tasks"]),
+        features=len(report["features"]),
         behaviours=len(report["behaviours"]),
         criteria=len(report["criteria"]),
         scored=sum(1 for c in report["criteria"].values() if c["rate"] is not None),

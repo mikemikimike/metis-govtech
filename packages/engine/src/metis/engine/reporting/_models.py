@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-_REPORT_VERSION = 1
+_REPORT_VERSION = 2
 
 
 class Timings(BaseModel, extra="allow"):
@@ -47,7 +47,7 @@ class Trial(BaseModel):
     duration: float | None = None
     conversation: list[ConversationTurn] = Field(default_factory=list)
     category: str
-    tasks: list[str] = Field(default_factory=list)
+    features: list[str] = Field(default_factory=list)
     results: dict[str, object] = Field(default_factory=dict)
 
 
@@ -144,7 +144,7 @@ class Behaviour(BaseModel):
     status: str | None = None
 
 
-class Task(BaseModel):
+class Feature(BaseModel):
     id: str
     name: str
     behaviours: list[str]
@@ -157,7 +157,7 @@ class ResultTableColumn(BaseModel):
     metric: str
 
 
-class ResultTableTask(BaseModel):
+class ResultTableFeature(BaseModel):
     id: str
     name: str
     columns: list[ResultTableColumn]
@@ -179,7 +179,7 @@ class ResultTableRow(Trial):
 
 
 class ResultTable(BaseModel):
-    tasks: list[ResultTableTask]
+    features: list[ResultTableFeature]
     rows: list[ResultTableRow]
 
 
@@ -218,7 +218,7 @@ class Report(BaseModel):
     behaviourTotal: int
     personasRun: list[str]
     scenariosRun: list[str]
-    tasks: list[Task]
+    features: list[Feature]
     behaviours: dict[str, Behaviour]
     criteria: dict[str, Criterion]
     resultTable: ResultTable

@@ -1,6 +1,6 @@
 """Resolving a patch path against the profile tree.
 
-Paths address nodes by id, not by index — `tasks[T-2].behaviours[EB-4].criteria[AC-4.1]`.
+Paths address nodes by id, not by index — `features[F-2].behaviours[EB-4].criteria[AC-4.1]`.
 Ids rather than positions because a list can be reordered between the model composing a
 patch and the applier running it, and an index would then point at the wrong node silently.
 """
@@ -83,7 +83,7 @@ def _render(segments: list[Segment]) -> str:
 
 
 def _deposition(profile: ProductProfile, segments: list[Segment]) -> list[Segment]:
-    """Rewrite any positional bracket (`tasks[0]`) to the real id at that index.
+    """Rewrite any positional bracket (`features[0]`) to the real id at that index.
 
     Paths are meant to address by id, and a numeric bracket is a model mistake — a user
     tick or edit is always built with real ids. But it is a recoverable one: walking the
@@ -117,24 +117,24 @@ def normalise(profile: ProductProfile, path: str) -> str:
 
     Two mistakes, both of which name a node that is plainly there:
 
-    * A positional bracket — `tasks[0].behaviours[0]` — where the contract is to address by
+    * A positional bracket — `features[0].behaviours[0]` — where the contract is to address by
       id. `_deposition` reads the id at each index and substitutes it.
-    * A right, unique behaviour id under the wrong task ancestor — `tasks[T-3].behaviours[EB-6]`
-      when EB-6 lives under T-4. A behaviour id is unique across the whole profile, so the
-      task segment is redundant for locating it; rewrite it to the task that truly owns it.
+    * A right, unique behaviour id under the wrong feature ancestor — `features[F-3].behaviours[EB-6]`
+      when EB-6 lives under F-4. A behaviour id is unique across the whole profile, so the
+      feature segment is redundant for locating it; rewrite it to the feature that truly owns it.
 
     Anything else is returned unchanged — an unknown id still fails downstream, as it should.
     """
     segments = _deposition(profile, parse(path))
     if (
         len(segments) >= 2
-        and segments[0].field == "tasks"
+        and segments[0].field == "features"
         and segments[1].field == "behaviours"
         and segments[1].key is not None
     ):
-        owner = profile.task_of(segments[1].key)
+        owner = profile.feature_of(segments[1].key)
         if owner is not None and owner.id != segments[0].key:
-            segments[0] = Segment("tasks", owner.id)
+            segments[0] = Segment("features", owner.id)
     return _render(segments)
 
 

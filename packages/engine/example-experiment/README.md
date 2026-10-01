@@ -12,7 +12,7 @@ different system will require writing your own experiment from scratch.
 ```
 example-experiment/
 ├── experiment.yaml      # Personas, tasks, metrics, and configuration
-├── profile.yaml         # Tasks, behaviours, criteria, and metrics
+├── profile.yaml         # Features, behaviours, criteria, and metrics
 └── fixtures/            # Files uploaded to Orca during simulation
     ├── q3_sales.csv
     ├── q3_sales_corrupted.csv

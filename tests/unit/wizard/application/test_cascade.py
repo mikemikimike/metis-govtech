@@ -16,7 +16,7 @@ from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
 
-EB1_DESCRIPTION = "tasks[T-1].behaviours[EB-1].description"
+EB1_DESCRIPTION = "features[F-1].behaviours[EB-1].description"
 
 
 def edit(path: str, value="reworded") -> Patch:
@@ -97,7 +97,7 @@ def test_edits_that_derive_nothing_ask_nothing() -> None:
     profile = research_assistant()
 
     nothing = [
-        edit("tasks[T-1].behaviours[EB-1].measured", False),
+        edit("features[F-1].behaviours[EB-1].measured", False),
         edit("personas[cooperative-delegator].description", "different words"),
         edit("scenarios[S-1].behaviour_refs", ["EB-1"]),
         edit("scenarios[S-1].num_trials", 5),
@@ -116,7 +116,7 @@ def test_personas_are_reached_by_nothing() -> None:
         profile,
         [
             edit(
-                "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].description.then",
+                "features[F-1].behaviours[EB-1].criteria[AC-1-1].description.then",
                 "x",
             )
         ],
@@ -166,7 +166,7 @@ def test_regenerating_clears_what_the_model_wrote() -> None:
 
 
 def test_a_product_edit_clears_everything_derived_from_it() -> None:
-    """Tasks and scenarios were all derived from the product description."""
+    """Features and scenarios were all derived from the product description."""
     profile = research_assistant()
 
     cascade.clear_for_regeneration(
@@ -175,7 +175,7 @@ def test_a_product_edit_clears_everything_derived_from_it() -> None:
         set(),
     )
 
-    assert profile.tasks == []
+    assert profile.features == []
     assert profile.scenarios == []
 
 

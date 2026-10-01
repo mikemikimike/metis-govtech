@@ -9,9 +9,9 @@ from metis.wizard.domain.applier import apply, sanitise
 from metis.wizard.domain.permissions import InterviewStep, StepPermissions, owner_of
 from tests.fixtures.wizard.profiles import research_assistant
 
-EB1_MEASURED = "tasks[T-1].behaviours[EB-1].measured"
-EB1_DESCRIPTION = "tasks[T-1].behaviours[EB-1].description"
-AC1_METRIC = "tasks[T-1].behaviours[EB-1].criteria[AC-1-1].metric_fqn"
+EB1_MEASURED = "features[F-1].behaviours[EB-1].measured"
+EB1_DESCRIPTION = "features[F-1].behaviours[EB-1].description"
+AC1_METRIC = "features[F-1].behaviours[EB-1].criteria[AC-1-1].metric_fqn"
 
 
 def patch(path: str, value=None, *, op=PatchOp.SET, origin=PatchOrigin.MODEL) -> Patch:
@@ -74,10 +74,10 @@ def test_measured_is_owned_by_no_step() -> None:
 def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
     from metis.wizard.contracts import (
         BehaviourDraft,
+        FeatureDraft,
         PersonaDraft,
         ScenarioDraft,
         StepResultPatch,
-        TaskDraft,
     )
 
     profile = research_assistant()
@@ -87,10 +87,10 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
             [
                 StepResultPatch(
                     op=PatchOp.ADD,
-                    path="tasks",
-                    value=TaskDraft(
+                    path="features",
+                    value=FeatureDraft(
                         name="New",
-                        description="A new task.",
+                        description="A new feature.",
                         behaviours=[
                             BehaviourDraft(
                                 name="Something",
@@ -121,9 +121,9 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
     )
 
     assert not result.rejected
-    assert profile.tasks[-1].id == "T-3"
-    assert profile.tasks[-1].behaviours[0].id == "EB-4"
-    assert profile.tasks[-1].behaviours[0].measured is True
+    assert profile.features[-1].id == "F-3"
+    assert profile.features[-1].behaviours[0].id == "EB-4"
+    assert profile.features[-1].behaviours[0].measured is True
     assert profile.personas[-1].id == "impatient-executive-2"
     assert profile.scenarios[-1].id == "S-3"
     assert profile.scenarios[-1].num_trials == 3
@@ -177,7 +177,7 @@ def test_rejecting_a_metric_write_points_at_rewording() -> None:
 # ── the fields inside a bundled value ──────────────────────────────────────
 #
 # The address check reads `patch.path` alone, and the model is told to draft a whole step in
-# one go — so its patches address a *container* (`scenarios`, `tasks`) and carry the finished
+# one go — so its patches address a *container* (`scenarios`, `features`) and carry the finished
 # object inside. Every user-owned field below is reachable that way without the path ever
 # naming it. These are the same three rules as above, tested at the shape the model actually
 # sends rather than the targeted SET it rarely does.
@@ -243,8 +243,8 @@ def test_a_model_cannot_change_fixtures_on_an_existing_scenario() -> None:
     assert profile.scenario("S-1").fixtures == before  # type: ignore[union-attr]
 
 
-def test_a_bundled_task_cannot_carry_a_tick_or_a_metric() -> None:
-    """The recursion case. `Task.model_validate` builds nested behaviours and criteria from
+def test_a_bundled_feature_cannot_carry_a_tick_or_a_metric() -> None:
+    """The recursion case. `Feature.model_validate` builds nested behaviours and criteria from
     raw dicts without re-entering the coercion, so the nesting is the whole smuggling route."""
     profile = research_assistant()
 
@@ -252,9 +252,9 @@ def test_a_bundled_task_cannot_carry_a_tick_or_a_metric() -> None:
         profile,
         [
             patch(
-                "tasks",
+                "features",
                 {
-                    "id": "T-9",
+                    "id": "F-9",
                     "name": "Data handling",
                     "description": "Handle uploaded data safely.",
                     "behaviours": [
@@ -440,30 +440,32 @@ def test_add_remove_and_set() -> None:
 def test_a_patch_at_a_missing_node_is_reported_not_raised() -> None:
     profile = research_assistant()
 
-    # A behaviour id no task owns stays unreachable — a wrong *task* ancestor is corrected
-    # against the behaviour id (see `test_a_wrong_task_ancestor_is_corrected`), but a wrong
+    # A behaviour id no feature owns stays unreachable — a wrong *feature* ancestor is corrected
+    # against the behaviour id (see `test_a_wrong_feature_ancestor_is_corrected`), but a wrong
     # behaviour id is a genuinely missing node.
-    result = apply(profile, [patch("tasks[T-404].behaviours[EB-404].description", "x")])
+    result = apply(
+        profile, [patch("features[F-404].behaviours[EB-404].description", "x")]
+    )
 
     assert result.applied == []
     assert result.any_rejected
 
 
-def test_a_wrong_task_ancestor_is_corrected() -> None:
+def test_a_wrong_feature_ancestor_is_corrected() -> None:
     """A model drafting criteria can pair the right, unique behaviour id with the wrong
-    task ancestor — `tasks[T-1].behaviours[EB-3]` when EB-3 lives under T-2. Behaviour ids
+    feature ancestor — `features[F-1].behaviours[EB-3]` when EB-3 lives under F-2. Behaviour ids
     are globally unique, so the applier corrects the ancestor against the behaviour rather
     than reporting a node it could plainly find. This is what stops "no behaviour with id
     'EB-3'" from reaching the user during the criteria step.
     """
     profile = research_assistant()
-    assert profile.task_of("EB-3").id == "T-2"  # type: ignore[union-attr]
+    assert profile.feature_of("EB-3").id == "F-2"  # type: ignore[union-attr]
 
     result = apply(
         profile,
         [
             patch(
-                "tasks[T-1].behaviours[EB-3].description",
+                "features[F-1].behaviours[EB-3].description",
                 "Stops after repeated failures and reports what it tried",
             )
         ],
@@ -477,18 +479,23 @@ def test_a_wrong_task_ancestor_is_corrected() -> None:
 
 
 def test_a_positional_path_is_resolved_to_ids() -> None:
-    """A model can draft a positional path — `tasks[0].behaviours[0]` — against the contract
+    """A model can draft a positional path — `features[0].behaviours[0]` — against the contract
     to address by id. The index plainly names a node, so the applier reads the id at each
-    index and substitutes it rather than reporting "no task with id '0'". User ticks and
+    index and substitutes it rather than reporting "no feature with id '0'". User ticks and
     edits are always built with real ids, so only a model mistake ever carries a number.
     """
     profile = research_assistant()
-    first_task = profile.tasks[0]
-    first_behaviour = first_task.behaviours[0]
+    first_feature = profile.features[0]
+    first_behaviour = first_feature.behaviours[0]
 
     result = apply(
         profile,
-        [patch("tasks[0].behaviours[0].description", "Cites a source for every claim")],
+        [
+            patch(
+                "features[0].behaviours[0].description",
+                "Cites a source for every claim",
+            )
+        ],
     )
 
     assert result.applied and not result.any_rejected
@@ -507,8 +514,8 @@ def test_a_malformed_value_is_reported_not_raised() -> None:
         profile,
         [
             patch(
-                "tasks",
-                {"id": "T-9", "behaviours": ["EB-1", "EB-2"]},
+                "features",
+                {"id": "F-9", "behaviours": ["EB-1", "EB-2"]},
                 op=PatchOp.ADD,
                 origin=PatchOrigin.WIZARD,  # even a trusted patch must not crash on a bad value
             )
@@ -517,13 +524,13 @@ def test_a_malformed_value_is_reported_not_raised() -> None:
 
     assert result.applied == []
     assert result.any_rejected
-    assert not any(e.id == "T-9" for e in profile.tasks)
+    assert not any(e.id == "F-9" for e in profile.features)
 
 
 def test_paths_address_by_id_not_index() -> None:
     profile = research_assistant()
 
-    node = paths.resolve(profile, "tasks[T-1].behaviours[EB-1].criteria[AC-1-1]")
+    node = paths.resolve(profile, "features[F-1].behaviours[EB-1].criteria[AC-1-1]")
 
     assert node.id == "AC-1-1"
 
@@ -545,7 +552,7 @@ def test_a_list_is_addressed_by_id_first_then_by_numeric_index(
     from being silently dropped. Id addressing stays first and preferred.
     """
     profile = research_assistant()
-    path = f"tasks[T-1].behaviours[{bracket}]"
+    path = f"features[F-1].behaviours[{bracket}]"
 
     if raises:
         with pytest.raises(paths.PathError):
@@ -564,7 +571,7 @@ def test_criteria_added_by_positional_index_actually_land() -> None:
         profile,
         [
             patch(
-                "tasks[T-1].behaviours[EB-1].criteria",
+                "features[F-1].behaviours[EB-1].criteria",
                 {
                     "id": "AC-1-1",
                     "name": "Cite answer",
@@ -585,10 +592,10 @@ def test_criteria_added_by_positional_index_actually_land() -> None:
 
 
 def test_a_glob_does_not_span_a_dot() -> None:
-    """`tasks[*].behaviours[*]` must not match something nested deeper under it."""
-    assert owner_of("tasks[T-1].behaviours[EB-1]") is InterviewStep.BEHAVIOURS
+    """`features[*].behaviours[*]` must not match something nested deeper under it."""
+    assert owner_of("features[F-1].behaviours[EB-1]") is InterviewStep.BEHAVIOURS
     assert (
-        owner_of("tasks[T-1].behaviours[EB-1].criteria[AC-1-1]")
+        owner_of("features[F-1].behaviours[EB-1].criteria[AC-1-1]")
         is InterviewStep.CRITERIA
     )
 
@@ -598,19 +605,19 @@ def test_materializer_uses_dot_free_ids_for_every_profile_node() -> None:
     from metis.wizard.contracts import (
         BehaviourDraft,
         CriterionDraft,
+        FeatureDraft,
         PersonaDraft,
         Product,
         ProductProfile,
         ScenarioDraft,
-        TaskDraft,
     )
 
     profile = ProductProfile(product=Product(name="X", users="", description=""))
     issued: set[str] = set()
     typed: set[str] = set()
-    task = materializer.add_task(
+    feature = materializer.add_feature(
         profile,
-        TaskDraft(
+        FeatureDraft(
             name="Answer",
             description="Answer well.",
             behaviours=[BehaviourDraft(name="Cite", description="Cite sources.")],
@@ -619,7 +626,7 @@ def test_materializer_uses_dot_free_ids_for_every_profile_node() -> None:
         issued_ids=issued,
         user_typed=typed,
     )
-    behaviour = task.behaviours[0]
+    behaviour = feature.behaviours[0]
     criterion = materializer.add_criterion(
         profile,
         behaviour,
@@ -653,7 +660,7 @@ def test_materializer_uses_dot_free_ids_for_every_profile_node() -> None:
         user_typed=typed,
     )
 
-    created = {task.id, behaviour.id, criterion.id, persona.id, scenario.id}
+    created = {feature.id, behaviour.id, criterion.id, persona.id, scenario.id}
     assert created == issued
     assert all("." not in node_id for node_id in created)
     assert {criterion.id, persona.id} <= typed
@@ -667,7 +674,7 @@ def test_removed_highest_ids_are_not_reused() -> None:
     profile = research_assistant()
     issued = collect_profile_ids(profile)
     typed: set[str] = set()
-    profile.tasks[1].behaviours.pop()
+    profile.features[1].behaviours.pop()
     profile.behaviour("EB-1").criteria.pop()  # type: ignore[union-attr]
 
     new_behaviour = materializer.add_behaviour(
@@ -677,7 +684,7 @@ def test_removed_highest_ids_are_not_reused() -> None:
         issued_ids=issued,
         user_typed=typed,
     )
-    profile.tasks[1].behaviours.append(new_behaviour)
+    profile.features[1].behaviours.append(new_behaviour)
     new_criterion = materializer.add_criterion(
         profile,
         profile.behaviour("EB-1"),  # type: ignore[arg-type]
@@ -697,7 +704,7 @@ def test_removed_highest_ids_are_not_reused() -> None:
 
 
 def test_tree_regeneration_does_not_reuse_removed_ids() -> None:
-    from metis.wizard.contracts import BehaviourDraft, TaskDraft
+    from metis.wizard.contracts import BehaviourDraft, FeatureDraft
     from metis.wizard.domain.profile import collect_profile_ids
 
     profile = research_assistant()
@@ -707,13 +714,13 @@ def test_tree_regeneration_does_not_reuse_removed_ids() -> None:
         cascade.Question(text="", subject="product.description", kind="tree"),
         set(),
     )
-    assert profile.tasks == [] and profile.scenarios == []
+    assert profile.features == [] and profile.scenarios == []
 
-    task = materializer.add_task(
+    feature = materializer.add_feature(
         profile,
-        TaskDraft(
-            name="New task",
-            description="A regenerated task.",
+        FeatureDraft(
+            name="New feature",
+            description="A regenerated feature.",
             behaviours=[
                 BehaviourDraft(name="New behaviour", description="A new behaviour.")
             ],
@@ -721,8 +728,8 @@ def test_tree_regeneration_does_not_reuse_removed_ids() -> None:
         PatchOrigin.MODEL,
         issued_ids=issued,
     )
-    assert task.id == "T-3"
-    assert task.behaviours[0].id == "EB-4"
+    assert feature.id == "F-3"
+    assert feature.behaviours[0].id == "EB-4"
 
 
 def test_persona_slug_collisions_get_deterministic_suffixes() -> None:

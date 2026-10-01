@@ -22,7 +22,7 @@ test("the new manual form presents its Experiment sections in order", () => {
   assert.match(markup, />Description<\/span>/);
   assert.match(markup, /Download experiment\.zip/);
   assert.doesNotMatch(markup, /Still needs/);
-  assert.doesNotMatch(markup, />Task</);
+  assert.doesNotMatch(markup, />Feature</);
   assert.doesNotMatch(markup, />Behaviour</);
   assert.doesNotMatch(markup, />Criterion</);
 

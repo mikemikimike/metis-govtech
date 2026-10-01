@@ -95,9 +95,9 @@ class TestSessionReport:
 def test_profile_fields_map_to_report():
     profile = {
         "product": {"name": "Assistant"},
-        "tasks": [
+        "features": [
             {
-                "id": "T-1",
+                "id": "F-1",
                 "name": "Answer",
                 "behaviours": [
                     {
@@ -162,7 +162,7 @@ class TestReportModel:
         report = Report.model_validate(sample_report)
         assert report.product == "Orca"
         assert report.run == "report"
-        assert isinstance(report.tasks, list)
+        assert isinstance(report.features, list)
         assert isinstance(report.behaviours, dict)
         assert isinstance(report.criteria, dict)
 

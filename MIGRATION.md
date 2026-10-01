@@ -29,6 +29,23 @@ survives past — the coordinated v1.0 release.
 
 ### metis-wizard
 
+#### `Task` renamed to `Feature`
+
+The Profile groups product functions under `features`. Update Python imports from `Task`
+to `Feature` and from `TaskDraft` to `FeatureDraft`. Use `profile.features`,
+`profile.feature(id)`, and `profile.feature_of(behaviour_id)`.
+
+For each saved `profile.yaml`, rename the top-level `tasks` key to `features` and set
+`schema_version` to `2`. Existing IDs can stay unchanged. New feature IDs use `F-`.
+Update patch paths from `tasks[...]` to `features[...]`.
+
+Saved browser Interviews that use profile schema version 1 cannot resume. Start a new
+Interview. Keep a backup of any saved state before conversion; its pending patches and
+history can also contain paths with `tasks[...]`.
+
+The wizard compiles `experiment.yaml` with `schema_version: 2`. Reports change too; see
+[Schema versions are now `2`](#schema-versions-are-now-2).
+
 #### `runs` renamed to `trials`
 
 The execution-count concept is now called **trials** everywhere, to match the
@@ -125,7 +142,15 @@ _No breaking changes in v1.0._
 
 ### metis-engine
 
-_No breaking changes in v1.0._
+#### Schema versions are now `2`
+
+v1 marks its break from v0 with one schema version bump. `experiment.yaml`, run records
+(`record.json`), and the report schema (`Report v2`) now use version `2`, the same as
+`profile.yaml`. Set `schema_version: 2` in each `experiment.yaml`. The engine refuses run
+records from v0; run the simulation again to create new records.
+
+Report JSON now uses `features` at the root, in `resultTable`, and in trial outcome
+items. Update report consumers and regenerate reports.
 
 ### metis-api
 

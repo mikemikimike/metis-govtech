@@ -78,7 +78,7 @@ The directory `packages/engine/example-experiment/` contains a complete experime
 ```
 example-experiment/
 ├── experiment.yaml      # Personas, scenarios, and metrics
-├── profile.yaml         # Tasks, behaviours, criteria, and metrics
+├── profile.yaml         # Features, behaviours, criteria, and metrics
 └── fixtures/            # Files uploaded during simulation
     ├── q3_sales.csv
     ├── q3_sales_corrupted.csv
@@ -183,7 +183,7 @@ my-experiment/
 ### Top-Level Fields
 
 ```yaml
-schema_version: 1
+schema_version: 2
 
 id: my-evaluation
 description: >
@@ -192,7 +192,7 @@ description: >
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `schema_version` | Yes | Always `1` (current version) |
+| `schema_version` | Yes | Always `2` (current version) |
 | `id` | Yes | Identifier used in the output directory name |
 | `description` | Yes | Free-text purpose of the experiment |
 
@@ -877,7 +877,7 @@ Once you have a `RunnerFactory` class, tell the engine to use it via the `runner
 Add `runner_factory_ref` at the top level of your experiment configuration:
 
 ```yaml
-schema_version: 1
+schema_version: 2
 
 id: my-api-eval
 description: Evaluate target system via REST API
@@ -944,14 +944,14 @@ Your runner module must be importable from the environment where `metis engine s
 
 ### Profile Configuration (profile.yaml)
 
-The `profile.yaml` file describes **what** your target system does — its product identity, the tasks it handles, and the acceptance criteria that define correct behavior. The engine uses it during report generation to map simulation outcomes to structured pass/fail results.
+The `profile.yaml` file describes **what** your target system does — its product identity, the features it handles, and the acceptance criteria that define correct behavior. The engine uses it during report generation to map simulation outcomes to structured pass/fail results.
 
 `profile.yaml` lives alongside `experiment.yaml` in your experiment directory:
 
 ```
 my-experiment/
 ├── experiment.yaml      # HOW to run: personas, scenarios, metrics
-├── profile.yaml         # WHAT to evaluate: tasks, behaviours, criteria
+├── profile.yaml         # WHAT to evaluate: features, behaviours, criteria
 └── fixtures/
 ```
 
@@ -960,7 +960,7 @@ my-experiment/
 | Concern | File | Purpose |
 |---------|------|---------|
 | Simulation setup | `experiment.yaml` | Personas, scenarios, fixtures, metrics, runner |
-| Evaluation semantics | `profile.yaml` | Product identity, task definitions, acceptance criteria |
+| Evaluation semantics | `profile.yaml` | Product identity, feature definitions, acceptance criteria |
 
 The experiment defines *how* to run evaluations. The profile defines *what* correct behavior looks like. Reports combine both: experiment results are graded against profile criteria.
 
@@ -973,17 +973,17 @@ The structure of `profile.yaml` is defined by a [JSON Schema](../../packages/wiz
 ```
 
 ```yaml
-schema_version: 1         # Profile schema version; always 1 (current version)
+schema_version: 2         # Profile schema version; always 2 (current version)
 product:
   name: <string>           # Target system name
   users: <string>          # Prose that describes the product users
   description: <string>    # Short description of what is evaluated
   detail: <string>         # Longer context about the evaluation scope
 
-tasks:
-  - id: <string>           # Unique task identifier (e.g. "EP-3")
-    name: <string>         # Human-readable task name (e.g. "Data Analyst")
-    description: <string>  # What the task must achieve
+features:
+  - id: <string>           # Unique feature identifier (e.g. "EP-3")
+    name: <string>         # Human-readable feature name (e.g. "Data Analyst")
+    description: <string>  # What the feature must achieve
     behaviours:
       - id: <string>       # Unique behaviour identifier (e.g. "EB-DA-1")
         name: <string>     # Human-readable behaviour name
@@ -1015,7 +1015,7 @@ scenarios:
 
 #### Field Descriptions
 
-**`schema_version`** — the profile schema version. Always `1` (the current version). A profile written without it still loads and is stamped on the next save; a profile stamped with a version the wizard cannot read is refused rather than misread.
+**`schema_version`** — the profile schema version. The current version is `2`. A profile without this field gets the current version on its next save. The wizard rejects an unsupported version.
 
 **`product`** — top-level metadata:
 
@@ -1026,30 +1026,30 @@ scenarios:
 | `description` | Yes | Short evaluation description |
 | `detail` | No | Extended context about the evaluation's purpose and scope |
 
-**`tasks[]`** — capabilities being evaluated:
+**`features[]`** — product functions or user workflows being evaluated:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | Yes | Stable identifier (conventionally `EP-N`) |
+| `id` | Yes | Stable identifier (new wizard features use `F-N`) |
 | `name` | Yes | Human-readable name |
-| `description` | Yes | What the task must achieve |
-| `behaviours` | Yes | List of expected behaviours for this task |
+| `description` | Yes | What the feature must achieve |
+| `behaviours` | Yes | List of expected behaviours for this feature |
 
-**`tasks[].behaviours[]`** — observable behaviors:
+**`features[].behaviours[]`** — observable behaviors:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | Yes | Stable identifier (conventionally `EB-<TASK>-N`) |
+| `id` | Yes | Stable identifier (conventionally `EB-<FEATURE>-N`) |
 | `name` | Yes | Human-readable behaviour name |
 | `description` | Yes | Full description of what the system must do |
 | `measured` | No | `true` when the evaluation measures this behaviour; defaults to `false` |
 | `criteria` | Yes | Acceptance criteria that define pass/fail |
 
-**`tasks[].behaviours[].criteria[]`** — acceptance criteria (Given/When/Then):
+**`features[].behaviours[].criteria[]`** — acceptance criteria (Given/When/Then):
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | Yes | Stable identifier (conventionally `AC-<TASK>-N`) |
+| `id` | Yes | Stable identifier (conventionally `AC-<FEATURE>-N`) |
 | `name` | Yes | Human-readable criterion name |
 | `description.given` | Yes | Precondition or setup state |
 | `description.when` | Yes | User action or trigger |
@@ -1065,7 +1065,7 @@ product:
   description: Evaluate chatbot response quality and safety.
   detail: Tests core chat capabilities across persona types.
 
-tasks:
+features:
   - id: EP-1
     name: General Chat
     description: Answer direct and ambiguous questions safely.
@@ -1169,7 +1169,7 @@ Use this template and checklist when creating an experiment from scratch for a n
 #### Minimal Template
 
 ```yaml
-schema_version: 1
+schema_version: 2
 
 id: my-target-eval
 description: >
@@ -1247,5 +1247,5 @@ Start with the minimal template above, verify it runs end-to-end, then layer in 
 1. **Add fixtures** — put files in `fixtures/`, reference them in `scenarios[].fixtures`, and ensure your runner handles `file_upload` actions
 2. **Add personas** — write 2-3 personas with contrasting behavioral profiles, add them to `persona_refs`
 3. **Add metrics** — start with code-graded metrics (fast, deterministic), then add judge-graded metrics
-4. **Add profile.yaml** — define tasks, behaviours, and criteria to get structured reports
+4. **Add profile.yaml** — define features, behaviours, and criteria to get structured reports
 5. **Tune parameters** — adjust `max_turns`, `timeout_minutes`, `response_wait_ms`, `num_trials` based on observed runs

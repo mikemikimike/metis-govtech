@@ -50,12 +50,12 @@ def test_matches_the_golden_file(fixtures_dir: Path) -> None:
 
 
 def test_emits_schema_version_explicitly() -> None:
-    """The engine declares it Literal[1] with no default and requires it."""
+    """The engine declares it Literal[2] with no default and requires it."""
     assert compiled()["schema_version"] == SCHEMA_VERSION
 
 
 def test_emits_the_default_runner_factory_ref() -> None:
-    """The engine v1 schema requires it; the compiler stamps a default the loader resolves."""
+    """The engine schema requires it; the compiler stamps a default the loader resolves."""
     from metis.wizard.application.compile import DEFAULT_RUNNER_FACTORY_REF
 
     assert compiled()["runner_factory_ref"] == DEFAULT_RUNNER_FACTORY_REF

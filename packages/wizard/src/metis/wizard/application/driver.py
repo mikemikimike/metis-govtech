@@ -191,7 +191,7 @@ class StepDriver:
             completion = screens.product_completion_form(profile)
             if completion is not None:
                 return completion
-            if not profile.tasks:
+            if not profile.features:
                 self._try(
                     lambda: self.interviewer.draft_behaviours(
                         profile,
@@ -445,14 +445,14 @@ class StepDriver:
             )
 
     def _add_typed_behaviour(
-        self, state: DriverState, task_id: str, values: dict[str, Any]
+        self, state: DriverState, feature_id: str, values: dict[str, Any]
     ) -> None:
-        """Append one form-created Behaviour under the Task that offered the action."""
-        task = state.profile.task(task_id)
-        if task is None:
+        """Append one form-created Behaviour under the Feature that offered the action."""
+        feature = state.profile.feature(feature_id)
+        if feature is None:
             return self._refuse_form_target()
 
-        task.behaviours.append(
+        feature.behaviours.append(
             materializer.add_behaviour(
                 state.profile,
                 BehaviourDraft(
@@ -555,7 +555,7 @@ class StepDriver:
 
         if "add" in actions:
             # Every repeated node has a short name and substantive content. The Behaviour
-            # action also carries its Task id so the submitted node cannot move to another
+            # action also carries its Feature id so the submitted node cannot move to another
             # group during a door or save/resume round trip.
             fields = [
                 FormField(id="name", label="Name"),
@@ -731,7 +731,7 @@ class StepDriver:
             Warning(
                 text=(
                     "I couldn't find where that item belongs, so I've left the profile "
-                    "unchanged. Open the form again from its Task."
+                    "unchanged. Open the form again from its Feature."
                 ),
                 source=WarningSource.RUNTIME,
                 blocking=False,
@@ -859,10 +859,12 @@ class StepDriver:
         for behaviour in state.profile.measured_behaviours():
             if behaviour.criteria:
                 continue
-            task = state.profile.task_of(behaviour.id)
-            if task is None:  # a Behaviour from this Profile must belong to one Task
+            feature = state.profile.feature_of(behaviour.id)
+            if (
+                feature is None
+            ):  # a Behaviour from this Profile must belong to one Feature
                 continue
-            paths.add(f"tasks[{task.id}].behaviours[{behaviour.id}].criteria")
+            paths.add(f"features[{feature.id}].behaviours[{behaviour.id}].criteria")
         return frozenset(paths)
 
     def _try(

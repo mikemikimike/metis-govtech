@@ -1,4 +1,4 @@
-schema_version: 1
+schema_version: 2
 id: research-assistant
 description: An agent that answers research questions over an internal document library, citing
   what it used.

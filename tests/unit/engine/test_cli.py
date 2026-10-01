@@ -8,7 +8,7 @@ import pytest
 from metis.engine.cli import _validate_inputs
 
 MINIMAL_EXPERIMENT = dedent("""\
-    schema_version: 1
+    schema_version: 2
     id: test-exp
     description: test
     runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -53,7 +53,7 @@ def test_missing_experiment_yaml(tmp_path: Path, capsys: pytest.CaptureFixture[s
 
 
 def test_malformed_experiment_yaml(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
-    (tmp_path / "experiment.yaml").write_text("schema_version: 1\nid: x\n")
+    (tmp_path / "experiment.yaml").write_text("schema_version: 2\nid: x\n")
     with pytest.raises(SystemExit) as exc_info:
         _validate_inputs(tmp_path)
     assert exc_info.value.code == 1
@@ -66,7 +66,7 @@ def test_malformed_experiment_yaml(tmp_path: Path, capsys: pytest.CaptureFixture
 
 def test_duplicate_persona_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -94,7 +94,7 @@ def test_duplicate_persona_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]
 
 def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -123,7 +123,7 @@ def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
 
 def test_unknown_persona_ref(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -148,7 +148,7 @@ def test_unknown_persona_ref(tmp_path: Path, capsys: pytest.CaptureFixture[str])
 
 def test_missing_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -175,7 +175,7 @@ def test_missing_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
 
 def test_bad_metric_fqn(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -201,7 +201,7 @@ def test_metric_not_basemetric_subclass(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -234,7 +234,7 @@ def test_valid_input_passes(tmp_path: Path):
 
 def test_valid_input_with_fixtures(tmp_path: Path):
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -260,7 +260,7 @@ def test_valid_input_with_fixtures(tmp_path: Path):
 def test_metric_ref_all_formats(tmp_path: Path):
     """All accepted MetricRef formats parse without error."""
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -285,7 +285,7 @@ def test_metric_ref_legacy_class_format(tmp_path: Path):
     from metis.engine.simulation.types import Experiment
 
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -313,7 +313,7 @@ def test_metric_ref_null_args(tmp_path: Path):
     from metis.engine.simulation.types import Experiment
 
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
@@ -341,7 +341,7 @@ def test_metric_ref_null_args(tmp_path: Path):
 def test_extra_persona_fields_ignored(tmp_path: Path):
     """Extra fields on persona don't cause validation failure."""
     content = dedent("""\
-        schema_version: 1
+        schema_version: 2
         id: test-exp
         description: test
         runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory

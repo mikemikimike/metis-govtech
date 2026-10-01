@@ -24,7 +24,7 @@ class BehaviourDraft(_StrictDraft):
     description: str
 
 
-class TaskDraft(_StrictDraft):
+class FeatureDraft(_StrictDraft):
     name: str
     description: str
     behaviours: list[BehaviourDraft] = Field(min_length=1)
@@ -50,7 +50,13 @@ class ScenarioDraft(_StrictDraft):
     fixtures: list[str] = Field(default_factory=list)
 
 
-_DRAFT_TYPES = (TaskDraft, BehaviourDraft, CriterionDraft, PersonaDraft, ScenarioDraft)
+_DRAFT_TYPES = (
+    FeatureDraft,
+    BehaviourDraft,
+    CriterionDraft,
+    PersonaDraft,
+    ScenarioDraft,
+)
 
 
 def _container(path: str) -> str:
@@ -65,12 +71,12 @@ def _legacy_value(path: str, value: Any) -> Any:
     if not isinstance(value, dict):
         return value
     field = _container(path)
-    if field == "tasks":
+    if field == "features":
         behaviours = [
             BehaviourDraft(name=item["name"], description=item["description"])
             for item in value.get("behaviours", [])
         ]
-        return TaskDraft(
+        return FeatureDraft(
             name=value["name"],
             description=value["description"],
             behaviours=behaviours,
@@ -113,7 +119,7 @@ class StepResultPatch(BaseModel):
     op: PatchOp
     path: str
     value: (
-        TaskDraft
+        FeatureDraft
         | BehaviourDraft
         | CriterionDraft
         | PersonaDraft
@@ -141,7 +147,7 @@ class StepResultPatch(BaseModel):
             # Pydantic validation to reject.
             field = _container(str(value.get("path", "")))
             required = {
-                "tasks": {"name", "description", "behaviours"},
+                "features": {"name", "description", "behaviours"},
                 "behaviours": {"name", "description"},
                 "criteria": {"name", "given", "when", "then"},
                 "personas": {"name", "description"},
@@ -154,7 +160,7 @@ class StepResultPatch(BaseModel):
                 },
             }.get(field, set())
             semantic = value["value"]
-            nested_valid = field != "tasks" or all(
+            nested_valid = field != "features" or all(
                 isinstance(item, dict) and set(item) == {"name", "description"}
                 for item in semantic.get("behaviours", [])
             )
@@ -169,7 +175,7 @@ class StepResultPatch(BaseModel):
         if self.op is PatchOp.ADD:
             field = self.path.rsplit(".", 1)[-1]
             expected = {
-                "tasks": TaskDraft,
+                "features": FeatureDraft,
                 "behaviours": BehaviourDraft,
                 "criteria": CriterionDraft,
                 "personas": PersonaDraft,

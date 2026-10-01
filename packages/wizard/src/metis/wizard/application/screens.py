@@ -40,7 +40,7 @@ from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
-    from metis.wizard.domain.profile import Behaviour, ProductProfile, Scenario, Task
+    from metis.wizard.domain.profile import Behaviour, Feature, ProductProfile, Scenario
 
 TRIALS_MIN = 1
 TRIALS_MAX = 20
@@ -102,15 +102,15 @@ def _wizard_patch(path: str, value: object, op: PatchOp = PatchOp.SET) -> Patch:
 
 
 def _behaviour_path(profile: ProductProfile, behaviour_id: str, field: str) -> str:
-    task = profile.task_of(behaviour_id)
-    task_id = task.id if task else "?"
-    return f"tasks[{task_id}].behaviours[{behaviour_id}].{field}"
+    feature = profile.feature_of(behaviour_id)
+    feature_id = feature.id if feature else "?"
+    return f"features[{feature_id}].behaviours[{behaviour_id}].{field}"
 
 
-def _section(task: Task) -> str:
-    # The name alone. "Task 1 ·" would be ordinal noise — the grouping is already visible, and
+def _section(feature: Feature) -> str:
+    # The name alone. "Feature 1 ·" would be ordinal noise — the grouping is already visible, and
     # the number matches nothing the user could refer to.
-    return task.name
+    return feature.name
 
 
 # ── the three replies ──────────────────────────────────────────────────────
@@ -174,12 +174,12 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     there is nothing to write criteria for.
     """
     cards: list[BehaviourCard] = []
-    for task in profile.tasks:
-        for behaviour in task.behaviours:
+    for feature in profile.features:
+        for behaviour in feature.behaviours:
             cards.append(
                 BehaviourCard(
                     id=behaviour.id,
-                    section=_section(task),
+                    section=_section(feature),
                     title=behaviour.name,
                     selected=behaviour.measured,
                     components=[CardText(text=behaviour.description)],
@@ -205,10 +205,10 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
             Option(id=OptionId(action="chat"), label="Chat about it"),
             *[
                 Option(
-                    id=OptionId(action="add", target=task.id),
-                    label=f"Add to {task.name}",
+                    id=OptionId(action="add", target=feature.id),
+                    label=f"Add to {feature.name}",
                 )
-                for task in profile.tasks
+                for feature in profile.features
             ],
             Option(
                 id=OptionId(action="continue"),
@@ -256,13 +256,13 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     """
     cards: list[BehaviourCard] = []
 
-    for task in profile.tasks:
-        for behaviour in task.behaviours:
+    for feature in profile.features:
+        for behaviour in feature.behaviours:
             if behaviour.measured:
                 cards.append(
                     BehaviourCard(
                         id=behaviour.id,
-                        section=_section(task),
+                        section=_section(feature),
                         title=behaviour.name,
                         selected=True,
                         components=[
@@ -297,7 +297,7 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                 cards.append(
                     BehaviourCard(
                         id=behaviour.id,
-                        section=_section(task),
+                        section=_section(feature),
                         title=behaviour.name,
                         components=[
                             CardText(text=behaviour.description),

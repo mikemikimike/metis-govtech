@@ -18,7 +18,9 @@ Commit the updated schema files alongside the model change.
 
 ## Schema Versioning
 
-**v0.x policy:** While the monorepo is pre-1.0, schema versions are not bumped for breaking changes. All v0.x releases may break schemas freely — consumers pin to exact package versions. The `schema_version` field stays at `1` and serves only as a structural marker, not a compatibility contract.
+**v0.x policy:** v0.x releases use `schema_version: 1` for every schema and may break schemas freely — consumers pin to exact package versions.
+
+**`next` (v1 pre-release) policy:** Every schema is at `schema_version: 2`, which marks the break from v0. Breaking changes on `next` do not bump it again; record them in `MIGRATION.md` instead.
 
 **v1.x policy (planned):** Starting with the 1.0 release, proper schema versioning will be enforced. Breaking changes will bump `schema_version`, and migration paths will be documented. The bump checklist below applies from 1.0 onward.
 

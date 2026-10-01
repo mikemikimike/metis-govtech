@@ -151,7 +151,7 @@ class TestDiagnosticsWiring:
 
         record = RunRecord.model_validate(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "config": {"persona": "p", "scenario": "s"},
                 "outcome": {
                     "stop_reason": "max_turns",

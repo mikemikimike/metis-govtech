@@ -9,11 +9,11 @@ from metis.wizard.contracts import (
     Behaviour,
     Criterion,
     CriterionDescription,
+    Feature,
     Persona,
     Product,
     ProductProfile,
     Scenario,
-    Task,
 )
 
 TURN_BUDGET = "metis.library.metrics.TurnBudgetMetric"
@@ -71,9 +71,9 @@ def research_assistant() -> ProductProfile:
                 "Search can time out. Nothing is carried between interviews."
             ),
         ),
-        tasks=[
-            Task(
-                id="T-1",
+        features=[
+            Feature(
+                id="F-1",
                 name="Answer quality",
                 description="Answer research questions accurately and with useful evidence.",
                 behaviours=[
@@ -129,8 +129,8 @@ def research_assistant() -> ProductProfile:
                     ),
                 ],
             ),
-            Task(
-                id="T-2",
+            Feature(
+                id="F-2",
                 name="Recovery",
                 description="Recover safely when document search cannot complete.",
                 behaviours=[

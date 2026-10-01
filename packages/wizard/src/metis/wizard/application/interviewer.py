@@ -43,7 +43,7 @@ class Interviewer(Protocol):
         history: list[Turn],
         context: InterviewContext | None = None,
     ) -> StepResult:
-        """Tasks and behaviours. No criteria yet."""
+        """Features and behaviours. No criteria yet."""
         ...
 
     def draft_criteria(

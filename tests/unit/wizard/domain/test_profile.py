@@ -70,13 +70,13 @@ def test_measured_behaviours_are_the_behaviours_the_user_chose() -> None:
     assert "EB-2" in {b.id for b in profile.behaviours()}
 
 
-def test_a_behaviour_resolves_to_its_owning_task() -> None:
-    """`Behaviour` carries no task id — position in the tree is the only link."""
+def test_a_behaviour_resolves_to_its_owning_feature() -> None:
+    """`Behaviour` carries no feature id — position in the tree is the only link."""
     profile = research_assistant()
 
-    assert profile.task_of("EB-1").id == "T-1"  # type: ignore[union-attr]
-    assert profile.task_of("EB-3").id == "T-2"  # type: ignore[union-attr]
-    assert profile.task_of("EB-nope") is None
+    assert profile.feature_of("EB-1").id == "F-1"  # type: ignore[union-attr]
+    assert profile.feature_of("EB-3").id == "F-2"  # type: ignore[union-attr]
+    assert profile.feature_of("EB-nope") is None
 
 
 def test_criterion_ids_are_scoped_to_their_behaviour() -> None:

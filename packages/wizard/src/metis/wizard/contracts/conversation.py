@@ -167,7 +167,7 @@ class Card(BaseModel):
     id: str  # package bookkeeping — never comes back in a response
     title: str
     section: str | None = (
-        None  # "Answer quality" — a task's bare name, a heading above this card
+        None  # "Answer quality" — a feature's bare name, a heading above this card
     )
     selected: bool | None = None  # a checkbox when set; none when None
     components: list[AnyCardComponent] = Field(default_factory=list)
@@ -350,7 +350,7 @@ class FormRequest(WizardRequest):
     type: Literal[InteractionType.FORM] = InteractionType.FORM
     fields: list[FormField]
     # Which parent this form writes into, when a per-card action raised it — an opaque id such
-    # as "T-1" or "EB-1". Both doors carry it unchanged. The package reads it back so a manual
+    # as "F-1" or "EB-1". Both doors carry it unchanged. The package reads it back so a manual
     # child stays under the parent whose card offered the action, including across a reload.
     # It is optional for screen-level forms.
     target: str | None = None

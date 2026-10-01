@@ -1,11 +1,11 @@
 // The document view. This is the component in the door that reads `ProductProfile` and knows
-// its shape — tasks hold behaviours hold criteria; personas and scenarios are flat lists. The
+// its shape — features hold behaviours hold criteria; personas and scenarios are flat lists. The
 // conversation stays shape-only so this can hold all of the interview's domain knowledge in one
 // place. Presentation remains read-only; the conversation owns every Profile mutation.
 //
 // It is read-only where it counts: no control here changes the profile — every edit still
 // originates in the conversation. The only controls are presentation: disclosures that fold a
-// task open or closed, and a control to collapse the whole pane — both view state, not document
+// feature open or closed, and a control to collapse the whole pane — both view state, not document
 // state.
 //
 // The pane is scaffold first and document second. Every section it will ever hold is drawn from
@@ -26,7 +26,7 @@ import type {
   Behaviour,
   MetricSpec,
   ProductProfile,
-  Task,
+  Feature,
   WizardRequest,
 } from "./transport/api";
 import { PanelRight } from "lucide-react";
@@ -124,11 +124,11 @@ export function Profile({
   onDownload?: () => void;
 }) {
   const { product } = profile;
-  const { tasks } = profile;
+  const { features } = profile;
   const writing =
     busy && interviewStep ? WRITING_TARGET[interviewStep] : undefined;
-  const hasCriteria = tasks.some((task) =>
-    task.behaviours.some((behaviour) => behaviour.criteria.length > 0),
+  const hasCriteria = features.some((feature) =>
+    feature.behaviours.some((behaviour) => behaviour.criteria.length > 0),
   );
   const metricsAvailable = !metricsLoading && !metricsError;
 
@@ -143,8 +143,8 @@ export function Profile({
   // not draft, which is exactly what the blank should report.)
   const selecting = interviewStep === "behaviours";
 
-  const behaviourCount = tasks.reduce(
-    (total, task) => total + task.behaviours.length,
+  const behaviourCount = features.reduce(
+    (total, feature) => total + feature.behaviours.length,
     0,
   );
 
@@ -250,15 +250,15 @@ export function Profile({
             count={behaviourCount}
             writing={writing === "behaviours"}
           >
-            {tasks.length > 0 ? (
+            {features.length > 0 ? (
               // Groups are set well apart from one another, so the section reads as a handful of
               // named groups rather than one long run of behaviours. The gap is the largest inside
               // the sheet: it is the boundary the eye chunks the list on.
               <div className="flex flex-col gap-6">
-                {tasks.map((task) => (
-                  <TaskView
-                    key={task.id}
-                    task={task}
+                {features.map((feature) => (
+                  <FeatureView
+                    key={feature.id}
+                    feature={feature}
                     selecting={selecting}
                     showMetrics={showMetrics}
                     metricByFqn={metricByFqn}
@@ -653,34 +653,34 @@ function ScenarioRow({
   );
 }
 
-// Each task is a disclosure: the header toggles its behaviours open and closed, so a long
-// document collapses to a scannable list of task names. Note this toggle is *view* state
+// Each feature is a disclosure: the header toggles its behaviours open and closed, so a long
+// document collapses to a scannable list of feature names. Note this toggle is *view* state
 // only: it opens and closes a section, it never edits the profile, so the document view stays
 // read-only in the sense that matters — nothing here changes what the package built.
-function TaskView({
-  task,
+function FeatureView({
+  feature,
   selecting,
   showMetrics,
   metricByFqn,
 }: {
-  task: Task;
+  feature: Feature;
   selecting?: boolean;
   showMetrics: boolean;
   metricByFqn: ReadonlyMap<string, MetricSpec>;
 }) {
   const [open, setOpen] = useState(true);
-  // How much of this task is actually being measured. A bare total said the task holds two
+  // How much of this feature is actually being measured. A bare total said the feature holds two
   // behaviours; it did not say that only one of them was ticked, which was left to the dormant
   // rows' opacity alone — easy to miss, and the fraction is the number that decides whether the
   // profile is thorough enough. New Behaviour rows start selected, and the fraction changes as
   // the user clears or restores them.
-  const measured = task.behaviours.filter((b) => b.measured).length;
+  const measured = feature.behaviours.filter((b) => b.measured).length;
   return (
     <div className="animate-arrive flex flex-col">
       <button
         type="button"
         aria-expanded={open}
-        aria-label={`${task.name}, ${measured} of ${task.behaviours.length} measured`}
+        aria-label={`${feature.name}, ${measured} of ${feature.behaviours.length} measured`}
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded py-1 text-left transition-colors hover:text-accent"
       >
@@ -689,16 +689,16 @@ function TaskView({
           className="text-muted-foreground transition-transform"
         />
         <span className="min-w-0 flex-1 font-medium text-foreground">
-          {task.name}
+          {feature.name}
         </span>
-        {/* The fraction goes teal the moment anything in this task is actually being measured,
-            and stays grey while none of it is. That makes "this task contributes nothing to the
+        {/* The fraction goes teal the moment anything in this feature is actually being measured,
+            and stays grey while none of it is. That makes "this feature contributes nothing to the
             run" a thing you see rather than a thing you compute, and it scans down the list: the
             grey chips are the gaps. Teal is the right colour for it because this is a live state
             and not a label — the same reason the open interview in the rail carries it. */}
         <span aria-hidden className="shrink-0">
           <Chip tone={measured > 0 ? "accent" : "neutral"}>
-            {measured}/{task.behaviours.length}
+            {measured}/{feature.behaviours.length}
           </Chip>
         </span>
       </button>
@@ -709,10 +709,10 @@ function TaskView({
         // groups first, behaviours within them second.
         <div className="ml-1.5 mt-1 border-l border-border pb-1 pl-3">
           <p className="mb-3 whitespace-pre-wrap text-sm text-muted-foreground">
-            {task.description}
+            {feature.description}
           </p>
           <ul className="flex flex-col gap-4">
-            {task.behaviours.map((b) => (
+            {feature.behaviours.map((b) => (
               <BehaviourView
                 key={b.id}
                 behaviour={b}
