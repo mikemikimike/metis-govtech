@@ -35,7 +35,7 @@ The Profile groups product functions under `features`. Update Python imports fro
 to `Feature` and from `TaskDraft` to `FeatureDraft`. Use `profile.features`,
 `profile.feature(id)`, and `profile.feature_of(behaviour_id)`.
 
-For a saved profile, rename the top-level `tasks` key to `features` and set
+For each saved `profile.yaml`, rename the top-level `tasks` key to `features` and set
 `schema_version` to `2`. Existing IDs can stay unchanged. New feature IDs use `F-`.
 Update patch paths from `tasks[...]` to `features[...]`.
 
