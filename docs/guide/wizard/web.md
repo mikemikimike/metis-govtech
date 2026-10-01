@@ -117,6 +117,9 @@ The archive contains a runnable `experiment.yaml`, the selected fixtures, and a 
 
 ## Browser storage and current limits
 
+- Unsent drafts are lost on refresh or page closure.
+- Edit each Interview in one tab at a time.
+- Failed or interrupted replies require a manual retry. Use **Edit reply** to correct the input.
 - Browser data belongs to the exact web origin. For example, `http://localhost:5173` and
   `http://127.0.0.1:5173` have separate Interview lists.
 - The web client does not provide:

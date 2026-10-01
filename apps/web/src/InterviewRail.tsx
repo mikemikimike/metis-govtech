@@ -12,7 +12,7 @@ export function InterviewRail({
   interviews,
   problems,
   currentId,
-  busy,
+  activeIds,
   onOpen,
   onNew,
   onDelete,
@@ -21,7 +21,7 @@ export function InterviewRail({
   interviews: InterviewSummary[];
   problems: readonly LocalStorageProblem[];
   currentId: string | null;
-  busy: boolean;
+  activeIds: ReadonlySet<string>;
   onOpen: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
@@ -59,7 +59,6 @@ export function InterviewRail({
           // control should read as the first row of that list, not as a centred toolbar button.
           // `bg-background` lifts it off the rail's muted fill, which `ghost` alone leaves flat.
           className="w-full justify-start bg-background"
-          disabled={busy}
           onClick={onNew}
         >
           <CirclePlus size={15} strokeWidth={1.75} aria-hidden />
@@ -132,7 +131,12 @@ export function InterviewRail({
               <button
                 type="button"
                 aria-label={`Delete ${s.title}`}
-                title="Delete local Interview"
+                title={
+                  activeIds.has(s.id)
+                    ? "Wait for this Interview to finish sending."
+                    : "Delete local Interview"
+                }
+                disabled={activeIds.has(s.id)}
                 className={cn(
                   "mr-2 shrink-0 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100",
                   s.id === currentId

@@ -7,7 +7,6 @@ import {
   InterviewRepository,
   emptyRecord,
   removeUnreferencedFixtures,
-  withProvisionalFixtures,
 } from "./repository.ts";
 
 before(async () => {
@@ -85,6 +84,9 @@ test("migrates saved Interviews with their description and fixture bytes", async
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction("interviews", "readwrite");
     transaction.objectStore("interviews").put(oldRecord);
+    transaction
+      .objectStore("interviews")
+      .put({ ...oldRecord, id: "version-four", storage_version: 4 });
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
   });
@@ -92,13 +94,17 @@ test("migrates saved Interviews with their description and fixture bytes", async
 
   const migrated = await new InterviewRepository().read("legacy-opening-files");
 
-  assert.equal(migrated?.storage_version, 4);
+  assert.equal(migrated?.storage_version, 5);
   assert.equal(
     migrated?.state.context.opening_description,
     "The opening explanation.",
   );
   assert.deepEqual(migrated?.state.context.documents, []);
   assert.equal(await migrated?.fixtures[0]?.blob.text(), "policy bytes");
+  const versionFour = await new InterviewRepository().read("version-four");
+  assert.equal(versionFour?.storage_version, 5);
+  assert.equal(await versionFour?.fixtures[0]?.blob.text(), "policy bytes");
+  await new InterviewRepository().delete("version-four");
   await new InterviewRepository().delete("legacy-opening-files");
 });
 
@@ -117,7 +123,7 @@ test("local repository creates, orders, reads and deletes browser records", asyn
     (await repository.list()).map((record) => record.id),
     ["storage-test-b", "storage-test-a"],
   );
-  assert.equal((await repository.read("storage-test-a"))?.storage_version, 4);
+  assert.equal((await repository.read("storage-test-a"))?.storage_version, 5);
   await repository.delete("storage-test-a");
   assert.equal(await repository.read("storage-test-a"), undefined);
   await repository.delete("storage-test-b");
@@ -128,7 +134,7 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
   const healthy = emptyRecord("healthy-record", state, "clarify", []);
   await repository.put(healthy);
   await new Promise<void>((resolve, reject) => {
-    const request = fakeIndexedDB.open("metis-web", 3);
+    const request = fakeIndexedDB.open("metis-web", 4);
     request.onsuccess = () => {
       const tx = request.result.transaction("interviews", "readwrite");
       tx.objectStore("interviews").put({
@@ -285,54 +291,4 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
     ["shared.txt"],
   );
   assert.equal(noLongerUsed.fixtures.length, 0);
-});
-
-test("restores the prior Interview after a provisional fixture turn fails", async () => {
-  const repository = new InterviewRepository();
-  const prior = emptyRecord("fixture-rollback", state, "scenarios", []);
-  await repository.put(prior);
-
-  await assert.rejects(
-    withProvisionalFixtures(
-      repository,
-      prior,
-      [new File(["provisional"], "policy.pdf")],
-      async () => {
-        throw new Error("turn failed");
-      },
-    ),
-    /turn failed/,
-  );
-
-  const reloaded = await new InterviewRepository().read("fixture-rollback");
-  assert.deepEqual(reloaded, prior);
-});
-
-test("restores the prior Interview when the final local write fails", async () => {
-  const repository = new InterviewRepository();
-  const prior = emptyRecord("fixture-final-write", state, "scenarios", []);
-  await repository.put(prior);
-  let writes = 0;
-  const writable = {
-    put: async (candidate: typeof prior) => {
-      writes += 1;
-      if (writes === 2) throw new Error("local write failed");
-      await repository.put(candidate);
-    },
-  };
-
-  await assert.rejects(
-    withProvisionalFixtures(
-      writable,
-      prior,
-      [new File(["provisional"], "policy.pdf")],
-      async (provisional) => {
-        await writable.put(provisional);
-      },
-    ),
-    /local write failed/,
-  );
-
-  const reloaded = await new InterviewRepository().read("fixture-final-write");
-  assert.deepEqual(reloaded, prior);
 });

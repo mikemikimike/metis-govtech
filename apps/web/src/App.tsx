@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   ArrowLeft,
@@ -42,9 +43,7 @@ import {
   emptyRecord,
   addFixtures,
   fixturesForProfile,
-  removeUnreferencedFixtures,
   type LocalStorageProblem,
-  withProvisionalFixtures,
 } from "./storage/repository";
 import {
   normalizeFixtureName,
@@ -53,17 +52,15 @@ import {
 import { profileHasCriteria } from "./metrics";
 import { downloadArchive } from "./download";
 import { ManualAuthoringEntry, ManualForm } from "./ManualForm";
-import {
-  applyEnd,
-  applyTurn,
-  startTranscript,
-  toPresentation,
-} from "./wizard/transcript";
+import { applyEnd, startTranscript, toPresentation } from "./wizard/transcript";
+
+import { TabNavigation, type TabEntry } from "./wizard/navigation";
+import { InterviewOperations, pendingEntry } from "./wizard/operations";
 
 const DOCUMENT_WIDTH_DEFAULT = 42;
 const DOCUMENT_WIDTH_MIN = 24;
 const DOCUMENT_WIDTH_MAX = 60;
-const SELECTED_INTERVIEW_KEY = "metis-web-selected-interview";
+
 const repository = new InterviewRepository();
 type WizardConfig = Awaited<ReturnType<typeof api.config>>;
 type OpeningPhase = "describe" | "capabilities";
@@ -121,22 +118,13 @@ const PERSPECTIVE_ICONS: Record<Perspective, LucideIcon> = {
   security: ShieldCheck,
 };
 
-type RetryIntent =
-  | {
-      kind: "turn";
-      response: UserResponse;
-      files?: File[];
-      removedFixtures?: string[];
-    }
-  | { kind: "end" }
-  | { kind: "package"; record: LocalInterviewRecord };
-
 export function conversationScrollRevision(
   interviewId: string | null,
   requestCount: number,
   done: boolean,
+  submission = "",
 ): string {
-  return `${interviewId ?? "opening"}:${requestCount}:${done ? "complete" : "active"}`;
+  return `${interviewId ?? "opening"}:${requestCount}:${done ? "complete" : "active"}:${submission}`;
 }
 
 export function App() {
@@ -145,7 +133,38 @@ export function App() {
     readonly LocalStorageProblem[]
   >([]);
   const [record, setRecord] = useState<LocalInterviewRecord | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [destination, setDestination] = useState<TabEntry | null>(null);
+  const destinationRef = useRef<TabEntry | null>(null);
+  const navigation = useRef<TabNavigation | null>(null);
+  const refreshListRef = useRef<() => Promise<void>>(async () => {});
+  const [operations] = useState(
+    () =>
+      new InterviewOperations(repository, (next) => {
+        const current = destinationRef.current?.destination;
+        if (current?.kind === "interview" && current.id === next.id)
+          setRecord(next);
+        void refreshListRef.current().catch(() => {});
+      }),
+  );
+  useSyncExternalStore(operations.subscribe, operations.snapshot);
+  const operationKey =
+    destination?.destination.kind === "interview"
+      ? destination.destination.id
+      : `opening:${destination?.entry ?? "loading"}`;
+  const busy = operations.active.has(operationKey);
+  const feedback = operations.feedback.get(operationKey);
+  const error = feedback?.message ?? null;
+  const setError = useCallback(
+    (message: string | null) => {
+      if (message) operations.report(operationKey, message);
+      else operations.dismiss(operationKey);
+    },
+    [operations, operationKey],
+  );
+  const drafts = useRef(new Map<string, string>());
+  const [, setDraftRevision] = useState(0);
+  const formDrafts = useRef(new Map<string, Record<string, string>>());
+  const draftKey = `${record?.id ?? "new"}:${record?.state.pending?.request_id ?? ""}`;
   const [workingStatus, setWorkingStatus] = useState("Working…");
   const [wizardConfig, setWizardConfig] = useState<WizardConfigState>({
     status: "loading",
@@ -163,8 +182,8 @@ export function App() {
   >({});
   const [capabilityEvidence, setCapabilityEvidence] =
     useState<CapabilityEvidenceDraft>(emptyCapabilityEvidence);
-  const [error, setError] = useState<string | null>(null);
-  const [retryIntent, setRetryIntent] = useState<RetryIntent | null>(null);
+
+  const [loadingRecord, setLoadingRecord] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(true);
@@ -180,7 +199,6 @@ export function App() {
   const metricRequest = useRef<Promise<
     Awaited<ReturnType<typeof api.metrics>>
   > | null>(null);
-  const restored = useRef(false);
 
   const view = useMemo(() => record && toPresentation(record), [record]);
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
@@ -188,6 +206,7 @@ export function App() {
     view?.id ?? null,
     view?.requests.length ?? 0,
     view?.done ?? false,
+    String(record?.submission_revision ?? 0),
   );
   const pending = record?.state.pending ?? undefined;
   const metricByFqn = useMemo(
@@ -196,19 +215,19 @@ export function App() {
     [metricCatalogue],
   );
   const hasCriteria = view ? profileHasCriteria(view.profile) : false;
-  const showError = useCallback((cause: unknown, intent?: RetryIntent) => {
-    setError(errorMessage(cause));
-    setRetryIntent(isRetryable(cause) ? (intent ?? null) : null);
-  }, []);
 
   useEffect(() => {
     setShowMetrics(false);
   }, [record?.id]);
 
+  const nearFoot = useRef(true);
+  const scrollInterview = useRef<string | null>(null);
   useLayoutEffect(() => {
     const container = conversationScrollRef.current;
-    if (container) container.scrollTop = container.scrollHeight;
-  }, [conversationRevision]);
+    if (container && (nearFoot.current || scrollInterview.current !== view?.id))
+      container.scrollTop = container.scrollHeight;
+    scrollInterview.current = view?.id ?? null;
+  }, [conversationRevision, view?.id]);
 
   const loadWizardConfig = useCallback(async () => {
     setWizardConfig({ status: "loading" });
@@ -231,26 +250,47 @@ export function App() {
     setStorageProblems([...repository.problems]);
   }, []);
 
+  refreshListRef.current = refreshList;
   useEffect(() => {
-    void (async () => {
-      try {
-        const rows = await repository.list();
-        setInterviews(rows.map(toSummary));
-        setStorageProblems([...repository.problems]);
-        if (!restored.current) {
-          const selectedId = readSelectedInterview();
-          setRecord(
-            rows.find((row) => row.id === selectedId) ?? rows[0] ?? null,
-          );
+    let disposed = false;
+    const nav = new TabNavigation(window, (entry) => {
+      if (disposed) return;
+      destinationRef.current = entry;
+      setDestination(entry);
+      setManualOpen(false);
+      setRecord(null);
+      setLoadingRecord(entry.destination.kind === "interview");
+      void (async () => {
+        try {
+          if (entry.destination.kind === "interview") {
+            const stored = await repository.read(entry.destination.id);
+            const next = stored
+              ? await operations.recover(
+                  operations.latest.get(stored.id) ?? stored,
+                )
+              : null;
+            if (!disposed && destinationRef.current?.entry === entry.entry)
+              setRecord(next);
+          }
+        } catch (cause) {
+          if (entry.destination.kind === "interview")
+            operations.report(entry.destination.id, errorMessage(cause));
+        } finally {
+          if (!disposed && destinationRef.current?.entry === entry.entry) {
+            setLoaded(true);
+            setLoadingRecord(false);
+          }
         }
-      } catch (cause) {
-        showError(cause);
-      } finally {
-        restored.current = true;
-        setLoaded(true);
-      }
-    })();
-  }, [showError]);
+      })();
+    });
+    navigation.current = nav;
+    void refreshList().catch(() => {});
+    void nav.initialize();
+    return () => {
+      disposed = true;
+      nav.dispose();
+    };
+  }, [operations, refreshList]);
   useEffect(() => {
     if (!hasCriteria || metricRequest.current) return;
     setMetricState("loading");
@@ -265,38 +305,18 @@ export function App() {
     );
   }, [hasCriteria]);
 
-  const open = useCallback(
-    async (id: string) => {
-      setManualOpen(false);
-      setBusy(true);
-      setError(null);
-      setRetryIntent(null);
-      try {
-        const next = await repository.read(id);
-        if (!next) throw new Error("This local Interview is not available.");
-        setRecord(next);
-        rememberSelectedInterview(id);
-      } catch (cause) {
-        showError(cause);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [showError],
-  );
+  const open = useCallback((id: string) => {
+    navigation.current?.go({ kind: "interview", id });
+  }, []);
   const startNew = useCallback(() => {
     openingGeneration.current += 1;
-    setManualOpen(false);
-    setRecord(null);
-    setError(null);
-    setRetryIntent(null);
+    navigation.current?.go({ kind: "new" });
     setOpeningPhase("describe");
     setOpeningDescription("");
     setOpeningDocuments([]);
     setDocumentTrayOpen(false);
     setOpeningDocumentReads({});
     setCapabilityEvidence(emptyCapabilityEvidence());
-    forgetSelectedInterview();
   }, []);
 
   const addOpeningDocuments = useCallback(
@@ -335,7 +355,6 @@ export function App() {
         setOpeningDocuments((current) => [...current, ...normalized]);
         setOpeningDocumentReads((current) => ({ ...current, ...reads }));
         setError(null);
-        setRetryIntent(null);
         for (const file of normalized) {
           if (reads[file.name]?.status !== "reading") continue;
           const generation = openingGeneration.current;
@@ -364,33 +383,36 @@ export function App() {
         }
       } catch (cause) {
         setError(errorMessage(cause));
-        setRetryIntent(null);
       }
     },
-    [openingDocuments, wizardConfig],
+    [openingDocuments, wizardConfig, setError],
   );
 
-  const removeOpeningDocument = useCallback((name: string) => {
-    setOpeningDocuments((current) =>
-      current.filter((file) => file.name !== name),
-    );
-    setOpeningDocumentReads((current) => {
-      const next = { ...current };
-      delete next[name];
-      return next;
-    });
-    setError(null);
-    setRetryIntent(null);
-  }, []);
+  const removeOpeningDocument = useCallback(
+    (name: string) => {
+      setOpeningDocuments((current) =>
+        current.filter((file) => file.name !== name),
+      );
+      setOpeningDocumentReads((current) => {
+        const next = { ...current };
+        delete next[name];
+        return next;
+      });
+      setError(null);
+    },
+    [setError],
+  );
 
-  const keepOpeningDocumentWithoutReading = useCallback((name: string) => {
-    setOpeningDocumentReads((current) => ({
-      ...current,
-      [name]: { status: "kept" },
-    }));
-    setError(null);
-    setRetryIntent(null);
-  }, []);
+  const keepOpeningDocumentWithoutReading = useCallback(
+    (name: string) => {
+      setOpeningDocumentReads((current) => ({
+        ...current,
+        [name]: { status: "kept" },
+      }));
+      setError(null);
+    },
+    [setError],
+  );
 
   const beginWithMessage = useCallback(
     async (
@@ -403,10 +425,9 @@ export function App() {
         setError("Choose Low, Medium, or High confidence before you start.");
         return;
       }
-      setBusy(true);
-      setError(null);
-      setRetryIntent(null);
-      try {
+      const origin = destinationRef.current?.entry;
+      const localId = crypto.randomUUID();
+      await operations.run(operationKey, async () => {
         const limits =
           wizardConfig.status === "ready"
             ? wizardConfig.config.document_limits
@@ -454,47 +475,41 @@ export function App() {
           documents,
         );
         const started = emptyRecord(
-          crypto.randomUUID(),
+          localId,
           result.state,
           result.stage,
           startTranscript(description, result.state),
         );
         const next = addFixtures(started, openingDocuments);
-        await repository.put(next);
-        setRecord(next);
-        setOpeningDocuments([]);
-        setOpeningDocumentReads({});
-        rememberSelectedInterview(next.id);
+        try {
+          await repository.put(next);
+        } catch (cause) {
+          operations.report(
+            operationKey,
+            `The new Interview was not saved. ${errorMessage(cause)}`,
+            () =>
+              operations.run(operationKey, async () => {
+                await repository.put(next);
+                if (origin) navigation.current?.started(origin, next.id);
+                await refreshList();
+              }),
+          );
+          return;
+        }
+        if (origin) navigation.current?.started(origin, next.id);
         await refreshList();
-      } catch (cause) {
-        showError(cause);
-      } finally {
-        setBusy(false);
-      }
+      });
     },
     [
       busy,
+      operations,
+      operationKey,
       openingDocuments,
       openingDocumentReads,
       refreshList,
-      showError,
+      setError,
       wizardConfig,
     ],
-  );
-
-  const saveResult = useCallback(
-    async (next: LocalInterviewRecord) => {
-      const previous = record;
-      try {
-        await repository.put(next);
-        setRecord(next);
-        await refreshList();
-      } catch (cause) {
-        if (previous) setRecord(previous);
-        throw cause;
-      }
-    },
-    [record, refreshList],
   );
 
   const packageAndDownload = useCallback(
@@ -508,31 +523,19 @@ export function App() {
     [],
   );
 
-  const showPackageError = useCallback(
-    (cause: unknown, localRecord: LocalInterviewRecord) => {
-      setError(errorMessage(cause));
-      // Packaging is request-scoped and idempotent. A retry never invokes another model turn,
-      // including when the API returned a correctable validation error.
-      setRetryIntent({ kind: "package", record: localRecord });
-    },
-    [],
-  );
-
   const downloadCurrent = useCallback(
     async (localRecord: LocalInterviewRecord) => {
-      if (busy) return;
-      setBusy(true);
-      setError(null);
-      setRetryIntent(null);
-      try {
-        await packageAndDownload(localRecord);
-      } catch (cause) {
-        showPackageError(cause, localRecord);
-      } finally {
-        setBusy(false);
-      }
+      await operations.run(localRecord.id, async () => {
+        try {
+          await packageAndDownload(localRecord);
+        } catch (cause) {
+          operations.report(localRecord.id, errorMessage(cause), () =>
+            downloadCurrent(localRecord),
+          );
+        }
+      });
     },
-    [busy, packageAndDownload, showPackageError],
+    [operations, packageAndDownload],
   );
 
   const send = useCallback(
@@ -541,109 +544,56 @@ export function App() {
       files: readonly File[] = [],
       removedFixtures: readonly string[] = [],
     ) => {
-      if (!record?.state.pending || busy) return;
-      setBusy(true);
-      setError(null);
-      setRetryIntent(null);
-      try {
-        await withProvisionalFixtures(
-          repository,
-          record,
-          files,
-          async (base) => {
-            if (files.length > 0) setRecord(base);
-            const result = await api.respond(
-              base.state,
-              base.state.pending?.request_id ?? "",
-              response,
-            );
-            const next = removeUnreferencedFixtures(
-              applyTurn(base, result, response),
-              removedFixtures,
-            );
-            await saveResult(next);
-          },
-        );
-      } catch (cause) {
-        if (files.length > 0) {
-          // A successful rollback is already durable. Read it back so the rendered record also
-          // reflects the exact state that will survive a reload. If rollback failed, this read
-          // gives the user the durable record without claiming that it was restored.
-          try {
-            const restored = await repository.read(record.id);
-            if (restored) setRecord(restored);
-          } catch {
-            // Keep the operation error visible; the durable record may be inspected on reload.
-          }
-        }
-        showError(cause, {
-          kind: "turn",
-          response,
-          files: [...files],
-          removedFixtures: [...removedFixtures],
-        });
-      } finally {
-        setBusy(false);
-      }
+      if (!record) return;
+      const key = `${record.id}:${record.state.pending?.request_id ?? ""}`;
+      await operations.send(record, response, files, removedFixtures, () => {
+        drafts.current.delete(key);
+        formDrafts.current.delete(key);
+        setDraftRevision((value) => value + 1);
+      });
     },
-    [busy, record, saveResult, showError],
+    [operations, record],
   );
 
   const finish = useCallback(async () => {
-    if (!record || busy) return;
-    setBusy(true);
-    setError(null);
-    setRetryIntent(null);
-    try {
-      const result = await api.end(record.state);
-      const next = applyEnd(record, result);
-      await saveResult(next);
-      if (result.outcome === "done") {
-        try {
-          await packageAndDownload(next);
-        } catch (cause) {
-          showPackageError(cause, next);
+    if (!record || operations.pendingSaves.has(record.id)) return;
+    await operations.run(
+      record.id,
+      async () => {
+        const result = await api.end(record.state);
+        const next = applyEnd(record, result);
+        await operations.save(next);
+        if (result.outcome === "done") {
+          try {
+            await packageAndDownload(next);
+          } catch (cause) {
+            operations.report(record.id, errorMessage(cause), () =>
+              downloadCurrent(next),
+            );
+          }
         }
-      }
-    } catch (cause) {
-      showError(cause, { kind: "end" });
-    } finally {
-      setBusy(false);
-    }
-  }, [
-    busy,
-    packageAndDownload,
-    record,
-    saveResult,
-    showError,
-    showPackageError,
-  ]);
-
-  const retry = useCallback(() => {
-    const intent = retryIntent;
-    if (!intent) return;
-    setRetryIntent(null);
-    setError(null);
-    if (intent.kind === "turn")
-      void send(intent.response, intent.files, intent.removedFixtures);
-    else if (intent.kind === "end") void finish();
-    else void downloadCurrent(intent.record);
-  }, [downloadCurrent, finish, retryIntent, send]);
+      },
+      finish,
+    );
+  }, [record, operations, packageAndDownload, downloadCurrent]);
 
   const remove = useCallback(
     async (id: string) => {
+      if (operations.active.has(id) || operations.pendingSaves.has(id)) return;
       try {
         await repository.delete(id);
-        if (record?.id === id) {
+        operations.latest.delete(id);
+        if (
+          destinationRef.current?.destination.kind === "interview" &&
+          destinationRef.current.destination.id === id
+        )
           setRecord(null);
-          forgetSelectedInterview();
-        }
         await refreshList();
       } catch (cause) {
-        showError(cause);
+        operations.report(id, errorMessage(cause));
       }
     },
-    [record?.id, refreshList, showError],
+    [operations, refreshList],
   );
 
   if (!loaded) return null;
@@ -656,7 +606,9 @@ export function App() {
           interviews={interviews}
           problems={storageProblems}
           currentId={record?.id ?? null}
-          busy={busy}
+          activeIds={
+            new Set([...operations.active, ...operations.pendingSaves.keys()])
+          }
           onOpen={open}
           onNew={startNew}
           onDelete={remove}
@@ -673,15 +625,23 @@ export function App() {
         {error && (
           <Banner
             message={error}
-            onDismiss={() => {
-              setError(null);
-              setRetryIntent(null);
-            }}
-            onRetry={retryIntent ? retry : undefined}
+            onDismiss={() => operations.dismiss(operationKey)}
+            onRetry={
+              feedback?.retry ? () => void feedback.retry?.() : undefined
+            }
           />
         )}
         {manualOpen ? (
           <ManualForm onBack={() => setManualOpen(false)} />
+        ) : view === null && destination?.destination.kind === "interview" ? (
+          <div className="m-auto flex flex-col gap-4 p-8" role="status">
+            <p>
+              {loadingRecord
+                ? "Loading Interview…"
+                : "This local Interview is unavailable. Choose an Interview from History or start a new evaluation."}
+            </p>
+            <Button onClick={startNew}>New evaluation</Button>
+          </div>
         ) : view === null ? (
           <OpeningRoute
             configState={wizardConfig}
@@ -689,6 +649,7 @@ export function App() {
             busy={busy}
             phase={openingPhase}
             description={openingDescription}
+            onDescription={setOpeningDescription}
             perspective={selectedPerspective}
             onPerspective={setSelectedPerspective}
             onContinue={(description) => {
@@ -715,11 +676,34 @@ export function App() {
             <div
               key={view.id}
               ref={conversationScrollRef}
+              onScroll={(event) => {
+                const element = event.currentTarget;
+                nearFoot.current =
+                  element.scrollHeight -
+                    element.scrollTop -
+                    element.clientHeight <
+                  100;
+              }}
               className="quiet-scrollbar animate-enter-conversation flex-1 overflow-y-auto py-10"
             >
               <div className="mx-auto flex w-4/5 flex-col gap-8">
                 <Transcript
                   requests={view.requests}
+                  entries={record?.transcript}
+                  formDrafts={formDrafts.current}
+                  draftPrefix={view.id}
+                  onRetry={() => {
+                    if (record) void operations.retry(record);
+                  }}
+                  onEdit={() => {
+                    if (!record) return;
+                    const response = pendingEntry(record)?.response;
+                    if (response?.type === "chat")
+                      drafts.current.set(draftKey, response.text);
+                    if (response?.type === "form")
+                      formDrafts.current.set(draftKey, response.values ?? {});
+                    void operations.edit(record);
+                  }}
                   busy={busy}
                   onRespond={send}
                 />
@@ -729,8 +713,21 @@ export function App() {
             </div>
             <div className="w-full">
               <Composer
+                key={draftKey}
                 request={pending}
-                busy={busy}
+                value={drafts.current.get(draftKey) ?? ""}
+                onValueChange={(value) => {
+                  drafts.current.set(draftKey, value);
+                  setDraftRevision((revision) => revision + 1);
+                }}
+                busy={
+                  busy ||
+                  operations.pendingSaves.has(view.id) ||
+                  (record !== null &&
+                    ["sending", "failed"].includes(
+                      pendingEntry(record)?.status ?? "",
+                    ))
+                }
                 onSend={(text) => void send({ type: "chat", text })}
               />
             </div>
@@ -751,7 +748,7 @@ export function App() {
                 profile={view.profile}
                 position={stepPosition(view.requests)}
                 interviewStep={view.stage}
-                busy={busy}
+                busy={busy || operations.pendingSaves.has(view.id)}
                 showMetrics={showMetrics}
                 onShowMetricsChange={setShowMetrics}
                 metricByFqn={metricByFqn}
@@ -784,6 +781,7 @@ type OpeningScreenProps = {
   busy: boolean;
   phase: OpeningPhase;
   description: string;
+  onDescription?: (value: string) => void;
   perspective: Perspective;
   onPerspective: (perspective: Perspective) => void;
   onContinue: (description: string) => void;
@@ -858,6 +856,7 @@ export function OpeningScreen({
   busy,
   phase,
   description,
+  onDescription,
   perspective,
   onPerspective,
   onContinue,
@@ -898,6 +897,8 @@ export function OpeningScreen({
                     leadingIcon
                     bare
                     initialText={description}
+                    value={description}
+                    onValueChange={onDescription}
                     roomy
                     placeholder="Describe your system and attached documents…"
                     onSend={onContinue}
@@ -1476,35 +1477,8 @@ function Banner({
     </div>
   );
 }
-function isRetryable(error: unknown): error is TransportError {
-  return error instanceof TransportError && error.retryable;
-}
 function errorMessage(error: unknown): string {
   return error instanceof TransportError || error instanceof Error
     ? error.message
     : "Something went wrong.";
-}
-
-function readSelectedInterview(): string | null {
-  try {
-    return globalThis.localStorage?.getItem(SELECTED_INTERVIEW_KEY) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function rememberSelectedInterview(id: string): void {
-  try {
-    globalThis.localStorage?.setItem(SELECTED_INTERVIEW_KEY, id);
-  } catch {
-    // IndexedDB still restores the records when localStorage is unavailable.
-  }
-}
-
-function forgetSelectedInterview(): void {
-  try {
-    globalThis.localStorage?.removeItem(SELECTED_INTERVIEW_KEY);
-  } catch {
-    // The local record remains removable when localStorage is unavailable.
-  }
 }

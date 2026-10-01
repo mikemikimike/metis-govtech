@@ -9,8 +9,8 @@ import { fixtureNameIdentity } from "../fixture-policy.ts";
 
 const DB_NAME = "metis-web";
 const STORE_NAME = "interviews";
-const DB_VERSION = 3;
-const STORAGE_VERSION = 4 as const;
+const DB_VERSION = 4;
+const STORAGE_VERSION = 5 as const;
 const INTERVIEW_STEPS: readonly InterviewStep[] = [
   "clarify",
   "behaviours",
@@ -97,7 +97,27 @@ function validTranscriptEntry(value: unknown): value is TranscriptEntry {
   return (
     entry.kind === "interaction" &&
     typeof entry.request_id === "string" &&
+    (entry.outbound === undefined ||
+      (!!entry.outbound &&
+        Array.isArray(entry.outbound.files) &&
+        entry.outbound.files.every(validFixture) &&
+        Array.isArray(entry.outbound.removedFixtures) &&
+        entry.outbound.removedFixtures.every(
+          (name) => typeof name === "string",
+        ) &&
+        Number.isInteger(entry.outbound.attempt) &&
+        entry.outbound.attempt > 0)) &&
+    (entry.failure === undefined ||
+      (!!entry.failure &&
+        typeof entry.failure.message === "string" &&
+        typeof entry.failure.retryable === "boolean" &&
+        ["request", "storage", "interrupted"].includes(entry.failure.kind))) &&
+    (!["sending", "failed"].includes(entry.status ?? "") ||
+      (!!entry.response && !!entry.outbound)) &&
+    (entry.status !== "failed" || !!entry.failure) &&
     (entry.status === "pending" ||
+      entry.status === "sending" ||
+      entry.status === "failed" ||
       entry.status === "answered" ||
       entry.status === "ended_unanswered") &&
     !!entry.request &&
@@ -268,14 +288,21 @@ export class InterviewRepository {
           const value = current.value as Partial<LocalInterviewRecord>;
           const storageVersion = (value as { storage_version?: number })
             .storage_version;
-          if (storageVersion === 2 || storageVersion === 3) {
+          if (
+            storageVersion === 2 ||
+            storageVersion === 3 ||
+            storageVersion === 4
+          ) {
             const row = value as unknown as Record<string, unknown>;
             current.update(currentRecord(row));
           }
           current.continue();
         };
       };
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        request.result.onversionchange = () => request.result.close();
+        resolve(request.result);
+      };
       request.onerror = () =>
         reject(
           request.error ?? new Error("Local Interview storage is unavailable."),
@@ -334,26 +361,6 @@ export function addFixtures(
     else fixtures[index] = next;
   }
   return { ...record, fixtures };
-}
-
-export async function withProvisionalFixtures<T>(
-  repository: Pick<InterviewRepository, "put">,
-  prior: LocalInterviewRecord,
-  files: readonly File[],
-  operation: (provisional: LocalInterviewRecord) => Promise<T>,
-): Promise<T> {
-  if (files.length === 0) return operation(prior);
-
-  const provisional = addFixtures(prior, files);
-  await repository.put(provisional);
-  try {
-    return await operation(provisional);
-  } catch (cause) {
-    // The fixture must exist before its name crosses the API boundary. If the turn or its final
-    // local write fails, restore the exact record that existed before the provisional write.
-    await repository.put(prior);
-    throw cause;
-  }
 }
 
 export function removeUnreferencedFixtures(

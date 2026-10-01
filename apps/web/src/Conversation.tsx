@@ -9,9 +9,17 @@
 // no such action, so the box greys itself with no step name written down anywhere here.
 
 import { ArrowUp, PencilSparkles } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import type {
+  TranscriptEntry,
   AnyCard,
   CardComponent,
   ChoiceRequest,
@@ -33,39 +41,85 @@ type Emit = (
 ) => void;
 type CardFieldValue = number | string[];
 
+const FormDraftContext = createContext<{
+  values: Map<string, Record<string, string>>;
+  prefix: string;
+} | null>(null);
+
 // ── whole transcript ─────────────────────────────────────────────────────────
 
 export function Transcript({
   requests,
+  entries,
+  formDrafts,
+  draftPrefix = "",
+  onRetry,
+  onEdit,
   busy,
   onRespond,
 }: {
   requests: WizardRequest[];
+  entries?: TranscriptEntry[];
+  formDrafts?: Map<string, Record<string, string>>;
+  draftPrefix?: string;
+  onRetry?: () => void;
+  onEdit?: () => void;
   busy: boolean;
   onRespond: Emit;
 }) {
   return (
-    <div className="flex flex-col gap-8">
-      {requests.map((request, i) => {
-        // A light rule ahead of the first block of each new step, so consecutive steps do not
-        // read as one unbroken scroll. The boundary is the per-request `step` changing between
-        // adjacent blocks — the package stamps it; the door only notices when it moves. Not the
-        // interview's current step, which cannot mark the joins between already-resolved blocks in
-        // the scrollback. The first block starts no divider (nothing precedes it), and a request
-        // with no `step` never introduces one, so the rule degrades to nothing on older interviews.
-        const prevStep = requests[i - 1]?.step ?? null;
-        const startsStep =
-          request.step != null && i > 0 && request.step !== prevStep;
-        return (
-          <div
-            key={i}
-            className={cn(startsStep && "border-t border-border pt-8")}
-          >
-            <RequestBlock request={request} busy={busy} onRespond={onRespond} />
-          </div>
-        );
-      })}
-    </div>
+    <FormDraftContext.Provider
+      value={formDrafts ? { values: formDrafts, prefix: draftPrefix } : null}
+    >
+      <div className="flex flex-col gap-8">
+        {requests.map((request, i) => {
+          // A light rule ahead of the first block of each new step, so consecutive steps do not
+          // read as one unbroken scroll. The boundary is the per-request `step` changing between
+          // adjacent blocks — the package stamps it; the door only notices when it moves. Not the
+          // interview's current step, which cannot mark the joins between already-resolved blocks in
+          // the scrollback. The first block starts no divider (nothing precedes it), and a request
+          // with no `step` never introduces one, so the rule degrades to nothing on older interviews.
+          const prevStep = requests[i - 1]?.step ?? null;
+          const startsStep =
+            request.step != null && i > 0 && request.step !== prevStep;
+          const entry = entries?.[i];
+          const failed =
+            entry?.kind === "interaction" && entry.status === "failed";
+          return (
+            <div
+              key={request.request_id ?? i}
+              className={cn(startsStep && "border-t border-border pt-8")}
+            >
+              <RequestBlock
+                request={request}
+                busy={busy}
+                onRespond={onRespond}
+              />
+              {entry?.kind === "interaction" && entry.status === "sending" && (
+                <p role="status" className="mt-2 text-sm text-muted-foreground">
+                  Sending…
+                </p>
+              )}
+              {failed && (
+                <div role="alert" className="mt-2 flex items-center gap-3">
+                  <p>{entry.failure?.message}</p>
+                  {entry.failure?.retryable && (
+                    <Button disabled={busy} onClick={onRetry}>
+                      Retry
+                    </Button>
+                  )}
+                  {entry.failure?.kind !== "storage" && (
+                    <Button disabled={busy} onClick={onEdit}>
+                      Edit reply
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </FormDraftContext.Provider>
   );
 }
 
@@ -663,7 +717,15 @@ function FormBlock({
   busy: boolean;
   onRespond: Emit;
 }) {
-  const [values, setValues] = useState<Record<string, string>>({});
+  const drafts = useContext(FormDraftContext);
+  const key = `${drafts?.prefix}:${request.request_id}`;
+  const [values, updateValues] = useState<Record<string, string>>(
+    drafts?.values.get(key) ?? {},
+  );
+  const setValues = (value: Record<string, string>) => {
+    drafts?.values.set(key, value);
+    updateValues(value);
+  };
   // A resolved form is a receipt: show what was submitted, labelled by field, the same way a
   // resolved chat shows its answer. The package stamped the values onto the request.
   if (resolved) {
@@ -704,7 +766,7 @@ function FormBlock({
               value={values[field.id] ?? ""}
               disabled={busy}
               onChange={(e) =>
-                setValues((v) => ({ ...v, [field.id]: e.target.value }))
+                setValues({ ...values, [field.id]: e.target.value })
               }
             />
           ) : (
@@ -714,7 +776,7 @@ function FormBlock({
               value={values[field.id] ?? ""}
               disabled={busy}
               onChange={(e) =>
-                setValues((v) => ({ ...v, [field.id]: e.target.value }))
+                setValues({ ...values, [field.id]: e.target.value })
               }
             />
           )}
@@ -770,6 +832,8 @@ export function Composer({
   alwaysEnabled = false,
   placeholder,
   initialText = "",
+  value,
+  onValueChange,
   roomy = false,
   leadingIcon = false,
   bare = false,
@@ -785,6 +849,8 @@ export function Composer({
   // The opening flow can return from capability selection to the description without losing the
   // user's draft. Interview replies remain empty on mount.
   initialText?: string;
+  value?: string;
+  onValueChange?: (value: string) => void;
   // Give the opening product prompt enough room for a useful first description. Conversation
   // replies keep the smaller composer.
   roomy?: boolean;
@@ -798,7 +864,12 @@ export function Composer({
   bare?: boolean;
   sourceControl?: ReactNode;
 }) {
-  const [text, setText] = useState(initialText);
+  const [localText, setLocalText] = useState(initialText);
+  const text = value ?? localText;
+  const setText = (next: string) => {
+    setLocalText(next);
+    onValueChange?.(next);
+  };
   const enabled = (alwaysEnabled || acceptsChat(request)) && !busy;
   const hint =
     placeholder ?? (enabled ? "Type a reply" : composerHint(request));
@@ -807,7 +878,7 @@ export function Composer({
     const trimmed = text.trim();
     if (!trimmed || !enabled) return;
     onSend(trimmed);
-    setText("");
+    if (value === undefined) setText("");
   };
 
   const canSend = enabled && text.trim().length > 0;

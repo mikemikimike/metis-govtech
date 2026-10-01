@@ -276,11 +276,22 @@ export interface InteractionEntry {
   request_id: string;
   request: WizardRequest;
   response?: UserResponse;
-  status: "pending" | "answered" | "ended_unanswered";
+  status: "pending" | "sending" | "failed" | "answered" | "ended_unanswered";
+  outbound?: {
+    files: LocalFixture[];
+    removedFixtures: string[];
+    attempt: number;
+  };
+  failure?: {
+    message: string;
+    retryable: boolean;
+    kind: "request" | "interrupted" | "storage";
+  };
 }
 export type TranscriptEntry = InitialDescriptionEntry | InteractionEntry;
 export interface LocalInterviewRecord {
-  storage_version: 4;
+  storage_version: 5;
+  submission_revision?: number;
   id: string;
   created_at: number;
   updated_at: number;
