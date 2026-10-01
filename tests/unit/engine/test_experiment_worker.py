@@ -553,7 +553,7 @@ class TestFixtureContentDescriptions:
         with pytest.raises(ValidationError, match="duplicate persona_ref"):
             Experiment.model_validate(
                 {
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "id": "e",
                     "description": "d",
                     "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
@@ -573,7 +573,7 @@ class TestFixtureContentDescriptions:
     ) -> None:
         exp = Experiment.model_validate(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "id": "e",
                 "description": "d",
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",

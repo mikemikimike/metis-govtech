@@ -42,21 +42,20 @@ def _profile() -> dict[str, Any]:
         "product": {"name": "Test Product"},
         "personas": [{"id": "p1"}],
         "scenarios": [{"id": "s1", "behaviour_refs": ["b1"]}],
-        "tasks": [
+        "features": [
             {
                 "id": "t1",
-                "name": "Task 1",
+                "name": "Feature 1",
                 "behaviours": [
                     {
                         "id": "b1",
-                        "statement": "Does the thing.",
-                        "priority": False,
+                        "name": "Does the thing",
+                        "description": "Does the thing.",
+                        "measured": False,
                         "criteria": [
                             {
                                 "id": "c1",
-                                "given": "g",
-                                "when": "w",
-                                "then": "t",
+                                "description": {"given": "g", "when": "w", "then": "t"},
                                 "metric_fqn": "pkg.metrics.Metric1",
                             }
                         ],
