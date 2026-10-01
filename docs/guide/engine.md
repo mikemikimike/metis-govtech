@@ -828,15 +828,13 @@ class RestRunner(Runner):
         resp = await self._client.post("/chat", json=payload)
         resp.raise_for_status()
         data = resp.json()
-        
+
         # Parse available_actions: if the API returns the field, use it (even if []);
         # if the API does not report available_actions, return None.
         available_actions = None
         if "available_actions" in data:
-            available_actions = [
-                ActionSlot(**a) for a in data["available_actions"]
-            ]
-        
+            available_actions = [ActionSlot(**a) for a in data["available_actions"]]
+
         return Observation(
             text=data.get("reply", ""),
             available_actions=available_actions,
