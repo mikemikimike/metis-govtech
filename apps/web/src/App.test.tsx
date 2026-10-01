@@ -17,7 +17,8 @@ import {
   PerspectivePicker,
   type CapabilityEvidenceDraft,
 } from "./App";
-import { Composer, FixtureField } from "./Conversation";
+import { Composer, FixtureField, Transcript } from "./Conversation";
+import { InterviewRail } from "./InterviewRail";
 import { api, type InterviewState, type Perspective } from "./transport/api";
 
 const originalFetch = globalThis.fetch;
@@ -92,6 +93,11 @@ test("changes the conversation scroll revision only for new content", () => {
   assert.notEqual(current, conversationScrollRevision("interview-2", 3, false));
   assert.notEqual(current, conversationScrollRevision("interview-1", 4, false));
   assert.notEqual(current, conversationScrollRevision("interview-1", 3, true));
+
+  assert.notEqual(
+    current,
+    conversationScrollRevision("interview-1", 3, false, "1"),
+  );
 
   // An in-place request replacement keeps the presented request count and completion state.
   assert.equal(current, conversationScrollRevision("interview-1", 3, false));
@@ -466,4 +472,83 @@ test("Scenario review exposes early fixture suggestions for user selection", () 
     names: ["policy.pdf", "terms.pdf"],
     removed: [],
   });
+});
+
+test("History stays usable while the sending Interview is protected from deletion", () => {
+  let opened = "";
+  const rail = InterviewRail({
+    interviews: [
+      { id: "a", title: "A", updated: Date.now() },
+      { id: "b", title: "B", updated: Date.now() },
+    ],
+    problems: [],
+    currentId: "a",
+    activeIds: new Set(["a"]),
+    onOpen: (id) => {
+      opened = id;
+    },
+    onNew: () => {},
+    onDelete: () => {},
+  });
+  assert.equal(
+    findElement(rail, (element) => element.props["aria-label"] === "Delete A")
+      .props.disabled,
+    true,
+  );
+  assert.equal(
+    findElement(rail, (element) => element.props["aria-label"] === "Delete B")
+      .props.disabled,
+    false,
+  );
+  const buttons = findElements(
+    rail,
+    (element) =>
+      element.type === "button" &&
+      !!element.props.onClick &&
+      !element.props["aria-label"],
+  );
+  (buttons[1]!.props.onClick as () => void)();
+  assert.equal(opened, "b");
+});
+
+test("failed reply feedback routes retry through its Interview", () => {
+  let retries = 0;
+  const request = {
+    type: "chat" as const,
+    prompt: "Question",
+    request_id: "req",
+    stage: "clarify" as const,
+    state: "resolved" as const,
+    multiline: true,
+    answer: "Reply",
+  };
+  const transcript = Transcript({
+    requests: [request],
+    entries: [
+      {
+        kind: "interaction",
+        request_id: "req",
+        request,
+        status: "failed",
+        response: { type: "chat", text: "Reply" },
+        outbound: { files: [], removedFixtures: [], attempt: 1 },
+        failure: {
+          message: "Service unavailable",
+          retryable: true,
+          kind: "request",
+        },
+      },
+    ],
+    busy: false,
+    onRespond: () => {},
+    onRetry: () => {
+      retries++;
+    },
+  });
+  const retry = findElement(
+    transcript,
+    (element) => element.props.children === "Retry",
+  );
+  (retry.props.onClick as () => void)();
+  assert.equal(retries, 1);
 });

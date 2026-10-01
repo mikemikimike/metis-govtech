@@ -65,6 +65,13 @@ function resolvedRequest(
       card.options.forEach(mark);
       card.components.forEach((component) => {
         if (component.type === "options") component.options.forEach(mark);
+        if (component.type === "number" || component.type === "upload") {
+          const value = response.values?.[optionKey(component.id)];
+          if (component.type === "number" && typeof value === "number")
+            component.value = value;
+          if (component.type === "upload" && Array.isArray(value))
+            component.value = value;
+        }
       });
     });
   }
@@ -123,7 +130,8 @@ export function applyTurn(
   const pending = transcript.find(
     (entry) =>
       entry.kind === "interaction" &&
-      entry.status === "pending" &&
+      entry.status !== "answered" &&
+      entry.status !== "ended_unanswered" &&
       entry.request_id === record.state.pending?.request_id,
   );
   const responseAdvancesRequest =
@@ -131,11 +139,17 @@ export function applyTurn(
   const refreshesChoice =
     pending?.kind === "interaction" &&
     refreshesCurrentChoice(pending.request, response, nextState.pending);
-  if (pending?.kind === "interaction" && refreshesChoice && nextState.pending) {
+  if (
+    pending?.kind === "interaction" &&
+    (refreshesChoice || !responseAdvancesRequest) &&
+    nextState.pending
+  ) {
     pending.request_id = nextState.pending.request_id;
     pending.request = clone(nextState.pending);
     pending.status = "pending";
     delete pending.response;
+    delete pending.outbound;
+    delete pending.failure;
   } else if (
     pending &&
     pending.kind === "interaction" &&
@@ -144,6 +158,8 @@ export function applyTurn(
     pending.request = resolvedRequest(pending.request, response);
     pending.response = response;
     pending.status = "answered";
+    delete pending.outbound;
+    delete pending.failure;
   }
   if (
     nextState.pending &&
@@ -176,7 +192,9 @@ export function applyEnd(
   if (result.type === "failure" || !result.state) return record;
   const transcript = clone(record.transcript);
   const pending = transcript.find(
-    (entry) => entry.kind === "interaction" && entry.status === "pending",
+    (entry) =>
+      entry.kind === "interaction" &&
+      (entry.status === "pending" || entry.status === "failed"),
   );
   if (pending && pending.kind === "interaction")
     pending.status = "ended_unanswered";
@@ -192,7 +210,14 @@ export function applyEnd(
 
 export function toPresentation(record: LocalInterviewRecord): PresentationView {
   const requests: WizardRequest[] = record.transcript.map((entry) => {
-    if (entry.kind === "interaction") return entry.request;
+    if (entry.kind === "interaction") {
+      if (
+        (entry.status === "sending" || entry.status === "failed") &&
+        entry.response
+      )
+        return resolvedRequest(entry.request, entry.response);
+      return entry.request;
+    }
     return {
       type: "chat",
       prompt: "",

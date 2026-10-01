@@ -212,6 +212,12 @@ _No v1 changes yet._
 
 #### Changed
 
+- Each browser tab keeps its own Interview selection, with refresh and Back/Forward support.
+  New tabs and windows start a new evaluation. Switching Interviews preserves question drafts and
+  form values while the page stays open. Submitted replies, files, errors, and manual retries stay
+  with their sender, including when another Interview is open. Interrupted sends require a manual
+  retry, and a failed local save can be retried without another model call while the page is open.
+
 - The opening screen now reads its question and perspective choices from the API configuration,
   asks who the evaluation is for with hover help, and sends the selected perspective on start.
 - **Clear completion and output actions.** The conversation composer now fills its column. Early
