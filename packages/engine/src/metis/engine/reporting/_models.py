@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-_REPORT_VERSION = 1
+_REPORT_VERSION = 2
 
 
 class Timings(BaseModel, extra="allow"):

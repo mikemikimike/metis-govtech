@@ -15,7 +15,7 @@ from metis.engine.simulation.types import RunConfig, RunOutcome, RunRecord
 runner = CliRunner()
 
 MINIMAL_EXPERIMENT = """\
-schema_version: 1
+schema_version: 2
 id: test-exp
 description: test experiment
 runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory

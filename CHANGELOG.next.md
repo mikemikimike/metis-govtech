@@ -53,6 +53,11 @@ _No v1 changes yet._
 - Report generation now reads named Behaviours, measured state, and structured Criteria from
   normalized `profile.yaml` files.
 
+#### Breaking
+
+- Set `schema_version` to `2` for `experiment.yaml`, run records, and the report schema. v1 bumps
+  each schema once to mark the break from v0, and later `next` changes keep version `2` (#392).
+
 ### metis-wizard
 
 #### Added
@@ -140,7 +145,8 @@ _No v1 changes yet._
 
 - Rename the wizard `Task` and `TaskDraft` models to `Feature` and `FeatureDraft`. Profiles use
   `features`, patch paths use `features[...]`, and new feature IDs use `F-`. Profile schema
-  version 2, prompts, API types, browser forms, and reports use the glossary term (#392).
+  version 2, prompts, API types, browser forms, and reports use the glossary term. Compiled
+  `experiment.yaml` files use `schema_version: 2` (#392).
 
 - **Interview state is client-held and file-free.** The server-owned session file, its format
   version, and the `/api/interviews` routes are gone. A caller holds the returned state and sends it

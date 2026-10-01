@@ -183,7 +183,7 @@ my-experiment/
 ### Top-Level Fields
 
 ```yaml
-schema_version: 1
+schema_version: 2
 
 id: my-evaluation
 description: >
@@ -192,7 +192,7 @@ description: >
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `schema_version` | Yes | Always `1` (current version) |
+| `schema_version` | Yes | Always `2` (current version) |
 | `id` | Yes | Identifier used in the output directory name |
 | `description` | Yes | Free-text purpose of the experiment |
 
@@ -877,7 +877,7 @@ Once you have a `RunnerFactory` class, tell the engine to use it via the `runner
 Add `runner_factory_ref` at the top level of your experiment configuration:
 
 ```yaml
-schema_version: 1
+schema_version: 2
 
 id: my-api-eval
 description: Evaluate target system via REST API
@@ -1169,7 +1169,7 @@ Use this template and checklist when creating an experiment from scratch for a n
 #### Minimal Template
 
 ```yaml
-schema_version: 1
+schema_version: 2
 
 id: my-target-eval
 description: >

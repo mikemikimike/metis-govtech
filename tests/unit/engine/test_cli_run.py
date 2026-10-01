@@ -12,7 +12,7 @@ from metis.engine.cli import EvaluationOutcome, app
 runner = CliRunner()
 
 MINIMAL_EXPERIMENT = """\
-schema_version: 1
+schema_version: 2
 id: test-exp
 description: test experiment
 runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory

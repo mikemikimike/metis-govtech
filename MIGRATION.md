@@ -43,8 +43,8 @@ Saved browser Interviews that use profile schema version 1 cannot resume. Start 
 Interview. Keep a backup of any saved state before conversion; its pending patches and
 history can also contain paths with `tasks[...]`.
 
-Report JSON now uses `features` at the root, in `resultTable`, and in trial outcome
-items. Update report consumers and regenerate reports from the converted profile.
+The wizard compiles `experiment.yaml` with `schema_version: 2`. Reports change too; see
+[Schema versions are now `2`](#schema-versions-are-now-2).
 
 #### `runs` renamed to `trials`
 
@@ -142,7 +142,15 @@ _No breaking changes in v1.0._
 
 ### metis-engine
 
-_No breaking changes in v1.0._
+#### Schema versions are now `2`
+
+v1 marks its break from v0 with one schema version bump. `experiment.yaml`, run records
+(`record.json`), and the report schema (`Report v2`) now use version `2`, the same as
+`profile.yaml`. Set `schema_version: 2` in each `experiment.yaml`. The engine refuses run
+records from v0; run the simulation again to create new records.
+
+Report JSON now uses `features` at the root, in `resultTable`, and in trial outcome
+items. Update report consumers and regenerate reports.
 
 ### metis-api
 

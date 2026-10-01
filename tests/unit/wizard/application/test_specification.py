@@ -35,7 +35,7 @@ class GuardedStream(BytesIO):
 
 def _document(*fixtures: str) -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "id": "specification-test",
         "description": "A specification test.",
         "personas": [{"id": "p", "description": "A person."}],

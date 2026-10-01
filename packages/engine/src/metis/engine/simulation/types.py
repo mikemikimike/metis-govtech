@@ -13,8 +13,8 @@ from pydantic import BaseModel, Field, GetJsonSchemaHandler, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
-_EXPERIMENT_VERSION = 1
-_RUN_RECORD_VERSION = 1
+_EXPERIMENT_VERSION = 2
+_RUN_RECORD_VERSION = 2
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +244,7 @@ class Scenario(BaseModel):
 
 class Experiment(BaseModel):
     schema_version: Literal[
-        1
+        2
     ]  # required — no default; see schemas/README.md for bump rules
     id: str
     description: str
@@ -371,7 +371,7 @@ class ConversationTurn(BaseModel, extra="ignore"):
 class RunRecord(BaseModel, extra="ignore"):
     """A complete simulation run record loaded from a JSON result file."""
 
-    schema_version: Literal[1] = _RUN_RECORD_VERSION
+    schema_version: Literal[2] = _RUN_RECORD_VERSION
     config: RunConfig
     outcome: RunOutcome
     conversation: list[ConversationTurn] = []
