@@ -80,7 +80,7 @@ def render_dashboard(state: SimulationState) -> RenderableType:
                 dur = _format_duration(run.duration_seconds or 0)
                 active_text.append(
                     f"  ✓ {worker_tag}{run.persona_id} "
-                    f"[done trial {run.trial}/{run.num_trials}]  {dur}\n",
+                    f"[done trial {run.trial_index}/{run.num_trials}]  {dur}\n",
                     style="green",
                 )
             elif run.phase == "failed":

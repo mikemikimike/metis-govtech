@@ -102,7 +102,7 @@ class TestPlaywrightRunnerFactoryLifecycle:
         factory = OrcaPlaywrightRunnerFactory(config=_make_config())
         factory._browser = mock_browser
 
-        runner = await factory.create(tmp_path / "run", tmp_path / "fixtures")
+        runner = await factory.create(tmp_path / "run", tmp_path / "fixtures", tmp_path)
         assert isinstance(runner, OrcaPlaywrightRunner)
         mock_browser.new_context.assert_called_once_with(
             viewport={"width": 1440, "height": 900},

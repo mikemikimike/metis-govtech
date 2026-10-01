@@ -32,9 +32,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `make install-extras-playwright` (or `make install-engine`) to install the
   browser binary; `make install-extras` runs all optional extras.
   `install-playwright` is also removed from `packages/engine/Makefile`.
-  **Note:** #335 makes a parallel fix to `v0.x` using the same
-  `install-extras` model; expect a Makefile conflict when `v0.x` merges into
-  `next` — resolve by keeping `next`'s version.
+  **Note:** #335 (via PR #343) made a parallel fix to `v0.x` using the same
+  `install-extras` model. When `v0.x` was cherry-picked into `next` (#396),
+  `next`'s Makefiles were kept unchanged: they already contained every target
+  #343 adds, and #343's `--extra web` does not exist on `next`.
 
 ### metis-core
 

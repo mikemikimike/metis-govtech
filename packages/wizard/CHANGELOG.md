@@ -4,6 +4,31 @@ All notable changes to `metis-wizard` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] — 2026-09-30
+
+### Fixed
+
+- **`ProductProfile.save()`/`.load()` and `write_review()` round-trip UTF-8,
+not the platform locale (issue #385).** `Path.write_text()`/`read_text()`
+with no `encoding=` fall back to the OS locale — `cp1252` on Windows — and
+both writers can carry arbitrary user- or model-authored prose
+(`product.summary`, `product.detail`, a criterion's `given`/`when`/`then`)
+that can contain any character. On a non-UTF-8-locale machine, a write hit
+one outside that codec, truncated the file to 0 bytes, then raised
+`UnicodeEncodeError`. Both now pass `encoding="utf-8"` explicitly.
+- **`write_experiment()` writes compiled experiments as UTF-8, not the
+platform locale (issue #385).** `compile_experiment()` embeds
+`product.summary` verbatim, so the same crash `write_review()` had can
+happen here too. `write_experiment()` now passes `encoding="utf-8"`
+explicitly.
+- **Remaining session and schema reads/writes now pin UTF-8 too (issue
+#385).** `SessionState.save()`/`.load()`, `SessionStore`'s session
+reads, and the wizard's own schema read all now pass `encoding="utf-8"`
+explicitly. These serialize through `json.dumps()` without
+`ensure_ascii=False`, so the files were already pure ASCII — this is
+defense-in-depth, not a live-bug fix, for consistency with the writers
+that are.
+
 ## [0.2.2] — 2026-09-03
 
 ### Fixed

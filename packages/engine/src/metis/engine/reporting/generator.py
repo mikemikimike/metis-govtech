@@ -164,10 +164,19 @@ def save_report(
     target_dir.mkdir(parents=True, exist_ok=True)
     json_path = target_dir / f"{run_id}.json"
     html_path = target_dir / f"{run_id}.html"
+    # encoding is explicit because write_text() otherwise uses the locale encoding,
+    # which is cp1252 on Windows. The rendered page contains characters outside it
+    # (U+2192 among them), so the write opens the file, truncates it, then raises
+    # UnicodeEncodeError — and the caller's blanket except swallows that, leaving a
+    # 0-byte report.html behind a "report_written" log line.
     json_path.write_text(
-        json.dumps(report_model.model_dump(by_alias=True), indent=1, default=str) + "\n"
+        json.dumps(report_model.model_dump(by_alias=True), indent=1, default=str)
+        + "\n",
+        encoding="utf-8",
     )
-    html_path.write_text(render_report_page(report, title=report["product"]))
+    html_path.write_text(
+        render_report_page(report, title=report["product"]), encoding="utf-8"
+    )
 
     logger.info(
         "report_written",
@@ -199,7 +208,7 @@ def generate_report(
         from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
 
         lf = get_langfuse_client()
-        fetch_result = fetch_by_session_id(session_id, lf)
+        fetch_result = fetch_by_session_id(session_id, lf, experiment_root=experiment_dir)
         eval_result = evaluate(fetch_result, metric_refs)
         report_result = generate_report(eval_result, run_id="my-run-001")
         console.print(report_result.html_path)

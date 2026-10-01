@@ -443,6 +443,46 @@
       "title": "Feature",
       "type": "object"
     },
+    "MetricPassRate": {
+      "properties": {
+        "rate": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rate"
+        },
+        "pass": {
+          "default": 0,
+          "title": "Pass",
+          "type": "integer"
+        },
+        "ran": {
+          "default": 0,
+          "title": "Ran",
+          "type": "integer"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        }
+      },
+      "title": "MetricPassRate",
+      "type": "object"
+    },
     "Plan": {
       "properties": {
         "personas": {
@@ -635,6 +675,11 @@
           "default": null,
           "title": "Duration"
         },
+        "attempt": {
+          "default": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
         "conversation": {
           "items": {
             "$ref": "#/$defs/ConversationTurn"
@@ -709,6 +754,22 @@
       "title": "Routing",
       "type": "object"
     },
+    "Scores": {
+      "properties": {
+        "metricPassRate": {
+          "$ref": "#/$defs/MetricPassRate"
+        },
+        "trialSuccess": {
+          "$ref": "#/$defs/TrialSuccess"
+        }
+      },
+      "required": [
+        "metricPassRate",
+        "trialSuccess"
+      ],
+      "title": "Scores",
+      "type": "object"
+    },
     "Timings": {
       "additionalProperties": true,
       "properties": {
@@ -771,6 +832,11 @@
           ],
           "default": null,
           "title": "Duration"
+        },
+        "attempt": {
+          "default": 1,
+          "title": "Attempt",
+          "type": "integer"
         },
         "conversation": {
           "items": {
@@ -858,6 +924,46 @@
         }
       },
       "title": "TrialResult",
+      "type": "object"
+    },
+    "TrialSuccess": {
+      "properties": {
+        "rate": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rate"
+        },
+        "successful": {
+          "default": 0,
+          "title": "Successful",
+          "type": "integer"
+        },
+        "attempted": {
+          "default": 0,
+          "title": "Attempted",
+          "type": "integer"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        }
+      },
+      "title": "TrialSuccess",
       "type": "object"
     },
     "TrialsSummary": {
@@ -982,6 +1088,9 @@
     "trials": {
       "$ref": "#/$defs/TrialsSummary"
     },
+    "scores": {
+      "$ref": "#/$defs/Scores"
+    },
     "plan": {
       "$ref": "#/$defs/Plan"
     },
@@ -1085,6 +1194,7 @@
     "results",
     "threshold",
     "trials",
+    "scores",
     "plan",
     "personas",
     "scenarios",

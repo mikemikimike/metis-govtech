@@ -62,7 +62,7 @@ class OrcaPlaywrightRunnerConfig(BaseModel):
                 f"Playwright runner requires environment variables: {', '.join(missing)}. "
                 "Set them in .env or export them before running a simulation."
             )
-        raw = yaml.safe_load(path.read_text())
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
         raw["url"] = os.environ["ORCA_URL"]
         raw.setdefault("auth", {})
         raw["auth"]["username"] = os.environ["ORCA_USERNAME"]

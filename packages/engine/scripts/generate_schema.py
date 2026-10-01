@@ -25,7 +25,7 @@ def main() -> None:
         schema = model.model_json_schema(by_alias=by_alias)
         schema["title"] = f"{model.__name__} v{version}"
         out = SCHEMA_DIR / filename
-        out.write_text(json.dumps(schema, indent=2) + "\n")
+        out.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
         print(f"Written: {out}")
 
 

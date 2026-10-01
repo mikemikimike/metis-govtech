@@ -161,31 +161,6 @@ class TestM3_ResponseDetectionScope:
         assert "Ask anything" in source or "Reply" in source
 
 
-class Testm3_DownloadCounter:
-    """m3: Download progress log should use a separate counter."""
-
-    def test_counter_only_increments_for_downloads(self):
-        """Simulate the fixed loop logic — dl_idx only counts downloads."""
-        artifacts = [
-            {"name": "chart.png", "type": "chart"},
-            {"name": "data.csv", "type": "download"},
-            {"name": "report.pdf", "type": "download"},
-            {"name": "thumb.jpg", "type": "preview"},
-        ]
-
-        download_count = sum(1 for a in artifacts if a.get("type") == "download")
-        dl_idx = 0
-        log_entries = []
-
-        for artifact in artifacts:
-            if artifact.get("type") != "download":
-                continue
-            dl_idx += 1
-            log_entries.append(f"[{dl_idx}/{download_count}]")
-
-        assert log_entries == ["[1/2]", "[2/2]"]
-
-
 class TestS1_SendMessagePattern:
     """S1: send_message uses fill + press Enter via Playwright."""
 

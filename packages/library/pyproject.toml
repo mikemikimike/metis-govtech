@@ -8,9 +8,10 @@ version = "1.0.0a1"
 description = "Shared catalog of metrics, skills, and reusable components for the METIS evaluation suite"
 requires-python = ">=3.11"
 dependencies = [
-    "metis-core",
+    "metis-core>=0.5.0",
     "deepeval>=2.0.0",
     "openai>=1.0.0",
+    "pymupdf>=1.28.2",
 ]
 
 [tool.uv.sources]

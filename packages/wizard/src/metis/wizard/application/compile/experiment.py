@@ -70,7 +70,7 @@ def _schema_path() -> Path:
 def _schema() -> dict[str, Any]:
     import json
 
-    return json.loads(_schema_path().read_text())
+    return json.loads(_schema_path().read_text(encoding="utf-8"))
 
 
 def _metric_refs(behaviours: list[Behaviour]) -> list[str]:
@@ -205,5 +205,8 @@ def write_experiment(
 ) -> dict[str, Any]:
     """Compile, validate, then write. Nothing is written if validation fails."""
     document = compile_experiment(profile, experiment_id)
-    Path(path).write_text(to_yaml(document))
+    # encoding is explicit — write_text() otherwise falls back to the platform
+    # locale encoding (cp1252 on Windows), and to_yaml() writes product.description
+    # verbatim (allow_unicode=True), which can be any character a person typed.
+    Path(path).write_text(to_yaml(document), encoding="utf-8")
     return document

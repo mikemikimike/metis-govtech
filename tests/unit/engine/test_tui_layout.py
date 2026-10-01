@@ -27,7 +27,7 @@ def _make_state() -> SimulationState:
                 SimulationRunState(
                     scenario_id="test-scn",
                     persona_id="test-per",
-                    trial=1,
+                    trial_index=1,
                     num_trials=1,
                     phase="pending",
                     current_turn=None,

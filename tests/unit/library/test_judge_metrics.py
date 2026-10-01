@@ -23,7 +23,7 @@ from metis.library.metrics import (
 )
 from metis.library.metrics._slide_visual_quality import _image_markers
 
-from .conftest import make_case, tool_call
+from .conftest import artifact, make_case, tool_call
 
 
 class _FakeGeval:
@@ -71,7 +71,7 @@ def test_deck_brief_coverage_skips_without_deck():
 
 def test_slide_visual_quality_skips_without_images():
     metric = SlideVisualQualityMetric()
-    asyncio.run(metric.a_measure(make_case(metadata={"slide_image_refs": []})))
+    asyncio.run(metric.a_measure(make_case(metadata={})))
     assert metric.skipped is True
     assert metric.success is True
     assert metric._geval is None
@@ -155,13 +155,17 @@ def test_slide_visual_quality_builds_multimodal_case_in_order(image_factory):
     assert len(markers) == 3
 
 
-def test_slide_visual_quality_scored_path(image_factory):
+def test_slide_visual_quality_scored_path(pdf_factory):
     metric = SlideVisualQualityMetric()
     metric._geval = _FakeGeval(score=0.9, reason="slides look consistent")
-    refs = [str(image_factory("slide1.png"))]
-    score = asyncio.run(
-        metric.a_measure(make_case(metadata={"slide_image_refs": refs}))
+    pdf_path = str(pdf_factory("deck.pdf"))
+    case = make_case(
+        metadata={
+            "turn_index": 0,
+            "artifacts": [artifact("deck.pdf", pdf_path, at_turn=0)],
+        }
     )
+    score = asyncio.run(metric.a_measure(case))
     assert score == 0.9
     assert metric.success is True
     assert metric.reason == "slides look consistent"

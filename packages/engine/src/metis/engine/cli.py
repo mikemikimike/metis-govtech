@@ -466,25 +466,26 @@ def _classify_resume_runs(
     from metis.engine.simulation.types import RunRecord
 
     redo: list[RunPlanItem] = []
-    complete: dict[tuple[str, str, int], RunRecord] = {}
-    for scenario, persona, trial in run_plan:
+    completed: dict[tuple[str, str, int], RunRecord] = {}
+    for item in run_plan:
+        scenario, persona, trial_index = item
         record_path = (
             experiment_dir
             / "runs"
-            / run_folder_name(scenario, persona, trial)
+            / run_folder_name(scenario, persona, trial_index)
             / "record.json"
         )
         try:
             record = RunRecord.load_file(record_path)
         except Exception:
-            redo.append((scenario, persona, trial))
+            redo.append(item)
             continue
-        key = (scenario.id, persona.id, trial + 1)
+        key = (scenario.id, persona.id, trial_index)
         if record.outcome.stop_reason == "system_error":
-            redo.append((scenario, persona, trial))
+            redo.append(item)
         else:
-            complete[key] = record
-    return redo, complete
+            completed[key] = record
+    return redo, completed
 
 
 def _run_simulation(
@@ -530,26 +531,26 @@ def _run_simulation(
     else:
         _validate_inputs(target)
         experiment = Experiment.load_file(target / "experiment.yaml")
-        fixtures_dir = target / "fixtures"
         suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
         experiment_dir = project_root / "experiments" / f"{experiment.id}-{suffix}"
         experiment_dir.mkdir(parents=True)
         shutil.copytree(target, experiment_dir / "inputs")
+        fixtures_dir = experiment_dir / "inputs" / "fixtures"
 
     personas_by_id = {persona.id: persona for persona in experiment.personas}
     run_plan = expand_run_plan(experiment, personas_by_id)
     if resume:
-        redo_plan, complete_records = _classify_resume_runs(experiment_dir, run_plan)
+        redo_plan, completed_records = _classify_resume_runs(experiment_dir, run_plan)
         console.print(
             f"Resume plan: {experiment_dir} — {len(redo_plan)} runs to redo, "
-            f"{len(complete_records)} already complete"
+            f"{len(completed_records)} already complete"
         )
         if not redo_plan:
             console.print("nothing to resume")
             return experiment_dir
     else:
         redo_plan = run_plan
-        complete_records = {}
+        completed_records = {}
 
     from metis.engine.simulation.runner_resolver import resolve_runner_factory
 
@@ -573,13 +574,13 @@ def _run_simulation(
     for scenario in experiment.scenarios:
         run_states: list[SimulationRunState] = []
         for persona_ref in scenario.persona_refs:
-            for trial_idx in range(scenario.num_trials):
+            for trial_index in range(1, scenario.num_trials + 1):
                 total_run_count += 1
                 run_states.append(
                     SimulationRunState(
                         scenario_id=scenario.id,
                         persona_id=persona_ref,
-                        trial=trial_idx + 1,
+                        trial_index=trial_index,
                         num_trials=scenario.num_trials,
                         phase="pending",
                         current_turn=None,
@@ -603,11 +604,11 @@ def _run_simulation(
         total_runs=total_run_count,
     )
 
-    for (scenario_id, persona_id, trial), record in complete_records.items():
-        sim_state.complete_run(
+    for (scenario_id, persona_id, trial_index), record in completed_records.items():
+        sim_state.mark_run_completed(
             scenario_id,
             persona_id,
-            trial=trial,
+            trial_index=trial_index,
             stop_reason=record.outcome.stop_reason,
             duration_seconds=record.outcome.duration_seconds,
         )
@@ -622,12 +623,13 @@ def _run_simulation(
         log_format=log_format,
         tail_buffers=tail_buffers,
         use_tui=use_tui,
+        append=resume,
     )
     orchestration_logger = OrchestrationLogger(
         log_dir=resolved_log_dir, log_format=log_format, append=resume
     )
     if resume:
-        orchestration_logger.resume_started(len(redo_plan), len(complete_records))
+        orchestration_logger.resume_started(len(redo_plan), len(completed_records))
 
     tui_ctx: TUIContext | None = None
     if use_tui:
@@ -891,8 +893,9 @@ def _run_evaluation(
                     fetch_result = fetch_by_session_id(
                         session_id,
                         langfuse,
+                        experiment_root=experiment_dir,
                         retry_timeout=langfuse_timeout,
-                        artifacts=record.artifacts_collected,
+                        artifacts=record.artifacts,
                         scenario=scenarios_by_id.get(scenario_id),
                         persona=personas_by_id.get(persona_id),
                         stop_reason=record.outcome.stop_reason,

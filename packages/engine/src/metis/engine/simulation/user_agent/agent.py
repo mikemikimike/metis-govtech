@@ -9,7 +9,10 @@ from pydantic import BaseModel
 from metis.core.logging import get_logger
 
 from ..types import (
+    ActionResult,
     ActionSlot,
+    Artifact,
+    Observation,
     Persona,
     Scenario,
     UserAgentInput,
@@ -31,6 +34,151 @@ from .prompts import (
 logger = get_logger()
 
 MAX_HISTORY_TURNS = 20
+
+
+def _render_available_actions(available_actions: list[ActionSlot] | None) -> str:
+    """Render offered slots into the prompt's Available Actions block.
+
+    Returns an empty string when there are none so the section disappears.
+    """
+    if not available_actions:
+        return ""
+    action_lines = ["Available actions:"]
+    for slot in available_actions:
+        parts = f'  - id: "{slot.id}", kind: "{slot.kind}", label: "{slot.label}"'
+        if slot.options:
+            parts += f", options: {slot.options}"
+        if slot.required is not None:
+            parts += f", required: {'true' if slot.required else 'false'}"
+        action_lines.append(parts)
+    return "\n" + "\n".join(action_lines) + "\n"
+
+
+def _render_observed_actions(available_actions: list[ActionSlot] | None) -> str:
+    """Render the three states of ``Observation.available_actions``.
+
+    A list of slots renders as the slot list; ``[]`` says the target offers
+    nothing this turn; ``None`` says nobody looked. All three must be
+    distinguishable, because the persona has no other source for what it may
+    do next and an absent block reads to it as "nothing on offer" — so
+    rendering ``[]`` and ``None`` the same way tells it its controls were
+    withdrawn when in fact nobody checked.
+
+    Delegates the non-empty case rather than formatting slots itself, so the
+    opening turn and every later turn describe the same slot identically.
+    """
+    if available_actions is None:
+        return "\nThe actions on offer this turn could not be determined.\n"
+    if not available_actions:
+        return "\nNo actions are on offer this turn.\n"
+    return _render_available_actions(available_actions)
+
+
+def _artifact_line(art: Artifact) -> str:
+    """One registry line: id, name, a direction/turn tag, then the description."""
+    desc = art.content_description or "(no description available)"
+    if art.source == "fixture":
+        tag = "fixture"
+    elif art.at_turn is not None:
+        tag = f"delivered turn {art.at_turn}"
+    else:
+        tag = "delivered"
+    line = f'  - id: "{art.id}", name: "{art.name}" ({tag}): {desc}'
+    if art.state_description:
+        line += f" [{art.state_description}]"
+    return line
+
+
+def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
+    """Render the cumulative artifact registry, grouped by direction.
+
+    Two labelled groups keep the persona from mistaking its own uploaded input
+    for a target deliverable. Same-named files are disambiguated by the per-line
+    tag (source + at_turn). Compact and description-only: never the uri or the
+    bytes. Empty string when there are none so the section disappears.
+
+    The delivered group is presented as exhaustive, which is what lets the
+    persona disbelieve a file named only in the target's prose. Stated as
+    absence rather than as a count on purpose: ``Artifact.external_id`` is
+    optional, and a file reported without one can appear under several record
+    ids, so any count would be wrong (see :meth:`UserAgent._merge_artifacts`).
+
+    That exhaustiveness claim is why an entry is excluded unless
+    ``state == "received"``: an ``unfetched`` artifact is a file the target
+    has that this runner failed to download, recorded so the failure is
+    auditable and the download retried, and an ``unavailable`` artifact is one
+    there is nothing left to retry for — a path-bearing ``unfetched`` record is
+    excluded just the same as one with no ``path`` at all. Listing either here
+    would assert the persona received a file that never arrived — the same
+    false pass the closure sentence exists to prevent (issue #337). The persona
+    still hears about the failure through ``Observation.response_notices``, in
+    terms a real user could perceive.
+    """
+    if not artifacts:
+        return ""
+    uploaded = [a for a in artifacts.values() if a.source == "fixture"]
+    delivered = [
+        a for a in artifacts.values() if a.source != "fixture" and a.state == "received"
+    ]
+    lines: list[str] = []
+    if uploaded:
+        lines.append(
+            "Files you've uploaded to the assistant. These are your own inputs, "
+            "not deliverables:"
+        )
+        lines.extend(_artifact_line(art) for art in uploaded)
+    if delivered:
+        lines.append(
+            "Files the assistant has delivered to you so far. Treat each as a "
+            "real file you have received — do NOT claim you got nothing, and do "
+            "NOT demand it be pasted inline; judge sufficiency from the "
+            "descriptions. This is every file you have received: a file the "
+            "assistant's message claims to have delivered but which is absent "
+            "here did not reach you:"
+        )
+        lines.extend(_artifact_line(art) for art in delivered)
+    if not lines:
+        # Every artifact was filtered out (e.g. the only entries are failed
+        # downloads). Same contract as the no-artifacts case: no section at all,
+        # rather than two bare newlines in the middle of the prompt.
+        return ""
+    return "\n" + "\n".join(lines) + "\n"
+
+
+def _render_problems(results: list[ActionResult], notices: list[str]) -> str:
+    """Render prior-turn problems into the prompt's problem block.
+
+    Two kinds share one block: an action of the persona's that did not happen,
+    and a problem with the reply that no submitted action accounts for. The
+    action rows come first because they are about the persona's own choices,
+    and they carry the ``retryable`` hint so it can tell "try that again" from
+    "that will never work".
+
+    Withheld rows are rendered like any other failure. ``withheld`` marks a
+    rejection made by METIS rather than by the target, which matters to the
+    report's blame attribution and not at all here: an action that did not
+    happen did not happen, and a persona that is not told proceeds believing
+    it did.
+
+    Returns an empty string when there is nothing to report so the section
+    disappears.
+    """
+    failed = [row for row in results if not row.succeeded]
+    if not failed and not notices:
+        return ""
+    lines = ["Problems reported on your previous turn — take them into account:"]
+    for row in failed:
+        # 1-based: nothing else in the prompt exposes a zero-based index, and
+        # the persona counts the actions it asked for from one.
+        line = f"  - action {row.action_index + 1}: {row.detail}"
+        if row.retryable is True:
+            line += " (you may try this again)"
+        elif row.retryable is False:
+            line += " (trying this again will not help)"
+        lines.append(line)
+    for notice in notices:
+        lines.append(f"  - {notice}")
+    return "\n" + "\n".join(lines) + "\n"
 
 
 class HistoryRole(StrEnum):
@@ -60,6 +208,11 @@ class UserAgent:
         self.scenario = scenario
         self.conversation_history: list[HistoryEntry] = []
         self.turn_count = 0
+        # Cumulative registry of artifacts surfaced to the persona, keyed by
+        # target-side identity where there is one (see _merge_artifacts, which
+        # populates it turn-by-turn). The keys are internal: every consumer
+        # reads .values().
+        self._artifacts: dict[str, Artifact] = {}
         self.client = AsyncOpenAI(
             api_key=USER_AGENT_API_KEY,
             base_url=USER_AGENT_BASE_URL,
@@ -73,7 +226,14 @@ class UserAgent:
             self.persona.id,
             USER_AGENT_MODEL,
         )
-        response = await self._call_llm(OPENING_TURN_PROMPT)
+        opening_slots = [
+            ActionSlot(id=name, kind="file_upload", label=f"Attach file '{name}'")
+            for name in self.scenario.fixtures
+        ]
+        opening_prompt = OPENING_TURN_PROMPT.format(
+            available_actions_section=_render_available_actions(opening_slots or None),
+        )
+        response = await self._call_llm(opening_prompt)
         self.turn_count += 1
         self.conversation_history.append(
             HistoryEntry(role=HistoryRole.USER_AGENT, content=response.message)
@@ -97,8 +257,9 @@ class UserAgent:
             observation and optional session metadata.
         """
         observation = turn_payload.observation
+        self._merge_artifacts(observation)
         target_message = observation.text
-        available_actions = observation.available_actions or None
+        available_actions = observation.available_actions
 
         logger.info(
             "[user_agent] Generating response (turn=%d, history=%d msgs, target_text=%d chars)...",
@@ -116,6 +277,9 @@ class UserAgent:
         user_prompt = self._build_user_prompt(
             target_message,
             available_actions=available_actions,
+            action_results=observation.action_results,
+            response_notices=observation.response_notices,
+            artifacts=self._artifacts,
         )
 
         # Call LLM
@@ -143,8 +307,8 @@ class UserAgent:
         if self.scenario.fixtures:
             lines = [
                 "\n## Files to Upload",
-                "The following files are staged and ready to upload. Include them "
-                "as file_upload actions in your **first message**. "
+                "The following files are staged and ready to upload. Attach them "
+                "with `upload_file` actions in your **first message**. "
                 "Do NOT upload any file not in this list:",
             ]
             for f in self.scenario.fixtures:
@@ -158,30 +322,68 @@ class UserAgent:
             fixtures_section=fixtures_section,
         )
 
+    def _merge_artifacts(self, observation: Observation) -> None:
+        """Fold this turn's artifacts into the cumulative registry.
+
+        Dedup is by the file's identity on the target's side rather than by the
+        record: ``Artifact.id`` is minted per record while ``external_id`` names
+        the file itself (see :class:`~metis.core.artifacts.Artifact`), so keying
+        on the record id lets one file occupy two slots. A runner may report the
+        same file on more than one turn — a retrieval that failed is expected to
+        be retried — so a single file can arrive first as a record with no
+        ``path`` and later as one that has the file, and keyed by record id both
+        would persist for the rest of the run.
+
+        ``source`` joins ``external_id`` in the key because the two directions
+        are rendered as separate groups and nothing promises a target draws the
+        ids for files it was given and files it produced from disjoint
+        namespaces. Collapsing the two would relabel the persona's own input as
+        something the assistant delivered.
+
+        A held record already at ``state == "received"`` is never displaced by
+        an incoming record that is not, so which of the two arrives last does
+        not decide what the persona is told it received — the deciding factor
+        is ``state``, not whether a ``path`` is present. A held ``"unfetched"``
+        record can carry a non-``None`` ``path`` and still be replaced by a
+        later record, since it is ``state``, not ``path``, that is checked.
+
+        ``external_id`` is optional, and a record without one has no identity to
+        key on: it falls back to its own id, which means repeated reports of one
+        such file cannot be collapsed. That is why the delivered-files header
+        states absence rather than a count (see :func:`_render_artifacts`).
+        """
+        for artifact in observation.artifacts:
+            key = (
+                f"{artifact.source}:{artifact.external_id}"
+                if artifact.external_id is not None
+                else artifact.id
+            )
+            held = self._artifacts.get(key)
+            if (
+                held is not None
+                and held.state == "received"
+                and artifact.state != "received"
+            ):
+                continue
+            self._artifacts[key] = artifact
+
     def _build_user_prompt(
         self,
         target_message: str,
         available_actions: list[ActionSlot] | None = None,
+        action_results: list[ActionResult] | None = None,
+        response_notices: list[str] | None = None,
+        artifacts: dict[str, Artifact] | None = None,
     ) -> str:
         """Build the turn-specific instruction prompt (excludes history, which
         is conveyed structurally via multi-turn contents)."""
-        available_actions_section = ""
-        if available_actions:
-            action_lines = ["Available actions:"]
-            for slot in available_actions:
-                parts = (
-                    f'  - id: "{slot.id}", kind: "{slot.kind}", label: "{slot.label}"'
-                )
-                if slot.options:
-                    parts += f", options: {slot.options}"
-                if slot.required is not None:
-                    parts += f", required: {'true' if slot.required else 'false'}"
-                action_lines.append(parts)
-            available_actions_section = "\n" + "\n".join(action_lines) + "\n"
-
         return RESPONSE_TURN_PROMPT.format(
             target_message=target_message,
-            available_actions_section=available_actions_section,
+            problems_section=_render_problems(
+                action_results or [], response_notices or []
+            ),
+            available_actions_section=_render_observed_actions(available_actions),
+            artifacts_section=_render_artifacts(artifacts),
             turn_number=self.turn_count + 1,
         )
 

@@ -4,9 +4,10 @@ from pathlib import Path
 
 from playwright.async_api import Page
 
+from metis.core import Artifact
 from metis.core.logging import get_logger
 
-from ...types import Artifact, UIState
+from ...types import UIState
 from ._config import RetryConfig
 from ._retry import action_retry
 
@@ -45,8 +46,7 @@ _CAPTURE_UI_STATE_JS = """() => {
     downloadLinks.forEach(link => {
       artifacts.push({
         name: link.download || link.textContent?.trim() || "file",
-        type: "download",
-        url: link.href || undefined,
+        path: link.href || undefined,
       });
     });
 
@@ -57,7 +57,7 @@ _CAPTURE_UI_STATE_JS = """() => {
       const href = link.href || "";
       if (fileExtPattern.test(href) || href.startsWith("blob:")) {
         const name = link.textContent?.trim() || href.split("/").pop()?.split("?")[0] || "file";
-        artifacts.push({ name, type: "download", url: href });
+        artifacts.push({ name, path: href });
       }
     });
 
@@ -65,7 +65,7 @@ _CAPTURE_UI_STATE_JS = """() => {
     downloadButtons.forEach(btn => {
       const text = btn.textContent?.trim() || "";
       if (/^download\\b/i.test(text) && text.length < 60) {
-        artifacts.push({ name: text, type: "download" });
+        artifacts.push({ name: text });
       }
     });
 
@@ -225,6 +225,8 @@ async def capture_ui_state(page: Page, config: RetryConfig | None = None) -> UIS
     async def _capture() -> UIState:
         logger.debug("[ui_capture] Evaluating UI state extraction JS...")
         raw = await page.evaluate(_CAPTURE_UI_STATE_JS)
+        for entry in raw.get("artifacts", []) or []:
+            entry.setdefault("state", "unfetched")
         state = UIState.model_validate(raw)
         logger.debug(
             "[ui_capture] Captured: text=%d chars, artifacts=%d, forms=%d, errors=%d, labels=%d",
@@ -287,14 +289,14 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
         downloadLinks.forEach(link => {
           const name = link.download || link.textContent?.trim() || link.href?.split("/").pop()?.split("?")[0] || "file";
           if (name && name.length < 200 && !found.some(f => f.name === name)) {
-            found.push({ name, type: "download", url: link.href || undefined });
+            found.push({ name, path: link.href || undefined });
           }
         });
         const blobLinks = body.querySelectorAll('a[href^="blob:"]');
         blobLinks.forEach(link => {
           const name = link.download || link.textContent?.trim() || "blob-file";
           if (!found.some(f => f.name === name)) {
-            found.push({ name, type: "download", url: link.href });
+            found.push({ name, path: link.href });
           }
         });
         const allClickables = body.querySelectorAll('button, [role="menuitem"]');
@@ -302,7 +304,7 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
           const text = el.textContent?.trim() || "";
           if (/download/i.test(text) && text.length < 60) {
             if (!found.some(f => f.name === text)) {
-              found.push({ name: text, type: "download" });
+              found.push({ name: text });
             }
           }
         });
@@ -313,7 +315,9 @@ async def capture_artifacts_panel(page: Page) -> list[Artifact]:
     await page.keyboard.press("Escape")
     await page.wait_for_timeout(500)
 
-    artifacts = [Artifact.model_validate(a) for a in raw_artifacts]
+    artifacts = [
+        Artifact.model_validate({**a, "state": "unfetched"}) for a in raw_artifacts
+    ]
     if artifacts:
         logger.info(
             "[artifacts_panel] Found %d artifact(s): %s",

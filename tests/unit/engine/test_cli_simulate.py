@@ -119,8 +119,8 @@ def test_resume_runs_only_missing_or_system_error_records(
     selected: list[tuple[str, str, int]] = []
 
     def fake_run_experiment(*_args: object, **kwargs: object) -> None:
-        for scenario, persona, trial in kwargs["run_plan"]:  # type: ignore[index]
-            selected.append((scenario.id, persona.id, trial))
+        for scenario, persona, trial_index in kwargs["run_plan"]:  # type: ignore[index]
+            selected.append((scenario.id, persona.id, trial_index))
 
     monkeypatch.setattr(experiment_module, "run_experiment", fake_run_experiment)
 
@@ -130,8 +130,38 @@ def test_resume_runs_only_missing_or_system_error_records(
     )
 
     assert result.exit_code == 0
-    assert selected == [("task-1", "alice", 1)]
+    assert selected == [("task-1", "alice", 2)]
     assert "runs to redo" in " ".join(result.output.split())
+
+
+def test_resume_passes_append_true_to_setup_engine_logging(
+    monkeypatch, tmp_path: Path
+) -> None:
+    output_dir = _write_output(
+        tmp_path / "experiments" / "test-exp-20260101-010101", TWO_TRIAL_EXPERIMENT
+    )
+    (output_dir / "inputs" / "fixtures" / "fixture.txt").write_text("frozen")
+    _write_record(output_dir, "task-1-alice-1", "goal_achieved")
+    _write_record(output_dir, "task-1-alice-2", "system_error")
+    monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
+    monkeypatch.setattr(experiment_module, "run_experiment", lambda *_a, **_k: None)
+
+    captured_append: list[object] = []
+    _real_setup = cli.setup_engine_logging
+
+    def _capturing_setup(*args: object, **kwargs: object) -> object:
+        captured_append.append(kwargs.get("append"))
+        return _real_setup(*args, **kwargs)
+
+    monkeypatch.setattr(cli, "setup_engine_logging", _capturing_setup)
+
+    result = runner.invoke(
+        app,
+        ["simulate", "--resume", "--experiment-dir", str(output_dir), "--no-tui"],
+    )
+
+    assert result.exit_code == 0
+    assert captured_append == [True]
 
 
 def test_resume_all_complete_is_noop(monkeypatch, tmp_path: Path) -> None:

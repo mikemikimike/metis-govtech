@@ -87,6 +87,39 @@ def test_the_engine_model_accepts_the_compiled_document() -> None:
     assert len(experiment.scenarios) == 2
 
 
+def test_write_experiment_survives_non_ascii(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """compile_experiment() embeds product.description verbatim (experiment.py's
+    description=profile.product.description), so write_experiment() can crash on
+    exactly the same input as write_review(). Both the write and the engine's
+    own read-back must round-trip a non-ASCII character (issue #385)."""
+    import pathlib
+
+    from metis.engine.simulation.types import Experiment
+
+    original_write_text = pathlib.Path.write_text
+    encodings_used: list[str | None] = []
+
+    def spy_write_text(self: pathlib.Path, data: str, *args: object, **kwargs: object):
+        encodings_used.append(kwargs.get("encoding"))  # type: ignore[arg-type]
+        return original_write_text(self, data, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pathlib.Path, "write_text", spy_write_text)
+
+    profile = research_assistant()
+    profile.product.description = "Swipe to metric → see detail"
+    path = tmp_path / "experiment.yaml"
+
+    write_experiment(profile, EXPERIMENT_ID, path)
+
+    assert encodings_used == ["utf-8"]
+    assert "→" in path.read_text(encoding="utf-8")
+
+    loaded = Experiment.load_file(path)
+    assert loaded.description == profile.product.description
+
+
 # ── the hand-authored door ───────────────────────────────────────────────────
 
 
@@ -258,3 +291,33 @@ def test_the_product_detail_is_kept_in_review_but_not_compiled() -> None:
     assert profile.product.detail in review
     assert profile.product.detail not in experiment
     assert yaml.safe_load(experiment)["description"] == profile.product.description
+
+
+def test_write_review_survives_non_ascii(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """product.description is arbitrary user-authored text and can contain any
+    character. write_review() must round-trip it exactly, and never rely on
+    the platform's locale encoding to do so (issue #385)."""
+    import pathlib
+
+    from metis.wizard.application.compile import write_review
+
+    original_write_text = pathlib.Path.write_text
+    encodings_used: list[str | None] = []
+
+    def spy_write_text(self: pathlib.Path, data: str, *args: object, **kwargs: object):
+        encodings_used.append(kwargs.get("encoding"))  # type: ignore[arg-type]
+        return original_write_text(self, data, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pathlib.Path, "write_text", spy_write_text)
+
+    profile = research_assistant()
+    profile.product.description = "Swipe to metric → see detail"
+    path = tmp_path / "review.md"
+
+    text = write_review(profile, EXPERIMENT_ID, path)
+
+    assert encodings_used == ["utf-8"]
+    assert "→" in text
+    assert "→" in path.read_text(encoding="utf-8")

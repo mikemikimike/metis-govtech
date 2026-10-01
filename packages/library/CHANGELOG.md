@@ -5,6 +5,28 @@ All notable changes to `metis-library` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [0.11.0] — 2026-09-30
+
+### Changed
+
+- **`SlideVisualQualityMetric` renders slides itself, no engine-supplied images (issue #381, rescoped from #380)** — the metric now locates the most recently delivered `source="target"` artifact whose name ends in `.pdf` (turn-scoped; latest `at_turn` wins) and rasterizes each page to PNG via the new `pymupdf` dependency, instead of reading pre-rendered paths from `metadata["slide_image_refs"]`. New helpers in `_extraction.py`: `_latest_target_pdf_path`, `render_pdf_slides`, `get_deck_slide_images`. A target deck delivered only as `.pptx`, with no accompanying `.pdf`, has no local conversion path — METIS does not shell out to a system-level renderer such as LibreOffice for this — so the metric skips it, same as when no deck artifact exists at all. `pymupdf` is AGPL-3.0/commercial dual-licensed (Artifex); flagged for sign-off as a new runtime dependency of `metis-library`.
+
+### Removed
+
+- **`slide_image_refs` is gone (issue #382).** Now that `SlideVisualQualityMetric` renders slides itself from `test_case.metadata["artifacts"]` (#381), the field had no remaining reader. `get_slide_image_refs()` (`_extraction.py`) and the `slide_image_refs` key on both `LlmTestCaseMetadata` and `ConversationalTestCaseMetadata` (`_types.py`) are deleted.
+
+### Fixed
+
+- `ReproducibleAnalysisScriptMetric` accepts existing script files in any directory, including Orca's `artifacts/` directory. Absolute paths and paths relative to the current working directory are supported. Missing files and directories fail the file check; descriptive names and response references are still required (#366).
+
+## [0.10.0] — 2026-09-23
+
+### Changed
+
+- **Artifact metrics read the unified `metis.core.Artifact` (issue #307)** — the library's local `ArtifactSummary` TypedDict is removed; `metrics._extraction.get_artifacts` now validates each `metadata["artifacts"]` dict into a `metis.core.Artifact` (skipping malformed/legacy dicts) and returns `list[Artifact]`. `_artifact_paths` and the output-verification, reproducible-analysis-script, and report-format-and-length metrics take the on-disk location from `Artifact.path` and the filename from `Artifact.name`, replacing the old `filename` key. Lockstep with the engine's artifact unification; requires `metis-core` ≥ 0.5.0. Old-shape (`{filename, path}`) metadata is no longer read (forward-only).
+
+---
+
 ## [0.9.0] — 2026-09-03
 
 ### Changed

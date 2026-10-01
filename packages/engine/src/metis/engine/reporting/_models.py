@@ -45,6 +45,7 @@ class Trial(BaseModel):
     failureSource: str
     turns: int
     duration: float | None = None
+    attempt: int = 1
     conversation: list[ConversationTurn] = Field(default_factory=list)
     category: str
     features: list[str] = Field(default_factory=list)
@@ -56,6 +57,27 @@ class TrialsSummary(BaseModel):
     successful: int
     rate: int | None = None
     items: list[Trial] = Field(default_factory=list)
+
+
+class MetricPassRate(BaseModel):
+    rate: int | None = None
+    pass_: int = Field(0, alias="pass")
+    ran: int = 0
+    status: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class TrialSuccess(BaseModel):
+    rate: int | None = None
+    successful: int = 0
+    attempted: int = 0
+    status: str | None = None
+
+
+class Scores(BaseModel):
+    metricPassRate: MetricPassRate
+    trialSuccess: TrialSuccess
 
 
 class PlanScenario(BaseModel):
@@ -210,6 +232,7 @@ class Report(BaseModel):
     routing: Routing = Field(default_factory=Routing)
     threshold: int
     trials: TrialsSummary
+    scores: Scores
     plan: Plan
     personas: list[str]
     scenarios: list[str]

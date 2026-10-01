@@ -13,6 +13,13 @@ from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
 
+from ._contract import (
+    merge_withheld,
+    validate_action_results,
+    withhold_unstaged_uploads,
+)
+from ._fixture_artifacts import build_fixture_artifacts
+from .artifact_summarizer import summarize_artifact
 from .exceptions import (
     ConsecutiveFailureEscalation,
     PostSubmissionObservationError,
@@ -20,12 +27,12 @@ from .exceptions import (
     RunRecoverableError,
     TargetSessionEnded,
     TargetUnavailableError,
-    TransientDOMError,
     TurnRecoverableError,
 )
 from .types import (
+    ActionResult,
+    Artifact,
     ChosenAction,
-    CollectedArtifact,
     ConversationTurn,
     Observation,
     RunConfig,
@@ -48,6 +55,59 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
+_UNDELIVERED_REASON = (
+    "No reply was captured for this turn — the target's response could not be read."
+)
+
+
+def _undelivered_reason(exc: Exception) -> str:
+    """Persona-facing text for a turn whose ``send_turn`` raised.
+
+    Preserves the two strings the ladder already produced where they remain
+    accurate, and falls back to a neutral phrasing for the browser runner's
+    two failure modes. ``PostSubmissionObservationError`` and
+    ``ResponseTimeoutError`` specifically mean the message *did* reach the
+    target and only the observation failed, so a reason claiming
+    non-delivery would be a false first-hand report (P2).
+    """
+    if isinstance(exc, ResponseTimeoutError):
+        return "Response timeout — no response received"
+    if isinstance(exc, TargetUnavailableError):
+        return f"Target unavailable — {exc}"
+    return _UNDELIVERED_REASON
+
+
+def _undelivered_observation(
+    actions: list[ChosenAction], reason: str, *, delivered: bool
+) -> Observation:
+    """The uniform shape for a turn the runner could not complete.
+
+    One ``succeeded=False`` row per submitted action, plus the same text as a
+    ``response_notices`` entry so a consumer reading only notices still sees
+    it. ``retryable`` is ``None`` — I2's "no opinion" — because the caller
+    observed nothing first-hand and has no standing to advise a retry.
+    ``available_actions`` stays ``None``: ``send_turn`` raised, so no page and
+    no payload was ever inspected. ``delivered`` (I5) is the caller's to set:
+    ``send_turn`` raised either way, but a ``PostSubmissionObservationError``
+    or a ``ResponseTimeoutError`` — both raised only after the runner's
+    submission step already committed — means the message already reached
+    the target before the observation failed, so ``delivered=True`` there is
+    the first-hand fact, not a guess.
+
+    I1 binds only what a *runner* returns, so this shape is voluntary. It
+    exists so every downstream consumer sees one ``Observation`` shape whether
+    the turn completed or not.
+    """
+    return Observation(
+        response_notices=[reason],
+        action_results=[
+            ActionResult(action_index=index, succeeded=False, detail=reason)
+            for index in range(len(actions))
+        ],
+        available_actions=None,
+        delivered=delivered,
+    )
+
 
 class Orchestrator:
     """Drives the turn loop. Runner-agnostic."""
@@ -60,7 +120,9 @@ class Orchestrator:
         scenario: Scenario,
         run_dir: Path,
         fixtures_dir: Path,
-        trial: int = 1,
+        experiment_root: Path,
+        fixture_artifacts: list[Artifact] | None = None,
+        trial_index: int = 1,  # 1-based
         state: SimulationState | None = None,
         tui_ctx: TUIContext | None = None,
         shutdown_event: threading.Event | None = None,
@@ -71,7 +133,18 @@ class Orchestrator:
         self._scenario = scenario
         self._run_dir = run_dir
         self._fixtures_dir = fixtures_dir
-        self._trial = trial
+        self._experiment_root = experiment_root
+        self._fixture_artifacts = (
+            fixture_artifacts
+            if fixture_artifacts is not None
+            else build_fixture_artifacts(
+                run_config.fixtures, fixtures_dir, self._experiment_root
+            )
+        )
+        # Staged fixtures by logical name — the enrichment loop swaps a
+        # runner-emitted fixture stub for the SAME object recorded here.
+        self._fixtures_by_name = {a.name: a for a in self._fixture_artifacts}
+        self._trial_index = trial_index
         self._state = state
         self._tui_ctx = tui_ctx
         self._shutdown_event = shutdown_event
@@ -79,7 +152,7 @@ class Orchestrator:
         # In-progress state mirrored here so a caller can still build a
         # record if run() raises. run() overwrites these on entry.
         self._conversation: list[ConversationTurn] = []
-        self._artifacts_collected: list[CollectedArtifact] = []
+        self._artifacts_collected: list[Artifact] = []
         self._start_time: float = time.time()
         self._target_session_id: str | None = None
 
@@ -88,7 +161,7 @@ class Orchestrator:
         run_config = self._run_config
         start_time = time.time()
         conversation: list[ConversationTurn] = []
-        artifacts_collected: list[CollectedArtifact] = []
+        artifacts_collected: list[Artifact] = []
         turn_count = 0
         target_session_id: str | None = None
 
@@ -163,10 +236,10 @@ class Orchestrator:
                 )
 
                 if self._state:
-                    self._state.update_run_turn(
+                    self._state.mark_run_turn(
                         self._scenario.id,
                         run_config.persona,
-                        trial=self._trial,
+                        trial_index=self._trial_index,
                         turn=turn_count,
                         max_turns=run_config.max_turns,
                         detail="sending message...",
@@ -240,61 +313,24 @@ class Orchestrator:
                     current_message[:80],
                 )
 
+                # Caller-side rejection: an upload naming a fixture this
+                # scenario never staged is never sent. The runner has no
+                # standing to judge this — only the orchestrator knows what
+                # was staged — and the report must not blame the target for
+                # an action it never received.
+                forwarded, withheld = withhold_unstaged_uploads(
+                    current_actions,
+                    set(self._fixtures_by_name),
+                    set(run_config.fixtures),
+                )
+
                 # Send turn to target via runner
                 try:
                     observation = await self._runner.send_turn(
-                        current_message, current_actions
+                        current_message, forwarded
                     )
+                    validate_action_results(observation, forwarded)
                     consecutive_failures = 0
-                except PostSubmissionObservationError:
-                    try:
-                        await self._runner.recover()
-                        observation = await self._runner.send_turn(current_message, [])
-                        consecutive_failures = 0
-                    except (TurnRecoverableError, ResponseTimeoutError) as inner:
-                        consecutive_failures += 1
-                        if consecutive_failures >= 2:
-                            raise ConsecutiveFailureEscalation(
-                                f"{consecutive_failures} consecutive turn failures"
-                            ) from inner
-                        observation = Observation(
-                            errors=["Response timeout — no response received"]
-                        )
-                except TransientDOMError as exc:
-                    consecutive_failures += 1
-                    if consecutive_failures >= 2:
-                        raise ConsecutiveFailureEscalation(
-                            f"{consecutive_failures} consecutive turn failures"
-                        ) from exc
-                    await self._runner.recover()
-                    try:
-                        observation = await self._runner.send_turn(current_message, [])
-                        consecutive_failures = 0
-                    except (TurnRecoverableError, ResponseTimeoutError) as inner:
-                        consecutive_failures += 1
-                        if consecutive_failures >= 2:
-                            raise ConsecutiveFailureEscalation(
-                                f"{consecutive_failures} consecutive turn failures"
-                            ) from inner
-                        observation = Observation(
-                            errors=["Response timeout — no response received"]
-                        )
-                except ResponseTimeoutError as exc:
-                    consecutive_failures += 1
-                    if consecutive_failures >= 2:
-                        raise ConsecutiveFailureEscalation(
-                            f"{consecutive_failures} consecutive turn failures"
-                        ) from exc
-                    observation = Observation(
-                        errors=["Response timeout — no response received"]
-                    )
-                except TargetUnavailableError as exc:
-                    consecutive_failures += 1
-                    if consecutive_failures >= 2:
-                        raise ConsecutiveFailureEscalation(
-                            f"{consecutive_failures} consecutive turn failures"
-                        ) from exc
-                    observation = Observation(errors=[f"Target unavailable — {exc}"])
                 except TargetSessionEnded as exc:
                     logger.info(
                         "[turn %d] STOP: target_exhausted (%s)", turn_count, exc
@@ -307,7 +343,34 @@ class Orchestrator:
                         target_session_id or await self._runner.get_session_id(),
                     )
                 except RunRecoverableError:
+                    # Escalated by the run layer, never absorbed here. Listed
+                    # before the turn-recoverable handler for the reader's
+                    # sake — the two families are disjoint, so this is
+                    # documentation rather than dispatch.
                     raise
+                except (TurnRecoverableError, ResponseTimeoutError) as exc:
+                    # I4: send_turn raised, so the caller cannot know whether
+                    # the message landed. It is never re-sent for this turn.
+                    # I3 hygiene for the *next* turn is now the runner's own
+                    # business (docs/runner-contract.md) — see #361.
+                    consecutive_failures += 1
+                    if consecutive_failures >= 2:
+                        raise ConsecutiveFailureEscalation(
+                            f"{consecutive_failures} consecutive turn failures"
+                        ) from exc
+                    reason = _undelivered_reason(exc)
+                    logger.info("[turn %d] turn not completed: %s", turn_count, reason)
+                    delivered = isinstance(
+                        exc, (PostSubmissionObservationError, ResponseTimeoutError)
+                    )
+                    observation = _undelivered_observation(
+                        forwarded, reason, delivered=delivered
+                    )
+
+                if withheld:
+                    observation.action_results = merge_withheld(
+                        observation.action_results, withheld
+                    )
 
                 send_elapsed = time.time() - turn_start
                 logger.info("[turn %d] send+wait: %.1fs", turn_count, send_elapsed)
@@ -336,6 +399,13 @@ class Orchestrator:
                         turn_count,
                         observation.discarded_message[:80],
                     )
+                # Stamp the turn onto each artifact and enrich downloads with a
+                # digest + descriptions before the turn is recorded, so both
+                # target_response and artifacts_collected carry enriched data.
+                await self._enrich_observation_artifacts(
+                    observation, turn_count, current_message
+                )
+
                 turn = ConversationTurn(
                     turn_number=turn_count,
                     user_message=current_message,
@@ -349,15 +419,8 @@ class Orchestrator:
                 )
                 conversation.append(turn)
 
-                # Track artifacts
-                for artifact in observation.artifacts:
-                    artifacts_collected.append(
-                        CollectedArtifact(
-                            filename=artifact.name,
-                            collected_at_turn=turn_count,
-                            path=artifact.url or "",
-                        )
-                    )
+                # Track artifacts (already stamped with at_turn above)
+                artifacts_collected.extend(observation.artifacts)
 
                 # Turn summary
                 logger.info(
@@ -376,17 +439,38 @@ class Orchestrator:
                         turn_count,
                         ", ".join(a.name for a in observation.artifacts),
                     )
-                if observation.errors:
+                if observation.response_notices:
                     logger.info(
-                        "[turn %d]   Errors: %s",
+                        "[turn %d]   Notices: %s",
                         turn_count,
-                        "; ".join(observation.errors),
+                        "; ".join(observation.response_notices),
+                    )
+                # Unlike the persona prompt and the report, this log deliberately
+                # includes withheld rows, marked as such: an operator reading
+                # logs/ needs to see that METIS itself rejected an action, which
+                # is often the actual bug.
+                undelivered = [
+                    row for row in observation.action_results if not row.succeeded
+                ]
+                if undelivered:
+                    logger.info(
+                        "[turn %d]   Actions not delivered: %s",
+                        turn_count,
+                        "; ".join(
+                            f"[{row.action_index}]"
+                            f"{' withheld:' if row.withheld else ''} {row.detail}"
+                            for row in undelivered
+                        ),
                     )
                 if observation.available_actions:
                     logger.info(
-                        "[turn %d]   Actions available: %d",
+                        "[turn %d]   Actions available: %d (%s)",
                         turn_count,
                         len(observation.available_actions),
+                        ", ".join(
+                            f"{slot.kind}:{slot.label!r}"
+                            for slot in observation.available_actions
+                        ),
                     )
 
                 # Re-check stopping after turn
@@ -422,10 +506,10 @@ class Orchestrator:
 
                 # TUI update
                 if self._state:
-                    self._state.update_run_turn(
+                    self._state.mark_run_turn(
                         self._scenario.id,
                         run_config.persona,
-                        trial=self._trial,
+                        trial_index=self._trial_index,
                         turn=turn_count,
                         max_turns=run_config.max_turns,
                         detail="waiting for LLM...",
@@ -494,11 +578,60 @@ class Orchestrator:
         finally:
             await self._runner.teardown()
 
+    async def _enrich_observation_artifacts(
+        self, observation: Observation, turn_count: int, current_message: str
+    ) -> None:
+        """Stamp + enrich this turn's observation artifacts, in place.
+
+        A ``source="fixture"`` entry is a confirmed upload the runner echoed:
+        swap the runner-emitted stub for the SAME worker-enriched registry
+        object (matched by name), stamp the upload turn, and skip
+        ``summarize_artifact`` — the fixture was described at build time, and
+        re-summarizing would relabel it as a delivered target and re-hash a
+        file already digested. Target downloads keep the stamp-and-summarize
+        path. Swapping the registry object into ``observation.artifacts`` means
+        the record folds one identity per fixture (deduped by id in
+        ``_build_record``) and the UserAgent merges the enriched object.
+
+        The swap discards the stub, so anything the stub alone knows has to be
+        carried across it. ``external_id`` is the only such field: the registry
+        object is built at staging time, before any target session exists, so
+        the target's own file id can only come from the runner's echo.
+        """
+        for i, artifact in enumerate(observation.artifacts):
+            if artifact.source == "fixture":
+                registry = self._fixtures_by_name.get(artifact.name)
+                if registry is None:
+                    # Runner echoed a fixture name we never staged — record the
+                    # un-enriched stub (no digest/description) but flag it, since
+                    # it usually means a fixtures-dir / scenario-list mismatch.
+                    logger.warning(
+                        "[orchestrator] runner echoed unstaged fixture %r; "
+                        "recording the un-enriched stub",
+                        artifact.name,
+                    )
+                    registry = artifact
+                if artifact.external_id is not None:
+                    # Guarded, not unconditional: a runner that re-echoes an
+                    # upload without an id must not blank the id an earlier turn
+                    # established.
+                    registry.external_id = artifact.external_id
+                registry.at_turn = turn_count
+                observation.artifacts[i] = registry
+            else:
+                artifact.at_turn = turn_count
+                await summarize_artifact(
+                    artifact,
+                    experiment_root=self._experiment_root,
+                    triggering_message=current_message,
+                    turn_number=turn_count,
+                )
+
     def _build_record(
         self,
         stop_reason: str,
         conversation: list[ConversationTurn],
-        artifacts_collected: list[CollectedArtifact],
+        artifacts_collected: list[Artifact],
         start_time: float,
         target_session_id: str | None,
     ) -> RunRecord:
@@ -513,7 +646,11 @@ class Orchestrator:
                 duration_seconds=round(duration_seconds, 1),
             ),
             conversation=conversation,
-            artifacts_collected=artifacts_collected,
+            artifacts=list(
+                {
+                    a.id: a for a in (*self._fixture_artifacts, *artifacts_collected)
+                }.values()
+            ),
         )
 
     def partial_record(self, stop_reason: str) -> RunRecord:

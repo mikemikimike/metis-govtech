@@ -86,6 +86,7 @@ def configure_logging(
         _make_level_filter(resolved_level),
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.TimeStamper(fmt="iso"),
     ]
@@ -98,6 +99,7 @@ def configure_logging(
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.TimeStamper(fmt="iso"),
     ]
@@ -169,9 +171,14 @@ def _rich_console_renderer(_logger: Any, _name: str, event_dict: EventDict) -> s
 
     event_dict.pop("_record", None)
     event_dict.pop("_from_stdlib", None)
+    # Rendered by format_exc_info; render on its own line(s) rather than
+    # clumping the multi-line traceback into the inline key=value pairs.
+    exception = event_dict.pop("exception", None)
     if event_dict:
         pairs = " ".join(f"{k}={v}" for k, v in event_dict.items())
         output.append(f"  {pairs}", style="dim")
+    if exception:
+        output.append(f"\n{exception}", style="dim")
 
     _stderr_console.print(output, highlight=False)
     return ""

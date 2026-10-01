@@ -34,3 +34,7 @@ def main(
 
 app.add_typer(engine_app, name="engine")
 app.add_typer(wizard_app, name="wizard")
+
+
+if __name__ == "__main__":
+    app()

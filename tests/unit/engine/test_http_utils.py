@@ -253,4 +253,80 @@ class TestDownloadTo:
             await download_to(client, "http://example.com/file", dest)
 
         assert not dest.exists()
+
+    @pytest.mark.asyncio
+    async def test_throttled_download_is_retried_not_lost(self, tmp_path: Path) -> None:
+        """A 429 costs a wait, not the file — the point of the opt-in window."""
+        dest = tmp_path / "file.txt"
+        statuses = iter([429, 200])
+        waits: list[float] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            if next(statuses) == 429:
+                return httpx.Response(429, headers={"Retry-After": "7"})
+            return httpx.Response(200, content=b"payload")
+
+        async def record_sleep(seconds: float) -> None:
+            waits.append(seconds)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+
+        await download_to(
+            client,
+            "http://example.com/file",
+            dest,
+            unavailable_window_s=30.0,
+            sleep=record_sleep,
+        )
+
+        assert dest.read_bytes() == b"payload"
+        assert waits == [7.0]  # Orca's own Retry-After, not the default
+
+    @pytest.mark.asyncio
+    async def test_download_raises_when_503_outlasts_window(
+        self, tmp_path: Path
+    ) -> None:
+        """A 503 past the window is still an error, and leaves nothing behind."""
+        dest = tmp_path / "file.txt"
+        clock = iter([0.0, 0.0, 5.0, 20.0])
+
+        async def no_sleep(_seconds: float) -> None:
+            return None
+
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda req: httpx.Response(503))
+        )
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await download_to(
+                client,
+                "http://example.com/file",
+                dest,
+                unavailable_window_s=10.0,
+                clock=lambda: next(clock),
+                sleep=no_sleep,
+            )
+
+        assert not dest.exists()
+        assert not dest.with_name(f".{dest.name}.part").exists()
+
+    @pytest.mark.asyncio
+    async def test_statuses_are_not_retried_without_the_window(
+        self, tmp_path: Path
+    ) -> None:
+        """Omitting the window keeps the old contract for callers that map 429."""
+        dest = tmp_path / "file.txt"
+        calls = 0
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            return httpx.Response(429)
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await download_to(client, "http://example.com/file", dest)
+
+        assert calls == 1
         assert not dest.with_name(f".{dest.name}.part").exists()

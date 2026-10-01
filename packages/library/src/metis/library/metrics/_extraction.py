@@ -12,8 +12,11 @@ Design rules (see the change proposal):
   chain-of-thought.
 - Be tolerant: return empty/None when a signal is absent so the calling
   metric can return an explicit skipped result instead of fabricating one.
-- No new third-party dependency: PPTX text/structure is read through the
-  standard-library ZIP/XML representation, not a presentation parser.
+- No new third-party dependency for text/structure extraction: PPTX
+  text/structure is read through the standard-library ZIP/XML representation,
+  not a presentation parser. The one deliberate exception is PDF-to-image
+  rendering (below) — producing pixels for a visual-quality judge is not
+  something the standard library can do, so that path alone uses `pymupdf`.
 
 Both per-turn metrics (``LLMTestCase`` + ``LlmTestCaseMetadata``) and session
 metrics (``ConversationalTestCase`` + ``Turn`` list) are supported; each
@@ -22,14 +25,19 @@ helper documents which shape it accepts.
 
 from __future__ import annotations
 
+import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+import pymupdf
+from pydantic import ValidationError
+
+from metis.core import Artifact
+
 from ._types import (
-    ArtifactSummary,
     LlmTestCaseMetadata,
     ObservationSummary,
     OrcaChatMetadata,
@@ -209,23 +217,30 @@ def extract_brief(test_case: LLMTestCase) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def get_artifacts(test_case: LLMTestCase) -> list[ArtifactSummary]:
-    """Collected output artifacts recorded in metadata (may be empty)."""
-    return list(get_metadata(test_case).get("artifacts", []) or [])
+def get_artifacts(test_case: LLMTestCase) -> list[Artifact]:
+    """Collected output artifacts recorded in metadata, validated to Artifact.
 
-
-def get_slide_image_refs(test_case: LLMTestCase) -> list[str] | None:
-    """Ordered pre-rendered slide-image paths (engine-supplied), or None."""
-    return get_metadata(test_case).get("slide_image_refs")
+    Malformed/legacy dicts are skipped (forward-only policy) so metrics never
+    crash on an old or partial record.
+    """
+    out: list[Artifact] = []
+    for raw in get_metadata(test_case).get("artifacts", []) or []:
+        try:
+            out.append(Artifact.model_validate(raw))
+        except ValidationError:
+            continue
+    return out
 
 
 def _artifact_paths(test_case: LLMTestCase, *suffixes: str) -> list[str]:
     out: list[str] = []
     for art in get_artifacts(test_case):
-        path = art.get("path")
-        filename = (art.get("filename") or "").lower()
-        if path and (not suffixes or any(filename.endswith(s) for s in suffixes)):
-            out.append(path)
+        if art.state != "received":
+            continue
+        local = Path(cast("str", art.path))
+        name = art.name.lower()
+        if not suffixes or any(name.endswith(s) for s in suffixes):
+            out.append(str(local))
     return out
 
 
@@ -310,6 +325,80 @@ def extract_deck_slides(test_case: LLMTestCase) -> list[DeckSlide]:
         if slides:
             return slides
     return []
+
+
+def _latest_target_pdf_path(test_case: LLMTestCase) -> str | None:
+    """Path of the most recently delivered target ``.pdf`` deck artifact.
+
+    Only ``source == "target"`` artifacts are eligible (fixtures — reference
+    decks a persona uploads — are excluded). Turn-scoped defensively: an
+    artifact is a candidate only if its ``at_turn`` is unset or at/before this
+    test case's ``turn_index``; ``turn_index`` is read tolerantly (missing
+    disables turn-scoping rather than dropping every candidate, since most
+    non-engine-supplied test cases never set it). Among candidates, the most
+    recent by ``at_turn`` wins — a later revision judges instead of an
+    earlier one, never both. Returns ``None`` when nothing qualifies.
+    """
+    turn_index = get_metadata(test_case).get("turn_index")
+    candidates = [
+        art
+        for art in get_artifacts(test_case)
+        if art.source == "target"
+        and art.state == "received"
+        and art.path
+        and art.name.lower().endswith(".pdf")
+        and (art.at_turn is None or turn_index is None or art.at_turn <= turn_index)
+    ]
+    if not candidates:
+        return None
+    latest = max(candidates, key=lambda a: a.at_turn if a.at_turn is not None else -1)
+    return cast("str", latest.path)
+
+
+def render_pdf_slides(pdf_path: str | Path, *, dpi: int = 150) -> list[str]:
+    """Rasterize each PDF page to a PNG file, returned as ordered paths.
+
+    Each call writes into a fresh ``tempfile.mkdtemp`` directory — a
+    randomly-named, metric-owned location, never the source PDF's own
+    directory and never ``record.artifacts`` — so a render is clearly a
+    side effect of judging, not part of what the target delivered. Nothing
+    currently deletes these directories; cleanup is left to the OS's own
+    temp-file housekeeping.
+
+    Pure-Python rendering via ``pymupdf``; wrapped fail-soft like
+    ``read_pptx_slides`` — a missing file, corrupt PDF, or unreadable page
+    degrades to an empty list rather than raising, so the caller falls
+    through to its existing "nothing to render" skip path. ``dpi`` defaults
+    above pymupdf's own 72 DPI default: a judge grading text legibility needs
+    sharper pixels than that, or it grades rendering quality instead of deck
+    quality.
+    """
+    path = Path(pdf_path)
+    if not path.is_file():
+        return []
+    out_dir = Path(tempfile.mkdtemp(prefix="metis-slide-render-"))
+    try:
+        with pymupdf.open(path) as doc:
+            pages: list[str] = []
+            for idx in range(len(doc)):
+                out_path = out_dir / f"slide-{idx:03d}.png"
+                doc[idx].get_pixmap(dpi=dpi).save(out_path)
+                pages.append(str(out_path))
+            return pages
+    except Exception:
+        return []
+
+
+def get_deck_slide_images(test_case: LLMTestCase) -> list[str]:
+    """Ordered PNG paths rendered from the most recent target PDF deck.
+
+    Composes :func:`_latest_target_pdf_path` and :func:`render_pdf_slides`.
+    A target artifact delivered only as ``.pptx`` (no accompanying ``.pdf``)
+    has no local conversion path and is not eligible here — this returns an
+    empty list for that case, same as when no deck artifact exists at all.
+    """
+    pdf_path = _latest_target_pdf_path(test_case)
+    return render_pdf_slides(pdf_path) if pdf_path else []
 
 
 # ---------------------------------------------------------------------------

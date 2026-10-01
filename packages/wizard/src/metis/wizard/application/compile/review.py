@@ -120,5 +120,9 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
 
 def write_review(profile: ProductProfile, experiment_id: str, path: Path) -> str:
     text = render_review(profile, experiment_id)
-    Path(path).write_text(text)
+    # encoding is explicit — write_text() otherwise falls back to the platform
+    # locale encoding (cp1252 on Windows), and this text is arbitrary user- or
+    # model-authored prose (product.description, criteria, personas) that can
+    # contain any character.
+    Path(path).write_text(text, encoding="utf-8")
     return text

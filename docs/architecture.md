@@ -115,7 +115,7 @@ MUST depend only on `metis-core`. MAY depend on evaluation framework libraries (
 | **Import Path** | `from metis.engine import ...` |
 | **Purpose** | Evaluation runtime — ingests traces, executes metrics, produces evaluation reports. |
 
-MUST depend on `metis-core` and `metis-library`. MAY depend on HTTP, math, parsing, browser automation, and LLM client libraries. MUST be usable both as a library import and as a standalone CLI.
+MUST depend on `metis-core` and `metis-library`. MAY depend on HTTP, math, parsing, browser automation, and LLM client libraries. MUST be usable both as a library import and as a standalone CLI. Every `Runner` implementation MUST satisfy the normative runner contract in [runner-contract.md](runner-contract.md).
 
 ---
 

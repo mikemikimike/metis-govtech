@@ -18,7 +18,7 @@ class FakeRunner(Runner):
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
         return Observation(
-            text="ok", artifacts=[], errors=[], available_actions=[], status_labels=[]
+            text="ok", artifacts=[], available_actions=[], status_labels=[]
         )
 
     async def teardown(self) -> None:
@@ -38,7 +38,9 @@ class FakeRunnerFactory:
     async def start(self) -> None:
         self.started = True
 
-    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
+    async def create(
+        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+    ) -> Runner:
         return FakeRunner()
 
     async def close(self) -> None:
@@ -57,7 +59,9 @@ class TestRunnerFactoryProtocol:
         factory = FakeRunnerFactory()
         await factory.start()
         assert factory.started
-        runner = await factory.create(Path("/tmp/run"), Path("/tmp/fixtures"))
+        runner = await factory.create(
+            Path("/tmp/run"), Path("/tmp/fixtures"), Path("/tmp/exp")
+        )
         assert isinstance(runner, Runner)
         await factory.close()
         assert factory.closed

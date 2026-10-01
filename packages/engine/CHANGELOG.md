@@ -4,6 +4,357 @@ All notable changes to `metis-engine` will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.14.0] — 2026-09-30
+
+### Added
+
+- **`report.json` now carries the two headline scores report.html already
+  showed (issue #369).** A new `scores` field gives
+  `scores.metricPassRate` and `scores.trialSuccess`, each with a
+  `rate`/`status` plus the counts behind it, so a CI/CD pipeline or another
+  agent can read a pass/fail verdict without re-deriving it from `axes.S`
+  and `trials`. report.html now reads from this field too, instead of
+  recomputing the metric rate client-side — one source of truth for both
+  numbers.
+- **The Runner↔Observation contract is now enforced, not documented.**
+  `simulation/_contract.py` checks every `send_turn` return against the action
+  list the runner was handed: one `ActionResult` per action, indices ascending
+  and dense, and no runner-issued `withheld` verdict. A violation raises
+  `RunnerContractError` and ends the run as `system_error` rather than
+  degrading into a report that silently undercounts. Only completeness is
+  checked here — the minimal-verdict rule lives in `ActionResult`'s own
+  validators, so there is exactly one copy of each rule.
+- **Structured per-action results on `Observation`.** A runner now reports one
+  `ActionResult` per action it received — `action_index`, `succeeded`, a
+  `detail` required on failure, an optional `retryable` hint, and a `withheld`
+  flag the caller alone may set — alongside `response_notices` for problems no
+  single action accounts for. `available_actions` is now three-state: a list of
+  offers, `[]` for looked-and-found-none, or `None` for nobody looked.
+
+### Changed
+
+- **A scenario listing the same `persona_ref` twice now fails to load,
+  where it previously ran (issue #356). Behaviour change.** This is a
+  deliberate rejection, not a silent dedupe: a duplicated ref is a config
+  its author did not mean to write, and `num_trials` is the supported way
+  to ask for repeated runs of one persona. A config that relied on the old
+  silent-duplicate behaviour was already producing fewer surviving results
+  than its `num_trials` claimed — the second run silently overwrote the
+  first's `record.json` — so this closes a gap rather than changing a
+  working config's output.
+- **Upload validation moved from the runners to the orchestrator.** Both
+  runners separately decided whether an upload named a staged fixture, and each
+  reported the rejection as free text a report consumer could not tell from a
+  target failure. The orchestrator now withholds such an action before
+  `send_turn` — it owns the staged-fixture registry, so it is the only layer
+  that can judge this — and records it as an `ActionResult` with
+  `withheld=True`. The persona still sees why its action did not go out, but
+  the report no longer counts it against the target, which never received it.
+  Surviving actions are renumbered around the withheld positions so the rows
+  the runner returns still line up with what the persona chose.
+- **The Orca API runner reports one result per action.** Every action the
+  runner receives comes back with its own verdict, so a button click this
+  runner cannot perform, a form fill naming no pending field, a duplicate
+  attachment and a fixture Orca rejects are each attributable instead of
+  being logged once and dropped. Turn-level problems — a failed or cancelled
+  status, an artifact that would not download, a submit refused because a
+  cached fileId went stale — move to `response_notices`, and a `failed`
+  status no longer implies its actions failed to arrive.
+- **The persona is told which of its actions failed, and can tell "nobody
+  looked" from "nothing on offer".** The prompt's problem block is built from
+  `action_results` and `response_notices` rather than one flat list, so a
+  rejected upload is attributed to the action that asked for it and carries a
+  retryable hint instead of arriving as anonymous prose. `available_actions`
+  is rendered in all three of its states: previously `[]` and `None` both made
+  the block vanish, which told the persona its controls had been withdrawn
+  when in fact nobody had checked. An action METIS itself withheld is still
+  shown to the persona — it is excluded from the report's blame attribution,
+  not from the persona's knowledge, because a persona not told would proceed
+  believing its file was attached. The opening turn is unchanged.
+- **The report reads failure evidence from the structured channels.** Per-turn
+  problems and the `failureSource` decision now come from `response_notices`
+  plus the `detail` of each failed, non-withheld `action_results` row, sorted
+  by `action_index`, through a single helper shared by the headline message and
+  the per-turn array so the two cannot drift. An action METIS withheld before
+  dispatch no longer counts as a product failure, and a failed row whose
+  `detail` is empty still does — the read path never rebuilds the model, so
+  neither invariant can be assumed here. `report.json` and
+  `report.schema.json` are unchanged. **Forward-only:** a record written
+  before this contract carries only the flat `errors` list, so re-reporting an
+  older run loses its failure attribution and needs a re-run.
+
+### Removed
+
+- **`Observation.errors` is gone.** The free-text list that every runner wrote
+  and the report, the persona prompt and the turn log each parsed differently is
+  replaced by two typed channels: `action_results`, one row per action the
+  runner was handed, and `response_notices` for turn-level problems belonging to
+  no single action. Nothing in the engine reads `errors` any more, and the
+  transitional validator that derived it from the new channels is deleted with
+  it. `UIState.errors` is a different field on a different model and survives —
+  it is the browser runner's raw DOM scrape, which is mapped into
+  `response_notices`. The runner guide's reproduced model and worked example are
+  updated, and both now point at `docs/runner-contract.md` as normative rather
+  than paraphrasing it. **Breaking:** a third-party runner constructing
+  `Observation(errors=[...])` silently loses that text — `Observation` sets no
+  model config, so Pydantic's default `extra="ignore"` drops the unknown keyword
+  rather than raising.
+- **`Runner.recover()` is gone.** The hook was a default no-op with exactly one
+  override (`OrcaPlaywrightRunner`) and exactly two call sites, both removed by
+  the I4 ruling in #329; the one guarded call #329 kept for interim I3 hygiene
+  is deleted here too. The reload it used to perform moves into
+  `OrcaPlaywrightRunner` as a lazy self-heal: a `_page_dirty` flag set when a
+  turn raises, honoured at the top of the *next* `send_turn` rather than on the
+  failing turn's way out, so a run that escalates after two consecutive
+  failures never pays the reload it used to pay on both. `_recover_and_check`
+  (`_recovery.py`), written for a re-send path #329 also deleted, and
+  `TurnDiagnostics.recovered` / `.recovery_found_response`, never assigned
+  anywhere in `packages/`, go with it. **Breaking:** a third-party `Runner`
+  subclass that still overrides `recover()` keeps compiling — Python does not
+  mind an unused method — but it is silently never called again; there is no
+  replacement hook, because session recovery is now understood to be the
+  runner's own internal business (`docs/runner-contract.md`).
+- **`slide_image_refs` is gone (issue #382).** The Langfuse extractor no
+  longer assembles an image-named-artifact list or writes it into
+  `LLMTestCase`/`ConversationalTestCase` metadata — `SlideVisualQualityMetric`
+  stopped reading it once it started rendering slides on demand (#381),
+  leaving nothing left to populate it for. `_IMAGE_EXTS` and the
+  `slide_images`/`slide_image_refs` assembly in `fetch_by_session_id`, and
+  the `slide_image_refs` parameter on `_session_to_conversational_test_case`,
+  are deleted; `fetch_by_session_id`'s own signature is unchanged.
+
+### Fixed
+
+- **`Scenario` rejects a `persona_ref` repeated within one scenario (issue
+  #356).** `persona_refs` had no uniqueness constraint, and nothing
+  downstream deduplicated it: a repeated ref planned the same run twice, and
+  because a run folder's name is a pure function of `(scenario.id,
+  persona.id, trial_index)`, both copies resolved to the same `run_dir` and
+  overwrote or interleaved with each other depending on how `_distribute_runs`
+  happened to split them across workers. Not observed in any experiment on
+  disk — every config to date is wizard-generated, and the wizard cannot
+  emit a duplicate. `Scenario` now rejects it at load time, via a new
+  `@model_validator(mode="after")` mirroring the existing
+  `_check_unique_fixtures` check on the same model.
+- **A turn whose observation failed after submission is no longer re-sent.**
+  `PostSubmissionObservationError` is raised precisely to report that the
+  message already reached the target, and the orchestrator was using it as a
+  cue to send again — producing a target session one turn longer than the run
+  record described, which silently shifted every turn-indexed metric read back
+  from Langfuse. The recovery ladder now calls `send_turn` at most once per
+  persona turn whatever the exception, and synthesises one `Observation`
+  carrying a failed `ActionResult` per submitted action. The cost is named
+  deliberately: the browser runner's refresh-and-retry for a transient DOM
+  failure is gone, so one class of recoverable turn is now reported as
+  undelivered rather than rescued.
+- **The Playwright runner reports one result per action.** A click or fill the
+  DOM refused, and a duplicate upload, used to be logged at warning level and
+  dropped, so the persona was told its action had been performed. Each now
+  comes back as a failure against the action that asked for it. Error text
+  scraped from the page moves to `response_notices`, where it belongs: no
+  submitted action accounts for it. Fixes #320.
+- **A poll-lane 503/transport error on the Orca API runner no longer reports
+  `delivered=False` (issue #374).** `_fetch_digest` is only ever called with
+  a `turn_id` a prior submit already returned, so a 503 that outlasts the
+  retry window, or a raw transport error, while reading that turn's digest
+  means the message already reached Orca — only the follow-up status read
+  failed. It now raises `PostSubmissionObservationError` instead of the
+  shared `TargetUnavailableError` the submit lane still raises for the same
+  failure, so the orchestrator's I5 delivery disclosure reports the
+  first-hand fact instead of the submit-lane default. That guarantee holds
+  only when the current submit's own request minted a new turn — `_submit`
+  now reports this via a `submit_confirmed` flag threaded through
+  `_poll_until_settled`/`_fetch_digest`, because a turn adopted via 409
+  `turn_in_progress` minted nothing: it names a turn that already existed
+  before this submit, and can be an unrelated, still-draining prior turn
+  (one whose best-effort cancel didn't land before the next submit), in
+  which case the same failure leaves delivery unconfirmed and the raw
+  `TargetUnavailableError` propagates instead.
+- **`save_report()` writes the HTML/JSON report as UTF-8, not the platform
+  locale (issue #385).** `Path.write_text()` with no `encoding=` falls back
+  to the OS locale — `cp1252` on Windows — and the report page's template
+  contains a literal `→` outside that codec, so the write opened the file,
+  truncated it to 0 bytes, then raised `UnicodeEncodeError`, which
+  `generate_report()`'s blanket `except` swallowed, leaving a 0-byte
+  `report.html` behind a logged `report_failed`. Both writes in
+  `save_report()` now pass `encoding="utf-8"` explicitly.
+- **`Experiment.load_file()` and `load_report_sources()` read
+  `experiment.yaml`/`profile.yaml` as UTF-8 (issue #385).** These are the
+  read-side mirrors of `metis-wizard`'s `write_experiment()`/
+  `ProductProfile.save()` — both now pass `encoding="utf-8"` explicitly,
+  matching the writers.
+- **Remaining run-record and config reads/writes now pin UTF-8 too
+  (issue #385).** `_save_run_record()`, `RunRecord.load_file()`,
+  `_save_artifacts()`'s manifest write, the artifact summarizer's read,
+  the Orca runner config readers, `load_report_sources()`'s remaining
+  reads, and the schema-generation dev script all now pass
+  `encoding="utf-8"` explicitly. These serialize through `json.dumps()`
+  without `ensure_ascii=False` (or are ASCII config/schema files), so the
+  files were already pure ASCII — this is defense-in-depth, not a
+  live-bug fix, for consistency with the writers that are.
+- **`tc.metadata["artifacts"]` is scoped to artifacts known by that turn, not
+  the full session list (issue #383).** Every turn's `LLMTestCase` in
+  `extractor/langfuse.py` used to see the entire session artifact list,
+  unfiltered by `at_turn` — a turn-1 test case could see a file the target
+  hadn't produced until turn 5. Any metric reading `metadata["artifacts"]` to
+  reason about what was available at a turn was silently working with future
+  information. The per-turn assignment now keeps an artifact only when
+  `at_turn is None` (session-level recoveries with no turn attribution) or
+  `at_turn <= turn_idx`, mirroring the scoping `_latest_target_pdf_path`
+  already applies at the metric layer.
+
+## [0.13.0] — 2026-09-23
+
+### Removed
+
+- `install-playwright` Makefile target — superseded by root-level `make install-extras-playwright`
+
+### Added
+
+- **Retried runs are visible in the report (issue #346)** — `attempt_number` and `prior_failures` had been recorded in `record.json` since run-level retries were introduced and read by nothing outside `simulation/`, so a run that burned two attempts looked identical to a clean one in every report. Each trial in the report payload now carries `attempt`, and a trial with `attempt > 1` is marked "retried" in the trial trace and the outcome breakdown. The flag only: `attempt` already says how many attempts were spent, and the per-attempt detail (failure type, turn reached, message) stays in the run's `record.json`, which is not a published schema — `report.schema.json` is audited by downstream consumers, so it gains one integer field rather than a nested `PriorFailure` array nothing rendered. It matters because a retry is a free do-over only when the failure was independent of what the run was doing: `ConsecutiveFailureEscalation` — the only real retry in the experiments on disk — plausibly was not, and retrying it biases the surviving sample toward runs that never trip it. `Trial.attempt` is defaulted, so reports written before this change still parse and validate, and `_REPORT_VERSION` is unchanged. One gap remains: a run that spent attempts, was interrupted, then succeeded after a `--resume` reports `attempt: 1` with no prior failures, because a resumed run restarts the attempt counter in a new process and the previous record's history is discarded when the redone run overwrites it — so the "retried" marker does not fire for that run.
+
+- **`quarantine_stale_artifacts()` for the run artifacts directory (issue #346)** — moves a populated `runs/<run>/artifacts/` to a timestamped `artifacts-superseded-<UTC>/` beside it, so an attempt can start with a clean directory. Returns `None` and touches nothing when there is no directory or it is empty; never deletes.
+
+- **A warning when the session sweep drops a generated file it cannot fetch** — a `Session.files` entry marked `generated` with a null `fileId` was skipped by `collect_session_artifacts` with no log, no note and no artifact, while the digest lane records all three for the same condition. It was the only branch in that loop leaving no trace, and since an entry with no `fileId` has no identity the sweep cannot tell whether the digest lane reported the same file — so when the digest omitted it too, nothing in the run mentioned it at all. Now warned about by name. Still log-only and still unrecorded: an entry with no `fileId` has no identity, so an artifact minted here would reconcile against nothing and double-report whatever the digest lane already recorded.
+
+- **A warning when one Orca `fileId` names two different files** — `reconcile_by_identity` now logs a warning if a second artifact lands on an id already held under a different filename, which breaks the uniqueness contract documented on `Artifact.external_id`: a file does not rename itself while keeping its id. Detection only — the two still merge and one is still lost, because uniqueness is a property of the set and nothing can validate it from a single record — but the collapse stops being silent, which is the whole cost of a target that reuses ids.
+
+- **`Artifact.external_id` propagated from Orca `fileId` on downloaded artifacts** — `collect_artifacts` now records the entry's `fileId` as `external_id` on every artifact it builds: successfully downloaded files, HTTP-error failures, and network-error failures all carry the id so a later re-check can retry exactly those entries by target identity rather than by filename. An entry whose `fileId` is `null` keeps `external_id=None` — there is nothing to record. `run-manifest.json` artifact entries gain a corresponding `"external_id"` key.
+- **`Artifact.external_id` propagated from Orca `fileId` on uploaded fixture artifacts** — `send_turn`'s post-submit fixture artifact recording now stamps each fixture `Artifact` with `external_id` from `FixtureLibrary.cached_file_id`, a new non-uploading, non-raising cache lookup. A cached rejection yields `None` rather than re-raising; an absent name yields `None`. The Orca-agnostic `build_fixture_artifacts` path is unchanged.
+
+- **Optional `X-PlatformAI-Key` on Orca submits (issue #338)** — the Orca API runner reads a new optional `ORCA_PLATFORM_AI_KEY` env var into `OrcaApiRunnerConfig.platform_ai_key` (a `SecretStr`) and sends it as `X-PlatformAI-Key` on `POST /chat` only, which bills each turn to the evaluator's own platform project on a fixed model. Without it every turn spends Orca's shared weekly allowance, and Orca *silently downgrades to a cheaper model* once that allowance is spent — changing the model under test mid-experiment with no marker in the run record. Malformed keys (empty, whitespace-bearing, under 8 or over 512 characters) are rejected at config construction rather than on the first submit, and the value is never logged: only the billing mode is, once, at setup. `v1_request` gained an optional `headers` argument, applied per attempt so retries carry it too.
+- **`GET /usage` pre-flight (issue #338)** — `OrcaApiRunnerFactory.start()` now reads the key's week-to-date allowance once and logs the tier, `resetAt`, and the overall / data-analysis / document-generation percentages. When no platform key is configured and any of them is at or above 80%, a console warning names `resetAt` and the downgrade consequence. Never blocks, and never raises: an unreadable pre-flight is a warning, not a failed experiment.
+
+- **`simulate.log` symlink in each run folder (issue #327)** — `open_run` now places a relative `simulate.log` symlink inside `runs/<name>/` pointing to the canonical per-run log in `logs/`. The run folder is self-contained for inspection and supports `tail -f runs/<name>/simulate.log` during a live run. Symlink creation is guarded so failures on unsupported filesystems or resume-overwrites are logged at debug and never break the run.
+- **Fixtures recorded in the run record as Artifacts (issue #321)** — inbound scenario fixtures are now captured in `RunRecord.artifacts` as `Artifact(source="fixture", …)` alongside outbound target outputs (`source="target"`), each with an experiment-root-relative `path` and a SHA-256 digest computed from the staged bytes. A run is now self-describing on its input side. `run-manifest.json` entries gain a `source` field. Authoring is unchanged: `Scenario.fixtures` stays `list[str]`.
+- Optional experiment-level `fixture_content_descriptions` map (filename → fixture
+  `Artifact.content_description`); gaps are auto-summarized at run start (#321).
+
+### Changed
+
+- **`RunRecord.total_attempts` renamed to `max_allowed_attempts` (issue #352)** — the field always held the *configured* retry budget — `1 +` the scenario's `max_run_retries` override, else the experiment-level default — never the number of attempts made, so a record reading `{"attempt_number": 1, "total_attempts": 3}` looked like a run that had taken three attempts when it had in fact succeeded on the first. The new name says which of the two it is; `attempt_number` remains the actual count and `prior_failures` the per-attempt detail. Output-schema change: the `record.json` key is now `"max_allowed_attempts"`. No `schema_version` bump (v0.x policy) — **forward-only: old `record.json` files are not migrated**, and because `RunRecord` ignores unknown keys the old field is silently dropped on load, leaving `max_allowed_attempts` at its default of `1`. Any external tooling keying on `"total_attempts"` must be updated.
+- **Artifact downloads and session delete now go through the shared resilience layer (issue #338)** — `download_to` gained an opt-in `unavailable_window_s` that retries a 429 per `Retry-After` and a 503 with backoff, and the Orca API runner's artifact collector uses it, so a throttled read lane costs a wait instead of the file. A 401 mid-download is now the run-level `AuthLossError` it is, rather than a per-file "could not be downloaded" note. Teardown's `DELETE /sessions/{id}` goes through the same layer instead of the raw client, so a throttled delete no longer leaks a session silently.
+- Every producer of `Artifact` objects (fixture builder, the ORCA API runner, the ORCA Playwright runner) emits `path` as a POSIX-style path relative to the experiment root
+- `Orchestrator`, `RunnerFactory.create`, both runner constructors, `_save_artifacts`, `summarize_artifact`, `summarize_fixture_artifacts`, `resolve_fixture_descriptions`, and `fetch_by_session_id` all gained a required `experiment_root: Path` parameter used to resolve `Artifact.path` back to an absolute filesystem path
+- **Simulation `trial` renamed to 1-based `trial_index`** — the trial counter is now `trial_index` throughout the simulation pipeline and is consistently 1-based (the first trial is `1`), removing the scattered `trial + 1` conversions in run-folder names, per-run log filenames, structlog context, and TUI output. `RunPlanItem` is now a `NamedTuple` (`scenario`, `persona`, `trial_index`) instead of a bare tuple alias, and `run_plan` is a required argument of `run_experiment` / `_run_experiment_async` (no longer lazily re-expanded).
+- **`SimulationState` mutators renamed** — `start_run` → `mark_run_started`, `update_run_turn` → `mark_run_turn`, `complete_run` → `mark_run_completed`, `fail_run` → `mark_run_failed`; all take a 1-based `trial_index`.
+- **JSON orchestration-log field renamed `trial` → `trial_index`** (output-schema change) — the `RUN_STARTED` / `RUN_COMPLETED` records emitted under `--log-format json` now use the key `"trial_index"` instead of `"trial"` (the per-run structlog context key changed to match). The value is unchanged (still 1-based). Text-format logs are unaffected. Any external tooling that parses the JSON orchestration log and keys on the old `"trial"` field must be updated.
+- **`Artifact` generalized to both file directions (issue #321, phase 2 of #307)** — `Artifact` gains `source: Literal["fixture","target"]` (default `"target"`) and a derived `media_type` computed field; the Orca-UI-specific `type` enum is removed; the turn-number field is renamed to `at_turn`; and `RunRecord.artifacts_collected` is renamed `artifacts`. No `schema_version` bump (v0.x) — **forward-only: old `record.json` files are not migrated** and need a re-run to re-evaluate. Requires `metis-core` with the reshaped `Artifact`.
+- **Artifact model unified; `Artifact.url` → `Artifact.path`; model relocated to `metis-core` (issue #307)** — `Artifact` and `CollectedArtifact` are merged into one lifecycle-spanning `Artifact` (`id`, `name`, `source`, `path`, `at_turn`, `content_description`, `state_description`, `digest`, `hash_algorithm`, and a derived `media_type`), now hosted in `metis.core` (with `resolve_artifact_path`) so the engine, library, and wizard share one definition. Both runners now record on-disk downloads as a POSIX path relative to the experiment root, keeping experiment output directories portable when copied or moved. Requires `metis-core` ≥ 0.5.0. No `schema_version` bump (v0.x policy) — **forward-only: old result files in the `{filename, path}` shape are not migrated** and need a re-run to re-evaluate.
+
+### Fixed
+
+- **The report's `num_trials` fallback follows the engine's default, not the wizard's (issue #346, secondary finding)** — `build_plan` read `num_trials` with a fallback of 3, matching `metis-wizard`'s domain default, while `metis-engine`'s `Scenario` schema defaults to 1 and is what the engine obeys. A hand-written config omitting the field would run once and be reported as 1 of 3 sessions planned. Now falls back to 1. Unreachable for a wizard-generated config, which always writes the field explicitly; the wizard's own interview-time default of 3 is deliberate and unchanged.
+
+- **`--resume` no longer truncates the per-run log of the run it redoes** — `LogRouter.open_run` opened each `logs/simulate-<scenario>_<persona>-NN.log` with mode `"w"`, so resuming a `system_error` run replaced the interrupted process's account of it. That was the only surviving narrative of the attempt whose downloads are now moved aside by the issue #346 fix, so preserving the files while erasing the log would have been worse than either alone. `LogRouter` and `setup_engine_logging` take an `append` flag, wired to the resume flag in the CLI — the same treatment `OrchestrationLogger` already gave `simulate.log`. A fresh experiment still truncates.
+
+- **A retried or resumed run no longer writes into the previous attempt's artifacts directory (issue #346)** — a run owns one `run_dir`, but each *attempt* at it produced its own downloads into the same `artifacts/`, which was never cleared. The API runner's collision handling stored attempt 2's `report.pdf` as `report-2.pdf`, implying a duplicate when it was the only good copy, and the browser runner's `save_as` overwrote attempt 1's copy in place; either way `record.json` described one attempt while the folder held several, and files from a failed attempt were left orphaned. The attempt loop now moves a populated `artifacts/` to a timestamped `artifacts-superseded-<UTC>/` before each attempt, so the surviving attempt's directory holds only its own files under their own names and the failed attempt's downloads are kept for inspection. Nothing is deleted, no runner changed, and a run that never retries is byte-for-byte unchanged. The trigger is the directory's contents rather than the attempt counter, which also covers `--resume`: it redoes a `system_error` run in a new process whose counter restarts at 1 while the directory still holds the earlier process's files. That per-process counter is unchanged and now documented — `attempt_number` counts attempts in this process, not the lifetime of the run.
+
+- **The persona's artifact registry dedupes by target identity, not by record
+  id** — `UserAgent._merge_artifacts` keyed the cumulative registry on
+  `Artifact.id`, a uuid minted per record, so the same file could occupy two
+  slots. That is not hypothetical: a failed download is reported again on
+  purpose, because the runner withholds its `fileId` from `_downloaded_file_ids`
+  so the next turn retries it, and keyed by uuid the turn-3 failure and the
+  turn-4 success both persisted for the rest of the run. The key is now
+  `source` plus `external_id` where there is one — `source` included so an
+  uploaded fixture and a deliverable sharing a `fileId` cannot collapse into one
+  entry and relabel the persona's own input — and a record with no `path` never
+  displaces one that has a file, the same rule `reconcile_by_identity` applies
+  within a single turn. Without an `external_id` the uuid remains the key: the
+  Playwright runner mints a fresh id per DOM capture and has no identity to
+  reconcile on, which is why the delivered-files header states absence rather
+  than a count.
+
+- **Raw Orca `fileId`s no longer leak into the simulated user's prompt** — a
+  per-file "could not be downloaded" note carried the file's id inside its own
+  text (`Artifact 'chart.vl.json' (file 8f3c2a1e-…) could not be downloaded`),
+  because `reconcile_by_identity` has to match a note to its file by identity
+  and Orca reuses names across revisions. Those notes become
+  `Observation.errors`, which is rendered into the persona's prompt, so a
+  simulated user was shown a backend identifier no real user of a chat product
+  would ever see — the same fidelity rule the runner already enforced for
+  sweep-level failures. Notes are now `ArtifactNote(text, file_id)` pairs:
+  reconciliation reads the id field directly and only `text` is copied into the
+  observation. The substring scan that recovered the id from the note text, and
+  the `note_marker` helper that embedded it, are both gone.
+
+- **The persona's artifact registry is now authoritative (issue #337)** —
+  **behaviour change, affects every scenario.** Nothing previously told the
+  simulated user that the delivered-files list was exhaustive, so it could
+  accept the list *and* believe files named only in the target's prose without
+  the two ever conflicting. In one recorded run the persona's reasoning credits
+  the assistant having "said it generated charts" and returns `goal_achieved`
+  for a run that captured no charts at all. Rule 8 and the delivered-files
+  header now state that the list is every file received and that a file claimed
+  but absent was not received, to be challenged in character. Phrased as
+  absence rather than a count, because the browser runner can surface one
+  persisting file under several ids. For that claim to be true, a `path=None`
+  artifact — a file the target produced but the runner could not fetch, recorded
+  so the failure stays auditable and the download is retried — is now excluded
+  from the delivered group: listing one under "this is every file you have
+  received" asserted a delivery that never happened, which is the same false
+  pass in a new shape. The persona still learns of the failure through
+  `Observation.errors`. Expect runs against an over-claiming
+  target to yield `continue` or `giving_up` where they previously yielded
+  `goal_achieved` — the correct direction, but it moves
+  `CapabilityHonestyMetric`, `SessionActionHonestyMetric` and
+  `AbandonmentMetric`, so results are not comparable with experiments recorded
+  before this change.
+
+- **The artifact summarizer no longer restates a document's claims about other
+  files (issue #337)** — `summarize_artifact` is strictly per-artifact and was
+  behaving correctly, but delivered documents frequently contain a manifest of
+  their siblings (one recorded `ANALYSIS_SUMMARY.txt` lists four `.vl.json`
+  charts with per-chart descriptions, none of which were ever captured). Asked
+  for "the headings and the key claims", the summarizer faithfully copied that
+  manifest into `content_description`, which `_render_artifacts` then presents
+  to the persona as METIS's own record of what it holds. The prompt now scopes
+  the description to the single file's contents while keeping the fact-rich
+  figures the persona needs to judge sufficiency.
+
+- **Generated files omitted from the turn digest are now recovered (issue #337)**
+  — Orca's `TurnDigest.files` is documented as "a file the turn generated" but
+  excludes Vega-Lite chart specs, which `GET /sessions/{id}` lists as
+  `source: "generated"` with working `fileId`s. Verified on two sessions
+  fifteen days apart: the digest is the generated set with every `.vl.json`
+  removed and nothing else. `OrcaApiRunner` now reconciles each settled turn
+  against the session and downloads what it does not already hold, so chart
+  metrics stop skipping for lack of input they should have had. The sweep is
+  additive and quiet — a failed session read logs a warning and leaves the
+  digest's own artifacts untouched, and it no-ops before the first submit.
+  `Session.files` carries no turn attribution, so a file first surfaced by the
+  sweep is attributed to the turn that surfaced it. Fixing the digest upstream
+  would not make this redundant: reconciliation is what makes the runner robust
+  to the next under-report.
+
+- **Artifact downloads dedupe by file identity, not filename (issue #337)** —
+  Orca's digest re-lists a file's `fileId` on every later turn, and
+  `_unused_path` dedupes by filename collision, so the same bytes were fetched
+  and stored repeatedly: 307 collision pairs across 20 runs in the recorded
+  experiments, 306 of them byte-identical, 15,258,949 wasted bytes, one file
+  stored eight times in a single run. `collect_artifacts` now takes a
+  `seen_file_ids` set and skips an id it already holds. The rename rule is
+  unchanged and still load-bearing — exactly one of those 307 pairs was
+  genuinely different, because an immutable-file system represents a revised
+  document as a new `fileId` reusing the name, and that one is still kept.
+  Redundant downloads also stop misleading the summarizer into describing a
+  stale copy as a fresh deliverable.
+
+- **A failed artifact download no longer leaves a URL in `Artifact.path`** — the Playwright runner's UI capture parks a download `href` in `path` for the download step to consume, but when the download failed (or no matching link was visible) that HTTP/`blob:` URL survived into the run record, where `resolve_artifact_path` would join it onto the experiment root and yield a nonsense location instead of reporting no file. `path` is now cleared before each download attempt and only a completed `save_as` sets it, so an undownloadable artifact is recorded by name with no path — the same shape the API runner already produces. The failing URL is named in the existing warning.
+
+- **Per-call input cap now ends the run instead of burning it (issue #338)** — Orca v1 has no session budget, so the runner's `session_exhausted` 409 branch and its `exhausted` digest status were dead code and are removed. What replaced them upstream is the 200,000-token per-call input cap, which arrives as a `failed` digest — a *successful* `send_turn`, so the orchestrator's consecutive-failure counter reset each time and a wedged session burned to `max_turns`, paying for every attempt. Two consecutive input-cap failures now raise `TargetSessionEnded` (nothing a persona can send shrinks the accumulated context that caused it); one does not, since a single oversized fixture is recoverable. Any other `failed` reason stays a per-turn error and is logged verbatim, so a change to Orca's wording shows up as a diagnostic rather than as a silent turn-limit burn.
+- **A submit 404 caused by a stale `fileId` no longer discards a healthy run (issue #338)** — Orca answers the same, deliberately indistinguishable 404 for an unknown `sessionId` or `fileId`, so attribution now comes from what was sent: a submit carrying files blames the files, evicting the dead ids from the experiment-scoped `FixtureLibrary` (new `FixtureLibrary.forget`) and returning a turn error that re-offers the fixtures for re-upload. Previously every such 404 was reported as `TargetSessionLostError`, retrying the whole run and re-sending the same dead id at the same turn until the retry budget was gone.
+- **An empty persona message is no longer an unmapped 422 (issue #338)** — `message` is `minLength: 1` and Orca requires exactly one of `message` or `formAnswers`, so a blank message with nothing to answer has no valid body. It is now reported as a turn error before any fixture is uploaded, instead of escaping as a bare `httpx.HTTPStatusError`. A 422 from `POST /chat` is separately mapped to a descriptive error naming the schema divergence.
+- **Turn cancellation is now confirmed rather than assumed (issue #338)** — Orca stops a turn "at its next step", so an accepted cancel does not mean the spend has stopped. After a `cancelled` `CancelResult` the runner polls the digest on a short bounded budget and logs the outcome; `not_running` is logged distinctly, since on the response-timeout path it means the turn settled just before the cancel and an answer was discarded. Nothing raises — both callers are already on an error path. A digest 404 now names Orca's ~10-minute retention window instead of surfacing as a bare status error.
+- Fresh (non-resume) `metis engine simulate` runs now build fixture artifacts from the in-experiment copy (`{experiment}/inputs/fixtures`) instead of the source tree passed on the command line, matching resumed runs
+- **Turn errors surfaced to the user agent (issue #315)** — `Observation.errors` produced during a simulation turn (e.g. a rejected file upload, an upload timeout, or a target-unavailable signal) are now rendered into the user agent's turn prompt via a neutral `{errors_section}` block, so the simulated persona can see why its previous turn failed and recover instead of blindly repeating the same failing action. Previously the orchestrator only logged these errors; the LLM saw only `observation.text` and `observation.available_actions`. Prompt-layer only — no `schema_version` bump (`Observation.errors` already exists).
+- **Typed, self-describing action protocol (issue #311)** — the user agent → runner action list is now a plain `anyOf` union of typed variants (`UploadFileAction`, `ButtonClickAction`, `FormFillAction`), each declaring its `type` and the `slot_id` it targets, replacing the untyped `ChosenAction {id, value}` and removing the dead `UIAction` union. Runners dispatch on the variant (`match`/`isinstance`) instead of substring-matching `action.id`: `OrcaPlaywrightRunner._infer_action_kind` and `OrcaApiRunner._fixture_name` are deleted. An upload naming a non-scenario fixture or a file missing on disk is now a loud early-error `Observation` in both runners instead of a silent no-op. The user agent offers synthetic `file_upload` slots built from `scenario.fixtures` on the opening turn, so first-turn uploads are slot-driven like every later turn. No `schema_version` bump (per the v0.x policy): `ConversationTurn.user_ui_actions` is `list[dict]` with `extra="ignore"`, so both old `{id,value}` and new `{type,slot_id,...}` records load.
+- **Crash tracebacks now persist to per-run text logs** — `LogRouter._format_file_line` appends the rendered `exception` traceback (supplied by `metis-core`'s `format_exc_info` processor) to the per-run text log line when present. Previously an unexpected simulation crash logged via `logger.exception(...)` left only a bare marker line with no stack in the common configuration (text logs, TUI on), forcing a re-run with stderr captured to diagnose. Requires `metis-core` ≥ 0.4.1. JSON per-run logs now carry a clean `exception` string instead of a stringified `exc_info` tuple.
+- **Target artifacts surfaced to the user agent (issue #307)** — the simulated persona was structurally blind to every file the target produced, causing it to reject correct file-based deliverables and abandon the run (`user_abandoned`). A new orchestrator summarizer step enriches each downloaded artifact with a fact-rich `content_description`, a `state_description`, and a SHA-256 `digest`; the shared user agent now reads `observation.artifacts`, keeps a cumulative registry keyed by `id`, and renders a compact `{id: {name, descriptions}}` block into its turn prompt (never the bytes or the uri). The persona is told to treat a described file as a real deliverable and not to demand inline paste.
+
+---
+
 ## [0.12.0] — 2026-09-03
 
 ### Added

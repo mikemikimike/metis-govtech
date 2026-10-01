@@ -10,10 +10,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from metis.engine.simulation.exceptions import ConsecutiveFailureEscalation
-from metis.engine.simulation.experiment import _worker, run_folder_name
+from metis.engine.simulation.experiment import (
+    RunPlanItem,
+    _worker,
+    run_folder_name,
+)
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     ChosenAction,
+    Experiment,
     Observation,
     Persona,
     RunConfig,
@@ -37,7 +42,6 @@ class MockRunner(Runner):
         return Observation(
             text="Goal achieved",
             artifacts=[],
-            errors=[],
             available_actions=[],
             status_labels=["completed"],
         )
@@ -59,7 +63,9 @@ class MockRunnerFactory:
     async def start(self) -> None:
         self.started = True
 
-    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
+    async def create(
+        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+    ) -> Runner:
         runner = MockRunner()
         self.runners_created.append(runner)
         return runner
@@ -101,7 +107,7 @@ def _make_canned_record(scenario: Scenario, persona: Persona) -> RunRecord:
             duration_seconds=0.1,
         ),
         conversation=[],
-        artifacts_collected=[],
+        artifacts=[],
     )
 
 
@@ -114,7 +120,7 @@ class TestWorkerWithMockFactory:
         factory = MockRunnerFactory()
         await factory.start()
 
-        run_slice = [(simple_scenario, simple_persona, 0)]
+        worker_runs = [RunPlanItem(simple_scenario, simple_persona, 1)]
         console_lock = asyncio.Lock()
 
         canned = _make_canned_record(simple_scenario, simple_persona)
@@ -127,10 +133,10 @@ class TestWorkerWithMockFactory:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=run_slice,
-                total_runs=1,
-                output_dir=tmp_path,
+                worker_runs=worker_runs,
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=console_lock,
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -152,7 +158,7 @@ class TestWorkerWithMockFactory:
         await factory.start()
 
         fixtures_dir = tmp_path / "fixtures"
-        run_slice = [(simple_scenario, simple_persona, 0)]
+        worker_runs = [RunPlanItem(simple_scenario, simple_persona, 1)]
         console_lock = asyncio.Lock()
 
         canned = _make_canned_record(simple_scenario, simple_persona)
@@ -165,10 +171,10 @@ class TestWorkerWithMockFactory:
             await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=run_slice,
-                total_runs=1,
-                output_dir=tmp_path,
+                worker_runs=worker_runs,
+                experiment_root=tmp_path,
                 fixtures_dir=fixtures_dir,
+                fixture_content_descriptions={},
                 console_lock=console_lock,
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -179,7 +185,7 @@ class TestWorkerWithMockFactory:
         assert len(factory.runners_created) == 1
 
         # Verify the expected run_dir path was constructed
-        expected_folder = run_folder_name(simple_scenario, simple_persona, 0)
+        expected_folder = run_folder_name(simple_scenario, simple_persona, 1)
         expected_run_dir = tmp_path / "runs" / expected_folder
         assert expected_run_dir.exists()
 
@@ -215,7 +221,7 @@ def _partial_record(
             duration_seconds=1.0,
         ),
         conversation=[],
-        artifacts_collected=[],
+        artifacts=[],
     )
 
 
@@ -251,10 +257,10 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
-                output_dir=tmp_path,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -300,10 +306,10 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
-                output_dir=tmp_path,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -313,7 +319,7 @@ class TestWorkerUnexpectedCrash:
         assert instance.run.await_count == 2
         assert records[0].outcome.stop_reason == "goal_achieved"
         assert records[0].attempt_number == 2
-        assert records[0].total_attempts == 2
+        assert records[0].max_allowed_attempts == 2
         assert len(records[0].prior_failures) == 1
         assert records[0].prior_failures[0].turn_reached == 2
 
@@ -342,10 +348,10 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
-                output_dir=tmp_path,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -390,10 +396,10 @@ class TestWorkerUnexpectedCrash:
             await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
-                output_dir=tmp_path,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -435,10 +441,10 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                run_slice=[(scenario, simple_persona, 0)],
-                total_runs=1,
-                output_dir=tmp_path,
+                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
+                fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
                 run_max_retries=2,
@@ -450,3 +456,405 @@ class TestWorkerUnexpectedCrash:
         assert records[0].outcome.total_turns == 3  # preserved, not 0
         assert len(records[0].prior_failures) == 1
         assert records[0].prior_failures[0].turn_reached == 3
+
+
+class TestFixtureContentDescriptions:
+    def test_experiment_accepts_fixture_content_descriptions(self) -> None:
+        exp = Experiment.model_validate(
+            {
+                "schema_version": 2,
+                "id": "e",
+                "description": "d",
+                "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                "personas": [{"id": "p", "description": "d"}],
+                "scenarios": [
+                    {
+                        "id": "s",
+                        "description": "d",
+                        "persona_refs": ["p"],
+                        "fixtures": ["q3.csv"],
+                    }
+                ],
+                "fixture_content_descriptions": {"q3.csv": "Q3 sales, 200 rows."},
+            }
+        )
+        assert exp.fixture_content_descriptions == {"q3.csv": "Q3 sales, 200 rows."}
+
+    def test_experiment_defaults_fixture_content_descriptions_to_empty(self) -> None:
+        exp = Experiment.model_validate(
+            {
+                "schema_version": 2,
+                "id": "e",
+                "description": "d",
+                "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                "personas": [{"id": "p", "description": "d"}],
+                "scenarios": [{"id": "s", "description": "d", "persona_refs": ["p"]}],
+            }
+        )
+        assert exp.fixture_content_descriptions == {}
+
+    def test_scenario_rejects_duplicate_fixtures(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="duplicate fixture"):
+            Scenario.model_validate(
+                {
+                    "id": "s",
+                    "description": "d",
+                    "persona_refs": ["p"],
+                    "fixtures": ["q3.csv", "q3.csv"],
+                }
+            )
+
+    def test_scenario_rejects_duplicate_persona_refs(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="duplicate persona_ref"):
+            Scenario.model_validate(
+                {
+                    "id": "s1",
+                    "description": "d",
+                    "persona_refs": ["p1", "p1"],
+                }
+            )
+
+    def test_scenario_dedupes_repeated_ref_in_error_message(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match=r"\['p1'\]"):
+            Scenario.model_validate(
+                {
+                    "id": "s1",
+                    "description": "d",
+                    "persona_refs": ["p1", "p1", "p1"],
+                }
+            )
+
+    def test_scenario_names_all_distinct_duplicated_refs(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match=r"\['p1', 'p2'\]"):
+            Scenario.model_validate(
+                {
+                    "id": "s1",
+                    "description": "d",
+                    "persona_refs": ["p1", "p1", "p2", "p2"],
+                }
+            )
+
+    def test_experiment_rejects_scenario_with_duplicate_persona_refs(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="duplicate persona_ref"):
+            Experiment.model_validate(
+                {
+                    "schema_version": 2,
+                    "id": "e",
+                    "description": "d",
+                    "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                    "personas": [{"id": "p1", "description": "d"}],
+                    "scenarios": [
+                        {
+                            "id": "s1",
+                            "description": "d",
+                            "persona_refs": ["p1", "p1"],
+                        }
+                    ],
+                }
+            )
+
+    def test_scenario_accepts_unique_persona_refs_reused_across_scenarios(
+        self,
+    ) -> None:
+        exp = Experiment.model_validate(
+            {
+                "schema_version": 2,
+                "id": "e",
+                "description": "d",
+                "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+                "personas": [
+                    {"id": "p1", "description": "d"},
+                    {"id": "p2", "description": "d"},
+                ],
+                "scenarios": [
+                    {"id": "s1", "description": "d", "persona_refs": ["p1", "p2"]},
+                    {"id": "s2", "description": "d", "persona_refs": ["p1"]},
+                ],
+            }
+        )
+        assert [s.persona_refs for s in exp.scenarios] == [["p1", "p2"], ["p1"]]
+
+
+@pytest.mark.asyncio
+async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    import metis.engine.simulation.experiment as exp_mod
+    from metis.core import Artifact
+    from metis.engine.simulation.experiment import _worker
+    from metis.engine.simulation.types import (
+        Persona,
+        RunConfig,
+        RunOutcome,
+        RunRecord,
+        Scenario,
+    )
+
+    fixtures_dir = tmp_path / "fixtures"
+    fixtures_dir.mkdir()
+    (fixtures_dir / "q3.csv").write_text("a,b\n1,2\n")
+
+    captured: dict[str, list[Artifact]] = {}
+
+    class FakeOrchestrator:
+        def __init__(self, *, fixture_artifacts, **kwargs):
+            captured["fixture_artifacts"] = fixture_artifacts
+
+        async def run(self):
+            return RunRecord(
+                config=RunConfig(persona="p", scenario="s"),
+                outcome=RunOutcome(
+                    stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+                ),
+            )
+
+    monkeypatch.setattr(exp_mod, "Orchestrator", FakeOrchestrator)
+    monkeypatch.setattr(exp_mod, "UserAgent", lambda **kwargs: object())
+
+    runner = AsyncMock()
+    factory = AsyncMock()
+    factory.create = AsyncMock(return_value=runner)
+
+    scenario = Scenario(
+        id="s", description="d", persona_refs=["p"], fixtures=["q3.csv"]
+    )
+    persona = Persona(id="p", description="d")
+
+    await _worker(
+        worker_id=0,
+        runner_factory=factory,
+        worker_runs=[(scenario, persona, 1)],
+        experiment_root=tmp_path,
+        fixtures_dir=fixtures_dir,
+        console_lock=__import__("asyncio").Lock(),
+        started_scenarios=set(),
+        run_max_retries=0,
+        run_retry_delay_seconds=0.0,
+        fixture_content_descriptions={"q3.csv": "Q3 sales, 200 rows."},
+    )
+
+    arts = captured["fixture_artifacts"]
+    assert [a.name for a in arts] == ["q3.csv"]
+    assert arts[0].source == "fixture"
+    assert arts[0].content_description == "Q3 sales, 200 rows."
+
+
+@pytest.mark.asyncio
+async def test_worker_factory_create_receives_experiment_root(
+    simple_scenario: Scenario, simple_persona: Persona, tmp_path: Path
+) -> None:
+    """runner_factory.create() receives the worker's experiment_root."""
+    factory = MockRunnerFactory()
+    await factory.start()
+
+    worker_runs = [RunPlanItem(simple_scenario, simple_persona, 1)]
+    console_lock = asyncio.Lock()
+    canned = _make_canned_record(simple_scenario, simple_persona)
+
+    captured: dict[str, object] = {}
+
+    class RecordingFactory(MockRunnerFactory):
+        async def create(
+            self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+        ) -> Runner:
+            captured["experiment_root"] = experiment_root
+            return await super().create(run_dir, fixtures_dir, experiment_root)
+
+    factory = RecordingFactory()
+    await factory.start()
+
+    with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
+        mock_orch_instance = AsyncMock()
+        mock_orch_instance.run = AsyncMock(return_value=canned)
+        mock_orch_cls.return_value = mock_orch_instance
+
+        await _worker(
+            worker_id=0,
+            runner_factory=factory,
+            worker_runs=worker_runs,
+            experiment_root=tmp_path,
+            fixtures_dir=tmp_path / "fixtures",
+            fixture_content_descriptions={},
+            console_lock=console_lock,
+            started_scenarios=set(),
+            run_max_retries=2,
+            run_retry_delay_seconds=1.0,
+        )
+
+    assert captured["experiment_root"] == tmp_path
+
+
+class TestAttemptScopedArtifacts:
+    """A retry must not write on top of the previous attempt's downloads (#346)."""
+
+    @pytest.mark.asyncio
+    async def test_retry_moves_the_failed_attempt_artifacts_aside(
+        self, simple_persona: Persona, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import metis.engine.simulation.experiment as exp_mod
+
+        scenario = Scenario(
+            id="test-scenario",
+            description="s",
+            persona_refs=["tester"],
+            num_trials=1,
+            max_turns=5,
+            max_run_retries=1,  # -> max_attempts == 2
+            metric_refs=[],
+        )
+        seen: list[int] = []
+
+        class FakeOrchestrator:
+            """Downloads report.pdf, then fails on attempt 1 and succeeds on 2."""
+
+            def __init__(self, *, run_dir: Path, **kwargs: object) -> None:
+                self._run_dir = run_dir
+                seen.append(len(seen) + 1)
+                self._attempt = len(seen)
+
+            async def run(self) -> RunRecord:
+                artifacts = self._run_dir / "artifacts"
+                artifacts.mkdir(parents=True, exist_ok=True)
+                (artifacts / "report.pdf").write_text(f"attempt {self._attempt}")
+                if self._attempt == 1:
+                    raise ConsecutiveFailureEscalation("2 consecutive turn failures")
+                return _make_canned_record(scenario, simple_persona)
+
+            def partial_record(self, stop_reason: str) -> RunRecord:
+                return _partial_record(
+                    scenario, simple_persona, turns=0, stop_reason=stop_reason
+                )
+
+        monkeypatch.setattr(exp_mod, "Orchestrator", FakeOrchestrator)
+        monkeypatch.setattr(exp_mod, "UserAgent", lambda **kwargs: object())
+
+        factory = MockRunnerFactory()
+        await factory.start()
+
+        records = await _worker(
+            worker_id=0,
+            runner_factory=factory,
+            worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+            experiment_root=tmp_path,
+            fixtures_dir=tmp_path / "fixtures",
+            fixture_content_descriptions={},
+            console_lock=asyncio.Lock(),
+            started_scenarios=set(),
+            run_max_retries=2,
+            run_retry_delay_seconds=0.0,
+        )
+
+        assert records[0].attempt_number == 2
+        run_dir = tmp_path / "runs" / run_folder_name(scenario, simple_persona, 1)
+        artifacts = run_dir / "artifacts"
+        # The surviving attempt's file, under its own name.
+        assert (artifacts / "report.pdf").read_text() == "attempt 2"
+        assert not (artifacts / "report-2.pdf").exists()
+        assert sorted(p.name for p in artifacts.iterdir()) == ["report.pdf"]
+        # Attempt 1's download is kept, not deleted.
+        superseded = list(run_dir.glob("artifacts-superseded-*"))
+        assert len(superseded) == 1
+        assert (superseded[0] / "report.pdf").read_text() == "attempt 1"
+
+    @pytest.mark.asyncio
+    async def test_resumed_run_starts_at_attempt_one_and_keeps_old_artifacts(
+        self, simple_persona: Persona, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Two successive _worker calls on one experiment_root == a --resume.
+
+        Pins the documented semantics: the attempt counter is per-process, so a
+        resumed run starts at attempt 1 with an empty prior_failures list even
+        though an earlier process already spent attempts on it. The previous
+        process's downloads are moved aside rather than written over.
+        """
+        import metis.engine.simulation.experiment as exp_mod
+
+        scenario = Scenario(
+            id="test-scenario",
+            description="s",
+            persona_refs=["tester"],
+            num_trials=1,
+            max_turns=5,
+            max_run_retries=0,  # one attempt per process
+            metric_refs=[],
+        )
+        label = ["first process"]
+        should_fail = [True]
+
+        class FakeOrchestrator:
+            def __init__(self, *, run_dir: Path, **kwargs: object) -> None:
+                self._run_dir = run_dir
+
+            async def run(self) -> RunRecord:
+                artifacts = self._run_dir / "artifacts"
+                artifacts.mkdir(parents=True, exist_ok=True)
+                (artifacts / "report.pdf").write_text(label[0])
+                if should_fail[0]:
+                    raise ConsecutiveFailureEscalation("2 consecutive turn failures")
+                return _make_canned_record(scenario, simple_persona)
+
+            def partial_record(self, stop_reason: str) -> RunRecord:
+                return _partial_record(
+                    scenario, simple_persona, turns=0, stop_reason=stop_reason
+                )
+
+        monkeypatch.setattr(exp_mod, "Orchestrator", FakeOrchestrator)
+        monkeypatch.setattr(exp_mod, "UserAgent", lambda **kwargs: object())
+
+        factory = MockRunnerFactory()
+        await factory.start()
+
+        first = await _worker(
+            worker_id=0,
+            runner_factory=factory,
+            worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+            experiment_root=tmp_path,
+            fixtures_dir=tmp_path / "fixtures",
+            fixture_content_descriptions={},
+            console_lock=asyncio.Lock(),
+            started_scenarios=set(),
+            run_max_retries=2,
+            run_retry_delay_seconds=0.0,
+        )
+        assert first[0].outcome.stop_reason == "system_error"
+
+        label[0] = "second process"
+        should_fail[0] = False
+        # Same experiment_root, so the same run_dir — this is what --resume does.
+        second = await _worker(
+            worker_id=0,
+            runner_factory=factory,
+            worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+            experiment_root=tmp_path,
+            fixtures_dir=tmp_path / "fixtures",
+            fixture_content_descriptions={},
+            console_lock=asyncio.Lock(),
+            started_scenarios=set(),
+            run_max_retries=2,
+            run_retry_delay_seconds=0.0,
+        )
+
+        assert second[0].outcome.stop_reason == "goal_achieved"
+        assert second[0].attempt_number == 1  # per-process, not a lifetime total
+        assert second[0].prior_failures == []
+
+        run_dir = tmp_path / "runs" / run_folder_name(scenario, simple_persona, 1)
+        assert (run_dir / "artifacts" / "report.pdf").read_text() == "second process"
+        superseded = list(run_dir.glob("artifacts-superseded-*"))
+        assert len(superseded) == 1
+        assert (superseded[0] / "report.pdf").read_text() == "first process"

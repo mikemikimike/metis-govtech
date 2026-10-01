@@ -6,6 +6,10 @@ See root [AGENTS.md](../../AGENTS.md) for monorepo-wide instructions.
 
 Evaluation runtime — simulation harness, trace extraction, metric execution, and report generation.
 
+## Runner Contract
+
+`docs/runner-contract.md` is normative for every `Runner` implementation. When changing a runner, `Observation`, `ActionResult`, or the orchestrator's handling of either, read it first and keep it in sync — it is the document the conformance suite in issue #358 will be written against.
+
 ## Schema Sync
 
 Pydantic models in `src/metis/engine/simulation/types.py` are the source of truth for JSON Schemas in `schemas/`. After modifying any model, run:
@@ -32,7 +36,7 @@ When modifying `Experiment` or `RunRecord`, check whether the change is **breaki
 
 A breaking change to a nested model bumps the version of the root model that contains it:
 - `Scenario`, `MetricRef`, `Persona` → bump `Experiment`
-- `RunConfig`, `RunOutcome`, `CollectedArtifact`, `ConversationTurn` → bump `RunRecord`
+- `RunConfig`, `RunOutcome`, `Artifact`, `ConversationTurn` → bump `RunRecord`
 
 ### Bump Checklist (applies from v1.0)
 

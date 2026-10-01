@@ -30,8 +30,6 @@ class TestTurnDiagnostics:
         assert d.failure_type is None
         assert d.submission_phase == "n/a"
         assert d.action_retries == []
-        assert d.recovered is False
-        assert d.recovery_found_response is None
         assert d.duration_ms == 0
 
     def test_with_values(self) -> None:
@@ -39,12 +37,23 @@ class TestTurnDiagnostics:
             retry_count=1,
             failure_type="transient_dom",
             submission_phase="pre",
-            recovered=True,
-            recovery_found_response=False,
             duration_ms=3200,
         )
         assert d.retry_count == 1
         assert d.submission_phase == "pre"
+
+    def test_legacy_recovery_keys_are_ignored_not_rejected(self) -> None:
+        """A record written before #361 still carries `recovered` /
+        `recovery_found_response`. `extra="ignore"` must keep loading it."""
+        d = TurnDiagnostics.model_validate(
+            {
+                "retry_count": 1,
+                "recovered": True,
+                "recovery_found_response": False,
+            }
+        )
+        assert d.retry_count == 1
+        assert not hasattr(d, "recovered")
 
 
 class TestRunFailure:
@@ -103,7 +112,7 @@ class TestRunRecordExtension:
             }
         )
         assert record.attempt_number == 1
-        assert record.total_attempts == 1
+        assert record.max_allowed_attempts == 1
         assert record.prior_failures == []
 
     def test_schema_version_is_2(self) -> None:

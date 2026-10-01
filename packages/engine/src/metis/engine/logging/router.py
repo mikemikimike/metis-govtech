@@ -12,11 +12,14 @@ from __future__ import annotations
 
 import json as json_mod
 import logging
+import os
 import time
 from typing import IO, TYPE_CHECKING, Any, Literal
 
 import structlog
 from rich.text import Text
+
+from metis.core.logging import get_logger, iso_timestamp
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -24,6 +27,8 @@ if TYPE_CHECKING:
     from structlog.types import EventDict
 
     from metis.engine.tui.tail import TailBuffer
+
+_logger = get_logger(__name__)
 
 _LEVEL_MAP = {
     "debug": logging.DEBUG,
@@ -43,10 +48,11 @@ _LEVEL_STYLES = {
 
 
 def _run_log_filename(
-    scenario_id: str, persona_id: str, trial: int, num_trials: int
+    scenario_id: str, persona_id: str, trial_index: int, num_trials: int
 ) -> str:
+    """Build a per-run log filename. ``trial_index`` is 1-based (first trial is 1)."""
     pad = max(2, len(str(num_trials)))
-    return f"simulate-{scenario_id}_{persona_id}-{trial:0{pad}}.log"
+    return f"simulate-{scenario_id}_{persona_id}-{trial_index:0{pad}}.log"
 
 
 class LogRouter:
@@ -63,6 +69,7 @@ class LogRouter:
         log_format: Literal["text", "json"] = "text",
         tail_buffers: dict[str, TailBuffer] | None = None,
         fallback_renderer: Any = None,
+        append: bool = False,
     ) -> None:
         self._log_dir = log_dir
         self._log_format = log_format
@@ -70,21 +77,49 @@ class LogRouter:
         self._fallback_renderer = fallback_renderer
         self._handles: dict[str, IO[str]] = {}
         self._start_time = time.monotonic()
+        self._append = append
         log_dir.mkdir(parents=True, exist_ok=True)
 
-    def _run_key(self, scenario_id: str, persona_id: str, trial: int) -> str:
-        return f"{scenario_id}:{persona_id}:{trial}"
+    def _run_key(self, scenario_id: str, persona_id: str, trial_index: int) -> str:
+        return f"{scenario_id}:{persona_id}:{trial_index}"
 
     def open_run(
-        self, scenario_id: str, persona_id: str, trial: int, num_trials: int
+        self,
+        scenario_id: str,
+        persona_id: str,
+        trial_index: int,
+        num_trials: int,
+        *,
+        run_dir: Path | None = None,
     ) -> None:
-        key = self._run_key(scenario_id, persona_id, trial)
-        filename = _run_log_filename(scenario_id, persona_id, trial, num_trials)
+        key = self._run_key(scenario_id, persona_id, trial_index)
+        filename = _run_log_filename(scenario_id, persona_id, trial_index, num_trials)
         path = self._log_dir / filename
-        self._handles[key] = open(path, "w", encoding="utf-8")  # noqa: SIM115
+        # Truncate for a fresh experiment; append when resuming, where this
+        # file already holds the interrupted process's account of the run and
+        # is the only record of the attempt whose artifacts were moved aside
+        # (issue #346). Matches OrchestrationLogger's handling of simulate.log.
+        mode = "a" if self._append else "w"
+        self._handles[key] = open(path, mode, encoding="utf-8")  # noqa: SIM115
+        if self._append and path.stat().st_size > 0:
+            stamp = iso_timestamp()
+            self._handles[key].write(f"\n--- [RESUMED {stamp}] ---\n\n")
+        if run_dir is not None:
+            try:
+                relative_target = os.path.relpath(path, run_dir)
+                symlink = run_dir / "simulate.log"
+                if symlink.exists() or symlink.is_symlink():
+                    symlink.unlink()
+                symlink.symlink_to(relative_target)
+            except Exception:
+                _logger.debug(
+                    "failed to create simulate.log symlink",
+                    run_dir=str(run_dir),
+                    log_path=str(path),
+                )
 
-    def close_run(self, scenario_id: str, persona_id: str, trial: int) -> None:
-        key = self._run_key(scenario_id, persona_id, trial)
+    def close_run(self, scenario_id: str, persona_id: str, trial_index: int) -> None:
+        key = self._run_key(scenario_id, persona_id, trial_index)
         handle = self._handles.pop(key, None)
         if handle:
             handle.flush()
@@ -100,11 +135,11 @@ class LogRouter:
         """Structlog renderer: routes to files + tail, optionally to stderr."""
         scenario_id = event_dict.get("scenario_id")
         persona_id = event_dict.get("persona_id")
-        trial = event_dict.get("trial")
+        trial_index = event_dict.get("trial_index")
 
         # Route to per-run file (always at DEBUG — all events)
-        if scenario_id and persona_id and trial is not None:
-            key = self._run_key(scenario_id, persona_id, trial)
+        if scenario_id and persona_id and trial_index is not None:
+            key = self._run_key(scenario_id, persona_id, trial_index)
             handle = self._handles.get(key)
             if handle:
                 handle.write(self._format_file_line(event_dict) + "\n")
@@ -175,7 +210,9 @@ class LogRouter:
         timestamp = event_dict.get("timestamp", "")
         level = event_dict.get("level", "info").upper()
         event = event_dict.get("event", "")
-        return f"[{timestamp}] [{level:<8}] {event}"
+        line = f"[{timestamp}] [{level:<8}] {event}"
+        exception = event_dict.get("exception")
+        return f"{line}\n{exception}" if exception else line
 
 
 def setup_engine_logging(
@@ -183,6 +220,7 @@ def setup_engine_logging(
     log_format: Literal["text", "json"] = "text",
     tail_buffers: dict[str, TailBuffer] | None = None,
     use_tui: bool = True,
+    append: bool = False,
 ) -> LogRouter:
     """Create a LogRouter and install it as structlog's renderer.
 
@@ -191,6 +229,9 @@ def setup_engine_logging(
     When use_tui=False, core's renderer is kept as fallback so events
     still appear on stderr.
     Must be called AFTER configure_logging().
+
+    ``append`` keeps an existing per-run log rather than truncating it; pass
+    the resume flag so a resumed run does not erase the earlier process's log.
     """
     config = structlog.get_config()
     current_processors = list(config.get("processors", []))
@@ -205,6 +246,7 @@ def setup_engine_logging(
         log_format=log_format,
         tail_buffers=tail_buffers,
         fallback_renderer=fallback,
+        append=append,
     )
 
     # Replace the last processor (the renderer) with our router

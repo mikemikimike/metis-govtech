@@ -10,14 +10,16 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import structlog
 
 from metis.core.console import console
 from metis.core.logging import get_logger
 
-from ._artifact_store import _save_artifacts
+from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
+from ._fixture_artifacts import build_fixture_artifacts
+from .artifact_summarizer import resolve_fixture_descriptions
 from .exceptions import RunRecoverableError
 from .orchestrator import Orchestrator
 from .types import (
@@ -39,7 +41,19 @@ if TYPE_CHECKING:
 
     from .runner import RunnerFactory
 
-RunPlanItem = tuple[Scenario, Persona, int]
+
+class RunPlanItem(NamedTuple):
+    """One planned run: a scenario × persona pair at a specific trial.
+
+    ``trial_index`` is 1-based: the first trial is 1 (not 0). It numbers the
+    repeated trials of a scenario/persona pair (1..``scenario.num_trials``) and
+    is used verbatim in log filenames, run-folder names, and TUI/log output.
+    """
+
+    scenario: Scenario
+    persona: Persona
+    trial_index: int  # 1-based: first trial is 1
+
 
 __all__ = [
     "RunPlanItem",
@@ -54,7 +68,7 @@ logger = get_logger()
 def expand_run_plan(
     experiment: Experiment, personas_by_id: dict[str, Persona]
 ) -> list[RunPlanItem]:
-    """Expand an experiment into scenario, persona, and zero-based trial items."""
+    """Expand an experiment into scenario, persona, and 1-based trial items."""
     runs: list[RunPlanItem] = []
     for scenario in experiment.scenarios:
         for persona_ref in scenario.persona_refs:
@@ -65,14 +79,13 @@ def expand_run_plan(
                     f"Scenario '{scenario.id}': unknown persona_ref '{persona_ref}'. "
                     f"Available: {available}"
                 )
-            for trial in range(scenario.num_trials):
-                runs.append((scenario, persona, trial))
+            for trial_index in range(1, scenario.num_trials + 1):
+                runs.append(RunPlanItem(scenario, persona, trial_index))
     return runs
 
 
-def run_folder_name(scenario: Scenario, persona: Persona, trial: int) -> str:
-    """Return the stable folder name for a zero-based plan item."""
-    trial_index = trial + 1
+def run_folder_name(scenario: Scenario, persona: Persona, trial_index: int) -> str:
+    """Return the stable run-folder name. ``trial_index`` is 1-based (first trial is 1)."""
     pad = len(str(scenario.num_trials))
     return f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
 
@@ -82,9 +95,10 @@ def run_experiment(
     experiment: Experiment,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
+    *,
+    run_plan: list[RunPlanItem],
     output_dir: Path | None = None,
     concurrency: int = 1,
-    run_plan: list[RunPlanItem] | None = None,
     run_max_retries: int = 2,
     run_retry_delay_seconds: float = 5.0,
     # Optional hooks for TUI / structured-logging integration
@@ -123,9 +137,9 @@ async def _run_experiment_async(
     experiment: Experiment,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
+    run_plan: list[RunPlanItem],
     output_dir: Path | None = None,
     concurrency: int = 1,
-    run_plan: list[RunPlanItem] | None = None,
     run_max_retries: int = 2,
     run_retry_delay_seconds: float = 5.0,
     state: SimulationState | None = None,
@@ -135,13 +149,7 @@ async def _run_experiment_async(
     shutdown_event: threading.Event | None = None,
 ) -> None:
     """Async experiment orchestrator with concurrent runner contexts."""
-    runs = (
-        run_plan
-        if run_plan is not None
-        else expand_run_plan(experiment, personas_by_id)
-    )
-
-    total_runs = len(runs)
+    total_runs = len(run_plan)
 
     logger.info("=" * 60)
     logger.info("[experiment] STARTING EXPERIMENT")
@@ -155,7 +163,7 @@ async def _run_experiment_async(
     logger.info("=" * 60)
 
     # Distribute runs across workers (round-robin for balanced load)
-    worker_slices = _distribute_runs(runs, concurrency)
+    runs_per_worker: list[list[RunPlanItem]] = _distribute_runs(run_plan, concurrency)
 
     # Console lock for safe Rich output from concurrent workers
     console_lock = asyncio.Lock()
@@ -163,21 +171,37 @@ async def _run_experiment_async(
     # Shared across workers so scenario_started fires exactly once
     started_scenarios: set[str] = set()
 
+    # Resolve each undescribed fixture's content_description exactly once, here,
+    # before workers fan out — a fixture's content is invariant across scenarios
+    # and runs, so it is summarized once per experiment (spec §6), not per run or
+    # per attempt. Workers thread this complete map into their per-run Artifact
+    # builds; those builds never re-summarize.
+    all_fixture_names = [
+        name for scenario in experiment.scenarios for name in scenario.fixtures
+    ]
+    experiment_root = output_dir if output_dir is not None else Path("results")
+    resolved_fixture_descriptions = await resolve_fixture_descriptions(
+        all_fixture_names,
+        fixtures_dir,
+        experiment_root,
+        experiment.fixture_content_descriptions,
+    )
+
     await runner_factory.start()
     try:
         active_worker_ids: list[int] = []
         worker_tasks = []
-        for wid, slice_runs in enumerate(worker_slices):
-            if slice_runs:
+        for wid, worker_runs in enumerate(runs_per_worker):
+            if worker_runs:
                 active_worker_ids.append(wid)
                 worker_tasks.append(
                     _worker(
                         worker_id=wid,
                         runner_factory=runner_factory,
-                        run_slice=slice_runs,
-                        total_runs=total_runs,
-                        output_dir=output_dir,
+                        worker_runs=worker_runs,
+                        experiment_root=experiment_root,
                         fixtures_dir=fixtures_dir,
+                        fixture_content_descriptions=resolved_fixture_descriptions,
                         console_lock=console_lock,
                         started_scenarios=started_scenarios,
                         run_max_retries=run_max_retries,
@@ -224,10 +248,10 @@ async def _run_experiment_async(
 async def _worker(
     worker_id: int,
     runner_factory: RunnerFactory,
-    run_slice: list[tuple[Scenario, Persona, int]],
-    total_runs: int,
-    output_dir: Path | None,
+    worker_runs: list[RunPlanItem],
+    experiment_root: Path,
     fixtures_dir: Path,
+    fixture_content_descriptions: dict[str, str],
     console_lock: asyncio.Lock,
     started_scenarios: set[str],
     run_max_retries: int,
@@ -243,19 +267,18 @@ async def _worker(
     structlog.contextvars.bind_contextvars(worker=f"w{worker_id}")
 
     logger.info(
-        "[experiment] Worker w%d starting with %d run(s)", worker_id, len(run_slice)
+        "[experiment] Worker w%d starting with %d run(s)", worker_id, len(worker_runs)
     )
 
     try:
         records: list[RunRecord] = []
-        for _idx, (scenario, persona, trial) in enumerate(run_slice):
+        for scenario, persona, trial_index in worker_runs:
             if shutdown_event and shutdown_event.is_set():
                 logger.info(
                     "[experiment] Worker w%d stopping (shutdown requested)", worker_id
                 )
                 break
 
-            trial_index = trial + 1
             trial_label = (
                 f" (trial {trial_index}/{scenario.num_trials})"
                 if scenario.num_trials > 1
@@ -268,19 +291,15 @@ async def _worker(
                 trial_label,
             )
 
-            folder_name = run_folder_name(scenario, persona, trial)
-            run_dir = (
-                (output_dir / "runs" / folder_name)
-                if output_dir
-                else Path("results") / "runs" / folder_name
-            )
+            folder_name = run_folder_name(scenario, persona, trial_index)
+            run_dir = experiment_root / "runs" / folder_name
             run_dir.mkdir(parents=True, exist_ok=True)
 
             # Bind run context for structured logging
             structlog.contextvars.bind_contextvars(
                 scenario_id=scenario.id,
                 persona_id=persona.id,
-                trial=trial_index,
+                trial_index=trial_index,
             )
 
             # Emit pre-run orchestration events (shared set — fires once across all workers)
@@ -293,19 +312,23 @@ async def _worker(
                 orchestration_logger.run_started(
                     scenario.id,
                     persona.id,
-                    trial=trial_index,
+                    trial_index=trial_index,
                     num_trials=scenario.num_trials,
                 )
             if log_router:
                 log_router.open_run(
                     scenario.id,
                     persona.id,
-                    trial=trial_index,
+                    trial_index=trial_index,
                     num_trials=scenario.num_trials,
+                    run_dir=run_dir,
                 )
             if state:
-                state.start_run(
-                    scenario.id, persona.id, trial=trial_index, worker_id=worker_id
+                state.mark_run_started(
+                    scenario.id,
+                    persona.id,
+                    trial_index=trial_index,
+                    worker_id=worker_id,
                 )
 
             async with console_lock:
@@ -315,6 +338,24 @@ async def _worker(
                     console.print(f"  [w{worker_id}] {scenario.id} × {persona.id} ...")
 
             run_start = time.time()
+            # The attempt counter is per-process and per-run. A --resume redoes
+            # a run in a new process, which starts it at attempt 1 with a fresh
+            # budget and an empty prior_failures, so attempt_number means
+            # "attempts in this process", never a lifetime total.
+            #
+            # The earlier process's history is dropped rather than merged, for a
+            # different reason in each of the two resume cases. An interrupted
+            # run never wrote a record.json, so its attempts are genuinely
+            # unrecoverable. A system_error run did write one, and
+            # _classify_resume_runs in cli.py reads it to decide the run needs
+            # redoing at all — so that record's attempt_number and prior_failures
+            # are in hand at that moment, and are deliberately discarded when the
+            # redone run overwrites the file. Carrying them forward is deferred,
+            # not impossible.
+            #
+            # Consequence worth knowing: a run that spent attempts, was
+            # interrupted, then succeeded after a --resume reports attempt 1, so
+            # the report's "retried" marker does not fire for it. Issue #346.
             max_attempts = 1 + (
                 scenario.max_run_retries
                 if scenario.max_run_retries is not None
@@ -324,8 +365,35 @@ async def _worker(
             record: RunRecord | None = None
 
             for attempt in range(1, max_attempts + 1):
-                runner = await runner_factory.create(run_dir, fixtures_dir)
+                # Every attempt at this run shares run_dir, so a retry used to
+                # download into the previous attempt's artifacts/ — renamed to
+                # "-N" by the API runner, overwritten by the browser runner.
+                # Both derive that directory from run_dir at download time
+                # rather than caching a handle, so moving it aside before the
+                # runner exists is enough to give this attempt a clean one.
+                # Keyed on the directory's contents, not on `attempt`, so a
+                # resumed run (a new process, counter back at 1) is covered
+                # too. Issue #346.
+                quarantine_dest = quarantine_stale_artifacts(run_dir)
+                if quarantine_dest is not None:
+                    logger.info(
+                        "[experiment] Previous artifacts moved to %s",
+                        quarantine_dest.name,
+                    )
+                runner = await runner_factory.create(
+                    run_dir, fixtures_dir, experiment_root
+                )
                 orchestrator: Orchestrator | None = None  # reset each attempt
+
+                # Descriptions were resolved once per experiment before fan-out;
+                # this only mints a fresh Artifact per attempt (clean at_turn/id)
+                # from that map — no re-summarization here.
+                fixture_artifacts = build_fixture_artifacts(
+                    scenario.fixtures,
+                    fixtures_dir,
+                    experiment_root,
+                    fixture_content_descriptions,
+                )
 
                 try:
                     run_config = RunConfig(
@@ -343,14 +411,16 @@ async def _worker(
                         scenario=scenario,
                         run_dir=run_dir,
                         fixtures_dir=fixtures_dir,
-                        trial=trial_index,
+                        experiment_root=experiment_root,
+                        fixture_artifacts=fixture_artifacts,
+                        trial_index=trial_index,
                         state=state,
                         tui_ctx=tui_ctx,
                         shutdown_event=shutdown_event,
                     )
                     record = await orchestrator.run()
                     record.attempt_number = attempt
-                    record.total_attempts = max_attempts
+                    record.max_allowed_attempts = max_attempts
                     record.prior_failures = prior_failures
                     break
                 except RunRecoverableError as exc:
@@ -387,7 +457,7 @@ async def _worker(
                         if partial is not None:
                             record = partial
                             record.attempt_number = attempt
-                            record.total_attempts = max_attempts
+                            record.max_allowed_attempts = max_attempts
                             record.prior_failures = prior_failures
                         else:
                             record = RunRecord(
@@ -404,9 +474,9 @@ async def _worker(
                                     duration_seconds=(time.time() - run_start),
                                 ),
                                 conversation=[],
-                                artifacts_collected=[],
+                                artifacts=[],
                                 attempt_number=attempt,
-                                total_attempts=max_attempts,
+                                max_allowed_attempts=max_attempts,
                                 prior_failures=prior_failures,
                             )
                     else:
@@ -467,11 +537,11 @@ async def _worker(
                                     duration_seconds=(time.time() - run_start),
                                 ),
                                 conversation=[],
-                                artifacts_collected=[],
+                                artifacts=[],
                             )
                         )
                         record.attempt_number = attempt
-                        record.total_attempts = max_attempts
+                        record.max_allowed_attempts = max_attempts
                         record.prior_failures = prior_failures
                         break
 
@@ -482,10 +552,10 @@ async def _worker(
 
             # Emit post-run orchestration events
             if state:
-                state.complete_run(
+                state.mark_run_completed(
                     scenario.id,
                     persona.id,
-                    trial=trial_index,
+                    trial_index=trial_index,
                     stop_reason=record.outcome.stop_reason,
                     duration_seconds=record.outcome.duration_seconds,
                 )
@@ -493,14 +563,14 @@ async def _worker(
                 orchestration_logger.run_completed(
                     scenario.id,
                     persona.id,
-                    trial=trial_index,
+                    trial_index=trial_index,
                     num_trials=scenario.num_trials,
                     stop_reason=record.outcome.stop_reason,
                     total_turns=record.outcome.total_turns,
                     duration_seconds=record.outcome.duration_seconds,
                 )
             if log_router:
-                log_router.close_run(scenario.id, persona.id, trial=trial_index)
+                log_router.close_run(scenario.id, persona.id, trial_index=trial_index)
 
             # Check scenario completion
             if (
@@ -544,8 +614,8 @@ async def _worker(
                 record.outcome.duration_seconds,
             )
 
-            if record.artifacts_collected:
-                manifest = _save_artifacts(record, run_dir)
+            if record.artifacts:
+                manifest = _save_artifacts(record, run_dir, experiment_root)
                 logger.info(
                     "[experiment] Artifacts: %d saved (target_session: %s)",
                     len(manifest["artifacts"]),
@@ -560,11 +630,11 @@ async def _worker(
 
 
 def _distribute_runs(
-    runs: list[tuple[Scenario, Persona, int]],
+    runs: list[RunPlanItem],
     concurrency: int,
-) -> list[list[tuple[Scenario, Persona, int]]]:
+) -> list[list[RunPlanItem]]:
     """Distribute runs across workers using round-robin."""
-    slices: list[list[tuple[Scenario, Persona, int]]] = [[] for _ in range(concurrency)]
+    slices: list[list[RunPlanItem]] = [[] for _ in range(concurrency)]
     for i, run in enumerate(runs):
         slices[i % concurrency].append(run)
     return slices
@@ -573,7 +643,7 @@ def _distribute_runs(
 def _save_run_record(record: RunRecord, run_dir: Path) -> None:
     """Save a run record as record.json inside the run folder."""
     filepath = run_dir / "record.json"
-    filepath.write_text(json.dumps(record.model_dump(), indent=2))
+    filepath.write_text(json.dumps(record.model_dump(), indent=2), encoding="utf-8")
 
 
 def _scenario_just_completed(state: SimulationState, scenario_id: str) -> bool:

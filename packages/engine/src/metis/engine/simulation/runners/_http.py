@@ -188,6 +188,10 @@ async def download_to(
     dest: Path,
     *,
     chunk_size: int = 64 * 1024,
+    unavailable_window_s: float | None = None,
+    retry_after_default_s: float = 1.0,
+    clock: Clock = time.monotonic,
+    sleep: Sleep = asyncio.sleep,
 ) -> None:
     """Stream ``GET url`` into ``dest`` without buffering the body in memory.
 
@@ -196,17 +200,44 @@ async def download_to(
     failed or interrupted download never leaves a partial file behind.
     Parent directories are created as needed.
 
-    :raises httpx.HTTPStatusError: on a non-2xx response (before any write).
+    :param unavailable_window_s: When given, a 429 or a 503 is retried under
+        the same policy as :func:`send_with_backoff` — a throttled read lane
+        costs a wait rather than the file. Each retry truncates the ``.part``
+        file and starts the body again, since a stream cannot be resumed.
+        Omit it (the default) for a caller that maps the statuses itself.
+    :raises httpx.HTTPStatusError: on a non-2xx response (before any write),
+        including a 503 that outlasted ``unavailable_window_s``.
     :raises httpx.HTTPError: on a transport failure, including mid-stream.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
     partial = dest.with_name(f".{dest.name}.part")
-    try:
+
+    async def attempt() -> httpx.Response:
         async with client.stream("GET", url) as response:
+            if unavailable_window_s is not None and response.status_code in (429, 503):
+                # Drain so the connection can be reused, and hand the response
+                # to send_with_backoff to decide whether to come back.
+                await response.aread()
+                return response
             response.raise_for_status()
             with partial.open("wb") as out:
                 async for chunk in response.aiter_bytes(chunk_size):
                     out.write(chunk)
+        return response
+
+    try:
+        if unavailable_window_s is None:
+            await attempt()
+        else:
+            response = await send_with_backoff(
+                attempt,
+                unavailable_window_s=unavailable_window_s,
+                retry_after_default_s=retry_after_default_s,
+                clock=clock,
+                sleep=sleep,
+            )
+            # Only a 503 that outlasted the window can still be an error here.
+            response.raise_for_status()
         partial.replace(dest)
     except BaseException:
         partial.unlink(missing_ok=True)

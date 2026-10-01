@@ -157,6 +157,14 @@
       "minItems": 1,
       "title": "Scenarios",
       "type": "array"
+    },
+    "fixture_content_descriptions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional map of fixture filename \u2192 Artifact.content_description. Fixtures not listed here are auto-summarized at run start.",
+      "title": "Fixture Content Descriptions",
+      "type": "object"
     }
   },
   "required": [

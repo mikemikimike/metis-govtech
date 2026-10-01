@@ -55,7 +55,9 @@ class OrcaPlaywrightRunnerFactory:
         )
         self._browser = await self._pw.chromium.launch(headless=not self._headed)
 
-    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
+    async def create(
+        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+    ) -> Runner:
         """Create a fresh runner with an isolated browser context."""
         if self._browser is None:
             raise RuntimeError("call start() before create()")
@@ -72,6 +74,7 @@ class OrcaPlaywrightRunnerFactory:
             config=self._config,
             fixtures_dir=fixtures_dir,
             run_dir=run_dir,
+            experiment_root=experiment_root,
         )
 
     async def close(self) -> None:

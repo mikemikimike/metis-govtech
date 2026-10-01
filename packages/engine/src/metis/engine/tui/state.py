@@ -13,7 +13,7 @@ SimulationRunPhase = Literal["pending", "simulating", "completed", "failed"]
 class SimulationRunState:
     scenario_id: str
     persona_id: str
-    trial: int
+    trial_index: int  # 1-based: first trial is 1, up to num_trials
     num_trials: int
     phase: SimulationRunPhase
     current_turn: int | None
@@ -44,65 +44,67 @@ class SimulationState:
         self._start_time = time.monotonic()
 
     def _find_run(
-        self, scenario_id: str, persona_id: str, trial: int
+        self, scenario_id: str, persona_id: str, trial_index: int
     ) -> tuple[SimulationScenarioState, SimulationRunState]:
         for sc in self.scenarios:
             if sc.scenario_id == scenario_id:
                 for run in sc.runs:
-                    if run.persona_id == persona_id and run.trial == trial:
+                    if run.persona_id == persona_id and run.trial_index == trial_index:
                         return sc, run
-        raise KeyError(f"Run not found: {scenario_id} x {persona_id} trial {trial}")
+        raise KeyError(
+            f"Run not found: {scenario_id} x {persona_id} trial {trial_index}"
+        )
 
-    def start_run(
+    def mark_run_started(
         self,
         scenario_id: str,
         persona_id: str,
-        trial: int,
+        trial_index: int,  # 1-based
         worker_id: int | None = None,
     ) -> None:
-        sc, run = self._find_run(scenario_id, persona_id, trial)
+        sc, run = self._find_run(scenario_id, persona_id, trial_index)
         run.phase = "simulating"
         run.worker_id = worker_id
         if sc.phase == "pending":
             sc.phase = "active"
 
-    def update_run_turn(
+    def mark_run_turn(
         self,
         scenario_id: str,
         persona_id: str,
-        trial: int,
+        trial_index: int,  # 1-based
         turn: int,
         max_turns: int,
         detail: str,
     ) -> None:
-        _, run = self._find_run(scenario_id, persona_id, trial)
+        _, run = self._find_run(scenario_id, persona_id, trial_index)
         run.current_turn = turn
         run.max_turns = max_turns
         run.turn_detail = detail
 
-    def complete_run(
+    def mark_run_completed(
         self,
         scenario_id: str,
         persona_id: str,
-        trial: int,
+        trial_index: int,  # 1-based
         stop_reason: str,
         duration_seconds: float,
     ) -> None:
-        sc, run = self._find_run(scenario_id, persona_id, trial)
+        sc, run = self._find_run(scenario_id, persona_id, trial_index)
         run.phase = "completed"
         run.stop_reason = stop_reason
         run.duration_seconds = duration_seconds
         self._check_scenario_complete(sc)
 
-    def fail_run(
+    def mark_run_failed(
         self,
         scenario_id: str,
         persona_id: str,
-        trial: int,
+        trial_index: int,  # 1-based
         reason: str,
         duration_seconds: float,
     ) -> None:
-        sc, run = self._find_run(scenario_id, persona_id, trial)
+        sc, run = self._find_run(scenario_id, persona_id, trial_index)
         run.phase = "failed"
         run.stop_reason = reason
         run.duration_seconds = duration_seconds

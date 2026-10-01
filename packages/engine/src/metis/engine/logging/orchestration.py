@@ -73,9 +73,11 @@ class OrchestrationLogger:
             )
 
     def run_started(
-        self, scenario_id: str, persona_id: str, trial: int, num_trials: int
+        self, scenario_id: str, persona_id: str, trial_index: int, num_trials: int
     ) -> None:
-        log_filename = _run_log_filename(scenario_id, persona_id, trial, num_trials)
+        log_filename = _run_log_filename(
+            scenario_id, persona_id, trial_index, num_trials
+        )
         pointer = f"logs/{log_filename}"
         if self._log_format == "json":
             self._write_json(
@@ -83,14 +85,14 @@ class OrchestrationLogger:
                     "event_type": "RUN_STARTED",
                     "scenario_id": scenario_id,
                     "persona_id": persona_id,
-                    "trial": trial,
+                    "trial_index": trial_index,
                     "num_trials": num_trials,
                     "log_file": pointer,
                 }
             )
         else:
             self._write_text(
-                f"RUN {scenario_id} x {persona_id} [trial {trial}/{num_trials}] "
+                f"RUN {scenario_id} x {persona_id} [trial {trial_index}/{num_trials}] "
                 f"STARTED → {pointer}"
             )
 
@@ -98,7 +100,7 @@ class OrchestrationLogger:
         self,
         scenario_id: str,
         persona_id: str,
-        trial: int,
+        trial_index: int,
         num_trials: int,
         stop_reason: str,
         total_turns: int,
@@ -111,7 +113,7 @@ class OrchestrationLogger:
                     "event_type": "RUN_COMPLETED",
                     "scenario_id": scenario_id,
                     "persona_id": persona_id,
-                    "trial": trial,
+                    "trial_index": trial_index,
                     "num_trials": num_trials,
                     "stop_reason": stop_reason,
                     "total_turns": total_turns,
@@ -120,7 +122,7 @@ class OrchestrationLogger:
             )
         else:
             self._write_text(
-                f"RUN {scenario_id} x {persona_id} [trial {trial}/{num_trials}] "
+                f"RUN {scenario_id} x {persona_id} [trial {trial_index}/{num_trials}] "
                 f"COMPLETED ({stop_reason}, {total_turns} turns, {duration_str})"
             )
 

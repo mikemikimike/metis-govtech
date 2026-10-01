@@ -8,8 +8,8 @@ version = "1.0.0a1"
 description = "Evaluation engine — simulation, metrics, and reporting for METIS"
 requires-python = ">=3.11"
 dependencies = [
-    "metis-core",
-    "metis-library",
+    "metis-core>=0.5.0",
+    "metis-library>=0.10.0",
     "openai>=1.0.0",
     "deepeval>=2.0.0",
     "langfuse>=2.0.0",

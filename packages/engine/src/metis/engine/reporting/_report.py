@@ -69,7 +69,7 @@ def load_report_sources(
     try:
         import yaml
 
-        profile = yaml.safe_load(profile_path.read_text())
+        profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         logger.warning("profile_unreadable", path=str(profile_path), error=str(exc))
         return None
@@ -80,7 +80,9 @@ def load_report_sources(
         try:
             import yaml
 
-            experiment = yaml.safe_load(experiment_path.read_text()) or {}
+            experiment = (
+                yaml.safe_load(experiment_path.read_text(encoding="utf-8")) or {}
+            )
         except (OSError, ValueError) as exc:
             logger.warning(
                 "experiment_unreadable",
@@ -102,7 +104,7 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
     trials: list[dict] = []
     for record_path in sorted(run_dir.glob("runs/*/record.json")):
         try:
-            record = json.loads(record_path.read_text())
+            record = json.loads(record_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             logger.debug("record_unreadable", path=str(record_path), error=str(exc))
             continue
@@ -116,9 +118,7 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
         stop_reason = str(outcome.get("stop_reason") or "unknown")
         conversation = record.get("conversation") or []
         product_errors = [
-            str(error)
-            for turn in conversation
-            for error in ((turn.get("target_response") or {}).get("errors") or [])
+            problem for turn in conversation for problem in _turn_problems(turn)
         ]
         failure_source = _failure_source(
             outcome.get("failure_source") or record.get("failure_source")
@@ -159,6 +159,18 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
                 "failureSource": failure_source,
                 "turns": int(outcome.get("total_turns") or 0),
                 "duration": outcome.get("duration_seconds"),
+                # A retried run is a run whose comparability is worth a second
+                # look: a retry is a free do-over only if the failure was
+                # independent of what the run was doing, which is not obvious
+                # for ConsecutiveFailureEscalation. Issue #346.
+                #
+                # The flag only, deliberately. `attempt` already says how many
+                # attempts were spent, and the per-attempt detail (failure type,
+                # turn reached, message) stays in the run's `record.json`, which
+                # is not a published schema. report.schema.json is audited by
+                # downstream consumers, so every field in it is a contract to
+                # keep — not somewhere to mirror data nothing renders.
+                "attempt": int(record.get("attempt_number") or 1),
                 "conversation": [
                     {
                         "turn": int(turn.get("turn_number") or index + 1),
@@ -166,18 +178,58 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
                         "product": str(
                             (turn.get("target_response") or {}).get("text") or ""
                         ),
-                        "errors": [
-                            str(error)
-                            for error in (
-                                (turn.get("target_response") or {}).get("errors") or []
-                            )
-                        ],
+                        "errors": _turn_problems(turn),
                     }
                     for index, turn in enumerate(conversation)
                 ],
             }
         )
     return persona_of, trials
+
+
+def _row_index(row: dict) -> int:
+    """``action_index`` if it survived the round trip as an int, else ``0``.
+
+    Coerced rather than trusted for the same reason :func:`_turn_problems`
+    sorts at all: no validator ran on this record, so a missing key or a string
+    must order somewhere rather than raise mid-report.
+    """
+    value = row.get("action_index")
+    return value if isinstance(value, int) else 0
+
+
+def _turn_problems(turn: dict) -> list[str]:
+    """Problem strings from one recorded turn that count against the product.
+
+    Notices first, then the ``detail`` of each failed action row in
+    ``action_index`` order. Three things here look like defensive noise and
+    are not, because this read path never rebuilds the Pydantic model — a
+    record from an older engine, a hand-built fixture or a third-party runner
+    arrives with no validator having run on it:
+
+    - the **sort**, because ``product_errors[-1]`` becomes the report's
+      headline message and I1's ordering guarantee binds only the write path;
+    - the **detail fallback**, because I2's non-empty-detail rule binds only
+      the write path too, and dropping a row with an empty detail would empty
+      ``product_errors`` and flip ``failureSource`` to ``evaluationRunner`` —
+      blaming METIS for the target's own failure;
+    - the **withheld exclusion**, which keeps the opposite misattribution out:
+      an action METIS itself rejected before dispatch never reached the
+      target, so the target cannot be blamed for it.
+    """
+    response = turn.get("target_response") or {}
+    results = sorted(response.get("action_results") or [], key=_row_index)
+    return [
+        *(str(notice) for notice in response.get("response_notices") or []),
+        *(
+            str(
+                row.get("detail")
+                or f"action {row.get('action_index')} failed with no detail recorded"
+            )
+            for row in results
+            if not row.get("succeeded") and not row.get("withheld")
+        ),
+    ]
 
 
 def _failure_source(value: object) -> str | None:
@@ -216,7 +268,7 @@ def _legacy_failure_details(
         run_dir / "logs" / f"simulate-{scenario}_{persona}-{int(trial_text):02d}.log"
     )
     try:
-        log_text = log_path.read_text()
+        log_text = log_path.read_text(encoding="utf-8")
     except OSError:
         return None, None
 
@@ -398,7 +450,11 @@ def build_plan(
         if not sid:
             continue
         personas = list(scenario.get("persona_refs") or plan_personas)
-        trials = int(scenario.get("num_trials", 3))
+        # Mirror metis-engine's Scenario schema default of 1, not the wizard's
+        # domain default of 3: the plan describes what the engine would run,
+        # and a hand-written config that omits the field runs once. Unreachable
+        # for a wizard-generated config, which always writes it explicitly.
+        trials = int(scenario.get("num_trials", 1))
         refs = _metric_refs(scenario)
         # A scenario can ask for a metric no criterion names, so resolve the strays too.
         strays = {fqn for fqn in refs if fqn not in name_of}
@@ -778,6 +834,20 @@ def build_report(
         )
     trial_successes = sum(t["category"] == "succeeded" for t in trials)
     trial_rate = round(100 * trial_successes / len(trials)) if trials else None
+    trial_rate_fraction = trial_successes / len(trials) if trials else None
+
+    # The scenario axis, once, shared by `axes.S` and the headline metric
+    # pass rate below — the same total the page's JS used to recompute from
+    # `axes.S` on every load.
+    scenario_axis_rows = axis_rows("S", scenarios, len(personas))
+    metric_pass_total = sum(row["pass"] for row in scenario_axis_rows)
+    metric_ran_total = sum(row["ran"] for row in scenario_axis_rows)
+    metric_rate = (
+        round(100 * metric_pass_total / metric_ran_total) if metric_ran_total else None
+    )
+    metric_rate_fraction = (
+        metric_pass_total / metric_ran_total if metric_ran_total else None
+    )
 
     table_features = [
         {
@@ -834,6 +904,20 @@ def build_report(
             "rate": trial_rate,
             "items": trials,
         },
+        "scores": {
+            "metricPassRate": {
+                "rate": metric_rate,
+                "pass": metric_pass_total,
+                "ran": metric_ran_total,
+                "status": status(metric_rate_fraction),
+            },
+            "trialSuccess": {
+                "rate": trial_rate,
+                "successful": trial_successes,
+                "attempted": len(trials),
+                "status": status(trial_rate_fraction),
+            },
+        },
         "plan": build_plan(experiment, rows, name_of),
         "personas": personas,
         "scenarios": scenarios,
@@ -843,7 +927,7 @@ def build_report(
         },
         "axes": {
             "P": axis_rows("P", personas, len(scenarios)),
-            "S": axis_rows("S", scenarios, len(personas)),
+            "S": scenario_axis_rows,
         },
         "behaviourTotal": len(out_behaviours),
         "personasRun": sorted({r["persona"] for r in rows if r["persona"]}),

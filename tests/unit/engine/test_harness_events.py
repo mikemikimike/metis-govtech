@@ -14,12 +14,12 @@ class TestHarnessEventEmission:
 
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(
-            scenario_id="test-scn", persona_id="test-per", trial=1
+            scenario_id="test-scn", persona_id="test-per", trial_index=1
         )
         ctx = structlog.contextvars.get_contextvars()
         assert ctx["scenario_id"] == "test-scn"
         assert ctx["persona_id"] == "test-per"
-        assert ctx["trial"] == 1
+        assert ctx["trial_index"] == 1
         structlog.contextvars.clear_contextvars()
 
     def test_state_transitions_on_run_lifecycle(self) -> None:
@@ -31,7 +31,7 @@ class TestHarnessEventEmission:
                     SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
-                        trial=1,
+                        trial_index=1,
                         num_trials=1,
                         phase="pending",
                         current_turn=None,
@@ -47,16 +47,20 @@ class TestHarnessEventEmission:
         state = SimulationState(experiment_id="test", scenarios=scenarios, total_runs=1)
 
         # Simulate what harness does
-        state.start_run("scn", "per", trial=1)
+        state.mark_run_started("scn", "per", trial_index=1)
         assert state.active_scenario is not None
 
-        state.update_run_turn(
-            "scn", "per", trial=1, turn=1, max_turns=20, detail="sending message"
+        state.mark_run_turn(
+            "scn", "per", trial_index=1, turn=1, max_turns=20, detail="sending message"
         )
         run = state.scenarios[0].runs[0]
         assert run.current_turn == 1
 
-        state.complete_run(
-            "scn", "per", trial=1, stop_reason="goal_achieved", duration_seconds=100.0
+        state.mark_run_completed(
+            "scn",
+            "per",
+            trial_index=1,
+            stop_reason="goal_achieved",
+            duration_seconds=100.0,
         )
         assert state.completed_runs == 1

@@ -10,7 +10,7 @@ from ._judge import _get_judge_model
 
 
 def _artifact_facts(test_case: LLMTestCase) -> str:
-    files = [a.get("filename") for a in get_artifacts(test_case) if a.get("filename")]
+    files = [a.name for a in get_artifacts(test_case)]
     return ", ".join(str(f) for f in files) if files else "(no artifact files recorded)"
 
 

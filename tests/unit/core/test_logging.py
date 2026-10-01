@@ -108,6 +108,51 @@ class TestStructlogLevelFiltering:
         assert "debug_visible" in captured.err
 
 
+class TestExceptionRendering:
+    """format_exc_info must convert exc_info into a rendered `exception` string."""
+
+    def setup_method(self):
+        structlog.reset_defaults()
+        root = logging.getLogger()
+        root.handlers.clear()
+
+    def test_exc_info_rendered_to_exception_string_json(self, capsys):
+        configure_logging(level="DEBUG", json=True)
+        log = get_logger("test.exc")
+        try:
+            raise ValueError("boom-marker")
+        except ValueError:
+            log.exception("worker crash")
+
+        captured = capsys.readouterr()
+        line = captured.err.strip().split("\n")[-1]
+        parsed = json.loads(line)
+        # exc_info tuple must be consumed and replaced by a rendered string.
+        assert "exc_info" not in parsed
+        assert isinstance(parsed["exception"], str)
+        assert "Traceback (most recent call last):" in parsed["exception"]
+        assert "ValueError" in parsed["exception"]
+        assert "boom-marker" in parsed["exception"]
+
+    def test_exception_rendered_on_own_line_pretty(self, capsys):
+        configure_logging(level="DEBUG", pretty=True)
+        log = get_logger("test.exc")
+        try:
+            raise ValueError("boom-marker")
+        except ValueError:
+            log.exception("worker crash")
+
+        err = capsys.readouterr().err
+        # Traceback rendered on its own line(s), not clumped into the inline
+        # key=value pairs as `exception=...`.
+        assert "exception=" not in err
+        assert "boom-marker" in err
+        assert any(
+            line.startswith("Traceback (most recent call last):")
+            for line in err.splitlines()
+        )
+
+
 class TestPublicExports:
     def test_logging_importable_from_metis_core(self):
         from metis.core import configure_logging, get_logger

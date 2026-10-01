@@ -16,14 +16,6 @@ from typing import Any, NotRequired, TypedDict
 # ---------------------------------------------------------------------------
 
 
-class ArtifactSummary(TypedDict):
-    """Serialized CollectedArtifact from the engine simulation layer."""
-
-    filename: str
-    collected_at_turn: int
-    path: str
-
-
 class ObservationSummary(TypedDict):
     """Serialized Langfuse ObservationsView.
 
@@ -140,13 +132,13 @@ class LlmTestCaseMetadata(TypedDict):
     clarification_requests: list[ClarificationRequest]
     chat_metadata: OrcaChatMetadata
     # Added at runtime when available:
-    artifacts: NotRequired[list[ArtifactSummary]]
+    # Serialized metis.core.Artifact dicts; validated via get_artifacts().
+    artifacts: NotRequired[list[dict[str, Any]]]
     # Reserved for future ground-truth annotation source:
     annotations: NotRequired[dict[str, Any]]
     # Observable execution metadata (engine-supplied):
     stop_reason: NotRequired[str | None]
     cancellation_available: NotRequired[bool | None]
-    slide_image_refs: NotRequired[list[str] | None]
     # Injected from experiment configuration at fetch time:
     persona: NotRequired[object]
     scenario: NotRequired[object]
@@ -178,7 +170,6 @@ class ConversationalTestCaseMetadata(TypedDict):
     # --- Observable execution state (set in fetch_by_session_id) ---
     stop_reason: str | None
     cancellation_available: bool | None
-    slide_image_refs: list[str] | None
 
     # --- Injected from experiment configuration when available ---
     scenario: NotRequired[object]

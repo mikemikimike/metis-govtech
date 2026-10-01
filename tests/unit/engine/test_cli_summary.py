@@ -27,7 +27,7 @@ class TestFinalSummary:
                     SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
-                        trial=1,
+                        trial_index=1,
                         num_trials=1,
                         phase="completed",
                         current_turn=None,
@@ -55,7 +55,7 @@ class TestFinalSummary:
             return SimulationRunState(
                 scenario_id="scn",
                 persona_id=persona,
-                trial=1,
+                trial_index=1,
                 num_trials=1,
                 phase=phase,
                 current_turn=None,
@@ -97,7 +97,7 @@ class TestFinalSummary:
                     SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
-                        trial=1,
+                        trial_index=1,
                         num_trials=1,
                         phase="completed",
                         current_turn=None,
@@ -127,7 +127,7 @@ class TestFinalSummary:
                     SimulationRunState(
                         scenario_id="scn",
                         persona_id="per",
-                        trial=1,
+                        trial_index=1,
                         num_trials=1,
                         phase="completed",
                         current_turn=None,

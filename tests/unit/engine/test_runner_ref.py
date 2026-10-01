@@ -121,7 +121,9 @@ class StubRunnerFactory:
     async def start(self) -> None:
         StubRunnerFactory.started = True
 
-    async def create(self, run_dir: Path, fixtures_dir: Path) -> Runner:
+    async def create(
+        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+    ) -> Runner:
         return StubRunner()
 
     async def close(self) -> None:

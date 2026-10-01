@@ -14,6 +14,7 @@ Lower-level extraction helpers are also re-exported for use by metrics.
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from deepeval.test_case import LLMTestCase
@@ -25,6 +26,7 @@ from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
 from langfuse.api import ObservationsView, TraceWithDetails
 
+from metis.core import Artifact, resolve_artifact_path
 from metis.engine.extractor.types import (
     ChatMessage,
     Delegation,
@@ -33,7 +35,7 @@ from metis.engine.extractor.types import (
     SessionContext,
     ToolCallSummary,
 )
-from metis.engine.simulation.types import CollectedArtifact, Persona, Scenario
+from metis.engine.simulation.types import Persona, Scenario
 from metis.library.metrics._types import (
     ClarificationRequest,
     ConversationalTestCaseMetadata,
@@ -444,7 +446,6 @@ def _session_to_conversational_test_case(
     *,
     stop_reason: str | None = None,
     cancellation_available: bool | None = None,
-    slide_image_refs: list[str] | None = None,
 ) -> ConversationalTestCase | None:
     """Convert pre-extracted trace data into a ConversationalTestCase.
 
@@ -466,7 +467,6 @@ def _session_to_conversational_test_case(
         trace_ids=[],
         stop_reason=stop_reason,
         cancellation_available=cancellation_available,
-        slide_image_refs=slide_image_refs,
     )
 
     for ext in extractions:
@@ -557,9 +557,10 @@ def fetch_by_session_id(
     session_id: str,
     langfuse: Langfuse,
     *,
+    experiment_root: Path,
     limit: int = 50,
     retry_timeout: int = 0,
-    artifacts: list[CollectedArtifact] | None = None,
+    artifacts: list[Artifact] | None = None,
     scenario: Scenario | None = None,
     persona: Persona | None = None,
     stop_reason: str | None = None,
@@ -569,6 +570,8 @@ def fetch_by_session_id(
 
     :param session_id: Langfuse session ID.
     :param langfuse: Initialized Langfuse client.
+    :param experiment_root: Experiment root directory that artifact paths are
+        resolved against before being embedded in test-case metadata.
     :param limit: Max traces to fetch.
     :param retry_timeout: Seconds to poll if no traces found (0 = no retry).
     :param artifacts: Collected artifacts from the session record, injected into
@@ -598,20 +601,12 @@ def fetch_by_session_id(
     # Sort traces chronologically within the session
     traces.sort(key=lambda t: t.timestamp or "")
 
-    session_artifacts: list[CollectedArtifact] = artifacts or []
-    # Collect slide/image artifact paths in turn order for multimodal metrics.
-    _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
-    slide_images = sorted(
-        [
-            a
-            for a in session_artifacts
-            if a.path and a.filename.lower().endswith(_IMAGE_EXTS)
-        ],
-        key=lambda a: (a.collected_at_turn, a.filename),
-    )
-    slide_image_refs: list[str] | None = (
-        [a.path for a in slide_images] if slide_images else None
-    )
+    session_artifacts: list[Artifact] = artifacts or []
+
+    def _local(a: Artifact) -> str | None:
+        p = resolve_artifact_path(experiment_root, a.path)
+        return str(p) if p else None
+
     test_cases: list[LLMTestCase] = []
     skipped: int = 0
     prior_turns: list[PriorTurn] = []
@@ -638,7 +633,11 @@ def fetch_by_session_id(
         tc: LLMTestCase = _trace_to_test_case(ext, session_ctx)
 
         if session_artifacts and tc.metadata is not None:
-            tc.metadata["artifacts"] = [a.model_dump() for a in session_artifacts]
+            tc.metadata["artifacts"] = [
+                a.model_copy(update={"path": _local(a)}).model_dump()
+                for a in session_artifacts
+                if a.at_turn is None or a.at_turn <= turn_idx
+            ]
         if scenario is not None and tc.metadata is not None:
             tc.metadata["scenario"] = scenario
             tc.metadata["scenario_id"] = scenario.id
@@ -647,7 +646,6 @@ def fetch_by_session_id(
         if tc.metadata is not None:
             tc.metadata["stop_reason"] = stop_reason
             tc.metadata["cancellation_available"] = cancellation_available
-            tc.metadata["slide_image_refs"] = slide_image_refs
 
         test_cases.append(tc)
 
@@ -676,7 +674,6 @@ def fetch_by_session_id(
         extractions,
         stop_reason=stop_reason,
         cancellation_available=cancellation_available,
-        slide_image_refs=slide_image_refs,
     )
     if ctc:
         if scenario is not None and ctc.metadata is not None:
