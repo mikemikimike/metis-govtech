@@ -463,7 +463,7 @@ class TestFixtureContentDescriptions:
     def test_experiment_accepts_fixture_content_descriptions(self) -> None:
         exp = Experiment.model_validate(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "id": "e",
                 "description": "d",
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
@@ -484,7 +484,7 @@ class TestFixtureContentDescriptions:
     def test_experiment_defaults_fixture_content_descriptions_to_empty(self) -> None:
         exp = Experiment.model_validate(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "id": "e",
                 "description": "d",
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
