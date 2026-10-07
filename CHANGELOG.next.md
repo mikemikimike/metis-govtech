@@ -107,6 +107,11 @@ _No v1 changes yet._
 
 #### Changed
 
+- Wizard prompts now group Features by main product functions and Behaviours by distinct
+  expectations for success. Slide creation and revision share one Feature. Explicit deliverable
+  instructions and content accuracy have separate scopes, with individual acceptance checks
+  and coverage-based counts.
+
 - Clarify now explores the product widely before it goes deep, with one instruction set instead of a
   product phase and a machinery phase.
 - Prompts now wrap injected reference content — the primer, the ARC catalogue, the Profile, the
