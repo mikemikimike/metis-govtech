@@ -305,7 +305,7 @@ export interface components {
         };
         /**
          * CapabilityId
-         * @description A stable METIS id for one ARC capability.
+         * @description A METIS id for one ARC capability.
          * @enum {string}
          */
         CapabilityId: "planning_goal_management" | "agent_delegation" | "tool_use" | "multimodal_understanding_generation" | "official_communication" | "business_transactions" | "internet_search_access" | "computer_use" | "other_programmatic_interfaces" | "code_execution" | "file_data_management" | "system_management";
@@ -547,7 +547,7 @@ export interface components {
         };
         /**
          * Experiment
-         * @description The Test Cases and settings used to execute an evaluation.
+         * @description The Personas, Scenarios, Tasks, and settings used to conduct an Experiment.
          */
         Experiment: {
             /**
@@ -966,7 +966,7 @@ export interface components {
         PatchOrigin: "wizard" | "model";
         /**
          * Persona
-         * @description A user type whose stable id can differ from its display name.
+         * @description A user type whose id can differ from its display name.
          */
         Persona: {
             /** Id */

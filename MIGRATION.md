@@ -45,7 +45,7 @@ Keep `schema_version: 2` on `next`. Use the complete example in
   Every Criterion needs a Grader, including dormant Criteria.
 - Keep only ID, name, and description on each Scenario. Create a Task for each
   selected Scenario and Persona pair. Move fixtures and Trial counts to that Task.
-  Select Criteria with `criterion_refs`. Give each Task a unique, stable ID.
+  Select Criteria with `criterion_refs`. Give each Task a unique, ID.
 - Derive coverage through Task → Criterion → Behaviour. Every Scenario needs a
   Task, and every measured Behaviour needs coverage. Engine execution limits keep
   their defaults.

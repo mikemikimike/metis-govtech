@@ -517,7 +517,7 @@ def package_specification(
 
 
 def experiment_id(specification: Specification) -> str:
-    """A stable, filename-safe id from the product name, falling back when it is empty."""
+    """A filename-safe id from the product name, falling back when it is empty."""
     if specification.id:
         return specification.id
     slug = re.sub(r"[^a-z0-9]+", "-", specification.product.name.lower()).strip("-")

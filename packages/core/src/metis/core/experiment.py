@@ -8,7 +8,7 @@ from metis.core.profile import NamedNode
 
 
 class Persona(NamedNode[str]):
-    """A user type whose stable id can differ from its display name."""
+    """A user type whose id can differ from its display name."""
 
 
 class Scenario(NamedNode[str], extra="forbid"):

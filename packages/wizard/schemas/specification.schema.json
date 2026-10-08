@@ -128,7 +128,7 @@
       "type": "object"
     },
     "Persona": {
-      "description": "A user type whose stable id can differ from its display name.",
+      "description": "A user type whose id can differ from its display name.",
       "properties": {
         "id": {
           "title": "Id",

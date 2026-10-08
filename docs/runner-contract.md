@@ -55,10 +55,9 @@ A runner MUST NOT drop an action silently. This is the invariant that makes
 issue #320 — a failed DOM click logged at warning level and otherwise
 forgotten — impossible to express.
 
-Correlation is positional because `ChosenAction.slot_id` is advisory rather
-than a stable identifier: the persona is an LLM and may emit an id that was
-never offered, and every built-in runner routes uploads by `filename` rather
-than by `slot_id`.
+Correlation uses action position. `ChosenAction.slot_id` is advisory: the persona
+is an LLM and may emit an ID that was never offered. Every built-in runner routes
+uploads by `filename`.
 
 I1 binds the callee. The caller satisfies the same shape voluntarily when it
 synthesises an `Observation` of its own, so that every downstream consumer sees

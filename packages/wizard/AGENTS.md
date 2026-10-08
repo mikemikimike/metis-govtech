@@ -200,7 +200,7 @@ of the library.
   it is stated in the system prompt.
 - **Paths resolve by real id only.** Paths address by id (`behaviours[EB-1]`); a numeric bracket
   such as `behaviours[0]` is rejected rather than treated as a positional fallback. This keeps
-  edits and references stable when lists are reordered.
+  references attached to the same items when lists are reordered.
 - **`ADD` addresses the container** (`features`, `scenarios`), `SET`/`REMOVE` an element
   (`features[F-1]`). `StepPermissions` must list both or half the operations are silently
   forbidden.

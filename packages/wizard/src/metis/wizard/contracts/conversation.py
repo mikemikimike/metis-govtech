@@ -44,7 +44,7 @@ class OptionId(BaseModel):
     target: str | None = None  # "EB-1" · "S-1"
     via: str | None = None  # "EB-4" · "P-2"
 
-    def __str__(self) -> str:  # doors key on this; it is stable and unique
+    def __str__(self) -> str:  # doors use the action and references as the option key
         return ":".join(p for p in (self.action, self.target, self.via) if p)
 
     def __hash__(self) -> int:
@@ -403,7 +403,7 @@ def editable_fields_of(
     """Every value-bearing card component a choice request actually offered.
 
     This deliberately stays separate from :func:`options_of`: a field is an input, not a
-    toggle or a navigation reply, even though both use the stable ``OptionId`` string form.
+    toggle or a navigation reply, even though both use the ``OptionId`` string form.
     """
     found: dict[str, CardNumberField | CardUploadField] = {}
     if not isinstance(request, ChoiceRequest):

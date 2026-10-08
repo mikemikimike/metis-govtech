@@ -16,7 +16,7 @@ class CapabilityCategory(StrEnum):
 
 
 class CapabilityId(StrEnum):
-    """A stable METIS id for one ARC capability."""
+    """A METIS id for one ARC capability."""
 
     PLANNING_GOAL_MANAGEMENT = "planning_goal_management"
     AGENT_DELEGATION = "agent_delegation"

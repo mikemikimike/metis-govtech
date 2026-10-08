@@ -28,7 +28,7 @@ def test_round_trips_through_json_unchanged() -> None:
     parsed = Specification.model_validate_json(original.model_dump_json())
 
     assert parsed == original
-    # spot-check the structured criterion description and stable references
+    # spot-check the structured criterion description and references
     assert parsed.behaviour("EB-3").criteria[0].description.then.startswith("it stops")  # type: ignore[union-attr]
     assert parsed.task("TC-001").criterion_refs == ["AC-1-1", "AC-1-2"]  # type: ignore[union-attr]
 

@@ -61,7 +61,7 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
    ```
 
 2. The CLI shows the fixed ARC capability catalogue. Select known capabilities by number, name, or
-   stable ID, separated by commas. Enter a blank line when you know none.
+   ID, separated by commas. Enter a blank line when you know none.
 3. Enter one confidence value: `low`, `medium`, or `high`. The value states how complete the full
    selection is.
 4. Answer the clarification questions.

@@ -332,7 +332,7 @@ def test_a_mid_step_form_inherits_the_parent_steps_header() -> None:
 def test_the_persona_add_form_keeps_the_name_and_description_and_generates_an_id() -> (
     None
 ):
-    """One submission adds one Persona with a stable generated id."""
+    """One submission adds one Persona with a generated id."""
     from metis.wizard.contracts import ChoiceResponse, FormResponse
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
@@ -460,7 +460,7 @@ def test_a_behaviour_form_with_a_stale_or_missing_feature_target_changes_nothing
 
 
 def test_a_persona_name_is_visible_and_its_id_is_the_reference() -> None:
-    """Cards and chips show Persona names while scenario references keep stable ids."""
+    """Cards and chips show Persona names while scenario references keep ids."""
     driver = StepDriver(interviewer=ScriptedInterviewer())
     specification = research_assistant()
 

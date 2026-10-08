@@ -85,7 +85,7 @@ def expand_run_plan(
 
 
 def run_folder_name(scenario: Scenario, persona: Persona, trial_index: int) -> str:
-    """Return the stable run-folder name. ``trial_index`` is 1-based (first trial is 1)."""
+    """Return the run-folder name from the Task and Persona IDs. ``trial_index`` is 1-based (first trial is 1)."""
     pad = len(str(scenario.num_trials))
     return f"{scenario.task_id or scenario.id}-{persona.id}-{trial_index:0{pad}}"
 

@@ -401,7 +401,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
             <SectionHeading
               id="manual-experiment-details"
               title="Experiment details"
-              hint="Set a stable ID and a short description."
+              hint="Set an ID and a short description."
               level={3}
             />
             <div className="flex flex-col gap-5">

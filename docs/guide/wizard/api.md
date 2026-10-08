@@ -316,5 +316,5 @@ you need the complete conversation; Interview state contains only recent history
 
 Keep the `specification` returned by `/compile` when the request contains new Tasks
 with blank IDs. Submit that Specification on later edits and to `/package`. Task IDs
-are assigned by the backend and must remain stable. Copying a Task requires a
+are assigned by the backend. Keep them when editing a Task. Copying a Task requires a
 new ID. `specification.yaml` is the only YAML file in the archive.

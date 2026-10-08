@@ -70,9 +70,11 @@ system:
     in a draft. Ids never contain a dot — a dot separates path segments.
 
     A **profile** contains Product context, Features, Expected Behaviours, and Criteria with
-    their Grader settings. An **experiment** contains Personas, Scenarios, Tasks, and execution
-    settings. A **specification** combines the Profile and Experiment. The document keeps
-    these fields at the top level.
+    their Grader settings. An **experiment** is a collection of runs used to evaluate one or
+    more target agentic systems across a set of test cases. The term also refers to the
+    configuration that defines those runs: Personas, Scenarios, Tasks, and execution settings.
+    A **specification** contains the Profile and Experiment configuration. The document
+    keeps these fields at the top level.
 
     Build a small set of representative Features and Behaviours that covers the important
     functional variation established by the user. Use the following hierarchy throughout the
@@ -366,7 +368,7 @@ model_calls:
     - `description`: one or two sentences describing how this archetype interacts, which the
       evaluation runner will use to simulate them
 
-    Do not add `id`, `scope` or `behaviours`; the wizard derives the stable id from the name.
+    Do not add `id`, `scope` or `behaviours`; the wizard derives the id from the name.
 
     Justify them by what the user chose to measure — "you're measuring citation discipline and
     scope refusal, so these will stress both" — in `message`. Include at least one who will

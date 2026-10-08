@@ -218,7 +218,7 @@ reads the complete `specification.yaml`. Reporting reads its frozen copy at
 `inputs/specification.yaml`. `metis.core.profile.ProductProfile` holds Product context
 and the Feature → Behaviour → Criterion hierarchy. `metis.core.experiment.Experiment`
 holds Personas, Scenarios, Tasks, and execution settings.
-`metis.core.specification.Specification` contains a Profile and an Experiment.
+`metis.core.specification.Specification` contains a Profile and the configuration needed to conduct an Experiment.
 The serialized document keeps these fields at the top level.
 Each Task selects one Scenario, one Persona, fixtures, a Trial count, and Criteria.
 Each Criterion owns its Grader FQN and parameters. Scores retain Task, Trial,

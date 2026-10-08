@@ -63,11 +63,11 @@ The report uses these aggregation rules:
 - A node with no usable evidence is Not evaluated.
 - A metric setup or mapping problem is Data error.
 
-The normalized profile gives each criterion a name and a stable ID. Report JSON uses the stable criterion ID as the criterion key and tree title.
+The normalized profile gives each criterion a name and an ID. Report JSON uses the criterion ID as the criterion key and tree title.
 The criterion name is part of the profile contract; the report uses the exact metric result
 name as the metric title. If a result is missing, it uses the metric class name as
 a fallback. Scores retain Task, Trial, Criterion, Grader FQN, and arguments.
-Stable IDs join Features, Behaviours, Criteria, Personas, Scenarios, Tasks, and
+IDs join Features, Behaviours, Criteria, Personas, Scenarios, Tasks, and
 metric results. The [report JSON Schema](../../packages/engine/schemas/report.schema.json)
 defines these fields.
 
@@ -109,7 +109,7 @@ or aggregation method.
 - Default ordering must not claim to be a product-priority order.
 - Put the result explorer in two tabs: `Experiment tree` and `Results table`.
 - Keep the tree as the default view.
-- In the table, use one row per Task, identified by its stable ID. Group metric columns by feature.
+- In the table, use one row per Task, identified by its ID. Group metric columns by feature.
 - In each metric cell, show the percentage of evaluated trials that pass. Give each
   trial equal weight. Exclude skipped and not-run trials from the denominator. Keep the
   separate status squares for trial outcomes.

@@ -282,7 +282,7 @@ tasks:
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `id` | Yes | — | Stable, unique Task identifier |
+| `id` | Yes | — | Unique Task identifier |
 | `scenario_ref` | Yes | — | One Scenario ID |
 | `persona_ref` | Yes | — | One Persona ID |
 | `fixtures` | No | `[]` | Filenames in `fixtures/` to upload |
@@ -293,7 +293,7 @@ tasks:
 The example above produces two runs. Two Tasks can select the same Scenario and
 Persona with different fixtures or Criteria.
 
-Keep Task IDs stable when you edit or reorder Tasks. Give new and copied Tasks
+Keep Task IDs when you edit or reorder Tasks. Give new and copied Tasks
 new IDs. Results and resume checks use the Task ID and Trial index.
 
 Every reference must resolve to an existing ID. IDs must be unique across the
@@ -1026,9 +1026,9 @@ Your runner module must be importable from the environment where `metis engine s
 ### Profile Configuration (specification.yaml)
 
 The Profile contains Product context and the Feature, Behaviour, and Criterion
-hierarchy, including Grader settings. The Experiment contains Personas, Scenarios,
+hierarchy, including Grader settings. The Experiment configuration contains Personas, Scenarios,
 Tasks, the experiment ID, and the runner reference. The Specification combines
-the Profile and Experiment.
+the Profile and Experiment configuration.
 `specification.yaml` stores all these fields at the top level.
 
 #### Relationship to the Specification
@@ -1121,7 +1121,7 @@ tasks:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | Yes | Stable identifier (new wizard features use `F-N`) |
+| `id` | Yes | Identifier (new wizard features use `F-N`) |
 | `name` | Yes | Human-readable name |
 | `description` | Yes | What the feature must achieve |
 | `behaviours` | No | Expected behaviours; defaults to `[]` |
@@ -1130,7 +1130,7 @@ tasks:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | Yes | Stable identifier (conventionally `EB-<FEATURE>-N`) |
+| `id` | Yes | Identifier (conventionally `EB-<FEATURE>-N`) |
 | `name` | Yes | Human-readable behaviour name |
 | `description` | Yes | Full description of what the system must do |
 | `measured` | No | `true` when the evaluation measures this behaviour; defaults to `false` |
@@ -1140,7 +1140,7 @@ tasks:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | Yes | Stable identifier (conventionally `AC-<FEATURE>-N`) |
+| `id` | Yes | Identifier (conventionally `AC-<FEATURE>-N`) |
 | `name` | Yes | Human-readable criterion name |
 | `description.given` | Yes | Precondition or setup state |
 | `description.when` | Yes | User action or trigger |
