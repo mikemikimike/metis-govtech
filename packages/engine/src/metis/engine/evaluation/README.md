@@ -18,7 +18,7 @@ The orchestrator splits metrics automatically by type:
 | `BaseMetric` | `LLMTestCase` (one per trace/turn) | Per-turn |
 | `BaseConversationalMetric` | `ConversationalTestCase` (one per session) | Session-level |
 
-Both types can be listed together in `experiment.yaml` — no annotation needed.
+Both types can be listed together in `specification.yaml` — no annotation needed.
 
 ### Concurrency
 
@@ -39,7 +39,7 @@ The judge model is configured in `metis.library.metrics._judge` and shared by al
 
 ## Input
 
-The orchestrator takes a `FetchLangfuseResult` (from the extractor) and a list of `MetricRef` objects (from `experiment.yaml`). Metrics are resolved by FQN at runtime via `importlib.import_module`.
+The orchestrator takes a `FetchLangfuseResult` (from the extractor) and a list of `MetricRef` objects resolved from Task Criterion references in `specification.yaml`. Metrics are resolved by FQN at runtime via `importlib.import_module`.
 
 ## Output
 

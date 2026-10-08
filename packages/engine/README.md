@@ -4,7 +4,7 @@ Evaluation engine for METIS — simulation harness, trace extraction, metric exe
 
 ## What it does
 
-1. **Simulate** — drives the target system's UI via Playwright with LLM-powered user personas
+1. **Simulate** — drives the target system through its selected runner with LLM-powered user personas
 2. **Extract** — fetches resulting Langfuse traces and builds DeepEval test cases
 3. **Evaluate** — runs 50+ metrics (code-graded and LLM-judge) against the traces
 4. **Report** — generates terminal summary, JSON, and self-contained HTML reports
@@ -13,12 +13,12 @@ Evaluation engine for METIS — simulation harness, trace extraction, metric exe
 
 ```bash
 # From the monorepo root
-make install                    # installs all deps + Playwright browser
+make install                    # installs workspace dependencies
 
 # Configure environment
 cp packages/engine/.env.example .env
 # Fill in: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, OPENAI_API_KEY,
-#          ORCA_URL, ORCA_USERNAME, ORCA_PASSWORD
+#          LANGFUSE_BASE_URL, ORCA_API_URL, ORCA_API_KEY
 ```
 
 ## Running
@@ -37,7 +37,7 @@ metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 metis engine simulate --resume --experiment-dir experiments/orca-eval-20260820-143000/
 metis engine run --resume --experiment-dir experiments/orca-eval-20260820-143000/
 
-# Headed mode (visible browser)
+# With the browser runner selected and its credentials set:
 HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/
 
 # Verbosity controls log detail, not progress displays.
@@ -63,8 +63,8 @@ metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/ --
 
 | Command | Reads | Writes |
 |---------|-------|--------|
-| `simulate` | `experiment.yaml` and `fixtures/` from `--input-dir` | `experiments/<id>-<timestamp>/runs/` |
-| `evaluate` | `runs/` from the `--experiment-dir` output directory,  the Langfuse traces it points to, and `profile.yaml` from `--input-dir` | `reports/` in that same output directory |
+| `simulate` | `specification.yaml` and `fixtures/` from `--input-dir` | `experiments/<id>-<timestamp>/runs/` |
+| `evaluate` | `runs/` from the `--experiment-dir` output directory,  the Langfuse traces it points to, and `inputs/specification.yaml` from that output | `reports/` in that same output directory |
 
 > **Important:** `evaluate` must only be run after `simulate`. It scores an existing simulation output rather than producing one, so if the directory holds no `inputs/` snapshot it exits 1 and tells you to run `simulate` first.
 
@@ -84,12 +84,11 @@ Runs are distributed round-robin across workers for balanced load. Start with `-
 
 ## Experiments
 
-An experiment is a directory containing `experiment.yaml`, `profile.yaml`, and a `fixtures/` folder:
+An experiment is a directory containing `specification.yaml` and a `fixtures/` folder:
 
 ```
 my-experiment/
-├── experiment.yaml      # Personas, tasks, metrics, configuration
-├── profile.yaml         # Features, behaviours, criteria, and metrics
+├── specification.yaml  # Product, Criteria, Personas, Scenarios, and Tasks
 └── fixtures/            # Files uploaded during simulation
     └── data.csv
 ```

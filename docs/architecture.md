@@ -129,7 +129,7 @@ MUST depend on `metis-core` and `metis-library`. MAY depend on HTTP, math, parsi
 MUST depend on `metis-core` and `metis-library`. MUST NOT depend on `metis-engine`.
 
 The wizard exposes a stateless Interview lifecycle interface (`handle_interview`,
-`compile_profile`, `derive_stage`) and holds no server state: the Interview state is client-held and
+`compile_specification`, `derive_stage`) and holds no server state: the Interview state is client-held and
 travels whole on each operation. The wizard MUST NOT own an HTTP server or a frontend; a web client
 reaches the Interview through `apps/api`. The CLI adapter drives the same lifecycle interface.
 
@@ -139,7 +139,7 @@ The wizard owns the final 12-item ARC capability catalogue in
 `InterviewStartRequest.known_capability_ids` and to build the general model background. The start
 request also requires `capability_confidence` (`low`, `medium`, or `high`). A returned
 `InterviewState` MUST contain `context.capability_evidence` with these values. Capability evidence
-is client-held Interview context, outside `ProductProfile`; it is not an Interview step and model
+is client-held Interview context, outside `Specification`; it is not an Interview step and model
 patches MUST NOT write it. An unselected capability is unknown, not evidence of absence.
 
 ---
@@ -175,10 +175,10 @@ MUST depend on `metis-core` and `metis-engine`.
 
 MAY depend on all `packages/*` members. For the wizard it depends on the `metis.wizard` public
 Interview interface only (`apps/api -> metis.wizard`): the router calls `handle_interview`,
-`compile_profile`, and the in-memory specification packager and maps typed results onto HTTP
-responses. No stage, Profile, prompt, matching, fixture validation, or compilation rule lives in
-the API. The package route accepts a Profile JSON part and request-scoped fixture bytes and returns
-one `experiment.zip`; it retains no uploaded files.
+`compile_specification`, and the in-memory specification packager and maps typed results onto HTTP
+responses. No stage, Specification, prompt, matching, fixture validation, or compilation rule lives in
+the API. The package route accepts a Specification JSON part and request-scoped fixture bytes and returns
+one `specification.zip`; it retains no uploaded files.
 
 `GET /api/v1/wizard/config` returns the wizard-owned ordered ARC capability categories with the
 opening copy and perspective definitions. `POST /api/v1/wizard/interview/start` accepts the
@@ -209,13 +209,20 @@ resources, wizard static assets, or an embedded wizard runtime.
 
 It MUST offer two authoring paths: the guided Interview, and a manual form for a user who already
 knows the scorers to run. The manual form MUST stay flat: it MUST NOT surface Feature, Behaviour, or
-Criterion. It MUST build a valid `ProductProfile` in the browser and submit it to the existing
+Criterion. It MUST build a valid `Specification` in the browser and submit it to the existing
 package route, and it MUST NOT add a route or create an Interview record. Server-side validation in
 `metis-wizard` stays authoritative for both paths.
 
 In this first version the manual form collects only what an engine run absolutely needs. The engine
-runs from `experiment.yaml`; the fuller `ProductProfile` is consumed only at report generation, which
-reads `inputs/profile.yaml`. The synthesized Profile is therefore minimal by design.
+reads the complete `specification.yaml`. Reporting reads its frozen copy at
+`inputs/specification.yaml`. `metis.core.profile.ProductProfile` holds Product context
+and the Feature → Behaviour → Criterion hierarchy. `metis.core.experiment.Experiment`
+holds Personas, Scenarios, Tasks, and execution settings.
+`metis.core.specification.Specification` contains a Profile and an Experiment.
+The serialized document keeps these fields at the top level.
+Each Task selects one Scenario, one Persona, fixtures, a Trial count, and Criteria.
+Each Criterion owns its Grader FQN and parameters. Scores retain Task, Trial,
+and Criterion identity plus the Grader configuration.
 
 The normal local run uses two processes: `PORT=8001 uv run metis-api` and
 `npm --prefix apps/web run dev`.
@@ -275,7 +282,7 @@ tests/
 ├── integration/                # Cross-package flow tests
 └── fixtures/                   # Shared test data
     ├── langfuse_trace.json
-    └── experiment.yaml
+    └── specification.yaml
 ```
 
 The web client workflow and its deferred features are documented in the
@@ -308,16 +315,16 @@ A root `Makefile` MUST provide the following targets as the public development a
 | `test-unit` | Run unit tests only. |
 | `test-integration` | Run integration tests only. |
 | `check` | Composition: `lint` + `format-check` + `typecheck`. |
-| `web-check` | Run non-mutating `apps/web` formatter, type checker, tests, and API drift checks. |
-| `web-build` | Run the production `apps/web` build. This target writes the normal Vite output. |
-| `ci` | Composition: `check` + `web-check` + `web-build` + `test`. MUST mirror what CI pipelines execute. |
+| `check-web` | Run non-mutating `apps/web` formatter, type checker, tests, and API drift checks. |
+| `build-web` | Run the production `apps/web` build. This target writes the normal Vite output. |
+| `ci` | Composition: `check` + `check-web` + `build-web` + `test` + engine and wizard schema checks. MUST mirror what CI pipelines execute. |
 | `clean` | Remove all generated/cached files across the monorepo. |
 
 **Rules:**
 
 - All targets MUST operate from the workspace root.
 - The `ci` target MUST be the single command that reproduces a CI pipeline run locally.
-- `check` and `web-check` MUST be non-mutating (read-only verification).
+- `check` and `check-web` MUST be non-mutating (read-only verification).
 
 ---
 
@@ -411,7 +418,7 @@ metis 0.1.0
 
 ### 9.9. Schema Versioning
 
-Schema versions (for data formats like `experiment.yaml` and `session-record.json`) are independent integers maintained in source code constants, not tied to package versions.
+Schema versions (for data formats like `specification.yaml` and `session-record.json`) are independent integers maintained in source code constants, not tied to package versions.
 
 ---
 

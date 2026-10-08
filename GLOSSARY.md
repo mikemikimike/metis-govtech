@@ -1,9 +1,10 @@
 | Term | Definition |
 |------|------------|
 | Target Agentic System | The agentic system under evaluation, considered at a specific version or configuration. |
-| Profile | The complete evaluation specification for a **target agentic system**, comprising its **features** and their **expected behaviours**, **personas**, and **scenarios**. |
-| Interview | The wizard's guided process that builds a **profile** by asking the user a sequence of questions. |
-| Document | A user-supplied file that can inform **evaluation planning** and may be sent to the target agentic system as a **fixture** for a **scenario**. |
+| Profile | The product context and requirements for a **target agentic system**: its **features**, **expected behaviours**, and **criteria**, including the selected **graders** and their settings. |
+| Specification | The complete evaluation document, combining a **profile** and an **experiment**. |
+| Interview | The wizard's guided process that builds a **specification** by asking the user a sequence of questions. |
+| Document | A user-supplied file that can inform **evaluation planning** and may be sent to the target agentic system as a **fixture** for a **task**. |
 | Perspective | The point of view the user answers the **Interview** from (who the evaluation is for), distinct from a **Persona**. |
 | Capability | An ability a **target agentic system** can have, drawn from the ARC framework and distinct from an **Expected Behaviour** or **Feature**. |
 | Feature | A product function or user workflow that the **target agentic system** is expected to perform, such as creating slide decks. |
@@ -13,11 +14,11 @@
 | Criterion | A specific, assessable property used to determine whether an **expected behaviour** was exhibited in an individual **trial**. |
 | Scenario | A concrete instantiation of a **feature**, specifying the particular situation and conditions in which the agent is evaluated. |
 | Persona | A concrete simulated user whose characteristics and behaviour are relevant to an evaluation interaction. |
-| Fixture | An artefact or piece of environment state supplied to a **scenario** to instantiate or execute a **test case**. It may be supplied by the user or generated dynamically. A fixture is an input, not an expected answer or scoring rule. |
-| Test Case / Task | A complete specification of a particular evaluation problem, combining a **scenario**, a **persona** (where applicable), **fixtures**, execution conditions, and success criteria. **Test case** and **task** are interchangeable terms. |
+| Fixture | An artefact or piece of environment state selected by a **task** to execute its **scenario**. It may be supplied by the user or generated dynamically. A fixture is an input, not an expected answer or scoring rule. |
+| Test Case / Task | A complete specification of a particular evaluation problem, combining a **scenario**, a **persona**, **fixtures**, a Trial count, and references to **criteria**. Each Task has a stable ID. **Test case** and **task** are interchangeable terms. |
 | Trial | One execution of a **test case** against a **target agentic system**, producing a **trace** and evaluation outputs. |
 | Run | A grouping of repeated **trials** of the same **test case**. |
-| Experiment | A collection of **runs** used to evaluate one or more **target agentic systems** across a set of **test cases**. |
+| Experiment | The evaluation plan: **personas**, **scenarios**, **tasks**, and execution settings, including the experiment ID and runner reference. Executing this plan produces **runs** and their **trials**. |
 | Trace | The observable record of what occurred during a **trial**, including interactions, actions, tool calls, observations, and relevant state changes. |
 | Session | A collection of **traces**. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |

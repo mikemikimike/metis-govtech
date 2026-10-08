@@ -8,8 +8,8 @@ The METIS Engine runs that specification.
 | Interface | Best for | Who saves Interview state? | Finished output |
 |---|---|---|---|
 | [CLI](wizard/cli.md) | A person working in a terminal | The CLI saves a local JSON file | Files in an output directory |
-| [Web](wizard/web.md) | A person who wants a guided browser flow | The browser saves data in IndexedDB | `experiment.zip` download |
-| [API](wizard/api.md) | A service or custom client | Your client saves the returned JSON state | YAML strings or `experiment.zip` |
+| [Web](wizard/web.md) | A person who wants a guided browser flow | The browser saves data in IndexedDB | `specification.zip` download |
+| [API](wizard/api.md) | A service or custom client | Your client saves the returned JSON state | YAML strings or `specification.zip` |
 
 - The CLI runs the Wizard logic on your computer. It does not need the API server.
 - The web client uses the Wizard API.
@@ -29,12 +29,13 @@ Example evaluation details for a research assistant:
 | Scenario | Ask how a new leave policy applies to a part-time employee. |
 | Scorer | A check that compares the answer with its cited sources. |
 
-The Interview produces two documents:
+The Interview produces one Specification with these related concepts:
 
-| Document | Contents |
+| Concept | Contents |
 |---|---|
-| Profile | The product and its users, Features, Behaviours, the Criteria for each measured Behaviour, Personas, Scenarios, and the scorers selected for the Criteria |
-| Experiment | The Personas, Scenarios, fixtures, trial counts, and scorers that the Engine runs |
+| Profile | The product and its users, Features, Behaviours, Criteria, and their scorer settings |
+| Specification | The Profile and Experiment together |
+| Experiment | Personas, Scenarios, Tasks, and execution settings. Each Task selects fixtures, a Trial count, and Criteria from the Profile |
 
 The interface guides give the exact files or archive that each interface produces.
 
@@ -46,7 +47,7 @@ The interface guides give the exact files or archive that each interface produce
 3. Select the known ARC capabilities and a confidence value.
 4. Answer clarification questions.
 5. Review the Behaviours to measure and their Criteria.
-6. Review the Personas and Scenarios.
+6. Review the Personas, Scenarios, and Test Cases.
 7. Finish and validate the specification.
 8. Compile or package the result.
 
@@ -58,7 +59,7 @@ Other paths:
   not use the Interview. See [Write the Experiment directly](wizard/web.md#write-the-experiment-directly).
 
 The Wizard saves the description, Perspective, capabilities, and documents in the Interview state.
-They are not separate fields in the Profile.
+This context is separate from the Specification.
 
 ## ARC capability catalogue
 
@@ -77,7 +78,7 @@ They are not separate fields in the Profile.
 ## Run the evaluation
 
 The CLI writes the files to `evaluation/` by default. From the web client or the API, extract
-`experiment.zip` into a directory, such as `evaluation/`. Then run the specification with the
+`specification.zip` into a directory, such as `evaluation/`. Then run the specification with the
 Engine:
 
 ```bash

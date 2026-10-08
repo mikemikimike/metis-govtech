@@ -1,6 +1,6 @@
 # schemas/
 
-JSON Schema files generated from the Pydantic models in `src/metis.engine/simulation/types.py`. They describe the structure of files that users author by hand — primarily `experiment.yaml` — and are used by IDE tooling (schema-aware editors, YAML validators) to provide autocomplete and inline validation.
+JSON Schema files generated from the Pydantic models in `src/metis/engine/simulation/types.py`. They describe the structure of files that users author by hand — primarily `specification.yaml` — and are used by IDE tooling (schema-aware editors, YAML validators) to provide autocomplete and inline validation.
 
 The JSON files here are **auto-generated**. Do not edit them directly; they will be overwritten.
 
@@ -8,17 +8,17 @@ The JSON files here are **auto-generated**. Do not edit them directly; they will
 
 | Schema file | Pydantic model | Version constant | Source file |
 |---|---|---|---|
-| `experiment.schema.json` | `Experiment` | `_EXPERIMENT_VERSION` | `src/metis/engine/simulation/types.py` |
+| `specification.schema.json` | `Specification` | `_SPECIFICATION_VERSION` | `src/metis/engine/simulation/types.py` |
 | `report.schema.json` | `Report` | `_REPORT_VERSION` | `src/metis/engine/reporting/_models.py` |
 
 `RunRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. Its version constant is `_RUN_RECORD_VERSION`.
 
 ## How to modify a schema
 
-1. Edit the Pydantic model in `src/metis.engine/simulation/types.py` (for `Experiment`) or `src/metis/engine/reporting/_models.py` (for `Report`)
+1. Edit Profile fields in `packages/core/src/metis/core/profile.py` execution inputs in `packages/core/src/metis/core/experiment.py`, or their flat document in `packages/core/src/metis/core/specification.py`, engine execution validation in `src/metis/engine/simulation/types.py`, or report fields in `src/metis/engine/reporting/_models.py`
 2. Determine whether the change is breaking (see [Version bump rules](#version-bump-rules) below); if so, increment the `_*_VERSION` constant and update the `Literal[N]` annotation on the model field to match
 3. Run `make generate-schema` to regenerate the schema file
-4. Update `example-experiment/experiment.yaml` if the `Experiment` model changed
+4. Update `example-experiment/specification.yaml` if the `Specification` model changed
 5. Commit the updated schema file alongside the model change; note any version bump in the commit message
 
 ## Automated checks
@@ -42,10 +42,10 @@ A change requires a version bump if data valid under version N would **fail `mod
 | Remove field | Drop `target_session_id` | No | `extra="ignore"` silently drops unknown fields in old data |
 | Change field type | `duration_ms: int` → `float` | **Yes** | Old data has wrong type; validation fails |
 | Rename field | `turn_number` → `index` | **Yes** | Old data has old name; new field missing |
-| Breaking change in nested model | New required field in `ExperimentTask` | **Yes** — bump root | Old data fails nested model validation |
+| Breaking change in nested model | New required field in `Task` | **Yes** — bump root | Old data fails nested model validation |
 
 A breaking change to a nested model bumps the version of the root model that contains it:
-- `Scenario`, `MetricRef`, `Persona` → bump `Experiment`
+- Shared Profile nodes, `Criterion`, `Persona`, `Scenario`, and `Task` → bump `Specification`
 - `RunConfig`, `RunOutcome`, `Artifact`, `ConversationTurn` → bump `RunRecord`
 
 The common trap is giving a breaking field a default to avoid a bump. That's fine for genuinely optional fields, but if the field is semantically required and you're using a default as a workaround, you're hiding a real schema change. Use a bump and a migration instead.
@@ -72,9 +72,9 @@ def _check_version(cls, data: dict) -> dict:
     if v == 1:
         data["new_field"] = derive_from(data.pop("old_field", None))
         data["schema_version"] = 2
-    elif v != _EXPERIMENT_VERSION:
+    elif v != _SPECIFICATION_VERSION:
         raise ValueError(
-            f"Unsupported schema_version {v} (expected {_EXPERIMENT_VERSION})"
+            f"Unsupported schema_version {v} (expected {_SPECIFICATION_VERSION})"
         )
     return data
 ```
@@ -84,8 +84,8 @@ def _check_version(cls, data: dict) -> dict:
 **3. Discriminated union** (preferred when multiple versions must coexist at runtime without transformation):
 
 ```python
-AnyExperiment = Annotated[
-    ExperimentV1 | ExperimentV2,
+AnySpecification = Annotated[
+    SpecificationV1 | SpecificationV2,
     Field(discriminator="schema_version"),
 ]
 ```
@@ -94,7 +94,7 @@ Without one of these, old files simply won't load — that's the correct default
 
 ### Who is responsible for updating files after a bump?
 
-For **user-authored inputs** (`experiment.yaml`): the user must update their files. The validator gives a clear error message. This is a deliberate one-time migration cost — the alternative (silent default-filling of a required field) would make the version field meaningless.
+For **user-authored inputs** (`specification.yaml`): the user must update their files. The validator gives a clear error message. This is a deliberate one-time migration cost — the alternative (silent default-filling of a required field) would make the version field meaningless.
 
 For **code-produced outputs** (`record.json` session records): the harness always writes `schema_version` explicitly, so new records are always stamped correctly. Old records from a previous run will not load after a bump — use one of the coexistence strategies above if needed.
 

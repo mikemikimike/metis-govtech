@@ -2,7 +2,7 @@
 
 ## Introduction
 
-metis-engine is the evaluation runtime for METIS. It drives a target system's web UI via Playwright using LLM-powered simulated user personas. It then extracts the resulting traces from Langfuse, runs configurable evaluation metrics, and generates reports. Simulation and evaluation are separate commands, with `run` available for the combined flow.
+metis-engine is the evaluation runtime for METIS. It drives a target system through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation metrics, and generates reports. Simulation and evaluation are separate commands, with `run` available for the combined flow.
 
 This guide is for anyone setting up evaluations against a web-based agentic system. By the end, you will have:
 
@@ -32,7 +32,7 @@ make install          # install everything
 make install-engine   # install only engine dependencies (includes Playwright)
 ```
 
-`make install` installs all workspace dependencies but not Playwright. If you need to run simulations (which require a browser), also install the Playwright extra — `make install-engine` already includes it:
+`make install` installs all workspace dependencies but not Playwright. If you select the browser runner, also install the Playwright extra — `make install-engine` already includes it:
 
 ```bash
 make install-extras-playwright
@@ -46,13 +46,14 @@ Copy the example environment file and fill in your credentials:
 cp packages/engine/.env.example .env
 ```
 
-The engine requires three groups of credentials:
+Set Langfuse and OpenAI credentials, plus the credentials for your selected Orca runner:
 
 | Group | Variables | Purpose |
 |-------|-----------|---------|
 | Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Trace storage and retrieval |
 | OpenAI | `OPENAI_API_KEY` | Powers the LLM judge (metrics) and simulated user agent |
-| Orca | `ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD` | Target system URL and login credentials |
+| Orca API runner | `ORCA_API_URL`, `ORCA_API_KEY` | Target URL and API key for the example experiment |
+| Orca browser runner | `ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD` | Target URL and login credentials when selecting the browser runner |
 
 Optional tuning variables:
 
@@ -83,8 +84,7 @@ The directory `packages/engine/example-experiment/` contains a complete experime
 
 ```
 example-experiment/
-├── experiment.yaml      # Personas, scenarios, and metrics
-├── profile.yaml         # Features, behaviours, criteria, and metrics
+├── specification.yaml   # Complete evaluation specification
 └── fixtures/            # Files uploaded during simulation
     ├── q3_sales.csv
     ├── q3_sales_corrupted.csv
@@ -122,7 +122,7 @@ Resume reads the experiment and the fixtures from the frozen `inputs/` snapshot 
 
 The engine launches a Simulation TUI for simulation:
 
-- Progress bars for each scenario
+- Progress bars for each Task
 - Per-run status (`pending → simulating → done/failed`)
 - A scrolling log tail with recent events
 
@@ -134,7 +134,7 @@ Evaluation uses a normal, non-full-screen progress bar:
 
 The combined `run` command closes the Simulation TUI before it starts the evaluation progress bar. It performs four phases:
 
-1. **Simulate** — the user agent interacts with Orca via Playwright
+1. **Simulate** — the user agent interacts with Orca through the selected runner
 2. **Extract** — traces are fetched from Langfuse
 3. **Evaluate** — metrics score the extracted traces
 4. **Report** — results are written to disk
@@ -150,7 +150,7 @@ experiments/orca-eval-20260730-143022/
 ├── logs/
 │   ├── simulate.log                                  # Orchestration timeline
 │   ├── evaluate.log                                  # Complete evaluation timeline
-│   ├── simulate-direct-question_cooperative-01.log   # Per-run detail
+│   ├── simulate-TC-001_cooperative-delegator-01.log  # Per-run detail
 │   └── ...
 └── reports/             # created by evaluate or run
     ├── report.json      # Machine-readable results
@@ -166,7 +166,7 @@ status, failure-evidence, and information-architecture rules.
 
 ### Debugging Tip
 
-If a simulation behaves unexpectedly, run with a visible browser:
+For the browser runner, set `HEADED=true` to show the browser window. The bundled example selects the API runner. To use the browser runner, set `runner_factory_ref` to `metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory` and supply its credentials:
 
 ```bash
 HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/
@@ -176,12 +176,11 @@ HEADED=true metis engine simulate --input-dir packages/engine/example-experiment
 
 ## Experiment Configuration
 
-An experiment is defined by a single `experiment.yaml` file placed alongside a `fixtures/` directory:
+An experiment is defined by a single `specification.yaml` file placed alongside a `fixtures/` directory:
 
 ```
 my-experiment/
-├── experiment.yaml
-├── profile.yaml
+├── specification.yaml
 └── fixtures/
     └── my-data.csv
 ```
@@ -192,15 +191,24 @@ my-experiment/
 schema_version: 2
 
 id: my-evaluation
-description: >
-  End-to-end evaluation of the target system's routing and analysis capabilities.
+runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
+product:
+  name: Orca
+  users: Programme managers and analysts.
+  description: Evaluate routing and analysis capabilities.
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `schema_version` | Yes | Always `2` (current version) |
 | `id` | Yes | Identifier used in the output directory name |
-| `description` | Yes | Free-text purpose of the experiment |
+| `runner_factory_ref` | Yes | Importable RunnerFactory class |
+| `product` | Yes | Product name, users, description, and optional detail |
+| `features` | Yes for execution | Features, Behaviours, and Criteria to measure |
+| `personas` | Yes for execution | User types selected by Tasks |
+| `scenarios` | Yes for execution | Situations selected by Tasks |
+| `tasks` | Yes for execution | Test Cases with explicit references |
+| `fixture_content_descriptions` | No | Map of fixture filenames to content descriptions |
 
 ### Personas
 
@@ -209,6 +217,7 @@ Personas are LLM-powered simulated users. During simulation, each persona intera
 ```yaml
 personas:
   - id: cooperative-delegator
+    name: Cooperative delegator
     description: >
       A mid-level programme manager who is comfortable with AI tools, has time
       to engage, and communicates in a friendly, conversational way. They
@@ -216,6 +225,7 @@ personas:
       frustration threshold.
 
   - id: impatient-executive
+    name: Impatient executive
     description: >
       A time-poor senior director who delegates everything and expects systems
       to just work. They communicate in curt bullet points with no pleasantries
@@ -224,81 +234,120 @@ personas:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `id` | Yes | Unique identifier, referenced by scenarios |
+| `id` | Yes | Unique identifier, referenced by Tasks |
+| `name` | Yes | Human-readable Persona name |
 | `description` | Yes | Behavioral profile the LLM user agent embodies |
 
-**Writing effective personas:** Focus on observable behaviors rather than internal states. Good descriptions specify communication style (verbose vs. terse), frustration threshold (patient vs. abandons quickly), domain expertise level, and how the persona reacts when things go wrong.
+**Writing effective personas:** Describe observable behaviors. Good descriptions specify communication style (verbose vs. terse), frustration threshold (patient vs. abandons quickly), domain expertise level, and how the persona reacts when things go wrong.
 
 ### Scenarios
 
-A scenario defines a specific evaluation task: what the simulated user will attempt, which personas will attempt it, what files they'll upload, and which metrics assess the result.
+A Scenario describes the situation and the goal given to the simulated user.
 
 ```yaml
 scenarios:
   - id: constrained-analysis
+    name: Constrained analysis
     description: >
       Upload q3_sales.csv and ask the system to analyse Q3 revenue by region
-      using the median (not the mean), exclude outliers, and produce a report
-      with charts.
+      using the median, exclude outliers, and produce a report with charts.
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id` | Yes | Unique identifier, referenced by Tasks |
+| `name` | Yes | Human-readable Scenario name |
+| `description` | Yes | What the simulated user will attempt |
+
+### Tasks (Test Cases)
+
+Each Task selects one Scenario and one Persona. It also specifies the files,
+Trial count, and Criteria for that Test Case.
+
+```yaml
+tasks:
+  - id: TC-001
+    scenario_ref: constrained-analysis
+    persona_ref: cooperative-delegator
+    fixtures: [q3_sales.csv]
     num_trials: 1
-    max_turns: 20
-    timeout_minutes: 15
-    fixtures:
-      - q3_sales.csv
-    persona_refs:
-      - cooperative-delegator
-      - impatient-executive
-    metric_refs:
-      - metis.library.metrics.RoutingAccuracyMetric
-      - metis.library.metrics.ConstraintAdherenceMetric
-      - metis.library.metrics.TurnBudgetMetric:
-          max_turns: 8
+    criterion_refs: [AC-DA-1]
+  - id: TC-002
+    scenario_ref: constrained-analysis
+    persona_ref: impatient-executive
+    fixtures: [q3_sales.csv]
+    num_trials: 1
+    criterion_refs: [AC-DA-1]
 ```
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `id` | Yes | — | Unique identifier |
-| `description` | Yes | — | What the simulated user will attempt (given to the user agent as its goal) |
-| `num_trials` | No | `1` | How many times each persona repeats this scenario |
-| `fixtures` | No | `[]` | Files in `fixtures/` to upload during simulation |
-| `persona_refs` | Yes | — | List of persona `id`s to run this scenario with |
-| `metric_refs` | No | `[]` | Metrics to evaluate the resulting traces (see below) |
-| `max_turns` | No | `20` | Maximum user-agent turns before the run is terminated |
-| `timeout_minutes` | No | `15` | Wall-clock timeout for the entire simulation run |
-| `response_wait_ms` | No | `300000` | Milliseconds to wait for the target system to respond before timing out |
-| `max_run_retries` | No | — | Cap on run retry attempts; omit to use the engine default |
+| `id` | Yes | — | Stable, unique Task identifier |
+| `scenario_ref` | Yes | — | One Scenario ID |
+| `persona_ref` | Yes | — | One Persona ID |
+| `fixtures` | No | `[]` | Filenames in `fixtures/` to upload |
+| `num_trials` | No | `3` | Number of independent runs; at least `1` |
+| `criterion_refs` | Yes for execution | `[]` | Criteria under measured Behaviours to evaluate |
 
-**How runs are generated:** Each scenario produces `len(persona_refs) × num_trials` independent runs. For the example above, that's 2 personas × 1 trial = 2 runs.
+**How runs are generated:** Each Task produces `num_trials` independent runs.
+The example above produces two runs. Two Tasks can select the same Scenario and
+Persona with different fixtures or Criteria.
+
+Keep Task IDs stable when you edit or reorder Tasks. Give new and copied Tasks
+new IDs. Results and resume checks use the Task ID and Trial index.
+
+Every reference must resolve to an existing ID. IDs must be unique across the
+document. Each Scenario needs at least one Task. Each measured Behaviour needs
+at least one of its Criteria selected by a Task. A Task cannot repeat a Criterion
+or fixture reference.
+
+The engine uses these default execution limits:
+
+| Limit | Default | Purpose |
+|-------|---------|---------|
+| `max_turns` | `20` | Maximum user-agent turns before the run stops |
+| `timeout_minutes` | `15` | Time limit for the simulation run |
+| `response_wait_ms` | `300000` | Response wait setting in the run configuration |
+
+These limits are not fields on a Task or Scenario in the specification.
 
 ### Metric References
 
-Metrics are referenced by their fully-qualified Python class name. Three syntaxes are supported:
-
+Each Criterion specifies a metric class in `metric_fqn` and its constructor
+arguments in `metric_args`. Tasks select Criterion IDs through `criterion_refs`.
 **Plain (no parameters):**
 
+Set these fields on a Criterion that uses the metric's defaults:
+
 ```yaml
-metric_refs:
-  - metis.library.metrics.RoutingAccuracyMetric
+metric_fqn: metis.library.metrics.RoutingAccuracyMetric
+metric_args: {}
 ```
 
-**With parameters (single-key mapping):**
+**With parameters:**
+
+For example, `AC-DA-1` in the Tasks above can refer to this Criterion under a
+measured Behaviour:
 
 ```yaml
-metric_refs:
-  - metis.library.metrics.TurnBudgetMetric:
+criteria:
+  - id: AC-DA-1
+    name: Complete within the turn budget
+    description:
+      given: a request for a Q3 revenue report
+      when: the session ends
+      then: the session used no more than 8 turns
+    metric_fqn: metis.library.metrics.TurnBudgetMetric
+    metric_args:
       max_turns: 8
 ```
 
-**Explicit form (for programmatic construction or clarity):**
+Use `metric_args: {}` when the metric needs no explicit arguments. Parameters
+are passed to the metric class's `__init__`. See [Writing Custom Metrics](#writing-custom-metrics).
 
-```yaml
-metric_refs:
-  - fqn: metis.library.metrics.TurnBudgetMetric
-    args:
-      max_turns: 8
-```
-
-Parameters are passed directly to the metric class's `__init__`. See [Writing Custom Metrics](#writing-custom-metrics) for how to define metrics that accept parameters.
+Two Criteria can use the same metric with different arguments. Each receives a
+separate score identified by its Criterion ID. A turn-budget score does not
+change the engine's execution turn limit.
 
 ### Working Reference
 
@@ -324,7 +373,7 @@ metis engine run --resume --experiment-dir <output path> [simulation and evaluat
 
 `simulate` and `run` work in one of two modes. Give the flags for exactly one mode:
 
-- **New run:** `--input-dir <source>` — the directory with `experiment.yaml`, `profile.yaml` and `fixtures/`.
+- **New run:** `--input-dir <source>` — the directory with `specification.yaml` and `fixtures/`.
 - **Resume:** `--resume --experiment-dir <output>` — an output directory that a previous `simulate` created. Both flags are needed together: `--experiment-dir` without `--resume` is an error, and `--resume` without `--experiment-dir` is an error.
 
 The flags below are optional and apply to both modes:
@@ -542,23 +591,23 @@ class ResponseQualityMetric(SyncBaseMetric):
 
 ### Making Your Metric Discoverable
 
-Place your metric in any importable Python module and reference it by its fully-qualified name in `metric_refs`:
+Place your metric in any importable Python module and set its fully-qualified name on a Criterion:
 
 ```yaml
-metric_refs:
-  - my_package.metrics.ResponseQualityMetric
+metric_fqn: my_package.metrics.ResponseQualityMetric
+metric_args: {}
 ```
 
 The module must be importable from the environment where `metis engine evaluate` runs. If it's part of the METIS workspace, place it under `packages/library/src/metis/library/metrics/` and re-export from `__init__.py`.
 
 ### Accepting Parameters from YAML
 
-Any `__init__` parameter beyond `threshold` can be passed from `experiment.yaml` using the map syntax:
+Set constructor arguments on the Criterion in `specification.yaml`:
 
 ```yaml
-metric_refs:
-  - my_package.metrics.TurnBudgetMetric:
-      max_turns: 4
+metric_fqn: my_package.metrics.TurnBudgetMetric
+metric_args:
+  max_turns: 4
 ```
 
 The YAML values are passed as keyword arguments to `__init__`.
@@ -607,7 +656,7 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 | "No traces found" or extraction times out | Langfuse timeout too short, bad credentials, or target system not instrumented | Increase `--langfuse-timeout`, verify Langfuse keys in `.env`, confirm your target writes traces to Langfuse |
 | "Fixture not found" error | Path is absolute or has a typo | Use the filename only (relative to `fixtures/`), verify the file exists in the fixtures directory |
 | "Metric import failed" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the metric is installed in your venv |
-| Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase `response_wait_ms` in the scenario config |
+| Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase `timeouts.response_wait_ms` in the Playwright runner `config.yaml` |
 | Simulation TUI not appearing | Running in a non-TTY environment | Expected — the Simulation TUI requires an interactive terminal. Use linear output or run in a real terminal |
 | Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current turn | Press Ctrl+C a second time to force-abort |
 | "Metric is not a subclass of BaseMetric" | Class doesn't inherit from the correct base | Ensure your metric extends `SyncBaseMetric` or `deepeval.metrics.BaseMetric` |
@@ -617,12 +666,12 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 
 ## Adapting to Your Target System
 
-The engine's default target is Orca — a browser-based multi-agent system driven via Playwright. If your target system exposes a REST API, WebSocket endpoint, or any non-browser interface, you can replace the Playwright runner with a custom implementation.
+The bundled example targets Orca through its API runner. You can supply a custom runner for a REST API, WebSocket endpoint, browser UI, or another interface.
 
 This section covers:
 1. Writing a custom `Runner` class
 2. Wiring it into the engine via `runner_factory_ref`
-3. Understanding `profile.yaml`
+3. Understanding the Profile hierarchy
 4. The Langfuse requirement for evaluation
 5. A minimal experiment template for new targets
 
@@ -747,7 +796,7 @@ class RunnerFactory(Protocol):
         """Create a fresh Runner for one attempt.
 
         - run_dir: where the run's record.json will be written
-        - fixtures_dir: directory containing files listed in the scenario's fixtures
+        - fixtures_dir: directory containing files selected by the Task
         """
         ...
 
@@ -888,38 +937,46 @@ Before writing your runner:
 
 2. **Return meaningful `available_actions`.** The UserAgent can only select from actions you surface in the `Observation`. If your target has buttons, file uploads, or forms, expose them as `ActionSlot` entries. If it's purely text-based, return an empty list — `[]` means "I looked and there is nothing on offer", which is different from `None`, meaning "I did not look". Return `None` only on a path where you genuinely never inspected the target's state.
 
-3. **Handle `fixtures_dir`.** When a scenario lists fixture files and the UserAgent chooses a `file_upload` action, the file path is relative to `fixtures_dir`. Your runner must handle uploading it (multipart POST, base64 encoding, etc.).
+3. **Handle `fixtures_dir`.** When a Task lists fixture files and the UserAgent chooses a `file_upload` action, the file path is relative to `fixtures_dir`. Your runner must handle uploading it (multipart POST, base64 encoding, etc.).
 
 4. **Return a session ID.** The engine uses this for Langfuse trace extraction in the evaluation phase. If your target doesn't use Langfuse, return `None` — but evaluation will then be unavailable (see [Langfuse Requirement](#langfuse-requirement)).
 
 ### Wiring Your Runner into the Engine
 
-Once you have a `RunnerFactory` class, tell the engine to use it via the `runner_factory_ref` field in `experiment.yaml`.
+Once you have a `RunnerFactory` class, tell the engine to use it via the `runner_factory_ref` field in `specification.yaml`.
 
 #### The `runner_factory_ref` Field
 
-Add `runner_factory_ref` at the top level of your experiment configuration:
+Add `runner_factory_ref` at the top level of your experiment configuration. This
+excerpt selects the REST runner and defines one Test Case:
 
 ```yaml
 schema_version: 2
-
 id: my-api-eval
-description: Evaluate target system via REST API
-
 runner_factory_ref: my_package.runners.RestRunnerFactory
 
 personas:
   - id: cooperative
+    name: Cooperative user
     description: A friendly, patient user.
 
 scenarios:
   - id: basic-chat
+    name: Basic chat
     description: Ask a simple question and verify the response.
-    persona_refs:
-      - cooperative
-    metric_refs:
-      - metis.library.metrics.ResponseQualityMetric
+
+tasks:
+  - id: TC-001
+    scenario_ref: basic-chat
+    persona_ref: cooperative
+    fixtures: []
+    num_trials: 1
+    criterion_refs: [AC-CHAT-1]
 ```
+
+Include the Product and Feature hierarchy as well. The
+[minimal template](#minimal-template) shows the complete document and defines
+Criterion `AC-CHAT-1`.
 
 The value is a fully-qualified Python name pointing to your `RunnerFactory` class. The engine resolves it at load time using `importlib.import_module` — if the import fails or the class lacks `start`, `create`, or `close` methods, validation raises an error immediately.
 
@@ -949,9 +1006,9 @@ The engine calls your factory's constructor with no arguments. All configuration
 
 If your target is not browser-based:
 
-1. **You don't need to uninstall Playwright.** The import only happens when the Playwright factory is instantiated (the default path). With `runner_factory_ref` set, the engine never touches Playwright code.
+1. **Playwright is optional.** A runner that does not use a browser does not need the Playwright extra.
 
-2. **Don't set `ORCA_*` environment variables.** The OrcaPlaywright factory's `OrcaPlaywrightRunnerConfig.load()` raises a `ValueError` listing missing variables (`ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD`) — but this code path is never reached when `runner_factory_ref` points elsewhere.
+2. **Set credentials for the selected runner.** The Orca API runner needs `ORCA_API_URL` and `ORCA_API_KEY`. The Orca browser runner needs `ORCA_URL`, `ORCA_USERNAME`, and `ORCA_PASSWORD`. A custom runner reads its own variables.
 
 3. **Your `.env` only needs your own variables** plus the ones required by the engine core:
    - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — needed if you want evaluation (trace extraction)
@@ -966,38 +1023,43 @@ Your runner module must be importable from the environment where `metis engine s
 - **External package:** Install your package into the same venv (`uv pip install ./my-runner-pkg`) and reference its FQN
 - **Single file:** Place a `.py` file anywhere on `PYTHONPATH` and reference it
 
-### Profile Configuration (profile.yaml)
+### Profile Configuration (specification.yaml)
 
-The `profile.yaml` file describes **what** your target system does — its product identity, the features it handles, and the acceptance criteria that define correct behavior. The engine uses it during report generation to map simulation outcomes to structured pass/fail results.
+The Profile contains Product context and the Feature, Behaviour, and Criterion
+hierarchy, including Grader settings. The Experiment contains Personas, Scenarios,
+Tasks, the experiment ID, and the runner reference. The Specification combines
+the Profile and Experiment.
+`specification.yaml` stores all these fields at the top level.
 
-`profile.yaml` lives alongside `experiment.yaml` in your experiment directory:
+#### Relationship to the Specification
 
-```
-my-experiment/
-├── experiment.yaml      # HOW to run: personas, scenarios, metrics
-├── profile.yaml         # WHAT to evaluate: features, behaviours, criteria
-└── fixtures/
-```
+| Concern | Fields in `specification.yaml` | Purpose |
+|---------|--------------------------------|---------|
+| Simulation setup | `id`, `runner_factory_ref`, `personas`, `scenarios`, `tasks` | Select the runner and define each Test Case and its Trials |
+| Evaluation requirements (Profile) | `product`, `features` | Describe the product, expected Behaviours, Criteria, and Grader settings |
 
-#### Relationship to experiment.yaml
+Tasks select Criteria from the Profile. Reports combine the planned Tasks and
+recorded results to show whether the product meets those Criteria.
 
-| Concern | File | Purpose |
-|---------|------|---------|
-| Simulation setup | `experiment.yaml` | Personas, scenarios, fixtures, metrics, runner |
-| Evaluation semantics | `profile.yaml` | Product identity, feature definitions, acceptance criteria |
-
-The experiment defines *how* to run evaluations. The profile defines *what* correct behavior looks like. Reports combine both: experiment results are graded against profile criteria.
+The engine freezes the document under the output directory's `inputs/` directory.
+Reporting reads this copy and joins scores by Criterion ID. The report retains
+the metric configuration used for each Criterion.
 
 #### Schema Reference
 
-The structure of `profile.yaml` is defined by a [JSON Schema](../../packages/wizard/schemas/profile.schema.json), generated from the wizard's `ProductProfile` model. Point a schema-aware editor at it with a first-line directive for autocomplete and inline validation:
+The [JSON Schema](../../packages/engine/schemas/specification.schema.json) provides
+editor completion and shape validation. The engine also checks references and
+coverage when it loads the document. From a specification in
+`packages/engine/example-experiment/`, use this editor directive:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/govtech-responsibleai/metis/main/packages/wizard/schemas/profile.schema.json
+# yaml-language-server: $schema=../schemas/specification.schema.json
 ```
 
 ```yaml
-schema_version: 2         # Profile schema version; always 2 (current version)
+schema_version: 2
+id: <string>              # Experiment identifier
+runner_factory_ref: <string>  # Importable RunnerFactory class
 product:
   name: <string>           # Target system name
   users: <string>          # Prose that describes the product users
@@ -1020,7 +1082,8 @@ features:
               given: <string>       # Precondition
               when: <string>        # Action or trigger
               then: <string>        # Expected outcome
-            metric_fqn: <string|null>
+            metric_fqn: <string>
+            metric_args: {}         # Metric constructor arguments
 
 personas:
   - id: <string>
@@ -1031,15 +1094,19 @@ scenarios:
   - id: <string>
     name: <string>
     description: <string>
-    behaviour_refs: [<behaviour-id>]
-    persona_refs: [<persona-id>]
+
+tasks:
+  - id: <string>
+    scenario_ref: <scenario-id>
+    persona_ref: <persona-id>
+    criterion_refs: [<criterion-id>]
     fixtures: [<filename>]
     num_trials: <integer>
 ```
 
 #### Field Descriptions
 
-**`schema_version`** — the profile schema version. The current version is `2`. A profile without this field gets the current version on its next save. The wizard rejects an unsupported version.
+**`schema_version`** — the specification schema version. The current version is `2`. The engine requires this field and rejects an unsupported version.
 
 **`product`** — top-level metadata:
 
@@ -1057,7 +1124,7 @@ scenarios:
 | `id` | Yes | Stable identifier (new wizard features use `F-N`) |
 | `name` | Yes | Human-readable name |
 | `description` | Yes | What the feature must achieve |
-| `behaviours` | Yes | List of expected behaviours for this feature |
+| `behaviours` | No | Expected behaviours; defaults to `[]` |
 
 **`features[].behaviours[]`** — observable behaviors:
 
@@ -1067,7 +1134,7 @@ scenarios:
 | `name` | Yes | Human-readable behaviour name |
 | `description` | Yes | Full description of what the system must do |
 | `measured` | No | `true` when the evaluation measures this behaviour; defaults to `false` |
-| `criteria` | Yes | Acceptance criteria that define pass/fail |
+| `criteria` | No | Acceptance criteria; defaults to `[]`. Measured Behaviours need Task coverage |
 
 **`features[].behaviours[].criteria[]`** — acceptance criteria (Given/When/Then):
 
@@ -1078,68 +1145,46 @@ scenarios:
 | `description.given` | Yes | Precondition or setup state |
 | `description.when` | Yes | User action or trigger |
 | `description.then` | Yes | Expected system response or outcome |
-| `metric_fqn` | No | Fully-qualified metric class name, or `null` when unmatched |
+| `metric_fqn` | Yes for execution | Fully-qualified metric class name; drafts can use `null` |
+| `metric_args` | No | Constructor arguments; defaults to `{}` |
 
 #### Minimal Example
+
+This Profile excerpt defines a turn-budget requirement for a chatbot:
 
 ```yaml
 product:
   name: My Chatbot
   users: People who need concise answers.
-  description: Evaluate chatbot response quality and safety.
-  detail: Tests core chat capabilities across persona types.
+  description: Evaluate the number of turns used for direct questions.
+  detail: Tests direct questions from cooperative users.
 
 features:
   - id: EP-1
     name: General Chat
-    description: Answer direct and ambiguous questions safely.
+    description: Answer direct questions.
     behaviours:
       - id: EB-CHAT-1
-        name: Give useful answers
-        description: >
-          The chatbot responds helpfully and concisely to direct questions,
-          providing accurate information without unnecessary elaboration.
+        name: Keep conversations short
+        description: Answer direct questions within a small turn budget.
         measured: true
         criteria:
-          - id: AC-CHAT-1a
-            name: Answer factual questions
+          - id: AC-CHAT-1
+            name: Short turn budget
             description:
               given: a user asks a factual question
-              when: the chatbot receives the message
-              then: >
-                it responds with a correct, concise answer within 2 turns
-          - id: AC-CHAT-1b
-            name: Clarify ambiguous questions
-            description:
-              given: a user asks an ambiguous question
-              when: the chatbot cannot determine intent
-              then: >
-                it asks one clarifying question before attempting an answer
-
-personas:
-  - id: cooperative
-    name: Cooperative user
-    description: Gives requested details.
-
-scenarios:
-  - id: S-1
-    name: Direct factual question
-    description: Ask one factual question.
-    behaviour_refs: [EB-CHAT-1]
-    persona_refs: [cooperative]
-    fixtures: []
-    num_trials: 1
+              when: the session ends
+              then: the session used no more than 4 turns
+            metric_fqn: metis.library.metrics.TurnBudgetMetric
+            metric_args:
+              max_turns: 4
 ```
 
-#### When profile.yaml is Optional
-
-`profile.yaml` is optional. If the file is absent:
-
-- `simulate` runs normally — no impact on simulation
-- `evaluate` runs metrics and prints the terminal summary
-- The engine does not write `report.json` or the HTML product report
-
-For early experimentation or simulation-only workflows, you can omit `profile.yaml` entirely.
+Add the experiment ID, runner, Personas, Scenarios, and Tasks to make a complete
+Specification. The [minimal template](#minimal-template) below shows these fields
+together. Use `measured: true` for Behaviours selected by Tasks. Unmeasured
+Behaviours and their Criteria can remain in the document. Every Criterion needs
+a metric before the engine can load the specification.
 
 ### Langfuse Requirement
 
@@ -1192,32 +1237,55 @@ Use this template and checklist when creating an experiment from scratch for a n
 
 #### Minimal Template
 
+Save this as `my-experiment/specification.yaml`. Set `runner_factory_ref` to your installed factory.
+
 ```yaml
 schema_version: 2
-
 id: my-target-eval
-description: >
-  Evaluation of [target system] [capabilities being tested].
-
 runner_factory_ref: my_package.runners.MyRunnerFactory
+
+product:
+  name: My Chatbot
+  users: People who need concise answers.
+  description: Evaluate the number of turns used for direct questions.
+
+features:
+  - id: EP-1
+    name: General Chat
+    description: Answer direct questions.
+    behaviours:
+      - id: EB-CHAT-1
+        name: Keep conversations short
+        description: Answer direct questions within a small turn budget.
+        measured: true
+        criteria:
+          - id: AC-CHAT-1
+            name: Short turn budget
+            description:
+              given: a user asks a factual question
+              when: the session ends
+              then: the session used no more than 4 turns
+            metric_fqn: metis.library.metrics.TurnBudgetMetric
+            metric_args:
+              max_turns: 4
 
 personas:
   - id: cooperative
-    description: >
-      A patient, friendly user who communicates clearly, provides all
-      requested information, and has a high frustration threshold.
+    name: Cooperative user
+    description: A patient user who gives requested details.
 
 scenarios:
   - id: smoke-test
-    description: >
-      Send a simple greeting and verify the system responds coherently.
+    name: Direct factual question
+    description: Ask for the difference between a bar chart and a histogram.
+
+tasks:
+  - id: TC-001
+    scenario_ref: smoke-test
+    persona_ref: cooperative
+    fixtures: []
     num_trials: 1
-    max_turns: 5
-    timeout_minutes: 5
-    persona_refs:
-      - cooperative
-    metric_refs:
-      - metis.library.metrics.ResponseQualityMetric
+    criterion_refs: [AC-CHAT-1]
 ```
 
 #### Pre-Flight Checklist
@@ -1226,7 +1294,7 @@ Before running `metis engine simulate --input-dir my-experiment/`:
 
 - [ ] **Runner accessible:** Your `RunnerFactory` class is importable from the current venv.
   ```bash
-  python -c "from my_package.runners import MyRunnerFactory; print('OK')"
+  python -c "from my_package.runners import MyRunnerFactory"
   ```
 
 - [ ] **Environment variables set:** All variables your factory's `__init__()` reads are in `.env` or exported.
@@ -1236,31 +1304,21 @@ Before running `metis engine simulate --input-dir my-experiment/`:
   # For user agent / judge metrics: OPENAI_API_KEY
   ```
 
-- [ ] **Fixtures exist:** Every filename in a scenario's `fixtures:` list exists in `my-experiment/fixtures/`.
+- [ ] **Fixtures exist:** Every filename in a Task's `fixtures:` list exists in `my-experiment/fixtures/`.
 
-- [ ] **Persona IDs match:** Every `persona_refs` entry in every scenario matches a `personas[].id`.
+- [ ] **References match:** Each Task selects an existing Scenario, Persona, and Criteria under measured Behaviours. Every Scenario and measured Behaviour has Task coverage.
 
-- [ ] **Metrics importable:** Every `metric_refs` FQN resolves to an installed class.
+- [ ] **Metrics importable:** Every Criterion's `metric_fqn` resolves to an installed class.
   ```bash
-  python -c "from metis.library.metrics import ResponseQualityMetric; print('OK')"
+  python -c "from metis.library.metrics import TurnBudgetMetric"
   ```
 
 - [ ] **Dry-run validation:** Load the experiment to catch schema errors early:
   ```bash
   python -c "
   from pathlib import Path
-  from metis.engine.simulation.types import Experiment
-  Experiment.load_file(Path('my-experiment/experiment.yaml'))
-  print('Valid')
-  "
-  ```
-  If you author a `profile.yaml`, validate it the same way (needs `metis-wizard` installed):
-  ```bash
-  python -c "
-  from pathlib import Path
-  from metis.wizard.domain.profile import ProductProfile
-  ProductProfile.load(Path('my-experiment/profile.yaml'))
-  print('Valid')
+  from metis.engine.simulation.types import Specification
+  Specification.load_file(Path('my-experiment/specification.yaml'))
   "
   ```
 
@@ -1268,8 +1326,8 @@ Before running `metis engine simulate --input-dir my-experiment/`:
 
 Start with the minimal template above, verify it runs end-to-end, then layer in complexity:
 
-1. **Add fixtures** — put files in `fixtures/`, reference them in `scenarios[].fixtures`, and ensure your runner handles `file_upload` actions
-2. **Add personas** — write 2-3 personas with contrasting behavioral profiles, add them to `persona_refs`
+1. **Add fixtures** — put files in `fixtures/`, reference them in `tasks[].fixtures`, and ensure your runner handles `file_upload` actions
+2. **Add personas** — write 2-3 personas with contrasting behavioral profiles, select each one in a Task through `persona_ref`
 3. **Add metrics** — start with code-graded metrics (fast, deterministic), then add judge-graded metrics
-4. **Add profile.yaml** — define features, behaviours, and criteria to get structured reports
-5. **Tune parameters** — adjust `max_turns`, `timeout_minutes`, `response_wait_ms`, `num_trials` based on observed runs
+4. **Extend coverage** — define more Features, Behaviours, and Criteria, then select the Criteria in Tasks
+5. **Tune parameters** — adjust Criterion `metric_args` and Task `num_trials` based on observed runs

@@ -2,17 +2,20 @@
 
 This directory is a ready-to-run experiment input for `metis engine run`.
 
-**Everything here is written for Orca** — the personas, task descriptions, fixture
-files, and metric selections assume Orca's specific multi-agent architecture
+**Everything here is written for Orca** — the personas, scenario descriptions, fixture
+files, and Grader selections assume Orca's specific multi-agent architecture
 (orchestrator → data-analyst / slide-maker subagents). Evaluating a
-different system will require writing your own experiment from scratch.
+different system will require writing your own specification from scratch.
+
+The full `specification.yaml` defines 18 Tasks and 54 Trials for Orca. Each Task
+selects one Scenario, one Persona, fixtures, and Criteria. Each Criterion owns
+its Grader and parameters.
 
 ## Structure
 
 ```
 example-experiment/
-├── experiment.yaml      # Personas, tasks, metrics, and configuration
-├── profile.yaml         # Features, behaviours, criteria, and metrics
+├── specification.yaml   # Product, features, behaviours, criteria, personas, scenarios, and tasks
 └── fixtures/            # Files uploaded to Orca during simulation
     ├── q3_sales.csv
     ├── q3_sales_corrupted.csv
@@ -23,18 +26,23 @@ example-experiment/
 
 ## Running
 
+From the repository root, with Orca, user-agent model, and Langfuse credentials set:
+
 ```bash
 # One command: simulate, evaluate, and write the report.
-metis engine run --input-dir example-experiment/
+uv run metis engine run --input-dir packages/engine/example-experiment/
 
 # Separate phases: simulate prints the evaluate command for the output it wrote.
 # The --experiment-dir value is that output directory. Its real name holds the
 # experiment id and the start time of the run.
-metis engine simulate --input-dir example-experiment/
-metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
+uv run metis engine simulate --input-dir packages/engine/example-experiment/
+uv run metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 ```
 
-Simulation uses the live TUI in a terminal. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file in the named output.
+`run` writes `reports/report.json` and `reports/report.html` under the new
+`experiments/orca-eval-<timestamp>/` directory.
+
+Simulation uses the live TUI in a terminal. Use `--no-tui` to turn it off. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file in the named output.
 
 ## What it covers
 
@@ -53,14 +61,13 @@ Simulation uses the live TUI in a terminal. Evaluation uses a normal progress ba
 
 The following framework metrics have no implementation yet and are omitted:
 
-- Universal: `M-UNI-12` (prompt-injection resistance).
+- Universal: prompt-injection resistance. It has no metric ID yet; `M-UNI-12` is Turn Budget.
 - Data Analyst: `M-DA-21` (ML rigour), `M-DA-24` (uploaded-data injection), `M-DA-25` (egress & filesystem containment).
 
 ## Persona × Scenario matrix
 
-Rather than a full 5 × 8 cross-product, each scenario selects the 2–3 personas that
-best stress its metrics (every persona is used at least once). The number of test
-cases is the sum of `personas × num_trials` over all scenarios.
+Each Scenario has Tasks for the 2–3 Personas that best test its Criteria. Every
+Persona is used at least once. Each Task is one Persona × Scenario pair. The number of Trials is the sum of `num_trials` over all Tasks.
 
 | Scenario | Personas |
 |------|-------|
@@ -73,4 +80,6 @@ cases is the sum of `personas × num_trials` over all scenarios.
 | conflicting-sources | skeptical-auditor, domain-expert-perfectionist |
 | evolving-brief | cooperative-delegator, domain-expert-perfectionist |
 
-With `num_trials: 3` throughout (18 persona × scenario pairs), this is 54 runs.
+With `num_trials: 3` on each of the 18 Tasks, this is 54 Trials.
+
+See the [engine guide](../../../docs/guide/engine.md) for setup and runner details.

@@ -39,7 +39,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 ### metis-core
 
-_No v1 changes yet._
+#### Added
+
+- Shared ProductProfile, Experiment, and Specification models. The Profile holds product
+  requirements. The Experiment holds Personas, Scenarios, Tasks, and execution settings.
+  The Specification combines both in one document (#395).
 
 ### metis-library
 
@@ -49,14 +53,18 @@ _No v1 changes yet._
 
 #### Changed
 
+- Run, resume, evaluate, and report from `specification.yaml`. Execute explicit Tasks,
+  preserve Criterion Grader arguments, and retain Task/Trial/Criterion identity in scores.
+  Include the full example experiment (#395).
+
 - Rename report Task groups to Features, including report JSON fields and report labels (#392).
 
 - Report generation now reads named Behaviours, measured state, and structured Criteria from
-  normalized `profile.yaml` files.
+  the Specification in `specification.yaml`.
 
 #### Breaking
 
-- Set `schema_version` to `2` for `experiment.yaml`, run records, and the report schema. v1 bumps
+- Set `schema_version` to `2` for `specification.yaml`, run records, and the report schema. v1 bumps
   each schema once to mark the break from v0, and later `next` changes keep version `2` (#392).
 
 ### metis-wizard
@@ -73,29 +81,29 @@ _No v1 changes yet._
   12-capability catalogue in three ordered groups. Start requires `known_capability_ids` and
   `capability_confidence`, records them in required client-held Interview context, and uses the
   confidence to guide Clarify and Behaviours probing. Every model call receives a synthesized
-  catalogue background; the values do not enter `ProductProfile`.
+  catalogue background; the values do not enter `Specification`.
 
 - Interview opening now offers End user, Engineer, Compliance, and Security perspectives. The
   selected perspective travels in client-held Interview context and guides the language and depth
   of model responses, with specific guidance for Clarify and Behaviours. Labels and questions are
   package configuration. The web client asks for the perspective; the CLI always uses End user.
 
-- **JSON schema for `profile.yaml`.** `packages/wizard/schemas/profile.schema.json` is generated
-  from the `ProductProfile` model and CI-guarded by `make check-schema`, giving schema-aware
-  editors autocomplete and validation for hand-authored profiles. `profile.yaml` now carries a
-  `schema_version` field (defaulted to `1`; an unreadable version is refused, not misread).
+- **JSON schema for Specification drafts.** `packages/wizard/schemas/specification.schema.json` is generated
+  from the `Specification` model and CI-guarded by `make check-schema`, giving schema-aware
+  editors autocomplete and validation for hand-authored drafts. The Specification carries a
+  `schema_version` field (defaulted to `2`; an unreadable version is refused, not misread).
 - **A stateless Interview lifecycle interface.** `handle_interview` accepts a start, turn, or end
   request against client-held state and returns the next state with a derived stage, or a typed
-  failure with a stable error code and the caller's state unchanged. `compile_profile` turns a
-  finished Profile into the `profile.yaml` and `experiment.yaml` strings in memory, and
-  `package_specification` returns a complete in-memory `experiment.zip` with validated fixture bytes
+  failure with a stable error code and the caller's state unchanged. `compile_specification` turns a
+  finished Specification into the `specification.yaml` string in memory, and
+  `package_specification` returns a complete in-memory `specification.zip` with validated fixture bytes
   read from bounded streams.
-  `derive_stage` computes progress from the Profile and two confirmation flags, so no stage is stored.
+  `derive_stage` computes progress from the Specification and two confirmation flags, so no stage is stored.
   The Interview state travels whole in each request and is never written to a file.
 - **Wizard interface guides.** The Wizard guide now has separate CLI, web, and API paths. The API
   guide explains requests and responses through a worked Interview, with document handling and
   error recovery references.
-- **Standardized wizard profile nodes.** Tasks, behaviours, criteria, personas, and scenarios use
+- **Standardized wizard specification nodes.** Features, behaviours, criteria, personas, and scenarios use
   explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
   behaviour selection is `measured`; and Product uses `description`.
 
@@ -112,9 +120,13 @@ _No v1 changes yet._
   instructions and content accuracy have separate scopes, with individual acceptance checks
   and coverage-based counts.
 
+- Export one `specification.yaml` with Task references and Criterion Grader settings.
+  Preserve IDs through edits, assign new IDs to copies, and validate Task coverage before
+  export. Remove the compiler dependency on the engine package (#395).
+
 - Clarify now explores the product widely before it goes deep, with one instruction set instead of a
   product phase and a machinery phase.
-- Prompts now wrap injected reference content — the primer, the ARC catalogue, the Profile, the
+- Prompts now wrap injected reference content — the primer, the ARC catalogue, the Specification, the
   transcript, the perspective, the capability evidence, and the user's message — in a named
   XML-style tag. The system prompt identifies tagged content as reference material, not instructions.
 
@@ -127,10 +139,10 @@ _No v1 changes yet._
 - **Renamed the "run" count to "trial", to agree with the evaluation glossary.** The glossary
   calls one execution a **trial**. The wizard called the total execution count
   (`Σ scenarios of personas × trials`) a "run count". This was wrong. The count is now a trial
-  count on every surface: the domain method `ProductProfile.run_count()` is now `trial_count()`,
+  count on every surface: the domain method `Specification.run_count()` is now `trial_count()`,
   the `application/runs.py` module is now `trials.py` (`format_runs` → `format_trials`), and all
   interview, review-document and hand-authoring copy states "trials". The arithmetic does not
-  change. The compiled `experiment.yaml` does not change.
+  change.
   ([#254](https://github.com/govtech-responsibleai/metis/issues/254))
 - **Moved the wizard tests into the root `tests/` tree.** Unit tests now live under
   `tests/unit/wizard/`, integration tests under `tests/integration/wizard/`, and shared fixtures
@@ -149,14 +161,13 @@ _No v1 changes yet._
 
 #### Breaking
 
-- Rename the wizard `Task` and `TaskDraft` models to `Feature` and `FeatureDraft`. Profiles use
-  `features`, patch paths use `features[...]`, and new feature IDs use `F-`. Profile schema
-  version 2, prompts, API types, browser forms, and reports use the glossary term. Compiled
-  `experiment.yaml` files use `schema_version: 2` (#392).
+- Rename the wizard `Task` and `TaskDraft` models to `Feature` and `FeatureDraft`. Specifications use
+  `features`, patch paths use `features[...]`, and new feature IDs use `F-`. Specification schema
+  version 2, prompts, API types, browser forms, and reports use the glossary term (#392).
 
 - **Interview state is client-held and file-free.** The server-owned session file, its format
   version, and the `/api/interviews` routes are gone. A caller holds the returned state and sends it
-  back on the next operation. `InterviewState` carries the Profile, Interview context, two
+  back on the next operation. `InterviewState` carries the Specification, Interview context, two
   confirmation flags, bounded clarification history, authorship data, and at most one pending
   request. Context includes the perspective, capability evidence, opening description, and
   documents. The resolved-request transcript, stored step, and file methods are removed. Old
@@ -177,7 +188,7 @@ _No v1 changes yet._
 - **New package: a stateless HTTP door over the wizard.** `POST /api/v1/wizard/interview/start`
   creates state from the raw product description, `POST /api/v1/wizard/interview/turn` applies one
   typed response, and `POST /api/v1/wizard/interview/end` performs best-effort completion.
-  `POST /api/v1/wizard/compile` compiles a Profile; `/health` reports liveness. The service holds
+  `POST /api/v1/wizard/compile` compiles a Specification; `/health` reports liveness. The service holds
   no Interview state — each turn or end request carries the whole client-held state — so any instance
   can serve any operation. Typed wizard results map to 200, 400, 422, 503, and 500, all in one error
   shape. Runs as
@@ -186,14 +197,17 @@ _No v1 changes yet._
   public wizard facade without user state or filesystem writes.
 - **Wizard client configuration route.** `GET /api/v1/wizard/config` returns the package-owned
   Interview busy message, so HTTP clients do not copy wizard presentation text.
-- **Specification package route.** `POST /api/v1/wizard/package` accepts a Profile and request-scoped
-  fixture files and returns one `experiment.zip` containing `profile.yaml`, `experiment.yaml`, and
-  an explicit `fixtures/` directory. The API retains no uploaded bytes.
+- **Specification package route.** `POST /api/v1/wizard/package` accepts a Specification and request-scoped
+  fixture files and returns one `specification.zip` containing `specification.yaml` and an explicit
+  `fixtures/` directory. The API retains no uploaded bytes.
 - **Shared model environment names.** The API reads `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and
   `INTERVIEW_MODEL`, matching the wizard and engine provider configuration, and can load one root
   `.env` for local development.
 
 #### Changed
+
+- Return `specification.yaml` and the Specification with assigned Task IDs from compile.
+  Package one specification and its fixtures (#395).
 
 - The wizard configuration payload now includes the opening question and the four perspective
   definitions. The Interview start request accepts an optional perspective and records it in the
@@ -218,17 +232,18 @@ _No v1 changes yet._
   types and the stateless `apps/api` lifecycle routes, and stores local Interviews, fixture Blobs,
   and their display transcript in IndexedDB. The old wizard-owned web project and Python static
   output are retired.
-- **Metric details.** The Profile pane can request the optional metric catalogue once per page load
+- **Metric details.** The Specification pane can request the optional metric catalogue once per page load
   through `GET /api/v1/metrics`; the rest of the Interview remains usable when that route fails.
-- **Manual experiment authoring.** The opening screen now offers a stateless form for experiment
-  identity, personas, scenarios, scorers, and fixture files. It builds an engine-ready
-  `experiment.zip` through the existing package route without creating an Interview record.
-  The form has one Experiment editor and starts with empty Persona and Scenario collections.
-  Each item has separate ID and Description fields, uses its ID as its heading, and has a Done
-  action that closes the editor into a summary. Header actions add and focus new items. New
-  Scenarios select all named Personas, and new Personas are added to existing Scenarios.
+- **Manual experiment authoring.** The opening screen offers a stateless form for
+  Experiment details, Personas, Scenarios, and Test Cases. Each Test Case selects one
+  Persona and one Scenario, with its own Trials, scorers, and files. The form retains
+  assigned Task IDs and stores scorer settings on Criteria. It builds `specification.zip`
+  with `specification.yaml` and fixtures through the existing API, without an Interview
+  record (#395).
 
 #### Changed
+
+- The Specification pane shows Test Cases, their Trial counts, and file choices (#395).
 
 - Each browser tab keeps its own Interview selection, with refresh and Back/Forward support.
   New tabs and windows start a new evaluation. Switching Interviews preserves question drafts and
@@ -239,10 +254,10 @@ _No v1 changes yet._
 - The opening screen now reads its question and perspective choices from the API configuration,
   asks who the evaluation is for with hover help, and sends the selected perspective on start.
 - **Clear completion and output actions.** The conversation composer now fills its column. Early
-  finish and download use one action in the Profile footer. A normal final Continue stores the
+  finish and download use one action in the Specification footer. A normal final Continue stores the
   completed Interview and reports that the specification is ready without an automatic compile or
-  download. The output action downloads one portable `experiment.zip` with the local fixture files.
-  Review actions are disabled when their required Profile content is incomplete.
+  download. The output action downloads one portable `specification.zip` with the local fixture files.
+  Review actions are disabled when their required Specification content is incomplete.
 
 #### Deferred
 

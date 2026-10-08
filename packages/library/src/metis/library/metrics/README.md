@@ -6,13 +6,12 @@ All metrics live in `metis.library.metrics` and are imported by their class name
 from metis.library.metrics import RoutingAccuracyMetric
 ```
 
-In `experiment.yaml`, use the package-level FQN:
+On each Criterion in `specification.yaml`, use the package-level FQN and arguments:
 
 ```yaml
-metric_refs:
-  - metis.library.metrics.RoutingAccuracyMetric
-  - metis.library.metrics.TurnBudgetMetric:
-      max_turns: 8
+metric_fqn: metis.library.metrics.TurnBudgetMetric
+metric_args:
+  max_turns: 8
 ```
 
 ## Classification via tags
@@ -39,7 +38,7 @@ The engine routes metrics automatically by type:
 - **Session metrics** (`BaseConversationalMetric` subclasses, tagged `"session-level"`) run against the full multi-turn `ConversationalTestCase` for each session.
 - **Per-turn metrics** (tagged `"per-turn"`) run against each individual `LLMTestCase`.
 
-Both can be listed together in `experiment.yaml` — no annotation needed.
+Both can be listed together in `specification.yaml` — no annotation needed.
 
 ## File layout
 

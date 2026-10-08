@@ -125,7 +125,7 @@ else
 fi
 ```
 
-Do not rebuild state from the visible Profile or from an abbreviated response example.
+Do not rebuild state from the visible Specification or from an abbreviated response example.
 
 ## Answer a turn
 
@@ -225,11 +225,11 @@ options can change after every turn.
 ## Finish and create the output
 
 A normal final `/interview/turn` can return `outcome: "done"`. You can then compile or package the
-Profile.
+Specification.
 
 ### Finish early
 
-`POST /interview/end` asks the Wizard to complete the remaining work and validate the Profile. It
+`POST /interview/end` asks the Wizard to complete the remaining work and validate the Specification. It
 is optional.
 
 Send the complete saved state from `interview.json`, then save the successful result back to the
@@ -253,7 +253,7 @@ A successful response has two possible outcomes:
 | Outcome | Next action |
 |---|---|
 | `awaiting_response` | Save the returned state and continue with `/interview/turn`. |
-| `done` | Compile or package `state.profile`. |
+| `done` | Compile or package `state.specification`. |
 
 HTTP 200 confirms that the operation succeeded. Check `outcome` to learn whether the Interview is
 complete. If the Wizard cannot complete the Interview, the API returns HTTP 400 with the code
@@ -265,13 +265,13 @@ Use either endpoint after `/turn` or `/end` returns `done`.
 
 | Endpoint | Input | Output | Use |
 |---|---|---|---|
-| `POST /compile` | `state.profile` as JSON | `profile.yaml` and `experiment.yaml` as JSON string values | Store or display YAML yourself. |
-| `POST /package` | Profile JSON form field and fixture file parts | `experiment.zip` | Download a portable specification. |
+| `POST /compile` | `state.specification` as JSON | `specification.yaml` as a string and `specification` with assigned Task IDs | Store or display YAML yourself. |
+| `POST /package` | Specification JSON form field and fixture file parts | `specification.zip` | Download a portable specification. |
 
 Compile directly from `interview.json`:
 
 ```bash
-jq '.state.profile' interview.json | \
+jq '.state.specification' interview.json | \
   curl --fail-with-body http://localhost:8001/api/v1/wizard/compile \
     -H 'Content-Type: application/json' \
     --data-binary @-
@@ -280,14 +280,14 @@ jq '.state.profile' interview.json | \
 Package directly from `interview.json`:
 
 ```bash
-jq -c '.state.profile' interview.json | \
+jq -c '.state.specification' interview.json | \
   curl --fail-with-body http://localhost:8001/api/v1/wizard/package \
-    -F 'profile=<-' \
-    --output experiment.zip
+    -F 'specification=<-' \
+    --output specification.zip
 ```
 
-Add one `-F 'files=@<path>'` part for each original fixture referenced by the completed Profile.
-The ZIP contains `profile.yaml`, `experiment.yaml`, and `fixtures/`. The API retains no uploaded
+Add one `-F 'files=@<path>'` part for each original fixture referenced by the completed Specification.
+The ZIP contains `specification.yaml` and `fixtures/`. The API retains no uploaded
 bytes.
 
 ## Handle errors and resume
@@ -302,7 +302,7 @@ a safe `state` and `missing` entries.
 | 400 | `no_pending_request` | Check `outcome`; a complete Interview can be compiled or packaged. |
 | 400 or 422 | `validation_error` | Correct the request fields or types. |
 | 400 | `completion_failed` | Read `missing` and continue the Interview. |
-| 400 | `compilation_failed` | Supply a runnable Profile and all referenced fixture files. |
+| 400 | `compilation_failed` | Supply a runnable Specification and all referenced fixture files. |
 | 400 | Document error codes | Correct the file type, content, count, or size using limits from `/config`. |
 | 503 | `model_unavailable` | Keep saved state and retry when `retryable` is true. |
 | 500 | `internal_error` | Keep saved state and inspect the API logs. |
@@ -313,3 +313,8 @@ successful file. Use a returned safe state to prepare the corrected request.
 To resume, load `interview.json`, check `outcome`, and read `state.pending`. The API needs no
 server-side Interview ID. Process one request at a time. Keep a separate display transcript when
 you need the complete conversation; Interview state contains only recent history.
+
+Keep the `specification` returned by `/compile` when the request contains new Tasks
+with blank IDs. Submit that Specification on later edits and to `/package`. Task IDs
+are assigned by the backend and must remain stable. Copying a Task requires a
+new ID. `specification.yaml` is the only YAML file in the archive.

@@ -68,16 +68,16 @@ Document facts:
 - The browser shows the accepted file types and size limits.
 - The API extracts text from UTF-8 TXT, Markdown, PDF text layers, and DOCX files.
 - The API does not run OCR. Scanned PDFs give no text.
-- The Wizard can suggest an opening document as a Scenario fixture. Review each suggestion under
+- The Wizard can suggest an opening document as a Test Case fixture. Review each suggestion under
   **Files sent to your system**.
-- The final package contains only files that a Scenario uses.
+- The final package contains only files that a Test Case uses.
 
 ## Finish and download
 
 1. Answer each Interview screen.
-2. Review the final Personas and Scenarios.
+2. Review the final Personas, Scenarios, and Test Cases.
 3. Select **Continue** on the final review screen to complete the Interview.
-4. Select **Download specification** to download `experiment.zip`.
+4. Select **Download specification** to download `specification.zip`.
 
 To finish early, select **Skip interview and download specification**. The Wizard checks whether
 the specification is ready. It can ask for more information or a document review before it
@@ -86,13 +86,12 @@ completes the Interview.
 The archive contains:
 
 ```text
-experiment.zip
-├── experiment.yaml
-├── profile.yaml
+specification.zip
+├── specification.yaml
 └── fixtures/
 ```
 
-The browser sends only the original fixture files that the current Scenarios use. The API builds
+The browser sends only the original fixture files that the current Tasks use. The API builds
 the archive for that request and does not keep the files.
 
 ## Write the Experiment directly
@@ -102,18 +101,22 @@ Interview and creates no Interview record.
 
 1. Select **Write it yourself**.
 2. Set the Experiment ID and description.
-3. Add Personas and Scenarios from each section header. Set trial counts, Persona references,
-   fixture files, and scorers.
-4. Select **Done** to close an item editor. Select **Edit** to open it again.
-5. Select **Download experiment.zip**.
+3. Define Personas and Scenarios in their sections.
+4. Select **Add test case**. Select one Persona and one Scenario,
+   and set its Trial count, scorers, and files. Add more test cases as needed.
+5. Select **Download specification**.
+
 
 Editor rules:
 
-- A new Scenario selects all named Personas.
-- A new Persona is added to all existing Scenarios.
+- Select **Done** to close a Persona editor. Select **Edit** to open it again.
+- Each test case selects exactly one Persona and one Scenario.
+- Multiple test cases can use the same pair with different settings or files.
+- Renaming a Persona or Scenario updates its test case references. Removing one
+  clears those selections. Select a replacement before you download.
+- Each Scenario needs at least one test case.
 
-The archive contains a runnable `experiment.yaml`, the selected fixtures, and a small supporting
-`profile.yaml` for report generation.
+The archive contains a complete `specification.yaml` and the selected fixtures.
 
 ## Browser storage and current limits
 
@@ -132,3 +135,7 @@ The archive contains a runnable `experiment.yaml`, the selected fixtures, and a 
 
 - `make check-web` runs the web checks.
 - `make build-web` makes a production build.
+
+Scorer settings in the manual form accept a JSON object. The downloaded document
+stores these settings on Criteria. Each test case becomes one Task in the YAML. The form retains Task IDs returned
+by the backend through later edits.

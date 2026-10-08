@@ -27,6 +27,43 @@ survives past — the coordinated v1.0 release.
 
 ## Migrating to v1.0 (from v0.x)
 
+### Shared specification (core, engine, wizard, API, and web)
+
+Use `metis.core.profile.ProductProfile` for Product context, Features, Behaviours,
+and Criteria. Use `metis.core.experiment.Experiment` for the execution plan.
+`metis.core.specification.Specification` combines both.
+The wizard persistence model is `metis.wizard.domain.specification.Specification`.
+
+Merge the old `profile.yaml` and `experiment.yaml` into `specification.yaml`.
+Keep `schema_version: 2` on `next`. Use the complete example in
+`packages/engine/example-experiment/specification.yaml` as the reference.
+
+- Keep `id` and `runner_factory_ref`. Use `product.description` for the description.
+- Keep the Product → Feature → Behaviour → Criterion hierarchy and `measured` state.
+- Put each Grader FQN and argument map on its Criterion as `metric_fqn` and
+  `metric_args`. Use separate Criteria for different requirements or settings.
+  Every Criterion needs a Grader, including dormant Criteria.
+- Keep only ID, name, and description on each Scenario. Create a Task for each
+  selected Scenario and Persona pair. Move fixtures and Trial counts to that Task.
+  Select Criteria with `criterion_refs`. Give each Task a unique, stable ID.
+- Derive coverage through Task → Criterion → Behaviour. Every Scenario needs a
+  Task, and every measured Behaviour needs coverage. Engine execution limits keep
+  their defaults.
+- Use `InterviewState.specification` for the complete document and the
+  `specification` form field for `/package`.
+- Use `/compile` response keys `specification.yaml` and `specification`. Retain the returned
+  Specification so later edits keep Task IDs. ZIP exports contain one YAML and `fixtures/`.
+- Recreate old browser drafts with the current format. Old drafts with `state.profile` or without Tasks are
+  not valid current Interview state. There is no automatic conversion.
+- Start a new run after conversion. Old run records have no Task/Criterion identity
+  and cannot supply the current result attribution. Resume uses the frozen new
+  specification. Report plans now contain `tasks`; scores and evidence retain
+  Task, Trial, Criterion, Grader FQN, and Grader arguments.
+
+The domain `Task` below was previously used for a product function. That older
+concept is now `Feature`. The current Task is an explicit Test Case.
+
+
 ### metis-wizard
 
 #### `Task` renamed to `Feature`
@@ -43,7 +80,7 @@ Saved browser Interviews that use profile schema version 1 cannot resume. Start 
 Interview. Keep a backup of any saved state before conversion; its pending patches and
 history can also contain paths with `tasks[...]`.
 
-The wizard compiles `experiment.yaml` with `schema_version: 2`. Reports change too; see
+The wizard compiles `specification.yaml` with `schema_version: 2`. Reports change too; see
 [Schema versions are now `2`](#schema-versions-are-now-2).
 
 #### `runs` renamed to `trials`
@@ -53,16 +90,14 @@ evaluation glossary. The arithmetic is unchanged; only the names change.
 
 **Python API**
 
-- `ProductProfile.run_count()` → `ProductProfile.trial_count()`
+- `ProductProfile.run_count()` → `Specification.trial_count()`
 - module `metis.wizard.application.runs` → `metis.wizard.application.trials`
 - `format_runs()` → `format_trials()`
 
-The compiled `experiment.yaml` is unchanged.
-
 #### Profile models standardised on one shape
 
-Every profile entity (task, behaviour, criterion, persona, scenario) now exposes
-the same `name` + `description` pair through a shared `ProfileNode` base, and the
+Every named specification entity (feature, behaviour, criterion, persona, scenario) now exposes
+the same `name` + `description` pair through a shared `NamedNode` base, and the
 behaviour tick and the product summary are renamed for clarity.
 
 **Python API**
@@ -74,8 +109,6 @@ behaviour tick and the product summary are renamed for clarity.
 - A criterion's `description` is now a structured `CriterionDescription`
   (`given` / `when` / `then`) instead of a flat string. Use
   `str(criterion.description)` for the old flat "Given …, when …, then …." text.
-
-The compiled `experiment.yaml` is unchanged.
 
 #### The interview is now stateless and file-free
 
@@ -90,9 +123,9 @@ machinery, which are gone.
   `InterviewStartRequest`, `InterviewTurnRequest`, or `InterviewEndRequest`. It returns the next
   `InterviewState` with a derived stage, or a typed
   failure with a stable error code and the caller's state unchanged.
-- Call `compile_profile(profile)` to get the `profile.yaml` and `experiment.yaml`
-  strings in memory.
-- Call `package_specification(profile, fixtures)` to get one in-memory `experiment.zip` with the
+- Call `compile_specification(specification)` to get the `specification.yaml` string and the Specification
+  with assigned Task IDs in memory.
+- Call `package_specification(specification, fixtures)` to get one in-memory `specification.zip` with the
   validated fixture bytes under `fixtures/`.
 - `SpecificationFixture` now takes a `stream` binary file object instead of a `content` byte
   string. The packager consumes streams in bounded chunks; the caller owns and closes them.
@@ -144,10 +177,10 @@ _No breaking changes in v1.0._
 
 #### Schema versions are now `2`
 
-v1 marks its break from v0 with one schema version bump. `experiment.yaml`, run records
-(`record.json`), and the report schema (`Report v2`) now use version `2`, the same as
-`profile.yaml`. Set `schema_version: 2` in each `experiment.yaml`. The engine refuses run
-records from v0; run the simulation again to create new records.
+v1 marks its break from v0 with one schema version bump. `specification.yaml`, run records
+(`record.json`), and the report schema (`Report v2`) now use version `2`. Set
+`schema_version: 2` in each `specification.yaml`. The engine refuses run records from v0;
+run the simulation again to create new records.
 
 Report JSON now uses `features` at the root, in `resultTable`, and in trial outcome
 items. Update report consumers and regenerate reports.
@@ -169,9 +202,9 @@ previously targeted the retired web project with `npm --prefix apps/web run dev`
 `npm --prefix apps/web run build`, and `npm --prefix apps/web run check:api`. Start `metis-api` on
 port 8001 (or set `METIS_API_ORIGIN` for another origin). Interview lists, state, and the display
 transcript and fixture Blobs are browser-local; there is no server Interview list to migrate and no
-cross-device state. A completed Interview downloads one `experiment.zip` containing the two YAML
-documents and its validated `fixtures/` files. The API retains no fixture bytes.
-Use `make web-check` for non-mutating web checks and `make web-build` for the production bundle.
-The web gets optional metric details from `GET /api/v1/metrics` after a Profile contains a
-Criterion. Direct authoring, source analysis, hosted state, authentication, and evaluation execution
-remain deferred.
+cross-device state. A completed Interview downloads one `specification.zip` containing
+`specification.yaml` and its validated `fixtures/` files. The API retains no fixture bytes.
+Use `make check-web` for non-mutating web checks and `make build-web` for the production bundle.
+The web gets optional metric details from `GET /api/v1/metrics` after a Specification contains a
+Criterion. The manual form supports direct authoring. Source analysis, hosted state,
+authentication, and evaluation execution remain deferred.

@@ -10,13 +10,13 @@ never enter that state.
 The client has two authoring paths. The Interview is the guided path. The manual form
 (`ManualForm.tsx`, with its pure logic in `manual.ts` and its file rules in `fixture-policy.ts`) is
 the direct path for a user who already knows the scorers to run. Keep the manual form flat: do not
-show Feature, Behaviour, or Criterion. It builds a `ProductProfile` in the browser and sends it to the
+show Feature, Behaviour, or Criterion. It builds a `Specification` in the browser and sends it to the
 existing package route, so it needs no new route and no Interview record.
 `docs/guide/wizard/web.md` describes it for the user.
 
-For this first version, the manual form asks only for what an engine run absolutely needs. The
-engine runs from `experiment.yaml`; the fuller `ProductProfile` is used only at report generation.
-The synthesized Profile is minimal for that reason, not by oversight.
+The manual form builds the complete `Specification` for `specification.yaml`. Both execution
+and reporting use that document. Compile assigns IDs to new Tasks. Retain the returned IDs
+for later edits and packaging. Scorer settings are stored on Criteria in the exported Specification.
 
 Render requests by their discriminator and supplied fields. Do not derive stages, apply patches, or
 recreate wizard validation rules in TypeScript. Regenerate `src/generated/api.ts` from FastAPI's
