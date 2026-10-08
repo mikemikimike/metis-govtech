@@ -1,5 +1,5 @@
 // The end of the interview, marked in the conversation. Download remains available from the
-// completed Profile pane.
+// completed Specification pane.
 
 import { PartyPopper } from "lucide-react";
 import { Panel } from "./ui";

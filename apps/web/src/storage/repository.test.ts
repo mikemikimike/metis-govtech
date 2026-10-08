@@ -23,8 +23,12 @@ after(() => {
 });
 
 const state: InterviewState = {
-  profile: {
+  specification: {
     schema_version: 2,
+    id: "test",
+    runner_factory_ref:
+      "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+    tasks: [],
     product: { name: "", users: "", description: "", detail: "" },
     features: [],
     personas: [],
@@ -243,31 +247,38 @@ test("fixture Blobs are isolated between local Interviews", async () => {
 
 test("removing a fixture reference keeps a Blob used by another scenario", () => {
   const fixture = new File(["shared"], "shared.txt");
-  const profile = {
-    ...state.profile,
-    scenarios: [
+  const specification = {
+    ...state.specification,
+    tasks: [
       {
         id: "S-1",
-        name: "First",
+
         description: "First scenario",
-        behaviour_refs: [],
-        persona_refs: [],
+        scenario_ref: "S-1",
+        persona_ref: "P-1",
+        criterion_refs: [],
         fixtures: ["shared.txt"],
         num_trials: 1,
       },
       {
         id: "S-2",
-        name: "Second",
+
         description: "Second scenario",
-        behaviour_refs: [],
-        persona_refs: [],
+        scenario_ref: "S-1",
+        persona_ref: "P-1",
+        criterion_refs: [],
         fixtures: ["shared.txt"],
         num_trials: 1,
       },
     ],
   };
   const record = addFixtures(
-    emptyRecord("fixture-reference", { ...state, profile }, "scenarios", []),
+    emptyRecord(
+      "fixture-reference",
+      { ...state, specification },
+      "scenarios",
+      [],
+    ),
     [fixture],
   );
 
@@ -279,9 +290,9 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
       ...record,
       state: {
         ...record.state,
-        profile: {
-          ...record.state.profile,
-          scenarios: record.state.profile.scenarios.map((scenario) => ({
+        specification: {
+          ...record.state.specification,
+          tasks: record.state.specification.tasks.map((scenario) => ({
             ...scenario,
             fixtures: [],
           })),

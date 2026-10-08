@@ -180,6 +180,11 @@
     },
     "Criterion": {
       "properties": {
+        "metric_args": {
+          "additionalProperties": true,
+          "title": "Metric Args",
+          "type": "object"
+        },
         "given": {
           "title": "Given",
           "type": "string"
@@ -338,6 +343,31 @@
     },
     "EvidenceItem": {
       "properties": {
+        "task_id": {
+          "default": "",
+          "title": "Task Id",
+          "type": "string"
+        },
+        "trial_index": {
+          "default": 1,
+          "title": "Trial Index",
+          "type": "integer"
+        },
+        "criterion_id": {
+          "default": "",
+          "title": "Criterion Id",
+          "type": "string"
+        },
+        "metric_fqn": {
+          "default": "",
+          "title": "Metric Fqn",
+          "type": "string"
+        },
+        "metric_args": {
+          "additionalProperties": true,
+          "title": "Metric Args",
+          "type": "object"
+        },
         "status": {
           "title": "Status",
           "type": "string"
@@ -492,23 +522,27 @@
           "title": "Personas",
           "type": "array"
         },
-        "scenarios": {
+        "tasks": {
           "items": {
-            "$ref": "#/$defs/PlanScenario"
+            "$ref": "#/$defs/PlanTask"
           },
-          "title": "Scenarios",
+          "title": "Tasks",
           "type": "array"
         }
       },
       "required": [
         "personas",
-        "scenarios"
+        "tasks"
       ],
       "title": "Plan",
       "type": "object"
     },
-    "PlanScenario": {
+    "PlanTask": {
       "properties": {
+        "scenario": {
+          "title": "Scenario",
+          "type": "string"
+        },
         "id": {
           "title": "Id",
           "type": "string"
@@ -549,6 +583,7 @@
         }
       },
       "required": [
+        "scenario",
         "id",
         "personas",
         "trials",
@@ -558,7 +593,7 @@
         "metricsAsked",
         "metricsScored"
       ],
-      "title": "PlanScenario",
+      "title": "PlanTask",
       "type": "object"
     },
     "ResultTable": {
@@ -631,6 +666,16 @@
     },
     "ResultTableRow": {
       "properties": {
+        "task_id": {
+          "default": "",
+          "title": "Task Id",
+          "type": "string"
+        },
+        "trial_index": {
+          "default": 1,
+          "title": "Trial Index",
+          "type": "integer"
+        },
         "id": {
           "title": "Id",
           "type": "string"
@@ -789,6 +834,16 @@
     },
     "Trial": {
       "properties": {
+        "task_id": {
+          "default": "",
+          "title": "Task Id",
+          "type": "string"
+        },
+        "trial_index": {
+          "default": 1,
+          "title": "Trial Index",
+          "type": "integer"
+        },
         "id": {
           "title": "Id",
           "type": "string"

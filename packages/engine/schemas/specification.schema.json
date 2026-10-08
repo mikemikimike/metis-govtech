@@ -180,6 +180,8 @@
       "type": "object"
     },
     "Scenario": {
+      "additionalProperties": false,
+      "description": "The situation in which Tasks evaluate the product.",
       "properties": {
         "id": {
           "title": "Id",
@@ -192,20 +194,31 @@
         "description": {
           "title": "Description",
           "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "Scenario",
+      "type": "object"
+    },
+    "Task": {
+      "additionalProperties": false,
+      "description": "One test case. Identity survives edits to its references and inputs.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
         },
-        "behaviour_refs": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Behaviour Refs",
-          "type": "array"
+        "scenario_ref": {
+          "title": "Scenario Ref",
+          "type": "string"
         },
-        "persona_refs": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Persona Refs",
-          "type": "array"
+        "persona_ref": {
+          "title": "Persona Ref",
+          "type": "string"
         },
         "fixtures": {
           "items": {
@@ -218,24 +231,38 @@
           "default": 3,
           "title": "Num Trials",
           "type": "integer"
+        },
+        "criterion_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Criterion Refs",
+          "type": "array"
         }
       },
       "required": [
         "id",
-        "name",
-        "description"
+        "scenario_ref",
+        "persona_ref"
       ],
-      "title": "Scenario",
+      "title": "Task",
       "type": "object"
     }
   },
-  "description": "The whole document. Every feature in it was discovered from the interview.",
+  "description": "Required metadata for an executable specification document.",
   "properties": {
     "schema_version": {
       "const": 2,
-      "default": 2,
       "title": "Schema Version",
       "type": "integer"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "runner_factory_ref": {
+      "title": "Runner Factory Ref",
+      "type": "string"
     },
     "product": {
       "$ref": "#/$defs/Product"
@@ -260,11 +287,28 @@
       },
       "title": "Scenarios",
       "type": "array"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/Task"
+      },
+      "title": "Tasks",
+      "type": "array"
+    },
+    "fixture_content_descriptions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Fixture Content Descriptions",
+      "type": "object"
     }
   },
   "required": [
+    "schema_version",
+    "id",
+    "runner_factory_ref",
     "product"
   ],
-  "title": "ProductProfile v2",
+  "title": "Specification v2",
   "type": "object"
 }

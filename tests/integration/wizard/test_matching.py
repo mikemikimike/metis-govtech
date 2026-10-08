@@ -11,10 +11,10 @@ from metis.wizard.application.matching import (
     GENERATED_JUDGE_FQN,
     EmbeddingMatcher,
     library_catalogue,
-    match_profile,
+    match_specification,
 )
 from metis.wizard.contracts import Criterion, MetricSpec
-from tests.fixtures.wizard.profiles import research_assistant
+from tests.fixtures.wizard.specifications import research_assistant
 
 
 class FakeEmbedder:
@@ -175,17 +175,17 @@ def test_an_unavailable_provider_degrades_rather_than_blocking() -> None:
 def test_a_degraded_run_still_produces_a_loadable_experiment(tmp_path) -> None:
     from metis.wizard.application.compile import write_experiment
 
-    profile = research_assistant()
-    for behaviour in profile.measured_behaviours():
+    specification = research_assistant()
+    for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None
 
     matcher = EmbeddingMatcher(
         embedder=FakeEmbedder([], fails=True), specs=[CITATION], threshold=0.5
     )
-    match_profile(profile, matcher)
+    match_specification(specification, matcher)
 
-    write_experiment(profile, "degraded", tmp_path / "experiment.yaml")
+    write_experiment(specification, "degraded", tmp_path / "specification.yaml")
 
     from metis.engine.cli import _validate_inputs
 
@@ -194,39 +194,39 @@ def test_a_degraded_run_still_produces_a_loadable_experiment(tmp_path) -> None:
     _validate_inputs(tmp_path)  # sys.exit(1) on any problem, so returning is the pass
 
 
-# ── matching over a whole profile ──────────────────────────────────────────
+# ── matching over a whole specification ──────────────────────────────────────────
 
 
 def test_only_criteria_without_a_metric_are_matched() -> None:
     """Re-matching a criterion that already has a metric would be a wasted call."""
-    profile = research_assistant()
+    specification = research_assistant()
     embedder = FakeEmbedder(["source"])
     matcher = EmbeddingMatcher(embedder=embedder, specs=[CITATION], threshold=0.5)
 
-    matched = match_profile(profile, matcher)
+    matched = match_specification(specification, matcher)
 
     assert matched == 0  # the fixture already has metrics on everything
 
 
-def test_unticked_behaviours_are_not_matched() -> None:
+def test_dormant_criteria_also_have_graders() -> None:
     """Nothing is generated for behaviours nobody picked, matching included."""
-    profile = research_assistant()
-    unticked = profile.behaviour("EB-2")
+    specification = research_assistant()
+    unticked = specification.behaviour("EB-2")
     assert unticked is not None
     unticked.criteria[0].metric_fqn = None
     matcher = EmbeddingMatcher(
         embedder=FakeEmbedder(["source"]), specs=[CITATION], threshold=0.5
     )
 
-    match_profile(profile, matcher)
+    match_specification(specification, matcher)
 
-    assert unticked.criteria[0].metric_fqn is None
+    assert unticked.criteria[0].metric_fqn is not None
 
 
 def test_rematching_a_criterion_is_silent_and_free() -> None:
     """The matcher chose the previous value, so re-choosing takes nothing from the user."""
-    profile = research_assistant()
-    criterion = profile.behaviour("EB-1").criteria[0]  # type: ignore[union-attr]
+    specification = research_assistant()
+    criterion = specification.behaviour("EB-1").criteria[0]  # type: ignore[union-attr]
     matcher = EmbeddingMatcher(
         embedder=FakeEmbedder(["turn"]), specs=[TURNS], threshold=0.5
     )

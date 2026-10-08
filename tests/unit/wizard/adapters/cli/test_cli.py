@@ -16,7 +16,7 @@ from metis.wizard.application.matching import GENERATED_JUDGE_FQN, EmbeddingMatc
 from metis.wizard.contracts import ChoiceRequest, InterviewState, Option, OptionId
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
-from tests.fixtures.wizard.profiles import research_assistant
+from tests.fixtures.wizard.specifications import research_assistant
 
 
 class StubInterviewer:
@@ -35,7 +35,7 @@ def _state_pending_at(stage: InterviewStep) -> InterviewState:
         options=[Option(id=OptionId(action="accept"), label="Looks right")],
     )
     return InterviewState(
-        profile=research_assistant(), context=interview_context(), pending=request
+        specification=research_assistant(), context=interview_context(), pending=request
     )
 
 
@@ -54,7 +54,7 @@ def test_the_spinner_uses_the_package_status_copy_for_the_pending_stage() -> Non
 def test_resume_reports_the_pending_request_stage(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    """A pending request is authoritative even when Profile evidence points elsewhere."""
+    """A pending request is authoritative even when Specification evidence points elsewhere."""
     from typer.testing import CliRunner
 
     from metis.wizard.adapters.cli import render as render_module
@@ -104,7 +104,7 @@ def test_a_retryable_failure_is_resent_when_the_user_agrees(
     )
     done = InterviewSuccess(
         state=InterviewState(
-            profile=research_assistant(),
+            specification=research_assistant(),
             context=interview_context(),
             confirmed=True,
         ),
@@ -198,56 +198,53 @@ def test_the_matcher_uses_the_same_gateway() -> None:
     assert matcher.embedder is interviewer  # type: ignore[attr-defined]
 
 
-def test_an_unmatched_profile_loses_the_users_metrics() -> None:
+def test_an_unmatched_specification_loses_the_users_metrics() -> None:
     """The failure the wiring prevents, stated as a fact rather than a warning.
 
     Without a matcher every criterion keeps metric_fqn=None, and the result is a file that
     validates and loads, and measures nothing at all.
     """
-    profile = research_assistant()
-    for behaviour in profile.measured_behaviours():
+    specification = research_assistant()
+    for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None  # what a turn leaves behind with no matcher
 
-    document = compile_experiment(profile, "unmatched")
+    from metis.wizard.application.compile import CompilationError
 
-    assert all(t["metric_refs"] == [] for t in document["scenarios"])
+    with pytest.raises(CompilationError, match="needs a Grader"):
+        compile_experiment(specification, "unmatched")
 
 
-def test_a_matched_profile_keeps_them() -> None:
-    """The same profile, matched — every scenario carries the metrics its behaviours earned."""
-    from metis.wizard.application.matching import match_profile
+def test_a_matched_specification_keeps_them() -> None:
+    """The same specification, matched — every scenario carries the metrics its behaviours earned."""
+    from metis.wizard.application.matching import match_specification
 
-    profile = research_assistant()
-    for behaviour in profile.measured_behaviours():
+    specification = research_assistant()
+    for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None
 
-    match_profile(profile, cli._matcher(StubInterviewer()))  # type: ignore[arg-type]
-    document = compile_experiment(profile, "matched")
+    match_specification(specification, cli._matcher(StubInterviewer()))  # type: ignore[arg-type]
+    document = compile_experiment(specification, "matched")
 
     # the stub embeds everything identically, so matches land on the fallback or a real
     # metric — either way every scenario ends up measured by something, which is the whole
     # difference from the unmatched case above.
-    for scenario in document["scenarios"]:
-        assert scenario["metric_refs"]
-    assert all(
-        ref for scenario in document["scenarios"] for ref in scenario["metric_refs"]
-    )
+    assert all(task["criterion_refs"] for task in document["tasks"])
 
 
 def test_every_criterion_ends_up_measured_by_something() -> None:
     """A criterion with no metric is a criterion nothing checks. There should be none."""
-    from metis.wizard.application.matching import match_profile
+    from metis.wizard.application.matching import match_specification
 
-    profile = research_assistant()
-    for behaviour in profile.measured_behaviours():
+    specification = research_assistant()
+    for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
             criterion.metric_fqn = None
 
-    match_profile(profile, cli._matcher(StubInterviewer()))  # type: ignore[arg-type]
+    match_specification(specification, cli._matcher(StubInterviewer()))  # type: ignore[arg-type]
 
-    for behaviour in profile.measured_behaviours():
+    for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
             assert criterion.metric_fqn
             assert (

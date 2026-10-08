@@ -1,7 +1,7 @@
-"""The shared Profile-readiness rules.
+"""The shared Specification-readiness rules.
 
 Stage derivation, the Scenario screen gate, best-effort finish and compile preflight all ask about
-the same Profile. The complete collector owns the objective gaps; the Scenario helper owns the
+the same Specification. The complete collector owns the objective gaps; the Scenario helper owns the
 engine-facing Scenario rules. Keeping both here stops the application from growing several
 slightly different definitions of "ready".
 
@@ -18,7 +18,7 @@ from metis.wizard.contracts.turn import MissingData, MissingDataCode
 from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
-    from metis.wizard.domain.profile import ProductProfile
+    from metis.wizard.domain.specification import Specification
 
 # The engine schema bounds a scenario's trial count; the Scenario screen's stepper enforces the
 # same range door-side. Kept here so the screen and the readiness check cannot disagree on it.
@@ -26,15 +26,15 @@ TRIALS_MIN = 1
 TRIALS_MAX = 20
 
 
-def scenario_readiness(profile: ProductProfile) -> list[MissingData]:
+def scenario_readiness(specification: Specification) -> list[MissingData]:
     """Every reason the Scenario list is not yet runnable, in user-facing order.
 
     Order mirrors how a person reads the screen: the behaviours left uncovered first, then each
-    scenario's own faults. An empty list means the Profile passes the Scenario gate.
+    scenario's own faults. An empty list means the Specification passes the Scenario gate.
     """
     gaps: list[MissingData] = []
 
-    if not profile.scenarios:
+    if not specification.scenarios:
         gaps.append(
             _gap(
                 MissingDataCode.NO_SCENARIOS,
@@ -44,11 +44,10 @@ def scenario_readiness(profile: ProductProfile) -> list[MissingData]:
         )
         return gaps
 
-    measured = {behaviour.id for behaviour in profile.measured_behaviours()}
-    persona_ids = {persona.id for persona in profile.personas}
+    persona_ids = {persona.id for persona in specification.personas}
 
     # A measured behaviour no scenario exercises is measured on nothing.
-    for behaviour in profile.uncovered():
+    for behaviour in specification.uncovered():
         gaps.append(
             _gap(
                 MissingDataCode.BEHAVIOUR_UNCOVERED,
@@ -57,57 +56,60 @@ def scenario_readiness(profile: ProductProfile) -> list[MissingData]:
             )
         )
 
-    for scenario in profile.scenarios:
-        if not set(scenario.behaviour_refs) & measured:
-            gaps.append(
-                _gap(
-                    MissingDataCode.SCENARIO_NO_SELECTED_BEHAVIOUR,
-                    scenario.id,
-                    f"{scenario.id} covers no selected behaviour.",
-                )
-            )
-
-        # The schema declares persona_refs with minItems 1, so an empty run list is a file the
-        # engine refuses to load.
-        if not scenario.persona_refs:
+    for scenario in specification.scenarios:
+        if not any(t.scenario_ref == scenario.id for t in specification.tasks):
             gaps.append(
                 _gap(
                     MissingDataCode.SCENARIO_NO_PERSONA,
                     scenario.id,
-                    f"{scenario.id} has nobody to run it.",
+                    f"{scenario.id} needs a Task.",
                 )
             )
-
-        # A client-held state could carry a reference the Profile no longer has; the screen
-        # never composes one, but preflight must not trust that.
-        unknown = [
-            ref for ref in scenario.behaviour_refs if profile.behaviour(ref) is None
-        ] + [ref for ref in scenario.persona_refs if ref not in persona_ids]
-        if unknown:
+    for task in specification.tasks:
+        if not task.criterion_refs or not all(
+            specification.criterion(ref)
+            and any(
+                c.id == ref
+                for b in specification.measured_behaviours()
+                for c in b.criteria
+            )
+            for ref in task.criterion_refs
+        ):
+            gaps.append(
+                _gap(
+                    MissingDataCode.SCENARIO_NO_SELECTED_BEHAVIOUR,
+                    task.id,
+                    f"{task.id} needs Criteria from a measured Behaviour.",
+                )
+            )
+        if (
+            task.persona_ref not in persona_ids
+            or not specification.scenario(task.scenario_ref)
+            or any(specification.criterion(ref) is None for ref in task.criterion_refs)
+        ):
             gaps.append(
                 _gap(
                     MissingDataCode.SCENARIO_UNKNOWN_REFERENCE,
-                    scenario.id,
-                    f"{scenario.id} refers to something that no longer exists.",
+                    task.id,
+                    f"{task.id} has an unknown reference.",
                 )
             )
-
-        if not TRIALS_MIN <= scenario.num_trials <= TRIALS_MAX:
+        if not TRIALS_MIN <= task.num_trials <= TRIALS_MAX:
             gaps.append(
                 _gap(
                     MissingDataCode.SCENARIO_INVALID_TRIALS,
-                    scenario.id,
-                    f"{scenario.id} needs between {TRIALS_MIN} and {TRIALS_MAX} trials.",
+                    task.id,
+                    f"{task.id} needs between 1 and 20 Trials.",
                 )
             )
 
     return gaps
 
 
-def profile_readiness(profile: ProductProfile) -> list[MissingData]:
-    """Return all objective gaps before a Profile can produce a runnable experiment."""
+def specification_readiness(specification: Specification) -> list[MissingData]:
+    """Return all objective gaps before a Specification can produce a runnable experiment."""
     gaps: list[MissingData] = []
-    if not profile.product.name or not profile.product.description:
+    if not specification.product.name or not specification.product.description:
         gaps.append(
             MissingData(
                 code=MissingDataCode.PRODUCT_INCOMPLETE,
@@ -116,7 +118,7 @@ def profile_readiness(profile: ProductProfile) -> list[MissingData]:
             )
         )
 
-    if not profile.features or not profile.behaviours():
+    if not specification.features or not specification.behaviours():
         gaps.append(
             MissingData(
                 code=MissingDataCode.BEHAVIOURS_INCOMPLETE,
@@ -124,7 +126,7 @@ def profile_readiness(profile: ProductProfile) -> list[MissingData]:
                 message="At least one Feature and Behaviour are required.",
             )
         )
-    elif not profile.measured_behaviours():
+    elif not specification.measured_behaviours():
         gaps.append(
             MissingData(
                 code=MissingDataCode.NO_MEASURED_BEHAVIOUR,
@@ -133,7 +135,7 @@ def profile_readiness(profile: ProductProfile) -> list[MissingData]:
             )
         )
 
-    for behaviour in profile.measured_behaviours():
+    for behaviour in specification.measured_behaviours():
         if not behaviour.criteria:
             gaps.append(
                 MissingData(
@@ -144,7 +146,7 @@ def profile_readiness(profile: ProductProfile) -> list[MissingData]:
                 )
             )
 
-    if not profile.personas:
+    if not specification.personas:
         gaps.append(
             MissingData(
                 code=MissingDataCode.NO_PERSONAS,
@@ -153,7 +155,7 @@ def profile_readiness(profile: ProductProfile) -> list[MissingData]:
             )
         )
 
-    gaps.extend(scenario_readiness(profile))
+    gaps.extend(scenario_readiness(specification))
     return gaps
 
 

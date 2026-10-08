@@ -10,6 +10,8 @@ updated schema files.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 _REPORT_VERSION = 2
@@ -36,6 +38,8 @@ class ConversationTurn(BaseModel):
 
 
 class Trial(BaseModel):
+    task_id: str = ""
+    trial_index: int = 1
     id: str
     session: str
     persona: str
@@ -80,7 +84,8 @@ class Scores(BaseModel):
     trialSuccess: TrialSuccess
 
 
-class PlanScenario(BaseModel):
+class PlanTask(BaseModel):
+    scenario: str
     id: str
     personas: list[str]
     trials: int
@@ -93,7 +98,7 @@ class PlanScenario(BaseModel):
 
 class Plan(BaseModel):
     personas: list[str]
-    scenarios: list[PlanScenario]
+    tasks: list[PlanTask]
 
 
 class AxisRow(BaseModel):
@@ -128,6 +133,11 @@ class BlankCause(BaseModel):
 
 
 class EvidenceItem(BaseModel):
+    task_id: str = ""
+    trial_index: int = 1
+    criterion_id: str = ""
+    metric_fqn: str = ""
+    metric_args: dict[str, Any] = Field(default_factory=dict)
     status: str
     message: str
     trace: str
@@ -138,6 +148,7 @@ class EvidenceItem(BaseModel):
 
 
 class Criterion(BaseModel):
+    metric_args: dict[str, Any] = Field(default_factory=dict)
     given: str
     when: str
     then: str

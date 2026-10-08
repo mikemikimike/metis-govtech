@@ -21,7 +21,7 @@ from metis.wizard.contracts import (
     Option,
     OptionId,
     Product,
-    ProductProfile,
+    Specification,
 )
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
@@ -29,7 +29,9 @@ from tests.fixtures.wizard.context import interview_context
 
 def _state() -> InterviewState:
     return InterviewState(
-        profile=ProductProfile(product=Product(name="n", description="d", users="u")),
+        specification=Specification(
+            product=Product(name="n", description="d", users="u")
+        ),
         context=interview_context(),
         pending=ChoiceRequest(
             prompt="Continue?",
@@ -184,9 +186,11 @@ def test_the_result_union_rebuilds_success_and_failure_from_json() -> None:
 
 
 def test_the_compile_result_keeps_its_file_named_aliases() -> None:
-    result = CompileResult(profile_yaml="p: 1\n", experiment_yaml="e: 2\n")
+    from tests.fixtures.wizard.specifications import research_assistant
 
-    payload = result.model_dump(by_alias=True)
-
-    assert set(payload) == {"profile.yaml", "experiment.yaml"}
-    assert CompileResult.model_validate(payload).experiment_yaml == "e: 2\n"
+    result = CompileResult(
+        specification_yaml="schema_version: 2\n", specification=research_assistant()
+    )
+    assert (
+        result.model_dump(by_alias=True)["specification.yaml"] == "schema_version: 2\n"
+    )

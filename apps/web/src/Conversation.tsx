@@ -271,7 +271,7 @@ function ChoiceBlock({
       )}
 
       {/* Screen-level actions — every one the screen offers, including "Chat about it". A
-          choice screen edits the profile, so it owns the only live controls: the composer is
+          choice screen edits the specification, so it owns the only live controls: the composer is
           disabled while it is up (see `acceptsChat`). Choosing "Chat about it" makes the driver
           swap this screen for a chat request, and that is what hands editing to the text box —
           one editor at a time, never the buttons and the box together. */}
@@ -808,7 +808,7 @@ function UserSaid({ text }: { text: string }) {
 // ── the composer ─────────────────────────────────────────────────────────────
 
 // Whether the live screen can be talked to, and the single source of the greying rule: only a
-// chat request. A choice screen edits the profile through its own controls — "Chat about it"
+// chat request. A choice screen edits the specification through its own controls — "Chat about it"
 // among them — so the composer stays disabled there, and one component edits at a time. Choosing
 // "Chat about it" makes the next request a chat request, which is what turns this true. No step
 // names, no domain checks.

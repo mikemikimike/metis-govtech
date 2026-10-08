@@ -24,9 +24,7 @@ class MetricSpec(BaseModel):
     fqn: str  # "metis.library.metrics.TurnBudgetMetric"
     name: str  # "Turn budget" — what the user sees
     description: str
-    # Unused in the MVP: arguments are always left at their defaults, so a criterion saying
-    # "within 5 turns" is judged against whatever the default is. Modelled anyway — it is
-    # what the catalogue already knows, and an argument-extraction pass needs it.
+    # Constructor defaults seed the Criterion parameters for user review.
     params: list[MetricParam] = Field(default_factory=list)
 
     @property

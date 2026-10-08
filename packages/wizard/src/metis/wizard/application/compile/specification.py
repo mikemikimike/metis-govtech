@@ -25,8 +25,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from typing import BinaryIO
 
-    from metis.wizard.domain.profile import ProductProfile
-
 
 class SpecificationError(ValueError):
     """The YAML and fixture directory cannot form a runnable specification."""
@@ -42,7 +40,7 @@ class SpecificationFixture:
 
 def _referenced_names(document: dict[str, Any]) -> set[str]:
     names: set[str] = set()
-    for scenario in document.get("scenarios", []):
+    for scenario in document.get("tasks", []):
         for raw_name in scenario.get("fixtures", []) or []:
             try:
                 names.add(normalize_fixture_name(raw_name))
@@ -55,10 +53,8 @@ def write_specification(
     document: dict[str, Any],
     fixture_dir: Path,
     target: Path,
-    *,
-    profile: ProductProfile | None = None,
 ) -> Path:
-    """Write engine inputs and an optional profile at the root of a ZIP archive."""
+    """Write specification.yaml and fixtures at the root of a ZIP archive."""
 
     fixture_root = Path(fixture_dir)
     destination = Path(target)
@@ -78,19 +74,15 @@ def write_specification(
                             stack.enter_context(path.open("rb")),
                         )
                     )
-            destination.write_bytes(
-                build_specification_archive(document, fixtures, profile=profile)
-            )
+            destination.write_bytes(build_specification_archive(document, fixtures))
     except OSError as exc:
-        raise SpecificationError(f"Could not create experiment.zip: {exc}") from exc
+        raise SpecificationError(f"Could not create specification.zip: {exc}") from exc
     return destination
 
 
 def build_specification_archive(
     document: dict[str, Any],
     fixtures: Iterable[SpecificationFixture],
-    *,
-    profile: ProductProfile | None = None,
 ) -> bytes:
     """Build a complete specification ZIP from request-scoped fixture streams.
 
@@ -124,14 +116,12 @@ def build_specification_archive(
         with zipfile.ZipFile(
             output, mode="w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
         ) as archive:
-            archive.writestr("experiment.yaml", to_yaml(document))
-            if profile is not None:
-                archive.writestr("profile.yaml", profile.to_yaml())
+            archive.writestr("specification.yaml", to_yaml(document))
             archive.writestr("fixtures/", b"")
             for name in sorted(normalized):
                 archive.writestr(f"fixtures/{name}", normalized[name])
     except (OSError, zipfile.BadZipFile) as exc:
-        raise SpecificationError(f"Could not create experiment.zip: {exc}") from exc
+        raise SpecificationError(f"Could not create specification.zip: {exc}") from exc
     return output.getvalue()
 
 

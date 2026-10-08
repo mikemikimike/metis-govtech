@@ -178,7 +178,7 @@ export function applyTurn(
   return {
     ...record,
     updated_at: Date.now(),
-    title: titleFor(nextState.profile),
+    title: titleFor(nextState.specification),
     stage: result.stage,
     state: nextState,
     transcript,
@@ -201,7 +201,7 @@ export function applyEnd(
   return {
     ...record,
     updated_at: Date.now(),
-    title: titleFor(result.state.profile),
+    title: titleFor(result.state.specification),
     stage: result.stage,
     state: result.state,
     transcript,
@@ -236,6 +236,6 @@ export function toPresentation(record: LocalInterviewRecord): PresentationView {
     stage: record.stage,
     done: record.state.pending === null && record.state.confirmed,
     requests,
-    profile: record.state.profile,
+    specification: record.state.specification,
   };
 }

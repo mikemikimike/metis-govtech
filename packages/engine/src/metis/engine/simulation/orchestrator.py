@@ -237,7 +237,7 @@ class Orchestrator:
 
                 if self._state:
                     self._state.mark_run_turn(
-                        self._scenario.id,
+                        self._scenario.task_id or self._scenario.id,
                         run_config.persona,
                         trial_index=self._trial_index,
                         turn=turn_count,
@@ -507,7 +507,7 @@ class Orchestrator:
                 # TUI update
                 if self._state:
                     self._state.mark_run_turn(
-                        self._scenario.id,
+                        self._scenario.task_id or self._scenario.id,
                         run_config.persona,
                         trial_index=self._trial_index,
                         turn=turn_count,

@@ -1,6 +1,6 @@
 """Validation and filesystem storage for experiment fixture files.
 
-The wizard profile stores fixture *names*. This module owns the bytes that those names resolve to
+The wizard specification stores fixture *names*. This module owns the bytes that those names resolve to
 at the web boundary, together with the small policy that keeps names portable and uploads bounded.
 """
 

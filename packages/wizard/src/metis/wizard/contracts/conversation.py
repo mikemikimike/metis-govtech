@@ -208,7 +208,7 @@ AnyCard: TypeAlias = Annotated[
 
 
 class WarningSource(StrEnum):
-    DOCUMENT = "document"  # a failed check over the ProductProfile
+    DOCUMENT = "document"  # a failed check over the Specification
     RUNTIME = "runtime"  # something the wizard or a service did
 
 

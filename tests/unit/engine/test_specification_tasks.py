@@ -1,0 +1,199 @@
+"""Task and Criterion identity across planning, evaluation, resume and reporting."""
+
+from pathlib import Path
+
+import pytest
+from deepeval.test_case import LLMTestCase
+from pydantic import ValidationError
+
+from metis.engine.cli import _classify_resume_runs
+from metis.engine.evaluation.orchestrator import _resolve_metrics, _run_metric
+from metis.engine.reporting._models import Report
+from metis.engine.reporting._report import build_report
+from metis.engine.simulation.experiment import expand_run_plan, run_folder_name
+from metis.engine.simulation.types import (
+    RunConfig,
+    RunOutcome,
+    RunRecord,
+    Specification,
+)
+
+
+def specification() -> Specification:
+    data = Specification.model_validate(
+        {
+            "schema_version": 2,
+            "id": "task-identity",
+            "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+            "product": {
+                "name": "Chatbot",
+                "users": "Analysts",
+                "description": "Answer questions.",
+            },
+            "features": [
+                {
+                    "id": "F-1",
+                    "name": "Chat",
+                    "description": "Answer questions.",
+                    "behaviours": [
+                        {
+                            "id": "B-1",
+                            "name": "Efficiency",
+                            "description": "Use few turns.",
+                            "measured": True,
+                            "criteria": [
+                                {
+                                    "id": "AC-UNI-22",
+                                    "name": "Short budget",
+                                    "description": {
+                                        "given": "a question",
+                                        "when": "the session ends",
+                                        "then": "at most 4 turns",
+                                    },
+                                    "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
+                                    "metric_args": {"max_turns": 4},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "personas": [
+                {
+                    "id": "P-1",
+                    "name": "Cooperative user",
+                    "description": "Gives details.",
+                }
+            ],
+            "scenarios": [
+                {"id": "S-1", "name": "Question", "description": "Ask a question."}
+            ],
+            "tasks": [
+                {
+                    "id": "TC-001",
+                    "scenario_ref": "S-1",
+                    "persona_ref": "P-1",
+                    "fixtures": [],
+                    "num_trials": 1,
+                    "criterion_refs": ["AC-UNI-22"],
+                }
+            ],
+        }
+    ).model_dump()
+    short = data["features"][0]["behaviours"][0]["criteria"][0]
+    long = {**short, "id": "AC-LONG", "metric_args": {"max_turns": 10}}
+    data["features"][0]["behaviours"][0]["criteria"].append(long)
+    first = data["tasks"][0]
+    data["tasks"].append({**first, "id": "TC-002", "criterion_refs": ["AC-LONG"]})
+    return Specification.model_validate(data)
+
+
+@pytest.mark.asyncio
+async def test_task_scores_keep_criterion_configuration_and_trial_identity(
+    tmp_path: Path,
+) -> None:
+    import asyncio
+
+    experiment = specification()
+    plan = expand_run_plan(experiment, {p.id: p for p in experiment.personas})
+    assert len(plan) == 2
+    names = [run_folder_name(*item) for item in plan]
+    assert len(set(names)) == 2
+    rows = []
+    outcomes = []
+    for item in plan:
+        scenario, persona, index = item
+        metric = _resolve_metrics(scenario.metric_refs)[0]
+        case = LLMTestCase(
+            input="A question", actual_output="An answer", metadata={"total_turns": 7}
+        )
+        result = await _run_metric(metric, case, asyncio.Semaphore(1))
+        assert result.metric_args == scenario.metric_refs[0].args
+        assert result.criterion_id == scenario.metric_refs[0].criterion_id
+        rows.append(
+            {
+                "session_id": scenario.task_id,
+                "scenario_id": scenario.id,
+                "metrics": [
+                    {
+                        "name": result.name,
+                        "criterion_id": result.criterion_id,
+                        "metric_fqn": result.metric_fqn,
+                        "metric_args": result.metric_args,
+                        "task_id": scenario.task_id,
+                        "trial_index": index,
+                        "success": result.success,
+                        "skipped": result.skipped,
+                    }
+                ],
+            }
+        )
+        outcomes.append(
+            {
+                "id": scenario.task_id,
+                "task_id": scenario.task_id,
+                "trial_index": index,
+                "session": scenario.task_id,
+                "persona": persona.id,
+                "scenario": scenario.id,
+                "stopReason": "goal_achieved",
+                "message": "goal_achieved",
+                "failureSource": "outcome",
+                "turns": 7,
+            }
+        )
+        path = tmp_path / "runs" / run_folder_name(*item) / "record.json"
+        path.parent.mkdir(parents=True)
+        record = RunRecord(
+            config=RunConfig(
+                task_id=scenario.task_id,
+                trial_index=index,
+                persona=persona.id,
+                scenario=scenario.id,
+                metric_refs=scenario.metric_refs,
+            ),
+            outcome=RunOutcome(
+                stop_reason="goal_achieved", total_turns=7, duration_seconds=1
+            ),
+        )
+        path.write_text(record.model_dump_json())
+    assert _classify_resume_runs(tmp_path, plan)[0] == []
+    report = build_report(experiment.model_dump(), rows, trial_outcomes=outcomes)
+    assert report["criteria"]["AC-UNI-22"]["rate"] == 0
+    assert report["criteria"]["AC-LONG"]["rate"] == 100
+    assert [r["task_id"] for r in report["resultTable"]["rows"]] == ["TC-001", "TC-002"]
+    saved = Report.model_validate(report).model_dump()
+    assert saved["criteria"]["AC-LONG"]["evidence"][0]["metric_args"] == {
+        "max_turns": 10
+    }
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "duplicate_task",
+        "duplicate_criterion",
+        "scenario",
+        "persona",
+        "criterion",
+        "coverage",
+        "trials",
+    ],
+)
+def test_specification_rejects_invalid_task_graph(fault: str) -> None:
+    data = specification().model_dump()
+    if fault == "duplicate_task":
+        data["tasks"][1]["id"] = data["tasks"][0]["id"]
+    elif fault == "duplicate_criterion":
+        criteria = data["features"][0]["behaviours"][0]["criteria"]
+        criteria[1]["id"] = criteria[0]["id"]
+    elif fault in {"scenario", "persona"}:
+        data["tasks"][0][f"{fault}_ref"] = "missing"
+    elif fault == "criterion":
+        data["tasks"][0]["criterion_refs"] = ["missing"]
+    elif fault == "coverage":
+        data["tasks"] = []
+    else:
+        data["tasks"][0]["num_trials"] = 0
+    with pytest.raises(ValidationError):
+        Specification.model_validate(data)

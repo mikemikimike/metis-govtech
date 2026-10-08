@@ -21,7 +21,7 @@ from metis.wizard.contracts import (
     ClarifyResult,
     Patch,
     PatchOp,
-    ProductProfile,
+    Specification,
     StepResult,
 )
 from metis.wizard.domain.permissions import InterviewStep
@@ -39,7 +39,7 @@ class ScriptedInterviewer:
 
     def clarify(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         history: list[Turn],
         context: InterviewContext | None = None,
     ) -> ClarifyResult:
@@ -54,7 +54,7 @@ class ScriptedInterviewer:
             )
             patches = []
             if latest_answer and self.clarify_questions >= clarify_turn_cap():
-                current_detail = profile.product.detail.strip()
+                current_detail = specification.product.detail.strip()
                 merged_detail = "\n".join(
                     part for part in (current_detail, latest_answer) if part
                 )
@@ -67,7 +67,7 @@ class ScriptedInterviewer:
                 )
             return ClarifyResult(message="", done=True, patches=patches)
         patches = []
-        if not profile.product.description or not profile.product.users:
+        if not specification.product.description or not specification.product.users:
             patches = [
                 Patch(
                     op=PatchOp.SET,
@@ -98,7 +98,7 @@ class ScriptedInterviewer:
 
     def draft_behaviours(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         history: list[Turn],
         context: InterviewContext | None = None,
     ) -> StepResult:
@@ -143,15 +143,15 @@ class ScriptedInterviewer:
 
     def draft_criteria(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("draft_criteria")
         patches = []
-        for behaviour in profile.measured_behaviours():
+        for behaviour in specification.measured_behaviours():
             if behaviour.criteria:
                 continue
-            feature = profile.feature_of(behaviour.id)
+            feature = specification.feature_of(behaviour.id)
             patches.append(
                 Patch(
                     op=PatchOp.ADD,
@@ -168,7 +168,7 @@ class ScriptedInterviewer:
 
     def draft_personas(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("draft_personas")
@@ -196,12 +196,14 @@ class ScriptedInterviewer:
 
     def draft_scenarios(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("draft_scenarios")
-        covered = [b.id for b in profile.measured_behaviours()]
-        personas = [p.id for p in profile.personas]
+        covered = [
+            c.id for b in specification.measured_behaviours() for c in b.criteria
+        ]
+        personas = [p.id for p in specification.personas]
         return StepResult(
             message="Two situations should cover everything you picked.",
             patches=[
@@ -213,8 +215,14 @@ class ScriptedInterviewer:
                         "description": "Ask for a literature review on a covered topic.",
                         # one scenario covering several behaviours — M:N, and what makes
                         # experiments cheaper than one scenario per behaviour
-                        "behaviour_refs": covered,
-                        "persona_refs": personas,
+                        "tasks": [
+                            {
+                                "persona_ref": persona,
+                                "criterion_refs": covered,
+                                "fixtures": [],
+                            }
+                            for persona in personas
+                        ],
                     },
                 ),
             ],
@@ -222,7 +230,7 @@ class ScriptedInterviewer:
 
     def chat(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         step: str,
         text: str,
         target: str | None,
@@ -233,7 +241,7 @@ class ScriptedInterviewer:
 
     def suggest_criterion(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         behaviour_id: str,
         context: InterviewContext | None = None,
     ) -> StepResult:
@@ -242,7 +250,7 @@ class ScriptedInterviewer:
         The materializer assigns the criterion id after validating this semantic draft.
         """
         self.calls.append("suggest_criterion")
-        feature = profile.feature_of(behaviour_id)
+        feature = specification.feature_of(behaviour_id)
         return StepResult(
             message="Here's one more you might want.",
             patches=[
@@ -280,10 +288,10 @@ class RejectingInterviewer(ScriptedInterviewer):
 
     def draft_criteria(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
-        result = super().draft_criteria(profile, context=context)
+        result = super().draft_criteria(specification, context=context)
         result.patches.append(
             Patch(
                 op=PatchOp.SET,

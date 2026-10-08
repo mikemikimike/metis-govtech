@@ -570,15 +570,15 @@ def fetch_by_session_id(
 
     :param session_id: Langfuse session ID.
     :param langfuse: Initialized Langfuse client.
-    :param experiment_root: Experiment root directory that artifact paths are
+    :param experiment_root: Specification root directory that artifact paths are
         resolved against before being embedded in test-case metadata.
     :param limit: Max traces to fetch.
     :param retry_timeout: Seconds to poll if no traces found (0 = no retry).
     :param artifacts: Collected artifacts from the session record, injected into
         each test case's metadata.
-    :param scenario: Scenario object from experiment.yaml (passed through to
+    :param scenario: Scenario object from specification.yaml (passed through to
         metric metadata).
-    :param persona: Persona object from experiment.yaml (passed through to
+    :param persona: Persona object from specification.yaml (passed through to
         metric metadata).
     :param stop_reason: Why the session stopped (passed through to metric
         metadata as observable execution state).

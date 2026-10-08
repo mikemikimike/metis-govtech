@@ -14,9 +14,12 @@ from metis.wizard.application.fixtures import (
     FixtureLibrary,
     FixtureMetadata,
 )
-from metis.wizard.application.readiness import profile_readiness, scenario_readiness
+from metis.wizard.application.readiness import (
+    scenario_readiness,
+    specification_readiness,
+)
 from metis.wizard.application.turn import (
-    compile_profile,
+    compile_specification,
     configure_interview_dependencies,
     derive_stage,
     handle_interview,
@@ -32,12 +35,12 @@ __all__ = [
     "FixtureMetadata",
     "InterviewState",
     "Turn",
-    "compile_profile",
+    "compile_specification",
     "configure_interview_dependencies",
     "derive_stage",
     "extract_documents",
     "handle_interview",
     "package_specification",
-    "profile_readiness",
+    "specification_readiness",
     "scenario_readiness",
 ]

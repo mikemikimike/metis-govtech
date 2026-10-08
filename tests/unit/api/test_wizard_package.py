@@ -8,29 +8,28 @@ from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 from metis.api.routes.wizard import package as package_route
-from tests.fixtures.wizard.profiles import research_assistant
+from tests.fixtures.wizard.specifications import research_assistant
 
 
-def _profile() -> str:
+def _specification() -> str:
     return research_assistant().model_dump_json()
 
 
-def test_package_returns_a_portable_zip_with_profile_and_fixtures(
+def test_package_returns_a_portable_zip_with_specification_and_fixtures(
     client: TestClient,
 ) -> None:
     response = client.post(
         "/api/v1/wizard/package",
-        data={"profile": _profile()},
+        data={"specification": _specification()},
         files=[("files", ("policy.pdf", b"policy bytes", "application/pdf"))],
     )
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/zip"
-    assert "experiment.zip" in response.headers["content-disposition"]
+    assert "specification.zip" in response.headers["content-disposition"]
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         assert set(archive.namelist()) == {
-            "experiment.yaml",
-            "profile.yaml",
+            "specification.yaml",
             "fixtures/",
             "fixtures/policy.pdf",
         }
@@ -41,7 +40,7 @@ def test_package_includes_unreferenced_fixture_bytes_without_server_state(
     make_client,
 ) -> None:
     request = {
-        "profile": _profile(),
+        "specification": _specification(),
     }
     files = [
         ("files", ("policy.pdf", b"policy bytes", "application/pdf")),
@@ -62,12 +61,12 @@ def test_package_includes_unreferenced_fixture_bytes_without_server_state(
         assert "fixtures/notes.txt" not in archive.namelist()
 
 
-def test_package_rejects_a_profile_with_a_missing_fixture(
+def test_package_rejects_a_specification_with_a_missing_fixture(
     client: TestClient,
 ) -> None:
     response = client.post(
         "/api/v1/wizard/package",
-        data={"profile": _profile()},
+        data={"specification": _specification()},
     )
 
     assert response.status_code == 400
@@ -75,17 +74,17 @@ def test_package_rejects_a_profile_with_a_missing_fixture(
     assert "policy.pdf" in response.json()["message"]
 
 
-def test_package_rejects_an_invalid_profile(client: TestClient) -> None:
+def test_package_rejects_an_invalid_specification(client: TestClient) -> None:
     response = client.post(
         "/api/v1/wizard/package",
-        data={"profile": "not json"},
+        data={"specification": "not json"},
     )
 
     assert response.status_code == 400
     assert response.json() == {
         "type": "failure",
         "code": "validation_error",
-        "message": "The submitted Profile is invalid.",
+        "message": "The submitted Specification is invalid.",
         "retryable": False,
     }
 
@@ -93,7 +92,7 @@ def test_package_rejects_an_invalid_profile(client: TestClient) -> None:
 def test_package_rejects_unsafe_fixture_names(client: TestClient) -> None:
     response = client.post(
         "/api/v1/wizard/package",
-        data={"profile": _profile()},
+        data={"specification": _specification()},
         files=[("files", ("../policy.pdf", b"policy bytes", "application/pdf"))],
     )
 
@@ -104,7 +103,7 @@ def test_package_rejects_unsafe_fixture_names(client: TestClient) -> None:
 def test_package_rejects_duplicate_fixture_identities(client: TestClient) -> None:
     response = client.post(
         "/api/v1/wizard/package",
-        data={"profile": _profile()},
+        data={"specification": _specification()},
         files=[
             ("files", ("policy.pdf", b"one", "application/pdf")),
             ("files", ("POLICY.PDF", b"two", "application/pdf")),
@@ -120,7 +119,7 @@ def test_package_rejects_excess_fixture_parts_before_reading_bodies(
 ) -> None:
     response = client.post(
         "/api/v1/wizard/package",
-        data={"profile": _profile()},
+        data={"specification": _specification()},
         files=[
             ("files", (f"fixture-{index}.txt", b"x", "text/plain"))
             for index in range(21)
@@ -149,7 +148,7 @@ class CloseTrackingStream(io.BytesIO):
 def test_package_closes_uploads_after_success() -> None:
     stream = CloseTrackingStream(b"fixture")
     response = package_route(
-        _profile(), [UploadFile(filename="policy.pdf", file=stream)]
+        _specification(), [UploadFile(filename="policy.pdf", file=stream)]
     )
 
     assert response.status_code == 200
@@ -162,6 +161,8 @@ def test_package_closes_uploads_after_unexpected_failure() -> None:
     stream = CloseTrackingStream(b"fixture", failure=RuntimeError("read failed"))
 
     with pytest.raises(RuntimeError, match="read failed"):
-        package_route(_profile(), [UploadFile(filename="policy.pdf", file=stream)])
+        package_route(
+            _specification(), [UploadFile(filename="policy.pdf", file=stream)]
+        )
 
     assert stream.closed

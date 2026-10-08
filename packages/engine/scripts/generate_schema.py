@@ -7,14 +7,14 @@ from pathlib import Path
 
 from metis.engine.reporting._models import _REPORT_VERSION, Report
 from metis.engine.simulation.types import (
-    _EXPERIMENT_VERSION,
-    Experiment,
+    _SPECIFICATION_VERSION,
+    Specification,
 )
 
 SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schemas"
 
 _MODELS = [
-    (Experiment, "experiment.schema.json", _EXPERIMENT_VERSION, False),
+    (Specification, "specification.schema.json", _SPECIFICATION_VERSION, False),
     (Report, "report.schema.json", _REPORT_VERSION, True),
 ]
 

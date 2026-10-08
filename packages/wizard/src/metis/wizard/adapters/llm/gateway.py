@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from metis.wizard.contracts.interview_state import InterviewContext, Turn
-    from metis.wizard.domain.profile import ProductProfile
+    from metis.wizard.domain.specification import Specification
 
 BASE_URL_VAR = "OPENAI_BASE_URL"
 API_KEY_VAR = "OPENAI_API_KEY"
@@ -185,14 +185,14 @@ class GatewayInterviewer:
     def _step(
         self,
         prompt: prompts.ModelPrompt,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
         result, recovered = self._ask(
             prompt,
             StepResult,
             validate=lambda candidate: validate_model_patches(
-                profile,
+                specification,
                 candidate.patches,
                 allowed_fixture_names=set(
                     context.document_names if context is not None else []
@@ -210,15 +210,15 @@ class GatewayInterviewer:
 
     def clarify(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         history: list[Turn],
         context: InterviewContext | None = None,
     ) -> ClarifyResult:
         result, _ = self._ask(
-            prompts.clarify(profile, history, context),
+            prompts.clarify(specification, history, context),
             ClarifyResult,
             validate=lambda candidate: validate_model_patches(
-                profile,
+                specification,
                 candidate.patches,
                 allowed_fixture_names=set(
                     context.document_names if context is not None else []
@@ -229,56 +229,64 @@ class GatewayInterviewer:
 
     def draft_behaviours(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         history: list[Turn],
         context: InterviewContext | None = None,
     ) -> StepResult:
         return self._step(
-            prompts.behaviours(profile, history, context), profile, context
+            prompts.behaviours(specification, history, context), specification, context
         )
 
     def draft_criteria(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.criteria(profile, context), profile, context)
+        return self._step(
+            prompts.criteria(specification, context), specification, context
+        )
 
     def draft_personas(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.personas(profile, context), profile, context)
+        return self._step(
+            prompts.personas(specification, context), specification, context
+        )
 
     def draft_scenarios(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
-        return self._step(prompts.scenarios(profile, context), profile, context)
+        return self._step(
+            prompts.scenarios(specification, context), specification, context
+        )
 
     def chat(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         step: str,
         text: str,
         target: str | None,
         context: InterviewContext | None = None,
     ) -> StepResult:
         return self._step(
-            prompts.chat(profile, step, text, target, context), profile, context
+            prompts.chat(specification, step, text, target, context),
+            specification,
+            context,
         )
 
     def suggest_criterion(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         behaviour_id: str,
         context: InterviewContext | None = None,
     ) -> StepResult:
         return self._step(
-            prompts.suggest_criterion(profile, behaviour_id, context),
-            profile,
+            prompts.suggest_criterion(specification, behaviour_id, context),
+            specification,
             context,
         )
 

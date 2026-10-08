@@ -18,12 +18,12 @@ from metis.wizard.contracts import (
     InterviewState,
     InterviewTurnRequest,
     Perspective,
-    ProductProfile,
+    Specification,
 )
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
-from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
+from tests.fixtures.wizard.specifications import research_assistant
 
 
 def _start_body() -> dict[str, object]:
@@ -34,15 +34,15 @@ def _start_body() -> dict[str, object]:
     ).model_dump(mode="json")
 
 
-def _empty_profile() -> dict[str, object]:
-    return ProductProfile.model_validate(
+def _empty_specification() -> dict[str, object]:
+    return Specification.model_validate(
         {"product": {"name": "", "description": "", "users": ""}}
     ).model_dump(mode="json")
 
 
 def _pending_state() -> InterviewState:
     return InterviewState(
-        profile=research_assistant(),
+        specification=research_assistant(),
         context=interview_context(),
         behaviours_confirmed=True,
         pending=ChatRequest(
@@ -195,7 +195,7 @@ def test_pending_request_metadata_is_required_and_non_null_over_http(
 
 def test_an_exhausted_model_is_a_503_retryable_failure(make_client) -> None:
     class ClarifyUnavailable(ScriptedInterviewer):
-        def clarify(self, profile, history, context=None):
+        def clarify(self, specification, history, context=None):
             raise InterviewerOutputError("three attempts, all failed")
 
     client = make_client(ClarifyUnavailable())
@@ -209,7 +209,7 @@ def test_an_exhausted_model_is_a_503_retryable_failure(make_client) -> None:
 
 def test_an_exhausted_model_during_turn_is_a_503_with_safe_state(make_client) -> None:
     class ClarifyUnavailable(ScriptedInterviewer):
-        def clarify(self, profile, history, context=None):
+        def clarify(self, specification, history, context=None):
             raise InterviewerOutputError("three attempts, all failed")
 
     opening = (
@@ -234,11 +234,11 @@ def test_an_exhausted_model_during_turn_is_a_503_with_safe_state(make_client) ->
 
 def test_an_exhausted_model_during_end_is_a_503_with_safe_state(make_client) -> None:
     class DraftUnavailable(ScriptedInterviewer):
-        def draft_behaviours(self, profile, history, context=None):
+        def draft_behaviours(self, specification, history, context=None):
             raise InterviewerOutputError("three attempts, all failed")
 
     state = InterviewState(
-        profile=ProductProfile.model_validate(
+        specification=Specification.model_validate(
             {
                 "product": {
                     "name": "Policy helper",
@@ -261,7 +261,7 @@ def test_an_exhausted_model_during_end_is_a_503_with_safe_state(make_client) -> 
 
 def test_an_unexpected_interview_fault_is_a_stable_500_failure(make_client) -> None:
     class BrokenInterviewer(ScriptedInterviewer):
-        def clarify(self, profile, history, context=None):
+        def clarify(self, specification, history, context=None):
             raise RuntimeError("unexpected provider bug")
 
     client = make_client(BrokenInterviewer())
@@ -313,7 +313,7 @@ def test_unexpected_interview_service_faults_are_stable_500_responses(
 
 def test_end_returns_best_effort_completion(client: TestClient) -> None:
     state = {
-        "profile": research_assistant().model_dump(mode="json"),
+        "specification": research_assistant().model_dump(mode="json"),
         "context": interview_context().model_dump(mode="json"),
         "behaviours_confirmed": True,
         "confirmed": False,
@@ -337,15 +337,15 @@ def test_compile_returns_the_two_file_named_yaml_strings(client: TestClient) -> 
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"profile.yaml", "experiment.yaml"}
-    assert body["profile.yaml"].strip()
-    assert "scenarios" in body["experiment.yaml"]
+    assert set(body) == {"specification.yaml", "specification"}
+    assert body["specification.yaml"].strip()
+    assert "scenarios" in body["specification.yaml"]
 
 
-def test_a_profile_that_will_not_build_is_a_400_compilation_failure(
+def test_a_specification_that_will_not_build_is_a_400_compilation_failure(
     client: TestClient,
 ) -> None:
-    response = client.post("/api/v1/wizard/compile", json=_empty_profile())
+    response = client.post("/api/v1/wizard/compile", json=_empty_specification())
 
     assert response.status_code == 400
     assert response.json()["code"] == "compilation_failed"
@@ -354,10 +354,10 @@ def test_a_profile_that_will_not_build_is_a_400_compilation_failure(
 def test_an_unexpected_compile_fault_is_a_stable_500_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail(_profile):
+    def fail(_specification):
         raise RuntimeError("unexpected compiler fault")
 
-    monkeypatch.setattr(wizard_routes, "compile_profile", fail)
+    monkeypatch.setattr(wizard_routes, "compile_specification", fail)
     client = TestClient(create_app(), raise_server_exceptions=False)
 
     response = client.post(

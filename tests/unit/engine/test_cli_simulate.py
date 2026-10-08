@@ -14,41 +14,27 @@ from metis.engine.simulation.types import RunConfig, RunOutcome, RunRecord
 
 runner = CliRunner()
 
-MINIMAL_EXPERIMENT = """\
-schema_version: 2
-id: test-exp
-description: test experiment
-runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
-personas:
-  - id: alice
-    description: test persona
-scenarios:
-  - id: task-1
-    description: test scenario
-    persona_refs: [alice]
-"""
+MINIMAL_EXPERIMENT = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
 
-TWO_TRIAL_EXPERIMENT = MINIMAL_EXPERIMENT.replace(
-    "    persona_refs: [alice]\n", "    persona_refs: [alice]\n    num_trials: 2\n"
-)
+TWO_TRIAL_EXPERIMENT = MINIMAL_EXPERIMENT.replace("num_trials: 1", "num_trials: 2")
 
 
 def _write_source(tmp_path: Path) -> Path:
     input_dir = tmp_path / "input"
     input_dir.mkdir()
-    (input_dir / "experiment.yaml").write_text(MINIMAL_EXPERIMENT)
+    (input_dir / "specification.yaml").write_text(MINIMAL_EXPERIMENT)
     return input_dir
 
 
 def _write_output(output_dir: Path, experiment_yaml: str = MINIMAL_EXPERIMENT) -> Path:
     """Create a resumable output directory with a frozen inputs/ snapshot."""
     (output_dir / "inputs" / "fixtures").mkdir(parents=True)
-    (output_dir / "inputs" / "experiment.yaml").write_text(experiment_yaml)
+    (output_dir / "inputs" / "specification.yaml").write_text(experiment_yaml)
     return output_dir
 
 
 def _write_record_marker(experiment_dir: Path) -> Path:
-    record_path = experiment_dir / "runs" / "task-1-alice-1" / "record.json"
+    record_path = experiment_dir / "runs" / "TC-001-alice-1" / "record.json"
     record_path.parent.mkdir(parents=True, exist_ok=True)
     record_path.write_text("{}")
     return experiment_dir
@@ -85,7 +71,7 @@ def test_simulate_prints_evaluate_and_resume_handoff(
     assert result.exit_code == 0
     compact_output = _compact(result.output)
     resolved = _compact(str(experiment_dir.resolve()))
-    assert f"Experiment:{resolved}" in compact_output
+    assert f"Specification:{resolved}" in compact_output
     assert f"Evaluate:metisengineevaluate--experiment-dir{resolved}" in compact_output
     assert (
         f"Resume:metisenginesimulate--resume--experiment-dir{resolved}"
@@ -113,8 +99,8 @@ def test_resume_runs_only_missing_or_system_error_records(
         tmp_path / "experiments" / "test-exp-20260101-010101", TWO_TRIAL_EXPERIMENT
     )
     (output_dir / "inputs" / "fixtures" / "fixture.txt").write_text("frozen")
-    _write_record(output_dir, "task-1-alice-1", "goal_achieved")
-    _write_record(output_dir, "task-1-alice-2", "system_error")
+    _write_record(output_dir, "TC-001-alice-1", "goal_achieved")
+    _write_record(output_dir, "TC-001-alice-2", "system_error")
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
     selected: list[tuple[str, str, int]] = []
 
@@ -141,8 +127,8 @@ def test_resume_passes_append_true_to_setup_engine_logging(
         tmp_path / "experiments" / "test-exp-20260101-010101", TWO_TRIAL_EXPERIMENT
     )
     (output_dir / "inputs" / "fixtures" / "fixture.txt").write_text("frozen")
-    _write_record(output_dir, "task-1-alice-1", "goal_achieved")
-    _write_record(output_dir, "task-1-alice-2", "system_error")
+    _write_record(output_dir, "TC-001-alice-1", "goal_achieved")
+    _write_record(output_dir, "TC-001-alice-2", "system_error")
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
     monkeypatch.setattr(experiment_module, "run_experiment", lambda *_a, **_k: None)
 
@@ -167,7 +153,7 @@ def test_resume_passes_append_true_to_setup_engine_logging(
 def test_resume_all_complete_is_noop(monkeypatch, tmp_path: Path) -> None:
     output_dir = _write_output(tmp_path / "experiments" / "test-exp-20260101-010101")
     (output_dir / "inputs" / "fixtures" / "fixture.txt").write_text("frozen")
-    _write_record(output_dir, "task-1-alice-1")
+    _write_record(output_dir, "TC-001-alice-1")
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
 
     result = runner.invoke(

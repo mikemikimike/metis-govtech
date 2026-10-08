@@ -1,0 +1,314 @@
+{
+  "$defs": {
+    "Behaviour": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "measured": {
+          "default": false,
+          "title": "Measured",
+          "type": "boolean"
+        },
+        "criteria": {
+          "items": {
+            "$ref": "#/$defs/Criterion"
+          },
+          "title": "Criteria",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "Behaviour",
+      "type": "object"
+    },
+    "Criterion": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "$ref": "#/$defs/CriterionDescription"
+        },
+        "metric_fqn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metric Fqn"
+        },
+        "metric_args": {
+          "additionalProperties": true,
+          "title": "Metric Args",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "Criterion",
+      "type": "object"
+    },
+    "CriterionDescription": {
+      "properties": {
+        "given": {
+          "title": "Given",
+          "type": "string"
+        },
+        "when": {
+          "title": "When",
+          "type": "string"
+        },
+        "then": {
+          "title": "Then",
+          "type": "string"
+        }
+      },
+      "required": [
+        "given",
+        "when",
+        "then"
+      ],
+      "title": "CriterionDescription",
+      "type": "object"
+    },
+    "Feature": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "behaviours": {
+          "items": {
+            "$ref": "#/$defs/Behaviour"
+          },
+          "title": "Behaviours",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "Feature",
+      "type": "object"
+    },
+    "Persona": {
+      "description": "A user type whose stable id can differ from its display name.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "Persona",
+      "type": "object"
+    },
+    "Product": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "users": {
+          "title": "Users",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "detail": {
+          "default": "",
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "users",
+        "description"
+      ],
+      "title": "Product",
+      "type": "object"
+    },
+    "Scenario": {
+      "additionalProperties": false,
+      "description": "The situation in which Tasks evaluate the product.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "Scenario",
+      "type": "object"
+    },
+    "Task": {
+      "additionalProperties": false,
+      "description": "One test case. Identity survives edits to its references and inputs.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "scenario_ref": {
+          "title": "Scenario Ref",
+          "type": "string"
+        },
+        "persona_ref": {
+          "title": "Persona Ref",
+          "type": "string"
+        },
+        "fixtures": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fixtures",
+          "type": "array"
+        },
+        "num_trials": {
+          "default": 3,
+          "title": "Num Trials",
+          "type": "integer"
+        },
+        "criterion_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Criterion Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "scenario_ref",
+        "persona_ref"
+      ],
+      "title": "Task",
+      "type": "object"
+    }
+  },
+  "description": "The flat YAML and API representation of a Specification.",
+  "properties": {
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "id": {
+      "default": "",
+      "title": "Id",
+      "type": "string"
+    },
+    "runner_factory_ref": {
+      "default": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+      "title": "Runner Factory Ref",
+      "type": "string"
+    },
+    "product": {
+      "$ref": "#/$defs/Product"
+    },
+    "features": {
+      "items": {
+        "$ref": "#/$defs/Feature"
+      },
+      "title": "Features",
+      "type": "array"
+    },
+    "personas": {
+      "items": {
+        "$ref": "#/$defs/Persona"
+      },
+      "title": "Personas",
+      "type": "array"
+    },
+    "scenarios": {
+      "items": {
+        "$ref": "#/$defs/Scenario"
+      },
+      "title": "Scenarios",
+      "type": "array"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/$defs/Task"
+      },
+      "title": "Tasks",
+      "type": "array"
+    },
+    "fixture_content_descriptions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Fixture Content Descriptions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "product"
+  ],
+  "title": "Specification v2",
+  "type": "object"
+}

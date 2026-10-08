@@ -10,16 +10,12 @@ requires-python = ">=3.11"
 dependencies = [
     "metis-core>=0.3.0",
     "metis-library>=0.1.4",
-    # Here for `schemas/experiment.schema.json`, which the compiler validates against and
-    # locates relative to the installed module. Nothing is imported from the engine.
-    "metis-engine>=0.7.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "pypdf>=6.19,<7.0",
     "python-docx>=1.2,<2.0",
-    "jsonschema>=4.20.0",
     "openai>=1.40",
     "python-dotenv>=1.0.0",
     # Langfuse's `langfuse.openai` drop-in traces every model call; imported in the gateway. A
@@ -34,7 +30,6 @@ metis-wizard = "metis.wizard.bootstrap:cli_app"
 [tool.uv.sources]
 metis-core = { workspace = true }
 metis-library = { workspace = true }
-metis-engine = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/metis"]

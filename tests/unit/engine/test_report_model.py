@@ -92,8 +92,8 @@ class TestSessionReport:
         assert s.session_id == "sess-1"
 
 
-def test_profile_fields_map_to_report():
-    profile = {
+def test_specification_fields_map_to_report():
+    specification = {
         "product": {"name": "Assistant"},
         "features": [
             {
@@ -123,7 +123,7 @@ def test_profile_fields_map_to_report():
         "scenarios": [],
     }
 
-    report = build_report(profile, {}, [])
+    report = build_report(specification, [])
 
     behaviour = report["behaviours"]["B-1"]
     assert {

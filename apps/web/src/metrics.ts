@@ -1,7 +1,9 @@
-import type { ProductProfile } from "./transport/api";
+import type { Specification } from "./transport/api";
 
-export function profileHasCriteria(profile: ProductProfile): boolean {
-  return profile.features.some((feature) =>
+export function specificationHasCriteria(
+  specification: Specification,
+): boolean {
+  return specification.features.some((feature) =>
     feature.behaviours.some((behaviour) => behaviour.criteria.length > 0),
   );
 }

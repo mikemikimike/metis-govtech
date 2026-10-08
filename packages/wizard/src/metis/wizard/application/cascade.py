@@ -30,7 +30,7 @@ from metis.wizard.domain.cascade import (
 
 if TYPE_CHECKING:
     from metis.wizard.domain.patch import Patch
-    from metis.wizard.domain.profile import ProductProfile
+    from metis.wizard.domain.specification import Specification
 
 
 @dataclass
@@ -78,7 +78,9 @@ class Question:
 _CASCADE_ACTIONS = frozenset({"keep", "regenerate", "edit", "review"})
 
 
-def question_from_request(request: object, profile: ProductProfile) -> Question | None:
+def question_from_request(
+    request: object, specification: Specification
+) -> Question | None:
     """Rebuild the cascade question a pending request represents, or None if it is not one.
 
     A cascade question is composed on one turn and answered on the next, but the driver is built
@@ -103,9 +105,9 @@ def question_from_request(request: object, profile: ProductProfile) -> Question 
 
     if "review" in actions:
         kind = "tree"
-    elif profile.behaviour(subject) is not None:
+    elif specification.behaviour(subject) is not None:
         kind = "criteria"
-    elif profile.scenario(subject) is not None:
+    elif specification.scenario(subject) is not None:
         kind = "scenario"
     else:
         return None
@@ -113,17 +115,17 @@ def question_from_request(request: object, profile: ProductProfile) -> Question 
     return Question(text=request.prompt, subject=subject, kind=kind)
 
 
-def questions_for(profile: ProductProfile, patches: list[Patch]) -> list[Question]:
+def questions_for(specification: Specification, patches: list[Patch]) -> list[Question]:
     """What to ask, in order, given what was just edited.
 
-    `profile` is the document from before the patches. A product field written while the
+    `specification` is the document from before the patches. A product field written while the
     first tree is being drafted cannot invalidate that same draft — there was no older tree.
 
     Sequenced deliberately: criteria first, then each scenario covering the behaviour. The user
     answers about the thing nearest the edit before being asked about the thing further away.
     """
     asked: list[Question] = []
-    for impact in impacts_for(profile, patches):
+    for impact in impacts_for(specification, patches):
         if impact.kind == "tree":
             text = (
                 "That changes the product description. The current draft came "
@@ -138,7 +140,7 @@ def questions_for(profile: ProductProfile, patches: list[Patch]) -> list[Questio
 
 
 def clear_for_regeneration(
-    profile: ProductProfile, question: Question, user_typed: set[str] | None = None
+    specification: Specification, question: Question, user_typed: set[str] | None = None
 ) -> None:
     """Answering "Regenerate" lands in a state the screens already draw.
 
@@ -151,7 +153,7 @@ def clear_for_regeneration(
     those nodes.
     """
     clear_impact(
-        profile,
+        specification,
         Impact(subject=question.subject, kind=question.kind),
         user_typed,
     )

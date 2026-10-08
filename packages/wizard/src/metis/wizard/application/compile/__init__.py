@@ -1,6 +1,6 @@
-"""The output end: `ProductProfile` → `experiment.yaml` + `review.md`.
+"""The output end: `Specification` → `specification.yaml` + `review.md`.
 
-Both are pure functions of the profile. Neither needs an interview, a step or any history,
+Both are pure functions of the specification. Neither needs an interview, a step or any history,
 which is what makes the golden-file test possible.
 """
 
@@ -8,7 +8,6 @@ from metis.wizard.application.compile.experiment import (
     DEFAULT_RUNNER_FACTORY_REF,
     SCHEMA_VERSION,
     CompilationError,
-    build_experiment_document,
     compile_experiment,
     to_yaml,
     write_experiment,
@@ -29,7 +28,6 @@ __all__ = [
     "SpecificationFixture",
     "build_specification_archive",
     "CompilationError",
-    "build_experiment_document",
     "compile_experiment",
     "render_review",
     "to_yaml",

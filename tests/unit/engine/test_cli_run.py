@@ -11,25 +11,13 @@ from metis.engine.cli import EvaluationOutcome, app
 
 runner = CliRunner()
 
-MINIMAL_EXPERIMENT = """\
-schema_version: 2
-id: test-exp
-description: test experiment
-runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
-personas:
-  - id: alice
-    description: test persona
-scenarios:
-  - id: task-1
-    description: test scenario
-    persona_refs: [alice]
-"""
+MINIMAL_EXPERIMENT = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
 
 
 def _write_source(tmp_path: Path) -> Path:
     input_dir = tmp_path / "input"
     input_dir.mkdir()
-    (input_dir / "experiment.yaml").write_text(MINIMAL_EXPERIMENT)
+    (input_dir / "specification.yaml").write_text(MINIMAL_EXPERIMENT)
     return input_dir
 
 

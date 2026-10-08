@@ -2,7 +2,7 @@
 
 This router is a thin HTTP adapter over the metis-wizard package. It parses a typed request body,
 calls the wizard's public facade, and maps the typed result onto an HTTP status code — it adds no
-behaviour of its own. Every stage, Profile, prompt, matching and compilation rule lives in
+behaviour of its own. Every stage, Specification, prompt, matching and compilation rule lives in
 metis-wizard.
 
 Document extraction stands outside the Interview lifecycle. It reads the uploaded file streams,
@@ -23,7 +23,7 @@ Status mapping (from the design):
 A 400 carries a typed code: an `InterviewErrorCode` from the lifecycle routes, and a
 `DocumentExtractionErrorCode` from the extraction route.
 
-Request/Profile schema failures become 422 through the app's validation handler.
+Request/Specification schema failures become 422 through the app's validation handler.
 """
 
 from __future__ import annotations
@@ -52,10 +52,10 @@ from metis.wizard import (
     InterviewState,
     InterviewSuccess,
     InterviewTurnRequest,
-    ProductProfile,
+    Specification,
     SpecificationError,
     SpecificationFixture,
-    compile_profile,
+    compile_specification,
     extract_documents,
     interview_client_config,
     package_specification,
@@ -97,7 +97,7 @@ def _example_state(pending: dict[str, object] | None) -> InterviewState:
     """Build one small, schema-valid state for the OpenAPI lifecycle examples."""
     return InterviewState.model_validate(
         {
-            "profile": {
+            "specification": {
                 "product": {
                     "name": "Research assistant",
                     "users": "Policy analysts",
@@ -296,7 +296,7 @@ def config() -> InterviewConfig:
 
 @router.post(
     "/package",
-    summary="Package a wizard Profile and fixtures into a ZIP",
+    summary="Package a wizard Specification and fixtures into a ZIP",
     response_class=Response,
     response_model=None,
     responses={
@@ -311,13 +311,13 @@ def config() -> InterviewConfig:
     },
 )
 def package(
-    profile: str = Form(...),
+    specification: str = Form(...),
     files: list[UploadFile] | None = File(default=None),
 ) -> Response | JSONResponse:
     """Build one request-scoped engine-ready ZIP without retaining uploaded files."""
     uploads = files or []
     try:
-        parsed = ProductProfile.model_validate_json(profile)
+        parsed = Specification.model_validate_json(specification)
         fixtures: list[SpecificationFixture] = []
         for upload in uploads:
             fixtures.append(
@@ -331,7 +331,7 @@ def package(
         return JSONResponse(
             ServiceError(
                 code="validation_error",
-                message="The submitted Profile is invalid.",
+                message="The submitted Specification is invalid.",
                 retryable=False,
             ).model_dump(),
             status_code=400,
@@ -352,7 +352,7 @@ def package(
     return Response(
         content=archive,
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="experiment.zip"'},
+        headers={"Content-Disposition": 'attachment; filename="specification.zip"'},
     )
 
 
@@ -470,7 +470,7 @@ def _result_response(result: InterviewResult) -> JSONResponse:
 
 @router.post(
     "/compile",
-    summary="Compile a finished wizard Profile into YAML",
+    summary="Compile a finished wizard Specification into YAML",
     response_model=CompileResult,
     responses={
         400: {"model": ServiceError},
@@ -478,14 +478,14 @@ def _result_response(result: InterviewResult) -> JSONResponse:
         500: {"model": ServiceError},
     },
 )
-def compile_(profile: ProductProfile) -> JSONResponse:
-    """Convert a runnable `ProductProfile` into the two final configuration documents.
+def compile_(specification: Specification) -> JSONResponse:
+    """Compile a runnable `Specification` into YAML with assigned Task IDs.
 
-    The response contains `profile.yaml` and `experiment.yaml` as strings. The API returns the
-    content only; it does not write files or save the Profile on the server.
+    The response contains `specification.yaml` and `specification` with assigned Task IDs.
+    The API does not write files or save the Specification on the server.
     """
     try:
-        result = compile_profile(profile)
+        result = compile_specification(specification)
     except CompilationError as exc:
         error = ServiceError(
             code="compilation_failed", message=str(exc), retryable=False

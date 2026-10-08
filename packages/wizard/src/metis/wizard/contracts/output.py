@@ -1,6 +1,6 @@
 """Structured-output targets for the model boundary.
 
-The draft models in this module are deliberately not the persisted profile models.  They are
+The draft models in this module are deliberately not the persisted specification models.  They are
 the small set of semantic fields the model is allowed to propose; application code supplies
 ids, authorship, defaults and matcher-owned fields afterwards.
 """
@@ -42,12 +42,23 @@ class PersonaDraft(_StrictDraft):
     description: str
 
 
+class TaskDraft(_StrictDraft):
+    scenario_ref: str
+    persona_ref: str
+    criterion_refs: list[str]
+    fixtures: list[str] = Field(default_factory=list)
+
+
+class ScenarioTaskDraft(_StrictDraft):
+    persona_ref: str
+    criterion_refs: list[str]
+    fixtures: list[str] = Field(default_factory=list)
+
+
 class ScenarioDraft(_StrictDraft):
     name: str
     description: str
-    behaviour_refs: list[str]
-    persona_refs: list[str]
-    fixtures: list[str] = Field(default_factory=list)
+    tasks: list[ScenarioTaskDraft] = Field(default_factory=list)
 
 
 _DRAFT_TYPES = (
@@ -56,6 +67,7 @@ _DRAFT_TYPES = (
     CriterionDraft,
     PersonaDraft,
     ScenarioDraft,
+    TaskDraft,
 )
 
 
@@ -99,10 +111,10 @@ def _legacy_value(path: str, value: Any) -> Any:
         return ScenarioDraft(
             name=value["name"],
             description=value["description"],
-            behaviour_refs=value.get("behaviour_refs", []),
-            persona_refs=value.get("persona_refs", []),
-            fixtures=value.get("fixtures", []),
+            tasks=value.get("tasks", []),
         )
+    if field == "tasks":
+        return TaskDraft.model_validate(value)
     return value
 
 
@@ -124,6 +136,7 @@ class StepResultPatch(BaseModel):
         | CriterionDraft
         | PersonaDraft
         | ScenarioDraft
+        | TaskDraft
         | str
         | int
         | bool
@@ -154,9 +167,7 @@ class StepResultPatch(BaseModel):
                 "scenarios": {
                     "name",
                     "description",
-                    "behaviour_refs",
-                    "persona_refs",
-                    "fixtures",
+                    "tasks",
                 },
             }.get(field, set())
             semantic = value["value"]
@@ -180,6 +191,7 @@ class StepResultPatch(BaseModel):
                 "criteria": CriterionDraft,
                 "personas": PersonaDraft,
                 "scenarios": ScenarioDraft,
+                "tasks": TaskDraft,
             }.get(field)
             if expected is None or not isinstance(self.value, expected):
                 raise ValueError(f"add to {field!r} requires its strict draft")

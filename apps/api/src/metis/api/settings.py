@@ -1,7 +1,7 @@
 """Process-wide settings and the production composition of the wizard dependencies.
 
 The app keeps immutable settings and model clients for the lifetime of the process. It keeps no
-user Profile, pending request, or Interview state — every lifecycle request carries the required
+user Specification, pending request, or Interview state — every lifecycle request carries the required
 state in its body. `build_dependencies` is the one place that constructs the real gateway-backed
 interviewer and matcher; tests inject a scripted pair instead through the router's dependency
 override.

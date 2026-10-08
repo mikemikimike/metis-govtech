@@ -1,29 +1,11 @@
-"""Join a run's metric results onto the product profile that asked for them.
+"""Join scores to the frozen specification by Task, Trial, and Criterion ID.
 
-The metric table tells you which metric failed. It does not tell you which product
-behaviour is weak, because a metric name is not a behaviour. This module builds that
-answer, and it builds it mechanically: every number comes from a file the run already
-wrote. No model writes any text.
-
-The chain, from the spec to a score::
-
-    profile.yaml  criterion.metric_fqn
-       -> library class .__name__          the metric display name
-       -> metric result name               pass / fail / skip per turn or per session
-       -> record.json config.persona       the persona axis
-
-Two roll-ups answer two questions, so both are kept:
-
-* The spec tree is **worst of**. A behaviour is only as strong as its weakest criterion,
-  and a feature is only as strong as its weakest behaviour. That is a compliance question.
-* The persona axis and the scenario axis are a **plain pass rate**, counted once per
-  metric result. That is a difficulty question. One result can attribute to several
-  criteria, so a count of attributions would make a busy persona look busier than it is.
+Feature and Behaviour scores keep the existing worst-Criterion rules.
+Persona and Scenario scores keep the existing pass-rate rules.
 """
 
 from __future__ import annotations
 
-import importlib
 import json
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
@@ -51,47 +33,23 @@ PASS_THRESHOLD = 0.70
 
 def load_report_sources(
     run_dir: Path,
-) -> tuple[dict, dict, dict[str, str], list[dict]] | None:
-    """Read the profile, experiment, persona map, and trial outcomes.
-
-    `simulate` freezes its input directory into the run, so the profile and the
-    experiment beside the results are the ones this run actually used.
-
-    :param run_dir: The experiment directory that holds `inputs/` and `runs/`.
-    :returns: profile, experiment, and session id to persona id. `None` if the run has
-        no profile, which is the case for every run made before the wizard wrote one.
-    """
-    profile_path = run_dir / "inputs" / "profile.yaml"
-    if not profile_path.is_file():
-        logger.debug("report_skipped", reason="no profile.yaml", path=str(profile_path))
+) -> tuple[dict, dict[str, str], list[dict]] | None:
+    """Read specification.yaml, the persona map, and recorded Trial outcomes."""
+    specification_path = run_dir / "inputs" / "specification.yaml"
+    if not specification_path.is_file():
         return None
-
     try:
         import yaml
 
-        profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+        specification = yaml.safe_load(specification_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        logger.warning("profile_unreadable", path=str(profile_path), error=str(exc))
+        logger.warning(
+            "specification_unreadable", path=str(specification_path), error=str(exc)
+        )
         return None
 
-    experiment: dict = {}
-    experiment_path = run_dir / "inputs" / "experiment.yaml"
-    if experiment_path.is_file():
-        try:
-            import yaml
-
-            experiment = (
-                yaml.safe_load(experiment_path.read_text(encoding="utf-8")) or {}
-            )
-        except (OSError, ValueError) as exc:
-            logger.warning(
-                "experiment_unreadable",
-                path=str(experiment_path),
-                error=str(exc),
-            )
-
     persona_of, trial_outcomes = _load_run_records(run_dir)
-    return profile, experiment, persona_of, trial_outcomes
+    return specification, persona_of, trial_outcomes
 
 
 def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
@@ -151,6 +109,8 @@ def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
         trials.append(
             {
                 "id": record_path.parent.name,
+                "task_id": config.get("task_id", ""),
+                "trial_index": config.get("trial_index", 1),
                 "session": session or "",
                 "persona": persona or "",
                 "scenario": config.get("scenario") or "",
@@ -302,28 +262,6 @@ def status(rate: float | None, threshold: float = PASS_THRESHOLD) -> str | None:
     return "pass" if rate >= threshold else "fail"
 
 
-def display_names(fqns: set[str]) -> tuple[dict[str, str], list[str]]:
-    """Map each metric FQN to the display name its results carry.
-
-    The display name lives on a `__name__` property, so the class must be built. Default
-    arguments are enough for every metric in the library today. A bad reference is
-    reported, not raised, because one broken criterion must not lose the whole report.
-    """
-    resolved: dict[str, str] = {}
-    failed: list[str] = []
-    modules: dict[str, Any] = {}
-    for fqn in sorted(fqns):
-        module_path, _, class_name = fqn.rpartition(".")
-        try:
-            module = modules.setdefault(
-                module_path, importlib.import_module(module_path)
-            )
-            resolved[fqn] = getattr(module, class_name)().__name__
-        except Exception as exc:  # noqa: BLE001 - a bad reference must not stop the report
-            failed.append(f"{fqn}: {type(exc).__name__}")
-    return resolved, failed
-
-
 def clean_reason(text: str) -> str:
     """A skip reason without its marker and without its dashes."""
     out = (text or "").strip()
@@ -385,6 +323,11 @@ def flatten_results(
             rows.append(
                 {
                     "metric": metric["name"],
+                    "criterion_id": metric.get("criterion_id", ""),
+                    "metric_fqn": metric.get("metric_fqn", ""),
+                    "metric_args": metric.get("metric_args", {}),
+                    "task_id": metric.get("task_id", ""),
+                    "trial_index": metric.get("trial_index", 1),
                     "scenario": case.get("scenario_id", ""),
                     "persona": persona_of.get(case.get("session_id", "")),
                     "skipped": bool(metric.get("skipped")),
@@ -402,6 +345,11 @@ def flatten_results(
             rows.append(
                 {
                     "metric": metric["name"],
+                    "criterion_id": metric.get("criterion_id", ""),
+                    "metric_fqn": metric.get("metric_fqn", ""),
+                    "metric_args": metric.get("metric_args", {}),
+                    "task_id": metric.get("task_id", ""),
+                    "trial_index": metric.get("trial_index", 1),
                     "scenario": scenario_of.get(sid, ""),
                     "persona": persona_of.get(sid),
                     "skipped": bool(metric.get("skipped")),
@@ -423,58 +371,28 @@ def flatten_results(
 def build_plan(
     experiment: Mapping[str, Any], rows: list[dict], name_of: dict[str, str]
 ) -> dict:
-    """What `experiment.yaml` asked for, beside what the run produced.
-
-    Three levels matter to a reader, and each one can lose things::
-
-        spec    profile.yaml      every persona and scenario the product owner declared
-        plan    experiment.yaml   the subset this experiment asked to run
-        actual  the results       what came back
-    """
-    plan_personas = [p["id"] for p in experiment.get("personas") or [] if p.get("id")]
-
-    seen_sessions: dict[str, set[str]] = defaultdict(set)
-    seen_personas: dict[str, set[str]] = defaultdict(set)
-    ran_metrics: dict[str, set[str]] = defaultdict(set)
-    for row in rows:
-        sid = row["scenario"] or ""
-        seen_sessions[sid].add(row["session"])
-        if row["persona"]:
-            seen_personas[sid].add(row["persona"])
-        if not row["skipped"]:
-            ran_metrics[sid].add(row["metric"])
-
-    scenarios = []
-    for scenario in experiment.get("scenarios") or []:
-        sid = scenario.get("id")
-        if not sid:
-            continue
-        personas = list(scenario.get("persona_refs") or plan_personas)
-        # Mirror metis-engine's Scenario schema default of 1, not the wizard's
-        # domain default of 3: the plan describes what the engine would run,
-        # and a hand-written config that omits the field runs once. Unreachable
-        # for a wizard-generated config, which always writes it explicitly.
-        trials = int(scenario.get("num_trials", 1))
-        refs = _metric_refs(scenario)
-        # A scenario can ask for a metric no criterion names, so resolve the strays too.
-        strays = {fqn for fqn in refs if fqn not in name_of}
-        if strays:
-            name_of.update(display_names(strays)[0])
-        asked = {name_of.get(fqn, fqn.rpartition(".")[2]) for fqn in refs}
-        scenarios.append(
+    """Compare planned Tasks and Trials with the recorded scores."""
+    plan_personas = [p["id"] for p in experiment.get("personas", [])]
+    tasks = []
+    for task in experiment.get("tasks", []):
+        results = [r for r in rows if r.get("task_id") == task["id"]]
+        asked = set(task["criterion_refs"])
+        tasks.append(
             {
-                "id": sid,
-                "personas": personas,
-                "trials": trials,
-                "sessionsPlanned": len(personas) * trials,
-                "sessionsRun": len(seen_sessions.get(sid, ())),
-                "personasRun": sorted(seen_personas.get(sid, ())),
+                "id": task["id"],
+                "scenario": task["scenario_ref"],
+                "personas": [task["persona_ref"]],
+                "trials": task["num_trials"],
+                "sessionsPlanned": task["num_trials"],
+                "sessionsRun": len({(r["task_id"], r["trial_index"]) for r in results}),
+                "personasRun": sorted({r["persona"] for r in results if r["persona"]}),
                 "metricsAsked": len(asked),
-                "metricsScored": len(asked & ran_metrics.get(sid, set())),
+                "metricsScored": len(
+                    {r["criterion_id"] for r in results if not r["skipped"]} & asked
+                ),
             }
         )
-
-    return {"personas": plan_personas, "scenarios": scenarios}
+    return {"personas": plan_personas, "tasks": tasks}
 
 
 # ---------------------------------------------------------------------------
@@ -483,8 +401,7 @@ def build_plan(
 
 
 def build_report(
-    profile: Mapping[str, Any],
-    experiment: Mapping[str, Any],
+    specification: Mapping[str, Any],
     test_results: Sequence[Row],
     *,
     persona_of: Mapping[str, str] | None = None,
@@ -498,8 +415,7 @@ def build_report(
 ) -> dict:
     """Build the report the page renders.
 
-    :param profile: The parsed `profile.yaml` for the product under test.
-    :param experiment: The parsed `experiment.yaml` that planned this run.
+    :param specification: The parsed specification.yaml frozen for this run.
     :param test_results: Per turn results, in the shape the JSON report writes.
     :param persona_of: Session id to persona id, from the simulation records.
     :param session_metrics: Session level results, same shape as `test_results`.
@@ -510,27 +426,32 @@ def build_report(
 
     criteria: dict[str, dict] = {}
     behaviour_of: dict[str, str] = {}
-    for feature in profile.get("features") or []:
+    for feature in specification.get("features") or []:
         for behaviour in feature.get("behaviours") or []:
             for criterion in behaviour.get("criteria") or []:
                 criteria[criterion["id"]] = criterion
                 behaviour_of[criterion["id"]] = behaviour["id"]
 
-    # Which behaviours each scenario is meant to exercise. A metric result is attributed
-    # only to criteria on a behaviour its own scenario covers, so a shared metric does
-    # not spill its score across unrelated behaviours.
-    covers: dict[str, list[str]] = {
-        s["id"]: s.get("behaviour_refs") or [] for s in profile.get("scenarios") or []
+    tasks = {t["id"]: t for t in specification.get("tasks", [])}
+    covers = {
+        scenario["id"]: list(
+            {
+                behaviour_of[cid]
+                for t in tasks.values()
+                if t["scenario_ref"] == scenario["id"]
+                for cid in t["criterion_refs"]
+                if cid in behaviour_of
+            }
+        )
+        for scenario in specification.get("scenarios", [])
     }
-
-    fqns = {c["metric_fqn"] for c in criteria.values() if c.get("metric_fqn")}
-    name_of, unresolved = display_names(fqns)
-
-    by_name: dict[str, list[str]] = defaultdict(list)
-    for cid, criterion in criteria.items():
-        fqn = criterion.get("metric_fqn")
-        if fqn and fqn in name_of:
-            by_name[name_of[fqn]].append(cid)
+    # Labels are presentation only; importing and constructing Graders is unnecessary here.
+    name_of = {
+        c["metric_fqn"]: c["metric_fqn"].rsplit(".", 1)[-1]
+        for c in criteria.values()
+        if c.get("metric_fqn")
+    }
+    unresolved: list[str] = []
 
     per_criterion: dict[str, dict] = {
         cid: {
@@ -564,21 +485,19 @@ def build_report(
     }
 
     for row in rows:
-        candidates = by_name.get(row["metric"], [])
-        allowed = set(covers.get(row["scenario"] or "", []))
-        matched = [
-            cid for cid in candidates if behaviour_of[cid] in allowed
-        ] or candidates
+        cid = row["criterion_id"]
+        task = tasks.get(row["task_id"])
+        matched = (
+            [cid] if cid in criteria and task and cid in task["criterion_refs"] else []
+        )
         if not matched:
             _add(unmapped[row["metric"]], row)
-            if row["metric"] not in unmapped_reason:
-                unmapped_reason[row["metric"]] = (
-                    "not named by any criterion"
-                    if row["metric"] not in by_name
-                    else "no covering scenario"
-                )
+            unmapped_reason[row["metric"]] = (
+                "Result has no matching Task and Criterion."
+            )
             continue
-
+        row["scenario"] = task["scenario_ref"]
+        row["persona"] = task["persona_ref"]
         touched = {behaviour_of[cid] for cid in matched}
         for key, name, partner in (
             ("P", row["persona"], row["scenario"]),
@@ -590,7 +509,7 @@ def build_report(
             _add(slot, row)
             slot["sessions"].add(row["session"])
             slot["behaviours"] |= touched
-            slot["metrics"].add(row["metric"])
+            slot["metrics"].add(cid)
             if partner:
                 slot["partners"].add(partner)
 
@@ -604,9 +523,14 @@ def build_report(
             if row["scenario"]:
                 _add(slot["scenario"][row["scenario"]], row)
             if row["session"]:
-                _add(slot["session"][row["session"]], row)
+                _add(slot["session"][(row["task_id"], row["trial_index"])], row)
             slot["evidence"].append(
                 {
+                    "task_id": row["task_id"],
+                    "trial_index": row["trial_index"],
+                    "criterion_id": cid,
+                    "metric_fqn": row["metric_fqn"],
+                    "metric_args": row["metric_args"],
                     "status": (
                         "skip"
                         if row["skipped"]
@@ -625,8 +549,8 @@ def build_report(
             if row["skipped"]:
                 slot["skips"][clean_reason(row["reason"])] += 1
 
-    personas = [p["id"] for p in profile.get("personas") or []]
-    scenarios = [s["id"] for s in profile.get("scenarios") or []]
+    personas = [p["id"] for p in specification.get("personas") or []]
+    scenarios = [s["id"] for s in specification.get("scenarios") or []]
 
     def split(slot: dict, key: str, order: list[str]) -> list[dict | None]:
         """One cell per column of the tree strip. `None` means never exercised."""
@@ -647,13 +571,8 @@ def build_report(
                 )
         return out
 
-    asked_fqns = {
-        fqn
-        for scenario in experiment.get("scenarios") or []
-        for fqn in _metric_refs(scenario)
-    }
-    unresolved_fqns = {item.split(":")[0] for item in unresolved}
-    appeared = {row["metric"] for row in rows}
+    asked_criteria = {cid for task in tasks.values() for cid in task["criterion_refs"]}
+    appeared = {row["criterion_id"] for row in rows}
 
     def blank_cause(criterion: Mapping[str, Any], slot: dict) -> dict:
         """Why a criterion has no pass rate. One cause each, checked in chain order.
@@ -669,15 +588,12 @@ def build_report(
                 "cause": "no metric",
                 "note": "the spec names no metric for this criterion",
             }
-        if fqn in unresolved_fqns:
-            short = fqn.rpartition(".")[2]
-            return {"cause": "no class", "note": f"{short} is not in the library"}
-        if fqn not in asked_fqns:
+        if criterion["id"] not in asked_criteria:
             return {
                 "cause": "not asked",
                 "note": f"no scenario in the experiment asks for {name}",
             }
-        if name not in appeared:
+        if criterion["id"] not in appeared:
             return {
                 "cause": "no result",
                 "note": f"{name} produced no result in this run",
@@ -705,6 +621,7 @@ def build_report(
             "metric": slot["metricName"]
             or name_of.get(criterion.get("metric_fqn") or "", ""),
             "fqn": criterion.get("metric_fqn"),
+            "metric_args": criterion.get("metric_args", {}),
             "pass": slot["all"]["pass"],
             "fail": slot["all"]["fail"],
             "skip": slot["all"]["skip"],
@@ -717,7 +634,7 @@ def build_report(
         }
 
     out_behaviours: dict[str, dict] = {}
-    for feature in profile.get("features") or []:
+    for feature in specification.get("features") or []:
         for behaviour in feature.get("behaviours") or []:
             live = [
                 out_criteria[c["id"]]["rate"]
@@ -737,7 +654,7 @@ def build_report(
             }
 
     out_features = []
-    for feature in profile.get("features") or []:
+    for feature in specification.get("features") or []:
         live = [
             out_behaviours[b["id"]]["rate"]
             for b in feature.get("behaviours") or []
@@ -799,18 +716,18 @@ def build_report(
 
     feature_of_behaviour = {
         behaviour["id"]: feature.get("name", feature["id"])
-        for feature in profile.get("features") or []
+        for feature in specification.get("features") or []
         for behaviour in feature.get("behaviours") or []
     }
     features_of_scenario = {
         scenario["id"]: list(
             dict.fromkeys(
                 feature_of_behaviour[behaviour_id]
-                for behaviour_id in scenario.get("behaviour_refs") or []
+                for behaviour_id in covers.get(scenario["id"], [])
                 if behaviour_id in feature_of_behaviour
             )
         )
-        for scenario in profile.get("scenarios") or []
+        for scenario in specification.get("scenarios") or []
     }
 
     trials = []
@@ -863,16 +780,17 @@ def build_report(
                 if per_criterion[criterion["id"]]["session"]
             ],
         }
-        for feature in profile.get("features") or []
+        for feature in specification.get("features") or []
     ]
     table_features = [feature for feature in table_features if feature["columns"]]
 
     table_rows = []
     for trial in trials:
-        session = str(trial.get("session") or "")
         results = {}
         for cid, slot in per_criterion.items():
-            bucket = slot["session"].get(session)
+            bucket = slot["session"].get(
+                (trial.get("task_id", ""), trial.get("trial_index", 1))
+            )
             if not bucket:
                 continue
             evaluated = bucket["pass"] + bucket["fail"]
@@ -888,7 +806,7 @@ def build_report(
         table_rows.append({**trial, "results": results})
 
     return {
-        "product": (profile.get("product") or {}).get("name", "the product"),
+        "product": (specification.get("product") or {}).get("name", "the product"),
         "run": run_id,
         "date": (timestamp or "")[:10],
         "sessions": len({t.get("session_id", "") for t in test_results}),
@@ -918,12 +836,12 @@ def build_report(
                 "status": status(trial_rate_fraction),
             },
         },
-        "plan": build_plan(experiment, rows, name_of),
+        "plan": build_plan(specification, rows, name_of),
         "personas": personas,
         "scenarios": scenarios,
         "describe": {
-            "P": described(profile.get("personas") or []),
-            "S": described(profile.get("scenarios") or []),
+            "P": described(specification.get("personas") or []),
+            "S": described(specification.get("scenarios") or []),
         },
         "axes": {
             "P": axis_rows("P", personas, len(scenarios)),

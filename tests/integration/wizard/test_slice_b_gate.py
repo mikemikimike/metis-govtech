@@ -7,7 +7,7 @@ gate also proves the interview survives the wire. Nothing in this file touches a
 
 from pathlib import Path
 
-from metis.wizard import compile_profile
+from metis.wizard import compile_specification
 from metis.wizard.application.config import clarify_turn_cap
 from metis.wizard.contracts import (
     ChatRequest,
@@ -31,7 +31,7 @@ def test_the_whole_flow_walks_to_done() -> None:
     assert result.state.confirmed
     assert result.state.pending is None
     assert result.used_end
-    assert "It answers research questions." in result.state.profile.product.detail
+    assert "It answers research questions." in result.state.specification.product.detail
     assert {ChatRequest, ChoiceRequest, FormRequest} <= {
         type(request) for request in result.seen
     }
@@ -39,7 +39,7 @@ def test_the_whole_flow_walks_to_done() -> None:
     first_criteria = stages.index("criteria")
     assert "behaviours" in stages[first_criteria + 1 :]
     assert any(
-        not behaviour.measured for behaviour in result.state.profile.behaviours()
+        not behaviour.measured for behaviour in result.state.specification.behaviours()
     )
     # every drafting step was reached
     assert {
@@ -54,13 +54,13 @@ def test_the_whole_flow_walks_to_done() -> None:
 def test_it_produces_an_experiment_the_engine_loads(tmp_path: Path) -> None:
     result = walk(ScriptedInterviewer())
 
-    compiled = compile_profile(result.state.profile)
-    experiment_path = tmp_path / "experiment.yaml"
-    experiment_path.write_text(compiled.experiment_yaml, encoding="utf-8")
+    compiled = compile_specification(result.state.specification)
+    experiment_path = tmp_path / "specification.yaml"
+    experiment_path.write_text(compiled.specification_yaml, encoding="utf-8")
 
-    from metis.engine.simulation.types import Experiment
+    from metis.engine.simulation.types import Specification
 
-    assert Experiment.load_file(experiment_path).scenarios
+    assert Specification.load_file(experiment_path).scenarios
 
 
 def test_the_state_on_the_wire_stays_bounded() -> None:

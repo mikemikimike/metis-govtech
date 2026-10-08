@@ -133,7 +133,7 @@ class LogRouter:
 
     def process(self, logger: Any, method_name: str, event_dict: EventDict) -> str:
         """Structlog renderer: routes to files + tail, optionally to stderr."""
-        scenario_id = event_dict.get("scenario_id")
+        scenario_id = event_dict.get("task_id") or event_dict.get("scenario_id")
         persona_id = event_dict.get("persona_id")
         trial_index = event_dict.get("trial_index")
 
@@ -187,7 +187,7 @@ class LogRouter:
     def _render_styled(self, event_dict: EventDict) -> Text:
         """Build a styled Rich Text for the TUI tail panel."""
         event = event_dict.get("event", "")
-        scenario_id = event_dict.get("scenario_id")
+        scenario_id = event_dict.get("task_id") or event_dict.get("scenario_id")
         persona_id = event_dict.get("persona_id")
 
         output = Text()

@@ -18,13 +18,13 @@ from metis.engine.simulation.experiment import (
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     ChosenAction,
-    Experiment,
     Observation,
     Persona,
     RunConfig,
     RunOutcome,
     RunRecord,
     Scenario,
+    Specification,
 )
 
 
@@ -72,6 +72,13 @@ class MockRunnerFactory:
 
     async def close(self) -> None:
         pass
+
+
+@pytest.fixture(autouse=True)
+def stub_user_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "metis.engine.simulation.experiment.UserAgent", lambda **kwargs: object()
+    )
 
 
 @pytest.fixture
@@ -460,35 +467,112 @@ class TestWorkerUnexpectedCrash:
 
 class TestFixtureContentDescriptions:
     def test_experiment_accepts_fixture_content_descriptions(self) -> None:
-        exp = Experiment.model_validate(
+        exp = Specification.model_validate(
             {
                 "schema_version": 2,
+                "fixture_content_descriptions": {"q3.csv": "Q3 sales, 200 rows."},
                 "id": "e",
-                "description": "d",
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
-                "personas": [{"id": "p", "description": "d"}],
-                "scenarios": [
+                "personas": [{"id": "p", "description": "d", "name": "p"}],
+                "scenarios": [{"id": "s", "description": "d", "name": "s"}],
+                "product": {
+                    "name": "Test product",
+                    "users": "Test users",
+                    "description": "Test product",
+                },
+                "tasks": [
                     {
-                        "id": "s",
-                        "description": "d",
-                        "persona_refs": ["p"],
+                        "id": "TC-001",
+                        "scenario_ref": "s",
+                        "persona_ref": "p",
                         "fixtures": ["q3.csv"],
+                        "num_trials": 1,
+                        "criterion_refs": ["AC-1-1"],
                     }
                 ],
-                "fixture_content_descriptions": {"q3.csv": "Q3 sales, 200 rows."},
+                "features": [
+                    {
+                        "id": "F-1",
+                        "name": "Responses",
+                        "description": "Responses",
+                        "behaviours": [
+                            {
+                                "id": "EB-1",
+                                "name": "Respond",
+                                "description": "Respond correctly",
+                                "measured": True,
+                                "criteria": [
+                                    {
+                                        "id": "AC-1-1",
+                                        "name": "Check 1",
+                                        "description": {
+                                            "given": "a request",
+                                            "when": "the agent responds",
+                                            "then": "the requirement is met",
+                                        },
+                                        "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
+                                        "metric_args": {},
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
             }
         )
         assert exp.fixture_content_descriptions == {"q3.csv": "Q3 sales, 200 rows."}
 
     def test_experiment_defaults_fixture_content_descriptions_to_empty(self) -> None:
-        exp = Experiment.model_validate(
+        exp = Specification.model_validate(
             {
                 "schema_version": 2,
                 "id": "e",
-                "description": "d",
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
-                "personas": [{"id": "p", "description": "d"}],
-                "scenarios": [{"id": "s", "description": "d", "persona_refs": ["p"]}],
+                "personas": [{"id": "p", "description": "d", "name": "p"}],
+                "scenarios": [{"id": "s", "description": "d", "name": "s"}],
+                "product": {
+                    "name": "Test product",
+                    "users": "Test users",
+                    "description": "Test product",
+                },
+                "tasks": [
+                    {
+                        "id": "TC-001",
+                        "scenario_ref": "s",
+                        "persona_ref": "p",
+                        "fixtures": [],
+                        "num_trials": 1,
+                        "criterion_refs": ["AC-1-1"],
+                    }
+                ],
+                "features": [
+                    {
+                        "id": "F-1",
+                        "name": "Responses",
+                        "description": "Responses",
+                        "behaviours": [
+                            {
+                                "id": "EB-1",
+                                "name": "Respond",
+                                "description": "Respond correctly",
+                                "measured": True,
+                                "criteria": [
+                                    {
+                                        "id": "AC-1-1",
+                                        "name": "Check 1",
+                                        "description": {
+                                            "given": "a request",
+                                            "when": "the agent responds",
+                                            "then": "the requirement is met",
+                                        },
+                                        "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
+                                        "metric_args": {},
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
             }
         )
         assert exp.fixture_content_descriptions == {}
@@ -546,48 +630,110 @@ class TestFixtureContentDescriptions:
                 }
             )
 
-    def test_experiment_rejects_scenario_with_duplicate_persona_refs(self) -> None:
-        import pytest
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError, match="duplicate persona_ref"):
-            Experiment.model_validate(
-                {
-                    "schema_version": 2,
-                    "id": "e",
-                    "description": "d",
-                    "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
-                    "personas": [{"id": "p1", "description": "d"}],
-                    "scenarios": [
-                        {
-                            "id": "s1",
-                            "description": "d",
-                            "persona_refs": ["p1", "p1"],
-                        }
-                    ],
-                }
-            )
-
     def test_scenario_accepts_unique_persona_refs_reused_across_scenarios(
         self,
     ) -> None:
-        exp = Experiment.model_validate(
+        exp = Specification.model_validate(
             {
                 "schema_version": 2,
                 "id": "e",
-                "description": "d",
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
                 "personas": [
-                    {"id": "p1", "description": "d"},
-                    {"id": "p2", "description": "d"},
+                    {"id": "p1", "description": "d", "name": "p1"},
+                    {"id": "p2", "description": "d", "name": "p2"},
                 ],
                 "scenarios": [
-                    {"id": "s1", "description": "d", "persona_refs": ["p1", "p2"]},
-                    {"id": "s2", "description": "d", "persona_refs": ["p1"]},
+                    {"id": "s1", "description": "d", "name": "s1"},
+                    {"id": "s2", "description": "d", "name": "s2"},
+                ],
+                "product": {
+                    "name": "Test product",
+                    "users": "Test users",
+                    "description": "Test product",
+                },
+                "tasks": [
+                    {
+                        "id": "TC-001",
+                        "scenario_ref": "s1",
+                        "persona_ref": "p1",
+                        "fixtures": [],
+                        "num_trials": 1,
+                        "criterion_refs": ["AC-1-1"],
+                    },
+                    {
+                        "id": "TC-002",
+                        "scenario_ref": "s1",
+                        "persona_ref": "p2",
+                        "fixtures": [],
+                        "num_trials": 1,
+                        "criterion_refs": ["AC-1-1"],
+                    },
+                    {
+                        "id": "TC-003",
+                        "scenario_ref": "s2",
+                        "persona_ref": "p1",
+                        "fixtures": [],
+                        "num_trials": 1,
+                        "criterion_refs": ["AC-2-1"],
+                    },
+                ],
+                "features": [
+                    {
+                        "id": "F-1",
+                        "name": "Responses",
+                        "description": "Responses",
+                        "behaviours": [
+                            {
+                                "id": "EB-1",
+                                "name": "Respond",
+                                "description": "Respond correctly",
+                                "measured": True,
+                                "criteria": [
+                                    {
+                                        "id": "AC-1-1",
+                                        "name": "Check 1",
+                                        "description": {
+                                            "given": "a request",
+                                            "when": "the agent responds",
+                                            "then": "the requirement is met",
+                                        },
+                                        "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
+                                        "metric_args": {},
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "id": "F-2",
+                        "name": "Responses",
+                        "description": "Responses",
+                        "behaviours": [
+                            {
+                                "id": "EB-2",
+                                "name": "Respond",
+                                "description": "Respond correctly",
+                                "measured": True,
+                                "criteria": [
+                                    {
+                                        "id": "AC-2-1",
+                                        "name": "Check 1",
+                                        "description": {
+                                            "given": "a request",
+                                            "when": "the agent responds",
+                                            "then": "the requirement is met",
+                                        },
+                                        "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
+                                        "metric_args": {},
+                                    }
+                                ],
+                            }
+                        ],
+                    },
                 ],
             }
         )
-        assert [s.persona_refs for s in exp.scenarios] == [["p1", "p2"], ["p1"]]
+        assert [t.persona_ref for t in exp.tasks] == ["p1", "p2", "p1"]
 
 
 @pytest.mark.asyncio
@@ -858,3 +1004,78 @@ class TestAttemptScopedArtifacts:
         superseded = list(run_dir.glob("artifacts-superseded-*"))
         assert len(superseded) == 1
         assert (superseded[0] / "report.pdf").read_text() == "first process"
+
+
+@pytest.mark.asyncio
+async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -> None:
+    from metis.engine.tui.state import (
+        SimulationRunState,
+        SimulationScenarioState,
+        SimulationState,
+    )
+
+    persona = Persona(id="tester", description="A patient user")
+    scenarios = [
+        Scenario(
+            id="shared",
+            task_id=task,
+            description="Ask a question",
+            persona_refs=[persona.id],
+        )
+        for task in ("TC-001", "TC-002")
+    ]
+    state = SimulationState(
+        "test",
+        [
+            SimulationScenarioState(
+                s.task_id,
+                [
+                    SimulationRunState(
+                        s.task_id, persona.id, 1, 1, "pending", None, 20, "", None, None
+                    )
+                ],
+                "pending",
+            )
+            for s in scenarios
+        ],
+        2,
+    )
+    factory = MockRunnerFactory()
+    logger = MagicMock()
+
+    def orchestrator(**kwargs):
+        record = RunRecord(
+            config=kwargs["run_config"],
+            outcome=RunOutcome(
+                stop_reason="goal_achieved", total_turns=1, duration_seconds=0.1
+            ),
+        )
+        return MagicMock(run=AsyncMock(return_value=record))
+
+    with patch(
+        "metis.engine.simulation.experiment.Orchestrator", side_effect=orchestrator
+    ):
+        records = await _worker(
+            worker_id=0,
+            runner_factory=factory,
+            worker_runs=[RunPlanItem(s, persona, 1) for s in scenarios],
+            experiment_root=tmp_path,
+            fixtures_dir=tmp_path / "fixtures",
+            fixture_content_descriptions={},
+            console_lock=asyncio.Lock(),
+            started_scenarios=set(),
+            run_max_retries=0,
+            run_retry_delay_seconds=0,
+            state=state,
+            orchestration_logger=logger,
+        )
+    assert [r.config.task_id for r in records] == ["TC-001", "TC-002"]
+    assert all(
+        r.config.scenario == "shared" and r.config.trial_index == 1 for r in records
+    )
+    assert state.completed_runs == 2
+    assert [call.args[0] for call in logger.scenario_completed.call_args_list] == [
+        "TC-001",
+        "TC-002",
+    ]
+    assert len(list((tmp_path / "runs").glob("*/record.json"))) == 2

@@ -22,7 +22,7 @@ from metis.wizard.contracts import (
     ClarifyResult,
     InterviewDocument,
     Product,
-    ProductProfile,
+    Specification,
 )
 from tests.fixtures.wizard.context import interview_context
 
@@ -112,7 +112,9 @@ def test_gateway_connection_failure_is_a_retryable_interviewer_error() -> None:
 
     with pytest.raises(InterviewerOutputError, match="could not complete"):
         gateway.clarify(
-            profile=ProductProfile(product=Product(name="", description="", users="")),
+            specification=Specification(
+                product=Product(name="", description="", users="")
+            ),
             history=[],
             context=interview_context(),
         )
@@ -166,7 +168,7 @@ def test_a_recovered_step_drops_its_narrated_intro() -> None:
     implementation detail — it must never reach the user, so the gateway blanks it in code
     rather than trusting the model not to write it. The patches, the real output, survive."""
     from metis.wizard.contracts import StepResult
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
     bad = "{not json at all"
     corrected = StepResult(
@@ -186,7 +188,7 @@ def test_a_recovered_step_drops_its_narrated_intro() -> None:
 def test_a_clean_step_keeps_the_model_intro() -> None:
     """First-attempt output is trusted — the justification the model writes is worth showing."""
     from metis.wizard.contracts import StepResult
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
     clean = StepResult(
         message="These personas stress citation discipline and scope refusal.",
@@ -210,9 +212,11 @@ def test_three_failures_raise() -> None:
     assert len(completions.calls) == ATTEMPTS
 
 
-def test_raw_scenario_fields_are_rejected_before_profile_materialization() -> None:
+def test_raw_scenario_fields_are_rejected_before_specification_materialization() -> (
+    None
+):
     """The regression starts at provider JSON, before a typed Scenario can exist."""
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
     invalid = json.dumps(
         {
@@ -225,10 +229,8 @@ def test_raw_scenario_fields_are_rejected_before_profile_materialization() -> No
                         "id": "MODEL-ID",
                         "name": "Invalid scenario",
                         "description": "x",
-                        "behaviour_refs": [],
-                        "persona_refs": [],
                         "num_trials": 99,
-                        "fixtures": ["secret.txt"],
+                        "tasks": [],
                     },
                 }
             ],
@@ -241,12 +243,7 @@ def test_raw_scenario_fields_are_rejected_before_profile_materialization() -> No
                 {
                     "op": "add",
                     "path": "scenarios",
-                    "value": {
-                        "name": "A scenario",
-                        "description": "x",
-                        "behaviour_refs": [],
-                        "persona_refs": [],
-                    },
+                    "value": {"name": "A scenario", "description": "x", "tasks": []},
                 }
             ],
         }
@@ -269,7 +266,7 @@ def test_raw_scenario_fields_are_rejected_before_profile_materialization() -> No
 
 
 def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
     invalid = json.dumps(
         {
@@ -361,9 +358,9 @@ def test_model_schema_has_no_persisted_or_runtime_fields() -> None:
 
 
 def test_raw_scenario_fixtures_are_retried_until_they_match_the_context() -> None:
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
-    profile = research_assistant()
+    specification = research_assistant()
     context = interview_context()
     context.documents = [InterviewDocument(name="policy.md")]
     bad = json.dumps(
@@ -376,9 +373,13 @@ def test_raw_scenario_fixtures_are_retried_until_they_match_the_context() -> Non
                     "value": {
                         "name": "Use the policy",
                         "description": "Ask about a policy rule.",
-                        "behaviour_refs": ["EB-1"],
-                        "persona_refs": ["impatient-executive"],
-                        "fixtures": ["unknown.csv"],
+                        "tasks": [
+                            {
+                                "persona_ref": "impatient-executive",
+                                "criterion_refs": ["AC-1-1"],
+                                "fixtures": ["unknown.csv"],
+                            }
+                        ],
                     },
                 }
             ],
@@ -387,10 +388,10 @@ def test_raw_scenario_fixtures_are_retried_until_they_match_the_context() -> Non
     good = bad.replace("unknown.csv", "policy.md")
     model, completions = interviewer([bad, good])
 
-    result = model.draft_scenarios(profile, context=context)
+    result = model.draft_scenarios(specification, context=context)
 
     assert len(completions.calls) == 2
-    assert result.patches[0].value.fixtures == ["policy.md"]
+    assert result.patches[0].value.tasks[0].fixtures == ["policy.md"]
     retry = completions.calls[1]["messages"]
     assert retry[2]["content"] == bad
     assert "unknown.csv" in retry[3]["content"]
@@ -413,7 +414,7 @@ def test_model_origin_is_not_part_of_provider_schema() -> None:
     )
     good = json.dumps({"message": "done", "patches": []})
     model, completions = interviewer([bad, good])
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
     result = model._step(simple_prompt("chat"), research_assistant())
 
@@ -425,11 +426,11 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     """The patch envelope is valid, but its value is not a Feature.
 
     The model-facing schema and domain validation belong inside the same retry loop. The
-    failed attempt must not apply its earlier product edit to the real profile.
+    failed attempt must not apply its earlier product edit to the real specification.
     """
-    from metis.wizard.contracts import FeatureDraft, Product, ProductProfile
+    from metis.wizard.contracts import FeatureDraft, Product, Specification
 
-    profile = ProductProfile(product=Product(name="X", description="", users=""))
+    specification = Specification(product=Product(name="X", description="", users=""))
     bad = json.dumps(
         {
             "message": "drafted",
@@ -501,14 +502,14 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     )
     model, completions = interviewer([bad, empty, good])
 
-    result = model.draft_behaviours(profile, [], context=interview_context())
+    result = model.draft_behaviours(specification, [], context=interview_context())
 
     assert len(completions.calls) == 3
     feature = result.patches[-1].value
     assert isinstance(feature, FeatureDraft)
     assert feature.behaviours[0].description
-    assert profile.product.description == ""
-    assert profile.features == []
+    assert specification.product.description == ""
+    assert specification.features == []
     retry_messages = completions.calls[2]["messages"]
     assert [message["role"] for message in retry_messages] == [
         "system",
@@ -525,10 +526,10 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
 
 def test_a_duplicate_persona_description_is_retried() -> None:
     from metis.wizard.contracts import PersonaDraft, StepResult, StepResultPatch
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
-    profile = research_assistant()
-    existing = profile.personas[0]
+    specification = research_assistant()
+    existing = specification.personas[0]
     duplicate = StepResult(
         message="added",
         patches=[
@@ -542,7 +543,7 @@ def test_a_duplicate_persona_description_is_retried() -> None:
     good = StepResult(message="updated", patches=[]).model_dump_json()
     model, completions = interviewer([duplicate, good])
 
-    result = model.chat(profile, "personas", "Use these personas instead", None)
+    result = model.chat(specification, "personas", "Use these personas instead", None)
 
     assert result.patches == []
     assert len(completions.calls) == 2
@@ -558,7 +559,7 @@ def test_a_duplicate_persona_description_is_retried() -> None:
 
 
 def test_chat_prompt_includes_the_user_message_and_scope_data() -> None:
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
     prompt = prompts.chat(
         research_assistant(),
@@ -573,53 +574,57 @@ def test_chat_prompt_includes_the_user_message_and_scope_data() -> None:
 
 def test_each_semantic_call_sends_one_complete_named_prompt() -> None:
     from metis.wizard.contracts import StepResult
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
-    profile = research_assistant()
+    specification = research_assistant()
     context = interview_context()
     cases = [
         (
             "clarify",
-            lambda model: model.clarify(profile, [], context=context),
-            lambda: prompts.clarify(profile, [], context=context),
+            lambda model: model.clarify(specification, [], context=context),
+            lambda: prompts.clarify(specification, [], context=context),
             ClarifyResult(message="", done=True).model_dump_json(),
         ),
         (
             "behaviours",
-            lambda model: model.draft_behaviours(profile, [], context=context),
-            lambda: prompts.behaviours(profile, [], context=context),
+            lambda model: model.draft_behaviours(specification, [], context=context),
+            lambda: prompts.behaviours(specification, [], context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "criteria",
-            lambda model: model.draft_criteria(profile, context=context),
-            lambda: prompts.criteria(profile, context=context),
+            lambda model: model.draft_criteria(specification, context=context),
+            lambda: prompts.criteria(specification, context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "personas",
-            lambda model: model.draft_personas(profile, context=context),
-            lambda: prompts.personas(profile, context=context),
+            lambda model: model.draft_personas(specification, context=context),
+            lambda: prompts.personas(specification, context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "scenarios",
-            lambda model: model.draft_scenarios(profile, context=context),
-            lambda: prompts.scenarios(profile, context=context),
+            lambda model: model.draft_scenarios(specification, context=context),
+            lambda: prompts.scenarios(specification, context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "chat",
             lambda model: model.chat(
-                profile, "criteria", "edit", "EB-1", context=context
+                specification, "criteria", "edit", "EB-1", context=context
             ),
-            lambda: prompts.chat(profile, "criteria", "edit", "EB-1", context=context),
+            lambda: prompts.chat(
+                specification, "criteria", "edit", "EB-1", context=context
+            ),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
         (
             "suggest_criterion",
-            lambda model: model.suggest_criterion(profile, "EB-1", context=context),
-            lambda: prompts.suggest_criterion(profile, "EB-1", context=context),
+            lambda model: model.suggest_criterion(
+                specification, "EB-1", context=context
+            ),
+            lambda: prompts.suggest_criterion(specification, "EB-1", context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
     ]
@@ -675,7 +680,7 @@ def test_the_gateway_builds_its_client_from_the_langfuse_drop_in() -> None:
 
 
 def test_the_primer_is_in_the_system_prompt() -> None:
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
     system = prompts.criteria(research_assistant()).system
 
@@ -688,7 +693,7 @@ def test_changing_the_primer_file_changes_the_prompt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """It is a file so it can be tuned without touching code or redeploying."""
-    from tests.fixtures.wizard.profiles import research_assistant
+    from tests.fixtures.wizard.specifications import research_assistant
 
     monkeypatch.setattr(prompts, "primer", lambda: "REPLACED PRIMER TEXT")
 

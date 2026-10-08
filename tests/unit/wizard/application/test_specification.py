@@ -15,8 +15,8 @@ from metis.wizard.application.compile import (
     write_specification,
 )
 from metis.wizard.application.compile import specification as specification_module
-from metis.wizard.contracts import ProductProfile
-from tests.fixtures.wizard.profiles import research_assistant
+from metis.wizard.contracts import Specification
+from tests.fixtures.wizard.specifications import research_assistant
 
 
 class GuardedStream(BytesIO):
@@ -34,22 +34,11 @@ class GuardedStream(BytesIO):
 
 
 def _document(*fixtures: str) -> dict:
-    return {
-        "schema_version": 2,
-        "id": "specification-test",
-        "description": "A specification test.",
-        "personas": [{"id": "p", "description": "A person."}],
-        "scenarios": [
-            {
-                "id": "S-1",
-                "description": "Use the fixtures.",
-                "num_trials": 1,
-                "persona_refs": ["p"],
-                "metric_refs": [],
-                **({"fixtures": list(fixtures)} if fixtures else {}),
-            }
-        ],
-    }
+    specification = research_assistant()
+    specification.id = "research-assistant"
+    for task in specification.tasks:
+        task.fixtures = list(fixtures)
+    return specification.model_dump(mode="json")
 
 
 def test_specification_has_engine_input_shape_and_opaque_bytes(tmp_path: Path) -> None:
@@ -57,53 +46,54 @@ def test_specification_has_engine_input_shape_and_opaque_bytes(tmp_path: Path) -
     fixture_dir.mkdir()
     (fixture_dir / "policy.html").write_bytes(b"<script>alert(1)</script>")
     (fixture_dir / "data.csv").write_text("a,b\n1,2\n")
-    target = tmp_path / "experiment.zip"
+    target = tmp_path / "specification.zip"
 
     write_specification(_document("policy.html"), fixture_dir, target)
 
     with zipfile.ZipFile(target) as archive:
         assert archive.namelist() == [
-            "experiment.yaml",
+            "specification.yaml",
             "fixtures/",
             "fixtures/data.csv",
             "fixtures/policy.html",
         ]
         assert archive.read("fixtures/policy.html") == b"<script>alert(1)</script>"
-        assert "features:" not in archive.read("experiment.yaml").decode()
+        assert "features:" in archive.read("specification.yaml").decode()
 
 
 def test_specification_keeps_an_explicit_empty_fixtures_directory(
     tmp_path: Path,
 ) -> None:
-    target = tmp_path / "experiment.zip"
+    target = tmp_path / "specification.zip"
     write_specification(_document(), tmp_path / "fixtures", target)
 
     with zipfile.ZipFile(target) as archive:
-        assert archive.namelist() == ["experiment.yaml", "fixtures/"]
+        assert archive.namelist() == ["specification.yaml", "fixtures/"]
 
 
-def test_specification_can_include_a_portable_profile(tmp_path: Path) -> None:
-    profile = research_assistant()
-    target = tmp_path / "experiment.zip"
+def test_specification_can_include_a_portable_specification(tmp_path: Path) -> None:
+    specification = research_assistant()
+    specification.id = "research-assistant"
+    for task in specification.tasks:
+        task.fixtures = []
+    target = tmp_path / "specification.zip"
 
     write_specification(
-        _document(),
+        specification.model_dump(mode="json"),
         tmp_path / "fixtures",
         target,
-        profile=profile,
     )
 
     with zipfile.ZipFile(target) as archive:
         assert archive.namelist() == [
-            "experiment.yaml",
-            "profile.yaml",
+            "specification.yaml",
             "fixtures/",
         ]
-        saved = ProductProfile.model_validate(
-            yaml.safe_load(archive.read("profile.yaml"))
+        saved = Specification.model_validate(
+            yaml.safe_load(archive.read("specification.yaml"))
         )
 
-    assert saved == profile
+    assert saved == specification
 
 
 def test_specification_refuses_missing_referenced_file(tmp_path: Path) -> None:
@@ -112,35 +102,38 @@ def test_specification_refuses_missing_referenced_file(tmp_path: Path) -> None:
 
     with pytest.raises(SpecificationError, match="missing.txt"):
         write_specification(
-            _document("missing.txt"), fixture_dir, tmp_path / "experiment.zip"
+            _document("missing.txt"), fixture_dir, tmp_path / "specification.zip"
         )
 
 
-def test_in_memory_packager_contains_profile_experiment_and_fixtures() -> None:
-    profile = research_assistant()
+def test_in_memory_packager_contains_specification_and_fixtures() -> None:
+    specification = research_assistant()
+    specification.id = "research-assistant"
     archive_bytes = package_specification(
-        profile,
+        specification,
         [SpecificationFixture("policy.pdf", BytesIO(b"policy bytes"))],
     )
 
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
         assert set(archive.namelist()) == {
-            "experiment.yaml",
-            "profile.yaml",
+            "specification.yaml",
             "fixtures/",
             "fixtures/policy.pdf",
         }
         assert archive.read("fixtures/policy.pdf") == b"policy bytes"
         assert (
-            ProductProfile.model_validate(yaml.safe_load(archive.read("profile.yaml")))
-            == profile
+            Specification.model_validate(
+                yaml.safe_load(archive.read("specification.yaml"))
+            )
+            == specification
         )
 
 
 def test_in_memory_packager_includes_unreferenced_fixtures() -> None:
-    profile = research_assistant()
+    specification = research_assistant()
+    specification.id = "research-assistant"
     archive_bytes = package_specification(
-        profile,
+        specification,
         [
             SpecificationFixture("policy.pdf", BytesIO(b"policy bytes")),
             SpecificationFixture("notes.txt", BytesIO(b"unreferenced notes")),
@@ -161,7 +154,7 @@ def test_in_memory_packager_keeps_an_empty_fixture_directory() -> None:
     archive_bytes = build_specification_archive(_document(), [])
 
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
-        assert archive.namelist() == ["experiment.yaml", "fixtures/"]
+        assert archive.namelist() == ["specification.yaml", "fixtures/"]
 
 
 @pytest.mark.parametrize(

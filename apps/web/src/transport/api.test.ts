@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { synthesizeManualProfile } from "../manual.ts";
+import { synthesizeManualSpecification } from "../manual.ts";
 import { api, TransportError, type InterviewState } from "./api.ts";
 
 const originalFetch = globalThis.fetch;
@@ -10,8 +10,12 @@ afterEach(() => {
 });
 
 const state = {
-  profile: {
+  specification: {
     schema_version: 2,
+    id: "test",
+    runner_factory_ref:
+      "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+    tasks: [],
     product: { name: "", users: "", description: "", detail: "" },
     features: [],
     personas: [],
@@ -62,10 +66,10 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
     text: "It answers questions",
   });
   await api.end(state);
-  await api.compile(state.profile);
+  await api.compile(state.specification);
   await api.metrics();
   await api.config();
-  await api.package(state.profile, []);
+  await api.package(state.specification, []);
 
   assert.deepEqual(
     calls.map((call) => call.path),
@@ -92,7 +96,7 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
     response: { type: "chat", text: "It answers questions" },
   });
   assert.deepEqual(calls[2]?.body, { state });
-  assert.deepEqual(calls[3]?.body, state.profile);
+  assert.deepEqual(calls[3]?.body, state.specification);
 });
 
 test("sends the selected perspective and capability evidence when an Interview begins", async () => {
@@ -187,7 +191,7 @@ test("preserves extraction failure details", async () => {
   );
 });
 
-test("packages a synthesized manual Profile and its fixtures as multipart", async () => {
+test("packages a synthesized manual Specification and its fixtures as multipart", async () => {
   let received: FormData | undefined;
   globalThis.fetch = async (input, init) => {
     assert.equal(String(input), "/api/v1/wizard/package");
@@ -200,16 +204,18 @@ test("packages a synthesized manual Profile and its fixtures as multipart", asyn
     });
   };
 
-  const profile = synthesizeManualProfile({
+  const specification = synthesizeManualSpecification({
     id: "manual-test",
     description: "A manual experiment.",
     personas: [{ id: "reviewer", description: "A reviewer." }],
-    scenarios: [
+    scenarios: [{ id: "check-answer", description: "Check one answer." }],
+    tasks: [
       {
-        id: "check-answer",
-        description: "Check one answer.",
+        id: "",
+
+        scenario_ref: "check-answer",
         num_trials: 1,
-        persona_refs: ["reviewer"],
+        persona_ref: "reviewer",
         fixtures: ["policy.pdf"],
         scorers: [
           {
@@ -224,12 +230,12 @@ test("packages a synthesized manual Profile and its fixtures as multipart", asyn
   const policy = new File(["policy"], "policy.pdf", {
     type: "application/pdf",
   });
-  const archive = await api.package(profile, [
+  const archive = await api.package(specification, [
     { name: policy.name, blob: policy },
   ]);
 
   assert.equal(await archive.text(), "zip bytes");
-  assert.equal(received?.get("profile"), JSON.stringify(profile));
+  assert.equal(received?.get("specification"), JSON.stringify(specification));
   assert.equal((received?.get("files") as File).name, "policy.pdf");
 });
 
@@ -246,7 +252,7 @@ test("package failures preserve the API error shape", async () => {
     );
 
   await assert.rejects(
-    api.package(state.profile, []),
+    api.package(state.specification, []),
     (cause: unknown) =>
       cause instanceof TransportError &&
       cause.status === 400 &&
