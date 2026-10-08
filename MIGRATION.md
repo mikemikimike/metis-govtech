@@ -63,6 +63,115 @@ Keep `schema_version: 2` on `next`. Use the complete example in
 The domain `Task` below was previously used for a product function. That older
 concept is now `Feature`. The current Task is an explicit Test Case.
 
+#### From `experiment.yaml` to `specification.yaml`
+
+Use this table to find where each `experiment.yaml` field goes. Profile fields
+(`product`, `features`, and Criteria) move into the same file without change,
+except for the Criterion Grader fields in the table.
+
+| Old field | New field |
+|---|---|
+| `description` (top level) | `product.description` |
+| `personas[].id`, `personas[].description` | Same fields. Add the new required `name`. |
+| `scenarios[].id`, `scenarios[].description` | Same fields. Add the new required `name`. |
+| `scenarios[].persona_refs` | One Task for each Persona, with `tasks[].scenario_ref` and `tasks[].persona_ref` |
+| `scenarios[].fixtures` | `tasks[].fixtures` on each of those Tasks |
+| `scenarios[].num_trials` | `tasks[].num_trials` on each of those Tasks |
+| `scenarios[].metric_refs` | One Criterion for each Grader, with `metric_fqn` and `metric_args`. Tasks select Criteria with `tasks[].criterion_refs`. |
+| `scenarios[].max_turns`, `timeout_minutes`, `response_wait_ms`, `max_run_retries` | Removed. Delete these fields; the engine defaults apply. |
+| Profile `scenarios[].behaviour_refs` | Removed. Coverage comes from Task → Criterion → Behaviour. |
+
+Check these points when you convert a file:
+
+- **Trial count default.** The old Scenario default for `num_trials` was `1`. The
+  Task default is `3`. If an old Scenario did not set `num_trials`, set
+  `num_trials: 1` on its Tasks to keep the same number of Trials.
+- **Execution limits.** A specification cannot set `max_turns`, `timeout_minutes`,
+  `response_wait_ms`, or `max_run_retries`. A Scenario that contains one of them
+  fails validation. A run uses `max_turns: 20`, `timeout_minutes: 15`, and
+  `response_wait_ms: 300000`. A Grader argument such as `TurnBudgetMetric`
+  `max_turns` sets the passing budget only. It does not stop the run.
+- **Grader formats.** The old `metric_refs` item had three formats. Each becomes
+  one Criterion:
+
+  | Old `metric_refs` item | Criterion fields |
+  |---|---|
+  | `metis.library.metrics.X` | `metric_fqn: metis.library.metrics.X`, `metric_args: {}` |
+  | `metis.library.metrics.X: {max_turns: 4}` | `metric_fqn: metis.library.metrics.X`, `metric_args: {max_turns: 4}` |
+  | `{class: metis.library.metrics.X, args: {...}}` | `metric_fqn: metis.library.metrics.X`, `metric_args: {...}` |
+
+- **Where a Criterion goes.** Put the Criterion under the Behaviour that it
+  measures, and set `measured: true` on that Behaviour. If a Criterion with the
+  same requirement and Grader settings exists, select it. Do not add a second one.
+  If no Behaviour fits, add one. The example adds `F-EXEC` and `EB-EXEC-1` for
+  Graders that had no Criterion.
+
+The example below shows part of the Orca `direct-question` Scenario before and
+after conversion. The old Scenario has three Personas and seven Graders. The
+example shows two Personas and two Graders.
+
+Before, in `experiment.yaml`:
+
+```yaml
+scenarios:
+  - id: direct-question
+    description: Ask Orca the difference between a bar chart and a histogram.
+    num_trials: 3
+    persona_refs: [cooperative-delegator, impatient-executive]
+    metric_refs:
+      - metis.library.metrics.DirectHandleRecognitionMetric
+      - metis.library.metrics.TurnBudgetMetric:
+          max_turns: 4
+```
+
+After, in `specification.yaml`:
+
+```yaml
+features:
+  - id: F-EXEC
+    name: Execution checks
+    description: Checks that had no matching Criterion.
+    behaviours:
+      - id: EB-EXEC-1
+        name: Execution checks
+        description: Additional checks selected for the evaluation.
+        measured: true
+        criteria:
+          - id: AC-EXEC-3
+            name: Turn budget
+            description:
+              given: an evaluation interaction
+              when: the interaction is evaluated
+              then: the session completed within the allowed turn budget
+            metric_fqn: metis.library.metrics.TurnBudgetMetric
+            metric_args:
+              max_turns: 4
+  # AC-ORCA-2 already exists under its Orchestration Behaviour. It now has
+  # metric_fqn: metis.library.metrics.DirectHandleRecognitionMetric.
+
+scenarios:
+  - id: direct-question
+    name: Direct question
+    description: Ask Orca the difference between a bar chart and a histogram.
+
+tasks:
+  - id: TC-001
+    scenario_ref: direct-question
+    persona_ref: cooperative-delegator
+    fixtures: []
+    num_trials: 3
+    criterion_refs: [AC-ORCA-2, AC-EXEC-3]
+  - id: TC-002
+    scenario_ref: direct-question
+    persona_ref: impatient-executive
+    fixtures: []
+    num_trials: 3
+    criterion_refs: [AC-ORCA-2, AC-EXEC-3]
+```
+
+The full converted file is
+`packages/engine/example-experiment/specification.yaml`.
+
 
 ### metis-wizard
 
