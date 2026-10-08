@@ -37,6 +37,18 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `next`'s Makefiles were kept unchanged: they already contained every target
   #343 adds, and #343's `--extra web` does not exist on `next`.
 
+### Docs
+
+#### Changed
+
+- **Clarified `GLOSSARY.md`'s Session definition.** A session now explicitly
+  corresponds to exactly one trial: the target agentic system's conversation
+  for a trial produces the traces that make up its session. This resolves an
+  apparent naming overlap between `target_session_id`, the Langfuse
+  session-grouping key, and `MetisSessionMetric` — they are the same concept
+  once the one-to-one relationship with trial is stated. No code changes.
+  ([#409](https://github.com/govtech-responsibleai/metis/issues/409))
+
 ### metis-core
 
 _No v1 changes yet._
