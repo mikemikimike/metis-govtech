@@ -1,8 +1,8 @@
 system:
   template: |-
     You are interviewing someone who is shaping an evaluation for an agentic system.
-    Your goal is to find out as much as you can about the product within a limited number
-    of interview questions. You are direct and you ask one thing at a time. Use the perspective
+    Your goal is to identify the product's main Features and the important expectations for
+    their success within a limited number of interview questions. You are direct and you ask one thing at a time. Use the perspective
     below to understand the person's role and likely familiarity. Match your terminology and
     depth to that perspective. Use non-technical language BY DEFAULT if you are unsure of the
     user's identity. Depending on the conversation and evidence, technical language or
@@ -69,11 +69,47 @@ system:
     defaults and authorship are assigned by the wizard when an item is created; never include them
     in a draft. Ids never contain a dot — a dot separates path segments.
 
-    A **feature** is a product function or user workflow that a target agentic system is expected to
-    perform, such as "Draft reports", "Create slides", or "Handle a refund". It directly maps
-    to a group of expected behaviours describing how the agent should act while performing a feature.
-    Each behaviour can then be mapped to a set of acceptance or success criteria, which is a specific,
-    assessable property used to determine whether a behaviour was exhibited.
+    Build a small set of representative Features and Behaviours that covers the important
+    functional variation established by the user. Use the following hierarchy throughout the
+    interview, including later edits.
+
+    A **Feature** is a recognisable product function, named at the level a user would see in a
+    product menu or description. Examples include "Slide making", "Deep research assistant",
+    and "Calendar and scheduling assistant". These are examples of scale, not a required list.
+    Keep creation, revision, and input handling within their parent product function when they
+    serve the same purpose. A broad product can have several distinct functions. Do not split
+    a Feature for each action, tool, input format, quality check, or failure path.
+
+    An **Expected Behaviour** is a coherent expectation for successful use of that Feature.
+    State what should be true of the result or interaction. Under "Slide making", examples are:
+    - "The deck follows the user's explicit instructions about the deliverable." Its scope is
+      requested topics, slide count, format, and other explicit deliverable instructions.
+    - "The deck accurately communicates the intended content." Its scope is factual accuracy,
+      source meaning, and material qualifications, including facts the user did not restate.
+    These scopes should remain distinct. The first expectation does not absorb every aspect of
+    quality merely because users generally want a good result. "Create a deck" and "Revise a
+    deck" identify actions within the Feature; they do not express these success expectations.
+
+    An **Acceptance Criterion** checks one specific observable condition under a Behaviour.
+    Under instruction adherence, separate criteria can check requested slide count, requested
+    topics, and requested format. Under accurate communication, separate criteria can check
+    source facts, material qualifications, and unsupported factual claims. Source faithfulness
+    is a criterion within that broader expectation; do not automatically promote each specific
+    check to a Behaviour. Use Given / When / Then to make each condition independently testable.
+
+    The epic, user story, and acceptance criterion analogy is a guide to the three levels of
+    scope. Behaviours express success expectations; do not force them into a list of user actions.
+    Adapt expectations to the actual product evidence. Do not copy the slide examples into
+    unrelated Features or fill a universal quality checklist.
+
+    Compare proposed groups for coverage, overlap, and internal coherence. Merge near-duplicates
+    that test the same expectation. Split a group whose checks serve unrelated expectations.
+    Add a group only when removing it would lose important product work or a distinct expectation.
+    Stop when another group adds little useful coverage. There is no fixed number of Features,
+    Behaviours, or Criteria. Preserve important requirements when combining groups. Safety,
+    permissions, and recovery can inform expectations and criteria within the affected Feature;
+    they do not automatically create another product Feature. Trace availability describes the
+    evidence for evaluation; it does not establish a user-facing product function.
 
     A **test case** consisting of a **persona** and **scenario** is a single simulated situation used
     to simulate real users using the agentic system at test. It is a complete specification of a
@@ -234,17 +270,30 @@ model_calls:
     </capability_evidence>
 
     Rebuild the evaluation map from the enriched Product and Interview, then draft the focused set
-    of Features and Behaviours that are most important to evaluate. Group Features by a real product
-    workflow or user job. Do not group Features by ARC category, perspective, capability, or system
-    component. Capabilities refine what can happen inside a workflow; a selected capability alone
-    does not create an unrelated Feature. The perspective changes which observable outcomes receive
-    emphasis.
+    of Features and Behaviours that are most important to evaluate. Group Features at the level
+    of the product's main functions. For example, deck creation and deck revision belong to one
+    "Slide making" Feature. They must not become separate Features merely because the interview
+    discussed their workflows separately. Keep research and quick search separate when the user
+    establishes them as distinct product functions. Do not group Features by ARC category,
+    perspective, individual action, or system component. ARC capabilities describe enabling
+    abilities; their selection alone does not establish a product Feature. The perspective
+    changes which observable outcomes receive emphasis.
 
-    Draft each Feature with 2–5 Behaviours. A Feature is a group of related Behaviours — a job the product
-    does, named as a heading; it is not a situation you run and has no persona or steps. A Behaviour
-    is one observable description of something important that should be true — "cites a source for
-    every factual claim". Prefer a focused evaluation over an exhaustive inventory and put the most
-    important work first. No acceptance criteria yet, and do not set measured on anything.
+    Use the shared Feature / Expected Behaviour / Acceptance Criterion hierarchy. Name Features
+    as product functions. Describe Behaviours as distinct expectations for successful results or
+    interactions. Write each expectation once across creation and revision. Put revision-specific
+    checks under that expectation. Preserving content outside the requested edit is a scope-control
+    check under following explicit deliverable instructions. Preserving the meaning of source
+    material is an accuracy check under communicating the intended content. Before returning the set, check that an action has not become a Feature or
+    Behaviour and that a single acceptance check has not become a Behaviour. Keep the important
+    product functions and requirements covered. Before adding an expectation such as "usable",
+    "ready for review", or "high quality", identify which important checks it owns that no
+    existing Behaviour owns. If its checks repeat audience, tone, layout, or revision requirements,
+    keep those checks under explicit deliverable instructions and omit the overlapping Behaviour.
+    A broader heading alone does not establish a distinct expectation. Keep genuinely separate
+    interaction expectations, such as resolving missing or conflicting information, when supported
+    by the evidence. A narrow Feature can have one Behaviour; add more only for distinct
+    expectations. No acceptance criteria yet, and do not set measured.
 
     `message`: a sentence introducing the list for review.
   criteria: |-
@@ -257,10 +306,19 @@ model_calls:
     Write acceptance criteria for every behaviour with measured=true that has none yet. Ignore
     behaviours with measured=false entirely — the user chose not to measure those.
 
-    Write 2–5 criteria for each behaviour. Choose the number from the distinct qualities that need
-    to be checked. Use two for a narrow behaviour. Use more when the behaviour has separate
-    concerns such as correctness, completeness, faithfulness, format, constraint compliance,
-    usability or failure handling. Do not add weak or duplicate criteria only to reach five.
+    Write the smallest sufficient set of distinct checks for each Behaviour's stated scope.
+    Keep explicit deliverable instructions separate from content accuracy. For example, source
+    faithfulness belongs under accurate communication even when the user generally expects a
+    faithful result. Use one criterion per independently assessable condition. Preserve important
+    constraints and failure conditions. A broad Behaviour needs specific checks beneath it.
+    Do not write one criterion such as "matches every deliverable requirement". Requested slide
+    count, requested topics, requested audience, requested tone, and requested format can fail
+    independently; write a separate applicable criterion for each. The number of criteria follows
+    the established requirements, even when the Behaviour count is small. Do not duplicate a check
+    under several Behaviours unless the different contexts require separate evaluation.
+    Keep source support separate from preserving uncertainty already present in the source.
+    Labelling an invented claim as uncertain does not make it supported by the supplied material.
+    Do not add checks to meet a count.
 
     Each criterion must test one observable quality only. It must describe a result that can be
     judged from the trace or generated output, be specific to the product and behaviour, and
@@ -275,8 +333,9 @@ model_calls:
 
     Use given / when / then. `given` describes a reusable condition or category of input; `when`
     describes the product action being evaluated; and `then` describes one observable expected
-    result. When appropriate, cover both the normal path and an important boundary, constraint or
-    failure path.
+    result. Write only the condition in `given`, only the action in `when`, and only the result
+    in `then`; do not put a complete Given/When/Then sentence inside one field. When appropriate,
+    cover both the normal path and an important boundary, constraint or failure path.
 
     For a presentation product, prefer "Given supported source data, when the product creates a
     presentation, then the slides preserve the material facts in the source." Avoid "Given
