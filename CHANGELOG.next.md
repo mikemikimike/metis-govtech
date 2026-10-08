@@ -239,7 +239,8 @@ _No v1 changes yet._
   Persona and one Scenario, with its own Trials, scorers, and files. The form retains
   assigned Task IDs and stores scorer settings on Criteria. It builds `specification.zip`
   with `specification.yaml` and fixtures through the existing API, without an Interview
-  record (#395).
+  record (#395). When a field is not complete, **Download specification** marks each
+  field that needs a change, shows what to change, and moves the focus to the first one.
 
 #### Changed
 

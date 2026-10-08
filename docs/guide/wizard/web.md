@@ -106,6 +106,10 @@ Interview and creates no Interview record.
    and set its Trial count, scorers, and files. Add more test cases as needed.
 5. Select **Download specification**.
 
+If a field is not complete, the download does not start. The form shows "Some fields are not
+complete.", marks each field that needs a change in red, and moves the focus to the first one.
+Each marked field tells you what to change. Every Scenario must be selected in at least one
+test case.
 
 Editor rules:
 

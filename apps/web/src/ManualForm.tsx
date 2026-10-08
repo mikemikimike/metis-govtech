@@ -29,7 +29,7 @@ import {
   type ManualTestCase,
 } from "./manual";
 import { api, TransportError, type MetricSpec } from "./transport/api";
-import { Button, formatTrials, Mono } from "./ui";
+import { Button, cn, formatTrials, Mono } from "./ui";
 
 export function ManualAuthoringEntry({ onOpen }: { onOpen: () => void }) {
   return (
@@ -123,6 +123,11 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<FocusTarget>(null);
   const [editingPersonas, setEditingPersonas] = useState<number[]>([]);
+  // Field errors stay hidden until the first download attempt, then update as the user types.
+  const [showErrors, setShowErrors] = useState(false);
+  const [submitAttempt, setSubmitAttempt] = useState(0);
+  const formRef = useRef<HTMLDivElement | null>(null);
+
   const personaIdRefs = useRef<Array<HTMLInputElement | null>>([]);
   const scenarioIdRefs = useRef<Array<HTMLInputElement | null>>([]);
   const taskPersonaRefs = useRef<Array<HTMLSelectElement | null>>([]);
@@ -173,6 +178,17 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
     [experiment, library],
   );
   const ready = fieldErrors.length === 0;
+  const errorFor = (field: string): string | undefined =>
+    showErrors
+      ? fieldErrors.find((value) => value.field === field)?.message
+      : undefined;
+
+  useEffect(() => {
+    if (!submitAttempt) return;
+    formRef.current
+      ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+      ?.focus();
+  }, [submitAttempt]);
   const personaIds = useMemo(
     () =>
       experiment.personas.map((persona) => persona.id.trim()).filter(Boolean),
@@ -284,7 +300,20 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
   };
 
   const download = async () => {
-    if (!ready || busy) return;
+    if (busy) return;
+    if (!ready) {
+      setShowErrors(true);
+      // A closed Persona editor cannot show its field errors, so open it.
+      const invalidPersonas = fieldErrors.flatMap((value) => {
+        const match = /^persona\.(\d+)\./.exec(value.field);
+        return match ? [Number(match[1])] : [];
+      });
+      setEditingPersonas((current) => [
+        ...new Set([...current, ...invalidPersonas]),
+      ]);
+      setSubmitAttempt((value) => value + 1);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -329,7 +358,10 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="quiet-scrollbar flex-1 overflow-y-auto px-5 py-7 sm:px-10 sm:py-9">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-10 pb-10">
+      <div
+        ref={formRef}
+        className="mx-auto flex w-full max-w-4xl flex-col gap-10 pb-10"
+      >
         <header className="flex flex-col gap-5">
           <button
             type="button"
@@ -373,9 +405,10 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
               level={3}
             />
             <div className="flex flex-col gap-5">
-              <Field label="ID">
+              <Field label="ID" error={errorFor("experiment.id")}>
                 <TextInput
                   id="manual-experiment-id"
+                  invalid={Boolean(errorFor("experiment.id"))}
                   ariaLabel="Experiment ID"
                   value={experiment.id}
                   placeholder="research-assistant"
@@ -385,9 +418,13 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                   }
                 />
               </Field>
-              <Field label="Description">
+              <Field
+                label="Description"
+                error={errorFor("experiment.description")}
+              >
                 <TextArea
                   id="manual-experiment-description"
+                  invalid={Boolean(errorFor("experiment.description"))}
                   ariaLabel="Experiment description"
                   value={experiment.description}
                   placeholder="What this Experiment evaluates."
@@ -427,7 +464,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
               }
             />
             {experiment.personas.length === 0 && (
-              <EmptyRow>
+              <EmptyRow error={errorFor("personas")}>
                 No Personas yet. Add a Persona to make it available to test
                 cases.
               </EmptyRow>
@@ -491,9 +528,13 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                       </div>
                       {isEditing ? (
                         <div className="mt-5 flex flex-col gap-5">
-                          <Field label="ID">
+                          <Field
+                            label="ID"
+                            error={errorFor(`persona.${index}.id`)}
+                          >
                             <TextInput
                               id={`manual-persona-${index}-id`}
+                              invalid={Boolean(errorFor(`persona.${index}.id`))}
                               inputRef={(element) => {
                                 personaIdRefs.current[index] = element;
                               }}
@@ -504,9 +545,15 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                               onChange={(id) => updatePersona(index, { id })}
                             />
                           </Field>
-                          <Field label="Description">
+                          <Field
+                            label="Description"
+                            error={errorFor(`persona.${index}.description`)}
+                          >
                             <TextArea
                               id={`manual-persona-${index}-description`}
+                              invalid={Boolean(
+                                errorFor(`persona.${index}.description`),
+                              )}
                               ariaLabel={`${itemLabel}, Description`}
                               value={persona.description}
                               placeholder="How this person acts during the evaluation."
@@ -557,7 +604,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
               }
             />
             {!experiment.scenarios.length && (
-              <EmptyRow>
+              <EmptyRow error={errorFor("scenarios")}>
                 No Scenarios yet. Add a Scenario to make it available to test
                 cases.
               </EmptyRow>
@@ -576,9 +623,10 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                     onClick={() => removeScenario(index)}
                   />
                 </div>
-                <Field label="ID">
+                <Field label="ID" error={errorFor(`scenario.${index}.id`)}>
                   <TextInput
                     ariaLabel={`Scenario ${index + 1}, ID`}
+                    invalid={Boolean(errorFor(`scenario.${index}.id`))}
                     value={scenario.id}
                     placeholder="supported-answer"
                     inputRef={(element) => {
@@ -587,9 +635,13 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                     onChange={(id) => updateScenario(index, { id })}
                   />
                 </Field>
-                <Field label="Description">
+                <Field
+                  label="Description"
+                  error={errorFor(`scenario.${index}.description`)}
+                >
                   <TextArea
                     ariaLabel={`Scenario ${index + 1}, Description`}
+                    invalid={Boolean(errorFor(`scenario.${index}.description`))}
                     value={scenario.description}
                     placeholder="Describe the situation and expected work."
                     onChange={(description) =>
@@ -601,7 +653,13 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                   !experiment.tasks.some(
                     (task) => task.scenario_ref === scenario.id.trim(),
                   ) && (
-                    <p className="text-xs text-muted-foreground">
+                    <p
+                      className={
+                        errorFor(`scenario.${index}.tasks`)
+                          ? "text-xs text-destructive"
+                          : "text-xs text-muted-foreground"
+                      }
+                    >
                       Select this Scenario in at least one test case.
                     </p>
                   )}
@@ -637,7 +695,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
               }
             />
             {!experiment.tasks.length && (
-              <EmptyRow>
+              <EmptyRow error={errorFor("tasks")}>
                 No test cases yet. Define Personas and Scenarios above, then add
                 a test case.
               </EmptyRow>
@@ -656,8 +714,12 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                       onClick={() => removeTask(index)}
                     />
                   </div>
-                  <Field label="Persona">
+                  <Field
+                    label="Persona"
+                    error={errorFor(`task.${index}.persona`)}
+                  >
                     <select
+                      aria-invalid={Boolean(errorFor(`task.${index}.persona`))}
                       ref={(element) => {
                         taskPersonaRefs.current[index] = element;
                       }}
@@ -676,8 +738,12 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                       ))}
                     </select>
                   </Field>
-                  <Field label="Scenario">
+                  <Field
+                    label="Scenario"
+                    error={errorFor(`task.${index}.scenario`)}
+                  >
                     <select
+                      aria-invalid={Boolean(errorFor(`task.${index}.scenario`))}
                       aria-label={`${itemLabel}, Scenario`}
                       value={task.scenario_ref}
                       onChange={(event) =>
@@ -695,7 +761,10 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                         ))}
                     </select>
                   </Field>
-                  <Field label="Trials">
+                  <Field
+                    label="Trials"
+                    error={errorFor(`task.${index}.trials`)}
+                  >
                     <NumberInput
                       value={task.num_trials}
                       min={1}
@@ -711,6 +780,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                     searchId={`manual-task-${index}-scorer-search`}
                     metrics={metrics}
                     error={catalogueError}
+                    invalid={errorFor(`task.${index}.scorers`)}
                     selected={task.scorers}
                     onRetry={() => loadMetrics()}
                     onToggle={(scorer) => {
@@ -727,9 +797,16 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                     }}
                   />
                   {task.scorers.map((scorer) => (
-                    <Field key={scorer.fqn} label={`${scorer.name} settings`}>
+                    <Field
+                      key={scorer.fqn}
+                      label={`${scorer.name} settings`}
+                      error={errorFor(`task.${index}.settings.${scorer.fqn}`)}
+                    >
                       <TextArea
                         ariaLabel={`${itemLabel}, ${scorer.name} settings`}
+                        invalid={Boolean(
+                          errorFor(`task.${index}.settings.${scorer.fqn}`),
+                        )}
                         value={
                           task.metric_args_text?.[scorer.fqn] ??
                           JSON.stringify(
@@ -754,6 +831,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                     itemLabel={itemLabel}
                     inputId={`manual-task-${index}-files`}
                     names={task.fixtures}
+                    invalid={errorFor(`task.${index}.files`)}
                     onAdd={(files) => uploadFiles(index, files)}
                     onRemove={(name) =>
                       updateTask(index, {
@@ -785,9 +863,14 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
             </p>
           )}
           <div className="flex items-center justify-end gap-3">
+            {showErrors && !ready && (
+              <p role="alert" className="text-sm text-destructive">
+                Some fields are not complete.
+              </p>
+            )}
             <Button
               variant="primary"
-              disabled={!ready || busy}
+              disabled={busy}
               title={ready ? undefined : "Some fields are not complete."}
               onClick={() => void download()}
             >
@@ -828,19 +911,22 @@ function SectionHeading({
 }
 
 const selectClass =
-  "rounded-lg border border-input bg-background px-3 py-2 text-sm";
+  "rounded-lg border border-input bg-background px-3 py-2 text-sm aria-[invalid=true]:border-destructive";
 
 function Field({
   label,
+  error,
   children,
 }: {
   label: string;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
     <label className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
+      {error && <span className="text-xs text-destructive">{error}</span>}
     </label>
   );
 }
@@ -852,6 +938,7 @@ function TextInput({
   value,
   placeholder,
   spellCheck,
+  invalid = false,
   onChange,
 }: {
   id?: string;
@@ -860,6 +947,7 @@ function TextInput({
   value: string;
   placeholder: string;
   spellCheck?: boolean;
+  invalid?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
@@ -867,11 +955,12 @@ function TextInput({
       id={id}
       ref={inputRef}
       aria-label={ariaLabel}
+      aria-invalid={invalid}
       value={value}
       placeholder={placeholder}
       spellCheck={spellCheck}
       onChange={(event) => onChange(event.target.value)}
-      className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground"
+      className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground aria-[invalid=true]:border-destructive"
     />
   );
 }
@@ -881,22 +970,25 @@ function TextArea({
   ariaLabel,
   value,
   placeholder,
+  invalid = false,
   onChange,
 }: {
   id?: string;
   ariaLabel?: string;
   value: string;
   placeholder: string;
+  invalid?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
     <textarea
       id={id}
       aria-label={ariaLabel}
+      aria-invalid={invalid}
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
-      className="min-h-24 resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+      className="min-h-24 resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground aria-[invalid=true]:border-destructive"
     />
   );
 }
@@ -907,6 +999,7 @@ function ScorerPicker({
   metrics,
   error,
   selected,
+  invalid,
   onRetry,
   onToggle,
 }: {
@@ -915,6 +1008,7 @@ function ScorerPicker({
   metrics: MetricSpec[] | null;
   error: string | null;
   selected: MetricSpec[];
+  invalid?: string;
   onRetry: () => void;
   onToggle: (metric: MetricSpec) => void;
 }) {
@@ -958,12 +1052,18 @@ function ScorerPicker({
             id={searchId}
             type="search"
             aria-label={`${itemLabel}, Search scorers`}
+            aria-invalid={Boolean(invalid)}
             value={query}
             placeholder="Search scorers"
             onChange={(event) => setQuery(event.target.value)}
             className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground"
           />
-          <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
+          <div
+            className={cn(
+              "max-h-64 overflow-y-auto rounded-lg border",
+              invalid ? "border-destructive" : "border-border",
+            )}
+          >
             {shown.map((metric) => {
               const checked = selected.some(
                 (value) => value.fqn === metric.fqn,
@@ -997,6 +1097,7 @@ function ScorerPicker({
               </p>
             )}
           </div>
+          {invalid && <p className="text-xs text-destructive">{invalid}</p>}
           {selected.length > 0 && (
             <p className="text-xs text-muted-foreground">
               {selected.length} {selected.length === 1 ? "scorer" : "scorers"}{" "}
@@ -1013,12 +1114,14 @@ function FixturePicker({
   itemLabel,
   inputId,
   names,
+  invalid,
   onAdd,
   onRemove,
 }: {
   itemLabel: string;
   inputId: string;
   names: string[];
+  invalid?: string;
   onAdd: (files: File[]) => void;
   onRemove: (name: string) => void;
 }) {
@@ -1089,19 +1192,31 @@ function FixturePicker({
           ))}
         </div>
       )}
-      {error && (
+      {(error ?? invalid) && (
         <p role="alert" className="text-xs text-destructive">
-          {error}
+          {error ?? invalid}
         </p>
       )}
     </fieldset>
   );
 }
 
-function EmptyRow({ children }: { children: React.ReactNode }) {
+function EmptyRow({
+  error,
+  children,
+}: {
+  error?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="rounded-lg border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
+    <div
+      className={cn(
+        "rounded-lg border border-dashed px-4 py-5 text-sm text-muted-foreground",
+        error ? "border-destructive" : "border-border",
+      )}
+    >
       {children}
+      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
     </div>
   );
 }
