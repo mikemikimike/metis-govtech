@@ -220,3 +220,18 @@ test("the same Persona and Scenario can have separate test cases and scorer sett
     ),
   );
 });
+
+test("manual task execution settings survive specification construction", () => {
+  const experiment: ManualExperiment = structuredClone(synthesis);
+  Object.assign(experiment.tasks[0], {
+    max_turns: 7,
+    timeout_minutes: 2,
+    response_wait_ms: 45000,
+    max_run_retries: 0,
+  });
+  const task = synthesizeManualSpecification(experiment).tasks[0];
+  assert.equal(task.max_turns, 7);
+  assert.equal(task.timeout_minutes, 2);
+  assert.equal(task.response_wait_ms, 45000);
+  assert.equal(task.max_run_retries, 0);
+});

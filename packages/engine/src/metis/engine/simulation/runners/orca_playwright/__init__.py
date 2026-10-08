@@ -115,12 +115,15 @@ class OrcaPlaywrightRunner(Runner):
         self._page_dirty = False
 
     async def setup(self, config: RunConfig) -> None:
-        """Authenticate and prepare the browser session.
-
-        ``config`` is unused: the staged-fixture list belongs to the
-        orchestrator, which withholds an unstaged upload before dispatch, and
-        this runner reads each file from ``fixtures_dir`` when it uploads it.
-        """
+        """Apply this run's response wait and prepare the browser session."""
+        # Each runner owns its timeout settings, including during concurrent runs.
+        self._config = self._config.model_copy(
+            update={
+                "timeouts": self._config.timeouts.model_copy(
+                    update={"response_wait_ms": config.response_wait_ms}
+                )
+            }
+        )
         logger.info("[playwright-runner] Setup: logging in...")
         await login(self._page, self._config)
 

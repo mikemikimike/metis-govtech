@@ -395,16 +395,18 @@ async def _worker(
                     fixture_content_descriptions,
                 )
 
+                run_config = RunConfig(
+                    persona=persona.id,
+                    scenario=scenario.id,
+                    task_id=task_id,
+                    trial_index=trial_index,
+                    metric_refs=scenario.metric_refs,
+                    max_turns=scenario.max_turns,
+                    timeout_minutes=scenario.timeout_minutes,
+                    response_wait_ms=scenario.response_wait_ms,
+                    fixtures=scenario.fixtures,
+                )
                 try:
-                    run_config = RunConfig(
-                        persona=persona.id,
-                        scenario=scenario.id,
-                        task_id=task_id,
-                        trial_index=trial_index,
-                        metric_refs=scenario.metric_refs,
-                        response_wait_ms=scenario.response_wait_ms,
-                        fixtures=scenario.fixtures,
-                    )
                     agent = UserAgent(persona=persona, scenario=scenario)
                     orchestrator = Orchestrator(
                         runner=runner,
@@ -463,14 +465,7 @@ async def _worker(
                             record.prior_failures = prior_failures
                         else:
                             record = RunRecord(
-                                config=RunConfig(
-                                    persona=persona.id,
-                                    scenario=scenario.id,
-                                    task_id=task_id,
-                                    trial_index=trial_index,
-                                    metric_refs=scenario.metric_refs,
-                                    fixtures=scenario.fixtures,
-                                ),
+                                config=run_config,
                                 target_session_id=None,
                                 outcome=RunOutcome(
                                     stop_reason="system_error",
@@ -528,14 +523,7 @@ async def _worker(
                             partial
                             if partial is not None
                             else RunRecord(
-                                config=RunConfig(
-                                    persona=persona.id,
-                                    scenario=scenario.id,
-                                    task_id=task_id,
-                                    trial_index=trial_index,
-                                    metric_refs=scenario.metric_refs,
-                                    fixtures=scenario.fixtures,
-                                ),
+                                config=run_config,
                                 target_session_id=None,
                                 outcome=RunOutcome(
                                     stop_reason="system_error",

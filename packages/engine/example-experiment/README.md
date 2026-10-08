@@ -31,7 +31,8 @@ example-experiment/
 
 The [simple specification](simple/specification.yaml) runs one direct question through
 Orca's API. It uses one Persona, one Scenario, one Task, and one Trial. Its Grader
-checks whether the conversation finishes within four turns.
+checks whether the conversation finishes within four turns. The Task shows the
+optional execution settings, including the separate turn limit and retry count.
 
 From the repository root, with the same credentials as the full example:
 

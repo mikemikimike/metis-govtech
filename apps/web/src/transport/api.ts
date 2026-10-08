@@ -233,6 +233,10 @@ function normalizeSpecification(
       fixtures: task.fixtures ?? [],
       criterion_refs: task.criterion_refs ?? [],
       num_trials: task.num_trials ?? 3,
+      max_turns: task.max_turns ?? 20,
+      timeout_minutes: task.timeout_minutes ?? 15,
+      response_wait_ms: task.response_wait_ms ?? 300000,
+      max_run_retries: task.max_run_retries ?? null,
     })),
   };
 }

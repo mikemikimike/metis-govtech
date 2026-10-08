@@ -1079,3 +1079,65 @@ async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -
         "TC-002",
     ]
     assert len(list((tmp_path / "runs").glob("*/record.json"))) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("retries,expected_attempts", [(None, 3), (0, 1), (1, 2)])
+async def test_task_execution_settings_reach_worker_and_failure_records(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    retries: int | None,
+    expected_attempts: int,
+) -> None:
+    from metis.engine.simulation.experiment import expand_run_plan
+
+    document = Specification.load_file(
+        Path("packages/engine/example-experiment/simple/specification.yaml")
+    ).model_dump()
+    task = document["tasks"][0]
+    task.update(
+        max_turns=7, timeout_minutes=2, response_wait_ms=45000, max_run_retries=retries
+    )
+    specification = Specification.model_validate(document)
+    plan = expand_run_plan(specification, {p.id: p for p in specification.personas})
+    captured: list[RunConfig] = []
+
+    class FailingOrchestrator:
+        def __init__(self, *, run_config: RunConfig, **kwargs: object) -> None:
+            captured.append(run_config)
+            if retries == 0:
+                raise RuntimeError("setup failed")
+
+        async def run(self) -> RunRecord:
+            raise RuntimeError("run failed")
+
+        def partial_record(self, reason: str) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "metis.engine.simulation.experiment.Orchestrator", FailingOrchestrator
+    )
+    fixtures = tmp_path / "fixtures"
+    fixtures.mkdir()
+    records = await _worker(
+        worker_id=0,
+        runner_factory=MockRunnerFactory(),
+        worker_runs=plan,
+        experiment_root=tmp_path,
+        fixtures_dir=fixtures,
+        fixture_content_descriptions={},
+        console_lock=asyncio.Lock(),
+        started_scenarios=set(),
+        run_max_retries=2,
+        run_retry_delay_seconds=0,
+    )
+    assert len(captured) == expected_attempts
+    assert len(records) == 1
+    assert records[0].max_allowed_attempts == expected_attempts
+    assert records[0].attempt_number == expected_attempts
+    for config in [*captured, records[0].config]:
+        assert (config.max_turns, config.timeout_minutes, config.response_wait_ms) == (
+            7,
+            2,
+            45000,
+        )

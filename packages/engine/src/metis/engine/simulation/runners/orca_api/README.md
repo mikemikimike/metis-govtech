@@ -150,4 +150,4 @@ orca_api/
 └── config.yaml    — poll interval, submit rpm, retry window, TLS, teardown
 ```
 
-Credentials come from the environment (`ORCA_API_URL`, `ORCA_API_KEY`, optional `ORCA_PLATFORM_AI_KEY`); `response_wait_ms` comes from the scenario. See the module docstring for what each does.
+Credentials come from the environment (`ORCA_API_URL`, `ORCA_API_KEY`, optional `ORCA_PLATFORM_AI_KEY`); `response_wait_ms` comes from the Task. See the module docstring for what each does.

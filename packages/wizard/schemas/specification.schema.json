@@ -238,6 +238,37 @@
           },
           "title": "Criterion Refs",
           "type": "array"
+        },
+        "max_turns": {
+          "default": 20,
+          "exclusiveMinimum": 0,
+          "title": "Max Turns",
+          "type": "integer"
+        },
+        "timeout_minutes": {
+          "default": 15,
+          "exclusiveMinimum": 0,
+          "title": "Timeout Minutes",
+          "type": "integer"
+        },
+        "response_wait_ms": {
+          "default": 300000,
+          "exclusiveMinimum": 0,
+          "title": "Response Wait Ms",
+          "type": "integer"
+        },
+        "max_run_retries": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Run Retries"
         }
       },
       "required": [

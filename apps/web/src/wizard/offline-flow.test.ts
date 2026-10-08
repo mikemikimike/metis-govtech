@@ -125,6 +125,10 @@ const policyTask = (fixtures: string[]) => ({
   criterion_refs: [],
   fixtures,
   num_trials: 1,
+  max_turns: 20,
+  timeout_minutes: 15,
+  response_wait_ms: 300000,
+  max_run_retries: null,
 });
 
 test("runs an offline document start, reload, review, end and package flow", async () => {

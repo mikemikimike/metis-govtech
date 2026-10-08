@@ -78,7 +78,7 @@ except for the Criterion Grader fields in the table.
 | `scenarios[].fixtures` | `tasks[].fixtures` on each of those Tasks |
 | `scenarios[].num_trials` | `tasks[].num_trials` on each of those Tasks |
 | `scenarios[].metric_refs` | One Criterion for each Grader, with `metric_fqn` and `metric_args`. Tasks select Criteria with `tasks[].criterion_refs`. |
-| `scenarios[].max_turns`, `timeout_minutes`, `response_wait_ms`, `max_run_retries` | Removed. Delete these fields; the engine defaults apply. |
+| `scenarios[].max_turns`, `timeout_minutes`, `response_wait_ms`, `max_run_retries` | Move each value to the same field on every Task for that Scenario. |
 | Profile `scenarios[].behaviour_refs` | Removed. Coverage comes from Task → Criterion → Behaviour. |
 
 Check these points when you convert a file:
@@ -86,11 +86,12 @@ Check these points when you convert a file:
 - **Trial count default.** The old Scenario default for `num_trials` was `1`. The
   Task default is `3`. If an old Scenario did not set `num_trials`, set
   `num_trials: 1` on its Tasks to keep the same number of Trials.
-- **Execution limits.** A specification cannot set `max_turns`, `timeout_minutes`,
-  `response_wait_ms`, or `max_run_retries`. A Scenario that contains one of them
-  fails validation. A run uses `max_turns: 20`, `timeout_minutes: 15`, and
-  `response_wait_ms: 300000`. A Grader argument such as `TurnBudgetMetric`
-  `max_turns` sets the passing budget only. It does not stop the run.
+- **Execution limits.** Tasks accept optional `max_turns`, `timeout_minutes`,
+  `response_wait_ms`, and `max_run_retries`. Their defaults are `20`, `15`,
+  `300000`, and the runner's retry default. Set `max_run_retries: 0` to disable
+  run retries. Move explicit Scenario values to each corresponding Task.
+  A Grader argument such as `TurnBudgetMetric` `max_turns` sets the passing
+  budget only. The Task's `max_turns` controls execution.
 - **Grader formats.** The old `metric_refs` item had three formats. Each becomes
   one Criterion:
 

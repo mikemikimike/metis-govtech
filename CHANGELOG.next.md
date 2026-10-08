@@ -55,6 +55,7 @@ _No v1 changes yet._
 
 - Run, resume, evaluate, and report from `specification.yaml`. Execute explicit Tasks,
   preserve Criterion Grader arguments, and retain Task/Trial/Criterion identity in scores.
+  Tasks carry optional turn, timeout, response wait, and run retry settings into execution.
   Include the full example experiment and a simple Orca API example with one Task
   and one Trial (#395).
 

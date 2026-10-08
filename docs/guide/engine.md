@@ -301,15 +301,28 @@ document. Each Scenario needs at least one Task. Each measured Behaviour needs
 at least one of its Criteria selected by a Task. A Task cannot repeat a Criterion
 or fixture reference.
 
-The engine uses these default execution limits:
+Tasks also accept optional execution settings:
 
-| Limit | Default | Purpose |
+| Field | Default | Purpose |
 |-------|---------|---------|
 | `max_turns` | `20` | Maximum user-agent turns before the run stops |
 | `timeout_minutes` | `15` | Time limit for the simulation run |
-| `response_wait_ms` | `300000` | Response wait setting in the run configuration |
+| `response_wait_ms` | `300000` | Response wait limit used by the runner, in milliseconds |
+| `max_run_retries` | `null` | Use the runner's retry default; `0` disables run retries |
 
-These limits are not fields on a Task or Scenario in the specification.
+The three limits must be positive integers. `max_run_retries` accepts a
+nonnegative integer or `null`. A value of `2` allows the initial attempt and
+up to two retries. Task settings apply to every Trial of that Task and are
+independent of Criterion Grader arguments.
+
+For example, a Task can include:
+
+```yaml
+max_turns: 30
+timeout_minutes: 20
+response_wait_ms: 450000
+max_run_retries: 0
+```
 
 ### Metric References
 
@@ -656,7 +669,7 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 | "No traces found" or extraction times out | Langfuse timeout too short, bad credentials, or target system not instrumented | Increase `--langfuse-timeout`, verify Langfuse keys in `.env`, confirm your target writes traces to Langfuse |
 | "Fixture not found" error | Path is absolute or has a typo | Use the filename only (relative to `fixtures/`), verify the file exists in the fixtures directory |
 | "Metric import failed" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the metric is installed in your venv |
-| Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase `timeouts.response_wait_ms` in the Playwright runner `config.yaml` |
+| Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task’s `response_wait_ms` |
 | Simulation TUI not appearing | Running in a non-TTY environment | Expected — the Simulation TUI requires an interactive terminal. Use linear output or run in a real terminal |
 | Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current turn | Press Ctrl+C a second time to force-abort |
 | "Metric is not a subclass of BaseMetric" | Class doesn't inherit from the correct base | Ensure your metric extends `SyncBaseMetric` or `deepeval.metrics.BaseMetric` |

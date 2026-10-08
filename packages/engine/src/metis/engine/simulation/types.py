@@ -410,6 +410,10 @@ class Specification(CoreSpecification):
             description=scenario.description,
             persona_refs=[task.persona_ref],
             num_trials=task.num_trials,
+            max_turns=task.max_turns,
+            timeout_minutes=task.timeout_minutes,
+            response_wait_ms=task.response_wait_ms,
+            max_run_retries=task.max_run_retries,
             fixtures=task.fixtures,
             metric_refs=refs,
         )

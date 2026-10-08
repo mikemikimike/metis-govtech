@@ -259,6 +259,10 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
         criterion_refs: [],
         fixtures: ["shared.txt"],
         num_trials: 1,
+        max_turns: 20,
+        timeout_minutes: 15,
+        response_wait_ms: 300000,
+        max_run_retries: null,
       },
       {
         id: "S-2",
@@ -269,6 +273,10 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
         criterion_refs: [],
         fixtures: ["shared.txt"],
         num_trials: 1,
+        max_turns: 20,
+        timeout_minutes: 15,
+        response_wait_ms: 300000,
+        max_run_retries: null,
       },
     ],
   };

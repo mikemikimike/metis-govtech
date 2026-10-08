@@ -24,6 +24,10 @@ class Task(BaseModel, extra="forbid"):
     fixtures: list[str] = Field(default_factory=list)
     num_trials: int = Field(default=3, strict=True)
     criterion_refs: list[str] = Field(default_factory=list)
+    max_turns: int = Field(default=20, gt=0, strict=True)
+    timeout_minutes: int = Field(default=15, gt=0, strict=True)
+    response_wait_ms: int = Field(default=300000, gt=0, strict=True)
+    max_run_retries: int | None = Field(default=None, ge=0, strict=True)
 
 
 class Experiment(BaseModel):

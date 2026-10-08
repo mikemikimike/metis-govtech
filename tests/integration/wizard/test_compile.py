@@ -74,8 +74,18 @@ def test_assigned_task_ids_survive_edits_and_new_tasks_get_new_ids() -> None:
     task = first.task(assigned)
     assert task is not None
     task.num_trials = 7
+    task.max_turns = 9
+    task.timeout_minutes = 2
+    task.response_wait_ms = 45000
+    task.max_run_retries = 0
     second = Specification.model_validate(compile_experiment(first, "test"))
-    assert second.task(assigned).num_trials == 7  # type: ignore[union-attr]
+    restored = second.task(assigned)
+    assert restored is not None
+    assert restored.num_trials == 7
+    assert restored.max_turns == 9
+    assert restored.timeout_minutes == 2
+    assert restored.response_wait_ms == 45000
+    assert restored.max_run_retries == 0
     first.tasks.append(task.model_copy(deep=True, update={"id": ""}))
     replacement = compile_experiment(first, "test")["tasks"][-1]
     assert replacement["id"] != assigned

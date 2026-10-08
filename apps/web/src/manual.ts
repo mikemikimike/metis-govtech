@@ -16,6 +16,10 @@ export interface ManualTestCase {
   scenario_ref: string;
   persona_ref: string;
   num_trials: number;
+  max_turns?: number;
+  timeout_minutes?: number;
+  response_wait_ms?: number;
+  max_run_retries?: number | null;
   scorers: MetricSpec[];
   fixtures: string[];
   metric_args_text?: Record<string, string>;
@@ -136,6 +140,10 @@ export function synthesizeManualSpecification(
       persona_ref: task.persona_ref,
       fixtures: [...task.fixtures],
       num_trials: task.num_trials,
+      max_turns: task.max_turns ?? 20,
+      timeout_minutes: task.timeout_minutes ?? 15,
+      response_wait_ms: task.response_wait_ms ?? 300000,
+      max_run_retries: task.max_run_retries ?? null,
       criterion_refs: behaviours[index].criteria.map((c) => c.id),
     })),
     scenarios: experiment.scenarios.map((scenario) => {

@@ -596,6 +596,10 @@ class StepDriver:
             )
             if original:
                 created.num_trials = original.num_trials
+                created.max_turns = original.max_turns
+                created.timeout_minutes = original.timeout_minutes
+                created.response_wait_ms = original.response_wait_ms
+                created.max_run_retries = original.max_run_retries
             return
 
         # Toggles and ticks: apply the patches the package already composed.

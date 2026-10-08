@@ -1139,6 +1139,23 @@ export interface components {
             num_trials: number;
             /** Criterion Refs */
             criterion_refs?: string[];
+            /**
+             * Max Turns
+             * @default 20
+             */
+            max_turns: number;
+            /**
+             * Timeout Minutes
+             * @default 15
+             */
+            timeout_minutes: number;
+            /**
+             * Response Wait Ms
+             * @default 300000
+             */
+            response_wait_ms: number;
+            /** Max Run Retries */
+            max_run_retries?: number | null;
         };
         /** Turn */
         Turn: {

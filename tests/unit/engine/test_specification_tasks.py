@@ -197,3 +197,32 @@ def test_specification_rejects_invalid_task_graph(fault: str) -> None:
         data["tasks"][0]["num_trials"] = 0
     with pytest.raises(ValidationError):
         Specification.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("max_turns", 0),
+        ("timeout_minutes", 0),
+        ("response_wait_ms", 0),
+        ("max_run_retries", -1),
+    ],
+)
+def test_execution_settings_require_positive_limits_and_nonnegative_retries(
+    field: str,
+    value: int,
+) -> None:
+    document = specification().model_dump()
+    document["tasks"][0][field] = value
+    with pytest.raises(ValidationError, match=field):
+        Specification.model_validate(document)
+
+
+def test_omitted_execution_settings_use_engine_defaults() -> None:
+    document = specification().model_dump()
+    fields = ("max_turns", "timeout_minutes", "response_wait_ms", "max_run_retries")
+    for field in fields:
+        document["tasks"][0].pop(field)
+    parsed = Specification.model_validate(document)
+    resolved = parsed.resolved_tasks()[0]
+    assert tuple(getattr(resolved, field) for field in fields) == (20, 15, 300000, None)

@@ -1220,6 +1220,10 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
 def test_copy_task_retains_settings_and_assigns_a_new_id() -> None:
     specification = research_assistant()
     specification.tasks[0].num_trials = 7
+    specification.tasks[0].max_turns = 9
+    specification.tasks[0].timeout_minutes = 2
+    specification.tasks[0].response_wait_ms = 45000
+    specification.tasks[0].max_run_retries = 0
     state = driver_state(
         specification=specification,
         step=InterviewStep.SCENARIOS,
@@ -1233,6 +1237,10 @@ def test_copy_task_retains_settings_and_assigns_a_new_id() -> None:
     assert copied.id != original.id
     assert copied.id in state.issued_ids
     assert copied.num_trials == 7
+    assert copied.max_turns == 9
+    assert copied.timeout_minutes == 2
+    assert copied.response_wait_ms == 45000
+    assert copied.max_run_retries == 0
     assert copied.scenario_ref == original.scenario_ref
     assert copied.persona_ref == original.persona_ref
     assert copied.criterion_refs == original.criterion_refs

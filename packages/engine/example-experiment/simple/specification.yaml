@@ -45,5 +45,9 @@ tasks:
   persona_ref: cooperative-delegator
   fixtures: []
   num_trials: 1
+  max_turns: 20
+  timeout_minutes: 15
+  response_wait_ms: 300000
+  max_run_retries: 2
   criterion_refs:
   - AC-UNI-22

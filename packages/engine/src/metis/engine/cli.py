@@ -577,7 +577,7 @@ def _run_simulation(
                         num_trials=scenario.num_trials,
                         phase="pending",
                         current_turn=None,
-                        max_turns=20,
+                        max_turns=scenario.max_turns,
                         turn_detail="",
                         duration_seconds=None,
                         stop_reason=None,
