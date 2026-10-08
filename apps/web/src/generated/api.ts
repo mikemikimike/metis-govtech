@@ -547,7 +547,7 @@ export interface components {
         };
         /**
          * Experiment
-         * @description The Personas, Scenarios, Tasks, and settings used to conduct an Experiment.
+         * @description The Test Cases and settings used to execute an evaluation.
          */
         Experiment: {
             /**

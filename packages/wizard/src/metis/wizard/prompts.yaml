@@ -71,8 +71,7 @@ system:
 
     A **profile** contains Product context, Features, Expected Behaviours, and Criteria with
     their Grader settings. An **experiment** is a collection of runs used to evaluate one or
-    more target agentic systems across a set of test cases. The term also refers to the
-    configuration that defines those runs: Personas, Scenarios, Tasks, and execution settings.
+    more target agentic systems across a set of test cases.
     A **specification** contains the Profile and Experiment configuration. The document
     keeps these fields at the top level.
 

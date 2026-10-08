@@ -35,7 +35,7 @@ The Interview produces one Specification with these related concepts:
 |---|---|
 | Profile | The product and its users, Features, Behaviours, Criteria, and their scorer settings |
 | Specification | The Profile and the configuration needed to conduct an Experiment |
-| Experiment | A collection of Runs used to evaluate one or more target agentic systems across a set of Test Cases. Also the configuration that defines those Runs: Personas, Scenarios, Tasks, and execution settings |
+| Experiment | A collection of Runs used to evaluate one or more target agentic systems across a set of Test Cases |
 
 The interface guides give the exact files or archive that each interface produces.
 

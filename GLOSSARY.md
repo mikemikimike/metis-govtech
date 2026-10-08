@@ -18,7 +18,7 @@
 | Test Case / Task | A complete specification of a particular evaluation problem, combining a **scenario**, a **persona**, **fixtures**, a Trial count, and references to **criteria**. Each Task has an ID. **Test case** and **task** are interchangeable terms. |
 | Trial | One execution of a **test case** against a **target agentic system**, producing a **trace** and evaluation outputs. |
 | Run | A grouping of repeated **trials** of the same **test case**. |
-| Experiment | A collection of **runs** used to evaluate one or more **target agentic systems** across a set of **test cases**. The term also refers to the configuration that defines those runs: **personas**, **scenarios**, **tasks**, and execution settings. |
+| Experiment | A collection of **runs** used to evaluate one or more **target agentic systems** across a set of **test cases**. |
 | Trace | The observable record of what occurred during a **trial**, including interactions, actions, tool calls, observations, and relevant state changes. |
 | Session | A collection of **traces**. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |
