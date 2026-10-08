@@ -16,6 +16,9 @@ its Grader and parameters.
 ```
 example-experiment/
 ├── specification.yaml   # Product, features, behaviours, criteria, personas, scenarios, and tasks
+├── simple/              # One Task, one Trial, one Grader, no uploaded files
+│   ├── specification.yaml
+│   └── fixtures/
 └── fixtures/            # Files uploaded to Orca during simulation
     ├── q3_sales.csv
     ├── q3_sales_corrupted.csv
@@ -23,6 +26,21 @@ example-experiment/
     ├── q3_sales_v2.csv
     └── policy_document_adversarial.txt
 ```
+
+## Quick check
+
+The [simple specification](simple/specification.yaml) runs one direct question through
+Orca's API. It uses one Persona, one Scenario, one Task, and one Trial. Its Grader
+checks whether the conversation finishes within four turns.
+
+From the repository root, with the same credentials as the full example:
+
+```bash
+uv run metis engine run --input-dir packages/engine/example-experiment/simple/
+```
+
+No uploaded files are needed. Results are written under
+`experiments/orca-simple-<timestamp>/`.
 
 ## Running
 

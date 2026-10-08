@@ -55,7 +55,8 @@ _No v1 changes yet._
 
 - Run, resume, evaluate, and report from `specification.yaml`. Execute explicit Tasks,
   preserve Criterion Grader arguments, and retain Task/Trial/Criterion identity in scores.
-  Include the full example experiment (#395).
+  Include the full example experiment and a simple Orca API example with one Task
+  and one Trial (#395).
 
 - Rename report Task groups to Features, including report JSON fields and report labels (#392).
 
