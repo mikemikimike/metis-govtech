@@ -3,8 +3,8 @@
 from metis.engine.simulation.types import (
     ActionRetry,
     ConversationTurn,
-    RunFailure,
-    RunRecord,
+    TrialFailure,
+    TrialRecord,
     TurnDiagnostics,
 )
 
@@ -56,9 +56,9 @@ class TestTurnDiagnostics:
         assert not hasattr(d, "recovered")
 
 
-class TestRunFailure:
+class TestTrialFailure:
     def test_construct(self) -> None:
-        f = RunFailure(
+        f = TrialFailure(
             attempt_number=1,
             failure_type="auth_loss",
             submission_phase="post",
@@ -95,9 +95,9 @@ class TestConversationTurnExtension:
         assert turn.diagnostics.retry_count == 1
 
 
-class TestRunRecordExtension:
+class TestTrialRecordExtension:
     def test_new_fields_default_backward_compatible(self) -> None:
-        record = RunRecord.model_validate(
+        record = TrialRecord.model_validate(
             {
                 "schema_version": 2,
                 "config": {
@@ -116,7 +116,7 @@ class TestRunRecordExtension:
         assert record.prior_failures == []
 
     def test_schema_version_is_2(self) -> None:
-        record = RunRecord.model_validate(
+        record = TrialRecord.model_validate(
             {
                 "schema_version": 2,
                 "config": {"persona": "p", "scenario": "s"},

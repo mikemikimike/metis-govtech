@@ -1,6 +1,6 @@
 """Pydantic models for simulation types.
 
-Covers both inputs (personas, experiments) and outputs (run records).
+Covers both inputs (personas, experiments) and outputs (trial records).
 These are the source of truth for the JSON Schemas in schemas/. After any
 change here, run `make generate-schema` and commit the updated schema files.
 """
@@ -19,7 +19,7 @@ from metis.core.specification import Specification as CoreSpecification
 from metis.core.specification import SpecificationDocument
 
 _SPECIFICATION_VERSION = 2
-_RUN_RECORD_VERSION = 2
+_TRIAL_RECORD_VERSION = 2
 
 
 # ---------------------------------------------------------------------------
@@ -209,8 +209,8 @@ class Observation(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class RunMeta(BaseModel):
-    """Metadata about the current run state."""
+class TrialMeta(BaseModel):
+    """Metadata about the current trial state."""
 
     turn_number: int
     elapsed_seconds: int
@@ -220,7 +220,7 @@ class UserAgentInput(BaseModel):
     """Input to :pymeth:`UserAgent.generate_response`."""
 
     observation: Observation = Field(default_factory=Observation)
-    run_meta: RunMeta | None = None
+    trial_meta: TrialMeta | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +327,7 @@ class Scenario(BaseModel):
     max_turns: int = 20
     timeout_minutes: int = 15
     response_wait_ms: int = 300000
-    max_run_retries: int | None = None
+    max_trial_retries: int | None = None
 
     @model_validator(mode="after")
     def _check_unique_fixtures(self) -> Self:
@@ -413,7 +413,7 @@ class Specification(CoreSpecification):
             max_turns=task.max_turns,
             timeout_minutes=task.timeout_minutes,
             response_wait_ms=task.response_wait_ms,
-            max_run_retries=task.max_run_retries,
+            max_trial_retries=task.max_run_retries,
             fixtures=task.fixtures,
             metric_refs=refs,
         )
@@ -426,11 +426,11 @@ class Specification(CoreSpecification):
 
 
 # ---------------------------------------------------------------------------
-# Run Record (simulation output)
+# Trial Record (simulation output)
 # ---------------------------------------------------------------------------
 
 
-class RunConfig(BaseModel, extra="ignore"):
+class TrialConfig(BaseModel, extra="ignore"):
     """Environment spec for a simulation run — defines which persona/scenario pair to run and the resource limits (turn cap, timeout) that bound execution."""
 
     task_id: str = ""
@@ -444,7 +444,7 @@ class RunConfig(BaseModel, extra="ignore"):
     fixtures: list[str] = Field(default_factory=list)
 
 
-class RunOutcome(BaseModel, extra="ignore"):
+class TrialOutcome(BaseModel, extra="ignore"):
     stop_reason: str
     total_turns: int
     duration_seconds: float
@@ -467,7 +467,7 @@ class TurnDiagnostics(BaseModel, extra="ignore"):
     discarded_message: str | None = None
 
 
-class RunFailure(BaseModel, extra="ignore"):
+class TrialFailure(BaseModel, extra="ignore"):
     attempt_number: int
     failure_type: str
     submission_phase: Literal["pre", "post", "unknown"] = "unknown"
@@ -486,12 +486,12 @@ class ConversationTurn(BaseModel, extra="ignore"):
     diagnostics: TurnDiagnostics | None = None
 
 
-class RunRecord(BaseModel, extra="ignore"):
+class TrialRecord(BaseModel, extra="ignore"):
     """A complete simulation run record loaded from a JSON result file."""
 
-    schema_version: Literal[2] = _RUN_RECORD_VERSION
-    config: RunConfig
-    outcome: RunOutcome
+    schema_version: Literal[2] = _TRIAL_RECORD_VERSION
+    config: TrialConfig
+    outcome: TrialOutcome
     conversation: list[ConversationTurn] = []
     artifacts: list[Artifact] = []
     target_session_id: str | None = None
@@ -499,14 +499,14 @@ class RunRecord(BaseModel, extra="ignore"):
     # max_allowed_attempts is configuration: 1 + the run's retry budget.
     # A record with attempt_number=1 and max_allowed_attempts=3 succeeded on
     # the first try under a budget of three — it did not take three attempts.
-    # prior_failures holds one RunFailure per attempt that failed. It is not
+    # prior_failures holds one TrialFailure per attempt that failed. It is not
     # strictly "prior": on a record whose retry budget ran out, the failure of
     # this record's own attempt is appended before the record is stamped, so the
     # last entry can describe attempt_number itself. Never compute attempts-made
     # as 1 + len(prior_failures).
     attempt_number: int = 1
     max_allowed_attempts: int = 1
-    prior_failures: list[RunFailure] = Field(default_factory=list)
+    prior_failures: list[TrialFailure] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -514,9 +514,9 @@ class RunRecord(BaseModel, extra="ignore"):
         if not isinstance(data, dict):
             return data
         v = data.get("schema_version")
-        if v is not None and v != _RUN_RECORD_VERSION:
+        if v is not None and v != _TRIAL_RECORD_VERSION:
             raise ValueError(
-                f"Unsupported schema_version {v!r} (expected {_RUN_RECORD_VERSION}). "
+                f"Unsupported schema_version {v!r} (expected {_TRIAL_RECORD_VERSION}). "
                 f"This record was produced by a different version of metis-engine."
             )
         return data

@@ -1,6 +1,6 @@
 """Tests for scenario-level simulation limit fields."""
 
-from metis.engine.simulation.types import RunConfig, Scenario
+from metis.engine.simulation.types import Scenario, TrialConfig
 
 
 class TestScenarioLimits:
@@ -43,12 +43,12 @@ class TestScenarioLimits:
         assert s.response_wait_ms == 300000  # not overridden
 
 
-class TestRunConfigFromScenario:
-    """RunConfig constructed from Scenario sources all three limits."""
+class TestTrialConfigFromScenario:
+    """TrialConfig constructed from Scenario sources all three limits."""
 
     def test_limits_from_scenario_defaults(self):
         s = Scenario(id="s1", description="test", persona_refs=["p1"])
-        rc = RunConfig(
+        rc = TrialConfig(
             persona="p1",
             scenario=s.id,
             metric_refs=s.metric_refs,
@@ -69,7 +69,7 @@ class TestRunConfigFromScenario:
             timeout_minutes=30,
             response_wait_ms=600000,
         )
-        rc = RunConfig(
+        rc = TrialConfig(
             persona="p1",
             scenario=s.id,
             metric_refs=s.metric_refs,
@@ -86,14 +86,14 @@ class TestResponseTimeoutResolution:
     """response_wait_ms from scenario is the runtime source of truth."""
 
     def test_scenario_value_is_authoritative(self):
-        """RunConfig.response_wait_ms (from Scenario) is never zero/None."""
+        """TrialConfig.response_wait_ms (from Scenario) is never zero/None."""
         s = Scenario(
             id="s1",
             description="test",
             persona_refs=["p1"],
             response_wait_ms=450000,
         )
-        rc = RunConfig(
+        rc = TrialConfig(
             persona="p1",
             scenario=s.id,
             metric_refs=s.metric_refs,

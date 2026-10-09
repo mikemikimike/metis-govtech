@@ -11,20 +11,20 @@ import pytest
 
 from metis.engine.simulation.exceptions import ConsecutiveFailureEscalation
 from metis.engine.simulation.experiment import (
-    RunPlanItem,
+    TrialPlanItem,
     _worker,
-    run_folder_name,
+    trial_folder_name,
 )
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     ChosenAction,
     Observation,
     Persona,
-    RunConfig,
-    RunOutcome,
-    RunRecord,
     Scenario,
     Specification,
+    TrialConfig,
+    TrialOutcome,
+    TrialRecord,
 )
 
 
@@ -35,7 +35,7 @@ class MockRunner(Runner):
         self.setup_called = False
         self.teardown_called = False
 
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         self.setup_called = True
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
@@ -98,17 +98,17 @@ def simple_persona() -> Persona:
     return Persona(id="tester", description="A test persona")
 
 
-def _make_canned_record(scenario: Scenario, persona: Persona) -> RunRecord:
-    """Create a canned RunRecord that the mocked orchestrator returns."""
-    return RunRecord(
-        config=RunConfig(
+def _make_canned_record(scenario: Scenario, persona: Persona) -> TrialRecord:
+    """Create a canned TrialRecord that the mocked orchestrator returns."""
+    return TrialRecord(
+        config=TrialConfig(
             persona=persona.id,
             scenario=scenario.id,
             metric_refs=[],
             max_turns=1,
         ),
         target_session_id="sess-mock-123",
-        outcome=RunOutcome(
+        outcome=TrialOutcome(
             stop_reason="goal_achieved",
             total_turns=1,
             duration_seconds=0.1,
@@ -123,31 +123,31 @@ class TestWorkerWithMockFactory:
     async def test_worker_uses_factory_create(
         self, simple_scenario: Scenario, simple_persona: Persona, tmp_path: Path
     ) -> None:
-        """_worker calls runner_factory.create() and produces a RunRecord."""
+        """_worker calls runner_factory.create() and produces a TrialRecord."""
         factory = MockRunnerFactory()
         await factory.start()
 
-        worker_runs = [RunPlanItem(simple_scenario, simple_persona, 1)]
+        worker_trials = [TrialPlanItem(simple_scenario, simple_persona, 1)]
         console_lock = asyncio.Lock()
 
         canned = _make_canned_record(simple_scenario, simple_persona)
 
         with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
             mock_orch_instance = AsyncMock()
-            mock_orch_instance.run = AsyncMock(return_value=canned)
+            mock_orch_instance.execute = AsyncMock(return_value=canned)
             mock_orch_cls.return_value = mock_orch_instance
 
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                worker_runs=worker_runs,
+                worker_trials=worker_trials,
                 experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=console_lock,
                 started_scenarios=set(),
-                run_max_retries=2,
-                run_retry_delay_seconds=1.0,
+                trial_max_retries=2,
+                trial_retry_delay_seconds=1.0,
             )
 
         # Factory should have been called to create a runner
@@ -165,35 +165,35 @@ class TestWorkerWithMockFactory:
         await factory.start()
 
         fixtures_dir = tmp_path / "fixtures"
-        worker_runs = [RunPlanItem(simple_scenario, simple_persona, 1)]
+        worker_trials = [TrialPlanItem(simple_scenario, simple_persona, 1)]
         console_lock = asyncio.Lock()
 
         canned = _make_canned_record(simple_scenario, simple_persona)
 
         with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
             mock_orch_instance = AsyncMock()
-            mock_orch_instance.run = AsyncMock(return_value=canned)
+            mock_orch_instance.execute = AsyncMock(return_value=canned)
             mock_orch_cls.return_value = mock_orch_instance
 
             await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                worker_runs=worker_runs,
+                worker_trials=worker_trials,
                 experiment_root=tmp_path,
                 fixtures_dir=fixtures_dir,
                 fixture_content_descriptions={},
                 console_lock=console_lock,
                 started_scenarios=set(),
-                run_max_retries=2,
-                run_retry_delay_seconds=1.0,
+                trial_max_retries=2,
+                trial_retry_delay_seconds=1.0,
             )
 
         # Verify runner was created
         assert len(factory.runners_created) == 1
 
         # Verify the expected run_dir path was constructed
-        expected_folder = run_folder_name(simple_scenario, simple_persona, 1)
-        expected_run_dir = tmp_path / "runs" / expected_folder
+        expected_folder = trial_folder_name(simple_scenario, simple_persona, 1)
+        expected_run_dir = tmp_path / "trials" / expected_folder
         assert expected_run_dir.exists()
 
 
@@ -217,12 +217,12 @@ class TestNoPlaywrightImport:
 
 def _partial_record(
     scenario: Scenario, persona: Persona, *, turns: int, stop_reason: str
-) -> RunRecord:
-    """A RunRecord standing in for orchestrator.partial_record() output."""
-    return RunRecord(
-        config=RunConfig(persona=persona.id, scenario=scenario.id, metric_refs=[]),
+) -> TrialRecord:
+    """A TrialRecord standing in for orchestrator.partial_record() output."""
+    return TrialRecord(
+        config=TrialConfig(persona=persona.id, scenario=scenario.id, metric_refs=[]),
         target_session_id="sess-partial",
-        outcome=RunOutcome(
+        outcome=TrialOutcome(
             stop_reason=stop_reason,
             total_turns=turns,
             duration_seconds=1.0,
@@ -245,7 +245,7 @@ class TestWorkerUnexpectedCrash:
             persona_refs=["tester"],
             num_trials=1,
             max_turns=5,
-            max_run_retries=0,  # no retry: isolate preservation
+            max_trial_retries=0,  # no retry: isolate preservation
             metric_refs=[],
         )
         factory = MockRunnerFactory()
@@ -257,21 +257,21 @@ class TestWorkerUnexpectedCrash:
 
         with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
             instance = AsyncMock()
-            instance.run = AsyncMock(side_effect=RuntimeError())  # message-less
+            instance.execute = AsyncMock(side_effect=RuntimeError())  # message-less
             instance.partial_record = MagicMock(return_value=partial)
             mock_orch_cls.return_value = instance
 
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                worker_trials=[TrialPlanItem(scenario, simple_persona, 1)],
                 experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
-                run_max_retries=2,
-                run_retry_delay_seconds=0.0,
+                trial_max_retries=2,
+                trial_retry_delay_seconds=0.0,
             )
 
         assert len(records) == 1
@@ -293,7 +293,7 @@ class TestWorkerUnexpectedCrash:
             persona_refs=["tester"],
             num_trials=1,
             max_turns=5,
-            max_run_retries=1,  # -> max_attempts == 2
+            max_trial_retries=1,  # -> max_attempts == 2
             metric_refs=[],
         )
         factory = MockRunnerFactory()
@@ -306,24 +306,24 @@ class TestWorkerUnexpectedCrash:
 
         with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
             instance = AsyncMock()
-            instance.run = AsyncMock(side_effect=[RuntimeError(), success])
+            instance.execute = AsyncMock(side_effect=[RuntimeError(), success])
             instance.partial_record = MagicMock(return_value=partial)
             mock_orch_cls.return_value = instance
 
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                worker_trials=[TrialPlanItem(scenario, simple_persona, 1)],
                 experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
-                run_max_retries=2,
-                run_retry_delay_seconds=0.0,
+                trial_max_retries=2,
+                trial_retry_delay_seconds=0.0,
             )
 
-        assert instance.run.await_count == 2
+        assert instance.execute.await_count == 2
         assert records[0].outcome.stop_reason == "goal_achieved"
         assert records[0].attempt_number == 2
         assert records[0].max_allowed_attempts == 2
@@ -342,7 +342,7 @@ class TestWorkerUnexpectedCrash:
             persona_refs=["tester"],
             num_trials=1,
             max_turns=5,
-            max_run_retries=0,
+            max_trial_retries=0,
             metric_refs=[],
         )
         factory = MockRunnerFactory()
@@ -355,14 +355,14 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                worker_trials=[TrialPlanItem(scenario, simple_persona, 1)],
                 experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
-                run_max_retries=2,
-                run_retry_delay_seconds=0.0,
+                trial_max_retries=2,
+                trial_retry_delay_seconds=0.0,
             )
 
         assert len(records) == 1
@@ -381,7 +381,7 @@ class TestWorkerUnexpectedCrash:
             persona_refs=["tester"],
             num_trials=1,
             max_turns=5,
-            max_run_retries=0,
+            max_trial_retries=0,
             metric_refs=[],
         )
         factory = MockRunnerFactory()
@@ -396,21 +396,21 @@ class TestWorkerUnexpectedCrash:
             patch("metis.engine.simulation.experiment.logger") as mock_logger,
         ):
             instance = AsyncMock()
-            instance.run = AsyncMock(side_effect=RuntimeError())
+            instance.execute = AsyncMock(side_effect=RuntimeError())
             instance.partial_record = MagicMock(return_value=partial)
             mock_orch_cls.return_value = instance
 
             await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                worker_trials=[TrialPlanItem(scenario, simple_persona, 1)],
                 experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
-                run_max_retries=2,
-                run_retry_delay_seconds=0.0,
+                trial_max_retries=2,
+                trial_retry_delay_seconds=0.0,
             )
 
         assert mock_logger.exception.called
@@ -419,7 +419,7 @@ class TestWorkerUnexpectedCrash:
     async def test_recoverable_exhaustion_preserves_partial_turns(
         self, simple_persona: Persona, tmp_path: Path
     ) -> None:
-        """When a RunRecoverableError exhausts the retry budget, the recorded
+        """When a TrialRecoverableError exhausts the retry budget, the recorded
         turn count comes from the orchestrator's partial state, not zero."""
         scenario = Scenario(
             id="test-scenario",
@@ -427,7 +427,7 @@ class TestWorkerUnexpectedCrash:
             persona_refs=["tester"],
             num_trials=1,
             max_turns=5,
-            max_run_retries=0,  # single attempt — immediately exhausted
+            max_trial_retries=0,  # single attempt — immediately exhausted
             metric_refs=[],
         )
         factory = MockRunnerFactory()
@@ -439,7 +439,7 @@ class TestWorkerUnexpectedCrash:
 
         with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
             instance = AsyncMock()
-            instance.run = AsyncMock(
+            instance.execute = AsyncMock(
                 side_effect=ConsecutiveFailureEscalation("too many failures")
             )
             instance.partial_record = MagicMock(return_value=partial)
@@ -448,14 +448,14 @@ class TestWorkerUnexpectedCrash:
             records = await _worker(
                 worker_id=0,
                 runner_factory=factory,
-                worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+                worker_trials=[TrialPlanItem(scenario, simple_persona, 1)],
                 experiment_root=tmp_path,
                 fixtures_dir=tmp_path / "fixtures",
                 fixture_content_descriptions={},
                 console_lock=asyncio.Lock(),
                 started_scenarios=set(),
-                run_max_retries=2,
-                run_retry_delay_seconds=0.0,
+                trial_max_retries=2,
+                trial_retry_delay_seconds=0.0,
             )
 
         assert len(records) == 1
@@ -745,10 +745,10 @@ async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
     from metis.engine.simulation.experiment import _worker
     from metis.engine.simulation.types import (
         Persona,
-        RunConfig,
-        RunOutcome,
-        RunRecord,
         Scenario,
+        TrialConfig,
+        TrialOutcome,
+        TrialRecord,
     )
 
     fixtures_dir = tmp_path / "fixtures"
@@ -761,10 +761,10 @@ async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
         def __init__(self, *, fixture_artifacts, **kwargs):
             captured["fixture_artifacts"] = fixture_artifacts
 
-        async def run(self):
-            return RunRecord(
-                config=RunConfig(persona="p", scenario="s"),
-                outcome=RunOutcome(
+        async def execute(self):
+            return TrialRecord(
+                config=TrialConfig(persona="p", scenario="s"),
+                outcome=TrialOutcome(
                     stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
                 ),
             )
@@ -784,13 +784,13 @@ async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
     await _worker(
         worker_id=0,
         runner_factory=factory,
-        worker_runs=[(scenario, persona, 1)],
+        worker_trials=[(scenario, persona, 1)],
         experiment_root=tmp_path,
         fixtures_dir=fixtures_dir,
         console_lock=__import__("asyncio").Lock(),
         started_scenarios=set(),
-        run_max_retries=0,
-        run_retry_delay_seconds=0.0,
+        trial_max_retries=0,
+        trial_retry_delay_seconds=0.0,
         fixture_content_descriptions={"q3.csv": "Q3 sales, 200 rows."},
     )
 
@@ -808,7 +808,7 @@ async def test_worker_factory_create_receives_experiment_root(
     factory = MockRunnerFactory()
     await factory.start()
 
-    worker_runs = [RunPlanItem(simple_scenario, simple_persona, 1)]
+    worker_trials = [TrialPlanItem(simple_scenario, simple_persona, 1)]
     console_lock = asyncio.Lock()
     canned = _make_canned_record(simple_scenario, simple_persona)
 
@@ -826,20 +826,20 @@ async def test_worker_factory_create_receives_experiment_root(
 
     with patch("metis.engine.simulation.experiment.Orchestrator") as mock_orch_cls:
         mock_orch_instance = AsyncMock()
-        mock_orch_instance.run = AsyncMock(return_value=canned)
+        mock_orch_instance.execute = AsyncMock(return_value=canned)
         mock_orch_cls.return_value = mock_orch_instance
 
         await _worker(
             worker_id=0,
             runner_factory=factory,
-            worker_runs=worker_runs,
+            worker_trials=worker_trials,
             experiment_root=tmp_path,
             fixtures_dir=tmp_path / "fixtures",
             fixture_content_descriptions={},
             console_lock=console_lock,
             started_scenarios=set(),
-            run_max_retries=2,
-            run_retry_delay_seconds=1.0,
+            trial_max_retries=2,
+            trial_retry_delay_seconds=1.0,
         )
 
     assert captured["experiment_root"] == tmp_path
@@ -860,7 +860,7 @@ class TestAttemptScopedArtifacts:
             persona_refs=["tester"],
             num_trials=1,
             max_turns=5,
-            max_run_retries=1,  # -> max_attempts == 2
+            max_trial_retries=1,  # -> max_attempts == 2
             metric_refs=[],
         )
         seen: list[int] = []
@@ -873,7 +873,7 @@ class TestAttemptScopedArtifacts:
                 seen.append(len(seen) + 1)
                 self._attempt = len(seen)
 
-            async def run(self) -> RunRecord:
+            async def execute(self) -> TrialRecord:
                 artifacts = self._run_dir / "artifacts"
                 artifacts.mkdir(parents=True, exist_ok=True)
                 (artifacts / "report.pdf").write_text(f"attempt {self._attempt}")
@@ -881,7 +881,7 @@ class TestAttemptScopedArtifacts:
                     raise ConsecutiveFailureEscalation("2 consecutive turn failures")
                 return _make_canned_record(scenario, simple_persona)
 
-            def partial_record(self, stop_reason: str) -> RunRecord:
+            def partial_record(self, stop_reason: str) -> TrialRecord:
                 return _partial_record(
                     scenario, simple_persona, turns=0, stop_reason=stop_reason
                 )
@@ -895,18 +895,18 @@ class TestAttemptScopedArtifacts:
         records = await _worker(
             worker_id=0,
             runner_factory=factory,
-            worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+            worker_trials=[TrialPlanItem(scenario, simple_persona, 1)],
             experiment_root=tmp_path,
             fixtures_dir=tmp_path / "fixtures",
             fixture_content_descriptions={},
             console_lock=asyncio.Lock(),
             started_scenarios=set(),
-            run_max_retries=2,
-            run_retry_delay_seconds=0.0,
+            trial_max_retries=2,
+            trial_retry_delay_seconds=0.0,
         )
 
         assert records[0].attempt_number == 2
-        run_dir = tmp_path / "runs" / run_folder_name(scenario, simple_persona, 1)
+        run_dir = tmp_path / "trials" / trial_folder_name(scenario, simple_persona, 1)
         artifacts = run_dir / "artifacts"
         # The surviving attempt's file, under its own name.
         assert (artifacts / "report.pdf").read_text() == "attempt 2"
@@ -936,7 +936,7 @@ class TestAttemptScopedArtifacts:
             persona_refs=["tester"],
             num_trials=1,
             max_turns=5,
-            max_run_retries=0,  # one attempt per process
+            max_trial_retries=0,  # one attempt per process
             metric_refs=[],
         )
         label = ["first process"]
@@ -946,7 +946,7 @@ class TestAttemptScopedArtifacts:
             def __init__(self, *, run_dir: Path, **kwargs: object) -> None:
                 self._run_dir = run_dir
 
-            async def run(self) -> RunRecord:
+            async def execute(self) -> TrialRecord:
                 artifacts = self._run_dir / "artifacts"
                 artifacts.mkdir(parents=True, exist_ok=True)
                 (artifacts / "report.pdf").write_text(label[0])
@@ -954,7 +954,7 @@ class TestAttemptScopedArtifacts:
                     raise ConsecutiveFailureEscalation("2 consecutive turn failures")
                 return _make_canned_record(scenario, simple_persona)
 
-            def partial_record(self, stop_reason: str) -> RunRecord:
+            def partial_record(self, stop_reason: str) -> TrialRecord:
                 return _partial_record(
                     scenario, simple_persona, turns=0, stop_reason=stop_reason
                 )
@@ -968,14 +968,14 @@ class TestAttemptScopedArtifacts:
         first = await _worker(
             worker_id=0,
             runner_factory=factory,
-            worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+            worker_trials=[TrialPlanItem(scenario, simple_persona, 1)],
             experiment_root=tmp_path,
             fixtures_dir=tmp_path / "fixtures",
             fixture_content_descriptions={},
             console_lock=asyncio.Lock(),
             started_scenarios=set(),
-            run_max_retries=2,
-            run_retry_delay_seconds=0.0,
+            trial_max_retries=2,
+            trial_retry_delay_seconds=0.0,
         )
         assert first[0].outcome.stop_reason == "system_error"
 
@@ -985,21 +985,21 @@ class TestAttemptScopedArtifacts:
         second = await _worker(
             worker_id=0,
             runner_factory=factory,
-            worker_runs=[RunPlanItem(scenario, simple_persona, 1)],
+            worker_trials=[TrialPlanItem(scenario, simple_persona, 1)],
             experiment_root=tmp_path,
             fixtures_dir=tmp_path / "fixtures",
             fixture_content_descriptions={},
             console_lock=asyncio.Lock(),
             started_scenarios=set(),
-            run_max_retries=2,
-            run_retry_delay_seconds=0.0,
+            trial_max_retries=2,
+            trial_retry_delay_seconds=0.0,
         )
 
         assert second[0].outcome.stop_reason == "goal_achieved"
         assert second[0].attempt_number == 1  # per-process, not a lifetime total
         assert second[0].prior_failures == []
 
-        run_dir = tmp_path / "runs" / run_folder_name(scenario, simple_persona, 1)
+        run_dir = tmp_path / "trials" / trial_folder_name(scenario, simple_persona, 1)
         assert (run_dir / "artifacts" / "report.pdf").read_text() == "second process"
         superseded = list(run_dir.glob("artifacts-superseded-*"))
         assert len(superseded) == 1
@@ -1009,9 +1009,9 @@ class TestAttemptScopedArtifacts:
 @pytest.mark.asyncio
 async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -> None:
     from metis.engine.tui.state import (
-        SimulationRunState,
         SimulationScenarioState,
         SimulationState,
+        SimulationTrialState,
     )
 
     persona = Persona(id="tester", description="A patient user")
@@ -1030,7 +1030,7 @@ async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -
             SimulationScenarioState(
                 s.task_id,
                 [
-                    SimulationRunState(
+                    SimulationTrialState(
                         s.task_id, persona.id, 1, 1, "pending", None, 20, "", None, None
                     )
                 ],
@@ -1044,13 +1044,13 @@ async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -
     logger = MagicMock()
 
     def orchestrator(**kwargs):
-        record = RunRecord(
-            config=kwargs["run_config"],
-            outcome=RunOutcome(
+        record = TrialRecord(
+            config=kwargs["trial_config"],
+            outcome=TrialOutcome(
                 stop_reason="goal_achieved", total_turns=1, duration_seconds=0.1
             ),
         )
-        return MagicMock(run=AsyncMock(return_value=record))
+        return MagicMock(execute=AsyncMock(return_value=record))
 
     with patch(
         "metis.engine.simulation.experiment.Orchestrator", side_effect=orchestrator
@@ -1058,14 +1058,14 @@ async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -
         records = await _worker(
             worker_id=0,
             runner_factory=factory,
-            worker_runs=[RunPlanItem(s, persona, 1) for s in scenarios],
+            worker_trials=[TrialPlanItem(s, persona, 1) for s in scenarios],
             experiment_root=tmp_path,
             fixtures_dir=tmp_path / "fixtures",
             fixture_content_descriptions={},
             console_lock=asyncio.Lock(),
             started_scenarios=set(),
-            run_max_retries=0,
-            run_retry_delay_seconds=0,
+            trial_max_retries=0,
+            trial_retry_delay_seconds=0,
             state=state,
             orchestration_logger=logger,
         )
@@ -1073,12 +1073,12 @@ async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -
     assert all(
         r.config.scenario == "shared" and r.config.trial_index == 1 for r in records
     )
-    assert state.completed_runs == 2
+    assert state.completed_trials == 2
     assert [call.args[0] for call in logger.scenario_completed.call_args_list] == [
         "TC-001",
         "TC-002",
     ]
-    assert len(list((tmp_path / "runs").glob("*/record.json"))) == 2
+    assert len(list((tmp_path / "trials").glob("*/record.json"))) == 2
 
 
 @pytest.mark.asyncio
@@ -1089,7 +1089,7 @@ async def test_task_execution_settings_reach_worker_and_failure_records(
     retries: int | None,
     expected_attempts: int,
 ) -> None:
-    from metis.engine.simulation.experiment import expand_run_plan
+    from metis.engine.simulation.experiment import expand_trial_plan
 
     document = Specification.load_file(
         Path("packages/engine/example-experiment/simple/specification.yaml")
@@ -1099,16 +1099,16 @@ async def test_task_execution_settings_reach_worker_and_failure_records(
         max_turns=7, timeout_minutes=2, response_wait_ms=45000, max_run_retries=retries
     )
     specification = Specification.model_validate(document)
-    plan = expand_run_plan(specification, {p.id: p for p in specification.personas})
-    captured: list[RunConfig] = []
+    plan = expand_trial_plan(specification, {p.id: p for p in specification.personas})
+    captured: list[TrialConfig] = []
 
     class FailingOrchestrator:
-        def __init__(self, *, run_config: RunConfig, **kwargs: object) -> None:
-            captured.append(run_config)
+        def __init__(self, *, trial_config: TrialConfig, **kwargs: object) -> None:
+            captured.append(trial_config)
             if retries == 0:
                 raise RuntimeError("setup failed")
 
-        async def run(self) -> RunRecord:
+        async def execute(self) -> TrialRecord:
             raise RuntimeError("run failed")
 
         def partial_record(self, reason: str) -> None:
@@ -1122,14 +1122,14 @@ async def test_task_execution_settings_reach_worker_and_failure_records(
     records = await _worker(
         worker_id=0,
         runner_factory=MockRunnerFactory(),
-        worker_runs=plan,
+        worker_trials=plan,
         experiment_root=tmp_path,
         fixtures_dir=fixtures,
         fixture_content_descriptions={},
         console_lock=asyncio.Lock(),
         started_scenarios=set(),
-        run_max_retries=2,
-        run_retry_delay_seconds=0,
+        trial_max_retries=2,
+        trial_retry_delay_seconds=0,
     )
     assert len(captured) == expected_attempts
     assert len(records) == 1

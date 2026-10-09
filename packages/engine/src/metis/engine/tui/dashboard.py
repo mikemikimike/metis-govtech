@@ -1,4 +1,4 @@
-"""Top panel: progress bars, scenario/run status table."""
+"""Top panel: progress bars, scenario/trial status table."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def render_dashboard(state: SimulationState) -> RenderableType:
 
     # Progress bars
     total_scenarios = len(state.scenarios)
-    total_runs = state.total_runs
+    total_trials = state.total_trials
 
     scenarios_table = Table.grid(padding=(0, 1))
     scenarios_table.add_row(
@@ -52,9 +52,9 @@ def render_dashboard(state: SimulationState) -> RenderableType:
         Text(f"{state.completed_scenarios}/{total_scenarios}"),
     )
     scenarios_table.add_row(
-        Text("Runs:", style="dim"),
-        ProgressBar(total=total_runs, completed=state.completed_runs, width=20),
-        Text(f"{state.completed_runs}/{total_runs}"),
+        Text("Trials:", style="dim"),
+        ProgressBar(total=total_trials, completed=state.completed_trials, width=20),
+        Text(f"{state.completed_trials}/{total_trials}"),
     )
     parts.append(scenarios_table)
     parts.append(Text(""))
@@ -64,33 +64,33 @@ def render_dashboard(state: SimulationState) -> RenderableType:
     for active in active_scenarios:
         active_text = Text()
         active_text.append(f"Ongoing scenario: {active.scenario_id}\n", style="bold")
-        for run in active.runs:
-            worker_tag = f"[w{run.worker_id}] " if run.worker_id is not None else ""
-            if run.phase == "simulating":
+        for trial in active.trials:
+            worker_tag = f"[w{trial.worker_id}] " if trial.worker_id is not None else ""
+            if trial.phase == "simulating":
                 turn_info = ""
-                if run.current_turn is not None:
-                    turn_info = f"[turn {run.current_turn}/{run.max_turns}]"
-                detail = run.turn_detail or ""
+                if trial.current_turn is not None:
+                    turn_info = f"[turn {trial.current_turn}/{trial.max_turns}]"
+                detail = trial.turn_detail or ""
                 active_text.append(
-                    f"  ● {worker_tag}{run.persona_id} simulating "
+                    f"  ● {worker_tag}{trial.persona_id} simulating "
                     f"{turn_info} {detail}\n",
                     style="yellow",
                 )
-            elif run.phase == "completed":
-                dur = _format_duration(run.duration_seconds or 0)
+            elif trial.phase == "completed":
+                dur = _format_duration(trial.duration_seconds or 0)
                 active_text.append(
-                    f"  ✓ {worker_tag}{run.persona_id} "
-                    f"[done trial {run.trial_index}/{run.num_trials}]  {dur}\n",
+                    f"  ✓ {worker_tag}{trial.persona_id} "
+                    f"[done trial {trial.trial_index}/{trial.num_trials}]  {dur}\n",
                     style="green",
                 )
-            elif run.phase == "failed":
+            elif trial.phase == "failed":
                 active_text.append(
-                    f"  ✗ {worker_tag}{run.persona_id} [failed: {run.stop_reason}]\n",
+                    f"  ✗ {worker_tag}{trial.persona_id} [failed: {trial.stop_reason}]\n",
                     style="red",
                 )
-            elif run.phase == "pending":
+            elif trial.phase == "pending":
                 active_text.append(
-                    f"  ○ {run.persona_id} [pending]\n",
+                    f"  ○ {trial.persona_id} [pending]\n",
                     style="dim",
                 )
         parts.append(active_text)
@@ -101,10 +101,10 @@ def render_dashboard(state: SimulationState) -> RenderableType:
         comp_text = Text()
         comp_text.append("Completed scenarios:\n", style="dim")
         for sc in completed:
-            run_count = len(sc.runs)
-            total_dur = sum(r.duration_seconds or 0 for r in sc.runs)
+            trial_count = len(sc.trials)
+            total_dur = sum(t.duration_seconds or 0 for t in sc.trials)
             comp_text.append(
-                f"  ✓ {sc.scenario_id} ({run_count} run{'s' if run_count > 1 else ''})  "
+                f"  ✓ {sc.scenario_id} ({trial_count} trial{'s' if trial_count > 1 else ''})  "
                 f"{_format_duration(total_dur)}\n",
                 style="green",
             )

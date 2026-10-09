@@ -91,7 +91,7 @@ from ...types import (
     ChosenAction,
     FormFillAction,
     Observation,
-    RunConfig,
+    TrialConfig,
     UploadFileAction,
 )
 from .._http import (
@@ -232,7 +232,7 @@ class OrcaApiRunner(Runner):
             clock=clock,
             sleep=sleep,
         )
-        #: The scenario's fixture names (from ``RunConfig``), offered until attached.
+        #: The scenario's fixture names (from ``TrialConfig``), offered until attached.
         self._fixtures: list[str] = []
         self._attached: set[str] = set()
         #: Fixtures Orca rejected in this run: reported once, then not offered.
@@ -246,7 +246,7 @@ class OrcaApiRunner(Runner):
         self._session_id: str | None = None
         #: The turn submitted but not yet settled — what a cancel would stop.
         self._inflight_turn_id: str | None = None
-        self._response_wait_ms = RunConfig.model_fields["response_wait_ms"].default
+        self._response_wait_ms = TrialConfig.model_fields["response_wait_ms"].default
         # The form from the most recent digest (``None`` once a digest carries
         # no form) and the prose the persona sent alongside a form answer.
         self._pending_form: dict[str, Any] | None = None
@@ -265,7 +265,7 @@ class OrcaApiRunner(Runner):
         #: same-named files carry new ids and *should* be stored alongside.
         self._downloaded_file_ids: set[str] = set()
 
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         """Record the scenario's response ceiling and fixtures; no session is created eagerly."""
         self._response_wait_ms = config.response_wait_ms
         self._fixtures = list(config.fixtures)
@@ -1381,8 +1381,8 @@ class OrcaApiRunnerFactory:
     @property
     def retry_defaults(self) -> tuple[int, float]:
         return (
-            self._config.retry.run_max_retries,
-            self._config.retry.run_retry_delay_seconds,
+            self._config.retry.trial_max_retries,
+            self._config.retry.trial_retry_delay_seconds,
         )
 
     async def start(self) -> None:

@@ -18,7 +18,12 @@ from metis.engine.evaluation.types import (
     SessionResult,
     TurnResult,
 )
-from metis.engine.simulation.types import MetricRef, RunConfig, RunOutcome, RunRecord
+from metis.engine.simulation.types import (
+    MetricRef,
+    TrialConfig,
+    TrialOutcome,
+    TrialRecord,
+)
 
 runner = CliRunner()
 
@@ -38,20 +43,20 @@ def _write_record(
     run_name: str = "task-1-alice-1",
     session_id: str = "session-1",
 ) -> Path:
-    record = RunRecord(
-        config=RunConfig(
+    record = TrialRecord(
+        config=TrialConfig(
             persona="alice",
             scenario="task-1",
             metric_refs=[MetricRef(fqn="example.metrics.TestMetric", args={})],
         ),
-        outcome=RunOutcome(
+        outcome=TrialOutcome(
             stop_reason="goal_achieved",
             total_turns=1,
             duration_seconds=1.0,
         ),
         target_session_id=session_id,
     )
-    record_path = experiment_dir / "runs" / run_name / "record.json"
+    record_path = experiment_dir / "trials" / run_name / "record.json"
     record_path.parent.mkdir(parents=True, exist_ok=True)
     record_path.write_text(record.model_dump_json())
     return record_path
@@ -207,18 +212,18 @@ def test_evaluate_fails_when_the_input_snapshot_has_no_specification_file(
     assert "specification.yaml" in result.output
 
 
-def test_evaluate_fails_for_a_malformed_run_record(tmp_path: Path) -> None:
+def test_evaluate_fails_for_a_malformed_trial_record(tmp_path: Path) -> None:
     experiment_dir = _write_experiment_dir(tmp_path)
-    malformed_record = experiment_dir / "runs" / "run-1" / "record.json"
+    malformed_record = experiment_dir / "trials" / "run-1" / "record.json"
     malformed_record.parent.mkdir(parents=True)
     malformed_record.write_text("{}")
 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(experiment_dir)])
 
     assert result.exit_code != 0
-    assert "run record" in result.output
+    assert "trial record" in result.output
     assert (
-        "EVALUATION FAILED — failed to load run record"
+        "EVALUATION FAILED — failed to load trial record"
         in (experiment_dir / "logs" / "evaluate.log").read_text()
     )
 

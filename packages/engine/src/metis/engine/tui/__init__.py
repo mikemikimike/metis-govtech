@@ -2,14 +2,14 @@
 
 from .layout import TUIContext, is_tui_active
 from .state import (
-    SimulationRunState,
     SimulationScenarioState,
     SimulationState,
+    SimulationTrialState,
 )
 from .tail import TailBuffer
 
 __all__ = [
-    "SimulationRunState",
+    "SimulationTrialState",
     "SimulationScenarioState",
     "SimulationState",
     "TUIContext",

@@ -7,7 +7,7 @@ from typing import IO, TYPE_CHECKING, Literal
 
 from metis.core.logging import iso_timestamp
 
-from .router import _run_log_filename
+from .router import _trial_log_filename
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -68,21 +68,21 @@ class OrchestrationLogger:
             )
         else:
             self._write_text(
-                f"RESUME STARTED ({redo_count} runs to redo, "
+                f"RESUME STARTED ({redo_count} trials to redo, "
                 f"{complete_count} already complete)"
             )
 
-    def run_started(
+    def trial_started(
         self, scenario_id: str, persona_id: str, trial_index: int, num_trials: int
     ) -> None:
-        log_filename = _run_log_filename(
+        log_filename = _trial_log_filename(
             scenario_id, persona_id, trial_index, num_trials
         )
         pointer = f"logs/{log_filename}"
         if self._log_format == "json":
             self._write_json(
                 {
-                    "event_type": "RUN_STARTED",
+                    "event_type": "TRIAL_STARTED",
                     "scenario_id": scenario_id,
                     "persona_id": persona_id,
                     "trial_index": trial_index,
@@ -92,11 +92,11 @@ class OrchestrationLogger:
             )
         else:
             self._write_text(
-                f"RUN {scenario_id} x {persona_id} [trial {trial_index}/{num_trials}] "
+                f"TRIAL {scenario_id} x {persona_id} [trial {trial_index}/{num_trials}] "
                 f"STARTED → {pointer}"
             )
 
-    def run_completed(
+    def trial_completed(
         self,
         scenario_id: str,
         persona_id: str,
@@ -110,7 +110,7 @@ class OrchestrationLogger:
         if self._log_format == "json":
             self._write_json(
                 {
-                    "event_type": "RUN_COMPLETED",
+                    "event_type": "TRIAL_COMPLETED",
                     "scenario_id": scenario_id,
                     "persona_id": persona_id,
                     "trial_index": trial_index,
@@ -122,25 +122,25 @@ class OrchestrationLogger:
             )
         else:
             self._write_text(
-                f"RUN {scenario_id} x {persona_id} [trial {trial_index}/{num_trials}] "
+                f"TRIAL {scenario_id} x {persona_id} [trial {trial_index}/{num_trials}] "
                 f"COMPLETED ({stop_reason}, {total_turns} turns, {duration_str})"
             )
 
     def scenario_completed(
-        self, scenario_id: str, runs_passed: int, runs_total: int
+        self, scenario_id: str, trials_passed: int, trials_total: int
     ) -> None:
         if self._log_format == "json":
             self._write_json(
                 {
                     "event_type": "SCENARIO_COMPLETED",
                     "scenario_id": scenario_id,
-                    "runs_passed": runs_passed,
-                    "runs_total": runs_total,
+                    "trials_passed": trials_passed,
+                    "trials_total": trials_total,
                 }
             )
         else:
             self._write_text(
-                f"SCENARIO {scenario_id} COMPLETED ({runs_passed}/{runs_total} runs passed)"
+                f"SCENARIO {scenario_id} COMPLETED ({trials_passed}/{trials_total} trials passed)"
             )
 
     def close(self) -> None:

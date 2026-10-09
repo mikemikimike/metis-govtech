@@ -12,7 +12,7 @@ from metis.core.logging import get_logger
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from .types import RunRecord
+    from .types import TrialRecord
 
 _TYPE_MAP = {
     "pdf": "report",
@@ -59,7 +59,7 @@ def quarantine_stale_artifacts(
     would be free to name attempt 2's files. The ``artifacts-`` prefix says
     which directory was superseded and sorts the folder next to it.
 
-    :param run_dir: The run folder (``runs/<scenario>-<persona>-<trial>/``).
+    :param run_dir: The run folder (``trials/<scenario>-<persona>-<trial>/``).
     :param now: Timestamp for the destination name. Defaults to the current
         UTC time; injected by tests for a deterministic name.
     :returns: The directory the artifacts were moved to, or ``None`` when
@@ -93,7 +93,7 @@ def infer_artifact_type(filename: str) -> str:
     return _TYPE_MAP.get(ext, "unknown")
 
 
-def _save_artifacts(record: RunRecord, run_dir: Path, experiment_root: Path) -> dict:
+def _save_artifacts(record: TrialRecord, run_dir: Path, experiment_root: Path) -> dict:
     """Write an artifact manifest for a completed simulation run.
 
     Artifacts are already on disk at their collected paths (written live during
@@ -101,7 +101,7 @@ def _save_artifacts(record: RunRecord, run_dir: Path, experiment_root: Path) -> 
     manifest dict.
 
     :param record: The completed run record.
-    :param run_dir: The run folder (``runs/<task>-<persona>-<trial>/``).
+    :param run_dir: The run folder (``trials/<task>-<persona>-<trial>/``).
     :param experiment_root: The experiment directory each artifact's ``path`` is
         relative to.
     :returns: The manifest dict (also written to ``run_dir/artifacts/run-manifest.json``).

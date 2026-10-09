@@ -12,9 +12,9 @@ from metis.engine.tui.layout import (
     is_tui_active,
 )
 from metis.engine.tui.state import (
-    SimulationRunState,
     SimulationScenarioState,
     SimulationState,
+    SimulationTrialState,
 )
 from metis.engine.tui.tail import TailBuffer
 
@@ -23,8 +23,8 @@ def _make_state() -> SimulationState:
     scenarios = [
         SimulationScenarioState(
             scenario_id="test-scn",
-            runs=[
-                SimulationRunState(
+            trials=[
+                SimulationTrialState(
                     scenario_id="test-scn",
                     persona_id="test-per",
                     trial_index=1,
@@ -40,7 +40,9 @@ def _make_state() -> SimulationState:
             phase="pending",
         ),
     ]
-    return SimulationState(experiment_id="test-exp", scenarios=scenarios, total_runs=1)
+    return SimulationState(
+        experiment_id="test-exp", scenarios=scenarios, total_trials=1
+    )
 
 
 class TestTUIContext:

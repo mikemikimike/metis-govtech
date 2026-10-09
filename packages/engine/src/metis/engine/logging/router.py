@@ -1,8 +1,8 @@
-"""Routes structlog events to per-run log files and the TUI tail buffer.
+"""Routes structlog events to per-trial log files and the TUI tail buffer.
 
 When the TUI is active, the LogRouter replaces core's _rich_console_renderer
 as the final processor in structlog's chain. It renders each event to:
-1. Per-run log files (plain text or JSON — always at DEBUG)
+1. Per-trial log files (plain text or JSON — always at DEBUG)
 2. The TUI tail buffer (styled Rich Text, same format as core's renderer)
 3. Returns "" so structlog's PrintLogger writes nothing to stderr
    (Rich Live owns the terminal)
@@ -47,10 +47,10 @@ _LEVEL_STYLES = {
 }
 
 
-def _run_log_filename(
+def _trial_log_filename(
     scenario_id: str, persona_id: str, trial_index: int, num_trials: int
 ) -> str:
-    """Build a per-run log filename. ``trial_index`` is 1-based (first trial is 1)."""
+    """Build a per-trial log filename. ``trial_index`` is 1-based (first trial is 1)."""
     pad = max(2, len(str(num_trials)))
     return f"simulate-{scenario_id}_{persona_id}-{trial_index:0{pad}}.log"
 
@@ -58,7 +58,7 @@ def _run_log_filename(
 class LogRouter:
     """Final structlog processor that replaces the default renderer.
 
-    Routes every event to per-run files and the tail buffer. When TUI is
+    Routes every event to per-trial files and the tail buffer. When TUI is
     active, returns "" to suppress stderr (Rich Live owns the terminal).
     When no TUI, falls through to the original renderer for stderr output.
     """
@@ -80,10 +80,10 @@ class LogRouter:
         self._append = append
         log_dir.mkdir(parents=True, exist_ok=True)
 
-    def _run_key(self, scenario_id: str, persona_id: str, trial_index: int) -> str:
+    def _trial_key(self, scenario_id: str, persona_id: str, trial_index: int) -> str:
         return f"{scenario_id}:{persona_id}:{trial_index}"
 
-    def open_run(
+    def open_trial(
         self,
         scenario_id: str,
         persona_id: str,
@@ -92,8 +92,8 @@ class LogRouter:
         *,
         run_dir: Path | None = None,
     ) -> None:
-        key = self._run_key(scenario_id, persona_id, trial_index)
-        filename = _run_log_filename(scenario_id, persona_id, trial_index, num_trials)
+        key = self._trial_key(scenario_id, persona_id, trial_index)
+        filename = _trial_log_filename(scenario_id, persona_id, trial_index, num_trials)
         path = self._log_dir / filename
         # Truncate for a fresh experiment; append when resuming, where this
         # file already holds the interrupted process's account of the run and
@@ -118,8 +118,8 @@ class LogRouter:
                     log_path=str(path),
                 )
 
-    def close_run(self, scenario_id: str, persona_id: str, trial_index: int) -> None:
-        key = self._run_key(scenario_id, persona_id, trial_index)
+    def close_trial(self, scenario_id: str, persona_id: str, trial_index: int) -> None:
+        key = self._trial_key(scenario_id, persona_id, trial_index)
         handle = self._handles.pop(key, None)
         if handle:
             handle.flush()
@@ -137,9 +137,9 @@ class LogRouter:
         persona_id = event_dict.get("persona_id")
         trial_index = event_dict.get("trial_index")
 
-        # Route to per-run file (always at DEBUG — all events)
+        # Route to per-trial file (always at DEBUG — all events)
         if scenario_id and persona_id and trial_index is not None:
-            key = self._run_key(scenario_id, persona_id, trial_index)
+            key = self._trial_key(scenario_id, persona_id, trial_index)
             handle = self._handles.get(key)
             if handle:
                 handle.write(self._format_file_line(event_dict) + "\n")
@@ -175,7 +175,7 @@ class LogRouter:
         """ISO-8601 UTC wall clock trimmed to whole seconds with a Z suffix.
 
         Reuses the structlog ``timestamp`` (TimeStamper(fmt="iso")) so it is
-        byte-consistent with the per-run log files. Drops fractional seconds
+        byte-consistent with the per-trial log files. Drops fractional seconds
         for the live view but keeps ``Z`` so it is unambiguously UTC.
         """
         if not timestamp:
@@ -201,7 +201,7 @@ class LogRouter:
         return output
 
     def _format_file_line(self, event_dict: EventDict) -> str:
-        """Format a line for per-run log files (plain text or JSON)."""
+        """Format a line for per-trial log files (plain text or JSON)."""
         if self._log_format == "json":
             return json_mod.dumps(
                 {k: v for k, v in event_dict.items() if k != "_record"},
@@ -230,7 +230,7 @@ def setup_engine_logging(
     still appear on stderr.
     Must be called AFTER configure_logging().
 
-    ``append`` keeps an existing per-run log rather than truncating it; pass
+    ``append`` keeps an existing per-trial log rather than truncating it; pass
     the resume flag so a resumed run does not erase the earlier process's log.
     """
     config = structlog.get_config()

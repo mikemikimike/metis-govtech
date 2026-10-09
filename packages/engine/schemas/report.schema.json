@@ -558,12 +558,12 @@
           "title": "Trials",
           "type": "integer"
         },
-        "sessionsPlanned": {
-          "title": "Sessionsplanned",
+        "trialsPlanned": {
+          "title": "Trialsplanned",
           "type": "integer"
         },
-        "sessionsRun": {
-          "title": "Sessionsrun",
+        "trialsRun": {
+          "title": "Trialsrun",
           "type": "integer"
         },
         "personasRun": {
@@ -587,8 +587,8 @@
         "id",
         "personas",
         "trials",
-        "sessionsPlanned",
-        "sessionsRun",
+        "trialsPlanned",
+        "trialsRun",
         "personasRun",
         "metricsAsked",
         "metricsScored"

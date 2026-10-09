@@ -11,7 +11,7 @@ The JSON files here are **auto-generated**. Do not edit them directly; they will
 | `specification.schema.json` | `Specification` | `_SPECIFICATION_VERSION` | `src/metis/engine/simulation/types.py` |
 | `report.schema.json` | `Report` | `_REPORT_VERSION` | `src/metis/engine/reporting/_models.py` |
 
-`RunRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. Its version constant is `_RUN_RECORD_VERSION`.
+`TrialRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. Its version constant is `_TRIAL_RECORD_VERSION`.
 
 ## How to modify a schema
 
@@ -46,7 +46,7 @@ A change requires a version bump if data valid under version N would **fail `mod
 
 A breaking change to a nested model bumps the version of the root model that contains it:
 - Shared Profile nodes, `Criterion`, `Persona`, `Scenario`, and `Task` → bump `Specification`
-- `RunConfig`, `RunOutcome`, `Artifact`, `ConversationTurn` → bump `RunRecord`
+- `TrialConfig`, `TrialOutcome`, `Artifact`, `ConversationTurn` → bump `TrialRecord`
 
 The common trap is giving a breaking field a default to avoid a bump. That's fine for genuinely optional fields, but if the field is semantically required and you're using a default as a workaround, you're hiding a real schema change. Use a bump and a migration instead.
 

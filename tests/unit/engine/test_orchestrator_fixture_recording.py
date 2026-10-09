@@ -12,14 +12,14 @@ from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     ChosenAction,
     Observation,
-    RunConfig,
     Scenario,
+    TrialConfig,
     UserAgentOutput,
 )
 
 
 class _NoArtifactRunner(Runner):
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         return None
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
@@ -41,7 +41,7 @@ class _FakeAgent:
 
 
 @pytest.mark.asyncio
-async def test_fixtures_recorded_in_run_record(tmp_path: Path) -> None:
+async def test_fixtures_recorded_in_trial_record(tmp_path: Path) -> None:
     fixtures_dir = tmp_path / "fixtures"
     fixtures_dir.mkdir()
     (fixtures_dir / "input.csv").write_text("a,b\n1,2\n")
@@ -49,14 +49,14 @@ async def test_fixtures_recorded_in_run_record(tmp_path: Path) -> None:
     orchestrator = Orchestrator(
         runner=_NoArtifactRunner(),
         agent=_FakeAgent(),  # type: ignore[arg-type]
-        run_config=RunConfig(persona="p1", scenario="s1", fixtures=["input.csv"]),
+        trial_config=TrialConfig(persona="p1", scenario="s1", fixtures=["input.csv"]),
         scenario=Scenario(id="s1", description="d", persona_refs=["p1"]),
         run_dir=tmp_path,
         fixtures_dir=fixtures_dir,
         experiment_root=tmp_path,
     )
 
-    record = await orchestrator.run()
+    record = await orchestrator.execute()
 
     fixtures = [a for a in record.artifacts if a.source == "fixture"]
     assert [a.name for a in fixtures] == ["input.csv"]
@@ -71,7 +71,7 @@ def test_orchestrator_uses_supplied_fixture_artifacts(tmp_path: Path) -> None:
     orch = Orchestrator(
         runner=object(),  # unused in this assertion
         agent=object(),
-        run_config=RunConfig(persona="p", scenario="s", fixtures=["q3.csv"]),
+        trial_config=TrialConfig(persona="p", scenario="s", fixtures=["q3.csv"]),
         scenario=Scenario(
             id="s", description="d", persona_refs=["p"], fixtures=["q3.csv"]
         ),

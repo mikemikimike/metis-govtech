@@ -4,18 +4,18 @@ from rich.console import Console
 
 from metis.engine.tui.dashboard import render_dashboard
 from metis.engine.tui.state import (
-    SimulationRunState,
     SimulationScenarioState,
     SimulationState,
+    SimulationTrialState,
 )
 
 
-def _make_state_with_active_run() -> SimulationState:
+def _make_state_with_active_trial() -> SimulationState:
     scenarios = [
         SimulationScenarioState(
             scenario_id="direct-question",
-            runs=[
-                SimulationRunState(
+            trials=[
+                SimulationTrialState(
                     scenario_id="direct-question",
                     persona_id="cooperative",
                     trial_index=1,
@@ -32,8 +32,8 @@ def _make_state_with_active_run() -> SimulationState:
         ),
         SimulationScenarioState(
             scenario_id="constrained-analysis",
-            runs=[
-                SimulationRunState(
+            trials=[
+                SimulationTrialState(
                     scenario_id="constrained-analysis",
                     persona_id="impatient",
                     trial_index=1,
@@ -49,17 +49,19 @@ def _make_state_with_active_run() -> SimulationState:
             phase="active",
         ),
     ]
-    return SimulationState(experiment_id="orca-eval", scenarios=scenarios, total_runs=2)
+    return SimulationState(
+        experiment_id="orca-eval", scenarios=scenarios, total_trials=2
+    )
 
 
 class TestRenderDashboard:
     def test_returns_renderable(self) -> None:
-        state = _make_state_with_active_run()
+        state = _make_state_with_active_trial()
         result = render_dashboard(state)
         assert result is not None
 
     def test_contains_experiment_id(self) -> None:
-        state = _make_state_with_active_run()
+        state = _make_state_with_active_trial()
         result = render_dashboard(state)
         console = Console(file=None, force_terminal=True, width=80)
         with console.capture() as capture:
@@ -68,16 +70,16 @@ class TestRenderDashboard:
         assert "orca-eval" in output
 
     def test_contains_progress_fractions(self) -> None:
-        state = _make_state_with_active_run()
+        state = _make_state_with_active_trial()
         result = render_dashboard(state)
         console = Console(file=None, force_terminal=True, width=80)
         with console.capture() as capture:
             console.print(result)
         output = capture.get()
-        assert "1/2" in output  # scenarios or runs
+        assert "1/2" in output  # scenarios or trials
 
     def test_contains_active_scenario(self) -> None:
-        state = _make_state_with_active_run()
+        state = _make_state_with_active_trial()
         result = render_dashboard(state)
         console = Console(file=None, force_terminal=True, width=80)
         with console.capture() as capture:
@@ -86,7 +88,7 @@ class TestRenderDashboard:
         assert "constrained-analysis" in output
 
     def test_contains_completed_scenario(self) -> None:
-        state = _make_state_with_active_run()
+        state = _make_state_with_active_trial()
         result = render_dashboard(state)
         console = Console(file=None, force_terminal=True, width=80)
         with console.capture() as capture:

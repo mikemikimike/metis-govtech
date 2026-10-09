@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 from metis.engine import cli
 from metis.engine.cli import app
 from metis.engine.simulation import experiment as experiment_module
-from metis.engine.simulation.types import RunConfig, RunOutcome, RunRecord
+from metis.engine.simulation.types import TrialConfig, TrialOutcome, TrialRecord
 
 runner = CliRunner()
 
@@ -34,7 +34,7 @@ def _write_output(output_dir: Path, experiment_yaml: str = MINIMAL_EXPERIMENT) -
 
 
 def _write_record_marker(experiment_dir: Path) -> Path:
-    record_path = experiment_dir / "runs" / "TC-001-alice-1" / "record.json"
+    record_path = experiment_dir / "trials" / "TC-001-alice-1" / "record.json"
     record_path.parent.mkdir(parents=True, exist_ok=True)
     record_path.write_text("{}")
     return experiment_dir
@@ -43,13 +43,13 @@ def _write_record_marker(experiment_dir: Path) -> Path:
 def _write_record(
     experiment_dir: Path, folder: str, stop_reason: str = "goal_achieved"
 ) -> None:
-    record = RunRecord(
-        config=RunConfig(persona="alice", scenario="task-1"),
-        outcome=RunOutcome(
+    record = TrialRecord(
+        config=TrialConfig(persona="alice", scenario="task-1"),
+        outcome=TrialOutcome(
             stop_reason=stop_reason, total_turns=1, duration_seconds=1.0
         ),
     )
-    path = experiment_dir / "runs" / folder / "record.json"
+    path = experiment_dir / "trials" / folder / "record.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(record.model_dump_json())
 
@@ -88,7 +88,7 @@ def test_simulate_zero_records_exits_one(monkeypatch, tmp_path: Path) -> None:
     result = runner.invoke(app, ["simulate", "--input-dir", str(input_dir)])
 
     assert result.exit_code == 1
-    assert "No run records found." in result.output
+    assert "No trial records found." in result.output
     assert "Evaluate:" not in result.output
 
 
@@ -104,11 +104,13 @@ def test_resume_runs_only_missing_or_system_error_records(
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
     selected: list[tuple[str, str, int]] = []
 
-    def fake_run_experiment(*_args: object, **kwargs: object) -> None:
-        for scenario, persona, trial_index in kwargs["run_plan"]:  # type: ignore[index]
+    def fake_execute_experiment(*_args: object, **kwargs: object) -> None:
+        for scenario, persona, trial_index in kwargs["trial_plan"]:  # type: ignore[index]
             selected.append((scenario.id, persona.id, trial_index))
 
-    monkeypatch.setattr(experiment_module, "run_experiment", fake_run_experiment)
+    monkeypatch.setattr(
+        experiment_module, "execute_experiment", fake_execute_experiment
+    )
 
     result = runner.invoke(
         app,
@@ -117,7 +119,7 @@ def test_resume_runs_only_missing_or_system_error_records(
 
     assert result.exit_code == 0
     assert selected == [("task-1", "alice", 2)]
-    assert "runs to redo" in " ".join(result.output.split())
+    assert "trials to redo" in " ".join(result.output.split())
 
 
 def test_resume_passes_append_true_to_setup_engine_logging(
@@ -130,7 +132,7 @@ def test_resume_passes_append_true_to_setup_engine_logging(
     _write_record(output_dir, "TC-001-alice-1", "goal_achieved")
     _write_record(output_dir, "TC-001-alice-2", "system_error")
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
-    monkeypatch.setattr(experiment_module, "run_experiment", lambda *_a, **_k: None)
+    monkeypatch.setattr(experiment_module, "execute_experiment", lambda *_a, **_k: None)
 
     captured_append: list[object] = []
     _real_setup = cli.setup_engine_logging

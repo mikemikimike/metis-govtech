@@ -69,6 +69,19 @@ _No v1 changes yet._
 - Set `schema_version` to `2` for `specification.yaml`, run records, and the report schema. v1 bumps
   each schema once to mark the break from v0, and later `next` changes keep version `2` (#392).
 
+- Rename every `Run`-as-individual-execution symbol in `packages/engine/` to `Trial`
+  (`RunConfig` → `TrialConfig`, `RunRecord` → `TrialRecord`, `RunOutcome` →
+  `TrialOutcome`, `RunFailure` → `TrialFailure`, `RunMeta` → `TrialMeta`,
+  `RunRecoverableError` → `TrialRecoverableError`, `RunRetryConfig` →
+  `TrialRetryConfig`, and matching renames across the orchestrator, TUI state,
+  structured logging, CLI resume classification, and report `trialsPlanned`/
+  `trialsRun` fields), freeing "Run" for its glossary meaning — a grouping of
+  repeated Trials of the same Test Case, conceptual only, no new class. Also
+  renames `run_experiment()` to `execute_experiment()` and `Orchestrator.run()`
+  to `Orchestrator.execute()` to avoid a noun/verb collision with the renamed
+  `Run` concept. The on-disk `runs/<folder>/` experiment-output directory is
+  now `trials/<folder>/` (#200).
+
 ### metis-wizard
 
 #### Added

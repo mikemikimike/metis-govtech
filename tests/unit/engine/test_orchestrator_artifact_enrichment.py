@@ -13,8 +13,8 @@ from metis.engine.simulation.types import (
     Artifact,
     ChosenAction,
     Observation,
-    RunConfig,
     Scenario,
+    TrialConfig,
     UserAgentOutput,
 )
 
@@ -25,7 +25,7 @@ class _FakeRunner(Runner):
     def __init__(self, artifact: Artifact) -> None:
         self._artifact = artifact
 
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         return None
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
@@ -77,18 +77,18 @@ async def test_orchestrator_summarizes_downloads(monkeypatch, tmp_path: Path) ->
     artifact = Artifact(name="x.csv", path="x.csv", state="received")
     runner = _FakeRunner(artifact)
     scenario = _scenario()
-    run_config = RunConfig(persona="p1", scenario="s1")
+    trial_config = TrialConfig(persona="p1", scenario="s1")
     orchestrator = Orchestrator(
         runner=runner,
         agent=_FakeAgent(),  # type: ignore[arg-type]
-        run_config=run_config,
+        trial_config=trial_config,
         scenario=scenario,
         run_dir=tmp_path,
         fixtures_dir=tmp_path / "fixtures",
         experiment_root=tmp_path,
     )
 
-    record = await orchestrator.run()
+    record = await orchestrator.execute()
 
     assert seen and seen[0][1] == 1
     art = record.artifacts[0]
@@ -113,7 +113,7 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
     orch = Orchestrator(
         runner=object(),
         agent=object(),
-        run_config=RunConfig(persona="p", scenario="s", fixtures=["q3.csv"]),
+        trial_config=TrialConfig(persona="p", scenario="s", fixtures=["q3.csv"]),
         scenario=Scenario(
             id="s", description="d", persona_refs=["p"], fixtures=["q3.csv"]
         ),
@@ -161,7 +161,7 @@ async def test_target_artifact_still_stamped_and_summarized(
     orch = Orchestrator(
         runner=object(),
         agent=object(),
-        run_config=RunConfig(persona="p", scenario="s"),
+        trial_config=TrialConfig(persona="p", scenario="s"),
         scenario=Scenario(id="s", description="d", persona_refs=["p"]),
         run_dir=tmp_path,
         fixtures_dir=tmp_path,
@@ -189,7 +189,7 @@ def _fixture_swap_orchestrator(tmp_path: Path, registry: Artifact) -> Orchestrat
     return Orchestrator(
         runner=object(),
         agent=object(),
-        run_config=RunConfig(persona="p", scenario="s", fixtures=[registry.name]),
+        trial_config=TrialConfig(persona="p", scenario="s", fixtures=[registry.name]),
         scenario=Scenario(
             id="s", description="d", persona_refs=["p"], fixtures=[registry.name]
         ),

@@ -323,11 +323,11 @@ class TestPlatformAiKey:
 
     @pytest.mark.asyncio
     async def test_setup_logs_the_mode_and_never_the_key(self, tmp_path: Path) -> None:
-        from metis.engine.simulation.types import RunConfig
+        from metis.engine.simulation.types import TrialConfig
 
         runner = _make_runner(tmp_path, platform_ai_key=_PLATFORM_KEY)
         with structlog.testing.capture_logs() as logs:
-            await runner.setup(RunConfig(persona="p", scenario="s"))
+            await runner.setup(TrialConfig(persona="p", scenario="s"))
         rendered = repr(logs)
         assert "PlatformAI" in rendered
         assert _PLATFORM_KEY not in rendered

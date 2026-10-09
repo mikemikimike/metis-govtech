@@ -5,12 +5,12 @@ import pytest
 pytest.importorskip("playwright")
 
 from metis.engine.simulation.runners.orca_playwright._config import RetryConfig
-from metis.engine.simulation.types import RunFailure, RunRecord
+from metis.engine.simulation.types import TrialFailure, TrialRecord
 
 
 class TestRunRetryBehavior:
     def test_run_failure_model_captures_attempt_info(self) -> None:
-        failure = RunFailure(
+        failure = TrialFailure(
             attempt_number=1,
             failure_type="auth_loss",
             submission_phase="unknown",
@@ -22,7 +22,7 @@ class TestRunRetryBehavior:
         assert failure.failure_type == "auth_loss"
 
     def test_run_record_tracks_multiple_attempts(self) -> None:
-        record = RunRecord.model_validate(
+        record = TrialRecord.model_validate(
             {
                 "schema_version": 2,
                 "config": {"persona": "p", "scenario": "s"},
@@ -58,8 +58,8 @@ class TestRunRetryBehavior:
 
     def test_retry_config_default_budget(self) -> None:
         config = RetryConfig()
-        # max_attempts = 1 initial + run_max_retries
-        max_attempts = 1 + config.run_max_retries
+        # max_attempts = 1 initial + trial_max_retries
+        max_attempts = 1 + config.trial_max_retries
         assert max_attempts == 3
 
     def test_scenario_override_respected(self) -> None:
@@ -70,8 +70,8 @@ class TestRunRetryBehavior:
                 "id": "s1",
                 "name": "Test",
                 "description": "test",
-                "max_run_retries": 0,
+                "max_trial_retries": 0,
                 "persona_refs": ["p1"],
             }
         )
-        assert scenario.max_run_retries == 0
+        assert scenario.max_trial_retries == 0
