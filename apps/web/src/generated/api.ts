@@ -72,7 +72,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Package a wizard Profile and fixtures into a ZIP
+         * Package a wizard Specification and fixtures into a ZIP
          * @description Build one request-scoped engine-ready ZIP without retaining uploaded files.
          */
         post: operations["package_api_v1_wizard_package_post"];
@@ -159,11 +159,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Compile a finished wizard Profile into YAML
-         * @description Convert a runnable `ProductProfile` into the two final configuration documents.
+         * Compile a finished wizard Specification into YAML
+         * @description Compile a runnable `Specification` into YAML with assigned Task IDs.
          *
-         *     The response contains `profile.yaml` and `experiment.yaml` as strings. The API returns the
-         *     content only; it does not write files or save the Profile on the server.
+         *     The response contains `specification.yaml` and `specification` with assigned Task IDs.
+         *     The API does not write files or save the Specification on the server.
          */
         post: operations["compile__api_v1_wizard_compile_post"];
         delete?: never;
@@ -255,8 +255,8 @@ export interface components {
         };
         /** Body_package_api_v1_wizard_package_post */
         Body_package_api_v1_wizard_package_post: {
-            /** Profile */
-            profile: string;
+            /** Specification */
+            specification: string;
             /** Files */
             files?: string[] | null;
         };
@@ -305,7 +305,7 @@ export interface components {
         };
         /**
          * CapabilityId
-         * @description A stable METIS id for one ARC capability.
+         * @description A METIS id for one ARC capability.
          * @enum {string}
          */
         CapabilityId: "planning_goal_management" | "agent_delegation" | "tool_use" | "multimodal_understanding_generation" | "official_communication" | "business_transactions" | "internet_search_access" | "computer_use" | "other_programmatic_interfaces" | "code_execution" | "file_data_management" | "system_management";
@@ -481,13 +481,12 @@ export interface components {
         };
         /**
          * CompileResult
-         * @description The two YAML strings returned by compilation, keyed by their file names.
+         * @description The compiled `specification.yaml` string and the Specification with assigned Task IDs.
          */
         CompileResult: {
-            /** Profile.Yaml */
-            "profile.yaml": string;
-            /** Experiment.Yaml */
-            "experiment.yaml": string;
+            /** Specification.Yaml */
+            "specification.yaml": string;
+            specification: components["schemas"]["Specification"];
         };
         /** Criterion */
         Criterion: {
@@ -545,6 +544,32 @@ export interface components {
         DocumentExtractionResult: {
             /** Documents */
             documents: components["schemas"]["ExtractedDocument"][];
+        };
+        /**
+         * Experiment
+         * @description The Test Cases and settings used to execute an evaluation.
+         */
+        Experiment: {
+            /**
+             * Id
+             * @default
+             */
+            id: string;
+            /**
+             * Runner Factory Ref
+             * @default metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
+             */
+            runner_factory_ref: string;
+            /** Personas */
+            personas?: components["schemas"]["Persona"][];
+            /** Scenarios */
+            scenarios?: components["schemas"]["Scenario"][];
+            /** Tasks */
+            tasks?: components["schemas"]["Task"][];
+            /** Fixture Content Descriptions */
+            fixture_content_descriptions?: {
+                [key: string]: string;
+            };
         };
         /**
          * ExtractedDocument
@@ -699,7 +724,7 @@ export interface components {
         };
         /**
          * InterviewContext
-         * @description User-owned context that travels with an Interview but is not Profile data.
+         * @description User-owned context that travels with an Interview but is not Specification data.
          */
         InterviewContext: {
             /** @default end_user */
@@ -778,7 +803,7 @@ export interface components {
          *     the only structured request, and it carries its own stage; the stage is not duplicated here.
          */
         InterviewState: {
-            profile: components["schemas"]["ProductProfile"];
+            specification: components["schemas"]["Specification"];
             context: components["schemas"]["InterviewContext"];
             /**
              * Behaviours Confirmed
@@ -849,7 +874,7 @@ export interface components {
         };
         /**
          * MissingData
-         * @description One structured reason a Profile is not yet runnable.
+         * @description One structured reason a Specification is not yet runnable.
          */
         MissingData: {
             code: components["schemas"]["MissingDataCode"];
@@ -861,7 +886,7 @@ export interface components {
         };
         /**
          * MissingDataCode
-         * @description Stable codes for gaps that stop a Profile from being runnable.
+         * @description Stable codes for gaps that stop a Specification from being runnable.
          * @enum {string}
          */
         MissingDataCode: "product_incomplete" | "behaviours_incomplete" | "no_measured_behaviour" | "criteria_incomplete" | "no_personas" | "no_scenarios" | "behaviour_uncovered" | "scenario_no_selected_behaviour" | "scenario_no_persona" | "scenario_unknown_reference" | "scenario_invalid_trials";
@@ -941,7 +966,7 @@ export interface components {
         PatchOrigin: "wizard" | "model";
         /**
          * Persona
-         * @description A user type whose stable id can differ from its display name.
+         * @description A user type whose id can differ from its display name.
          */
         Persona: {
             /** Id */
@@ -984,24 +1009,17 @@ export interface components {
         };
         /**
          * ProductProfile
-         * @description The whole document. Every feature in it was discovered from the interview.
+         * @description The product context and requirements that an evaluation measures.
          */
         ProductProfile: {
-            /**
-             * Schema Version
-             * @default 2
-             * @constant
-             */
-            schema_version: 2;
             product: components["schemas"]["Product"];
             /** Features */
             features?: components["schemas"]["Feature"][];
-            /** Personas */
-            personas?: components["schemas"]["Persona"][];
-            /** Scenarios */
-            scenarios?: components["schemas"]["Scenario"][];
         };
-        /** Scenario */
+        /**
+         * Scenario
+         * @description The situation in which Tasks evaluate the product.
+         */
         Scenario: {
             /** Id */
             id: string;
@@ -1009,17 +1027,6 @@ export interface components {
             name: string;
             /** Description */
             description: string;
-            /** Behaviour Refs */
-            behaviour_refs?: string[];
-            /** Persona Refs */
-            persona_refs?: string[];
-            /** Fixtures */
-            fixtures?: string[];
-            /**
-             * Num Trials
-             * @default 3
-             */
-            num_trials: number;
         };
         /**
          * ScenarioCard
@@ -1076,6 +1083,79 @@ export interface components {
              * @default false
              */
             retryable: boolean;
+        };
+        /**
+         * Specification
+         * @description The flat YAML and API representation of a Specification.
+         */
+        Specification: {
+            /**
+             * Schema Version
+             * @default 2
+             * @constant
+             */
+            schema_version: 2;
+            /**
+             * Id
+             * @default
+             */
+            id: string;
+            /**
+             * Runner Factory Ref
+             * @default metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
+             */
+            runner_factory_ref: string;
+            product: components["schemas"]["Product"];
+            /** Features */
+            features?: components["schemas"]["Feature"][];
+            /** Personas */
+            personas?: components["schemas"]["Persona"][];
+            /** Scenarios */
+            scenarios?: components["schemas"]["Scenario"][];
+            /** Tasks */
+            tasks?: components["schemas"]["Task"][];
+            /** Fixture Content Descriptions */
+            fixture_content_descriptions?: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * Task
+         * @description One test case. Identity survives edits to its references and inputs.
+         */
+        Task: {
+            /** Id */
+            id: string;
+            /** Scenario Ref */
+            scenario_ref: string;
+            /** Persona Ref */
+            persona_ref: string;
+            /** Fixtures */
+            fixtures?: string[];
+            /**
+             * Num Trials
+             * @default 3
+             */
+            num_trials: number;
+            /** Criterion Refs */
+            criterion_refs?: string[];
+            /**
+             * Max Turns
+             * @default 20
+             */
+            max_turns: number;
+            /**
+             * Timeout Minutes
+             * @default 15
+             */
+            timeout_minutes: number;
+            /**
+             * Response Wait Ms
+             * @default 300000
+             */
+            response_wait_ms: number;
+            /** Max Run Retries */
+            max_run_retries?: number | null;
         };
         /** Turn */
         Turn: {
@@ -1481,7 +1561,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProductProfile"];
+                "application/json": components["schemas"]["Specification"];
             };
         };
         responses: {

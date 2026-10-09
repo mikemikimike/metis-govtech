@@ -1,4 +1,4 @@
-"""Transport-neutral impact rules for edits to a wizard profile.
+"""Transport-neutral impact rules for edits to a wizard specification.
 
 This module deliberately knows nothing about screens, requests, or terminal/web UI.  It
 answers the domain question: which derived nodes are affected by a set of edits, and what
@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from metis.wizard.domain.patch import Patch
-    from metis.wizard.domain.profile import ProductProfile
+    from metis.wizard.domain.specification import Specification
 
 BEHAVIOUR_DESCRIPTION = "description"
 PRODUCT_WIDE = ("product.description", "product.detail")
@@ -20,14 +20,14 @@ PRODUCT_WIDE = ("product.description", "product.detail")
 
 @dataclass(frozen=True)
 class Impact:
-    """A derived profile node whose current value may need a user decision."""
+    """A derived specification node whose current value may need a user decision."""
 
     subject: str
     kind: str  # "criteria" | "scenario" | "tree"
     related_to: str | None = None
 
 
-def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
+def impacts_for(specification: Specification, patches: list[Patch]) -> list[Impact]:
     """Return derived nodes affected by ``patches``, in user-facing order."""
     impacts: list[Impact] = []
     seen: set[tuple[str, str]] = set()
@@ -36,7 +36,9 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
         path = patch.path
 
         if path in PRODUCT_WIDE:
-            has_derived_work = bool(profile.features) or bool(profile.scenarios)
+            has_derived_work = bool(specification.features) or bool(
+                specification.scenarios
+            )
             if not has_derived_work:
                 continue
             key = ("tree", "product")
@@ -49,7 +51,7 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
             continue
 
         behaviour_id = _behaviour_id(path)
-        behaviour = profile.behaviour(behaviour_id) if behaviour_id else None
+        behaviour = specification.behaviour(behaviour_id) if behaviour_id else None
         if behaviour is None:
             continue
 
@@ -57,7 +59,7 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
             seen.add(("criteria", behaviour.id))
             impacts.append(Impact(subject=behaviour.id, kind="criteria"))
 
-        for scenario in profile.scenarios_covering(behaviour.id):
+        for scenario in specification.scenarios_covering(behaviour.id):
             if ("scenario", scenario.id) in seen:
                 continue
             seen.add(("scenario", scenario.id))
@@ -69,32 +71,34 @@ def impacts_for(profile: ProductProfile, patches: list[Patch]) -> list[Impact]:
 
 
 def clear_for_regeneration(
-    profile: ProductProfile,
+    specification: Specification,
     impact: Impact,
     user_typed: set[str] | None = None,
 ) -> None:
     """Discard only model-derived state represented by ``impact``."""
     if impact.kind == "criteria":
-        behaviour = profile.behaviour(impact.subject)
+        behaviour = specification.behaviour(impact.subject)
         if behaviour is not None:
             if user_typed is None:
                 user_typed = set()
             behaviour.criteria = [c for c in behaviour.criteria if c.id in user_typed]
 
     elif impact.kind == "scenario":
-        scenario = profile.scenario(impact.subject)
+        scenario = specification.scenario(impact.subject)
         if scenario is not None and (
             user_typed is None or scenario.id not in user_typed
         ):
-            profile.scenarios = [s for s in profile.scenarios if s.id != impact.subject]
+            specification.scenarios = [
+                s for s in specification.scenarios if s.id != impact.subject
+            ]
 
     elif impact.kind == "tree":
         keep = user_typed or set()
-        profile.features = [
-            feature for feature in profile.features if feature.id in keep
+        specification.features = [
+            feature for feature in specification.features if feature.id in keep
         ]
-        profile.scenarios = [
-            scenario for scenario in profile.scenarios if scenario.id in keep
+        specification.scenarios = [
+            scenario for scenario in specification.scenarios if scenario.id in keep
         ]
 
 

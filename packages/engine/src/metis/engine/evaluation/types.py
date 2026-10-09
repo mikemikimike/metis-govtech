@@ -5,7 +5,7 @@ Result types for the three-phase evaluation orchestrator.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from metis.engine.extractor.types import RoutingSummary
 
@@ -23,6 +23,11 @@ class MetricResult:
     reason: str
     success: bool
     skipped: bool
+    criterion_id: str = ""
+    metric_fqn: str = ""
+    metric_args: dict[str, Any] = field(default_factory=dict)
+    task_id: str = ""
+    trial_index: int = 1
     evaluation_cost: float | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None

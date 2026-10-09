@@ -84,16 +84,17 @@ from metis.wizard.contracts.turn import (
     MissingDataCode,
 )
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
-from metis.wizard.domain.profile import (
+from metis.wizard.domain.specification import (
     Behaviour,
     Criterion,
     CriterionDescription,
     Feature,
+    NamedNode,
     Persona,
     Product,
-    ProductProfile,
-    ProfileNode,
     Scenario,
+    Specification,
+    Task,
 )
 from metis.wizard.domain.types import InteractionType
 
@@ -149,12 +150,13 @@ __all__ = [
     "Persona",
     "PersonaDraft",
     "Product",
-    "ProductProfile",
-    "ProfileNode",
+    "Specification",
+    "NamedNode",
     "CompileResult",
     "MissingDataCode",
     "MissingData",
     "Scenario",
+    "Task",
     "ScenarioCard",
     "ScenarioDraft",
     "InterviewState",

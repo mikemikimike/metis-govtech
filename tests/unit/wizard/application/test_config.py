@@ -14,8 +14,8 @@ from metis.wizard.application.driver import DriverState, StepDriver
 from metis.wizard.contracts.interview_state import Perspective, Turn
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
-from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
+from tests.fixtures.wizard.specifications import research_assistant
 
 _EXPECTED_STATUSES = {
     "clarify": "Understanding your agent…",
@@ -210,7 +210,7 @@ def test_a_limit_edit_affects_an_active_interview(
     document["settings"]["clarify_turn_cap"] = 3
     _install_document(monkeypatch, document)
     state = DriverState(
-        profile=research_assistant(),
+        specification=research_assistant(),
         context=interview_context(),
         step=InterviewStep.CLARIFY,
         history=[

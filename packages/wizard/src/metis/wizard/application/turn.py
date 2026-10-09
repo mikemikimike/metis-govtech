@@ -7,7 +7,7 @@ rehydrate mid-conversation the same way.
 
 Three properties hold the design together:
 
-- **Stage is derived.** `derive_stage` reads the Profile and the two explicit locks to find the
+- **Stage is derived.** `derive_stage` reads the Specification and the two explicit locks to find the
   first incomplete stage; the client never stores a stage. While a request is pending, that
   request's own `stage` is authoritative instead.
 - **Every operation is a transaction.** The operation runs on a deep copy. On full success the
@@ -38,7 +38,7 @@ from metis.wizard.application.interviewer import (
     InterviewerOutputError,
     InterviewerUnavailable,
 )
-from metis.wizard.application.readiness import profile_readiness
+from metis.wizard.application.readiness import specification_readiness
 from metis.wizard.contracts.conversation import (
     ChatRequest,
     ChatResponse,
@@ -68,10 +68,10 @@ from metis.wizard.contracts.turn import (
     MissingData,
 )
 from metis.wizard.domain.permissions import InterviewStep
-from metis.wizard.domain.profile import (
+from metis.wizard.domain.specification import (
     Product,
-    ProductProfile,
-    collect_profile_ids,
+    Specification,
+    collect_specification_ids,
 )
 
 if TYPE_CHECKING:
@@ -102,7 +102,7 @@ def configure_interview_dependencies(
 
 
 def derive_stage(state: InterviewState) -> InterviewStep:
-    """The first stage the Profile has not yet satisfied — the interview's position, computed.
+    """The first stage the Specification has not yet satisfied — the interview's position, computed.
 
     Read top to bottom: a missing product needs clarification; a Behaviour list that is empty,
     measures nothing, or has not been confirmed needs the Behaviour review; a measured Behaviour
@@ -110,7 +110,7 @@ def derive_stage(state: InterviewState) -> InterviewStep:
     set that is not runnable, or a review not yet confirmed, needs the Scenario review. Everything
     satisfied is DONE.
     """
-    gaps = profile_readiness(state.profile)
+    gaps = specification_readiness(state.specification)
 
     if any(gap.stage is InterviewStep.CLARIFY for gap in gaps):
         return InterviewStep.CLARIFY
@@ -197,7 +197,7 @@ def handle_interview(
     # own state is returned untouched on any retryable failure.
     working = _lift(state, _effective_stage(state))
     driver = StepDriver(interviewer=interviewer, matcher=resolved_matcher)
-    before = working.profile.model_copy(deep=True)
+    before = working.specification.model_copy(deep=True)
 
     if isinstance(request, InterviewEndRequest):
         return _finish(working, state, interviewer, resolved_matcher)
@@ -239,12 +239,12 @@ def _start(
     matcher: object | None,
 ) -> InterviewResult:
     """Begin a fresh interview with the user's description as its first input."""
-    profile = ProductProfile(
+    specification = Specification(
         product=Product(name="", description=request.description, users="")
     )
     working = _lift(
         InterviewState(
-            profile=profile,
+            specification=specification,
             context=InterviewContext(
                 perspective=request.perspective,
                 capability_evidence=CapabilityEvidence(
@@ -255,7 +255,7 @@ def _start(
                 documents=request.documents,
             ),
             history=[Turn(role="user", text=request.description)],
-            issued_ids=collect_profile_ids(profile),
+            issued_ids=collect_specification_ids(specification),
         ),
         InterviewStep.CLARIFY,
     )
@@ -286,7 +286,7 @@ def _apply_response(
     # A cascade question was composed last turn; this turn's fresh driver has no memory of it, so
     # rebuild it, reseed the driver, and answer it directly — bypassing the driver's own routing,
     # which keys on an exact request match the stamped id would now defeat.
-    question = cascade.question_from_request(pending, working.profile)
+    question = cascade.question_from_request(pending, working.specification)
     if question is not None:
         driver.pending_questions = [question]
         driver._answer_question(working, response)  # noqa: SLF001 — reseeded above
@@ -301,7 +301,7 @@ def _finish(
     interviewer: Interviewer,
     matcher: object | None,
 ) -> InterviewResult:
-    """Drive the remaining stages to DONE without asking, then check the Profile is runnable.
+    """Drive the remaining stages to DONE without asking, then check the Specification is runnable.
 
     Best-effort: each stage is composed (which drafts any missing content) and its Continue or
     accept is clicked. Clarification is abandoned rather than continued. A held Scenario gate — a
@@ -353,11 +353,11 @@ def _finish(
             return _model_unavailable(original)
 
     working.pending = None
-    gaps = _completion_gaps(working.profile)
+    gaps = _completion_gaps(working.specification)
     if working.step is InterviewStep.DONE and not gaps:
         if not original.confirmed and working.context.documents:
             # Early fixture names and model suggestions are proposals. Even a complete
-            # Profile must pass through the existing Scenario review before it is confirmed.
+            # Specification must pass through the existing Scenario review before it is confirmed.
             working.step = InterviewStep.SCENARIOS
             try:
                 working.pending = driver.compose(working)
@@ -381,8 +381,8 @@ def _finish(
 
 
 def _finalize(working: DriverState, original: InterviewState) -> InterviewResult:
-    """Seal an interview that Continue drove to DONE, verifying the Profile is runnable."""
-    gaps = _completion_gaps(working.profile)
+    """Seal an interview that Continue drove to DONE, verifying the Specification is runnable."""
+    gaps = _completion_gaps(working.specification)
     if gaps:  # the Scenario gate should have blocked Continue; refuse rather than emit a bad set
         return InterviewFailure(
             code=InterviewErrorCode.COMPLETION_FAILED,
@@ -450,30 +450,30 @@ def _validate_respond(
     return None
 
 
-def _reconcile_locks(working: DriverState, before: ProductProfile) -> None:
+def _reconcile_locks(working: DriverState, before: Specification) -> None:
     """Clear the confirmation locks that an accepted mutation invalidates.
 
-    Any change to the Profile clears the final `confirmed` lock, so an earlier sign-off can never
+    Any change to the Specification clears the final `confirmed` lock, so an earlier sign-off can never
     cover new content. A change to the measurement scope itself — the Feature or Behaviour set, or a
     measured flag — also clears `behaviours_confirmed`, so re-scoping demands a fresh Continue.
     """
-    if working.profile == before:
+    if working.specification == before:
         return
     working.confirmed = False
-    if _scope_signature(working.profile) != _scope_signature(before):
+    if _scope_signature(working.specification) != _scope_signature(before):
         working.behaviours_confirmed = False
 
 
-def _scope_signature(profile: ProductProfile) -> object:
+def _scope_signature(specification: Specification) -> object:
     """The measurement scope, reduced to what a change to it would move."""
     return (
         tuple(
             (behaviour.id, behaviour.name, behaviour.description, behaviour.measured)
-            for behaviour in profile.behaviours()
+            for behaviour in specification.behaviours()
         ),
         tuple(
             (feature.id, feature.name, feature.description)
-            for feature in profile.features
+            for feature in specification.features
         ),
     )
 
@@ -481,44 +481,46 @@ def _scope_signature(profile: ProductProfile) -> object:
 # ── compilation ──────────────────────────────────────────────────────────────
 
 
-def compile_profile(profile: ProductProfile) -> CompileResult:
-    """Compile a confirmed Profile to the two YAML strings, writing nothing to disk.
+def compile_specification(specification: Specification) -> CompileResult:
+    """Compile a confirmed Specification to the `specification.yaml` string, writing nothing to disk.
 
-    Reuses the same pure compile the CLI and golden-file test use; a caller that wants files
-    writes the returned strings itself. Raises `CompilationError` when the Profile will not build
-    a valid experiment.
+    Reuses the same pure compile the CLI and golden-file test use; a caller that wants a file
+    writes the returned string itself. Raises `CompilationError` when the Specification will not build
+    a valid specification.
     """
-    gaps = profile_readiness(profile)
+    gaps = specification_readiness(specification)
     if gaps:
         raise CompilationError(
-            "Profile is not runnable: " + "; ".join(gap.message for gap in gaps)
+            "Specification is not runnable: " + "; ".join(gap.message for gap in gaps)
         )
-    document = compile_experiment(profile, experiment_id(profile))
+    document = compile_experiment(specification, experiment_id(specification))
     return CompileResult.model_validate(
         {
-            "profile.yaml": profile.to_yaml(),
-            "experiment.yaml": to_yaml(document),
+            "specification.yaml": to_yaml(document),
+            "specification": document,
         }
     )
 
 
 def package_specification(
-    profile: ProductProfile,
+    specification: Specification,
     fixtures: Iterable[SpecificationFixture],
 ) -> bytes:
-    """Compile a Profile and package request-scoped fixture streams in an engine-ready ZIP."""
-    gaps = profile_readiness(profile)
+    """Compile a Specification and package request-scoped fixture streams in an engine-ready ZIP."""
+    gaps = specification_readiness(specification)
     if gaps:
         raise CompilationError(
-            "Profile is not runnable: " + "; ".join(gap.message for gap in gaps)
+            "Specification is not runnable: " + "; ".join(gap.message for gap in gaps)
         )
-    document = compile_experiment(profile, experiment_id(profile))
-    return build_specification_archive(document, fixtures, profile=profile)
+    document = compile_experiment(specification, experiment_id(specification))
+    return build_specification_archive(document, fixtures)
 
 
-def experiment_id(profile: ProductProfile) -> str:
-    """A stable, filename-safe id from the product name, falling back when it is empty."""
-    slug = re.sub(r"[^a-z0-9]+", "-", profile.product.name.lower()).strip("-")
+def experiment_id(specification: Specification) -> str:
+    """A filename-safe id from the product name, falling back when it is empty."""
+    if specification.id:
+        return specification.id
+    slug = re.sub(r"[^a-z0-9]+", "-", specification.product.name.lower()).strip("-")
     return slug or "experiment"
 
 
@@ -570,7 +572,7 @@ def _awaiting(working: DriverState) -> InterviewSuccess:
     return InterviewSuccess(
         state=client,
         stage=_effective_stage(client),
-        missing=_completion_gaps(client.profile),
+        missing=_completion_gaps(client.specification),
         outcome="awaiting_response",
     )
 
@@ -623,14 +625,14 @@ def _internal_error(state: InterviewState | None, exc: Exception) -> InterviewFa
     )
 
 
-def _completion_gaps(profile: ProductProfile) -> list[MissingData]:
+def _completion_gaps(specification: Specification) -> list[MissingData]:
     """Return all missing prerequisites before a result may claim `done`."""
-    return profile_readiness(profile)
+    return specification_readiness(specification)
 
 
 __all__ = [
     "MissingData",
-    "compile_profile",
+    "compile_specification",
     "package_specification",
     "derive_stage",
     "experiment_id",

@@ -2,7 +2,7 @@
 
 This drives the wizard's own corridor (`walk`) through the HTTP door instead of in process, so the
 door and the wizard gate share one answer script. It reaches DONE over the Interview lifecycle, compiles the
-finished Profile over `/compile`, and loads the returned experiment through the engine's own gate —
+finished Specification over `/compile`, and loads the returned experiment through the engine's own gate —
 the same check the wizard's Slice B gate makes, now proven through the API. No network, no gateway.
 """
 
@@ -46,15 +46,15 @@ def test_interview_lifecycle_compiles_an_engine_valid_experiment(
 
     compiled = client.post(
         "/api/v1/wizard/compile",
-        json=result.state.profile.model_dump(mode="json"),
+        json=result.state.specification.model_dump(mode="json"),
     )
     assert compiled.status_code == 200
 
-    experiment_path = tmp_path / "experiment.yaml"
-    experiment_path.write_text(compiled.json()["experiment.yaml"], encoding="utf-8")
+    experiment_path = tmp_path / "specification.yaml"
+    experiment_path.write_text(compiled.json()["specification.yaml"], encoding="utf-8")
 
-    from metis.engine.simulation.types import Experiment
+    from metis.engine.simulation.types import Specification
 
-    experiment = Experiment.load_file(experiment_path)
+    experiment = Specification.load_file(experiment_path)
     assert experiment.scenarios
-    assert all(scenario.metric_refs for scenario in experiment.scenarios)
+    assert all(scenario.metric_refs for scenario in experiment.resolved_tasks())

@@ -27,6 +27,153 @@ survives past — the coordinated v1.0 release.
 
 ## Migrating to v1.0 (from v0.x)
 
+### Shared specification (core, engine, wizard, API, and web)
+
+Use `metis.core.profile.ProductProfile` for Product context, Features, Behaviours,
+and Criteria. Use `metis.core.experiment.Experiment` for the execution plan.
+`metis.core.specification.Specification` combines both.
+The wizard persistence model is `metis.wizard.domain.specification.Specification`.
+
+Merge the old `profile.yaml` and `experiment.yaml` into `specification.yaml`.
+Keep `schema_version: 2` on `next`. Use the complete example in
+`packages/engine/example-experiment/specification.yaml` as the reference.
+
+- Keep `id` and `runner_factory_ref`. Use `product.description` for the description.
+- Keep the Product → Feature → Behaviour → Criterion hierarchy and `measured` state.
+- Put each Grader FQN and argument map on its Criterion as `metric_fqn` and
+  `metric_args`. Use separate Criteria for different requirements or settings.
+  Every Criterion needs a Grader, including dormant Criteria.
+- Keep only ID, name, and description on each Scenario. Create a Task for each
+  selected Scenario and Persona pair. Move fixtures and Trial counts to that Task.
+  Select Criteria with `criterion_refs`. Give each Task a unique, ID.
+- Derive coverage through Task → Criterion → Behaviour. Every Scenario needs a
+  Task, and every measured Behaviour needs coverage. Engine execution limits keep
+  their defaults.
+- Use `InterviewState.specification` for the complete document and the
+  `specification` form field for `/package`.
+- Use `/compile` response keys `specification.yaml` and `specification`. Retain the returned
+  Specification so later edits keep Task IDs. ZIP exports contain one YAML and `fixtures/`.
+- Recreate old browser drafts with the current format. Old drafts with `state.profile` or without Tasks are
+  not valid current Interview state. There is no automatic conversion.
+- Start a new run after conversion. Old run records have no Task/Criterion identity
+  and cannot supply the current result attribution. Resume uses the frozen new
+  specification. Report plans now contain `tasks`; scores and evidence retain
+  Task, Trial, Criterion, Grader FQN, and Grader arguments.
+
+The domain `Task` below was previously used for a product function. That older
+concept is now `Feature`. The current Task is an explicit Test Case.
+
+#### From `experiment.yaml` to `specification.yaml`
+
+Use this table to find where each `experiment.yaml` field goes. Profile fields
+(`product`, `features`, and Criteria) move into the same file without change,
+except for the Criterion Grader fields in the table.
+
+| Old field | New field |
+|---|---|
+| `description` (top level) | `product.description` |
+| `personas[].id`, `personas[].description` | Same fields. Add the new required `name`. |
+| `scenarios[].id`, `scenarios[].description` | Same fields. Add the new required `name`. |
+| `scenarios[].persona_refs` | One Task for each Persona, with `tasks[].scenario_ref` and `tasks[].persona_ref` |
+| `scenarios[].fixtures` | `tasks[].fixtures` on each of those Tasks |
+| `scenarios[].num_trials` | `tasks[].num_trials` on each of those Tasks |
+| `scenarios[].metric_refs` | One Criterion for each Grader, with `metric_fqn` and `metric_args`. Tasks select Criteria with `tasks[].criterion_refs`. |
+| `scenarios[].max_turns`, `timeout_minutes`, `response_wait_ms`, `max_run_retries` | Move each value to the same field on every Task for that Scenario. |
+| Profile `scenarios[].behaviour_refs` | Removed. Coverage comes from Task → Criterion → Behaviour. |
+
+Check these points when you convert a file:
+
+- **Trial count default.** The old Scenario default for `num_trials` was `1`. The
+  Task default is `3`. If an old Scenario did not set `num_trials`, set
+  `num_trials: 1` on its Tasks to keep the same number of Trials.
+- **Execution limits.** Tasks accept optional `max_turns`, `timeout_minutes`,
+  `response_wait_ms`, and `max_run_retries`. Their defaults are `20`, `15`,
+  `300000`, and the runner's retry default. Set `max_run_retries: 0` to disable
+  run retries. Move explicit Scenario values to each corresponding Task.
+  A Grader argument such as `TurnBudgetMetric` `max_turns` sets the passing
+  budget only. The Task's `max_turns` controls execution.
+- **Grader formats.** The old `metric_refs` item had three formats. Each becomes
+  one Criterion:
+
+  | Old `metric_refs` item | Criterion fields |
+  |---|---|
+  | `metis.library.metrics.X` | `metric_fqn: metis.library.metrics.X`, `metric_args: {}` |
+  | `metis.library.metrics.X: {max_turns: 4}` | `metric_fqn: metis.library.metrics.X`, `metric_args: {max_turns: 4}` |
+  | `{class: metis.library.metrics.X, args: {...}}` | `metric_fqn: metis.library.metrics.X`, `metric_args: {...}` |
+
+- **Where a Criterion goes.** Put the Criterion under the Behaviour that it
+  measures, and set `measured: true` on that Behaviour. If a Criterion with the
+  same requirement and Grader settings exists, select it. Do not add a second one.
+  If no Behaviour fits, add one. The example adds `F-EXEC` and `EB-EXEC-1` for
+  Graders that had no Criterion.
+
+The example below shows part of the Orca `direct-question` Scenario before and
+after conversion. The old Scenario has three Personas and seven Graders. The
+example shows two Personas and two Graders.
+
+Before, in `experiment.yaml`:
+
+```yaml
+scenarios:
+  - id: direct-question
+    description: Ask Orca the difference between a bar chart and a histogram.
+    num_trials: 3
+    persona_refs: [cooperative-delegator, impatient-executive]
+    metric_refs:
+      - metis.library.metrics.DirectHandleRecognitionMetric
+      - metis.library.metrics.TurnBudgetMetric:
+          max_turns: 4
+```
+
+After, in `specification.yaml`:
+
+```yaml
+features:
+  - id: F-EXEC
+    name: Execution checks
+    description: Checks that had no matching Criterion.
+    behaviours:
+      - id: EB-EXEC-1
+        name: Execution checks
+        description: Additional checks selected for the evaluation.
+        measured: true
+        criteria:
+          - id: AC-EXEC-3
+            name: Turn budget
+            description:
+              given: an evaluation interaction
+              when: the interaction is evaluated
+              then: the session completed within the allowed turn budget
+            metric_fqn: metis.library.metrics.TurnBudgetMetric
+            metric_args:
+              max_turns: 4
+  # AC-ORCA-2 already exists under its Orchestration Behaviour. It now has
+  # metric_fqn: metis.library.metrics.DirectHandleRecognitionMetric.
+
+scenarios:
+  - id: direct-question
+    name: Direct question
+    description: Ask Orca the difference between a bar chart and a histogram.
+
+tasks:
+  - id: TC-001
+    scenario_ref: direct-question
+    persona_ref: cooperative-delegator
+    fixtures: []
+    num_trials: 3
+    criterion_refs: [AC-ORCA-2, AC-EXEC-3]
+  - id: TC-002
+    scenario_ref: direct-question
+    persona_ref: impatient-executive
+    fixtures: []
+    num_trials: 3
+    criterion_refs: [AC-ORCA-2, AC-EXEC-3]
+```
+
+The full converted file is
+`packages/engine/example-experiment/specification.yaml`.
+
+
 ### metis-wizard
 
 #### `Task` renamed to `Feature`
@@ -43,7 +190,7 @@ Saved browser Interviews that use profile schema version 1 cannot resume. Start 
 Interview. Keep a backup of any saved state before conversion; its pending patches and
 history can also contain paths with `tasks[...]`.
 
-The wizard compiles `experiment.yaml` with `schema_version: 2`. Reports change too; see
+The wizard compiles `specification.yaml` with `schema_version: 2`. Reports change too; see
 [Schema versions are now `2`](#schema-versions-are-now-2).
 
 #### `runs` renamed to `trials`
@@ -53,16 +200,14 @@ evaluation glossary. The arithmetic is unchanged; only the names change.
 
 **Python API**
 
-- `ProductProfile.run_count()` → `ProductProfile.trial_count()`
+- `ProductProfile.run_count()` → `Specification.trial_count()`
 - module `metis.wizard.application.runs` → `metis.wizard.application.trials`
 - `format_runs()` → `format_trials()`
 
-The compiled `experiment.yaml` is unchanged.
-
 #### Profile models standardised on one shape
 
-Every profile entity (task, behaviour, criterion, persona, scenario) now exposes
-the same `name` + `description` pair through a shared `ProfileNode` base, and the
+Every named specification entity (feature, behaviour, criterion, persona, scenario) now exposes
+the same `name` + `description` pair through a shared `NamedNode` base, and the
 behaviour tick and the product summary are renamed for clarity.
 
 **Python API**
@@ -74,8 +219,6 @@ behaviour tick and the product summary are renamed for clarity.
 - A criterion's `description` is now a structured `CriterionDescription`
   (`given` / `when` / `then`) instead of a flat string. Use
   `str(criterion.description)` for the old flat "Given …, when …, then …." text.
-
-The compiled `experiment.yaml` is unchanged.
 
 #### The interview is now stateless and file-free
 
@@ -90,9 +233,9 @@ machinery, which are gone.
   `InterviewStartRequest`, `InterviewTurnRequest`, or `InterviewEndRequest`. It returns the next
   `InterviewState` with a derived stage, or a typed
   failure with a stable error code and the caller's state unchanged.
-- Call `compile_profile(profile)` to get the `profile.yaml` and `experiment.yaml`
-  strings in memory.
-- Call `package_specification(profile, fixtures)` to get one in-memory `experiment.zip` with the
+- Call `compile_specification(specification)` to get the `specification.yaml` string and the Specification
+  with assigned Task IDs in memory.
+- Call `package_specification(specification, fixtures)` to get one in-memory `specification.zip` with the
   validated fixture bytes under `fixtures/`.
 - `SpecificationFixture` now takes a `stream` binary file object instead of a `content` byte
   string. The packager consumes streams in bounded chunks; the caller owns and closes them.
@@ -144,10 +287,10 @@ _No breaking changes in v1.0._
 
 #### Schema versions are now `2`
 
-v1 marks its break from v0 with one schema version bump. `experiment.yaml`, run records
-(`record.json`), and the report schema (`Report v2`) now use version `2`, the same as
-`profile.yaml`. Set `schema_version: 2` in each `experiment.yaml`. The engine refuses run
-records from v0; run the simulation again to create new records.
+v1 marks its break from v0 with one schema version bump. `specification.yaml`, run records
+(`record.json`), and the report schema (`Report v2`) now use version `2`. Set
+`schema_version: 2` in each `specification.yaml`. The engine refuses run records from v0;
+run the simulation again to create new records.
 
 Report JSON now uses `features` at the root, in `resultTable`, and in trial outcome
 items. Update report consumers and regenerate reports.
@@ -169,9 +312,9 @@ previously targeted the retired web project with `npm --prefix apps/web run dev`
 `npm --prefix apps/web run build`, and `npm --prefix apps/web run check:api`. Start `metis-api` on
 port 8001 (or set `METIS_API_ORIGIN` for another origin). Interview lists, state, and the display
 transcript and fixture Blobs are browser-local; there is no server Interview list to migrate and no
-cross-device state. A completed Interview downloads one `experiment.zip` containing the two YAML
-documents and its validated `fixtures/` files. The API retains no fixture bytes.
-Use `make web-check` for non-mutating web checks and `make web-build` for the production bundle.
-The web gets optional metric details from `GET /api/v1/metrics` after a Profile contains a
-Criterion. Direct authoring, source analysis, hosted state, authentication, and evaluation execution
-remain deferred.
+cross-device state. A completed Interview downloads one `specification.zip` containing
+`specification.yaml` and its validated `fixtures/` files. The API retains no fixture bytes.
+Use `make check-web` for non-mutating web checks and `make build-web` for the production bundle.
+The web gets optional metric details from `GET /api/v1/metrics` after a Specification contains a
+Criterion. The manual form supports direct authoring. Source analysis, hosted state,
+authentication, and evaluation execution remain deferred.

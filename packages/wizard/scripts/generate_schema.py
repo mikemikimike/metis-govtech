@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from metis.wizard.domain.profile import _PROFILE_VERSION, ProductProfile
+from metis.wizard.domain.specification import _SPECIFICATION_VERSION, Specification
 
 SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schemas"
 
 _MODELS = [
-    (ProductProfile, "profile.schema.json", _PROFILE_VERSION, False),
+    (Specification, "specification.schema.json", _SPECIFICATION_VERSION, False),
 ]
 
 

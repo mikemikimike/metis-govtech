@@ -15,11 +15,11 @@ from metis.wizard.application.config import opening_question
 from metis.wizard.contracts import (
     InterviewDocument,
     Product,
-    ProductProfile,
+    Specification,
 )
 from metis.wizard.contracts.interview_state import Perspective, Turn
 from tests.fixtures.wizard.context import interview_context
-from tests.fixtures.wizard.profiles import orca_handover, research_assistant
+from tests.fixtures.wizard.specifications import orca_handover, research_assistant
 
 PERSPECTIVES = Path("packages/wizard/src/metis/wizard/application/perspectives")
 
@@ -60,9 +60,9 @@ def _xml_content(message: str, tag: str) -> str:
 
 
 def test_substitution_only_expands_placeholders() -> None:
-    template = '  before\n$profile\n$$literal\nvalue: {"name": "x"}\n  after  '
+    template = '  before\n$specification\n$$literal\nvalue: {"name": "x"}\n  after  '
 
-    result = prompts._substitute(template, "test", {"profile": "VALUE"})
+    result = prompts._substitute(template, "test", {"specification": "VALUE"})
 
     # placeholders expand; every other byte — braces, escaped `$`, whitespace — is literal
     assert result == '  before\nVALUE\n$literal\nvalue: {"name": "x"}\n  after  '
@@ -70,7 +70,7 @@ def test_substitution_only_expands_placeholders() -> None:
 
 def test_an_unsupplied_placeholder_is_rejected() -> None:
     with pytest.raises(prompts.PromptCatalogError, match="model_calls.criteria"):
-        prompts._substitute("$profile", "model_calls.criteria", {})
+        prompts._substitute("$specification", "model_calls.criteria", {})
 
 
 # --- catalogue validation --------------------------------------------------
@@ -110,7 +110,7 @@ def _invalid_template(document: dict[str, Any]) -> None:
 
 
 def _unsupported_placeholder(document: dict[str, Any]) -> None:
-    document["model_calls"]["criteria"] = "$profile $unknown"
+    document["model_calls"]["criteria"] = "$specification $unknown"
 
 
 @pytest.mark.parametrize(
@@ -243,7 +243,7 @@ def test_clarify_uses_one_shared_catalogue_template(
     document = _document()
     document["model_calls"]["clarify"] += "\nSHARED CLARIFY MARKER"
     _install_document(monkeypatch, document)
-    empty = ProductProfile(product=Product(name="", users="", description=""))
+    empty = Specification(product=Product(name="", users="", description=""))
 
     prompt = prompts.clarify(empty, [], context=interview_context())
 
@@ -309,7 +309,7 @@ def test_model_calls_receive_their_required_context(
     call: str,
     perspective: Perspective,
 ) -> None:
-    profile = orca_handover()
+    specification = orca_handover()
     context = interview_context(
         perspective=perspective, known_capability_ids=["tool_use"], confidence="high"
     )
@@ -321,18 +321,20 @@ def test_model_calls_receive_their_required_context(
     # The current history need not contain the original opening message.
     history = [Turn(role="user", text="RECENT_ANSWER_SENTINEL")]
     if call in {"clarify", "behaviours"}:
-        prompt = getattr(prompts, call)(profile, history, context=context)
+        prompt = getattr(prompts, call)(specification, history, context=context)
     elif call.endswith("_chat"):
         step = "scenarios" if call == "scenario_chat" else "criteria"
-        prompt = prompts.chat(profile, step, "CHAT_SENTINEL", None, context=context)
+        prompt = prompts.chat(
+            specification, step, "CHAT_SENTINEL", None, context=context
+        )
     elif call == "suggest_criterion":
-        prompt = prompts.suggest_criterion(profile, "EB-1", context=context)
+        prompt = prompts.suggest_criterion(specification, "EB-1", context=context)
     else:
-        prompt = getattr(prompts, call)(profile, context=context)
+        prompt = getattr(prompts, call)(specification, context=context)
 
-    assert json.loads(_xml_content(prompt.user, "profile")) == profile.model_dump(
-        mode="json"
-    )
+    assert json.loads(
+        _xml_content(prompt.user, "specification")
+    ) == specification.model_dump(mode="json")
     assert prompts.primer() in _xml_content(prompt.system, "primer")
     assert prompts.arc_catalogue() in _xml_content(prompt.system, "arc_catalogue")
     assert _xml_content(prompt.system, "perspective").strip() == perspective.value

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from metis.wizard.contracts.interview_state import InterviewContext, Turn
     from metis.wizard.contracts.output import ClarifyResult, StepResult
-    from metis.wizard.domain.profile import ProductProfile
+    from metis.wizard.domain.specification import Specification
 
 
 class InterviewerUnavailable(RuntimeError):
@@ -30,7 +30,7 @@ class Interviewer(Protocol):
 
     def clarify(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         history: list[Turn],
         context: InterviewContext | None = None,
     ) -> ClarifyResult:
@@ -39,7 +39,7 @@ class Interviewer(Protocol):
 
     def draft_behaviours(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         history: list[Turn],
         context: InterviewContext | None = None,
     ) -> StepResult:
@@ -48,7 +48,7 @@ class Interviewer(Protocol):
 
     def draft_criteria(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
         """Criteria for every ticked behaviour that lacks them, in one call."""
@@ -56,7 +56,7 @@ class Interviewer(Protocol):
 
     def draft_personas(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
         """Archetypes, justified by what the user chose to measure."""
@@ -64,7 +64,7 @@ class Interviewer(Protocol):
 
     def draft_scenarios(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         context: InterviewContext | None = None,
     ) -> StepResult:
         """The whole covering set, in one call."""
@@ -72,7 +72,7 @@ class Interviewer(Protocol):
 
     def chat(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         step: str,
         text: str,
         target: str | None,
@@ -83,7 +83,7 @@ class Interviewer(Protocol):
 
     def suggest_criterion(
         self,
-        profile: ProductProfile,
+        specification: Specification,
         behaviour_id: str,
         context: InterviewContext | None = None,
     ) -> StepResult:

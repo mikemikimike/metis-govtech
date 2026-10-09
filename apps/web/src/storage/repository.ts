@@ -70,12 +70,13 @@ function validState(value: unknown): value is InterviewState {
   const evidence = context.capability_evidence;
   if (!evidence || typeof evidence !== "object") return false;
   return (
-    !!state.profile &&
-    typeof state.profile === "object" &&
-    state.profile.schema_version === 2 &&
-    Array.isArray(state.profile.features) &&
-    Array.isArray(state.profile.personas) &&
-    Array.isArray(state.profile.scenarios) &&
+    !!state.specification &&
+    typeof state.specification === "object" &&
+    state.specification.schema_version === 2 &&
+    Array.isArray(state.specification.features) &&
+    Array.isArray(state.specification.personas) &&
+    Array.isArray(state.specification.scenarios) &&
+    Array.isArray(state.specification.tasks) &&
     Array.isArray(state.history) &&
     Array.isArray(state.user_typed) &&
     Array.isArray(state.issued_ids) &&
@@ -323,7 +324,7 @@ export function emptyRecord(
     id,
     created_at: now,
     updated_at: now,
-    title: state.profile.product.name.trim() || "Untitled Interview",
+    title: state.specification.product.name.trim() || "Untitled Interview",
     stage,
     state,
     transcript,
@@ -368,7 +369,7 @@ export function removeUnreferencedFixtures(
   names: readonly string[],
 ): LocalInterviewRecord {
   const references = new Set(
-    record.state.profile.scenarios.flatMap((scenario) => scenario.fixtures),
+    record.state.specification.tasks.flatMap((scenario) => scenario.fixtures),
   );
   const removable = new Set(names.filter((name) => !references.has(name)));
   const openingDocuments = new Set(
@@ -387,11 +388,11 @@ export function removeUnreferencedFixtures(
   };
 }
 
-export function fixturesForProfile(
+export function fixturesForSpecification(
   record: LocalInterviewRecord,
 ): LocalFixture[] {
   const references = new Set(
-    record.state.profile.scenarios.flatMap((scenario) => scenario.fixtures),
+    record.state.specification.tasks.flatMap((scenario) => scenario.fixtures),
   );
   return record.fixtures.filter((fixture) => references.has(fixture.name));
 }

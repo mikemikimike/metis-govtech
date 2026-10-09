@@ -13,7 +13,7 @@ metis-wizard; this package must not learn any of them.
 ## The client-held state boundary
 
 The service keeps only immutable settings and model clients for the process lifetime. It keeps no
-Profile, pending request, or Interview state — each lifecycle operation carries the required state
+Specification, pending request, or Interview state — each lifecycle operation carries the required state
 in the request body and the next state goes back whole in the response. Any instance can therefore
 serve any operation, and no Interview file is ever written. Do not add per-user server state; if an
 operation needs to remember
@@ -32,8 +32,8 @@ src/metis/api/
 ```
 
 The dependency arrow is `apps/api -> metis.wizard`. The router calls `handle_interview`,
-`compile_profile`, and `package_specification` from the `metis.wizard` facade and maps typed results
-onto an HTTP status (200/400/422/503/500) in one error shape. No stage, Profile, prompt, matching,
+`compile_specification`, and `package_specification` from the `metis.wizard` facade and maps typed results
+onto an HTTP status (200/400/422/503/500) in one error shape. No stage, Specification, prompt, matching,
 fixture validation, or compilation rule lives here.
 
 `GET /api/v1/metrics` is a stateless catalogue route owned by `routes/metrics.py`. It reads stable
@@ -50,7 +50,7 @@ The API's unit tests live under `tests/unit/api/` and its end-to-end tests under
 
 API tests are door tests: they prove the HTTP adapter preserves wizard behaviour, not the wizard
 rules themselves. They reuse the wizard's own offline corridor — the `ScriptedInterviewer`, the
-`walk` driver, and the hand-authored profiles under `tests/fixtures/wizard/` — through the
+`walk` driver, and the hand-authored specifications under `tests/fixtures/wizard/` — through the
 `send` transport, so the door and the wizard's Slice B gate share one answer script. `conftest.py`
 injects the scripted dependency pair, so no test builds the real gateway or reaches the network.
 

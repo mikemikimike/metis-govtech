@@ -28,7 +28,7 @@ from metis.wizard.contracts.interview_state import (
 
 if TYPE_CHECKING:
     from metis.wizard.contracts.interview_state import Turn
-    from metis.wizard.domain.profile import ProductProfile
+    from metis.wizard.domain.specification import Specification
 
 PROMPTS_FILE = "prompts.yaml"
 PRIMER_FILE = "agentic-primer.md"
@@ -47,7 +47,7 @@ ModelCall: TypeAlias = Literal[
 _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "clarify": frozenset(
         {
-            "profile",
+            "specification",
             "history",
             "perspective",
             "capability_evidence",
@@ -57,13 +57,13 @@ _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
         }
     ),
     "behaviours": frozenset(
-        {"profile", "history", "perspective", "capability_evidence"}
+        {"specification", "history", "perspective", "capability_evidence"}
     ),
-    "criteria": frozenset({"profile"}),
-    "personas": frozenset({"profile"}),
-    "scenarios": frozenset({"profile"}),
-    "chat": frozenset({"profile", "step", "text", "scope"}),
-    "suggest_criterion": frozenset({"profile", "behaviour_id"}),
+    "criteria": frozenset({"specification"}),
+    "personas": frozenset({"specification"}),
+    "scenarios": frozenset({"specification"}),
+    "chat": frozenset({"specification", "step", "text", "scope"}),
+    "suggest_criterion": frozenset({"specification", "behaviour_id"}),
 }
 _SYSTEM_PLACEHOLDERS = frozenset(
     {
@@ -232,8 +232,8 @@ def _system_message(
     )
 
 
-def _profile(profile: ProductProfile) -> str:
-    return json.dumps(profile.model_dump(mode="json"), indent=2)
+def _specification(specification: Specification) -> str:
+    return json.dumps(specification.model_dump(mode="json"), indent=2)
 
 
 def _transcript(history: list[Turn]) -> str:
@@ -348,7 +348,7 @@ def _compose(
 
 
 def clarify(
-    profile: ProductProfile,
+    specification: Specification,
     history: list[Turn],
     context: InterviewContext | None = None,
 ) -> ModelPrompt:
@@ -356,7 +356,7 @@ def clarify(
     return _compose(
         "clarify",
         {
-            "profile": _profile(profile),
+            "specification": _specification(specification),
             "history": _transcript(history),
             "perspective": _perspective(context),
             "capability_evidence": _capability_evidence(context),
@@ -370,14 +370,14 @@ def clarify(
 
 
 def behaviours(
-    profile: ProductProfile,
+    specification: Specification,
     history: list[Turn],
     context: InterviewContext | None = None,
 ) -> ModelPrompt:
     return _compose(
         "behaviours",
         {
-            "profile": _profile(profile),
+            "specification": _specification(specification),
             "history": _transcript(history),
             "perspective": _perspective(context),
             "capability_evidence": _capability_evidence(context),
@@ -387,30 +387,34 @@ def behaviours(
 
 
 def criteria(
-    profile: ProductProfile, context: InterviewContext | None = None
+    specification: Specification, context: InterviewContext | None = None
 ) -> ModelPrompt:
-    return _compose("criteria", {"profile": _profile(profile)}, context=context)
+    return _compose(
+        "criteria", {"specification": _specification(specification)}, context=context
+    )
 
 
 def personas(
-    profile: ProductProfile, context: InterviewContext | None = None
+    specification: Specification, context: InterviewContext | None = None
 ) -> ModelPrompt:
-    return _compose("personas", {"profile": _profile(profile)}, context=context)
+    return _compose(
+        "personas", {"specification": _specification(specification)}, context=context
+    )
 
 
 def scenarios(
-    profile: ProductProfile, context: InterviewContext | None = None
+    specification: Specification, context: InterviewContext | None = None
 ) -> ModelPrompt:
     return _compose(
         "scenarios",
-        {"profile": _profile(profile)},
+        {"specification": _specification(specification)},
         context=context,
         available_fixtures=context.document_names if context else [],
     )
 
 
 def chat(
-    profile: ProductProfile,
+    specification: Specification,
     step: str,
     text: str,
     target: str | None,
@@ -420,7 +424,7 @@ def chat(
     return _compose(
         "chat",
         {
-            "profile": _profile(profile),
+            "specification": _specification(specification),
             "step": step,
             "text": text,
             "scope": scope,
@@ -431,13 +435,13 @@ def chat(
 
 
 def suggest_criterion(
-    profile: ProductProfile,
+    specification: Specification,
     behaviour_id: str,
     context: InterviewContext | None = None,
 ) -> ModelPrompt:
     return _compose(
         "suggest_criterion",
-        {"profile": _profile(profile), "behaviour_id": behaviour_id},
+        {"specification": _specification(specification), "behaviour_id": behaviour_id},
         context=context,
     )
 

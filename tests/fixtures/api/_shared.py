@@ -1,7 +1,7 @@
 """Shared fixtures for the API door tests.
 
 The API tests reuse the wizard's own offline corridor — the `ScriptedInterviewer`, the `walk`
-driver and the hand-authored profiles under ``tests/fixtures/wizard`` — so a door test proves the
+driver and the hand-authored specifications under ``tests/fixtures/wizard`` — so a door test proves the
 HTTP adapter preserves wizard behaviour without re-scripting it.
 
 Every client is built over a fresh `create_app()` with the wizard dependencies overridden to the

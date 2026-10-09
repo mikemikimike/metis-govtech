@@ -3,7 +3,7 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { focusManualInput, itemHeading, ManualForm } from "./ManualForm";
 import {
-  addPersonaReference,
+  emptyManualTestCase,
   emptyManualExperiment,
   emptyManualScenario,
 } from "./manual";
@@ -17,10 +17,10 @@ test("the new manual form presents its Experiment sections in order", () => {
   assert.match(markup, />Add Persona<\/button>/);
   assert.match(markup, />Add Scenario<\/button>/);
   assert.match(markup, /No Personas yet/);
-  assert.match(markup, /Add and name a Persona before you define a Scenario\./);
+  assert.match(markup, />Add test case<\/button>/);
   assert.match(markup, />ID<\/span>/);
   assert.match(markup, />Description<\/span>/);
-  assert.match(markup, /Download experiment\.zip/);
+  assert.match(markup, /Download specification/);
   assert.doesNotMatch(markup, /Still needs/);
   assert.doesNotMatch(markup, />Feature</);
   assert.doesNotMatch(markup, />Behaviour</);
@@ -33,36 +33,17 @@ test("the new manual form presents its Experiment sections in order", () => {
   assert.ok(experiment < details);
   assert.ok(details < personas);
   assert.ok(personas < scenarios);
+  assert.ok(scenarios < markup.indexOf('id="manual-tasks"'));
 });
 
-test("a new manual form has no placeholder items and new Scenarios use named Personas", () => {
+test("new definitions and test cases start with explicit empty selections", () => {
   const experiment = emptyManualExperiment();
   assert.deepEqual(experiment.personas, []);
   assert.deepEqual(experiment.scenarios, []);
-  assert.deepEqual(emptyManualScenario(["analyst", "director"]).persona_refs, [
-    "analyst",
-    "director",
-  ]);
-});
-
-test("a named Persona is added to each existing Scenario once", () => {
-  const scenarios = [
-    emptyManualScenario(["analyst"]),
-    emptyManualScenario(["analyst", "director"]),
-  ];
-  const updated = addPersonaReference(scenarios, " reviewer ");
-  assert.deepEqual(updated[0]?.persona_refs, ["analyst", "reviewer"]);
-  assert.deepEqual(updated[1]?.persona_refs, [
-    "analyst",
-    "director",
-    "reviewer",
-  ]);
-  assert.deepEqual(
-    addPersonaReference(updated, "reviewer").map(
-      (scenario) => scenario.persona_refs,
-    ),
-    updated.map((scenario) => scenario.persona_refs),
-  );
+  assert.deepEqual(experiment.tasks, []);
+  assert.deepEqual(emptyManualScenario(), { id: "", description: "" });
+  assert.equal(emptyManualTestCase().persona_ref, "");
+  assert.equal(emptyManualTestCase().scenario_ref, "");
 });
 
 test("manual item headings describe blank and entered IDs", () => {
@@ -77,6 +58,11 @@ test("manual item addition can focus the new ID control", () => {
   const focused: string[] = [];
   const persona = { focus: () => focused.push("persona") };
   const scenario = { focus: () => focused.push("scenario") };
+  const task = { focus: () => focused.push("task") };
+  assert.equal(
+    focusManualInput({ kind: "task", index: 0 }, [], [], [task]),
+    true,
+  );
 
   assert.equal(
     focusManualInput({ kind: "persona", index: 0 }, [persona], []),
@@ -90,5 +76,5 @@ test("manual item addition can focus the new ID control", () => {
     focusManualInput({ kind: "persona", index: 1 }, [persona], []),
     false,
   );
-  assert.deepEqual(focused, ["persona", "scenario"]);
+  assert.deepEqual(focused, ["task", "persona", "scenario"]);
 });

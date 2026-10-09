@@ -1,7 +1,7 @@
 """Shared fixtures for the wizard tests.
 
-`FIXTURES` is where hand-authored profiles and golden files live. A hand-authored
-`ProductProfile` is a first-class test input: the profile model deliberately requires no
+`FIXTURES` is where hand-authored specifications and golden files live. A hand-authored
+`Specification` is a first-class test input: the specification model deliberately requires no
 interview, no step and no history, so a fixture can be written by hand and compiled.
 
 Import the fixtures you need into a conftest to register them for that test subtree:

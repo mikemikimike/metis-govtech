@@ -1,16 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ProductProfile } from "./transport/api";
+import type { Specification } from "./transport/api";
 import { Composer, Transcript } from "./Conversation";
 import { Done } from "./Done";
-import { Profile } from "./Profile";
+import { SpecificationView } from "./SpecificationView";
 
-function profile(
-  product: Partial<ProductProfile["product"]> = {},
-): ProductProfile {
+function specification(
+  product: Partial<Specification["product"]> = {},
+): Specification {
   return {
     schema_version: 2,
+    id: "test",
+    runner_factory_ref:
+      "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+    tasks: [],
     product: {
       name: "",
       users: "",
@@ -25,12 +29,12 @@ function profile(
 }
 
 function render(
-  value: ProductProfile,
+  value: Specification,
   state: { busy?: boolean; interviewStep?: string } = {},
 ): string {
   return renderToStaticMarkup(
-    <Profile
-      profile={value}
+    <SpecificationView
+      specification={value}
       interviewStep={state.interviewStep}
       busy={state.busy}
       showMetrics={false}
@@ -59,7 +63,7 @@ function occurrences(value: string, part: string): number {
 }
 
 test("the empty document scaffolds all four Product fields", () => {
-  const markup = render(profile());
+  const markup = render(specification());
   const product = section(markup, "Product", "Behaviours");
 
   assert.match(product, />Name<\/h3>/);
@@ -70,7 +74,7 @@ test("the empty document scaffolds all four Product fields", () => {
 });
 
 test("each written Product value replaces only its own placeholder", () => {
-  const markup = render(profile({ users: "policy analysts" }));
+  const markup = render(specification({ users: "policy analysts" }));
   const product = section(markup, "Product", "Behaviours");
 
   assert.match(product, /policy analysts/);
@@ -79,7 +83,7 @@ test("each written Product value replaces only its own placeholder", () => {
 
 test("resumed values are complete and preserve paragraphs and line lists", () => {
   const markup = render(
-    profile({
+    specification({
       name: "Research assistant",
       description: "Answers research questions.",
       users: "People\n- policy analysts\n- reviewers",
@@ -94,7 +98,10 @@ test("resumed values are complete and preserve paragraphs and line lists", () =>
 });
 
 test("clarify marks only Product and leaves its document content read-only", () => {
-  const markup = render(profile(), { busy: true, interviewStep: "clarify" });
+  const markup = render(specification(), {
+    busy: true,
+    interviewStep: "clarify",
+  });
   const product = section(markup, "Product", "Behaviours");
 
   assert.equal(occurrences(markup, "is-writing"), 1);
@@ -103,8 +110,8 @@ test("clarify marks only Product and leaves its document content read-only", () 
 });
 
 test("the document keeps node names and descriptions in their presentation roles", () => {
-  const value: ProductProfile = {
-    ...profile({
+  const value: Specification = {
+    ...specification({
       name: "Research assistant",
       description: "Answers questions.",
     }),
@@ -142,15 +149,26 @@ test("the document keeps node names and descriptions in their presentation roles
         description: "Checks outputs.",
       },
     ],
+    tasks: [
+      {
+        id: "TC-001",
+
+        scenario_ref: "S-1",
+        persona_ref: "careful-reviewer",
+        fixtures: [],
+        num_trials: 3,
+        max_turns: 20,
+        timeout_minutes: 15,
+        response_wait_ms: 300000,
+        max_run_retries: null,
+        criterion_refs: ["AC-1-1"],
+      },
+    ],
     scenarios: [
       {
         id: "S-1",
         name: "Supported question",
         description: "Ask a question the library covers.",
-        behaviour_refs: ["EB-1"],
-        persona_refs: ["careful-reviewer"],
-        fixtures: [],
-        num_trials: 1,
       },
     ],
   };
@@ -171,7 +189,7 @@ test("the document keeps node names and descriptions in their presentation roles
 });
 
 test("hides metric identifiers and shows only the human summary when enabled", () => {
-  const value = profile();
+  const value = specification();
   value.features = [
     {
       id: "F-1",
@@ -202,8 +220,8 @@ test("hides metric identifiers and shows only the human summary when enabled", (
   const hidden = render(value);
   assert.doesNotMatch(hidden, /Answer quality metric/);
   const visible = renderToStaticMarkup(
-    <Profile
-      profile={value}
+    <SpecificationView
+      specification={value}
       showMetrics
       onShowMetricsChange={() => undefined}
       metricByFqn={
@@ -336,9 +354,9 @@ test("the docked composer fills the conversation column", () => {
   assert.match(markup, /class="w-full pb-6 pt-2"/);
 });
 
-test("the Profile output action follows Interview completion", () => {
+test("the Specification output action follows Interview completion", () => {
   const shared = {
-    profile: profile(),
+    specification: specification(),
     showMetrics: false,
     onShowMetricsChange: () => undefined,
     metricByFqn: new Map(),
@@ -347,8 +365,8 @@ test("the Profile output action follows Interview completion", () => {
     onFinish: () => undefined,
     onDownload: () => undefined,
   };
-  const pending = renderToStaticMarkup(<Profile {...shared} />);
-  const complete = renderToStaticMarkup(<Profile {...shared} done />);
+  const pending = renderToStaticMarkup(<SpecificationView {...shared} />);
+  const complete = renderToStaticMarkup(<SpecificationView {...shared} done />);
 
   assert.match(pending, /Skip interview and download specification/);
   assert.doesNotMatch(pending, />Download specification</);

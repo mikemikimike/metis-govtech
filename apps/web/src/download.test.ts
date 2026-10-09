@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { downloadArchive } from "./download.ts";
 
-test("offers one portable experiment ZIP with a stable name", () => {
+test("offers one portable specification ZIP with a stable name", () => {
   const downloads: string[] = [];
   const revoked: string[] = [];
   const document = {
@@ -26,6 +26,6 @@ test("offers one portable experiment ZIP with a stable name", () => {
     urlApi,
   );
 
-  assert.deepEqual(downloads, ["experiment.zip"]);
+  assert.deepEqual(downloads, ["specification.zip"]);
   assert.deepEqual(revoked, ["blob:metis"]);
 });

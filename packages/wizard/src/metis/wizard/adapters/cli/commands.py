@@ -26,7 +26,7 @@ from metis.wizard import (
     InterviewStep,
     InterviewTurnRequest,
     __version__,
-    compile_profile,
+    compile_specification,
     core_version,
     derive_stage,
     handle_interview,
@@ -84,9 +84,7 @@ def _new_interviewer(interview_id: str | None = None) -> Interviewer:
 def _matcher(interviewer: Interviewer) -> object:
     """The metric matcher, wired to the same gateway.
 
-    The matcher is not optional in a real run. Without it every criterion keeps
-    `metric_fqn=None`, the compiler drops it from the scenario's metric list, and the experiment
-    comes out with empty `metric_refs` — it validates, it loads, and it measures nothing at all.
+    Every Criterion needs a Grader before the specification can be exported.
 
     One gateway serves both chat and embeddings, so the interviewer *is* the embedder.
     """
@@ -194,32 +192,29 @@ def _fail(failure: InterviewFailure) -> NoReturn:
 
 
 def _write_outputs(state: InterviewState, out_dir: Path) -> None:
-    """Write the experiment, the review and the profile beside each other, then clear the state.
+    """Write `specification.yaml` and `review.md` beside each other, then clear the state.
 
-    The profile is the spec the engine's verdict report joins results onto; it rides beside the
-    experiment so `simulate` freezes it into the run's inputs/. The saved interview state is
-    removed once the files exist — the interview is finished, so there is nothing to resume.
+    `simulate` freezes the specification into the run's inputs/, and the engine's verdict report
+    joins results onto it. The saved interview state is removed once the files exist — the
+    interview is finished, so there is nothing to resume.
     """
     from metis.wizard.application.compile import render_review
     from metis.wizard.application.turn import experiment_id
 
-    profile = state.profile
-    compiled = compile_profile(profile)
-    review = render_review(profile, experiment_id(profile))
+    specification = state.specification
+    compiled = compile_specification(specification)
+    review = render_review(specification, experiment_id(specification))
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    experiment_path = out_dir / "experiment.yaml"
+    specification_path = out_dir / "specification.yaml"
     review_path = out_dir / "review.md"
-    profile_path = out_dir / "profile.yaml"
-    experiment_path.write_text(compiled.experiment_yaml, encoding="utf-8")
+    specification_path.write_text(compiled.specification_yaml, encoding="utf-8")
     review_path.write_text(review, encoding="utf-8")
-    profile_path.write_text(compiled.profile_yaml, encoding="utf-8")
     _state_path(out_dir).unlink(missing_ok=True)
 
-    typer.echo(f"\nWrote {experiment_path}")
+    typer.echo(f"\nWrote {specification_path}")
     typer.echo(f"Wrote {review_path}")
-    typer.echo(f"Wrote {profile_path}")
-    typer.echo(f"\n{format_trials(profile.trial_count())} when you run this.")
+    typer.echo(f"\n{format_trials(specification.trial_count())} when you run this.")
 
 
 # ── state persistence (client-held) ────────────────────────────────────────────
@@ -278,7 +273,7 @@ def init(
     out_dir: Path = typer.Option(
         Path("evaluation"),
         "--out-dir",
-        help="Where to write the experiment and review.",
+        help="Where to write the specification and review.",
     ),
     restart: bool = typer.Option(
         False,

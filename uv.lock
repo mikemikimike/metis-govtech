@@ -1205,10 +1205,8 @@ name = "metis-wizard"
 version = "1.0.0a1"
 source = { editable = "packages/wizard" }
 dependencies = [
-    { name = "jsonschema" },
     { name = "langfuse" },
     { name = "metis-core" },
-    { name = "metis-engine" },
     { name = "metis-library" },
     { name = "openai" },
     { name = "pydantic" },
@@ -1222,10 +1220,8 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "jsonschema", specifier = ">=4.20.0" },
     { name = "langfuse", specifier = ">=3.0,<4.0" },
     { name = "metis-core", editable = "packages/core" },
-    { name = "metis-engine", editable = "packages/engine" },
     { name = "metis-library", editable = "packages/library" },
     { name = "openai", specifier = ">=1.40" },
     { name = "pydantic", specifier = ">=2.0" },

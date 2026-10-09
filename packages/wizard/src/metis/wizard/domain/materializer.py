@@ -1,4 +1,4 @@
-"""Application-owned construction of persisted profile entities."""
+"""Application-owned construction of persisted specification entities."""
 
 from __future__ import annotations
 
@@ -11,14 +11,15 @@ from metis.wizard.domain.documents import (
     normalize_fixture_name,
 )
 from metis.wizard.domain.patch import PatchOrigin
-from metis.wizard.domain.profile import (
+from metis.wizard.domain.specification import (
     Behaviour,
     Criterion,
     CriterionDescription,
     Feature,
     Persona,
-    ProductProfile,
     Scenario,
+    Specification,
+    Task,
 )
 
 
@@ -52,14 +53,14 @@ def _persona_id(issued_ids: set[str], name: str, *, manual: bool) -> str:
 def _record(
     issued_ids: set[str], user_typed: set[str] | None, node_id: str, origin: PatchOrigin
 ) -> None:
-    """Record identity before the caller inserts the node into the profile."""
+    """Record identity before the caller inserts the node into the specification."""
     issued_ids.add(node_id)
     if origin is PatchOrigin.WIZARD and user_typed is not None:
         user_typed.add(node_id)
 
 
 def add_feature(
-    profile: ProductProfile,
+    specification: Specification,
     draft: Any,
     origin: PatchOrigin,
     *,
@@ -76,19 +77,19 @@ def add_feature(
     for behaviour_draft in draft.behaviours:
         feature.behaviours.append(
             add_behaviour(
-                profile,
+                specification,
                 behaviour_draft,
                 origin,
                 issued_ids=issued_ids,
                 user_typed=user_typed,
             )
         )
-    profile.features.append(feature)
+    specification.features.append(feature)
     return feature
 
 
 def add_behaviour(
-    profile: ProductProfile,
+    specification: Specification,
     draft: Any,
     origin: PatchOrigin,
     *,
@@ -96,7 +97,7 @@ def add_behaviour(
     user_typed: set[str] | None = None,
 ) -> Behaviour:
     behaviour = Behaviour(
-        id=_next_numeric(issued_ids | {b.id for b in profile.behaviours()}, "EB"),
+        id=_next_numeric(issued_ids | {b.id for b in specification.behaviours()}, "EB"),
         name=draft.name,
         description=draft.description,
         measured=True,
@@ -106,7 +107,7 @@ def add_behaviour(
 
 
 def add_criterion(
-    profile: ProductProfile,
+    specification: Specification,
     behaviour: Behaviour,
     draft: Any,
     origin: PatchOrigin,
@@ -133,7 +134,7 @@ def add_criterion(
 
 
 def add_persona(
-    profile: ProductProfile,
+    specification: Specification,
     draft: Any,
     origin: PatchOrigin,
     *,
@@ -146,12 +147,12 @@ def add_persona(
         description=draft.description,
     )
     _record(issued_ids, user_typed, persona.id, origin)
-    profile.personas.append(persona)
+    specification.personas.append(persona)
     return persona
 
 
 def add_scenario(
-    profile: ProductProfile,
+    specification: Specification,
     draft: Any,
     origin: PatchOrigin,
     *,
@@ -159,41 +160,94 @@ def add_scenario(
     user_typed: set[str] | None = None,
     allowed_fixture_names: set[str] | None = None,
 ) -> Scenario:
-    behaviour_ids = {b.id for b in profile.behaviours()}
-    persona_ids = {p.id for p in profile.personas}
-    unknown_behaviours = set(draft.behaviour_refs) - behaviour_ids
-    unknown_personas = set(draft.persona_refs) - persona_ids
-    if unknown_behaviours or unknown_personas:
-        missing = sorted(unknown_behaviours | unknown_personas)
-        raise ValueError(f"scenario references unknown ids: {', '.join(missing)}")
-    available = {
-        fixture_name_identity(name): normalize_fixture_name(name)
-        for name in (allowed_fixture_names or set())
-    }
-    fixtures: list[str] = []
-    seen_fixtures: set[str] = set()
-    if origin is not PatchOrigin.MODEL and draft.fixtures:
-        raise ValueError("Only a model Scenario draft can suggest fixtures.")
-    for raw_name in draft.fixtures:
-        name = normalize_fixture_name(raw_name)
-        if name != raw_name:
-            raise ValueError("scenario fixture names must already be normalized")
-        identity = fixture_name_identity(name)
-        if identity in seen_fixtures:
-            raise ValueError(f"scenario fixture '{name}' is duplicated")
-        if identity not in available:
-            raise ValueError(f"scenario fixture '{name}' is not available")
-        seen_fixtures.add(identity)
-        fixtures.append(available[identity])
     scenario = Scenario(
         id=_next_numeric(issued_ids, "S"),
         name=draft.name,
         description=draft.description,
-        behaviour_refs=list(draft.behaviour_refs),
-        persona_refs=list(draft.persona_refs),
-        fixtures=fixtures,
-        num_trials=3,
     )
+    # Build every Task before changing the Specification, so invalid drafts are atomic.
+    tasks = [
+        _task(
+            specification,
+            item,
+            scenario.id,
+            issued_ids | {scenario.id} | {t.id for t in specification.tasks},
+            allowed_fixture_names,
+            offset=i,
+        )
+        for i, item in enumerate(draft.tasks)
+    ]
     _record(issued_ids, user_typed, scenario.id, origin)
-    profile.scenarios.append(scenario)
+    specification.scenarios.append(scenario)
+    for task in tasks:
+        _record(issued_ids, user_typed, task.id, origin)
+        specification.tasks.append(task)
     return scenario
+
+
+def _task(
+    specification: Specification,
+    draft: Any,
+    scenario_id: str,
+    issued_ids: set[str],
+    allowed_fixture_names: set[str] | None,
+    *,
+    offset: int = 0,
+) -> Task:
+    if specification.persona(draft.persona_ref) is None or any(
+        specification.criterion(ref) is None for ref in draft.criterion_refs
+    ):
+        raise ValueError("Task references unknown Persona or Criterion IDs.")
+    available = {
+        fixture_name_identity(name): normalize_fixture_name(name)
+        for name in (allowed_fixture_names or set())
+    }
+    fixtures = []
+    for raw in draft.fixtures:
+        name = normalize_fixture_name(raw)
+        if name != raw or fixture_name_identity(name) not in available:
+            raise ValueError(f"Task fixture {raw!r} is not available.")
+        fixtures.append(available[fixture_name_identity(name)])
+    if len(set(fixtures)) != len(fixtures):
+        raise ValueError("Task fixtures must be unique.")
+    number = int(_next_numeric(issued_ids, "TC").split("-")[-1]) + offset
+    return Task(
+        id=f"TC-{number:03}",
+        scenario_ref=scenario_id,
+        persona_ref=draft.persona_ref,
+        criterion_refs=list(draft.criterion_refs),
+        fixtures=fixtures,
+    )
+
+
+def add_task(
+    specification: Specification,
+    draft: Any,
+    origin: PatchOrigin,
+    *,
+    issued_ids: set[str],
+    user_typed: set[str] | None = None,
+    allowed_fixture_names: set[str] | None = None,
+) -> Task:
+    if specification.scenario(draft.scenario_ref) is None:
+        raise ValueError("Task references an unknown Scenario.")
+    task = _task(
+        specification,
+        draft,
+        draft.scenario_ref,
+        issued_ids | {t.id for t in specification.tasks},
+        allowed_fixture_names,
+    )
+    _record(issued_ids, user_typed, task.id, origin)
+    specification.tasks.append(task)
+    return task
+
+
+def assign_task_ids(specification: Specification) -> None:
+    """Assign IDs to new manual Tasks; retain every ID supplied by the client."""
+    issued = {task.id for task in specification.tasks if task.id}
+    for task in specification.tasks:
+        if not task.id:
+            number = int(_next_numeric(issued, "TC").split("-")[-1])
+            task.id = f"TC-{number:03}"
+            issued.add(task.id)

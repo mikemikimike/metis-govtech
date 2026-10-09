@@ -17,7 +17,7 @@ import jsonschema
 import pytest
 import yaml
 
-from metis.engine.simulation.types import _EXPERIMENT_VERSION, Experiment
+from metis.engine.simulation.types import _SPECIFICATION_VERSION, Specification
 
 
 def _load_fixture(path: Path) -> dict:
@@ -46,24 +46,24 @@ class TestSchemaSync:
 
     def test_schema_is_fresh(self, schema_dir: Path):
         """Committed schema must match what generate_schema.py produces now."""
-        schema_path = schema_dir / "experiment.schema.json"
+        schema_path = schema_dir / "specification.schema.json"
         if not schema_path.exists():
             pytest.fail(
                 f"Schema file not found: {schema_path}. Run `make generate-schema`."
             )
         committed = json.loads(schema_path.read_text())
-        current = Experiment.model_json_schema()
-        current["title"] = f"Experiment v{_EXPERIMENT_VERSION}"
+        current = Specification.model_json_schema()
+        current["title"] = f"Specification v{_SPECIFICATION_VERSION}"
         assert committed == current, (
-            "experiment.schema.json is stale. Run `make generate-schema` to regenerate."
+            "specification.schema.json is stale. Run `make generate-schema` to regenerate."
         )
 
     def test_fixture_validates_against_schema(
         self, schema_dir: Path, examples_dir: Path
     ):
         """Test fixture must conform to the JSON Schema."""
-        schema_path = schema_dir / "experiment.schema.json"
-        fixture_path = examples_dir / "experiment.yaml"
+        schema_path = schema_dir / "specification.schema.json"
+        fixture_path = examples_dir / "specification.yaml"
         if not fixture_path.exists():
             pytest.fail(f"Fixture not found: {fixture_path}")
         schema = json.loads(schema_path.read_text())
@@ -76,9 +76,9 @@ class TestSchemaSync:
             "playwright",
             reason="example-experiment uses OrcaPlaywrightRunnerFactory (requires playwright extra)",
         )
-        fixture_path = examples_dir / "experiment.yaml"
+        fixture_path = examples_dir / "specification.yaml"
         if not fixture_path.exists():
             pytest.fail(f"Fixture not found: {fixture_path}")
         data = _load_fixture(fixture_path)
-        obj = Experiment.model_validate(data)
+        obj = Specification.model_validate(data)
         assert obj.id

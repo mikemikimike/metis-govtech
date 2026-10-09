@@ -88,11 +88,19 @@ Key invariants:
   wizard's retired server/static-web path. It gives the user two ways to author an experiment: the
   guided Interview, and a manual form for a user who already knows the scorers to run. The manual
   form is flat — it never shows Feature, Behaviour, or Criterion — and it builds its own
-  `ProductProfile` in the browser, which it sends to the existing package route.
+  `Specification` in the browser, which it sends to the existing package route.
 
 ## Contributing
 
 All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](CONTRIBUTING.md). This includes branching conventions, commit message style, testing requirements, dependency DAG invariants, and PR expectations.
+
+## Documentation for work in progress
+
+Treat user corrections as part of the final design. Write documentation, comments,
+and tests as if that design was present from the start of the current work. Consolidate
+changelog entries around the final result. Record migrations only for behavior that
+existed before the current work or has real consumers. Omit temporary fields, abandoned
+approaches, and the sequence of feedback. Preserve released history.
 
 ## Coding Conventions
 

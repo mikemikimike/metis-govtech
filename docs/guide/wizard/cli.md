@@ -61,11 +61,11 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
    ```
 
 2. The CLI shows the fixed ARC capability catalogue. Select known capabilities by number, name, or
-   stable ID, separated by commas. Enter a blank line when you know none.
+   ID, separated by commas. Enter a blank line when you know none.
 3. Enter one confidence value: `low`, `medium`, or `high`. The value states how complete the full
    selection is.
 4. Answer the clarification questions.
-5. Review the Features, Behaviours, Criteria, Personas, and Scenarios that the Wizard drafts.
+5. Review the Features, Behaviours, Criteria, Personas, Scenarios, and Test Cases that the Wizard drafts.
 
 The CLI saves state to `evaluation/interview_state.json` after each accepted turn. Use another
 directory with `--out-dir`:
@@ -90,8 +90,7 @@ When the Interview is complete, the CLI writes these files and removes `intervie
 
 | File | Contents |
 |---|---|
-| `experiment.yaml` | Personas, Scenarios, trial counts, fixtures, and scorers |
-| `profile.yaml` | Product, Features, Behaviours, Criteria and their scorers, Personas, and Scenarios |
+| `specification.yaml` | Product, Features, Behaviours, Criteria and Grader settings, Personas, Scenarios, and Tasks |
 | `review.md` | A human-readable review of the specification |
 
 The CLI also shows the total trial count. Run the result with:

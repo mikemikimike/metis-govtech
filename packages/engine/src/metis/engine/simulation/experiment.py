@@ -1,4 +1,4 @@
-"""Experiment runner — concurrent execution of scenario x persona runs.
+"""Experiment runner — concurrent execution of explicit Tasks and Trials.
 
 Manages worker concurrency, retry logic, and result persistence.
 Transport-specific concerns are delegated to Runner implementations.
@@ -23,13 +23,13 @@ from .artifact_summarizer import resolve_fixture_descriptions
 from .exceptions import RunRecoverableError
 from .orchestrator import Orchestrator
 from .types import (
-    Experiment,
     Persona,
     RunConfig,
     RunFailure,
     RunOutcome,
     RunRecord,
     Scenario,
+    Specification,
 )
 from .user_agent.agent import UserAgent
 
@@ -66,11 +66,11 @@ logger = get_logger()
 
 
 def expand_run_plan(
-    experiment: Experiment, personas_by_id: dict[str, Persona]
+    specification: Specification, personas_by_id: dict[str, Persona]
 ) -> list[RunPlanItem]:
     """Expand an experiment into scenario, persona, and 1-based trial items."""
     runs: list[RunPlanItem] = []
-    for scenario in experiment.scenarios:
+    for scenario in specification.resolved_tasks():
         for persona_ref in scenario.persona_refs:
             persona = personas_by_id.get(persona_ref)
             if not persona:
@@ -85,14 +85,14 @@ def expand_run_plan(
 
 
 def run_folder_name(scenario: Scenario, persona: Persona, trial_index: int) -> str:
-    """Return the stable run-folder name. ``trial_index`` is 1-based (first trial is 1)."""
+    """Return the run-folder name from the Task and Persona IDs. ``trial_index`` is 1-based (first trial is 1)."""
     pad = len(str(scenario.num_trials))
-    return f"{scenario.id}-{persona.id}-{trial_index:0{pad}}"
+    return f"{scenario.task_id or scenario.id}-{persona.id}-{trial_index:0{pad}}"
 
 
 def run_experiment(
     runner_factory: RunnerFactory,
-    experiment: Experiment,
+    specification: Specification,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
     *,
@@ -115,7 +115,7 @@ def run_experiment(
     asyncio.run(
         _run_experiment_async(
             runner_factory=runner_factory,
-            experiment=experiment,
+            specification=specification,
             personas_by_id=personas_by_id,
             fixtures_dir=fixtures_dir,
             output_dir=output_dir,
@@ -134,7 +134,7 @@ def run_experiment(
 
 async def _run_experiment_async(
     runner_factory: RunnerFactory,
-    experiment: Experiment,
+    specification: Specification,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
     run_plan: list[RunPlanItem],
@@ -157,7 +157,7 @@ async def _run_experiment_async(
     logger.info("[experiment]   Concurrency: %d worker(s)", concurrency)
     logger.info("[experiment]   Output dir: %s", output_dir or "results/ (default)")
     logger.info(
-        "[experiment]   Scenarios: %s", ", ".join(s.id for s in experiment.scenarios)
+        "[experiment]   Scenarios: %s", ", ".join(s.id for s in specification.scenarios)
     )
     logger.info("[experiment]   Personas: %s", ", ".join(personas_by_id.keys()))
     logger.info("=" * 60)
@@ -176,15 +176,13 @@ async def _run_experiment_async(
     # and runs, so it is summarized once per experiment (spec §6), not per run or
     # per attempt. Workers thread this complete map into their per-run Artifact
     # builds; those builds never re-summarize.
-    all_fixture_names = [
-        name for scenario in experiment.scenarios for name in scenario.fixtures
-    ]
+    all_fixture_names = [name for task in specification.tasks for name in task.fixtures]
     experiment_root = output_dir if output_dir is not None else Path("results")
     resolved_fixture_descriptions = await resolve_fixture_descriptions(
         all_fixture_names,
         fixtures_dir,
         experiment_root,
-        experiment.fixture_content_descriptions,
+        specification.fixture_content_descriptions,
     )
 
     await runner_factory.start()
@@ -273,6 +271,7 @@ async def _worker(
     try:
         records: list[RunRecord] = []
         for scenario, persona, trial_index in worker_runs:
+            task_id = scenario.task_id or scenario.id
             if shutdown_event and shutdown_event.is_set():
                 logger.info(
                     "[experiment] Worker w%d stopping (shutdown requested)", worker_id
@@ -298,26 +297,27 @@ async def _worker(
             # Bind run context for structured logging
             structlog.contextvars.bind_contextvars(
                 scenario_id=scenario.id,
+                task_id=task_id,
                 persona_id=persona.id,
                 trial_index=trial_index,
             )
 
             # Emit pre-run orchestration events (shared set — fires once across all workers)
-            if scenario.id not in started_scenarios:
-                started_scenarios.add(scenario.id)
+            if task_id not in started_scenarios:
+                started_scenarios.add(task_id)
                 if orchestration_logger:
-                    orchestration_logger.scenario_started(scenario.id)
+                    orchestration_logger.scenario_started(task_id)
 
             if orchestration_logger:
                 orchestration_logger.run_started(
-                    scenario.id,
+                    task_id,
                     persona.id,
                     trial_index=trial_index,
                     num_trials=scenario.num_trials,
                 )
             if log_router:
                 log_router.open_run(
-                    scenario.id,
+                    task_id,
                     persona.id,
                     trial_index=trial_index,
                     num_trials=scenario.num_trials,
@@ -325,7 +325,7 @@ async def _worker(
                 )
             if state:
                 state.mark_run_started(
-                    scenario.id,
+                    task_id,
                     persona.id,
                     trial_index=trial_index,
                     worker_id=worker_id,
@@ -395,14 +395,18 @@ async def _worker(
                     fixture_content_descriptions,
                 )
 
+                run_config = RunConfig(
+                    persona=persona.id,
+                    scenario=scenario.id,
+                    task_id=task_id,
+                    trial_index=trial_index,
+                    metric_refs=scenario.metric_refs,
+                    max_turns=scenario.max_turns,
+                    timeout_minutes=scenario.timeout_minutes,
+                    response_wait_ms=scenario.response_wait_ms,
+                    fixtures=scenario.fixtures,
+                )
                 try:
-                    run_config = RunConfig(
-                        persona=persona.id,
-                        scenario=scenario.id,
-                        metric_refs=scenario.metric_refs,
-                        response_wait_ms=scenario.response_wait_ms,
-                        fixtures=scenario.fixtures,
-                    )
                     agent = UserAgent(persona=persona, scenario=scenario)
                     orchestrator = Orchestrator(
                         runner=runner,
@@ -448,7 +452,7 @@ async def _worker(
                         type(exc).__name__,
                         attempt,
                         max_attempts,
-                        scenario.id,
+                        task_id,
                         persona.id,
                         exc,
                     )
@@ -461,12 +465,7 @@ async def _worker(
                             record.prior_failures = prior_failures
                         else:
                             record = RunRecord(
-                                config=RunConfig(
-                                    persona=persona.id,
-                                    scenario=scenario.id,
-                                    metric_refs=scenario.metric_refs,
-                                    fixtures=scenario.fixtures,
-                                ),
+                                config=run_config,
                                 target_session_id=None,
                                 outcome=RunOutcome(
                                     stop_reason="system_error",
@@ -502,7 +501,7 @@ async def _worker(
                         worker_id,
                         attempt,
                         max_attempts,
-                        scenario.id,
+                        task_id,
                         persona.id,
                         turn_reached,
                     )
@@ -524,12 +523,7 @@ async def _worker(
                             partial
                             if partial is not None
                             else RunRecord(
-                                config=RunConfig(
-                                    persona=persona.id,
-                                    scenario=scenario.id,
-                                    metric_refs=scenario.metric_refs,
-                                    fixtures=scenario.fixtures,
-                                ),
+                                config=run_config,
                                 target_session_id=None,
                                 outcome=RunOutcome(
                                     stop_reason="system_error",
@@ -553,7 +547,7 @@ async def _worker(
             # Emit post-run orchestration events
             if state:
                 state.mark_run_completed(
-                    scenario.id,
+                    task_id,
                     persona.id,
                     trial_index=trial_index,
                     stop_reason=record.outcome.stop_reason,
@@ -561,7 +555,7 @@ async def _worker(
                 )
             if orchestration_logger:
                 orchestration_logger.run_completed(
-                    scenario.id,
+                    task_id,
                     persona.id,
                     trial_index=trial_index,
                     num_trials=scenario.num_trials,
@@ -570,18 +564,18 @@ async def _worker(
                     duration_seconds=record.outcome.duration_seconds,
                 )
             if log_router:
-                log_router.close_run(scenario.id, persona.id, trial_index=trial_index)
+                log_router.close_run(task_id, persona.id, trial_index=trial_index)
 
             # Check scenario completion
             if (
                 state
                 and orchestration_logger
-                and _scenario_just_completed(state, scenario.id)
+                and _scenario_just_completed(state, task_id)
             ):
-                sc = next(s for s in state.scenarios if s.scenario_id == scenario.id)
+                sc = next(s for s in state.scenarios if s.scenario_id == task_id)
                 passed = sum(1 for r in sc.runs if r.stop_reason == "goal_achieved")
                 orchestration_logger.scenario_completed(
-                    scenario.id, runs_passed=passed, runs_total=len(sc.runs)
+                    task_id, runs_passed=passed, runs_total=len(sc.runs)
                 )
 
             async with console_lock:

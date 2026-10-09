@@ -10,18 +10,25 @@ Pydantic models are the serializable projection used by the reporting layer:
 The conversion happens in generator._convert_turn_results and
 generator._convert_session_results. Downstream, these models are:
   • aggregated for pass/fail/skip counts in the terminal summary (_aggregation.py)
-  • joined onto the product profile to build the report (_report.py)
+  • joined onto the product specification to build the report (_report.py)
   • exported as part of the report JSON schema (schemas/report.schema.json)
 """
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class SessionMetricResult(BaseModel):
     """Shape of a single metric result inside SessionReport."""
 
+    criterion_id: str = ""
+    metric_fqn: str = ""
+    metric_args: dict[str, Any] = Field(default_factory=dict)
+    task_id: str = ""
+    trial_index: int = 1
     name: str
     score: float | None
     reason: str
@@ -39,6 +46,11 @@ class SessionReport(BaseModel):
 class TurnMetricResult(BaseModel):
     """Shape of a single metric result inside TurnReport."""
 
+    criterion_id: str = ""
+    metric_fqn: str = ""
+    metric_args: dict[str, Any] = Field(default_factory=dict)
+    task_id: str = ""
+    trial_index: int = 1
     name: str
     score: float | None
     reason: str

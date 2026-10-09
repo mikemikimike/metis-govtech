@@ -1,4 +1,4 @@
-const DOWNLOAD_NAME = "experiment.zip";
+const DOWNLOAD_NAME = "specification.zip";
 
 export function downloadArchive(
   archive: Blob,

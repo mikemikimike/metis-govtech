@@ -5,15 +5,26 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from metis.wizard.bootstrap import create_cli_app
-from metis.wizard.contracts import ProductProfile
+from metis.wizard.contracts import Specification
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
 
 
-def test_init_happy_path_writes_experiment_review_and_profile(tmp_path: Path) -> None:
+def test_init_happy_path_writes_specification_and_review(
+    tmp_path: Path,
+) -> None:
     app = create_cli_app(ScriptedInterviewer)
     # Two model questions, keep every behaviour measured and continue,
     # continue through criteria, accept personas, then continue through scenarios.
-    answers = ["", "low", "answer", "answer", "7", "11", "1", "9"]
+    answers = [
+        "",
+        "low",
+        "answer",
+        "answer",
+        "7",
+        "14",
+        "1",
+        "21",
+    ]
 
     result = CliRunner().invoke(
         app,
@@ -22,10 +33,9 @@ def test_init_happy_path_writes_experiment_review_and_profile(tmp_path: Path) ->
     )
 
     assert result.exit_code == 0, result.output
-    assert (tmp_path / "experiment.yaml").is_file()
     assert (tmp_path / "review.md").is_file()
-    profile_path = tmp_path / "profile.yaml"
-    assert profile_path.is_file()
-    # The profile the engine's verdict report reads is valid YAML that loads back.
-    assert ProductProfile.load(profile_path).trial_count() > 0
+    specification_path = tmp_path / "specification.yaml"
+    assert specification_path.is_file()
+    # The specification the engine's verdict report reads is valid YAML that loads back.
+    assert Specification.load(specification_path).trial_count() > 0
     assert "Wrote" in result.output

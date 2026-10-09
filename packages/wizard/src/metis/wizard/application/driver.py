@@ -10,6 +10,7 @@ model is called at five points only — clarify, and the four drafting steps.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -48,7 +49,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from metis.wizard.contracts.interview_state import Turn
-    from metis.wizard.domain.profile import Behaviour
+    from metis.wizard.domain.specification import Behaviour
 
 
 class DriverState(InterviewState):
@@ -149,7 +150,7 @@ class StepDriver:
         return request
 
     def _compose(self, state: DriverState) -> AnyRequest:
-        profile = state.profile
+        specification = state.specification
         step = state.step
 
         # An edit raised questions about work derived from it. Ask them before anything else,
@@ -168,7 +169,7 @@ class StepDriver:
             cap = config.clarify_turn_cap()
             if asked <= cap:
                 result = self.interviewer.clarify(
-                    profile,
+                    specification,
                     state.history,
                     context=state.context,
                 )
@@ -188,13 +189,13 @@ class StepDriver:
         if step is InterviewStep.BEHAVIOURS:
             # A model can finish clarification without filling required Product fields.
             # Collect them directly so the review cannot strand the user at Continue.
-            completion = screens.product_completion_form(profile)
+            completion = screens.product_completion_form(specification)
             if completion is not None:
                 return completion
-            if not profile.features:
+            if not specification.features:
                 self._try(
                     lambda: self.interviewer.draft_behaviours(
-                        profile,
+                        specification,
                         state.history,
                         context=state.context,
                     ),
@@ -202,38 +203,42 @@ class StepDriver:
                 )
             return self._attach(
                 screens.behaviours_screen(
-                    profile, self._message(InterviewStep.BEHAVIOURS)
+                    specification, self._message(InterviewStep.BEHAVIOURS)
                 )
             )
 
         if step is InterviewStep.CRITERIA:
             return self._attach(
-                screens.criteria_screen(profile, self._message(InterviewStep.CRITERIA))
+                screens.criteria_screen(
+                    specification, self._message(InterviewStep.CRITERIA)
+                )
             )
 
         if step is InterviewStep.PERSONAS:
-            if not profile.personas:
+            if not specification.personas:
                 self._try(
                     lambda: self.interviewer.draft_personas(
-                        profile, context=state.context
+                        specification, context=state.context
                     ),
                     state,
                 )
             return self._attach(
-                screens.personas_screen(profile, self._message(InterviewStep.PERSONAS))
+                screens.personas_screen(
+                    specification, self._message(InterviewStep.PERSONAS)
+                )
             )
 
         if step is InterviewStep.SCENARIOS:
-            if not profile.scenarios:
+            if not specification.scenarios:
                 self._try(
                     lambda: self.interviewer.draft_scenarios(
-                        profile, context=state.context
+                        specification, context=state.context
                     ),
                     state,
                 )
             return self._attach(
                 screens.scenarios_screen(
-                    profile,
+                    specification,
                     self._message(InterviewStep.SCENARIOS),
                     state.context.document_names,
                 )
@@ -290,7 +295,7 @@ class StepDriver:
         before_texts = self._criterion_texts(state)
         try:
             result = self.interviewer.chat(
-                state.profile,
+                state.specification,
                 str(state.step),
                 text,
                 target,
@@ -312,7 +317,7 @@ class StepDriver:
             Warning(
                 text=(
                     "I couldn't work out a change from that just then, so I've left your "
-                    "profile exactly as it is. Try saying it again."
+                    "specification exactly as it is. Try saying it again."
                 ),
                 source=WarningSource.RUNTIME,
                 blocking=False,
@@ -350,7 +355,7 @@ class StepDriver:
         """Every criterion's wording, keyed by id — the input the matcher reads."""
         return {
             criterion.id: str(criterion.description)
-            for behaviour in state.profile.behaviours()
+            for behaviour in state.specification.behaviours()
             for criterion in behaviour.criteria
         }
 
@@ -361,7 +366,7 @@ class StepDriver:
 
         This is the other half of the "you may not write metric_fqn" rule: the model reweds
         the criterion instead, and the matcher — not the model — chooses the metric that new
-        wording points at. Without this, `match_profile` would skip a criterion that already
+        wording points at. Without this, `match_specification` would skip a criterion that already
         has a metric, so a reword would leave the old metric in place. Silent by design: the
         matcher only ever overwrites its own earlier choice.
 
@@ -371,7 +376,7 @@ class StepDriver:
             return
         from metis.wizard.application.matching import rematch
 
-        for behaviour in state.profile.behaviours():
+        for behaviour in state.specification.behaviours():
             for criterion in behaviour.criteria:
                 if str(criterion.description) != before_texts.get(criterion.id, ""):
                     rematch(criterion, self.matcher)  # type: ignore[arg-type]
@@ -382,13 +387,13 @@ class StepDriver:
         """Text typed into a form is used as-is — the model never sees it, so it cannot
         rewrite it. Everything created here is stamped FORM."""
         values = getattr(response, "values", {}) or {}
-        profile = state.profile
+        specification = state.specification
 
         if state.step is InterviewStep.BEHAVIOURS and request.target is None:
-            completion = screens.product_completion_form(profile)
+            completion = screens.product_completion_form(specification)
             if completion is not None and request.fields == completion.fields:
                 apply(
-                    profile,
+                    specification,
                     [
                         Patch(
                             op=PatchOp.SET,
@@ -404,6 +409,22 @@ class StepDriver:
                     user_typed=state.user_typed,
                 )
                 return
+
+        if request.target and any(
+            field.id == "metric_args" for field in request.fields
+        ):
+            criterion = specification.criterion(request.target)
+            if criterion is None:
+                return self._refuse_form_target()
+            from metis.wizard.application.matching.matcher import validate_metric_args
+
+            try:
+                args = json.loads(values.get("metric_args", "{}"))
+                validate_metric_args(criterion.metric_fqn, args)
+            except (ValueError, TypeError) as exc:
+                return self._refuse_field_edit(f"Invalid Grader parameters: {exc}")
+            criterion.metric_args = args
+            return
 
         # A target keeps a manual child attached to the parent that offered the action. The
         # current step tells us which parent type the opaque id names.
@@ -421,7 +442,7 @@ class StepDriver:
 
         if state.step is InterviewStep.PERSONAS:
             materializer.add_persona(
-                profile,
+                specification,
                 PersonaDraft(
                     name=values.get("name", "Persona"),
                     description=values.get("description", ""),
@@ -432,12 +453,11 @@ class StepDriver:
             )
         elif state.step is InterviewStep.SCENARIOS:
             materializer.add_scenario(
-                profile,
+                specification,
                 ScenarioDraft(
                     name=values.get("name", "Scenario"),
                     description=values.get("description", ""),
-                    behaviour_refs=values.get("behaviour_refs", []),
-                    persona_refs=values.get("persona_refs", []),
+                    tasks=[],
                 ),
                 PatchOrigin.WIZARD,
                 issued_ids=state.issued_ids,
@@ -448,13 +468,13 @@ class StepDriver:
         self, state: DriverState, feature_id: str, values: dict[str, Any]
     ) -> None:
         """Append one form-created Behaviour under the Feature that offered the action."""
-        feature = state.profile.feature(feature_id)
+        feature = state.specification.feature(feature_id)
         if feature is None:
             return self._refuse_form_target()
 
         feature.behaviours.append(
             materializer.add_behaviour(
-                state.profile,
+                state.specification,
                 BehaviourDraft(
                     name=values.get("name", "Behaviour"),
                     description=values.get("description", ""),
@@ -480,7 +500,7 @@ class StepDriver:
             return self._refuse_unresolved_target()
 
         materializer.add_criterion(
-            state.profile,
+            state.specification,
             behaviour,
             CriterionDraft(
                 name=values.get("name", "Criterion"),
@@ -504,7 +524,7 @@ class StepDriver:
         if values:
             if selected or len(values) != 1:
                 return self._refuse_field_edit(
-                    "Edit one scenario field at a time; I left the profile unchanged."
+                    "Edit one scenario field at a time; I left the specification unchanged."
                 )
             key, value = next(iter(values.items()))
             return self._handle_field_value(state, request, key, value)
@@ -516,11 +536,77 @@ class StepDriver:
         chosen = [options[key] for key in selected if key in options]
         actions = {option.id.action for option in chosen}
 
+        if "parameters" in actions:
+            cid = _target_of(chosen, "parameters")
+            criterion = state.specification.criterion(cid or "")
+            if criterion is None:
+                return
+            state.pending = FormRequest(
+                prompt=f"Set parameters for {criterion.name}. Enter a JSON object. Current values: {json.dumps(criterion.metric_args)}",
+                fields=[
+                    FormField(
+                        id="metric_args",
+                        label="Grader parameters",
+                        placeholder=json.dumps(criterion.metric_args),
+                    )
+                ],
+                target=criterion.id,
+            )
+            screens.stamp_step(state.pending, state.step)
+            return
+        if actions & {"add-task", "copy-task", "remove-task"}:
+            from metis.wizard.contracts.output import TaskDraft
+
+            action = next(
+                a for a in ("add-task", "copy-task", "remove-task") if a in actions
+            )
+            target = _target_of(chosen, action) or ""
+            original = state.specification.task(target)
+            if action == "remove-task":
+                state.specification.tasks = [
+                    t for t in state.specification.tasks if t.id != target
+                ]
+                return
+            if not state.specification.personas:
+                return
+            scenario_id = original.scenario_ref if original else target
+            scenario = state.specification.scenario(scenario_id)
+            if scenario is None:
+                return
+            created = materializer.add_task(
+                state.specification,
+                TaskDraft(
+                    scenario_ref=scenario_id,
+                    persona_ref=original.persona_ref
+                    if original
+                    else state.specification.personas[0].id,
+                    criterion_refs=list(original.criterion_refs)
+                    if original
+                    else [
+                        c.id
+                        for b in state.specification.measured_behaviours()
+                        for c in b.criteria
+                    ],
+                    fixtures=list(original.fixtures) if original else [],
+                ),
+                PatchOrigin.WIZARD,
+                issued_ids=state.issued_ids,
+                user_typed=state.user_typed,
+                allowed_fixture_names=set(state.context.document_names),
+            )
+            if original:
+                created.num_trials = original.num_trials
+                created.max_turns = original.max_turns
+                created.timeout_minutes = original.timeout_minutes
+                created.response_wait_ms = original.response_wait_ms
+                created.max_run_retries = original.max_run_retries
+            return
+
         # Toggles and ticks: apply the patches the package already composed.
         patches = [option.patch for option in chosen if option.patch]
         if patches:
             apply(
-                state.profile,
+                state.specification,
                 patches,
                 issued_ids=state.issued_ids,
                 user_typed=state.user_typed,
@@ -589,21 +675,21 @@ class StepDriver:
         field = editable_fields_of(request).get(key)
         if field is None:
             return self._refuse_field_edit(
-                "That field is no longer available on this screen; I left the profile unchanged."
+                "That field is no longer available on this screen; I left the specification unchanged."
             )
 
         scenario_id = field.id.target
-        scenario = state.profile.scenario(scenario_id) if scenario_id else None
+        scenario = state.specification.task(scenario_id) if scenario_id else None
         if scenario is None:
             return self._refuse_field_edit(
-                "That scenario is no longer available; I left the profile unchanged."
+                "That scenario is no longer available; I left the specification unchanged."
             )
 
         if isinstance(field, CardNumberField):
             if field.id.action != "trials":
                 return self._refuse_field_edit(
                     "That scenario field is not a supported trial editor; "
-                    "I left the profile unchanged."
+                    "I left the specification unchanged."
                 )
             if (
                 isinstance(value, bool)
@@ -612,31 +698,31 @@ class StepDriver:
             ):
                 return self._refuse_field_edit(
                     f"Trials must be an integer from {field.min} to {field.max}; "
-                    "I left the profile unchanged."
+                    "I left the specification unchanged."
                 )
-            path = f"scenarios[{scenario.id}].num_trials"
+            path = f"tasks[{scenario.id}].num_trials"
             patch_value: int | list[str] = value
         elif isinstance(field, CardUploadField):
             if field.id.action != "files":
                 return self._refuse_field_edit(
                     "That scenario field is not a supported filename editor; "
-                    "I left the profile unchanged."
+                    "I left the specification unchanged."
                 )
             normalized = _normalise_fixture_references(value)
             if normalized is None:
                 return self._refuse_field_edit(
                     "Fixture references must be non-blank portable filenames; "
-                    "I left the profile unchanged."
+                    "I left the specification unchanged."
                 )
-            path = f"scenarios[{scenario.id}].fixtures"
+            path = f"tasks[{scenario.id}].fixtures"
             patch_value = normalized
         else:  # pragma: no cover - editable_fields_of only returns the two field shapes
             return self._refuse_field_edit(
-                "That scenario field is not editable; I left the profile unchanged."
+                "That scenario field is not editable; I left the specification unchanged."
             )
 
         outcome = apply(
-            state.profile,
+            state.specification,
             [
                 Patch(
                     op=PatchOp.SET,
@@ -650,7 +736,7 @@ class StepDriver:
         )
         if outcome.any_rejected:
             return self._refuse_field_edit(
-                "That scenario field could not be updated; I left the profile unchanged."
+                "That scenario field could not be updated; I left the specification unchanged."
             )
 
     def _refuse_field_edit(self, text: str) -> None:
@@ -710,7 +796,7 @@ class StepDriver:
         """
         if not target:
             return None
-        return state.profile.behaviour(target)
+        return state.specification.behaviour(target)
 
     def _refuse_unresolved_target(self) -> None:
         """Change nothing and say so, when a criteria action names no writable behaviour."""
@@ -730,7 +816,7 @@ class StepDriver:
         self.pending_warnings.append(
             Warning(
                 text=(
-                    "I couldn't find where that item belongs, so I've left the profile "
+                    "I couldn't find where that item belongs, so I've left the specification "
                     "unchanged. Open the form again from its Feature."
                 ),
                 source=WarningSource.RUNTIME,
@@ -753,7 +839,7 @@ class StepDriver:
 
         try:
             result = self.interviewer.suggest_criterion(
-                state.profile,
+                state.specification,
                 behaviour.id,
                 context=state.context,
             )
@@ -767,7 +853,7 @@ class StepDriver:
             return self._refuse_suggestion()
 
         outcome = apply(
-            state.profile,
+            state.specification,
             patches,
             issued_ids=state.issued_ids,
             user_typed=state.user_typed,
@@ -822,7 +908,7 @@ class StepDriver:
         # behaviour — with none there is nothing to write criteria for — and it records that
         # the user has chosen the set to measure. A screen with the gate held stays put.
         if current is InterviewStep.BEHAVIOURS:
-            if not state.profile.measured_behaviours():
+            if not state.specification.measured_behaviours():
                 return
             state.behaviours_confirmed = True
 
@@ -837,7 +923,7 @@ class StepDriver:
         if allowed_paths:
             self._try(
                 lambda: self.interviewer.draft_criteria(
-                    state.profile, context=state.context
+                    state.specification, context=state.context
                 ),
                 state,
                 allowed_paths=allowed_paths,
@@ -852,17 +938,17 @@ class StepDriver:
     def _missing_measured_criteria_paths(state: DriverState) -> frozenset[str]:
         """Return the exact Criteria collections that one draft can add to.
 
-        The model receives the complete Profile for context. This allowlist prevents it from
+        The model receives the complete Specification for context. This allowlist prevents it from
         writing Criteria to an unmeasured Behaviour or replacing an existing Criteria set.
         """
         paths = set()
-        for behaviour in state.profile.measured_behaviours():
+        for behaviour in state.specification.measured_behaviours():
             if behaviour.criteria:
                 continue
-            feature = state.profile.feature_of(behaviour.id)
+            feature = state.specification.feature_of(behaviour.id)
             if (
                 feature is None
-            ):  # a Behaviour from this Profile must belong to one Feature
+            ):  # a Behaviour from this Specification must belong to one Feature
                 continue
             paths.add(f"features[{feature.id}].behaviours[{behaviour.id}].criteria")
         return frozenset(paths)
@@ -879,7 +965,7 @@ class StepDriver:
 
         Three attempts have already happened inside the client. Reaching here means all of
         them failed, so the user is told and the previous screen is redrawn — everything
-        already decided is still in the profile, because nothing was applied.
+        already decided is still in the specification, because nothing was applied.
         """
         try:
             self._run(
@@ -916,7 +1002,7 @@ class StepDriver:
         `sanitise` forces MODEL origin first: origin is stamped by the code that builds a
         patch, so a model claiming `wizard` is either confused or trying it on.
         """
-        before = state.profile.model_copy(deep=True)
+        before = state.specification.model_copy(deep=True)
         if result.message:
             self._step_messages[state.step] = result.message
         patches = sanitise(result.patches)
@@ -932,14 +1018,14 @@ class StepDriver:
                 Warning(
                     text=(
                         "I left out a model change that was outside this operation's "
-                        "allowed scope. Your profile keeps the scope you selected."
+                        "allowed scope. Your specification keeps the scope you selected."
                     ),
                     source=WarningSource.RUNTIME,
                     blocking=False,
                 )
             )
         outcome = apply(
-            state.profile,
+            state.specification,
             patches,
             issued_ids=state.issued_ids,
             user_typed=state.user_typed,
@@ -966,17 +1052,19 @@ class StepDriver:
 
         if action == "regenerate":
             if question.kind == "criteria":
-                behaviour = state.profile.behaviour(question.subject)
+                behaviour = state.specification.behaviour(question.subject)
                 if behaviour is None or not behaviour.measured:
                     return
-            cascade.clear_for_regeneration(state.profile, question, state.user_typed)
+            cascade.clear_for_regeneration(
+                state.specification, question, state.user_typed
+            )
             # What is left is a state the forward pass already draws: a ticked behaviour
             # with no criteria, or a behaviour no scenario covers.
             if question.kind == "criteria":
                 self._run(
                     state,
                     self.interviewer.draft_criteria(
-                        state.profile, context=state.context
+                        state.specification, context=state.context
                     ),
                     allowed_paths=self._missing_measured_criteria_paths(state),
                     allowed_ops=frozenset({PatchOp.ADD}),
@@ -986,7 +1074,7 @@ class StepDriver:
                 self._run(
                     state,
                     self.interviewer.draft_scenarios(
-                        state.profile, context=state.context
+                        state.specification, context=state.context
                     ),
                 )
             elif question.kind == "tree":
@@ -1015,9 +1103,9 @@ class StepDriver:
         if self.matcher is None:
             return
 
-        from metis.wizard.application.matching import match_profile
+        from metis.wizard.application.matching import match_specification
 
-        match_profile(state.profile, self.matcher)  # type: ignore[arg-type]
+        match_specification(state.specification, self.matcher)  # type: ignore[arg-type]
         if getattr(self.matcher, "degraded", False):
             self.pending_warnings.append(
                 Warning(

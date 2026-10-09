@@ -6,7 +6,7 @@ IMPORTANT: Always talk in ASD-STE100 Simplified Technical English.
 
 ## Package Purpose
 
-Interactive wizard that turns a prose description of a product into a runnable `experiment.yaml`.
+Interactive wizard that turns a prose description of a product into a runnable `specification.yaml`.
 Depends on metis-core and metis-library.
 
 The design record lives in these files:
@@ -74,22 +74,22 @@ syntax.
 
 ```python
 # criteria are kept when a behaviour is unticked — they go dormant rather than being
-# deleted, and the compiler filters on `priority` at the end. this is what lets the
-# tick stay live without needing any staleness tracking.
-behaviour.priority = False
+# deleted, and Tasks can select only Criteria of `measured` behaviours. this is what
+# lets the tick stay live without needing any staleness tracking.
+behaviour.measured = False
 ```
 
 ## Module layout
 
 The package is split by ownership so a door lives at the edge and the interview does not move with
 it. The interview is driven through a stateless lifecycle interface (`handle_interview`,
-`compile_profile`, `derive_stage`); the state is client-held and travels whole on each operation.
+`compile_specification`, `derive_stage`); the state is client-held and travels whole on each operation.
 The CLI is the only door inside the package. A web client reaches the same interface over HTTP
 through `apps/api`; the wizard owns no HTTP server and no frontend.
 
 ```
 src/metis/wizard/
-├── domain/       profile, patches, path resolution, permissions and edit impacts
+├── domain/       specification, patches, path resolution, permissions and edit impacts
 ├── contracts/    requests, responses, cards, warnings, model outputs, the Interview transaction, and
 │                 the client-held InterviewState
 ├── application/  handle_interview, driver, stage derivation, readiness, prompts, screens, compiler,
@@ -149,19 +149,19 @@ Keep prompt tests lean so wording can change quickly:
 
 Two integration tests are gates rather than unit tests:
 
-- **`tests/integration/wizard/test_slice_a_gate.py`** — a hand-written profile compiles to an experiment the engine
-  actually loads, via the engine's own `_validate_inputs`. No model call anywhere in it.
+- **`tests/integration/wizard/test_slice_a_gate.py`** — a hand-written specification compiles to a `specification.yaml` the
+  engine actually loads, via the engine's own `_validate_inputs`. No model call anywhere in it.
 - **`tests/integration/wizard/test_slice_b_gate.py`** — the whole interview walks to DONE on `ScriptedInterviewer`,
   with no network. That stand-in in `tests/fixtures/wizard/scripted.py` is **not a throwaway**: it is
   the offline regression suite for Interview flow and matching. It does not test whether a live model
   follows the prompts. Keep it working.
 
-`tests/fixtures/wizard/golden_experiment.yaml` is a golden file. Regenerate with
+`tests/fixtures/wizard/golden_specification.yaml` is a golden file. Regenerate with
 `uv run python tests/fixtures/wizard/regenerate_golden.py` — and read the diff before
 committing it, or it stops buying anything.
 
 `tests/integration/wizard/test_cli_happy_path.py` drives the actual Typer app through `CliRunner` with
-the scripted interviewer. It is the offline full happy-path check for both output files.
+the scripted interviewer. It is the offline full happy-path check for `specification.yaml`.
 
 ## Langfuse tracing
 
@@ -200,12 +200,12 @@ of the library.
   it is stated in the system prompt.
 - **Paths resolve by real id only.** Paths address by id (`behaviours[EB-1]`); a numeric bracket
   such as `behaviours[0]` is rejected rather than treated as a positional fallback. This keeps
-  edits and references stable when lists are reordered.
+  references attached to the same items when lists are reordered.
 - **`ADD` addresses the container** (`features`, `scenarios`), `SET`/`REMOVE` an element
   (`features[F-1]`). `StepPermissions` must list both or half the operations are silently
   forbidden.
 - **Strict drafts own the boundary.** Provider JSON is parsed into strict, model-only draft
-  models (`extra="forbid"`) before any persisted profile object exists. The application
+  models (`extra="forbid"`) before any persisted specification object exists. The application
   materializer then assigns ids, authorship, defaults and references. The old recursive value
   filter was only a compatibility guard for hand-built runtime patches; it never protected the
   real typed provider path.
@@ -218,8 +218,7 @@ re-exported flat from `metis.library.metrics.__init__` and emits canonical FQNs
 `metis.library.metrics.<Class>`; the `MetricSpec`/`MetricParam` types it returns live in
 `contracts/metric_spec.py`.
 
-The wizard still depends on **metis-engine** in one place, breaking the DAG: `application/compile/experiment.py`
-locates the experiment schema on disk relative to the installed `metis.engine` module (the schema
-lives beside the engine package, not inside it). This is temporary and deliberate — it is one
-`importlib.util.find_spec("metis.engine")` call, not an import of engine code. See `CHANGELOG.md`
-for what closes it.
+The compiler validates the shared Specification in `metis.core.specification` and writes one
+`specification.yaml`. It does not depend on the engine. Tasks own execution references,
+fixtures, and Trial counts. Criteria own Grader FQNs and parameters. Preserve Task IDs
+through edits; assign a new ID for a copy. The backend returns assigned IDs to clients.

@@ -29,7 +29,9 @@ def _resolve_metrics(metric_refs: list[MetricRef]) -> list[BaseMetric]:
     for ref in metric_refs:
         module_path, class_name = ref.fqn.rsplit(".", 1)
         cls = getattr(importlib.import_module(module_path), class_name)
-        metrics.append(cls(**ref.args))
+        metric = cls(**ref.args)
+        metric._metis_ref = ref
+        metrics.append(metric)
     return metrics
 
 
@@ -50,7 +52,11 @@ async def _run_metric(
             metric_copy.score = 0.0
             metric_copy.reason = f"Metric raised: {type(exc).__name__}: {exc}"
             metric_copy.success = False
+        ref = getattr(metric, "_metis_ref", None)
         return MetricResult(
+            criterion_id=ref.criterion_id if ref else "",
+            metric_fqn=ref.fqn if ref else "",
+            metric_args=dict(ref.args) if ref else {},
             name=metric_copy.__name__,
             score=metric_copy.score,
             reason=metric_copy.reason or "",
@@ -110,6 +116,8 @@ def evaluate(
     *,
     concurrency: int = 50,
     throttle: int = 5,
+    task_id: str = "",
+    trial_index: int = 1,
 ) -> EvalResult:
     """Evaluate test cases using metrics specified as FQN class references.
 
@@ -120,7 +128,7 @@ def evaluate(
       (one per trace/turn).
 
     This means session metrics and per-turn metrics can be listed together
-    in ``experiment.yaml`` — no annotation needed.
+    in ``specification.yaml`` — no annotation needed.
 
     :param fetch_result: Output of :func:`metis.engine.extractor.langfuse.fetch_by_session_id`.
     :param metric_refs: List of :class:`~metis.engine.simulation.types.MetricRef` objects.
@@ -168,6 +176,11 @@ def evaluate(
             )
         )
         durations.session_metrics_seconds = round(time.time() - t0, 1)
+
+    for result in [*per_turn_results, *session_results]:
+        for score in result.metric_results:
+            score.task_id = task_id
+            score.trial_index = trial_index
 
     routing_summary = RoutingSummary(
         total_traces=len(test_cases),

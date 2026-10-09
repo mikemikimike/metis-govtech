@@ -1,4 +1,4 @@
-"""Resolving a patch path against the profile tree.
+"""Resolving a patch path against the specification tree.
 
 Paths address nodes by id, not by index — `features[F-2].behaviours[EB-4].criteria[AC-4.1]`.
 Ids rather than positions because a list can be reordered between the model composing a
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from metis.wizard.domain.profile import ProductProfile
+    from metis.wizard.domain.specification import Specification
 
 # Bracket contents are opaque. Ids are not supposed to contain a dot — `AC-1-1`, not
 # `AC-1.1` — precisely because a dot separates path segments. But ids are written by a model,
@@ -82,7 +82,7 @@ def _render(segments: list[Segment]) -> str:
     )
 
 
-def _deposition(profile: ProductProfile, segments: list[Segment]) -> list[Segment]:
+def _deposition(specification: Specification, segments: list[Segment]) -> list[Segment]:
     """Rewrite any positional bracket (`features[0]`) to the real id at that index.
 
     Paths are meant to address by id, and a numeric bracket is a model mistake — a user
@@ -91,7 +91,7 @@ def _deposition(profile: ProductProfile, segments: list[Segment]) -> list[Segmen
     substitute. A key that is not a plain integer, or an index off the end, is left as-is so
     it fails downstream exactly as before.
     """
-    node: Any = profile
+    node: Any = specification
     rewritten: list[Segment] = []
     for segment in segments:
         key = segment.key
@@ -112,7 +112,7 @@ def _deposition(profile: ProductProfile, segments: list[Segment]) -> list[Segmen
     return rewritten
 
 
-def normalise(profile: ProductProfile, path: str) -> str:
+def normalise(specification: Specification, path: str) -> str:
     """Repair a drafted path so a recoverable model mistake does not reach the user.
 
     Two mistakes, both of which name a node that is plainly there:
@@ -120,39 +120,39 @@ def normalise(profile: ProductProfile, path: str) -> str:
     * A positional bracket — `features[0].behaviours[0]` — where the contract is to address by
       id. `_deposition` reads the id at each index and substitutes it.
     * A right, unique behaviour id under the wrong feature ancestor — `features[F-3].behaviours[EB-6]`
-      when EB-6 lives under F-4. A behaviour id is unique across the whole profile, so the
+      when EB-6 lives under F-4. A behaviour id is unique across the whole specification, so the
       feature segment is redundant for locating it; rewrite it to the feature that truly owns it.
 
     Anything else is returned unchanged — an unknown id still fails downstream, as it should.
     """
-    segments = _deposition(profile, parse(path))
+    segments = _deposition(specification, parse(path))
     if (
         len(segments) >= 2
         and segments[0].field == "features"
         and segments[1].field == "behaviours"
         and segments[1].key is not None
     ):
-        owner = profile.feature_of(segments[1].key)
+        owner = specification.feature_of(segments[1].key)
         if owner is not None and owner.id != segments[0].key:
             segments[0] = Segment("features", owner.id)
     return _render(segments)
 
 
-def resolve(profile: ProductProfile, path: str) -> Any:
+def resolve(specification: Specification, path: str) -> Any:
     """The node a path names."""
-    node: Any = profile
+    node: Any = specification
     for segment in parse(path):
         node = _step_into(node, segment, path)
     return node
 
 
-def resolve_parent(profile: ProductProfile, path: str) -> tuple[Any, Segment]:
+def resolve_parent(specification: Specification, path: str) -> tuple[Any, Segment]:
     """The node *containing* what the path names, plus the final segment.
 
     What ADD, REMOVE and SET need: to change something you have to hold the thing holding it.
     """
     segments = parse(path)
-    node: Any = profile
+    node: Any = specification
     for segment in segments[:-1]:
         node = _step_into(node, segment, path)
     return node, segments[-1]

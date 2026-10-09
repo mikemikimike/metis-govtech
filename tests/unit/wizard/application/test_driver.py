@@ -18,15 +18,15 @@ from metis.wizard.contracts import (
     PatchOp,
     Perspective,
     Product,
-    ProductProfile,
+    Specification,
     StepResult,
     WarningSource,
 )
 from metis.wizard.domain.permissions import InterviewStep
-from metis.wizard.domain.profile import collect_profile_ids
+from metis.wizard.domain.specification import collect_specification_ids
 from tests.fixtures.wizard.context import interview_context
-from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
+from tests.fixtures.wizard.specifications import research_assistant
 
 
 def driver_state(**values: object) -> ApplicationDriverState:
@@ -36,7 +36,9 @@ def driver_state(**values: object) -> ApplicationDriverState:
 
 def empty_state(step=InterviewStep.CLARIFY, history=None) -> ApplicationDriverState:
     return driver_state(
-        profile=ProductProfile(product=Product(name="X", description="", users="")),
+        specification=Specification(
+            product=Product(name="X", description="", users="")
+        ),
         step=step,
         history=history or [],
     )
@@ -49,7 +51,7 @@ def empty_state(step=InterviewStep.CLARIFY, history=None) -> ApplicationDriverSt
 class NeverDone(ScriptedInterviewer):
     """A model that always says it needs one more question."""
 
-    def clarify(self, profile, history, context=None):
+    def clarify(self, specification, history, context=None):
         self.calls.append("clarify")
         from metis.wizard.contracts import ClarifyResult
 
@@ -104,18 +106,18 @@ def test_clarify_commits_product_but_not_behaviours() -> None:
     request = driver.compose(state)
 
     assert request.prompt
-    assert state.profile.product.name == "Research assistant"
-    assert state.profile.product.users == "Policy analysts"
-    assert state.profile.product.description
-    assert state.profile.product.detail
-    assert state.profile.features == []
-    assert state.profile.scenarios == []
+    assert state.specification.product.name == "Research assistant"
+    assert state.specification.product.users == "Policy analysts"
+    assert state.specification.product.description
+    assert state.specification.product.detail
+    assert state.specification.features == []
+    assert state.specification.scenarios == []
 
 
 def test_a_thin_answer_writes_no_product_fields() -> None:
     @dataclass
     class ThinInterviewer(ScriptedInterviewer):
-        def clarify(self, profile, history, context=None):
+        def clarify(self, specification, history, context=None):
             from metis.wizard.contracts import ClarifyResult
 
             return ClarifyResult(message="Tell me a little more.", done=False)
@@ -126,15 +128,15 @@ def test_a_thin_answer_writes_no_product_fields() -> None:
     request = driver.compose(state)
 
     assert request.prompt == "Tell me a little more."
-    assert state.profile.product.description == ""
-    assert state.profile.product.users == ""
+    assert state.specification.product.description == ""
+    assert state.specification.product.users == ""
     assert state.step is InterviewStep.CLARIFY
 
 
 def test_clarify_rejects_a_non_product_patch() -> None:
     @dataclass
     class WritesABehaviour(NeverDone):
-        def clarify(self, profile, history, context=None):
+        def clarify(self, specification, history, context=None):
             from metis.wizard.contracts import ClarifyResult
 
             return ClarifyResult(
@@ -154,7 +156,7 @@ def test_clarify_rejects_a_non_product_patch() -> None:
 
     driver.compose(state)
 
-    assert state.profile.features == []
+    assert state.specification.features == []
 
 
 def test_model_drafts_cannot_change_interview_context() -> None:
@@ -207,7 +209,7 @@ def test_a_later_product_edit_does_not_move_the_step() -> None:
         ),
     )
 
-    assert state.profile.product.description == "A corrected description"
+    assert state.specification.product.description == "A corrected description"
     assert state.step is InterviewStep.CRITERIA
 
 
@@ -219,9 +221,9 @@ def test_the_configured_cap_is_positive() -> None:
 
 
 def _compose_at(step: InterviewStep):
-    """Compose the screen for one step over a fully-drafted profile, no model call needed."""
+    """Compose the screen for one step over a fully-drafted specification, no model call needed."""
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = driver_state(profile=research_assistant(), step=step)
+    state = driver_state(specification=research_assistant(), step=step)
     return driver.compose(state)
 
 
@@ -283,11 +285,17 @@ def test_a_criterion_is_three_labelled_rows_with_dividers_between() -> None:
         ("text", "Given"),
         ("text", "When"),
         ("text", "Then"),
+        ("text", "Grader"),
+        ("text", "Parameters"),
+        ("options", None),
         ("divider", None),
         ("text", "Name"),
         ("text", "Given"),
         ("text", "When"),
         ("text", "Then"),
+        ("text", "Grader"),
+        ("text", "Parameters"),
+        ("options", None),
     ]
 
 
@@ -307,7 +315,9 @@ def test_a_mid_step_form_inherits_the_parent_steps_header() -> None:
     from metis.wizard.contracts import ChoiceResponse
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = driver_state(profile=research_assistant(), step=InterviewStep.PERSONAS)
+    state = driver_state(
+        specification=research_assistant(), step=InterviewStep.PERSONAS
+    )
     screen = driver.compose(state)
     state.pending = screen
 
@@ -322,16 +332,16 @@ def test_a_mid_step_form_inherits_the_parent_steps_header() -> None:
 def test_the_persona_add_form_keeps_the_name_and_description_and_generates_an_id() -> (
     None
 ):
-    """One submission adds one Persona with a stable generated id."""
+    """One submission adds one Persona with a generated id."""
     from metis.wizard.contracts import ChoiceResponse, FormResponse
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    profile = research_assistant()
-    before = len(profile.personas)
+    specification = research_assistant()
+    before = len(specification.personas)
     state = driver_state(
-        profile=profile,
+        specification=specification,
         step=InterviewStep.PERSONAS,
-        issued_ids=collect_profile_ids(profile),
+        issued_ids=collect_specification_ids(specification),
     )
     screen = driver.compose(state)
     state.pending = screen
@@ -353,8 +363,8 @@ def test_the_persona_add_form_keeps_the_name_and_description_and_generates_an_id
         ),
     )
 
-    added = profile.personas[-1]
-    assert len(profile.personas) == before + 1
+    added = specification.personas[-1]
+    assert len(specification.personas) == before + 1
     assert added.id == "P-1"
     assert added.name == "Careful reviewer"
     assert added.description == "Second-guesses each decision."
@@ -366,11 +376,11 @@ def test_the_behaviour_add_form_is_scoped_to_the_selected_feature() -> None:
     from metis.wizard.contracts import FormResponse
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    profile = research_assistant()
+    specification = research_assistant()
     state = driver_state(
-        profile=profile,
+        specification=specification,
         step=InterviewStep.BEHAVIOURS,
-        issued_ids=collect_profile_ids(profile),
+        issued_ids=collect_specification_ids(specification),
     )
     screen = driver.compose(state)
     state.pending = screen
@@ -384,7 +394,7 @@ def test_the_behaviour_add_form_is_scoped_to_the_selected_feature() -> None:
     form = state.pending
     assert form is not None and form.target == "F-2"
     assert [field.id for field in form.fields] == ["name", "description"]
-    before_t1 = [behaviour.id for behaviour in profile.feature("F-1").behaviours]  # type: ignore[union-attr]
+    before_t1 = [behaviour.id for behaviour in specification.feature("F-1").behaviours]  # type: ignore[union-attr]
     driver.handle(
         state,
         form,
@@ -396,7 +406,7 @@ def test_the_behaviour_add_form_is_scoped_to_the_selected_feature() -> None:
         ),
     )
 
-    added = profile.feature("F-2").behaviours[-1]  # type: ignore[union-attr]
+    added = specification.feature("F-2").behaviours[-1]  # type: ignore[union-attr]
     assert (added.id, added.name, added.description) == (
         "EB-4",
         "Recover gracefully",
@@ -404,7 +414,7 @@ def test_the_behaviour_add_form_is_scoped_to_the_selected_feature() -> None:
     )
     assert added.measured is True
     assert [
-        behaviour.id for behaviour in profile.feature("F-1").behaviours
+        behaviour.id for behaviour in specification.feature("F-1").behaviours
     ] == before_t1  # type: ignore[union-attr]
     assert {"EB-4"} <= state.issued_ids
     assert {"EB-4"} <= state.user_typed
@@ -416,9 +426,9 @@ def test_a_behaviour_form_with_a_stale_or_missing_feature_target_changes_nothing
     from metis.wizard.contracts import FormField, FormRequest, FormResponse
 
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    profile = research_assistant()
-    state = driver_state(profile=profile, step=InterviewStep.BEHAVIOURS)
-    before = profile.model_copy(deep=True)
+    specification = research_assistant()
+    state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
+    before = specification.model_copy(deep=True)
     form = FormRequest(
         prompt="Add a Behaviour",
         target="F-404",
@@ -432,7 +442,7 @@ def test_a_behaviour_form_with_a_stale_or_missing_feature_target_changes_nothing
         form,
         FormResponse(values={"name": "Orphan", "description": "Must not land."}),
     )
-    assert profile == before
+    assert specification == before
     assert driver.pending_warnings
 
     driver.pending_warnings.clear()
@@ -442,7 +452,7 @@ def test_a_behaviour_form_with_a_stale_or_missing_feature_target_changes_nothing
         no_target,
         FormResponse(values={"name": "Orphan", "description": "Must not land."}),
     )
-    assert profile == before
+    assert specification == before
     assert driver.pending_warnings
 
 
@@ -450,12 +460,12 @@ def test_a_behaviour_form_with_a_stale_or_missing_feature_target_changes_nothing
 
 
 def test_a_persona_name_is_visible_and_its_id_is_the_reference() -> None:
-    """Cards and chips show Persona names while scenario references keep stable ids."""
+    """Cards and chips show Persona names while scenario references keep ids."""
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    profile = research_assistant()
+    specification = research_assistant()
 
     personas = driver.compose(
-        driver_state(profile=profile, step=InterviewStep.PERSONAS)
+        driver_state(specification=specification, step=InterviewStep.PERSONAS)
     )
     titles = {c.id: c.title for c in personas.cards}
     assert titles == {
@@ -466,27 +476,27 @@ def test_a_persona_name_is_visible_and_its_id_is_the_reference() -> None:
     from metis.wizard.contracts import CardOptionGroup
 
     scenarios = driver.compose(
-        driver_state(profile=profile, step=InterviewStep.SCENARIOS)
+        driver_state(specification=specification, step=InterviewStep.SCENARIOS)
     )
     run_as = next(
         comp
         for card in scenarios.cards
-        if card.id == "S-1"
+        if card.id == "TC-001"
         for comp in card.components
-        if isinstance(comp, CardOptionGroup) and comp.label == "Run as"
+        if isinstance(comp, CardOptionGroup) and comp.label == "Persona"
     )
     chips = {opt.id.via: opt.label for opt in run_as.options}
     assert chips["cooperative-delegator"] == "Cooperative delegator"
     assert chips["impatient-executive"] == "Impatient executive"
-    assert profile.scenario("S-1").persona_refs == list(chips)  # type: ignore[union-attr]
+    assert specification.task("TC-001").persona_ref in chips  # type: ignore[union-attr]
 
 
 def test_shared_review_screens_show_names_and_descriptions() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    profile = research_assistant()
+    specification = research_assistant()
 
     behaviours = driver.compose(
-        driver_state(profile=profile, step=InterviewStep.BEHAVIOURS)
+        driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
     )
     assert behaviours.cards[0].title == "Cite factual claims"
     assert (
@@ -495,15 +505,15 @@ def test_shared_review_screens_show_names_and_descriptions() -> None:
     )  # type: ignore[union-attr]
 
     personas = driver.compose(
-        driver_state(profile=profile, step=InterviewStep.PERSONAS)
+        driver_state(specification=specification, step=InterviewStep.PERSONAS)
     )
     assert personas.cards[0].title == "Cooperative delegator"
     assert personas.cards[0].components[0].text.startswith("A policy analyst")  # type: ignore[union-attr]
 
     scenarios = driver.compose(
-        driver_state(profile=profile, step=InterviewStep.SCENARIOS)
+        driver_state(specification=specification, step=InterviewStep.SCENARIOS)
     )
-    assert scenarios.cards[0].title == "Supported literature review"
+    assert scenarios.cards[0].title == "TC-001"
     assert (
         scenarios.cards[0].components[0].text.startswith("Ask for a literature review")
     )  # type: ignore[union-attr]
@@ -513,15 +523,15 @@ def test_drafted_behaviours_start_measured_on_the_behaviour_screen() -> None:
     """The combined Behaviour screen reviews the draft and asks which to measure in one place:
     every drafted behaviour starts measured, so each card draws a ticked measurement box, and
     the screen carries the measurement instruction rather than a bare review prompt."""
-    profile = ProductProfile(
+    specification = Specification(
         product=Product(name="Agent", description="An agent.", users="Operators")
     )
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = driver_state(profile=profile, step=InterviewStep.BEHAVIOURS)
+    state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
 
     request = driver.compose(state)
 
-    assert all(behaviour.measured for behaviour in profile.behaviours())
+    assert all(behaviour.measured for behaviour in specification.behaviours())
     assert all(card.selected for card in request.cards)
     assert all(card.options[0].selected for card in request.cards)
     assert request.instruction is not None
@@ -531,184 +541,67 @@ def test_drafted_behaviours_start_measured_on_the_behaviour_screen() -> None:
 # ── the scenarios gates ─────────────────────────────────────────────────────
 
 
-def _scenarios_screen(profile):
+def _scenarios_screen(specification):
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = driver_state(profile=profile, step=InterviewStep.SCENARIOS)
+    state = driver_state(specification=specification, step=InterviewStep.SCENARIOS)
     return driver.compose(state)
 
 
-def test_the_footer_matches_the_harness_expansion() -> None:
-    profile = research_assistant()
-
-    request = _scenarios_screen(profile)
-
-    assert f"Total: {profile.trial_count()} trials" == request.footer
-    assert "scenarios" not in (request.footer or "")
-    assert "pairs" not in (request.footer or "")
-
-    cards = {card.id: card for card in request.cards}
-    assert cards["S-1"].trials == 6
-    assert cards["S-2"].trials == 3
-
-
-def test_an_uncovered_behaviour_blocks_and_carries_its_fixes() -> None:
-    profile = research_assistant()
-    profile.scenarios = [
-        t for t in profile.scenarios if t.id != "S-2"
-    ]  # EB-3 now uncovered
-
-    request = _scenarios_screen(profile)
-
-    blocking = [w for w in request.warnings if w.blocking]
-    assert blocking and "EB-3" in blocking[0].text
-    assert [o.id.action for o in blocking[0].options][0] == "generate-scenario"
-    assert any(o.id.action == "cover" for o in blocking[0].options)
-    continue_option = next(o for o in request.options if o.id.action == "continue")
-    assert not continue_option.enabled
-
-
-def test_a_scenario_with_no_persona_blocks() -> None:
-    """The schema declares persona_refs with minItems 1 — the engine would refuse the file."""
-    profile = research_assistant()
-    profile.scenario("S-1").persona_refs = []  # type: ignore[union-attr]
-
-    request = _scenarios_screen(profile)
-
-    assert any(w.blocking and "S-1" in w.text for w in request.warnings)
-
-
-def test_trial_count_is_zero_when_a_scenario_has_no_persona() -> None:
-    profile = research_assistant()
-    profile.scenario("S-1").persona_refs = []  # type: ignore[union-attr]
-
-    request = _scenarios_screen(profile)
-    card = next(card for card in request.cards if card.id == "S-1")
-
-    assert card.trials == 0
-    assert request.footer == "Total: 3 trials"
-
-
-def test_trial_count_uses_the_singular_for_one() -> None:
-    profile = research_assistant()
-    profile.scenario("S-1").persona_refs = []  # type: ignore[union-attr]
-    profile.scenario("S-2").num_trials = 1  # type: ignore[union-attr]
-
-    request = _scenarios_screen(profile)
-    card = next(card for card in request.cards if card.id == "S-2")
-
-    assert card.trials == 1
-    assert request.footer == "Total: 1 trial"
+def test_task_cards_show_planned_trials() -> None:
+    specification = research_assistant()
+    request = _scenarios_screen(specification)
+    assert request.footer == "Total: 3 Test Cases · 9 trials"
+    assert [(card.id, card.trials) for card in request.cards] == [
+        ("TC-001", 3),
+        ("TC-002", 3),
+        ("TC-003", 3),
+    ]
 
 
 @pytest.mark.parametrize(
-    ("refs", "blocks"),
-    [
-        (["EB-1"], False),  # a selected behaviour — fine
-        ([], True),  # covers nothing at all
-        (["EB-99"], True),  # only an unknown id
-        (["EB-2"], True),  # EB-2 exists but is not ticked in the fixture
-        (["EB-2", "EB-1"], False),  # one selected ref is enough
-    ],
+    "fault", ["persona", "scenario", "criterion", "trials", "coverage"]
 )
-def test_a_scenario_must_cover_a_selected_behaviour(
-    refs: list[str], blocks: bool
-) -> None:
-    """A scenario covers nothing measurable unless a currently selected behaviour is among its
-    refs. Empty, unknown and unticked refs all fail the gate; one good ref clears it."""
-    profile = research_assistant()
-    profile.scenario("S-1").behaviour_refs = refs  # type: ignore[union-attr]
-
-    request = _scenarios_screen(profile)
-
-    flagged = any(
-        w.blocking and "S-1 covers no selected" in w.text for w in request.warnings
-    )
-    assert flagged is blocks
-    card = next(c for c in request.cards if c.id == "S-1")
-    assert card.blocking is blocks
-
-
-def test_the_coverage_gate_clears_itself() -> None:
-    """Document warnings are recomputed every screen — covering a selected behaviour clears it."""
-    profile = research_assistant()
-    profile.scenario("S-1").behaviour_refs = []  # type: ignore[union-attr]
-    assert any(w.blocking for w in _scenarios_screen(profile).warnings)
-
-    profile.scenario("S-1").behaviour_refs = ["EB-1"]  # type: ignore[union-attr]
-
-    request = _scenarios_screen(profile)
-    assert not any("covers no selected" in w.text for w in request.warnings)
-
-
-def test_the_gates_clear_themselves() -> None:
-    """Document warnings are recomputed every screen — nothing carries a stale flag."""
-    profile = research_assistant()
-    profile.scenarios = [t for t in profile.scenarios if t.id != "S-2"]
-    assert any(w.blocking for w in _scenarios_screen(profile).warnings)
-
-    profile.scenario("S-1").behaviour_refs.append("EB-3")  # type: ignore[union-attr]
-
-    request = _scenarios_screen(profile)
-    assert not any(w.blocking for w in request.warnings)
-    assert next(o for o in request.options if o.id.action == "continue").enabled
-
-
-def test_continue_reads_the_readiness_gate_not_the_on_screen_warnings() -> None:
-    """The Continue gate is the one readiness source, so a fault with no warning card still holds.
-
-    A scenario that names a persona the profile no longer has is a file the engine refuses, but it
-    raises no on-screen warning — the run list is not empty, so the persona gate stays quiet. The
-    Continue gate must still close, because it reads `scenario_readiness`, the same set the derived
-    stage and the compile preflight read."""
-    profile = research_assistant()
-    profile.scenario("S-1").persona_refs = ["ghost-persona"]  # type: ignore[union-attr]
-
-    request = _scenarios_screen(profile)
-
+def test_task_readiness_blocks_incomplete_inputs(fault: str) -> None:
+    specification = research_assistant()
+    if fault == "persona":
+        specification.tasks[0].persona_ref = "missing"
+    elif fault == "scenario":
+        specification.tasks[0].scenario_ref = "missing"
+    elif fault == "criterion":
+        specification.tasks[0].criterion_refs = ["missing"]
+    elif fault == "trials":
+        specification.tasks[0].num_trials = 0
+    else:
+        specification.tasks = specification.tasks[:2]
+    request = _scenarios_screen(specification)
+    assert any(w.blocking for w in request.warnings)
     assert not next(o for o in request.options if o.id.action == "continue").enabled
 
 
-def test_scenario_card_fields_are_typed_and_separate_from_options() -> None:
-    """Fields have stable identities without pretending to be selectable option chips."""
-    from metis.wizard.application.driver import _all_options
-    from metis.wizard.contracts import (
-        CardNumberField,
-        CardUploadField,
-        editable_fields_of,
-    )
-
-    profile = research_assistant()
-    request = _scenarios_screen(profile)
-    card = next(c for c in request.cards if c.id == "S-2")
-
-    number = next(c for c in card.components if isinstance(c, CardNumberField))
-    upload = next(c for c in card.components if isinstance(c, CardUploadField))
-    assert number.value == profile.scenario("S-2").num_trials  # type: ignore[union-attr]
-    assert upload.value == ["policy.pdf"]
-
-    keys = _all_options(request)
-    assert str(number.id) not in keys and str(upload.id) not in keys
-    fields = editable_fields_of(request)
-    assert fields[str(number.id)] is number
-    assert fields[str(upload.id)] is upload
+def test_task_readiness_clears_after_correction() -> None:
+    specification = research_assistant()
+    specification.tasks[0].criterion_refs = []
+    assert any(w.blocking for w in _scenarios_screen(specification).warnings)
+    specification.tasks[0].criterion_refs = ["AC-1-1"]
+    assert not _scenarios_screen(specification).warnings
 
 
 def _scenario_edit_state():
-    profile = research_assistant()
+    specification = research_assistant()
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = driver_state(profile=profile, step=InterviewStep.SCENARIOS)
+    state = driver_state(specification=specification, step=InterviewStep.SCENARIOS)
     return driver, state, driver.compose(state)
 
 
 def test_a_trial_edit_recomposes_the_scenario_total() -> None:
     driver, state, request = _scenario_edit_state()
 
-    driver.handle(state, request, ChoiceResponse(values={"trials:S-2": 7}))
+    driver.handle(state, request, ChoiceResponse(values={"trials:TC-003": 7}))
 
-    assert state.profile.scenario("S-2").num_trials == 7  # type: ignore[union-attr]
+    assert state.specification.task("TC-003").num_trials == 7  # type: ignore[union-attr]
     refreshed = driver.compose(state)
-    assert refreshed.footer == "Total: 13 trials"  # 2×3 + 1×7
-    scenario_card = next(card for card in refreshed.cards if card.id == "S-2")
+    assert refreshed.footer == "Total: 3 Test Cases · 13 trials"  # 2×3 + 1×7
+    scenario_card = next(card for card in refreshed.cards if card.id == "TC-003")
     assert next(c for c in scenario_card.components if c.type == "number").value == 7
     assert scenario_card.trials == 7
 
@@ -719,62 +612,59 @@ def test_fixture_edits_normalize_and_compile() -> None:
     driver.handle(
         state,
         request,
-        ChoiceResponse(values={"files:S-2": [" policy.pdf ", "faq.md", "policy.pdf"]}),
+        ChoiceResponse(
+            values={"files:TC-003": [" policy.pdf ", "faq.md", "policy.pdf"]}
+        ),
     )
 
-    scenario = state.profile.scenario("S-2")
+    scenario = state.specification.task("TC-003")
     assert scenario is not None and scenario.fixtures == ["policy.pdf", "faq.md"]
 
     from metis.wizard.application.compile import compile_experiment
 
-    compiled = compile_experiment(state.profile, "edited")
-    assert next(t for t in compiled["scenarios"] if t["id"] == "S-2")["fixtures"] == [
+    compiled = compile_experiment(state.specification, "edited")
+    assert next(t for t in compiled["tasks"] if t["id"] == "TC-003")["fixtures"] == [
         "policy.pdf",
         "faq.md",
     ]
 
     refreshed = driver.compose(state)
-    files = next(card for card in refreshed.cards if card.id == "S-2").components[-1]
+    files = next(card for card in refreshed.cards if card.id == "TC-003").components[-1]
     assert files.value == ["policy.pdf", "faq.md"]
 
-    driver.handle(state, refreshed, ChoiceResponse(values={"files:S-2": ["faq.md"]}))
-    assert state.profile.scenario("S-2").fixtures == ["faq.md"]  # type: ignore[union-attr]
+    driver.handle(state, refreshed, ChoiceResponse(values={"files:TC-003": ["faq.md"]}))
+    assert state.specification.task("TC-003").fixtures == ["faq.md"]  # type: ignore[union-attr]
 
     refreshed = driver.compose(state)
-    driver.handle(state, refreshed, ChoiceResponse(values={"files:S-2": []}))
-    assert state.profile.scenario("S-2").fixtures == []  # type: ignore[union-attr]
-    assert "fixtures" not in next(
-        t
-        for t in compile_experiment(state.profile, "cleared")["scenarios"]
-        if t["id"] == "S-2"
-    )
+    driver.handle(state, refreshed, ChoiceResponse(values={"files:TC-003": []}))
+    assert state.specification.task("TC-003").fixtures == []  # type: ignore[union-attr]
 
 
 @pytest.mark.parametrize(
     "response",
     [
-        ChoiceResponse(values={"trials:S-2": 0}),
-        ChoiceResponse(values={"trials:S-2": 21}),
+        ChoiceResponse(values={"trials:TC-003": 0}),
+        ChoiceResponse(values={"trials:TC-003": 21}),
         ChoiceResponse.model_construct(
-            selected=[], values={"trials:S-2": ["not a number"]}
+            selected=[], values={"trials:TC-003": ["not a number"]}
         ),
-        ChoiceResponse(values={"files:S-2": ["../secret.txt"]}),
-        ChoiceResponse(values={"files:S-2": ["/absolute.txt"]}),
-        ChoiceResponse(values={"files:S-2": ["folder\\secret.txt"]}),
-        ChoiceResponse(values={"files:S-2": [" "]}),
+        ChoiceResponse(values={"files:TC-003": ["../secret.txt"]}),
+        ChoiceResponse(values={"files:TC-003": ["/absolute.txt"]}),
+        ChoiceResponse(values={"files:TC-003": ["folder\\secret.txt"]}),
+        ChoiceResponse(values={"files:TC-003": [" "]}),
         ChoiceResponse(values={"trials:S-404": 4}),
         ChoiceResponse(values={"not-offered:S-2": 4}),
-        ChoiceResponse(selected=["continue"], values={"trials:S-2": 4}),
-        ChoiceResponse(values={"trials:S-2": 4, "files:S-2": []}),
+        ChoiceResponse(selected=["continue"], values={"trials:TC-003": 4}),
+        ChoiceResponse(values={"trials:TC-003": 4, "files:TC-003": []}),
     ],
 )
 def test_invalid_or_mixed_field_edits_do_not_mutate(response) -> None:
     driver, state, request = _scenario_edit_state()
-    before = state.profile.model_copy(deep=True)
+    before = state.specification.model_copy(deep=True)
 
     driver.handle(state, request, response)
 
-    assert state.profile == before
+    assert state.specification == before
     refreshed = driver.compose(state)
     assert any(w.source is WarningSource.RUNTIME for w in refreshed.warnings)
 
@@ -784,18 +674,18 @@ def test_the_behaviour_screen_gates_continue_on_at_least_one_measured() -> None:
     no warning either way. But at least one behaviour must be measured to have anything to
     write criteria for, so Continue is disabled while nothing is measured and enabled once one
     is."""
-    profile = research_assistant()
-    for behaviour in profile.behaviours():
+    specification = research_assistant()
+    for behaviour in specification.behaviours():
         behaviour.measured = False
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = driver_state(profile=profile, step=InterviewStep.BEHAVIOURS)
+    state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
 
     request = driver.compose(state)
 
     assert not request.warnings
     assert not next(o for o in request.options if o.id.action == "continue").enabled
 
-    profile.behaviour("EB-1").measured = True  # type: ignore[union-attr]
+    specification.behaviour("EB-1").measured = True  # type: ignore[union-attr]
     request = driver.compose(state)
 
     assert not request.warnings
@@ -805,32 +695,32 @@ def test_the_behaviour_screen_gates_continue_on_at_least_one_measured() -> None:
 def test_each_review_gates_its_continue_action_on_complete_content() -> None:
     from metis.wizard.application.screens import personas_screen
 
-    profile = research_assistant()
+    specification = research_assistant()
     driver = StepDriver(interviewer=ScriptedInterviewer())
 
-    profile.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
+    specification.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
     criteria = driver.compose(
-        driver_state(profile=profile, step=InterviewStep.CRITERIA)
+        driver_state(specification=specification, step=InterviewStep.CRITERIA)
     )
     assert not next(
         option for option in criteria.options if option.id.action == "continue"
     ).enabled
 
-    profile = research_assistant()
-    profile.personas = []
-    personas = personas_screen(profile, "Current personas")
+    specification = research_assistant()
+    specification.personas = []
+    personas = personas_screen(specification, "Current personas")
     assert not next(
         option for option in personas.options if option.id.action == "accept"
     ).enabled
 
 
-def test_the_final_continue_uses_full_profile_readiness() -> None:
-    profile = research_assistant()
-    profile.product.name = ""
+def test_the_final_continue_uses_full_specification_readiness() -> None:
+    specification = research_assistant()
+    specification.product.name = ""
 
-    request = _scenarios_screen(profile)
+    request = _scenarios_screen(specification)
 
-    assert not scenario_readiness(profile)
+    assert not scenario_readiness(specification)
     assert any("name and description" in warning.text for warning in request.warnings)
     assert not next(
         option for option in request.options if option.id.action == "continue"
@@ -858,7 +748,7 @@ def test_the_final_continue_uses_full_profile_readiness() -> None:
 def test_every_visible_back_transition_restores_its_destination(
     source: InterviewStep, destination: InterviewStep, expected_prompt: str
 ) -> None:
-    profile = research_assistant()
+    specification = research_assistant()
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
     driver._step_messages = {
@@ -868,11 +758,11 @@ def test_every_visible_back_transition_restores_its_destination(
         InterviewStep.SCENARIOS: "Review the scenarios.",
     }
     state = driver_state(
-        profile=profile,
+        specification=specification,
         step=source,
         history=[Turn(role="user", text="Keep everything I already decided.")],
     )
-    before_profile = profile.model_copy(deep=True)
+    before_specification = specification.model_copy(deep=True)
     before_history = list(state.history)
     request = driver.compose(state)
     assert any(option.id.action == "back" for option in request.options)
@@ -882,15 +772,15 @@ def test_every_visible_back_transition_restores_its_destination(
 
     assert state.step is destination
     assert destination_request.prompt == expected_prompt
-    assert state.profile == before_profile
+    assert state.specification == before_specification
     assert state.history == before_history
     assert interviewer.calls == []
 
 
 def test_a_recomposed_screen_uses_a_neutral_message() -> None:
-    profile = research_assistant()
+    specification = research_assistant()
     driver = StepDriver(interviewer=ScriptedInterviewer())
-    state = driver_state(profile=profile, step=InterviewStep.BEHAVIOURS)
+    state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
 
     request = driver.compose(state)
 
@@ -899,38 +789,38 @@ def test_a_recomposed_screen_uses_a_neutral_message() -> None:
 
 def test_going_back_regenerates_nothing_that_already_exists() -> None:
     """Continue generates only what is missing; existing criteria are left alone."""
-    profile = research_assistant()
+    specification = research_assistant()
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
-    state = driver_state(profile=profile, step=InterviewStep.BEHAVIOURS)
-    before = profile.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
+    state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
+    before = specification.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
 
     driver._advance(state)  # the Continue that generates
 
     assert "draft_criteria" not in interviewer.calls  # nothing was missing
-    assert profile.behaviour("EB-1").criteria[0].description.then == before  # type: ignore[union-attr]
+    assert specification.behaviour("EB-1").criteria[0].description.then == before  # type: ignore[union-attr]
 
 
 def test_unticking_then_continuing_generates_only_the_gap() -> None:
-    profile = research_assistant()
-    profile.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
+    specification = research_assistant()
+    specification.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
-    state = driver_state(profile=profile, step=InterviewStep.BEHAVIOURS)
+    state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
 
     driver._advance(state)
 
     assert "draft_criteria" in interviewer.calls
-    assert profile.behaviour("EB-1").criteria  # filled
-    assert len(profile.behaviour("EB-3").criteria) == 1  # type: ignore[union-attr]  # untouched
+    assert specification.behaviour("EB-1").criteria  # filled
+    assert len(specification.behaviour("EB-3").criteria) == 1  # type: ignore[union-attr]  # untouched
 
 
 def test_criteria_drafting_cannot_write_outside_the_measured_gaps() -> None:
-    """The full Profile is model context, but only measured gaps are writable output."""
+    """The full Specification is model context, but only measured gaps are writable output."""
 
     class ScopeBreakingInterviewer(ScriptedInterviewer):
-        def draft_criteria(self, profile, context=None):
-            result = super().draft_criteria(profile, context=context)
+        def draft_criteria(self, specification, context=None):
+            result = super().draft_criteria(specification, context=context)
             result.patches.append(
                 Patch(
                     op=PatchOp.ADD,
@@ -945,16 +835,16 @@ def test_criteria_drafting_cannot_write_outside_the_measured_gaps() -> None:
             )
             return result
 
-    profile = research_assistant()
-    profile.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
-    dormant_count = len(profile.behaviour("EB-2").criteria)  # type: ignore[union-attr]
+    specification = research_assistant()
+    specification.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
+    dormant_count = len(specification.behaviour("EB-2").criteria)  # type: ignore[union-attr]
     driver = StepDriver(interviewer=ScopeBreakingInterviewer())
-    state = driver_state(profile=profile, step=InterviewStep.BEHAVIOURS)
+    state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
 
     driver._advance(state)
 
-    assert profile.behaviour("EB-1").criteria  # type: ignore[union-attr]
-    assert len(profile.behaviour("EB-2").criteria) == dormant_count  # type: ignore[union-attr]
+    assert specification.behaviour("EB-1").criteria  # type: ignore[union-attr]
+    assert len(specification.behaviour("EB-2").criteria) == dormant_count  # type: ignore[union-attr]
     assert driver.pending_warnings
 
 
@@ -965,38 +855,38 @@ def test_criteria_drafting_cannot_write_outside_the_measured_gaps() -> None:
 class BrokenInterviewer(ScriptedInterviewer):
     """Every attempt already failed inside the client."""
 
-    def draft_personas(self, profile, context=None):
+    def draft_personas(self, specification, context=None):
         raise ModelOutputError("three attempts, all malformed")
 
-    def chat(self, profile, step, text, target, context=None):
+    def chat(self, specification, step, text, target, context=None):
         raise ModelOutputError("three attempts, all malformed")
 
 
 def test_a_total_failure_warns_and_loses_nothing() -> None:
-    profile = research_assistant()
-    profile.personas = []
+    specification = research_assistant()
+    specification.personas = []
     driver = StepDriver(interviewer=BrokenInterviewer())
-    state = driver_state(profile=profile, step=InterviewStep.PERSONAS)
+    state = driver_state(specification=specification, step=InterviewStep.PERSONAS)
 
     request = driver.compose(state)
 
     runtime = [w for w in request.warnings if w.source is WarningSource.RUNTIME]
     assert runtime and "nothing you've decided has been lost" in runtime[0].text.lower()
     assert not runtime[0].blocking
-    assert state.profile.features  # the profile is intact
+    assert state.specification.features  # the specification is intact
     assert state.step is InterviewStep.PERSONAS  # and we did not advance past it
 
 
 def test_a_chat_failure_warns_and_loses_nothing() -> None:
     """A chat is a model call like any other: when all its retries fail, it degrades to a
     warning and touches nothing, rather than crashing the turn."""
-    profile = research_assistant()
-    before = profile.model_copy(deep=True)
+    specification = research_assistant()
+    before = specification.model_copy(deep=True)
     driver = StepDriver(interviewer=BrokenInterviewer())
     state = driver_state(
-        profile=profile,
+        specification=specification,
         step=InterviewStep.CRITERIA,
-        issued_ids=collect_profile_ids(profile),
+        issued_ids=collect_specification_ids(specification),
     )
 
     driver.handle(
@@ -1006,26 +896,29 @@ def test_a_chat_failure_warns_and_loses_nothing() -> None:
     )
 
     runtime = [w for w in driver.pending_warnings if w.source is WarningSource.RUNTIME]
-    assert runtime and "left your profile exactly as it is" in runtime[0].text.lower()
+    assert (
+        runtime
+        and "left your specification exactly as it is" in runtime[0].text.lower()
+    )
     assert not runtime[0].blocking
-    assert state.profile == before  # nothing applied
+    assert state.specification == before  # nothing applied
 
 
 # ── responses that cost no model call ──────────────────────────────────────
 
 
 def test_ticking_costs_no_model_call() -> None:
-    profile = research_assistant()
+    specification = research_assistant()
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
-    state = driver_state(profile=profile, step=InterviewStep.BEHAVIOURS)
+    state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
     request = driver.compose(state)
     interviewer.calls.clear()
 
     driver.handle(state, request, ChoiceResponse(selected=["tick:EB-2"]))
 
     assert interviewer.calls == []
-    assert profile.behaviour("EB-2").measured is True  # type: ignore[union-attr]
+    assert specification.behaviour("EB-2").measured is True  # type: ignore[union-attr]
 
 
 # ── a reworded criterion re-maps its metric, silently ───────────────────────
@@ -1038,7 +931,7 @@ class RewordingInterviewer(ScriptedInterviewer):
     """A chat that rewords one criterion, the way the model is told to when the user asks
     for a different metric — it never touches metric_fqn itself."""
 
-    def chat(self, profile, step, text, target, context=None):
+    def chat(self, specification, step, text, target, context=None):
         self.calls.append("chat")
         from metis.wizard.contracts import Patch, PatchOp
 
@@ -1067,13 +960,13 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
     """The other half of the metric rule: the model rewords, the matcher re-picks. Only the
     criterion whose text changed is rematched — untouched ones keep their metric and cost
     no call."""
-    profile = research_assistant()
+    specification = research_assistant()
     matcher = RecordingMatcher()
     driver = StepDriver(interviewer=RewordingInterviewer(), matcher=matcher)
     state = driver_state(
-        profile=profile,
+        specification=specification,
         step=InterviewStep.CRITERIA,
-        issued_ids=collect_profile_ids(profile),
+        issued_ids=collect_specification_ids(specification),
     )
 
     driver.handle(
@@ -1082,7 +975,7 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
 
     assert matcher.matched == ["AC-1-1"]  # only the reworded criterion
     assert (
-        profile.behaviour("EB-1").criteria[0].metric_fqn  # type: ignore[union-attr]
+        specification.behaviour("EB-1").criteria[0].metric_fqn  # type: ignore[union-attr]
         == "metis.library.metrics.routing.RoutingAccuracyMetric"
     )
 
@@ -1112,7 +1005,7 @@ class ReachesAcrossInterviewer(ScriptedInterviewer):
     land; the sibling edit should be dropped, because the user opened this chat on one card.
     """
 
-    def chat(self, profile, step, text, target, context=None):
+    def chat(self, specification, step, text, target, context=None):
         self.calls.append("chat")
         from metis.wizard.contracts import Patch, PatchOp
 
@@ -1136,16 +1029,16 @@ class ReachesAcrossInterviewer(ScriptedInterviewer):
 def test_a_scoped_criteria_chat_edits_only_its_own_behaviour() -> None:
     """A chat opened on EB-1's card carries EB-1 as its target. A patch the model aims at
     EB-2 is dropped and reported; only EB-1's reworded criterion is applied and rematched."""
-    profile = research_assistant()
+    specification = research_assistant()
     matcher = RecordingMatcher()
     driver = StepDriver(interviewer=ReachesAcrossInterviewer(), matcher=matcher)
     state = driver_state(
-        profile=profile,
+        specification=specification,
         step=InterviewStep.CRITERIA,
-        issued_ids=collect_profile_ids(profile),
+        issued_ids=collect_specification_ids(specification),
     )
 
-    before_eb2 = profile.behaviour("EB-2").criteria[0].description.then  # type: ignore[union-attr]
+    before_eb2 = specification.behaviour("EB-2").criteria[0].description.then  # type: ignore[union-attr]
     screen, chat_option = _criterion_action(
         driver, state, "chat", "Chat about these criteria"
     )
@@ -1162,17 +1055,17 @@ def test_a_scoped_criteria_chat_edits_only_its_own_behaviour() -> None:
     # EB-1's own criterion changed and was rematched; EB-2 was left exactly as it was.
     assert matcher.matched == ["AC-1-1"]
     assert (
-        profile.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
+        specification.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
         == "it names the routing decision"
     )
-    assert profile.behaviour("EB-2").criteria[0].description.then == before_eb2  # type: ignore[union-attr]
+    assert specification.behaviour("EB-2").criteria[0].description.then == before_eb2  # type: ignore[union-attr]
     assert any(w.source is WarningSource.RUNTIME for w in driver.pending_warnings)
 
 
 # ── "Suggest one for me": one clean add, or nothing ──────────────────────────
 
 
-def _suggest_on(profile, interviewer, matcher=None):
+def _suggest_on(specification, interviewer, matcher=None):
     """Drive the real "Suggest one for me" control on EB-1's card, the way the door would.
 
     Composes the criteria screen, finds the `another` option scoped to EB-1, and clicks it —
@@ -1181,9 +1074,9 @@ def _suggest_on(profile, interviewer, matcher=None):
 
     driver = StepDriver(interviewer=interviewer, matcher=matcher)
     state = driver_state(
-        profile=profile,
+        specification=specification,
         step=InterviewStep.CRITERIA,
-        issued_ids=collect_profile_ids(profile),
+        issued_ids=collect_specification_ids(specification),
     )
     screen, another = _criterion_action(driver, state, "another", "Suggest one for me")
     driver.handle(state, screen, ChoiceResponse(selected=[str(another.id)]))
@@ -1193,11 +1086,11 @@ def _suggest_on(profile, interviewer, matcher=None):
 def test_suggest_one_for_me_adds_exactly_one_criterion_and_matches_it() -> None:
     """The happy path: the model returns one add under EB-1, it is applied, and only the new
     criterion is matched — the two it already had keep their metrics and cost no call."""
-    profile = research_assistant()
+    specification = research_assistant()
     matcher = RecordingMatcher()
-    driver, _ = _suggest_on(profile, ScriptedInterviewer(), matcher)
+    driver, _ = _suggest_on(specification, ScriptedInterviewer(), matcher)
 
-    eb1 = profile.behaviour("EB-1")
+    eb1 = specification.behaviour("EB-1")
     assert [c.id for c in eb1.criteria] == ["AC-1-1", "AC-1-2", "AC-1-3"]  # type: ignore[union-attr]
     assert matcher.matched == ["AC-1-3"]  # only the one just added
     assert not driver.pending_warnings
@@ -1205,23 +1098,23 @@ def test_suggest_one_for_me_adds_exactly_one_criterion_and_matches_it() -> None:
 
 @dataclass
 class SuggestsNothing(ScriptedInterviewer):
-    def suggest_criterion(self, profile, behaviour_id, context=None):
+    def suggest_criterion(self, specification, behaviour_id, context=None):
         self.calls.append("suggest_criterion")
         return StepResult(message="Nothing to add.", patches=[])
 
 
 @dataclass
 class SuggestsTwo(ScriptedInterviewer):
-    def suggest_criterion(self, profile, behaviour_id, context=None):
+    def suggest_criterion(self, specification, behaviour_id, context=None):
         self.calls.append("suggest_criterion")
-        one = super().suggest_criterion(profile, behaviour_id, context=context)
+        one = super().suggest_criterion(specification, behaviour_id, context=context)
         one.patches.append(one.patches[0].model_copy())  # a second add — not allowed
         return one
 
 
 @dataclass
 class SuggestsElsewhere(ScriptedInterviewer):
-    def suggest_criterion(self, profile, behaviour_id, context=None):
+    def suggest_criterion(self, specification, behaviour_id, context=None):
         self.calls.append("suggest_criterion")
         from metis.wizard.contracts import Patch, PatchOp
 
@@ -1251,11 +1144,11 @@ class SuggestsElsewhere(ScriptedInterviewer):
 def test_a_suggestion_that_is_not_one_clean_add_changes_nothing(interviewer) -> None:
     """Zero adds, more than one, or an add aimed at another behaviour are each refused whole:
     EB-1 is untouched, EB-2 is untouched, and the user is told nothing landed."""
-    profile = research_assistant()
-    before = profile.model_copy(deep=True)
-    driver, _ = _suggest_on(profile, interviewer, RecordingMatcher())
+    specification = research_assistant()
+    before = specification.model_copy(deep=True)
+    driver, _ = _suggest_on(specification, interviewer, RecordingMatcher())
 
-    assert profile == before  # all-or-nothing: not a single patch applied
+    assert specification == before  # all-or-nothing: not a single patch applied
     assert any(w.source is WarningSource.RUNTIME for w in driver.pending_warnings)
 
 
@@ -1283,13 +1176,13 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
     """Manual entry appends a FORM criterion under the card's behaviour, verbatim. A second
     submission gets its own scoped id rather than overwriting the first — the append-nothing
     bug is what this guards against."""
-    profile = research_assistant()
+    specification = research_assistant()
     matcher = RecordingMatcher()
     driver = StepDriver(interviewer=ScriptedInterviewer(), matcher=matcher)
     state = driver_state(
-        profile=profile,
+        specification=specification,
         step=InterviewStep.CRITERIA,
-        issued_ids=collect_profile_ids(profile),
+        issued_ids=collect_specification_ids(specification),
     )
 
     _type_one(
@@ -1313,7 +1206,7 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
         },
     )
 
-    eb1 = profile.behaviour("EB-1")
+    eb1 = specification.behaviour("EB-1")
     assert [c.id for c in eb1.criteria] == ["AC-1-1", "AC-1-2", "AC-1-3", "AC-1-4"]  # type: ignore[union-attr]
     fresh = eb1.criteria[-2:]  # type: ignore[union-attr]
     assert [c.description.given for c in fresh] == [
@@ -1322,3 +1215,53 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
     ]  # verbatim, in order
     assert {c.id for c in fresh} <= state.user_typed
     assert matcher.matched == ["AC-1-3", "AC-1-4"]  # each new one matched, once
+
+
+def test_copy_task_retains_settings_and_assigns_a_new_id() -> None:
+    specification = research_assistant()
+    specification.tasks[0].num_trials = 7
+    specification.tasks[0].max_turns = 9
+    specification.tasks[0].timeout_minutes = 2
+    specification.tasks[0].response_wait_ms = 45000
+    specification.tasks[0].max_run_retries = 0
+    state = driver_state(
+        specification=specification,
+        step=InterviewStep.SCENARIOS,
+        issued_ids=collect_specification_ids(specification),
+    )
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    screen = driver.compose(state)
+    driver.handle(state, screen, ChoiceResponse(selected=["copy-task:TC-001"]))
+    original = specification.tasks[0]
+    copied = specification.tasks[-1]
+    assert copied.id != original.id
+    assert copied.id in state.issued_ids
+    assert copied.num_trials == 7
+    assert copied.max_turns == 9
+    assert copied.timeout_minutes == 2
+    assert copied.response_wait_ms == 45000
+    assert copied.max_run_retries == 0
+    assert copied.scenario_ref == original.scenario_ref
+    assert copied.persona_ref == original.persona_ref
+    assert copied.criterion_refs == original.criterion_refs
+    copied.criterion_refs.clear()
+    assert original.criterion_refs
+
+
+def test_criterion_parameter_form_changes_the_selected_requirement() -> None:
+    from metis.wizard.contracts import FormResponse
+
+    specification = research_assistant()
+    criterion = specification.behaviour("EB-2").criteria[0]  # type: ignore[union-attr]
+    specification.behaviour("EB-2").measured = True  # type: ignore[union-attr]
+    state = driver_state(specification=specification, step=InterviewStep.CRITERIA)
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    screen = driver.compose(state)
+    driver.handle(
+        state, screen, ChoiceResponse(selected=[f"parameters:{criterion.id}"])
+    )
+    assert state.pending is not None
+    driver.handle(
+        state, state.pending, FormResponse(values={"metric_args": '{"max_turns":4}'})
+    )
+    assert criterion.metric_args == {"max_turns": 4}

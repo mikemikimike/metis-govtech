@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ProductProfile } from "./transport/api.ts";
-import { profileHasCriteria } from "./metrics.ts";
+import type { Specification } from "./transport/api.ts";
+import { specificationHasCriteria } from "./metrics.ts";
 
-const profile: ProductProfile = {
+const specification: Specification = {
   schema_version: 2,
+  id: "test",
+  runner_factory_ref:
+    "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+  tasks: [],
   product: { name: "", users: "", description: "", detail: "" },
   features: [
     {
@@ -26,16 +30,16 @@ const profile: ProductProfile = {
   scenarios: [],
 };
 
-test("metric loading waits until the Profile contains a Criterion", () => {
-  assert.equal(profileHasCriteria(profile), false);
-  const withCriterion: ProductProfile = {
-    ...profile,
+test("metric loading waits until the Specification contains a Criterion", () => {
+  assert.equal(specificationHasCriteria(specification), false);
+  const withCriterion: Specification = {
+    ...specification,
     features: [
       {
-        ...profile.features[0]!,
+        ...specification.features[0]!,
         behaviours: [
           {
-            ...profile.features[0]!.behaviours[0]!,
+            ...specification.features[0]!.behaviours[0]!,
             criteria: [
               {
                 id: "C-1",
@@ -48,5 +52,5 @@ test("metric loading waits until the Profile contains a Criterion", () => {
       },
     ],
   };
-  assert.equal(profileHasCriteria(withCriterion), true);
+  assert.equal(specificationHasCriteria(withCriterion), true);
 });

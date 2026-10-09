@@ -22,7 +22,7 @@ def test_save_report_writes_utf8(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     (tmp_path / "inputs").mkdir()
-    (tmp_path / "inputs" / "profile.yaml").write_text(
+    (tmp_path / "inputs" / "specification.yaml").write_text(
         "product:\n  name: Test Product\n", encoding="utf-8"
     )
 

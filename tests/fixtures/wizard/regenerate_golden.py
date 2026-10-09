@@ -1,8 +1,8 @@
-"""Regenerate the golden experiment file.
+"""Regenerate the golden specification file.
 
     uv run python tests/fixtures/wizard/regenerate_golden.py
 
-Run this when the compiler or the fixture profile changes *on purpose*, then read the diff
+Run this when the compiler or the fixture specification changes *on purpose*, then read the diff
 before committing it. The golden file's whole job is to make an unintended change visible,
 so regenerating without reading the diff throws away the only thing it was buying.
 """
@@ -14,10 +14,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from metis.wizard.application.compile import compile_experiment, to_yaml  # noqa: E402
-from tests.fixtures.wizard.profiles import research_assistant  # noqa: E402
+from tests.fixtures.wizard.specifications import research_assistant  # noqa: E402
 
 EXPERIMENT_ID = "research-assistant"
-GOLDEN = Path(__file__).parent / "golden_experiment.yaml"
+GOLDEN = Path(__file__).parent / "golden_specification.yaml"
 
 
 def main() -> None:

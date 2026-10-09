@@ -110,28 +110,26 @@ export type Feature = Omit<Schema["Feature"], "behaviours"> & {
   behaviours: Behaviour[];
 };
 export type Persona = Schema["Persona"];
-export type Scenario = Omit<
-  Schema["Scenario"],
-  "behaviour_refs" | "persona_refs" | "fixtures"
-> & {
-  behaviour_refs: string[];
-  persona_refs: string[];
-  fixtures: string[];
-};
+export type Scenario = Schema["Scenario"];
+export type Task = Omit<
+  Schema["Task"],
+  "fixtures" | "criterion_refs" | "num_trials"
+> & { fixtures: string[]; criterion_refs: string[]; num_trials: number };
 export type Product = Schema["Product"];
-export type ProductProfile = Omit<
-  Schema["ProductProfile"],
-  "features" | "personas" | "scenarios"
+export type Specification = Omit<
+  Schema["Specification"],
+  "features" | "personas" | "scenarios" | "tasks"
 > & {
   features: Feature[];
   personas: Persona[];
   scenarios: Scenario[];
+  tasks: Task[];
 };
 export type Turn = Schema["Turn"];
 export type InterviewState = RequiredFields<
-  Omit<Schema["InterviewState"], "profile" | "pending">,
+  Omit<Schema["InterviewState"], "specification" | "pending">,
   "history" | "user_typed" | "issued_ids"
-> & { profile: ProductProfile; pending: WizardRequest | null };
+> & { specification: Specification; pending: WizardRequest | null };
 export type MissingData = Schema["MissingData"];
 export type InterviewSuccess = Omit<
   Schema["InterviewSuccess"],
@@ -216,22 +214,29 @@ function normalizeRequest(
   return request;
 }
 
-function normalizeProfile(profile: Schema["ProductProfile"]): ProductProfile {
+function normalizeSpecification(
+  specification: Schema["Specification"],
+): Specification {
   return {
-    ...profile,
-    features: (profile.features ?? []).map((feature) => ({
+    ...specification,
+    features: (specification.features ?? []).map((feature) => ({
       ...feature,
       behaviours: (feature.behaviours ?? []).map((behaviour) => ({
         ...behaviour,
         criteria: behaviour.criteria ?? [],
       })),
     })),
-    personas: profile.personas ?? [],
-    scenarios: (profile.scenarios ?? []).map((scenario) => ({
-      ...scenario,
-      behaviour_refs: scenario.behaviour_refs ?? [],
-      persona_refs: scenario.persona_refs ?? [],
-      fixtures: scenario.fixtures ?? [],
+    personas: specification.personas ?? [],
+    scenarios: specification.scenarios ?? [],
+    tasks: (specification.tasks ?? []).map((task) => ({
+      ...task,
+      fixtures: task.fixtures ?? [],
+      criterion_refs: task.criterion_refs ?? [],
+      num_trials: task.num_trials ?? 3,
+      max_turns: task.max_turns ?? 20,
+      timeout_minutes: task.timeout_minutes ?? 15,
+      response_wait_ms: task.response_wait_ms ?? 300000,
+      max_run_retries: task.max_run_retries ?? null,
     })),
   };
 }
@@ -239,7 +244,7 @@ function normalizeProfile(profile: Schema["ProductProfile"]): ProductProfile {
 function normalizeState(state: Schema["InterviewState"]): InterviewState {
   return {
     ...state,
-    profile: normalizeProfile(state.profile),
+    specification: normalizeSpecification(state.specification),
     context: state.context,
     history: state.history ?? [],
     user_typed: state.user_typed ?? [],
@@ -317,7 +322,7 @@ export interface PresentationView {
   stage: InterviewStep;
   done: boolean;
   requests: WizardRequest[];
-  profile: ProductProfile;
+  specification: Specification;
 }
 
 export class TransportError extends Error {
@@ -446,10 +451,10 @@ export const api = {
       }),
     );
   },
-  compile: (profile: ProductProfile) =>
+  compile: (specification: Specification) =>
     call<CompileResponse>("/api/v1/wizard/compile", {
       ...JSON_POST,
-      body: JSON.stringify(profile),
+      body: JSON.stringify(specification),
     }),
   metrics: () => call<MetricsResponse>("/api/v1/metrics"),
   config: () => call<ConfigResponse>("/api/v1/wizard/config"),
@@ -461,9 +466,9 @@ export const api = {
       body: form,
     });
   },
-  package: (profile: ProductProfile, files: readonly PackageFile[]) => {
+  package: (specification: Specification, files: readonly PackageFile[]) => {
     const form = new FormData();
-    form.append("profile", JSON.stringify(profile));
+    form.append("specification", JSON.stringify(specification));
     for (const file of files) form.append("files", file.blob, file.name);
     return callBlob("/api/v1/wizard/package", {
       method: "POST",
@@ -475,6 +480,6 @@ export const api = {
 export function toSummary(record: LocalInterviewRecord): InterviewSummary {
   return { id: record.id, title: record.title, updated: record.updated_at };
 }
-export function titleFor(profile: ProductProfile): string {
-  return profile.product.name.trim() || "Untitled Interview";
+export function titleFor(specification: Specification): string {
+  return specification.product.name.trim() || "Untitled Interview";
 }

@@ -78,8 +78,11 @@ StepPermissions: dict[InterviewStep, list[str]] = {
         "scenarios[*]",
         "scenarios[*].name",
         "scenarios[*].description",
-        "scenarios[*].behaviour_refs",
-        "scenarios[*].persona_refs",
+        "tasks",
+        "tasks[*]",
+        "tasks[*].scenario_ref",
+        "tasks[*].persona_ref",
+        "tasks[*].criterion_refs",
     ],
 }
 

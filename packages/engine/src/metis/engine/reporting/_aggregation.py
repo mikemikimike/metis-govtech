@@ -23,7 +23,7 @@ def aggregate_metrics(
     turn_results: list[TurnReport],
     session_results: list[SessionReport] | None = None,
 ) -> dict[str, MetricAggregate]:
-    """Aggregate pass/fail/skip counts and scores by metric name.
+    """Aggregate pass/fail/skip counts and scores by Criterion identity.
 
     Processes both per-trace metrics (from turn_results) and session-level
     metrics (from session_results) into a single unified summary.
@@ -50,7 +50,7 @@ def aggregate_metrics(
 
 
 def _accumulate(agg: dict[str, MetricAggregate], metric: Mapping[str, Any]) -> None:
-    name = metric["name"]
+    name = metric.get("criterion_id") or metric["name"]
     if name not in agg:
         agg[name] = MetricAggregate(
             pass_count=0,

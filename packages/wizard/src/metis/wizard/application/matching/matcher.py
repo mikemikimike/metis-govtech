@@ -11,15 +11,17 @@ experiment rather than a stopped interview.
 
 from __future__ import annotations
 
+import inspect
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, Protocol
 
 from metis.wizard.application.matching.library_catalogue import library_catalogue
 
 if TYPE_CHECKING:
     from metis.wizard.contracts.metric_spec import MetricSpec
-    from metis.wizard.domain.profile import Criterion, ProductProfile
+    from metis.wizard.domain.specification import Criterion, Specification
 
 # One parameterised class that builds a judge from the criterion text. Not codegen: the
 # criterion travels as an argument, so there is no generated file to keep in sync.
@@ -83,19 +85,19 @@ class EmbeddingMatcher:
         return best.fqn if score >= self.threshold else GENERATED_JUDGE_FQN
 
 
-def match_profile(profile: ProductProfile, matcher: EmbeddingMatcher) -> int:
+def match_specification(specification: Specification, matcher: EmbeddingMatcher) -> int:
     """Resolve every criterion that needs it. Returns how many were matched.
 
-    Skips two things deliberately: criteria that already have a metric (re-matching would be
-    a wasted call), and unticked behaviours (nothing is generated for behaviours nobody
-    picked, matching included).
+    Preserve existing mappings and parameters. Dormant Criteria also need a Grader
+    because they remain in the shared document.
     """
     matched = 0
-    for behaviour in profile.measured_behaviours():
+    for behaviour in specification.behaviours():
         for criterion in behaviour.criteria:
             if criterion.metric_fqn:
                 continue
             criterion.metric_fqn = matcher.match(criterion)
+            criterion.metric_args = default_metric_args(criterion)
             matched += 1
     return matched
 
@@ -107,5 +109,26 @@ def rematch(criterion: Criterion, matcher: EmbeddingMatcher) -> str:
     re-choosing overwrites only its own work. This stops being true the day a metric picker
     exists — a user-chosen metric would be destroyed here without a word.
     """
+    previous = criterion.metric_fqn
     criterion.metric_fqn = matcher.match(criterion)
+    if previous != criterion.metric_fqn or criterion.metric_fqn == GENERATED_JUDGE_FQN:
+        criterion.metric_args = default_metric_args(criterion)
     return criterion.metric_fqn
+
+
+def default_metric_args(criterion: Criterion) -> dict[str, Any]:
+    if criterion.metric_fqn == GENERATED_JUDGE_FQN:
+        return {"criterion": str(criterion.description), "name": criterion.name}
+    spec = next((s for s in library_catalogue() if s.fqn == criterion.metric_fqn), None)
+    return {p.name: p.default for p in spec.params if not p.required} if spec else {}
+
+
+def validate_metric_args(fqn: str | None, args: Any) -> None:
+    if not fqn or not isinstance(args, dict):
+        raise ValueError("Select a Grader and supply a JSON object.")
+    try:
+        module, name = fqn.rsplit(".", 1)
+        cls = getattr(import_module(module), name)
+        inspect.signature(cls).bind(**args)
+    except (ImportError, AttributeError, TypeError) as exc:
+        raise ValueError(str(exc)) from exc

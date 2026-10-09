@@ -69,6 +69,12 @@ system:
     defaults and authorship are assigned by the wizard when an item is created; never include them
     in a draft. Ids never contain a dot — a dot separates path segments.
 
+    A **profile** contains Product context, Features, Expected Behaviours, and Criteria with
+    their Grader settings. An **experiment** is a collection of runs used to evaluate one or
+    more target agentic systems across a set of test cases.
+    A **specification** contains the Profile and Experiment configuration. The document
+    keeps these fields at the top level.
+
     Build a small set of representative Features and Behaviours that covers the important
     functional variation established by the user. Use the following hierarchy throughout the
     interview, including later edits.
@@ -113,7 +119,7 @@ system:
 
     A **test case** consisting of a **persona** and **scenario** is a single simulated situation used
     to simulate real users using the agentic system at test. It is a complete specification of a
-    particular evaluation condition, combining a scenario, a persona (where applicable), fixtures,
+    particular evaluation condition, combining a scenario, a persona, fixtures,
     and any conditions required for execution. These test cases are used to exercise and evaluate
     product behaviours.
 
@@ -128,13 +134,14 @@ system:
               "behaviours": [{"name": "…", "description": "…"}]}
 
     Mirror that shape, and the shape of anything already in the document. The wizard allocates
-    collision-free ids across the current profile.
+    collision-free ids across the current specification.
 
     The wizard owns ids, authorship, defaults, measured state, metric bindings and trials. The model
-    may never write any of them. Fixture assignments on existing Scenarios remain the user's to
+    may never write any of them. Fixture assignments on existing Tasks remain the user's to
     change. A new Scenario draft may suggest fixture names only from `<available_fixture_names>`;
     these are proposals for user review. Persona drafts use `name` and `description`. Scenario drafts
-    use `name`, `description`, `behaviour_refs`, `persona_refs`, and `fixtures`.
+    use `name`, `description`, and `tasks`. Each Task draft has `persona_ref`,
+    `criterion_refs`, and `fixtures`. The application assigns Task IDs.
 
     Two semantic fields you may never write, at any step:
       - a behaviour's `measured` — that is the user's decision alone
@@ -150,9 +157,9 @@ model_calls:
   clarify: |-
     ## Product:
 
-    <profile>
-    $profile
-    </profile>
+    <specification>
+    $specification
+    </specification>
 
     ## Conversation so far:
 
@@ -218,7 +225,7 @@ model_calls:
     Write only what the conversation established. You may set product.name, product.users,
     product.description and product.detail.
 
-    Keep product.description short: it is the one-line description compiled into the experiment.
+    Keep product.description short: it is the one-line description of the product in the specification.
     Treat product.detail as the cumulative handover to every later step, not as a second summary.
     Its depth must match the evidence. When the conversation or a supplied source establishes
     several material facts, preserve them separately and with enough context to use later.
@@ -245,9 +252,9 @@ model_calls:
   behaviours: |-
     ## Product
 
-    <profile>
-    $profile
-    </profile>
+    <specification>
+    $specification
+    </specification>
 
     ## Interview
 
@@ -299,9 +306,9 @@ model_calls:
   criteria: |-
     ## Document
 
-    <profile>
-    $profile
-    </profile>
+    <specification>
+    $specification
+    </specification>
 
     Write acceptance criteria for every behaviour with measured=true that has none yet. Ignore
     behaviours with measured=false entirely — the user chose not to measure those.
@@ -348,9 +355,9 @@ model_calls:
   personas: |-
     ## Document
 
-    <profile>
-    $profile
-    </profile>
+    <specification>
+    $specification
+    </specification>
 
     Propose 3–5 personas: behavioural archetypes describing *how someone interacts*, not who they
     are. Any persona must make sense dropped into any scenario.
@@ -360,7 +367,7 @@ model_calls:
     - `description`: one or two sentences describing how this archetype interacts, which the
       evaluation runner will use to simulate them
 
-    Do not add `id`, `scope` or `behaviours`; the wizard derives the stable id from the name.
+    Do not add `id`, `scope` or `behaviours`; the wizard derives the id from the name.
 
     Justify them by what the user chose to measure — "you're measuring citation discipline and
     scope refusal, so these will stress both" — in `message`. Include at least one who will
@@ -368,11 +375,11 @@ model_calls:
   scenarios: |-
     ## Document
 
-    <profile>
-    $profile
-    </profile>
+    <specification>
+    $specification
+    </specification>
 
-    For each new Scenario, use `fixtures` to suggest only names from the available fixture names in
+    For each new Task, use `fixtures` to suggest only names from the available fixture names in
     the system context. Use the user's explanation and readable file content to decide whether a
     file fits. For a file without extracted text, rely only on its name and the user's explanation.
     Suggest only files that fit that Scenario. Return an empty list when none fit. These assignments
@@ -382,8 +389,8 @@ model_calls:
     Draft the whole set of scenarios in one go. A scenario is one simulated situation. It can
     exercise several behaviours at once, and one behaviour can be probed by several scenarios.
 
-    Every behaviour with measured=true must be covered by at least one scenario. Set behaviour_refs
-    to what each scenario covers and persona_refs to who runs it (at least one). Those, the
+    Every behaviour with measured=true must be covered by at least one scenario. Select criterion_refs from each measured Behaviour in Tasks. Select one persona_ref
+    per Task. Every Scenario needs at least one Task. Those, the
     description, and any fixture suggestions are the Scenario draft. Suggest only available file
     names. The user reviews those suggestions and sets the trial count.
 
@@ -397,9 +404,9 @@ model_calls:
   chat: |-
     ## Document
 
-    <profile>
-    $profile
-    </profile>
+    <specification>
+    $specification
+    </specification>
 
     The user is at the $step step.
 
@@ -426,9 +433,9 @@ model_calls:
   suggest_criterion: |-
     ## Document
 
-    <profile>
-    $profile
-    </profile>
+    <specification>
+    $specification
+    </specification>
 
     Suggest exactly one new acceptance criterion for the behaviour with id $behaviour_id. Look at
     the criteria it already has and propose one that covers a distinct observable quality or

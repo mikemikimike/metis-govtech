@@ -31,7 +31,7 @@ The two Orca-specific runners under `runners/` are reference implementations for
 
 Both satisfy the normative [runner contract](../../../../../../docs/runner-contract.md); a custom runner must too.
 
-Custom runners are selected via `runner_factory_ref` in `experiment.yaml`. See the [Engine User Guide](../../../../../../docs/guide/engine.md#writing-a-custom-runner) for the `Runner` ABC, `RunnerFactory` protocol, and a complete REST example.
+Custom runners are selected via `runner_factory_ref` in `specification.yaml`. See the [Engine User Guide](../../../../../../docs/guide/engine.md#writing-a-custom-runner) for the `Runner` ABC, `RunnerFactory` protocol, and a complete REST example.
 
 ### Concurrency
 
@@ -82,7 +82,7 @@ simulation/
 ├── runner_resolver.py — Resolves runner_factory_ref FQN to a class
 ├── experiment.py      — Experiment orchestrator (worker distribution, asyncio.gather)
 ├── orchestrator.py    — Single-run orchestration (turn loop, retries)
-├── types.py           — Pydantic models (Experiment, Scenario, Persona, Observation, ...)
+├── types.py           — Pydantic models (Specification, Scenario, Persona, Observation, ...)
 ├── config.py          — Shared configuration (retry defaults)
 ├── _contract.py       — Runner↔Observation contract enforcement (see docs/runner-contract.md)
 ├── exceptions.py      — Simulation-specific exceptions

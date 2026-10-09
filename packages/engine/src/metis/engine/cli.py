@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from metis.engine.evaluation.types import EvalResult
     from metis.engine.simulation.experiment import RunPlanItem
-    from metis.engine.simulation.types import Experiment, RunRecord
+    from metis.engine.simulation.types import RunRecord, Specification
 
 app = typer.Typer(help="Run METIS evaluations against traces.")
 
@@ -77,12 +77,13 @@ def _validate_inputs(input_dir: Path) -> None:
     Fails fast on the first error with a clear message and sys.exit(1).
     """
     import importlib
+    import inspect
 
     from deepeval.metrics import BaseMetric
     from deepeval.metrics.base_metric import BaseConversationalMetric
     from pydantic import ValidationError
 
-    from metis.engine.simulation.types import Experiment
+    from metis.engine.simulation.types import Specification
 
     if not input_dir.is_dir():
         console.print(
@@ -90,70 +91,51 @@ def _validate_inputs(input_dir: Path) -> None:
         )
         sys.exit(1)
 
-    experiment_path = input_dir / "experiment.yaml"
+    experiment_path = input_dir / "specification.yaml"
     if not experiment_path.exists():
         console.print(
-            f"Error: missing required file 'experiment.yaml' in {input_dir}",
+            f"Error: missing required file 'specification.yaml' in {input_dir}",
             style="bold red",
         )
         sys.exit(1)
 
     try:
-        experiment = Experiment.load_file(experiment_path)
+        specification = Specification.load_file(experiment_path)
     except ValidationError as e:
         first = e.errors()[0]
         loc = " → ".join(str(part) for part in first["loc"]) if first["loc"] else "root"
         console.print(
-            f"Error: experiment.yaml validation failed: {loc} — {first['msg']}",
+            f"Error: specification.yaml validation failed: {loc} — {first['msg']}",
             style="bold red",
         )
         sys.exit(1)
     except Exception as e:
-        console.print(f"Error: failed to parse experiment.yaml: {e}", style="bold red")
+        console.print(
+            f"Error: failed to parse specification.yaml: {e}", style="bold red"
+        )
         sys.exit(1)
 
     seen_personas: set[str] = set()
-    for persona in experiment.personas:
+    for persona in specification.personas:
         if persona.id in seen_personas:
             console.print(
-                f"Error: duplicate persona id '{persona.id}' in experiment.yaml",
+                f"Error: duplicate persona id '{persona.id}' in specification.yaml",
                 style="bold red",
             )
             sys.exit(1)
         seen_personas.add(persona.id)
 
-    seen_scenarios: set[str] = set()
-    for scenario in experiment.scenarios:
-        if scenario.id in seen_scenarios:
-            console.print(
-                f"Error: duplicate scenario id '{scenario.id}' in experiment.yaml",
-                style="bold red",
-            )
-            sys.exit(1)
-        seen_scenarios.add(scenario.id)
-
-    defined_personas = {p.id for p in experiment.personas}
-    for scenario in experiment.scenarios:
-        for ref in scenario.persona_refs:
-            if ref not in defined_personas:
-                available = ", ".join(sorted(defined_personas))
-                console.print(
-                    f"Error: scenario '{scenario.id}' references unknown persona '{ref}' (available: {available})",
-                    style="bold red",
-                )
-                sys.exit(1)
-
     fixtures_dir = input_dir / "fixtures"
-    for scenario in experiment.scenarios:
-        for fixture in scenario.fixtures:
+    for task in specification.resolved_tasks():
+        for fixture in task.fixtures:
             if not (fixtures_dir / fixture).exists():
                 console.print(
-                    f"Error: scenario '{scenario.id}' references fixture '{fixture}' which does not exist in {fixtures_dir}",
+                    f"Error: Task '{task.task_id}' references fixture '{fixture}' which does not exist in {fixtures_dir}",
                     style="bold red",
                 )
                 sys.exit(1)
 
-    for scenario in experiment.scenarios:
+    for scenario in specification.resolved_tasks():
         for metric_ref in scenario.metric_refs:
             fqn = metric_ref.fqn
             parts = fqn.rsplit(".", 1)
@@ -191,6 +173,15 @@ def _validate_inputs(input_dir: Path) -> None:
                     f"Error: metric '{fqn}' is not a subclass of "
                     f"deepeval.metrics.BaseMetric or "
                     f"BaseConversationalMetric",
+                    style="bold red",
+                )
+                sys.exit(1)
+
+            try:
+                inspect.signature(cls).bind(**metric_ref.args)
+            except (TypeError, ValueError) as exc:
+                console.print(
+                    f"Error: Criterion '{metric_ref.criterion_id}' has invalid Grader parameters: {exc}",
                     style="bold red",
                 )
                 sys.exit(1)
@@ -272,10 +263,10 @@ def _record_files(experiment_dir: Path) -> list[Path]:
 
 def _experiment_id(input_dir: Path) -> str | None:
     """Return the experiment id in ``input_dir``, or None if it cannot be read."""
-    from metis.engine.simulation.types import Experiment
+    from metis.engine.simulation.types import Specification
 
     try:
-        return Experiment.load_file(input_dir.resolve() / "experiment.yaml").id
+        return Specification.load_file(input_dir.resolve() / "specification.yaml").id
     except Exception:
         return None
 
@@ -426,7 +417,7 @@ def _resume_command(experiment_dir: Path, command: str) -> str:
 def _print_handoff(experiment_dir: Path, *, command: str) -> None:
     """Print the evaluate and resume commands for a simulation output."""
     resolved = experiment_dir.resolve()
-    console.print(f"Experiment: {resolved}")
+    console.print(f"Specification: {resolved}")
     console.print(
         f"Evaluate: {_evaluate_command(resolved)}",
         no_wrap=True,
@@ -452,7 +443,7 @@ def _print_evaluation_summary(
     console.print(
         f"  {label} — {outcome.total_records} run(s), {outcome.failed_records} failed"
     )
-    console.print(f"  Experiment: {experiment_dir}")
+    console.print(f"  Specification: {experiment_dir}")
     console.print(f"  Log: {experiment_dir / 'logs' / 'evaluate.log'}")
     console.print(f"{'=' * 60}")
 
@@ -480,7 +471,7 @@ def _classify_resume_runs(
         except Exception:
             redo.append(item)
             continue
-        key = (scenario.id, persona.id, trial_index)
+        key = (scenario.task_id or scenario.id, persona.id, trial_index)
         if record.outcome.stop_reason == "system_error":
             redo.append(item)
         else:
@@ -517,7 +508,7 @@ def _run_simulation(
         expand_run_plan,
         run_experiment,
     )
-    from metis.engine.simulation.types import Experiment
+    from metis.engine.simulation.types import Specification
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
         os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
@@ -526,19 +517,21 @@ def _run_simulation(
 
     if resume:
         experiment_dir = target
-        experiment = Experiment.load_file(experiment_dir / "inputs" / "experiment.yaml")
+        specification = Specification.load_file(
+            experiment_dir / "inputs" / "specification.yaml"
+        )
         fixtures_dir = experiment_dir / "inputs" / "fixtures"
     else:
         _validate_inputs(target)
-        experiment = Experiment.load_file(target / "experiment.yaml")
+        specification = Specification.load_file(target / "specification.yaml")
         suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
-        experiment_dir = project_root / "experiments" / f"{experiment.id}-{suffix}"
+        experiment_dir = project_root / "experiments" / f"{specification.id}-{suffix}"
         experiment_dir.mkdir(parents=True)
         shutil.copytree(target, experiment_dir / "inputs")
         fixtures_dir = experiment_dir / "inputs" / "fixtures"
 
-    personas_by_id = {persona.id: persona for persona in experiment.personas}
-    run_plan = expand_run_plan(experiment, personas_by_id)
+    personas_by_id = {persona.id: persona for persona in specification.personas}
+    run_plan = expand_run_plan(specification, personas_by_id)
     if resume:
         redo_plan, completed_records = _classify_resume_runs(experiment_dir, run_plan)
         console.print(
@@ -554,7 +547,7 @@ def _run_simulation(
 
     from metis.engine.simulation.runner_resolver import resolve_runner_factory
 
-    factory_cls = resolve_runner_factory(experiment.runner_factory_ref)
+    factory_cls = resolve_runner_factory(specification.runner_factory_ref)
 
     runner_factory = factory_cls()
 
@@ -563,7 +556,7 @@ def _run_simulation(
     console.print(f"\n{'=' * 60}")
     console.print("  SIMULATION")
     console.print(f"{'=' * 60}")
-    console.print(f"  Experiment: {experiment_dir}")
+    console.print(f"  Specification: {experiment_dir}")
     console.print(f"  Input: {fixtures_dir.parent}\n")
 
     resolved_log_dir = log_dir or (experiment_dir / "logs")
@@ -571,20 +564,20 @@ def _run_simulation(
 
     scenarios_state: list[SimulationScenarioState] = []
     total_run_count = 0
-    for scenario in experiment.scenarios:
+    for scenario in specification.resolved_tasks():
         run_states: list[SimulationRunState] = []
         for persona_ref in scenario.persona_refs:
             for trial_index in range(1, scenario.num_trials + 1):
                 total_run_count += 1
                 run_states.append(
                     SimulationRunState(
-                        scenario_id=scenario.id,
+                        scenario_id=scenario.task_id or scenario.id,
                         persona_id=persona_ref,
                         trial_index=trial_index,
                         num_trials=scenario.num_trials,
                         phase="pending",
                         current_turn=None,
-                        max_turns=20,
+                        max_turns=scenario.max_turns,
                         turn_detail="",
                         duration_seconds=None,
                         stop_reason=None,
@@ -592,14 +585,14 @@ def _run_simulation(
                 )
         scenarios_state.append(
             SimulationScenarioState(
-                scenario_id=scenario.id,
+                scenario_id=scenario.task_id or scenario.id,
                 runs=run_states,
                 phase="pending",
             )
         )
 
     sim_state = SimulationState(
-        experiment_id=experiment.id,
+        experiment_id=specification.id,
         scenarios=scenarios_state,
         total_runs=total_run_count,
     )
@@ -660,7 +653,7 @@ def _run_simulation(
         with tui_ctx if tui_ctx else nullcontext():
             run_experiment(
                 runner_factory=runner_factory,
-                experiment=experiment,
+                specification=specification,
                 personas_by_id=personas_by_id,
                 output_dir=experiment_dir,
                 fixtures_dir=fixtures_dir,
@@ -691,14 +684,14 @@ def _run_simulation(
     return experiment_dir
 
 
-def _load_evaluation_experiment(experiment_dir: Path) -> Experiment:
+def _load_evaluation_specification(experiment_dir: Path) -> Specification:
     """Validate and load the frozen experiment snapshot."""
-    from metis.engine.simulation.types import Experiment
+    from metis.engine.simulation.types import Specification
 
     inputs_dir = experiment_dir / "inputs"
     if not inputs_dir.is_dir():
         console.print(
-            f"Error: missing required file 'experiment.yaml' in {inputs_dir}",
+            f"Error: missing required file 'specification.yaml' in {inputs_dir}",
             style="bold red",
         )
         raise EvaluationInputError("missing experiment snapshot")
@@ -711,7 +704,7 @@ def _load_evaluation_experiment(experiment_dir: Path) -> Experiment:
         ) from exc
 
     try:
-        return Experiment.load_file(inputs_dir / "experiment.yaml")
+        return Specification.load_file(inputs_dir / "specification.yaml")
     except Exception as exc:
         console.print(
             f"Error: failed to load experiment snapshot: {exc}", style="bold red"
@@ -817,7 +810,7 @@ def _run_evaluation(
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
         os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
 
-    experiment = _load_evaluation_experiment(experiment_dir)
+    specification = _load_evaluation_specification(experiment_dir)
     files = _record_files(experiment_dir)
     if not files:
         evaluation_log.write("EVALUATION COMPLETED — 0 records")
@@ -832,8 +825,10 @@ def _run_evaluation(
     console.print(f"  Loaded {len(records)} run record(s)")
     evaluation_log.write(f"LOADED {len(records)} run record(s)")
     langfuse = get_langfuse_client()
-    personas_by_id = {persona.id: persona for persona in experiment.personas}
-    scenarios_by_id = {scenario.id: scenario for scenario in experiment.scenarios}
+    personas_by_id = {persona.id: persona for persona in specification.personas}
+    scenarios_by_id = {
+        scenario.task_id: scenario for scenario in specification.resolved_tasks()
+    }
     eval_results: list[EvalResult] = []
     failed = 0
     interactive_progress = sys.stderr.isatty()
@@ -896,7 +891,7 @@ def _run_evaluation(
                         experiment_root=experiment_dir,
                         retry_timeout=langfuse_timeout,
                         artifacts=record.artifacts,
-                        scenario=scenarios_by_id.get(scenario_id),
+                        scenario=scenarios_by_id.get(record.config.task_id),
                         persona=personas_by_id.get(persona_id),
                         stop_reason=record.outcome.stop_reason,
                         cancellation_available=True,
@@ -936,7 +931,12 @@ def _run_evaluation(
                         label=label,
                         phase="evaluating",
                     )
-                    eval_result = evaluate_metrics(fetch_result, metric_refs)
+                    eval_result = evaluate_metrics(
+                        fetch_result,
+                        metric_refs,
+                        task_id=record.config.task_id,
+                        trial_index=record.config.trial_index,
+                    )
                     eval_results.append(eval_result)
                     _log_metric_results(
                         evaluation_log,
@@ -1030,7 +1030,7 @@ def simulate(
     input_dir: Path | None = typer.Option(
         None,
         "--input-dir",
-        help="Source experiment directory (experiment.yaml and fixtures/) for a new run",
+        help="Source experiment directory (specification.yaml and fixtures/) for a new run",
     ),
     experiment_dir: Path | None = typer.Option(
         None,
@@ -1124,7 +1124,7 @@ def run(
     input_dir: Path | None = typer.Option(
         None,
         "--input-dir",
-        help="Source experiment directory (experiment.yaml and fixtures/) for a new run",
+        help="Source experiment directory (specification.yaml and fixtures/) for a new run",
     ),
     experiment_dir: Path | None = typer.Option(
         None,

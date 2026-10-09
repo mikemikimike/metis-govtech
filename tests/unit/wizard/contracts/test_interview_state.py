@@ -25,7 +25,7 @@ from metis.wizard.contracts import (
 from metis.wizard.contracts.interview_state import InterviewState
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
-from tests.fixtures.wizard.profiles import research_assistant
+from tests.fixtures.wizard.specifications import research_assistant
 
 
 def _roundtrip(state: InterviewState) -> InterviewState:
@@ -36,7 +36,7 @@ def _roundtrip(state: InterviewState) -> InterviewState:
 def test_pending_state_requires_request_identity_and_stage() -> None:
     with pytest.raises(ValueError, match="pending.request_id"):
         InterviewState(
-            profile=research_assistant(),
+            specification=research_assistant(),
             context=interview_context(),
             pending=ChoiceRequest(
                 prompt="Do these look right?",
@@ -55,7 +55,7 @@ def test_pending_state_requires_request_identity_and_stage() -> None:
 
     with pytest.raises(ValueError, match="pending.stage"):
         InterviewState(
-            profile=research_assistant(),
+            specification=research_assistant(),
             context=interview_context(),
             pending=ChoiceRequest(
                 prompt="Do these look right?",
@@ -73,7 +73,7 @@ def test_the_state_carries_only_client_held_control_data() -> None:
     field set is an architectural constraint, so it is asserted directly rather than by behaviour.
     """
     assert set(InterviewState.model_fields) == {
-        "profile",
+        "specification",
         "context",
         "behaviours_confirmed",
         "confirmed",
@@ -86,7 +86,7 @@ def test_the_state_carries_only_client_held_control_data() -> None:
 
 def test_context_and_capability_evidence_are_required() -> None:
     with pytest.raises(ValueError, match="context"):
-        InterviewState(profile=research_assistant())
+        InterviewState(specification=research_assistant())
 
     with pytest.raises(ValueError, match="capability_evidence"):
         InterviewContext(perspective=Perspective.END_USER)
@@ -107,9 +107,9 @@ def test_context_and_capability_evidence_are_required() -> None:
     assert context.capability_evidence.known_capability_ids == [CapabilityId.TOOL_USE]
 
 
-def test_context_round_trips_without_entering_the_profile() -> None:
+def test_context_round_trips_without_entering_the_specification() -> None:
     state = InterviewState(
-        profile=research_assistant(),
+        specification=research_assistant(),
         context=interview_context(
             perspective=Perspective.SECURITY,
             known_capability_ids=[CapabilityId.TOOL_USE],
@@ -120,14 +120,14 @@ def test_context_round_trips_without_entering_the_profile() -> None:
     loaded = _roundtrip(state)
 
     assert loaded.context.perspective is Perspective.SECURITY
-    assert "perspective" not in loaded.profile.model_dump()
+    assert "perspective" not in loaded.specification.model_dump()
 
 
 def test_state_rejects_unknown_fields() -> None:
     with pytest.raises(ValueError):
         InterviewState.model_validate(
             {
-                "profile": research_assistant().model_dump(),
+                "specification": research_assistant().model_dump(),
                 "unexpected": True,
             }
         )
@@ -136,7 +136,7 @@ def test_state_rejects_unknown_fields() -> None:
 def test_history_is_bounded_to_the_model_context_limit() -> None:
     with pytest.raises(ValueError):
         InterviewState(
-            profile=research_assistant(),
+            specification=research_assistant(),
             context=interview_context(),
             history=[Turn(role="user", text=str(index)) for index in range(13)],
         )
@@ -145,7 +145,7 @@ def test_history_is_bounded_to_the_model_context_limit() -> None:
 def test_a_pending_choice_screen_rehydrates_as_its_subclass() -> None:
     """`Literal` discriminators exist so JSON rebuilds the concrete request, not the base."""
     state = InterviewState(
-        profile=research_assistant(),
+        specification=research_assistant(),
         context=interview_context(),
         pending=ChoiceRequest(
             prompt="Do these look right?",
@@ -185,7 +185,7 @@ def test_a_targeted_follow_up_keeps_its_target_across_the_wire() -> None:
     ):
         loaded = _roundtrip(
             InterviewState(
-                profile=research_assistant(),
+                specification=research_assistant(),
                 context=interview_context(),
                 pending=request,
             )

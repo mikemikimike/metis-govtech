@@ -1,10 +1,10 @@
 """Composing the screen for each step.
 
 This is the package's answer to *"draw this screen"*, not *"here is my document"*. Every
-function here walks the profile, decides each card's state, composes its components and
+function here walks the specification, decides each card's state, composes its components and
 notes, runs the completeness check, and emits a finished request.
 
-Nothing here calls a model. Screens are composed from the profile as it stands, which is why
+Nothing here calls a model. Screens are composed from the specification as it stands, which is why
 document warnings clear themselves: they are recomputed every time a screen is built, so
 there is never a stale flag to track.
 
@@ -14,9 +14,10 @@ wanting different phrasing changes this file, rather than two doors quietly disa
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
-from metis.wizard.application.readiness import profile_readiness
+from metis.wizard.application.readiness import specification_readiness
 from metis.wizard.application.trials import format_trials
 from metis.wizard.contracts.conversation import (
     AnyCardComponent,
@@ -40,7 +41,7 @@ from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
-    from metis.wizard.domain.profile import Behaviour, Feature, ProductProfile, Scenario
+    from metis.wizard.domain.specification import Behaviour, Feature, Specification
 
 TRIALS_MIN = 1
 TRIALS_MAX = 20
@@ -65,12 +66,12 @@ _STEP_TITLES: dict[InterviewStep, str] = {
 _INTERVIEW_STEPS: list[InterviewStep] = list(_STEP_TITLES)
 
 
-def _ready_through(profile: ProductProfile, step: InterviewStep) -> bool:
-    """True when the Profile has no missing content at or before this review."""
+def _ready_through(specification: Specification, step: InterviewStep) -> bool:
+    """True when the Specification has no missing content at or before this review."""
     position = _INTERVIEW_STEPS.index(step)
     return not any(
         _INTERVIEW_STEPS.index(gap.stage) <= position
-        for gap in profile_readiness(profile)
+        for gap in specification_readiness(specification)
     )
 
 
@@ -101,8 +102,8 @@ def _wizard_patch(path: str, value: object, op: PatchOp = PatchOp.SET) -> Patch:
     return Patch(op=op, path=path, value=value, origin=PatchOrigin.WIZARD)
 
 
-def _behaviour_path(profile: ProductProfile, behaviour_id: str, field: str) -> str:
-    feature = profile.feature_of(behaviour_id)
+def _behaviour_path(specification: Specification, behaviour_id: str, field: str) -> str:
+    feature = specification.feature_of(behaviour_id)
     feature_id = feature.id if feature else "?"
     return f"features[{feature_id}].behaviours[{behaviour_id}].{field}"
 
@@ -144,14 +145,14 @@ BEHAVIOUR_INSTRUCTION = (
 )
 
 
-def product_completion_form(profile: ProductProfile) -> FormRequest | None:
+def product_completion_form(specification: Specification) -> FormRequest | None:
     """Ask for required Product fields that the model did not supply."""
     fields: list[FormField] = []
-    if not profile.product.name.strip():
+    if not specification.product.name.strip():
         fields.append(
             FormField(id="product.name", label="Product name", multiline=False)
         )
-    if not profile.product.description.strip():
+    if not specification.product.description.strip():
         fields.append(FormField(id="product.description", label="Product description"))
     if not fields:
         return None
@@ -161,7 +162,7 @@ def product_completion_form(profile: ProductProfile) -> FormRequest | None:
     )
 
 
-def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+def behaviours_screen(specification: Specification, message: str) -> ChoiceRequest:
     """Review and measurement selection in one screen.
 
     Each card shows a behaviour and carries its own measurement tick — the "which of these do
@@ -174,7 +175,7 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     there is nothing to write criteria for.
     """
     cards: list[BehaviourCard] = []
-    for feature in profile.features:
+    for feature in specification.features:
         for behaviour in feature.behaviours:
             cards.append(
                 BehaviourCard(
@@ -189,7 +190,9 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                             label="Measure this",
                             selected=behaviour.measured,
                             patch=_wizard_patch(
-                                _behaviour_path(profile, behaviour.id, "measured"),
+                                _behaviour_path(
+                                    specification, behaviour.id, "measured"
+                                ),
                                 not behaviour.measured,
                             ),
                         )
@@ -208,7 +211,7 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                     id=OptionId(action="add", target=feature.id),
                     label=f"Add to {feature.name}",
                 )
-                for feature in profile.features
+                for feature in specification.features
             ],
             Option(
                 id=OptionId(action="continue"),
@@ -216,7 +219,7 @@ def behaviours_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                 primary=True,
                 # A disabled Continue is still shown, marked unavailable. Readiness through this
                 # review requires a complete Product and at least one measured Behaviour.
-                enabled=_ready_through(profile, InterviewStep.BEHAVIOURS),
+                enabled=_ready_through(specification, InterviewStep.BEHAVIOURS),
             ),
         ],
         instruction=BEHAVIOUR_INSTRUCTION,
@@ -245,10 +248,29 @@ def _criterion_components(behaviour: Behaviour) -> list[AnyCardComponent]:
         components.append(CardText(label="Given", text=criterion.description.given))
         components.append(CardText(label="When", text=criterion.description.when))
         components.append(CardText(label="Then", text=criterion.description.then))
+        components.append(
+            CardText(label="Grader", text=criterion.metric_fqn or "Not selected")
+        )
+        components.append(
+            CardText(
+                label="Parameters",
+                text=json.dumps(criterion.metric_args, sort_keys=True),
+            )
+        )
+        components.append(
+            CardOptionGroup(
+                options=[
+                    Option(
+                        id=OptionId(action="parameters", target=criterion.id),
+                        label="Set Grader parameters",
+                    )
+                ]
+            )
+        )
     return components
 
 
-def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+def criteria_screen(specification: Specification, message: str) -> ChoiceRequest:
     """The only per-card screen, and it earns it.
 
     Criteria are the one thing scoped to a single behaviour, so "chat about it" has to say
@@ -256,7 +278,7 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
     """
     cards: list[BehaviourCard] = []
 
-    for feature in profile.features:
+    for feature in specification.features:
         for behaviour in feature.behaviours:
             if behaviour.measured:
                 cards.append(
@@ -304,7 +326,7 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                             *_criterion_components(behaviour),
                         ],
                         selected=False,
-                        note="not selected — no criteria will be written",
+                        note="Not selected. Tasks cannot use these Criteria.",
                     )
                 )
 
@@ -322,7 +344,7 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
                 id=OptionId(action="continue"),
                 label="Continue",
                 primary=True,
-                enabled=_ready_through(profile, InterviewStep.CRITERIA),
+                enabled=_ready_through(specification, InterviewStep.CRITERIA),
             ),
         ],
     )
@@ -331,7 +353,7 @@ def criteria_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
 # ── step 3 · personas ──────────────────────────────────────────────────────
 
 
-def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
+def personas_screen(specification: Specification, message: str) -> ChoiceRequest:
     cards = [
         BehaviourCard(
             id=persona.id,
@@ -339,7 +361,7 @@ def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
             selected=True,
             components=[CardText(text=persona.description)],
         )
-        for persona in profile.personas
+        for persona in specification.personas
     ]
 
     return ChoiceRequest(
@@ -349,7 +371,7 @@ def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
         options=_three_replies(
             "Looks right",
             "Add one",
-            accept_enabled=_ready_through(profile, InterviewStep.PERSONAS),
+            accept_enabled=_ready_through(specification, InterviewStep.PERSONAS),
         ),
         instruction=FEEDBACK_INSTRUCTION,
     )
@@ -358,188 +380,138 @@ def personas_screen(profile: ProductProfile, message: str) -> ChoiceRequest:
 # ── step 4 · scenarios ───────────────────────────────────────────────────────
 
 
-def _coverage_group(profile: ProductProfile, scenario_id: str) -> CardOptionGroup:
-    scenario = profile.scenario(scenario_id)
-    covered = set(scenario.behaviour_refs) if scenario else set()
-    return CardOptionGroup(
-        label="Covers",
-        options=[
-            Option(
-                id=OptionId(action="cover", target=scenario_id, via=behaviour.id),
-                label=behaviour.name,
-                selected=behaviour.id in covered,
-                patch=_wizard_patch(
-                    f"scenarios[{scenario_id}].behaviour_refs",
-                    sorted(covered ^ {behaviour.id}),
-                ),
-            )
-            for behaviour in profile.measured_behaviours()
-        ],
-    )
-
-
-def _persona_group(profile: ProductProfile, scenario_id: str) -> CardOptionGroup:
-    scenario = profile.scenario(scenario_id)
-    running = set(scenario.persona_refs) if scenario else set()
-    return CardOptionGroup(
-        label="Run as",
-        options=[
-            Option(
-                id=OptionId(action="run", target=scenario_id, via=persona.id),
-                label=persona.name,
-                selected=persona.id in running,
-                patch=_wizard_patch(
-                    f"scenarios[{scenario_id}].persona_refs",
-                    sorted(running ^ {persona.id}),
-                ),
-            )
-            for persona in profile.personas
-        ],
-    )
-
-
-def _covers_a_selection(profile: ProductProfile, scenario: Scenario) -> bool:
-    """Does the scenario reference at least one currently selected behaviour?
-
-    `measured_behaviours()` is exactly that set. A scenario whose refs are all empty, unknown or unmeasured
-    covers nothing the experiment will measure — nothing rides along to make up the
-    difference — so it fails this test and the gate below stops the step.
-    """
-    return bool(
-        set(scenario.behaviour_refs) & {b.id for b in profile.measured_behaviours()}
-    )
-
-
-def _scenario_warnings(profile: ProductProfile) -> list[Warning]:
-    """The blocking gates. Each carries its own fixes where it can."""
-    warnings: list[Warning] = []
-
-    for behaviour in profile.uncovered():
-        fixes = [
-            Option(
-                id=OptionId(action="generate-scenario", via=behaviour.id),
-                label="Generate one",
-            )
-        ]
-        fixes += [
-            Option(
-                id=OptionId(action="cover", target=scenario.id, via=behaviour.id),
-                label=f"add to {scenario.id}",
-                patch=_wizard_patch(
-                    f"scenarios[{scenario.id}].behaviour_refs",
-                    sorted({*scenario.behaviour_refs, behaviour.id}),
-                ),
-            )
-            for scenario in profile.scenarios
-        ]
-        warnings.append(
-            Warning(
-                text=f"{behaviour.id} is covered by no scenario.",
-                source=WarningSource.DOCUMENT,
-                blocking=True,
-                options=fixes,
-            )
-        )
-
-    for scenario in profile.scenarios:
-        if not _covers_a_selection(profile, scenario):
-            # A scenario that measures no selected behaviour is a trial spent proving
-            # nothing. The fix is a click on the card's own "Covers" group already on screen,
-            # so no options.
-            warnings.append(
-                Warning(
-                    text=f"{scenario.id} covers no selected behaviour.",
-                    source=WarningSource.DOCUMENT,
-                    blocking=True,
-                )
-            )
-
-        if not scenario.persona_refs:
-            # The experiment schema declares persona_refs with minItems 1, so a scenario with
-            # every chip off produces a file the engine refuses to load.
-            warnings.append(
-                Warning(
-                    text=f"{scenario.id} has nobody to run it.",
-                    source=WarningSource.DOCUMENT,
-                    blocking=True,
-                )
-            )
-
-    return warnings
-
-
 def scenarios_screen(
-    profile: ProductProfile,
+    specification: Specification,
     message: str,
     available_fixture_names: list[str] | None = None,
 ) -> ChoiceRequest:
-    warnings = _scenario_warnings(profile)
-    # The gate reads the one readiness source, not the on-screen warnings. The warnings carry
-    # their own fixes and cover only what a person can act on here; readiness is the authoritative
-    # set the derived stage, finish and compile preflight all share, so the Continue this screen
-    # offers and the DONE the interview computes can never disagree — a wire-borne fault such as
-    # an out-of-range trial count or a dangling reference holds Continue even with no warning card.
-    readiness = profile_readiness(profile)
-    warnings.extend(
-        Warning(text=gap.message, source=WarningSource.DOCUMENT, blocking=True)
-        for gap in readiness
-        if gap.stage is not InterviewStep.SCENARIOS
-    )
-    blocked = bool(readiness)
-    blocking_ids = (
-        {s.id for s in profile.scenarios if not s.persona_refs}
-        | {s.id for s in profile.scenarios if not _covers_a_selection(profile, s)}
-        | {s.id for b in profile.uncovered() for s in profile.scenarios_covering(b.id)}
-    )
-
-    cards = [
-        ScenarioCard(
-            id=scenario.id,
-            title=scenario.name,
-            blocking=scenario.id in blocking_ids,
-            trials=len(scenario.persona_refs) * scenario.num_trials,
-            components=[
-                CardText(text=scenario.description),
-                _coverage_group(profile, scenario.id),
-                _persona_group(profile, scenario.id),
-                CardNumberField(
-                    label="Trials",
-                    id=OptionId(action="trials", target=scenario.id),
-                    value=scenario.num_trials,
-                    min=TRIALS_MIN,
-                    max=TRIALS_MAX,
-                ),
-                CardUploadField(
-                    label="Files sent to your system",
-                    id=OptionId(action="files", target=scenario.id),
-                    value=list(scenario.fixtures),
-                    available=list(available_fixture_names or []),
-                ),
-            ],
+    gaps = specification_readiness(specification)
+    cards = []
+    for task in specification.tasks:
+        scenario = specification.scenario(task.scenario_ref)
+        cards.append(
+            ScenarioCard(
+                id=task.id,
+                title=task.id,
+                trials=task.num_trials,
+                components=[
+                    CardText(
+                        text=scenario.description if scenario else "Select a Scenario."
+                    ),
+                    CardOptionGroup(
+                        label="Scenario",
+                        options=[
+                            Option(
+                                id=OptionId(
+                                    action="scenario", target=task.id, via=item.id
+                                ),
+                                label=item.name,
+                                selected=item.id == task.scenario_ref,
+                                patch=_wizard_patch(
+                                    f"tasks[{task.id}].scenario_ref", item.id
+                                ),
+                            )
+                            for item in specification.scenarios
+                        ],
+                    ),
+                    CardOptionGroup(
+                        label="Persona",
+                        options=[
+                            Option(
+                                id=OptionId(action="run", target=task.id, via=item.id),
+                                label=item.name,
+                                selected=item.id == task.persona_ref,
+                                patch=_wizard_patch(
+                                    f"tasks[{task.id}].persona_ref", item.id
+                                ),
+                            )
+                            for item in specification.personas
+                        ],
+                    ),
+                    CardOptionGroup(
+                        label="Criteria",
+                        options=[
+                            Option(
+                                id=OptionId(action="cover", target=task.id, via=c.id),
+                                label=c.name
+                                if b.measured
+                                else f"{c.name} (not measured)",
+                                selected=c.id in task.criterion_refs,
+                                patch=_wizard_patch(
+                                    f"tasks[{task.id}].criterion_refs",
+                                    sorted(set(task.criterion_refs) ^ {c.id}),
+                                ),
+                            )
+                            for b in specification.behaviours()
+                            for c in b.criteria
+                            if b.measured or c.id in task.criterion_refs
+                        ]
+                        + [
+                            Option(
+                                id=OptionId(action="cover", target=task.id, via=ref),
+                                label=f"{ref} (missing; remove this reference)",
+                                selected=True,
+                                patch=_wizard_patch(
+                                    f"tasks[{task.id}].criterion_refs",
+                                    [cid for cid in task.criterion_refs if cid != ref],
+                                ),
+                            )
+                            for ref in task.criterion_refs
+                            if specification.criterion(ref) is None
+                        ],
+                    ),
+                    CardNumberField(
+                        label="Trials",
+                        id=OptionId(action="trials", target=task.id),
+                        value=task.num_trials,
+                        min=TRIALS_MIN,
+                        max=TRIALS_MAX,
+                    ),
+                    CardUploadField(
+                        label="Files sent to your system",
+                        id=OptionId(action="files", target=task.id),
+                        value=list(task.fixtures),
+                        available=list(available_fixture_names or []),
+                    ),
+                ],
+                options=[
+                    Option(
+                        id=OptionId(action="copy-task", target=task.id),
+                        label="Copy Test Case",
+                    ),
+                    Option(
+                        id=OptionId(action="remove-task", target=task.id),
+                        label="Remove Test Case",
+                    ),
+                ],
+            )
         )
-        for scenario in profile.scenarios
-    ]
-
-    footer = f"Total: {format_trials(profile.trial_count())}"
-
     return ChoiceRequest(
         prompt=message,
         cards=cards,
         multi=True,
-        warnings=warnings,
-        footer=footer,
+        warnings=[
+            Warning(text=g.message, source=WarningSource.DOCUMENT, blocking=True)
+            for g in gaps
+        ],
+        footer=f"Total: {len(specification.tasks)} Test Cases · {format_trials(specification.trial_count())}",
         instruction=FEEDBACK_INSTRUCTION,
         options=[
             Option(id=OptionId(action="back"), label="← Back"),
             Option(id=OptionId(action="chat"), label="Chat about it"),
-            Option(id=OptionId(action="add"), label="I'll add one"),
+            Option(id=OptionId(action="add"), label="Add Scenario"),
+            *[
+                Option(
+                    id=OptionId(action="add-task", target=scenario.id),
+                    label=f"Add Test Case: {scenario.name}",
+                )
+                for scenario in specification.scenarios
+            ],
             Option(
                 id=OptionId(action="continue"),
                 label="Continue",
                 primary=True,
-                # A disabled Continue is still shown. `enabled` carries the distinction that
-                # a blocking warning alone could not: which control the gate is holding.
-                enabled=not blocked,
+                enabled=not gaps,
             ),
         ],
     )

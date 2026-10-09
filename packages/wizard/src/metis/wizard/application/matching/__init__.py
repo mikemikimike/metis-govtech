@@ -15,7 +15,7 @@ from metis.wizard.application.matching.matcher import (
     Embedder,
     EmbeddingMatcher,
     cosine,
-    match_profile,
+    match_specification,
     rematch,
 )
 
@@ -27,6 +27,6 @@ __all__ = [
     "EmbeddingMatcher",
     "cosine",
     "library_catalogue",
-    "match_profile",
+    "match_specification",
     "rematch",
 ]

@@ -16,10 +16,14 @@ afterEach(() => {
   api.respond = respond;
 });
 const state: InterviewState = {
-  profile: {
-    schema_version: 1,
-    product: { name: "Test", users: "", description: "", detail: "" },
+  specification: {
+    schema_version: 2,
+    id: "test",
+    runner_factory_ref:
+      "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
     tasks: [],
+    product: { name: "Test", users: "", description: "", detail: "" },
+    features: [],
     personas: [],
     scenarios: [],
   },

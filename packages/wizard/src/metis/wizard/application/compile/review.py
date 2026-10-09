@@ -1,22 +1,15 @@
-"""`ProductProfile` → `review.md`, the human-readable half of the output.
-
-`experiment.yaml` is what the engine runs; this is what a person reads. The difference that
-matters is that this keeps the behaviours nobody ticked. Those are the record of what was
-considered and deliberately not measured, which `experiment.yaml` has no way to express and
-no reason to.
-
-Like the compiler, this is a pure function of the profile — no interview, no step, no history.
-"""
+"""Render the complete Specification as a human-readable review, including dormant Criteria."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from metis.wizard.application.trials import format_trials
 
 if TYPE_CHECKING:
-    from metis.wizard.domain.profile import Behaviour, Criterion, ProductProfile
+    from metis.wizard.domain.specification import Behaviour, Criterion, Specification
 
 
 def _criterion_lines(criterion: Criterion) -> list[str]:
@@ -25,6 +18,7 @@ def _criterion_lines(criterion: Criterion) -> list[str]:
         f"    - **{criterion.name}** — given {criterion.description.given}, "
         f"when {criterion.description.when}, then {criterion.description.then}",
         f"      *measured by:* `{measured}`",
+        f"      *parameters:* `{json.dumps(criterion.metric_args, ensure_ascii=False, sort_keys=True)}`",
     ]
 
 
@@ -39,8 +33,8 @@ def _behaviour_lines(behaviour: Behaviour) -> list[str]:
     return lines
 
 
-def render_review(profile: ProductProfile, experiment_id: str) -> str:
-    product = profile.product
+def render_review(specification: Specification, experiment_id: str) -> str:
+    product = specification.product
     out: list[str] = [
         f"# {product.name} — evaluation review",
         "",
@@ -60,7 +54,7 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
         out += ["## How it works", "", product.detail, ""]
 
     out += ["## What should be true", ""]
-    for feature in profile.features:
+    for feature in specification.features:
         out += [f"### {feature.id} · {feature.name}", ""]
         if feature.description:
             out += [feature.description, ""]
@@ -69,40 +63,42 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
         out += [""]
 
     out += ["## Personas", ""]
-    for persona in profile.personas:
+    for persona in specification.personas:
         out += [f"- **{persona.name}** (`{persona.id}`) — {persona.description}"]
-    if not profile.personas:
+    if not specification.personas:
         out += ["_none_"]
     out += [""]
 
-    out += ["## Scenarios", ""]
-    for scenario in profile.scenarios:
-        covers = ", ".join(scenario.behaviour_refs) or "nothing"
-        runs = ", ".join(scenario.persona_refs) or "nobody"
+    out += ["## Test Cases", ""]
+    for task in specification.tasks:
+        scenario = specification.scenario(task.scenario_ref)
         out += [
-            f"### {scenario.name} (`{scenario.id}`)",
+            f"### {task.id}",
             "",
-            scenario.description,
+            scenario.description if scenario else "",
             "",
-            f"- *covers:* {covers}",
-            f"- *run as:* {runs}",
-            f"- *trials:* {scenario.num_trials}",
+            f"- Scenario: {task.scenario_ref}",
+            f"- Persona: {task.persona_ref}",
+            f"- Criteria: {', '.join(task.criterion_refs)}",
+            f"- Trials: {task.num_trials}",
+            f"- Files: {', '.join(task.fixtures)}",
+            "",
         ]
-        if scenario.fixtures:
-            out += [f"- *files:* {', '.join(scenario.fixtures)}"]
-        out += [""]
 
     # The same calculation the interview footer shows, so the document and the screen the
     # user decided on cannot disagree.
     out += [
         "## Trials",
         "",
-        format_trials(profile.trial_count()),
+        format_trials(specification.trial_count()),
         "",
     ]
 
     not_measured = [
-        b for feature in profile.features for b in feature.behaviours if not b.measured
+        b
+        for feature in specification.features
+        for b in feature.behaviours
+        if not b.measured
     ]
     if not_measured:
         out += [
@@ -118,8 +114,8 @@ def render_review(profile: ProductProfile, experiment_id: str) -> str:
     return "\n".join(out)
 
 
-def write_review(profile: ProductProfile, experiment_id: str, path: Path) -> str:
-    text = render_review(profile, experiment_id)
+def write_review(specification: Specification, experiment_id: str, path: Path) -> str:
+    text = render_review(specification, experiment_id)
     # encoding is explicit — write_text() otherwise falls back to the platform
     # locale encoding (cp1252 on Windows), and this text is arbitrary user- or
     # model-authored prose (product.description, criteria, personas) that can

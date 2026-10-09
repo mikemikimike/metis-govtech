@@ -5,10 +5,9 @@ Produces:
 1. A terminal summary table.
 2. The product evaluation report, as an HTML page and as JSON data.
 
-The report joins each metric result onto the product profile that asked for it, so a
-reader sees which behaviour is weak, and which persona or scenario is hard to test,
-rather than only which metric failed. Every number comes from a file the run already
-wrote; no model writes any of its text. A run with no product profile writes no report.
+The report joins each metric result to its Criterion in the Specification. A reader
+can see which Behaviour needs attention and which Persona or Scenario is hard to test. Every number comes from a file the run already
+wrote; no model writes any of its text. A run with no product specification writes no report.
 """
 
 from __future__ import annotations
@@ -122,11 +121,10 @@ def save_report(
 ) -> tuple[Path, Path] | None:
     """Write the product evaluation report, as a page and as data.
 
-    The report needs the product profile the run was planned against. `simulate` freezes
-    its whole input directory beside the results, so the profile is one level up from the
-    report directory. A run with no profile gets no report, and that is not an error.
+    The report reads `inputs/specification.yaml` from the run directory. `simulate`
+    freezes the input document and fixtures there. A run with no specification gets no report, and that is not an error.
 
-    :returns: The HTML path and the JSON path, or `None` when there is no profile.
+    :returns: The HTML path and the JSON path, or `None` when there is no specification.
     """
     target_dir = output_dir or RESULTS_DIR
     run_dir = target_dir.parent
@@ -134,7 +132,7 @@ def save_report(
     sources = load_report_sources(run_dir)
     if sources is None:
         return None
-    profile, experiment, persona_of, trial_outcomes = sources
+    specification, persona_of, trial_outcomes = sources
 
     d = durations or EvalDurations()
     timings = {
@@ -144,8 +142,7 @@ def save_report(
     latency = round(d.turn_metrics_seconds + d.session_metrics_seconds, 1) or None
 
     report = build_report(
-        profile,
-        experiment,
+        specification,
         [t.model_dump() for t in turn_results],
         persona_of=persona_of,
         session_metrics=[s.model_dump() for s in session_results]
@@ -250,7 +247,7 @@ def generate_report(
             console.print(f"  HTML report:  {html_path}")
             console.print(f"  Open with:    open {html_path}\n")
         else:
-            console.print("  Report:       not written (no profile.yaml)")
+            console.print("  Report:       not written (no specification.yaml)")
 
     return ReportResult(
         json_path=json_path,
@@ -275,6 +272,11 @@ def _convert_turn_results(eval_result: EvalResult) -> list[TurnReport]:
         for mr in tcr.metric_results:
             metrics_data.append(
                 TurnMetricResult(
+                    criterion_id=mr.criterion_id,
+                    metric_fqn=mr.metric_fqn,
+                    metric_args=mr.metric_args,
+                    task_id=mr.task_id,
+                    trial_index=mr.trial_index,
                     name=mr.name,
                     score=mr.score,
                     reason=mr.reason,
@@ -315,6 +317,11 @@ def _convert_session_results(
         for mr in scr.metric_results:
             metrics_out.append(
                 SessionMetricResult(
+                    criterion_id=mr.criterion_id,
+                    metric_fqn=mr.metric_fqn,
+                    metric_args=mr.metric_args,
+                    task_id=mr.task_id,
+                    trial_index=mr.trial_index,
                     name=mr.name,
                     score=mr.score,
                     reason=mr.reason,

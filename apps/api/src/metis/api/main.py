@@ -41,7 +41,7 @@ _OPENAPI_TAGS = [
             "Drive one stateless Wizard Interview. Start returns client-held state. "
             "For each turn, save the complete returned state, read its pending screen, and send "
             "that state with the matching request id and response. End can return another "
-            "pending screen. Compile or package the Profile after outcome is done."
+            "pending screen. Compile or package the Specification after outcome is done."
         ),
     }
 ]
@@ -79,7 +79,7 @@ def create_app(interview_handler: InterviewHandler | None = None) -> FastAPI:
     def _on_validation_error(
         _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
-        # A request or Profile that does not match its schema. Reported in the service error
+        # A request or Specification that does not match its schema. Reported in the service error
         # shape, not FastAPI's default body, so a client parses one failure format everywhere.
         error = ServiceError(code="validation_error", message=str(exc), retryable=False)
         return JSONResponse(error.model_dump(), status_code=422)

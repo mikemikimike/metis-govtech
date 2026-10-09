@@ -12,7 +12,7 @@ import { api } from "../transport/api.ts";
 import { downloadArchive } from "../download.ts";
 import {
   addFixtures,
-  fixturesForProfile,
+  fixturesForSpecification,
   InterviewRepository,
   emptyRecord,
   removeUnreferencedFixtures,
@@ -26,8 +26,12 @@ afterEach(() => {
 });
 
 const baseState = (): InterviewState => ({
-  profile: {
+  specification: {
     schema_version: 2,
+    id: "test",
+    runner_factory_ref:
+      "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+    tasks: [],
     product: { name: "", users: "", description: "", detail: "" },
     features: [],
     personas: [],
@@ -112,14 +116,19 @@ function formRequest(): FormRequest {
   };
 }
 
-const policyScenario = (fixtures: string[]) => ({
+const policyTask = (fixtures: string[]) => ({
   id: "S-1",
-  name: "Check policy",
+
   description: "Ask about one policy rule.",
-  behaviour_refs: [],
-  persona_refs: [],
+  scenario_ref: "S-1",
+  persona_ref: "P-1",
+  criterion_refs: [],
   fixtures,
   num_trials: 1,
+  max_turns: 20,
+  timeout_minutes: 15,
+  response_wait_ms: 300000,
+  max_run_retries: null,
 });
 
 test("runs an offline document start, reload, review, end and package flow", async () => {
@@ -148,9 +157,9 @@ test("runs an offline document start, reload, review, end and package flow", asy
     ...startState,
     pending: null,
     confirmed: false,
-    profile: {
-      ...startState.profile,
-      scenarios: [policyScenario(["policy.md"])],
+    specification: {
+      ...startState.specification,
+      tasks: [policyTask(["policy.md"])],
     },
   };
 
@@ -190,9 +199,9 @@ test("runs an offline document start, reload, review, end and package flow", asy
   const selectedState: InterviewState = {
     ...reviewState,
     pending: scenarioRequest("review-2", ["notes.txt"]),
-    profile: {
-      ...reviewState.profile,
-      scenarios: reviewState.profile.scenarios.map((scenario) => ({
+    specification: {
+      ...reviewState.specification,
+      tasks: reviewState.specification.tasks.map((scenario) => ({
         ...scenario,
         fixtures: ["notes.txt"],
       })),
@@ -292,7 +301,7 @@ test("runs an offline document start, reload, review, end and package flow", asy
     record.fixtures.map((file) => file.name),
     ["policy.md", "notes.txt"],
   );
-  assert.equal(fixturesForProfile(record).length, 0);
+  assert.equal(fixturesForSpecification(record).length, 0);
   const reloadedStart = await new InterviewRepository().read("offline-flow");
   assert.deepEqual(reloadedStart?.state.context.documents, initialDocuments);
   assert.deepEqual(
@@ -361,8 +370,8 @@ test("runs an offline document start, reload, review, end and package flow", asy
   ]);
   await repository.put(withFixture);
   const archive = await api.package(
-    withFixture.state.profile,
-    fixturesForProfile(withFixture),
+    withFixture.state.specification,
+    fixturesForSpecification(withFixture),
   );
   assert.equal(await archive.text(), "zip bytes");
   const downloads: string[] = [];
@@ -380,7 +389,7 @@ test("runs an offline document start, reload, review, end and package flow", asy
     } as unknown as Document,
     { createObjectURL: () => "blob:offline", revokeObjectURL: () => {} },
   );
-  assert.deepEqual(downloads, ["experiment.zip"]);
+  assert.deepEqual(downloads, ["specification.zip"]);
   assert.equal(withFixture.state.confirmed, true);
   assert.equal(withFixture.transcript.at(-1)?.kind, "interaction");
   await repository.delete("offline-flow");
@@ -394,9 +403,9 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
     ...startState,
     pending: null,
     confirmed: true,
-    profile: {
-      ...startState.profile,
-      scenarios: [policyScenario(["policy.pdf"])],
+    specification: {
+      ...startState.specification,
+      tasks: [policyTask(["policy.pdf"])],
     },
   };
 
@@ -497,8 +506,8 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
     ["policy.pdf", "unused.json"],
   );
   const archive = await api.package(
-    withFixture.state.profile,
-    fixturesForProfile(withFixture),
+    withFixture.state.specification,
+    fixturesForSpecification(withFixture),
   );
   assert.equal(await archive.text(), "zip bytes");
   const downloads: string[] = [];
@@ -516,7 +525,7 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
     } as unknown as Document,
     { createObjectURL: () => "blob:offline", revokeObjectURL: () => {} },
   );
-  assert.deepEqual(downloads, ["experiment.zip"]);
+  assert.deepEqual(downloads, ["specification.zip"]);
   assert.equal(withFixture.state.confirmed, true);
   assert.equal(withFixture.transcript.at(-1)?.kind, "interaction");
   await repository.delete("offline-plain-flow");

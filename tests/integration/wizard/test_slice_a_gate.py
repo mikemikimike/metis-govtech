@@ -1,12 +1,12 @@
-"""Slice A gate: a hand-written profile compiles to something the engine actually loads.
+"""Slice A gate: a hand-written specification compiles to something the engine actually loads.
 
 This is the end of the first build slice. No model call has happened anywhere in it — the
-profile is written by hand, the compiler is a pure function, and the engine's own validator
+specification is written by hand, the compiler is a pure function, and the engine's own validator
 is the judge. If this passes, the output contract is proven before anything upstream of it
 exists.
 
-`_validate_inputs` is the engine's real load path, not a stand-in: it parses `experiment.yaml`
-through `Experiment`, checks persona references resolve, checks every fixture file is present,
+`_validate_inputs` is the engine's real load path, not a stand-in: it parses `specification.yaml`
+through `Specification`, checks persona references resolve, checks every fixture file is present,
 and imports every metric FQN via `importlib` to confirm it is a real metric class. That last
 part is the one that matters most here — metric FQNs are strings until run time, so a typo in
 a compiled file is invisible until something tries to import it.
@@ -20,29 +20,29 @@ from pathlib import Path
 import pytest
 import yaml
 
-from metis.wizard import ProductProfile, SpecificationFixture, package_specification
+from metis.wizard import Specification, SpecificationFixture, package_specification
 from metis.wizard.application.compile import (
     write_experiment,
     write_review,
 )
-from tests.fixtures.wizard.profiles import CITATION_METRIC, research_assistant
+from tests.fixtures.wizard.specifications import CITATION_METRIC, research_assistant
 
 EXPERIMENT_ID = "research-assistant"
 
 
 def _input_dir(tmp_path: Path) -> Path:
-    """Compile a profile into the directory layout the engine reads.
+    """Compile a specification into the directory layout the engine reads.
 
-    The engine's input directory is `experiment.yaml` plus a `fixtures/` folder — there is
+    The engine's input directory is `specification.yaml` plus a `fixtures/` folder — there is
     no separate personas file, because personas are inline.
     """
-    profile = research_assistant()
-    write_experiment(profile, EXPERIMENT_ID, tmp_path / "experiment.yaml")
-    write_review(profile, EXPERIMENT_ID, tmp_path / "review.md")
+    specification = research_assistant()
+    write_experiment(specification, EXPERIMENT_ID, tmp_path / "specification.yaml")
+    write_review(specification, EXPERIMENT_ID, tmp_path / "review.md")
 
     fixtures = tmp_path / "fixtures"
     fixtures.mkdir()
-    for scenario in profile.scenarios:
+    for scenario in specification.tasks:
         for name in scenario.fixtures:
             (fixtures / name).write_text("stand-in fixture\n")
 
@@ -57,7 +57,7 @@ def test_the_engine_loads_the_compiled_experiment(tmp_path: Path) -> None:
     # `_validate_inputs` calls sys.exit(1) on any problem, so reaching the end is the pass.
     _validate_inputs(input_dir)
 
-    assert (input_dir / "experiment.yaml").is_file()
+    assert (input_dir / "specification.yaml").is_file()
     assert (input_dir / "review.md").is_file()
 
 
@@ -70,7 +70,7 @@ def test_the_gate_would_catch_an_unimportable_metric(tmp_path: Path) -> None:
     from metis.engine.cli import _validate_inputs
 
     input_dir = _input_dir(tmp_path)
-    experiment = input_dir / "experiment.yaml"
+    experiment = input_dir / "specification.yaml"
     original = experiment.read_text()
     # The metrics' old home, deleted when they moved to metis-library. Deliberately dead —
     # an experiment compiled before the move names this and must fail loudly. Sourced from
@@ -87,39 +87,48 @@ def test_the_gate_would_catch_an_unimportable_metric(tmp_path: Path) -> None:
     assert exit_info.value.code == 1
 
 
-def test_the_manual_profile_package_passes_the_engine_input_gate(
+def test_the_manual_specification_package_passes_the_engine_input_gate(
     tmp_path: Path,
     repo_root: Path,
 ) -> None:
-    """The web transform's shared Profile produces the complete runnable package."""
+    """The web transform's shared Specification produces the complete runnable package."""
     from metis.engine.cli import _validate_inputs
 
-    profile_path = repo_root / "tests/fixtures/wizard/manual_profile.json"
-    profile = ProductProfile.model_validate(json.loads(profile_path.read_text()))
+    specification_path = repo_root / "tests/fixtures/wizard/manual_specification.json"
+    specification = Specification.model_validate(
+        json.loads(specification_path.read_text())
+    )
     archive_bytes = package_specification(
-        profile,
+        specification,
         [
             SpecificationFixture("policy.pdf", io.BytesIO(b"policy")),
             SpecificationFixture("notes.txt", io.BytesIO(b"notes")),
         ],
     )
-    archive = tmp_path / "experiment.zip"
+    archive = tmp_path / "specification.zip"
     archive.write_bytes(archive_bytes)
 
     extracted = tmp_path / "extracted"
     with zipfile.ZipFile(archive) as specification:
         assert set(specification.namelist()) == {
-            "experiment.yaml",
-            "profile.yaml",
+            "specification.yaml",
             "fixtures/",
             "fixtures/notes.txt",
             "fixtures/policy.pdf",
         }
         specification.extractall(extracted)
 
-    experiment = yaml.safe_load((extracted / "experiment.yaml").read_text())
+    from metis.engine.simulation.types import Specification as EngineSpecification
+
+    experiment = yaml.safe_load((extracted / "specification.yaml").read_text())
+    assert [task["id"] for task in experiment["tasks"]] == [
+        "TC-001",
+        "TC-002",
+        "TC-003",
+    ]
     metrics = {
-        scenario["id"]: scenario["metric_refs"] for scenario in experiment["scenarios"]
+        scenario.id: [ref.fqn for ref in scenario.metric_refs]
+        for scenario in EngineSpecification.model_validate(experiment).resolved_tasks()
     }
     assert metrics == {
         "supported-answer": [

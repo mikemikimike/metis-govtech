@@ -1,4 +1,4 @@
-"""Applying patches to the profile.
+"""Applying patches to the specification.
 
 The order of the checks is the whole design:
 
@@ -29,14 +29,15 @@ from pydantic import ValidationError
 from metis.wizard.domain import materializer, paths
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import owner_of
-from metis.wizard.domain.profile import (
+from metis.wizard.domain.specification import (
     Behaviour,
     Criterion,
     Feature,
     Persona,
-    ProductProfile,
     Scenario,
-    collect_profile_ids,
+    Specification,
+    Task,
+    collect_specification_ids,
 )
 
 if TYPE_CHECKING:
@@ -49,6 +50,7 @@ _LIST_TYPES: dict[str, type] = {
     "criteria": Criterion,
     "personas": Persona,
     "scenarios": Scenario,
+    "tasks": Task,
 }
 
 
@@ -130,12 +132,12 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
             "behaviours": {"id", "name", "description", "criteria"},
             "criteria": {"id", "name", "description"},
             "personas": {"id", "name", "description"},
+            "tasks": {"id", "scenario_ref", "persona_ref", "criterion_refs"},
             "scenarios": {
                 "id",
                 "name",
                 "description",
-                "behaviour_refs",
-                "persona_refs",
+                "tasks",
             },
         }.get(field_name)
         if allowed is not None:
@@ -160,7 +162,7 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
 
 
 def _apply_one(
-    profile: ProductProfile,
+    specification: Specification,
     patch: Patch,
     *,
     issued_ids: set[str],
@@ -169,8 +171,8 @@ def _apply_one(
 ) -> None:
     # A model can pair a right, unique behaviour id with a wrong feature ancestor; correct the
     # ancestor against the behaviour it names before resolving. See `paths.normalise`.
-    path = paths.normalise(profile, patch.path)
-    parent, segment = paths.resolve_parent(profile, path)
+    path = paths.normalise(specification, patch.path)
+    parent, segment = paths.resolve_parent(specification, path)
 
     if patch.op is PatchOp.SET:
         if segment.key is None:
@@ -194,7 +196,7 @@ def _apply_one(
         value = patch.value
         if _draft(value, "FeatureDraft") and segment.field == "features":
             materializer.add_feature(
-                profile,
+                specification,
                 value,
                 patch.origin,
                 issued_ids=issued_ids,
@@ -204,7 +206,7 @@ def _apply_one(
         if _draft(value, "BehaviourDraft") and segment.field == "behaviours":
             items.append(
                 materializer.add_behaviour(
-                    profile,
+                    specification,
                     value,
                     patch.origin,
                     issued_ids=issued_ids,
@@ -218,7 +220,7 @@ def _apply_one(
                     f"{patch.path!r}: criteria has no behaviour parent."
                 )
             materializer.add_criterion(
-                profile,
+                specification,
                 parent,
                 value,
                 patch.origin,
@@ -228,7 +230,7 @@ def _apply_one(
             return
         if _draft(value, "PersonaDraft") and segment.field == "personas":
             materializer.add_persona(
-                profile,
+                specification,
                 value,
                 patch.origin,
                 issued_ids=issued_ids,
@@ -237,7 +239,17 @@ def _apply_one(
             return
         if _draft(value, "ScenarioDraft") and segment.field == "scenarios":
             materializer.add_scenario(
-                profile,
+                specification,
+                value,
+                patch.origin,
+                issued_ids=issued_ids,
+                user_typed=user_typed,
+                allowed_fixture_names=allowed_fixture_names,
+            )
+            return
+        if _draft(value, "TaskDraft") and segment.field == "tasks":
+            materializer.add_task(
+                specification,
                 value,
                 patch.origin,
                 issued_ids=issued_ids,
@@ -267,7 +279,7 @@ def _apply_one(
 
 
 def apply(
-    profile: ProductProfile,
+    specification: Specification,
     patches: list[Patch],
     *,
     issued_ids: set[str] | None = None,
@@ -281,7 +293,11 @@ def apply(
     is guaranteed not to conflict (see `multi`), and suggestion chips are one at a time.
     """
     result = ApplyResult()
-    issued_ids = issued_ids if issued_ids is not None else collect_profile_ids(profile)
+    issued_ids = (
+        issued_ids
+        if issued_ids is not None
+        else collect_specification_ids(specification)
+    )
 
     for patch in patches:
         reason = _check(patch)
@@ -290,7 +306,7 @@ def apply(
             continue
         try:
             _apply_one(
-                profile,
+                specification,
                 patch,
                 issued_ids=issued_ids,
                 user_typed=user_typed,
@@ -334,12 +350,12 @@ def sanitise(patches: Sequence[Any]) -> list[Patch]:
 
 
 def validate_model_patches(
-    profile: ProductProfile,
+    specification: Specification,
     patches: Sequence[Any],
     *,
     allowed_fixture_names: set[str] | None = None,
 ) -> None:
-    """Validate model patch values without touching the real profile.
+    """Validate model patch values without touching the real specification.
 
     `Patch.value` is necessarily `Any`: its shape depends on the path. Structured output
     therefore validates only the patch envelope. Applying to a deep copy closes that gap and
@@ -348,10 +364,10 @@ def validate_model_patches(
     Policy and path rejections remain the applier's concern. They describe something the
     wizard refuses or cannot locate, not malformed structured output.
     """
-    candidate = profile.model_copy(deep=True)
-    issued_ids = collect_profile_ids(candidate)
+    candidate = specification.model_copy(deep=True)
+    issued_ids = collect_specification_ids(candidate)
     user_typed: set[str] = set()
-    previous_persona_counts = _persona_description_counts(profile)
+    previous_persona_counts = _persona_description_counts(specification)
 
     for patch in sanitise(patches):
         if _check(patch) is not None:
@@ -366,7 +382,7 @@ def validate_model_patches(
             )
             # Assignment itself is not validated on Pydantic models. Rebuilding after every
             # patch catches scalar SETs and list-shaped values as well as nested model errors.
-            candidate = ProductProfile.model_validate(
+            candidate = Specification.model_validate(
                 candidate.model_dump(mode="python", warnings=False)
             )
         except paths.PathError:
@@ -400,17 +416,17 @@ def _normalise_prose(value: str) -> str:
     return " ".join(value.split()).casefold()
 
 
-def _persona_descriptions(profile: ProductProfile) -> dict[str, list[str]]:
+def _persona_descriptions(specification: Specification) -> dict[str, list[str]]:
     descriptions: dict[str, list[str]] = {}
-    for persona in profile.personas:
+    for persona in specification.personas:
         descriptions.setdefault(_normalise_prose(persona.description), []).append(
             persona.id
         )
     return descriptions
 
 
-def _persona_description_counts(profile: ProductProfile) -> dict[str, int]:
+def _persona_description_counts(specification: Specification) -> dict[str, int]:
     return {
         description: len(ids)
-        for description, ids in _persona_descriptions(profile).items()
+        for description, ids in _persona_descriptions(specification).items()
     }

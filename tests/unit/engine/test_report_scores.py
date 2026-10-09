@@ -7,19 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from metis.engine.reporting import _report
-
-
-@pytest.fixture(autouse=True)
-def _stub_display_names(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Skip the real metric-class import; only the display name matters here."""
-    monkeypatch.setattr(
-        _report,
-        "display_names",
-        lambda fqns: ({fqn: "Metric1" for fqn in fqns}, []),
-    )
 
 
 def _metric_row(session_id: str, scenario_id: str, *, success: bool) -> dict[str, Any]:
@@ -29,6 +17,9 @@ def _metric_row(session_id: str, scenario_id: str, *, success: bool) -> dict[str
         "metrics": [
             {
                 "name": "Metric1",
+                "criterion_id": "c1",
+                "task_id": "TC-001",
+                "trial_index": 1,
                 "success": success,
                 "skipped": False,
                 "reason": "" if success else "nope",
@@ -37,11 +28,20 @@ def _metric_row(session_id: str, scenario_id: str, *, success: bool) -> dict[str
     }
 
 
-def _profile() -> dict[str, Any]:
+def _specification() -> dict[str, Any]:
     return {
         "product": {"name": "Test Product"},
+        "tasks": [
+            {
+                "id": "TC-001",
+                "scenario_ref": "s1",
+                "persona_ref": "p1",
+                "num_trials": 2,
+                "criterion_refs": ["c1"],
+            }
+        ],
         "personas": [{"id": "p1"}],
-        "scenarios": [{"id": "s1", "behaviour_refs": ["b1"]}],
+        "scenarios": [{"id": "s1"}],
         "features": [
             {
                 "id": "t1",
@@ -66,20 +66,6 @@ def _profile() -> dict[str, Any]:
     }
 
 
-def _experiment() -> dict[str, Any]:
-    return {
-        "personas": [{"id": "p1"}],
-        "scenarios": [
-            {
-                "id": "s1",
-                "persona_refs": ["p1"],
-                "num_trials": 2,
-                "metric_refs": ["pkg.metrics.Metric1"],
-            }
-        ],
-    }
-
-
 class TestScores:
     def test_metric_pass_rate_sums_the_scenario_axis(self) -> None:
         """3 of 4 metric results pass, matching the 75% shown on axes.S."""
@@ -90,8 +76,7 @@ class TestScores:
             _metric_row("sess-1", "s1", success=False),
         ]
         report = _report.build_report(
-            _profile(),
-            _experiment(),
+            _specification(),
             test_results,
             persona_of={"sess-1": "p1"},
         )
@@ -109,8 +94,7 @@ class TestScores:
             {"scenario": "s1", "stopReason": "max_turns_timeout"},
         ]
         report = _report.build_report(
-            _profile(),
-            _experiment(),
+            _specification(),
             [],
             persona_of={},
             trial_outcomes=trial_outcomes,
@@ -123,7 +107,7 @@ class TestScores:
         }
 
     def test_no_data_leaves_rate_and_status_blank(self) -> None:
-        report = _report.build_report(_profile(), _experiment(), [], persona_of={})
+        report = _report.build_report(_specification(), [], persona_of={})
         assert report["scores"]["metricPassRate"] == {
             "rate": None,
             "pass": 0,

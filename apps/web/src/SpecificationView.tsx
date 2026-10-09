@@ -1,9 +1,9 @@
-// The document view. This is the component in the door that reads `ProductProfile` and knows
+// The document view. This is the component in the door that reads `Specification` and knows
 // its shape — features hold behaviours hold criteria; personas and scenarios are flat lists. The
 // conversation stays shape-only so this can hold all of the interview's domain knowledge in one
-// place. Presentation remains read-only; the conversation owns every Profile mutation.
+// place. Presentation remains read-only; the conversation owns every Specification mutation.
 //
-// It is read-only where it counts: no control here changes the profile — every edit still
+// It is read-only where it counts: no control here changes the specification — every edit still
 // originates in the conversation. The only controls are presentation: disclosures that fold a
 // feature open or closed, and a control to collapse the whole pane — both view state, not document
 // state.
@@ -16,8 +16,8 @@
 // the same five stages in the same order, and a second stepper in the conversation would be a
 // second drawing of what is already on screen.
 //
-// It is a live mirror of the profile the package built, drawn fresh each time the payload arrives.
-// It holds no persistent change history and no whole-profile diff. Each product value remembers
+// It is a live mirror of the specification the package built, drawn fresh each time the payload arrives.
+// It holds no persistent change history and no whole-specification diff. Each product value remembers
 // only the string it last received while mounted, which is enough to mark an arrival or correction;
 // once that reveal has finished, the text looks like content that arrived ten turns ago.
 
@@ -25,21 +25,13 @@ import { useState } from "react";
 import type {
   Behaviour,
   MetricSpec,
-  ProductProfile,
+  Specification,
   Feature,
   WizardRequest,
 } from "./transport/api";
 import { PanelRight } from "lucide-react";
 import { RevealText } from "./RevealText";
-import {
-  Button,
-  Chevron,
-  Chip,
-  cn,
-  countTrials,
-  formatTrials,
-  Mono,
-} from "./ui";
+import { Button, Chevron, Chip, cn, formatTrials, Mono } from "./ui";
 
 // ── where the interview has got to ───────────────────────────────────────────
 
@@ -93,8 +85,8 @@ const WRITING_TARGET: Record<string, WritingTarget> = {
   personas: "scenarios",
 };
 
-export function Profile({
-  profile,
+export function SpecificationView({
+  specification,
   position,
   interviewStep,
   busy,
@@ -108,7 +100,7 @@ export function Profile({
   onDownload,
   done,
 }: {
-  profile: ProductProfile;
+  specification: Specification;
   position?: StepPosition | null;
   interviewStep?: string;
   busy?: boolean;
@@ -123,8 +115,8 @@ export function Profile({
   onFinish?: () => void;
   onDownload?: () => void;
 }) {
-  const { product } = profile;
-  const { features } = profile;
+  const { product } = specification;
+  const { features } = specification;
   const writing =
     busy && interviewStep ? WRITING_TARGET[interviewStep] : undefined;
   const hasCriteria = features.some((feature) =>
@@ -272,10 +264,10 @@ export function Profile({
 
           <Section
             title="Personas"
-            count={profile.personas.length}
+            count={specification.personas.length}
             writing={writing === "personas"}
           >
-            {profile.personas.length > 0 ? (
+            {specification.personas.length > 0 ? (
               // Each persona leads with its name and is anchored by a marker at the left edge, so a
               // run of them is countable at a glance rather than read to be counted. The two were
               // previously the same weight — a muted id above a full-strength paragraph — which put
@@ -283,7 +275,7 @@ export function Profile({
               // The name now carries the foreground and the description recedes behind it. The
               // description stays whole: a persona is judged on what it says, not on its name.
               <ul className="flex flex-col gap-4">
-                {profile.personas.map((p) => (
+                {specification.personas.map((p) => (
                   <li key={p.id} className="animate-arrive flex gap-3">
                     <span
                       aria-hidden
@@ -304,89 +296,49 @@ export function Profile({
           </Section>
 
           <Section
-            title="Scenarios"
-            count={profile.scenarios.length}
+            title="Test Cases"
+            count={specification.tasks.length}
             writing={writing === "scenarios"}
           >
-            {profile.scenarios.length > 0 ? (
+            {specification.scenarios.length > 0 ? (
               <div className="flex flex-col gap-3">
                 <ul className="flex flex-col gap-4">
-                  {profile.scenarios.map((s) => (
+                  {specification.tasks.map((task) => (
                     <li
-                      key={s.id}
+                      key={task.id}
                       className="animate-arrive flex flex-col gap-2"
                     >
-                      {/* No visible id. A behaviour's id is referenced — a scenario says which
-                        behaviours it covers — but nothing in the pane ever points at a scenario,
-                        so drawing `S-1` beside each one spent a column on a handle no reader
-                        needs. It is still stamped on the compiled experiment, where it is what
-                        results are traced back through. */}
-                      <h3 className="font-medium text-foreground">{s.name}</h3>
-                      <p className="text-foreground">{s.description}</p>
-                      {/* A scenario's metadata answers three separate questions — what it checks,
-                        who runs it, and how much of it there is — so each is a labelled row, with
-                        the labels lined up in a fixed left column and the values reading down a
-                        single column beside them. The three-column grid that stood here spread the
-                        same three answers across the full pane width, which left each value marooned
-                        under a header far from the others; stacked as rows they stay close to the
-                        description they belong to and the labels form one edge to read down.
-
-                        The label column is `auto`, so it sizes to the longest label and the values
-                        share one left edge regardless of pane width — no fixed width to re-tune when
-                        a label is renamed. On a pane dragged narrow the value cell wraps under its
-                        own label rather than under the description. */}
+                      <h3 className="font-medium text-foreground">{task.id}</h3>
+                      <p>
+                        {
+                          specification.scenarios.find(
+                            (s) => s.id === task.scenario_ref,
+                          )?.description
+                        }
+                      </p>
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
-                        <ScenarioRow label="Behaviours">
-                          {s.behaviour_refs.length > 0 ? (
-                            s.behaviour_refs.map((ref) => (
-                              <Chip key={ref}>{ref}</Chip>
-                            ))
-                          ) : (
-                            <span className="text-muted-foreground">None</span>
-                          )}
+                        <ScenarioRow label="Scenario">
+                          <Chip>
+                            {specification.scenarios.find(
+                              (s) => s.id === task.scenario_ref,
+                            )?.name ?? task.scenario_ref}
+                          </Chip>
                         </ScenarioRow>
-                        <ScenarioRow label="Personas">
-                          {s.persona_refs.length > 0 ? (
-                            s.persona_refs.map((ref) => (
-                              <Chip key={ref}>{ref}</Chip>
-                            ))
-                          ) : (
-                            <span className="text-muted-foreground">None</span>
-                          )}
+                        <ScenarioRow label="Persona">
+                          <Chip>{task.persona_ref}</Chip>
                         </ScenarioRow>
-                        {/* The trial total is the whole of the count worth stating. The per-persona
-                          trial count was shown alongside it and said nothing extra: the total *is*
-                          that per-persona count times personas, and the personas are named in the
-                          row directly above, so "3 per persona, 3 total" was the same fact written
-                          twice.
-
-                          The total is plain text, not a chip: a chip marks something the profile
-                          refers to by name — a behaviour, a persona, a file — and a total refers to
-                          nothing, so bordering it would imply it could be looked up. Files stay chips
-                          for exactly that reason, and share the row with the total behind a faint dot
-                          separator; they simply do not appear when there are none. */}
-                        <ScenarioRow label="Experiment configuration">
-                          {/* py-0.5 matches the chip's own vertical padding so the trial total and the
-                            file chips sit on one line under `items-start` — without it the padding-
-                            less text rode above the chip. */}
-                          <span className="py-0.5 text-muted-foreground">
-                            {formatTrials(
-                              countTrials(s.persona_refs.length, s.num_trials),
-                            )}
-                          </span>
-                          {s.fixtures.length > 0 && (
-                            <>
-                              <span
-                                aria-hidden
-                                className="py-0.5 text-muted-foreground/40"
-                              >
-                                ·
-                              </span>
-                              {s.fixtures.map((file) => (
-                                <Chip key={file}>{file}</Chip>
-                              ))}
-                            </>
-                          )}
+                        <ScenarioRow label="Criteria">
+                          {task.criterion_refs.map((ref) => (
+                            <Chip key={ref}>{ref}</Chip>
+                          ))}
+                        </ScenarioRow>
+                        <ScenarioRow label="Trials">
+                          {formatTrials(task.num_trials)}
+                        </ScenarioRow>
+                        <ScenarioRow label="Files">
+                          {task.fixtures.map((file) => (
+                            <Chip key={file}>{file}</Chip>
+                          ))}
                         </ScenarioRow>
                       </div>
                     </li>
@@ -395,13 +347,8 @@ export function Profile({
                 <div className="flex justify-end border-t border-border pt-2 text-sm text-muted-foreground">
                   Total:{" "}
                   {formatTrials(
-                    profile.scenarios.reduce(
-                      (total, scenario) =>
-                        total +
-                        countTrials(
-                          scenario.persona_refs.length,
-                          scenario.num_trials,
-                        ),
+                    specification.tasks.reduce(
+                      (total, task) => total + task.num_trials,
                       0,
                     ),
                   )}
@@ -414,7 +361,7 @@ export function Profile({
         </div>
       </div>
 
-      <ProfileFooter
+      <SpecificationFooter
         done={done}
         busy={busy}
         onFinish={onFinish}
@@ -427,7 +374,7 @@ export function Profile({
 // The pane's foot owns the one output action. Before completion it asks the API to finish the
 // remaining interview and download the result. After completion it downloads the current result
 // without doing more interview work.
-function ProfileFooter({
+function SpecificationFooter({
   done,
   busy,
   onFinish,
@@ -655,7 +602,7 @@ function ScenarioRow({
 
 // Each feature is a disclosure: the header toggles its behaviours open and closed, so a long
 // document collapses to a scannable list of feature names. Note this toggle is *view* state
-// only: it opens and closes a section, it never edits the profile, so the document view stays
+// only: it opens and closes a section, it never edits the specification, so the document view stays
 // read-only in the sense that matters — nothing here changes what the package built.
 function FeatureView({
   feature,
@@ -672,7 +619,7 @@ function FeatureView({
   // How much of this feature is actually being measured. A bare total said the feature holds two
   // behaviours; it did not say that only one of them was ticked, which was left to the dormant
   // rows' opacity alone — easy to miss, and the fraction is the number that decides whether the
-  // profile is thorough enough. New Behaviour rows start selected, and the fraction changes as
+  // specification is thorough enough. New Behaviour rows start selected, and the fraction changes as
   // the user clears or restores them.
   const measured = feature.behaviours.filter((b) => b.measured).length;
   return (

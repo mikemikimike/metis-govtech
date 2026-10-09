@@ -19,6 +19,7 @@ from metis.wizard.contracts.interview_state import (
     Perspective,
 )
 from metis.wizard.domain.permissions import InterviewStep
+from metis.wizard.domain.specification import Specification
 
 
 class InterviewStartRequest(BaseModel):
@@ -93,7 +94,7 @@ class InterviewErrorCode(StrEnum):
 
 
 class MissingDataCode(StrEnum):
-    """Stable codes for gaps that stop a Profile from being runnable."""
+    """Stable codes for gaps that stop a Specification from being runnable."""
 
     PRODUCT_INCOMPLETE = "product_incomplete"
     BEHAVIOURS_INCOMPLETE = "behaviours_incomplete"
@@ -109,7 +110,7 @@ class MissingDataCode(StrEnum):
 
 
 class MissingData(BaseModel):
-    """One structured reason a Profile is not yet runnable."""
+    """One structured reason a Specification is not yet runnable."""
 
     code: MissingDataCode
     stage: InterviewStep
@@ -148,12 +149,12 @@ InterviewResult: TypeAlias = Annotated[
 
 
 class CompileResult(BaseModel):
-    """The two YAML strings returned by compilation, keyed by their file names."""
+    """The compiled `specification.yaml` string and the Specification with assigned Task IDs."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    profile_yaml: str = Field(alias="profile.yaml")
-    experiment_yaml: str = Field(alias="experiment.yaml")
+    specification_yaml: str = Field(alias="specification.yaml")
+    specification: Specification
 
 
 __all__ = [

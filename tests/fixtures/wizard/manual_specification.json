@@ -1,0 +1,175 @@
+{
+  "schema_version": 2,
+  "id": "manual-research",
+  "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+  "product": {
+    "name": "manual-research",
+    "description": "Check research answers and recovery.",
+    "users": "The personas defined in this manual experiment.",
+    "detail": ""
+  },
+  "features": [
+    {
+      "id": "EP-1",
+      "name": "Manual experiment",
+      "description": "Check research answers and recovery.",
+      "behaviours": [
+        {
+          "id": "EB-1",
+          "name": "supported-answer: analyst",
+          "description": "Ask for a supported answer.",
+          "measured": true,
+          "criteria": [
+            {
+              "id": "AC-1-1",
+              "name": "Synthesis faithfulness",
+              "description": {
+                "given": "the target agent is evaluated in scenario supported-answer with persona analyst",
+                "when": "Ask for a supported answer.",
+                "then": "the result is evaluated by Synthesis faithfulness: Checks that the answer uses its evidence."
+              },
+              "metric_fqn": "metis.library.metrics.SynthesisFaithfulnessMetric",
+              "metric_args": {}
+            },
+            {
+              "id": "AC-1-2",
+              "name": "Turn budget",
+              "description": {
+                "given": "the target agent is evaluated in scenario supported-answer with persona analyst",
+                "when": "Ask for a supported answer.",
+                "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
+              },
+              "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
+              "metric_args": {}
+            }
+          ]
+        },
+        {
+          "id": "EB-2",
+          "name": "supported-answer: director",
+          "description": "Ask for a supported answer.",
+          "measured": true,
+          "criteria": [
+            {
+              "id": "AC-2-1",
+              "name": "Synthesis faithfulness",
+              "description": {
+                "given": "the target agent is evaluated in scenario supported-answer with persona director",
+                "when": "Ask for a supported answer.",
+                "then": "the result is evaluated by Synthesis faithfulness: Checks that the answer uses its evidence."
+              },
+              "metric_fqn": "metis.library.metrics.SynthesisFaithfulnessMetric",
+              "metric_args": {}
+            },
+            {
+              "id": "AC-2-2",
+              "name": "Turn budget",
+              "description": {
+                "given": "the target agent is evaluated in scenario supported-answer with persona director",
+                "when": "Ask for a supported answer.",
+                "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
+              },
+              "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
+              "metric_args": {}
+            }
+          ]
+        },
+        {
+          "id": "EB-3",
+          "name": "short-recovery: analyst",
+          "description": "Recover after a failed search.",
+          "measured": true,
+          "criteria": [
+            {
+              "id": "AC-3-1",
+              "name": "Turn budget",
+              "description": {
+                "given": "the target agent is evaluated in scenario short-recovery with persona analyst",
+                "when": "Recover after a failed search.",
+                "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
+              },
+              "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
+              "metric_args": {}
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "personas": [
+    {
+      "id": "analyst",
+      "name": "analyst",
+      "description": "A careful policy analyst."
+    },
+    {
+      "id": "director",
+      "name": "director",
+      "description": "A time-poor director."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "",
+      "scenario_ref": "supported-answer",
+      "persona_ref": "analyst",
+      "fixtures": [
+        "policy.pdf"
+      ],
+      "num_trials": 2,
+      "criterion_refs": [
+        "AC-1-1",
+        "AC-1-2"
+      ],
+      "max_turns": 20,
+      "timeout_minutes": 15,
+      "response_wait_ms": 300000,
+      "max_run_retries": null
+    },
+    {
+      "id": "",
+      "scenario_ref": "supported-answer",
+      "persona_ref": "director",
+      "fixtures": [
+        "policy.pdf"
+      ],
+      "num_trials": 2,
+      "criterion_refs": [
+        "AC-2-1",
+        "AC-2-2"
+      ],
+      "max_turns": 20,
+      "timeout_minutes": 15,
+      "response_wait_ms": 300000,
+      "max_run_retries": null
+    },
+    {
+      "id": "",
+      "scenario_ref": "short-recovery",
+      "persona_ref": "analyst",
+      "fixtures": [
+        "notes.txt"
+      ],
+      "num_trials": 1,
+      "criterion_refs": [
+        "AC-3-1"
+      ],
+      "max_turns": 20,
+      "timeout_minutes": 15,
+      "response_wait_ms": 300000,
+      "max_run_retries": null
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "supported-answer",
+      "name": "supported-answer",
+      "description": "Ask for a supported answer."
+    },
+    {
+      "id": "short-recovery",
+      "name": "short-recovery",
+      "description": "Recover after a failed search."
+    }
+  ]
+}

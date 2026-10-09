@@ -2,13 +2,25 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  emptyManualExperiment,
+  emptyManualTestCase,
   keepReferencedFixtures,
-  manualFormProblems,
-  replacePersonaReference,
-  synthesizeManualProfile,
+  manualFieldErrors,
+  replaceTaskReference,
+  synthesizeManualSpecification,
   type ManualExperiment,
 } from "./manual.ts";
 
+const synthesisScorer = {
+  fqn: "metis.library.metrics.SynthesisFaithfulnessMetric",
+  name: "Synthesis faithfulness",
+  description: "Checks that the answer uses its evidence.",
+};
+const budgetScorer = {
+  fqn: "metis.library.metrics.TurnBudgetMetric",
+  name: "Turn budget",
+  description: "Checks that the conversation stays within its turn budget.",
+};
 const synthesis = {
   id: " manual-research ",
   description: " Check research answers and recovery. ",
@@ -17,130 +29,209 @@ const synthesis = {
     { id: "director", description: "A time-poor director." },
   ],
   scenarios: [
+    { id: " supported-answer ", description: " Ask for a supported answer. " },
+    { id: "short-recovery", description: "Recover after a failed search." },
+  ],
+  tasks: [
     {
-      id: " supported-answer ",
-      description: " Ask for a supported answer. ",
+      id: "",
+
+      scenario_ref: "supported-answer",
+      persona_ref: "analyst",
       num_trials: 2,
-      persona_refs: ["analyst", "director"],
       fixtures: ["policy.pdf"],
-      scorers: [
-        {
-          fqn: "metis.library.metrics.SynthesisFaithfulnessMetric",
-          name: "Synthesis faithfulness",
-          description: "Checks that the answer uses its evidence.",
-        },
-        {
-          fqn: "metis.library.metrics.TurnBudgetMetric",
-          name: "Turn budget",
-          description:
-            "Checks that the conversation stays within its turn budget.",
-        },
-      ],
+      scorers: [synthesisScorer, budgetScorer],
     },
     {
-      id: "short-recovery",
-      description: "Recover after a failed search.",
+      id: "",
+
+      scenario_ref: "supported-answer",
+      persona_ref: "director",
+      num_trials: 2,
+      fixtures: ["policy.pdf"],
+      scorers: [synthesisScorer, budgetScorer],
+    },
+    {
+      id: "",
+
+      scenario_ref: "short-recovery",
+      persona_ref: "analyst",
       num_trials: 1,
-      persona_refs: ["analyst"],
       fixtures: ["notes.txt"],
-      scorers: [
-        {
-          fqn: "metis.library.metrics.TurnBudgetMetric",
-          name: "Turn budget",
-          description:
-            "Checks that the conversation stays within its turn budget.",
-        },
-      ],
+      scorers: [budgetScorer],
     },
   ],
 } satisfies ManualExperiment;
 
-test("synthesizes the complete deterministic manual Profile", () => {
+test("explicit test cases produce the complete engine Specification", () => {
   const expected = JSON.parse(
     readFileSync(
       new URL(
-        "../../../tests/fixtures/wizard/manual_profile.json",
+        "../../../tests/fixtures/wizard/manual_specification.json",
         import.meta.url,
       ),
       "utf8",
     ),
   );
-  assert.deepEqual(synthesizeManualProfile(synthesis), expected);
-});
-
-test("the complete-form gate checks every manual row", () => {
+  assert.deepEqual(synthesizeManualSpecification(synthesis), expected);
   assert.deepEqual(
-    manualFormProblems(synthesis, [
+    manualFieldErrors(synthesis, [
       { name: "policy.pdf" },
       { name: "notes.txt" },
     ]),
     [],
   );
+});
 
+test("each test case selects an existing Persona and Scenario and valid execution settings", () => {
   const invalid: ManualExperiment = {
     id: "Not valid",
     description: " ",
     personas: [
       { id: "same", description: "ok" },
-      { id: "same", description: " " },
+      { id: "same", description: "" },
     ],
     scenarios: [
+      { id: "same", description: "" },
+      { id: "same", description: "ok" },
+    ],
+    tasks: [
       {
-        id: "same",
-        description: "",
+        ...emptyManualTestCase(),
         num_trials: 21,
-        persona_refs: ["missing"],
-        scorers: [],
+        persona_ref: "missing",
+        scenario_ref: "missing",
         fixtures: ["missing.pdf"],
-      },
-      {
-        id: "same",
-        description: "ok",
-        num_trials: 1,
-        persona_refs: [],
-        scorers: synthesis.scenarios[0]?.scorers ?? [],
-        fixtures: [],
       },
     ],
   };
-  const problems = manualFormProblems(invalid, []);
-  for (const part of [
-    "lowercase experiment ID",
-    "experiment description",
-    "every persona",
-    "unique persona IDs",
-    "every scenario",
-    "unique scenario IDs",
-    "1 to 20 trials",
-    "current persona",
-    "scorer",
-    "missing.pdf",
-  ]) {
-    assert.match(problems.join(" "), new RegExp(part));
-  }
+  const fields = manualFieldErrors(invalid, []).map((error) => error.field);
+  assert.deepEqual(fields, [
+    "experiment.id",
+    "experiment.description",
+    "persona.1.id",
+    "persona.1.description",
+    "scenario.0.description",
+    "scenario.1.id",
+    "scenario.0.tasks",
+    "scenario.1.tasks",
+    "task.0.persona",
+    "task.0.scenario",
+    "task.0.trials",
+    "task.0.scorers",
+    "task.0.files",
+  ]);
+  assert.deepEqual(
+    manualFieldErrors(emptyManualExperiment(), []).map((error) => error.field),
+    [
+      "experiment.id",
+      "experiment.description",
+      "personas",
+      "scenarios",
+      "tasks",
+    ],
+  );
 });
 
-test("persona references follow a changed or removed persona ID", () => {
-  const renamed = replacePersonaReference(
-    synthesis.scenarios,
-    "analyst",
+test("renaming and removing definitions preserve test case identity and other settings", () => {
+  const tasks = [{ ...synthesis.tasks[0], id: "TC-stable" }];
+  const renamed = replaceTaskReference(
+    replaceTaskReference(tasks, "persona_ref", "analyst", "reviewer"),
+    "scenario_ref",
+    "supported-answer",
+    "new-situation",
+  );
+  assert.deepEqual(renamed[0], {
+    ...tasks[0],
+    persona_ref: "reviewer",
+    scenario_ref: "new-situation",
+  });
+  assert.equal(
+    replaceTaskReference(renamed, "persona_ref", "reviewer", "")[0].persona_ref,
+    "",
+  );
+  assert.equal(
+    replaceTaskReference(renamed, "scenario_ref", "new-situation", "")[0]
+      .scenario_ref,
+    "",
+  );
+  assert.equal(
+    replaceTaskReference(renamed, "persona_ref", "", "new-person")[0]
+      .persona_ref,
     "reviewer",
   );
-  assert.deepEqual(renamed[0]?.persona_refs, ["reviewer", "director"]);
+});
+
+test("keeps fixture bytes until the last test case that uses them is removed", () => {
+  const files = ["policy.pdf", "notes.txt", "unused.csv"].map((name) => ({
+    name,
+    size: 1,
+    blob: new Blob(["x"]),
+  }));
   assert.deepEqual(
-    replacePersonaReference(renamed, "reviewer", "")[0]?.persona_refs,
-    ["director"],
+    keepReferencedFixtures(synthesis.tasks.slice(1), files).map((f) => f.name),
+    ["policy.pdf", "notes.txt"],
+  );
+  assert.deepEqual(
+    keepReferencedFixtures(synthesis.tasks.slice(2), files).map((f) => f.name),
+    ["notes.txt"],
   );
 });
 
-test("keeps only fixture bytes that a current Scenario uses", () => {
-  const files = [
-    { name: "policy.pdf", size: 1, blob: new Blob(["p"]) },
-    { name: "notes.txt", size: 1, blob: new Blob(["n"]) },
-    { name: "removed.csv", size: 1, blob: new Blob(["r"]) },
-  ];
+test("the same Persona and Scenario can have separate test cases and scorer settings", () => {
+  const experiment: ManualExperiment = structuredClone(synthesis);
+  const first = experiment.tasks[0];
+  const second = experiment.tasks[1];
+  first.id = "TC-first";
+  second.id = "TC-second";
+  second.persona_ref = first.persona_ref;
+  first.metric_args_text = { [budgetScorer.fqn]: '{"max_turns":4}' };
+  second.metric_args_text = { [budgetScorer.fqn]: '{"max_turns":10}' };
+  const specification = synthesizeManualSpecification(experiment);
   assert.deepEqual(
-    keepReferencedFixtures(synthesis.scenarios, files).map((file) => file.name),
-    ["policy.pdf", "notes.txt"],
+    specification.tasks.slice(0, 2).map((t) => t.id),
+    ["TC-first", "TC-second"],
   );
+  assert.equal(specification.tasks.length, 3);
+  assert.equal(
+    specification.tasks.reduce((total, t) => total + t.num_trials, 0),
+    5,
+  );
+  assert.deepEqual(
+    specification.features[0].behaviours[0].criteria[1].metric_args,
+    {
+      max_turns: 4,
+    },
+  );
+  assert.deepEqual(
+    specification.features[0].behaviours[1].criteria[1].metric_args,
+    {
+      max_turns: 10,
+    },
+  );
+  assert.notDeepEqual(
+    specification.tasks[0].criterion_refs,
+    specification.tasks[1].criterion_refs,
+  );
+  first.metric_args_text[budgetScorer.fqn] = "[]";
+  assert.ok(
+    manualFieldErrors(experiment, []).some(
+      (error) => error.field === `task.0.settings.${budgetScorer.fqn}`,
+    ),
+  );
+});
+
+test("manual task execution settings survive specification construction", () => {
+  const experiment: ManualExperiment = structuredClone(synthesis);
+  Object.assign(experiment.tasks[0], {
+    max_turns: 7,
+    timeout_minutes: 2,
+    response_wait_ms: 45000,
+    max_run_retries: 0,
+  });
+  const task = synthesizeManualSpecification(experiment).tasks[0];
+  assert.equal(task.max_turns, 7);
+  assert.equal(task.timeout_minutes, 2);
+  assert.equal(task.response_wait_ms, 45000);
+  assert.equal(task.max_run_retries, 0);
 });

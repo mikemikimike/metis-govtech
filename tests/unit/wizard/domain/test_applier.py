@@ -7,7 +7,7 @@ from metis.wizard.contracts import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain import materializer, paths
 from metis.wizard.domain.applier import apply, sanitise
 from metis.wizard.domain.permissions import InterviewStep, StepPermissions, owner_of
-from tests.fixtures.wizard.profiles import research_assistant
+from tests.fixtures.wizard.specifications import research_assistant
 
 EB1_MEASURED = "features[F-1].behaviours[EB-1].measured"
 EB1_DESCRIPTION = "features[F-1].behaviours[EB-1].description"
@@ -23,28 +23,28 @@ def patch(path: str, value=None, *, op=PatchOp.SET, origin=PatchOrigin.MODEL) ->
 
 def test_the_users_tick_is_applied_and_the_models_is_not() -> None:
     """The two patches are byte-identical. Only origin tells them apart."""
-    profile = research_assistant()
-    profile.behaviour("EB-1").measured = False  # type: ignore[union-attr]
+    specification = research_assistant()
+    specification.behaviour("EB-1").measured = False  # type: ignore[union-attr]
 
     from_model = patch(EB1_MEASURED, True, origin=PatchOrigin.MODEL)
     from_wizard = patch(EB1_MEASURED, True, origin=PatchOrigin.WIZARD)
     assert from_model.op == from_wizard.op and from_model.path == from_wizard.path
 
-    rejected = apply(profile, [from_model])
+    rejected = apply(specification, [from_model])
     assert rejected.applied == []
     assert len(rejected.rejected) == 1
-    assert profile.behaviour("EB-1").measured is False  # type: ignore[union-attr]
+    assert specification.behaviour("EB-1").measured is False  # type: ignore[union-attr]
 
-    accepted = apply(profile, [from_wizard])
+    accepted = apply(specification, [from_wizard])
     assert len(accepted.applied) == 1
-    assert profile.behaviour("EB-1").measured is True  # type: ignore[union-attr]
+    assert specification.behaviour("EB-1").measured is True  # type: ignore[union-attr]
 
 
 def test_rejecting_a_tick_says_whose_call_it_is() -> None:
     """The one message where the wizard must say *I chose not to*."""
-    profile = research_assistant()
+    specification = research_assistant()
 
-    result = apply(profile, [patch(EB1_MEASURED, True)])
+    result = apply(specification, [patch(EB1_MEASURED, True)])
 
     message = result.rejected[0].message
     assert "your call" in message
@@ -59,9 +59,9 @@ def test_the_model_cannot_claim_wizard_origin() -> None:
     cleaned = sanitise(claimed)
 
     assert cleaned[0].origin is PatchOrigin.MODEL
-    profile = research_assistant()
-    profile.behaviour("EB-1").measured = False  # type: ignore[union-attr]
-    assert apply(profile, cleaned).applied == []
+    specification = research_assistant()
+    specification.behaviour("EB-1").measured = False  # type: ignore[union-attr]
+    assert apply(specification, cleaned).applied == []
 
 
 def test_measured_is_owned_by_no_step() -> None:
@@ -80,9 +80,9 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
         StepResultPatch,
     )
 
-    profile = research_assistant()
+    specification = research_assistant()
     result = apply(
-        profile,
+        specification,
         sanitise(
             [
                 StepResultPatch(
@@ -110,9 +110,13 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
                     value=ScenarioDraft(
                         name="Exercise",
                         description="exercise it",
-                        behaviour_refs=["EB-4"],
-                        persona_refs=["impatient-executive-2"],
-                        fixtures=["policy.md"],
+                        tasks=[
+                            {
+                                "persona_ref": "impatient-executive-2",
+                                "criterion_refs": [],
+                                "fixtures": ["policy.md"],
+                            }
+                        ],
                     ),
                 ),
             ]
@@ -121,33 +125,28 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
     )
 
     assert not result.rejected
-    assert profile.features[-1].id == "F-3"
-    assert profile.features[-1].behaviours[0].id == "EB-4"
-    assert profile.features[-1].behaviours[0].measured is True
-    assert profile.personas[-1].id == "impatient-executive-2"
-    assert profile.scenarios[-1].id == "S-3"
-    assert profile.scenarios[-1].num_trials == 3
-    assert profile.scenarios[-1].fixtures == ["policy.md"]
+    assert specification.features[-1].id == "F-3"
+    assert specification.features[-1].behaviours[0].id == "EB-4"
+    assert specification.features[-1].behaviours[0].measured is True
+    assert specification.personas[-1].id == "impatient-executive-2"
+    assert specification.scenarios[-1].id == "S-3"
+    assert specification.tasks[-1].num_trials == 3
+    assert specification.tasks[-1].fixtures == ["policy.md"]
 
 
 def test_model_whole_entity_set_is_refused() -> None:
     from metis.wizard.contracts import Patch, ScenarioDraft
 
-    profile = research_assistant()
+    specification = research_assistant()
     patch_value = Patch(
         op=PatchOp.SET,
         path="scenarios[S-1]",
-        value=ScenarioDraft(
-            name="Replacement",
-            description="replacement",
-            behaviour_refs=[],
-            persona_refs=[],
-        ),
+        value=ScenarioDraft(name="Replacement", description="replacement", tasks=[]),
     )
-    result = apply(profile, sanitise([patch_value]))
+    result = apply(specification, sanitise([patch_value]))
     assert result.applied == []
     assert result.rejected
-    assert profile.scenario("S-1").description.startswith("Ask for")  # type: ignore[union-attr]
+    assert specification.scenario("S-1").description.startswith("Ask for")  # type: ignore[union-attr]
 
 
 # ── the metric is the matcher's, not the model's ────────────────────────────
@@ -162,16 +161,16 @@ def test_metric_fqn_is_owned_by_no_step() -> None:
 
 def test_rejecting_a_metric_write_points_at_rewording() -> None:
     """A stray model write is refused with wording help, not the raw internal path."""
-    profile = research_assistant()
+    specification = research_assistant()
 
-    result = apply(profile, [patch(AC1_METRIC, "some.other.Metric")])
+    result = apply(specification, [patch(AC1_METRIC, "some.other.Metric")])
 
     assert result.applied == []
     message = result.rejected[0].message
     assert "reword" in message.lower()
     assert "metric_fqn" not in message  # the raw field name never surfaces
     assert AC1_METRIC not in message  # nor the raw path
-    assert profile.behaviour("EB-1").criteria[0].metric_fqn != "some.other.Metric"  # type: ignore[union-attr]
+    assert specification.behaviour("EB-1").criteria[0].metric_fqn != "some.other.Metric"  # type: ignore[union-attr]
 
 
 # ── the fields inside a bundled value ──────────────────────────────────────
@@ -187,19 +186,23 @@ def test_an_unavailable_scenario_fixture_rejects_only_its_patch() -> None:
     """A strict draft cannot turn a model-proposed filename into an uploaded fixture."""
     from metis.wizard.contracts import ScenarioDraft
 
-    profile = research_assistant()
+    specification = research_assistant()
 
     result = apply(
-        profile,
+        specification,
         [
             patch(
                 "scenarios",
                 ScenarioDraft(
                     name="Spreadsheet analysis",
                     description="Ask for an analysis of an uploaded spreadsheet",
-                    behaviour_refs=["EB-1"],
-                    persona_refs=["impatient-executive"],
-                    fixtures=["malformed_dataset.csv"],
+                    tasks=[
+                        {
+                            "persona_ref": "impatient-executive",
+                            "criterion_refs": ["AC-1-1"],
+                            "fixtures": ["malformed_dataset.csv"],
+                        }
+                    ],
                 ),
                 op=PatchOp.ADD,
             ),
@@ -208,9 +211,13 @@ def test_an_unavailable_scenario_fixture_rejects_only_its_patch() -> None:
                 ScenarioDraft(
                     name="Use the policy",
                     description="Ask a question covered by policy.md.",
-                    behaviour_refs=["EB-1"],
-                    persona_refs=["impatient-executive"],
-                    fixtures=["policy.md"],
+                    tasks=[
+                        {
+                            "persona_ref": "impatient-executive",
+                            "criterion_refs": ["AC-1-1"],
+                            "fixtures": ["policy.md"],
+                        }
+                    ],
                 ),
                 op=PatchOp.ADD,
             ),
@@ -221,35 +228,37 @@ def test_an_unavailable_scenario_fixture_rejects_only_its_patch() -> None:
     assert len(result.applied) == 1
     assert len(result.rejected) == 1
     assert all(
-        scenario.name != "Spreadsheet analysis" for scenario in profile.scenarios
+        scenario.name != "Spreadsheet analysis" for scenario in specification.scenarios
     )
-    scenario = profile.scenario("S-3")
+    scenario = specification.scenario("S-3")
     assert scenario is not None
-    assert scenario.fixtures == ["policy.md"]
+    assert next(
+        t for t in specification.tasks if t.scenario_ref == scenario.id
+    ).fixtures == ["policy.md"]
 
 
 def test_a_model_cannot_change_fixtures_on_an_existing_scenario() -> None:
-    profile = research_assistant()
-    before = profile.scenario("S-1").fixtures.copy()  # type: ignore[union-attr]
+    specification = research_assistant()
+    before = specification.task("TC-001").fixtures.copy()  # type: ignore[union-attr]
 
     result = apply(
-        profile,
+        specification,
         [patch("scenarios[S-1].fixtures", ["policy.md"])],
         allowed_fixture_names={"policy.md"},
     )
 
     assert not result.applied
     assert result.rejected
-    assert profile.scenario("S-1").fixtures == before  # type: ignore[union-attr]
+    assert specification.task("TC-001").fixtures == before  # type: ignore[union-attr]
 
 
 def test_a_bundled_feature_cannot_carry_a_tick_or_a_metric() -> None:
     """The recursion case. `Feature.model_validate` builds nested behaviours and criteria from
     raw dicts without re-entering the coercion, so the nesting is the whole smuggling route."""
-    profile = research_assistant()
+    specification = research_assistant()
 
     result = apply(
-        profile,
+        specification,
         [
             patch(
                 "features",
@@ -283,7 +292,7 @@ def test_a_bundled_feature_cannot_carry_a_tick_or_a_metric() -> None:
     )
 
     assert len(result.applied) == 1
-    behaviour = profile.behaviour("EB-9")
+    behaviour = specification.behaviour("EB-9")
     assert behaviour is not None
     assert behaviour.description.startswith("Validates uploaded data")
     # A generic persisted-object compatibility patch keeps the domain default. Strict model
@@ -296,10 +305,10 @@ def test_a_bundled_feature_cannot_carry_a_tick_or_a_metric() -> None:
 def test_a_bundled_item_cannot_claim_the_user_typed_it() -> None:
     """FORM means the user typed it, and `chat_user` protects FORM items from replacement.
     A model that could stamp its own suggestions FORM would make them stick."""
-    profile = research_assistant()
+    specification = research_assistant()
 
     apply(
-        profile,
+        specification,
         [
             patch(
                 "personas",
@@ -314,47 +323,32 @@ def test_a_bundled_item_cannot_claim_the_user_typed_it() -> None:
         ],
     )
 
-    persona = profile.persona("fragmented-sender")
+    persona = specification.persona("fragmented-sender")
     assert persona is not None
     assert persona.name == "Fragmented sender"
     assert "interaction_type" not in persona.model_dump()
 
 
-def test_the_filter_never_touches_what_the_wizard_composed() -> None:
-    """The future seam: a user's trials edit or upload arrives WIZARD-origin and must land.
-    Origin is read first here for the same reason `_check` reads it first."""
-    profile = research_assistant()
-
+def test_user_task_settings_are_preserved() -> None:
+    specification = research_assistant()
     result = apply(
-        profile,
+        specification,
         [
+            patch("tasks[TC-001].num_trials", 10, origin=PatchOrigin.WIZARD),
             patch(
-                "scenarios",
-                {
-                    "id": "S-9",
-                    "name": "User scenario",
-                    "description": "Typed by the user in the manual form",
-                    "fixtures": ["uploaded_by_the_user.csv"],
-                    "num_trials": 10,
-                },
-                op=PatchOp.ADD,
-                origin=PatchOrigin.WIZARD,
-            )
+                "tasks[TC-001].fixtures", ["uploaded.csv"], origin=PatchOrigin.WIZARD
+            ),
         ],
     )
-
-    assert len(result.applied) == 1
-    scenario = profile.scenario("S-9")
-    assert scenario is not None
-    assert scenario.fixtures == ["uploaded_by_the_user.csv"]
-    assert scenario.num_trials == 10
-    assert scenario.name == "User scenario"
+    assert len(result.applied) == 2
+    assert specification.tasks[0].num_trials == 10
+    assert specification.tasks[0].fixtures == ["uploaded.csv"]
 
 
 def test_trials_and_files_are_owned_by_no_step() -> None:
     """The other half, mirroring measured: the targeted SET the field filter cannot see."""
-    assert owner_of("scenarios[S-1].num_trials") is None
-    assert owner_of("scenarios[S-1].fixtures") is None
+    assert owner_of("tasks[TC-001].num_trials") is None
+    assert owner_of("tasks[TC-001].fixtures") is None
     for globs in StepPermissions.values():
         assert not any("num_trials" in g or "fixtures" in g for g in globs)
 
@@ -373,13 +367,15 @@ def test_an_unowned_address_is_refused_without_leaking_its_path() -> None:
 
 def test_a_behaviour_edit_from_the_criteria_step_is_applied() -> None:
     """ "Reword EB-4" typed at the criteria step should simply work."""
-    profile = research_assistant()
+    specification = research_assistant()
     step = InterviewStep.CRITERIA
 
-    result = apply(profile, [patch(EB1_DESCRIPTION, "Cites a source, accurately")])
+    result = apply(
+        specification, [patch(EB1_DESCRIPTION, "Cites a source, accurately")]
+    )
 
     assert len(result.applied) == 1
-    assert profile.behaviour("EB-1").description == "Cites a source, accurately"  # type: ignore[union-attr]
+    assert specification.behaviour("EB-1").description == "Cites a source, accurately"  # type: ignore[union-attr]
     assert (
         owner_of(EB1_DESCRIPTION) is InterviewStep.BEHAVIOURS
     )  # a different step owns it
@@ -387,9 +383,9 @@ def test_a_behaviour_edit_from_the_criteria_step_is_applied() -> None:
 
 
 def test_an_address_no_step_owns_is_writable_nowhere() -> None:
-    profile = research_assistant()
+    specification = research_assistant()
 
-    result = apply(profile, [patch("product.invented_field", "x")])
+    result = apply(specification, [patch("product.invented_field", "x")])
 
     assert result.applied == []
     assert owner_of("product.invented_field") is None
@@ -411,10 +407,10 @@ def test_clarify_owns_the_product_prose_and_measured_is_owned_nowhere() -> None:
 
 
 def test_add_remove_and_set() -> None:
-    profile = research_assistant()
+    specification = research_assistant()
 
     apply(
-        profile,
+        specification,
         [
             patch(
                 "personas",
@@ -428,23 +424,23 @@ def test_add_remove_and_set() -> None:
             )
         ],
     )
-    assert profile.persona("P-9") is not None
+    assert specification.persona("P-9") is not None
 
     apply(
-        profile,
+        specification,
         [patch("personas[P-9]", op=PatchOp.REMOVE, origin=PatchOrigin.WIZARD)],
     )
-    assert profile.persona("P-9") is None
+    assert specification.persona("P-9") is None
 
 
 def test_a_patch_at_a_missing_node_is_reported_not_raised() -> None:
-    profile = research_assistant()
+    specification = research_assistant()
 
     # A behaviour id no feature owns stays unreachable — a wrong *feature* ancestor is corrected
     # against the behaviour id (see `test_a_wrong_feature_ancestor_is_corrected`), but a wrong
     # behaviour id is a genuinely missing node.
     result = apply(
-        profile, [patch("features[F-404].behaviours[EB-404].description", "x")]
+        specification, [patch("features[F-404].behaviours[EB-404].description", "x")]
     )
 
     assert result.applied == []
@@ -458,11 +454,11 @@ def test_a_wrong_feature_ancestor_is_corrected() -> None:
     than reporting a node it could plainly find. This is what stops "no behaviour with id
     'EB-3'" from reaching the user during the criteria step.
     """
-    profile = research_assistant()
-    assert profile.feature_of("EB-3").id == "F-2"  # type: ignore[union-attr]
+    specification = research_assistant()
+    assert specification.feature_of("EB-3").id == "F-2"  # type: ignore[union-attr]
 
     result = apply(
-        profile,
+        specification,
         [
             patch(
                 "features[F-1].behaviours[EB-3].description",
@@ -473,7 +469,7 @@ def test_a_wrong_feature_ancestor_is_corrected() -> None:
 
     assert result.applied and not result.any_rejected
     assert (
-        profile.behaviour("EB-3").description  # type: ignore[union-attr]
+        specification.behaviour("EB-3").description  # type: ignore[union-attr]
         == "Stops after repeated failures and reports what it tried"
     )
 
@@ -484,12 +480,12 @@ def test_a_positional_path_is_resolved_to_ids() -> None:
     index and substitutes it rather than reporting "no feature with id '0'". User ticks and
     edits are always built with real ids, so only a model mistake ever carries a number.
     """
-    profile = research_assistant()
-    first_feature = profile.features[0]
+    specification = research_assistant()
+    first_feature = specification.features[0]
     first_behaviour = first_feature.behaviours[0]
 
     result = apply(
-        profile,
+        specification,
         [
             patch(
                 "features[0].behaviours[0].description",
@@ -508,10 +504,10 @@ def test_a_malformed_value_is_reported_not_raised() -> None:
     happen, not a crash four answers into an interview. The module's contract is that a
     rejected patch is never silent; a value that won't validate is one of them.
     """
-    profile = research_assistant()
+    specification = research_assistant()
 
     result = apply(
-        profile,
+        specification,
         [
             patch(
                 "features",
@@ -524,13 +520,15 @@ def test_a_malformed_value_is_reported_not_raised() -> None:
 
     assert result.applied == []
     assert result.any_rejected
-    assert not any(e.id == "F-9" for e in profile.features)
+    assert not any(e.id == "F-9" for e in specification.features)
 
 
 def test_paths_address_by_id_not_index() -> None:
-    profile = research_assistant()
+    specification = research_assistant()
 
-    node = paths.resolve(profile, "features[F-1].behaviours[EB-1].criteria[AC-1-1]")
+    node = paths.resolve(
+        specification, "features[F-1].behaviours[EB-1].criteria[AC-1-1]"
+    )
 
     assert node.id == "AC-1-1"
 
@@ -551,24 +549,24 @@ def test_a_list_is_addressed_by_id_first_then_by_numeric_index(
     so it cannot shadow a real id — which stops a whole behaviour's freshly drafted criteria
     from being silently dropped. Id addressing stays first and preferred.
     """
-    profile = research_assistant()
+    specification = research_assistant()
     path = f"features[F-1].behaviours[{bracket}]"
 
     if raises:
         with pytest.raises(paths.PathError):
-            paths.resolve(profile, path)
+            paths.resolve(specification, path)
     else:
-        assert paths.resolve(profile, path).id == expected_id
+        assert paths.resolve(specification, path).id == expected_id
 
 
 def test_criteria_added_by_positional_index_actually_land() -> None:
     """The end-to-end shape of the live failure: a criteria ADD addressed by index applies
     rather than being rejected, so the criteria the model drafted are not lost."""
-    profile = research_assistant()
-    profile.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
+    specification = research_assistant()
+    specification.behaviour("EB-1").criteria = []  # type: ignore[union-attr]
 
     result = apply(
-        profile,
+        specification,
         [
             patch(
                 "features[F-1].behaviours[EB-1].criteria",
@@ -588,7 +586,7 @@ def test_criteria_added_by_positional_index_actually_land() -> None:
     )
 
     assert len(result.applied) == 1
-    assert profile.behaviour("EB-1").criteria[0].id == "AC-1-1"  # type: ignore[union-attr]
+    assert specification.behaviour("EB-1").criteria[0].id == "AC-1-1"  # type: ignore[union-attr]
 
 
 def test_a_glob_does_not_span_a_dot() -> None:
@@ -600,7 +598,7 @@ def test_a_glob_does_not_span_a_dot() -> None:
     )
 
 
-def test_materializer_uses_dot_free_ids_for_every_profile_node() -> None:
+def test_materializer_uses_dot_free_ids_for_every_specification_node() -> None:
     """Application-created identities are compact opaque ids, never path fragments."""
     from metis.wizard.contracts import (
         BehaviourDraft,
@@ -608,15 +606,15 @@ def test_materializer_uses_dot_free_ids_for_every_profile_node() -> None:
         FeatureDraft,
         PersonaDraft,
         Product,
-        ProductProfile,
         ScenarioDraft,
+        Specification,
     )
 
-    profile = ProductProfile(product=Product(name="X", users="", description=""))
+    specification = Specification(product=Product(name="X", users="", description=""))
     issued: set[str] = set()
     typed: set[str] = set()
     feature = materializer.add_feature(
-        profile,
+        specification,
         FeatureDraft(
             name="Answer",
             description="Answer well.",
@@ -628,7 +626,7 @@ def test_materializer_uses_dot_free_ids_for_every_profile_node() -> None:
     )
     behaviour = feature.behaviours[0]
     criterion = materializer.add_criterion(
-        profile,
+        specification,
         behaviour,
         CriterionDraft(
             name="Supported",
@@ -641,26 +639,38 @@ def test_materializer_uses_dot_free_ids_for_every_profile_node() -> None:
         user_typed=typed,
     )
     persona = materializer.add_persona(
-        profile,
+        specification,
         PersonaDraft(name="Careful reviewer", description="Checks the result."),
         PatchOrigin.WIZARD,
         issued_ids=issued,
         user_typed=typed,
     )
     scenario = materializer.add_scenario(
-        profile,
+        specification,
         ScenarioDraft(
             name="Review",
             description="Review the answer.",
-            behaviour_refs=[behaviour.id],
-            persona_refs=[persona.id],
+            tasks=[
+                {
+                    "persona_ref": persona.id,
+                    "criterion_refs": [],
+                    "fixtures": [],
+                }
+            ],
         ),
         PatchOrigin.MODEL,
         issued_ids=issued,
         user_typed=typed,
     )
 
-    created = {feature.id, behaviour.id, criterion.id, persona.id, scenario.id}
+    created = {
+        feature.id,
+        behaviour.id,
+        criterion.id,
+        persona.id,
+        scenario.id,
+        *[t.id for t in specification.tasks],
+    }
     assert created == issued
     assert all("." not in node_id for node_id in created)
     assert {criterion.id, persona.id} <= typed
@@ -669,25 +679,25 @@ def test_materializer_uses_dot_free_ids_for_every_profile_node() -> None:
 def test_removed_highest_ids_are_not_reused() -> None:
     """Issued identity history survives removal and controls the next allocation."""
     from metis.wizard.contracts import BehaviourDraft, CriterionDraft
-    from metis.wizard.domain.profile import collect_profile_ids
+    from metis.wizard.domain.specification import collect_specification_ids
 
-    profile = research_assistant()
-    issued = collect_profile_ids(profile)
+    specification = research_assistant()
+    issued = collect_specification_ids(specification)
     typed: set[str] = set()
-    profile.features[1].behaviours.pop()
-    profile.behaviour("EB-1").criteria.pop()  # type: ignore[union-attr]
+    specification.features[1].behaviours.pop()
+    specification.behaviour("EB-1").criteria.pop()  # type: ignore[union-attr]
 
     new_behaviour = materializer.add_behaviour(
-        profile,
+        specification,
         BehaviourDraft(name="New recovery", description="Recovers safely."),
         PatchOrigin.WIZARD,
         issued_ids=issued,
         user_typed=typed,
     )
-    profile.features[1].behaviours.append(new_behaviour)
+    specification.features[1].behaviours.append(new_behaviour)
     new_criterion = materializer.add_criterion(
-        profile,
-        profile.behaviour("EB-1"),  # type: ignore[arg-type]
+        specification,
+        specification.behaviour("EB-1"),  # type: ignore[arg-type]
         CriterionDraft(
             name="Another source",
             given="a question",
@@ -705,19 +715,19 @@ def test_removed_highest_ids_are_not_reused() -> None:
 
 def test_tree_regeneration_does_not_reuse_removed_ids() -> None:
     from metis.wizard.contracts import BehaviourDraft, FeatureDraft
-    from metis.wizard.domain.profile import collect_profile_ids
+    from metis.wizard.domain.specification import collect_specification_ids
 
-    profile = research_assistant()
-    issued = collect_profile_ids(profile)
+    specification = research_assistant()
+    issued = collect_specification_ids(specification)
     cascade.clear_for_regeneration(
-        profile,
+        specification,
         cascade.Question(text="", subject="product.description", kind="tree"),
         set(),
     )
-    assert profile.features == [] and profile.scenarios == []
+    assert specification.features == [] and specification.scenarios == []
 
     feature = materializer.add_feature(
-        profile,
+        specification,
         FeatureDraft(
             name="New feature",
             description="A regenerated feature.",
@@ -733,18 +743,18 @@ def test_tree_regeneration_does_not_reuse_removed_ids() -> None:
 
 
 def test_persona_slug_collisions_get_deterministic_suffixes() -> None:
-    from metis.wizard.contracts import PersonaDraft, Product, ProductProfile
+    from metis.wizard.contracts import PersonaDraft, Product, Specification
 
-    profile = ProductProfile(product=Product(name="X", users="", description=""))
+    specification = Specification(product=Product(name="X", users="", description=""))
     issued: set[str] = set()
     first = materializer.add_persona(
-        profile,
+        specification,
         PersonaDraft(name="Same name", description="First."),
         PatchOrigin.MODEL,
         issued_ids=issued,
     )
     second = materializer.add_persona(
-        profile,
+        specification,
         PersonaDraft(name="Same name", description="Second."),
         PatchOrigin.MODEL,
         issued_ids=issued,
@@ -755,16 +765,16 @@ def test_persona_slug_collisions_get_deterministic_suffixes() -> None:
 def test_stale_user_authorship_does_not_protect_a_new_id() -> None:
     """A regenerated node gets a fresh id, so an old user-typed id cannot keep it alive."""
     from metis.wizard.contracts import CriterionDraft
-    from metis.wizard.domain.profile import collect_profile_ids
+    from metis.wizard.domain.specification import collect_specification_ids
 
-    profile = research_assistant()
-    behaviour = profile.behaviour("EB-3")
+    specification = research_assistant()
+    behaviour = specification.behaviour("EB-3")
     assert behaviour is not None
-    issued = collect_profile_ids(profile)
+    issued = collect_specification_ids(specification)
     user_typed = {"AC-3-1"}
     behaviour.criteria.clear()
     fresh = materializer.add_criterion(
-        profile,
+        specification,
         behaviour,
         CriterionDraft(
             name="Fresh retry outcome",
@@ -778,7 +788,7 @@ def test_stale_user_authorship_does_not_protect_a_new_id() -> None:
     )
     assert fresh.id == "AC-3-2"
     cascade.clear_for_regeneration(
-        profile,
+        specification,
         cascade.Question(text="", subject="EB-3", kind="criteria"),
         user_typed,
     )

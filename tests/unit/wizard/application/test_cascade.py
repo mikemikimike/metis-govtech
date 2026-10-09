@@ -9,12 +9,12 @@ from metis.wizard.contracts import (
     PatchOp,
     PatchOrigin,
     Product,
-    ProductProfile,
+    Specification,
 )
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
-from tests.fixtures.wizard.profiles import research_assistant
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
+from tests.fixtures.wizard.specifications import research_assistant
 
 EB1_DESCRIPTION = "features[F-1].behaviours[EB-1].description"
 
@@ -25,7 +25,7 @@ def edit(path: str, value="reworded") -> Patch:
 
 def a_state(step=InterviewStep.CRITERIA) -> DriverState:
     return DriverState(
-        profile=research_assistant(), context=interview_context(), step=step
+        specification=research_assistant(), context=interview_context(), step=step
     )
 
 
@@ -34,9 +34,9 @@ def a_state(step=InterviewStep.CRITERIA) -> DriverState:
 
 def test_rewording_a_behaviour_asks_twice_in_sequence() -> None:
     """Criteria first, then each scenario covering it — nearest the edit, then further away."""
-    profile = research_assistant()
+    specification = research_assistant()
 
-    questions = cascade.questions_for(profile, [edit(EB1_DESCRIPTION)])
+    questions = cascade.questions_for(specification, [edit(EB1_DESCRIPTION)])
 
     assert [q.kind for q in questions] == ["criteria", "scenario"]
     assert questions[0].subject == "EB-1"
@@ -62,10 +62,10 @@ def test_editing_the_product_reaches_the_whole_tree() -> None:
 
 
 def test_initial_product_capture_does_not_invalidate_its_own_draft() -> None:
-    profile = ProductProfile(product=Product(name="X", description="", users=""))
+    specification = Specification(product=Product(name="X", description="", users=""))
 
     questions = cascade.questions_for(
-        profile,
+        specification,
         [
             edit("product.description", "A new product"),
             edit("product.detail", "Tools"),
@@ -76,10 +76,10 @@ def test_initial_product_capture_does_not_invalidate_its_own_draft() -> None:
 
 
 def test_description_and_detail_edits_ask_about_the_tree_once() -> None:
-    profile = research_assistant()
+    specification = research_assistant()
 
     questions = cascade.questions_for(
-        profile,
+        specification,
         [edit("product.description"), edit("product.detail")],
     )
 
@@ -94,26 +94,26 @@ def test_description_and_detail_edits_ask_about_the_tree_once() -> None:
 
 def test_edits_that_derive_nothing_ask_nothing() -> None:
     """The tick is scope, not content. Personas are referenced by id, not by text."""
-    profile = research_assistant()
+    specification = research_assistant()
 
     nothing = [
         edit("features[F-1].behaviours[EB-1].measured", False),
         edit("personas[cooperative-delegator].description", "different words"),
-        edit("scenarios[S-1].behaviour_refs", ["EB-1"]),
-        edit("scenarios[S-1].num_trials", 5),
-        edit("scenarios[S-1].fixtures", ["a.pdf"]),
+        edit("tasks[TC-001].criterion_refs", ["AC-1-1"]),
+        edit("tasks[TC-001].num_trials", 5),
+        edit("tasks[TC-001].fixtures", ["a.pdf"]),
         edit("product.name", "New name"),
     ]
 
-    assert cascade.questions_for(profile, nothing) == []
+    assert cascade.questions_for(specification, nothing) == []
 
 
 def test_personas_are_reached_by_nothing() -> None:
     """They come from *all* criteria, so no single edit above them triggers a question."""
-    profile = research_assistant()
+    specification = research_assistant()
 
     questions = cascade.questions_for(
-        profile,
+        specification,
         [
             edit(
                 "features[F-1].behaviours[EB-1].criteria[AC-1-1].description.then",
@@ -127,10 +127,10 @@ def test_personas_are_reached_by_nothing() -> None:
 
 def test_each_thing_is_asked_about_once() -> None:
     """Two edits to the same behaviour is still one question about its criteria."""
-    profile = research_assistant()
+    specification = research_assistant()
 
     questions = cascade.questions_for(
-        profile, [edit(EB1_DESCRIPTION), edit(EB1_DESCRIPTION)]
+        specification, [edit(EB1_DESCRIPTION), edit(EB1_DESCRIPTION)]
     )
 
     assert len(questions) == 2  # criteria + S-1, not four
@@ -141,11 +141,11 @@ def test_each_thing_is_asked_about_once() -> None:
 
 def test_regenerating_keeps_text_the_user_typed() -> None:
     """FORM content came in through a form and is used as-is."""
-    profile = research_assistant()
-    behaviour = profile.behaviour("EB-3")
+    specification = research_assistant()
+    behaviour = specification.behaviour("EB-3")
     assert behaviour is not None
     cascade.clear_for_regeneration(
-        profile,
+        specification,
         cascade.Question(text="", subject="EB-3", kind="criteria"),
         {"AC-3-1"},
     )
@@ -154,12 +154,12 @@ def test_regenerating_keeps_text_the_user_typed() -> None:
 
 
 def test_regenerating_clears_what_the_model_wrote() -> None:
-    profile = research_assistant()
-    behaviour = profile.behaviour("EB-1")
+    specification = research_assistant()
+    behaviour = specification.behaviour("EB-1")
     assert behaviour is not None and len(behaviour.criteria) == 2
 
     cascade.clear_for_regeneration(
-        profile, cascade.Question(text="", subject="EB-1", kind="criteria"), set()
+        specification, cascade.Question(text="", subject="EB-1", kind="criteria"), set()
     )
 
     assert behaviour.criteria == []  # both were CHAT-authored
@@ -167,16 +167,16 @@ def test_regenerating_clears_what_the_model_wrote() -> None:
 
 def test_a_product_edit_clears_everything_derived_from_it() -> None:
     """Features and scenarios were all derived from the product description."""
-    profile = research_assistant()
+    specification = research_assistant()
 
     cascade.clear_for_regeneration(
-        profile,
+        specification,
         cascade.Question(text="", subject="product.description", kind="tree"),
         set(),
     )
 
-    assert profile.features == []
-    assert profile.scenarios == []
+    assert specification.features == []
+    assert specification.scenarios == []
 
 
 # ── the driver asks in the same turn ───────────────────────────────────────
@@ -197,7 +197,7 @@ def test_the_question_is_asked_before_the_next_screen() -> None:
 def test_chat_on_the_initial_draft_opens_free_text() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = DriverState(
-        profile=ProductProfile(
+        specification=Specification(
             product=Product(
                 name="X", description="Answers research questions.", users=""
             )
@@ -222,11 +222,11 @@ def test_answering_keep_changes_nothing() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = a_state()
     driver._run(state, _result_editing_eb1())
-    before = len(state.profile.behaviour("EB-1").criteria)  # type: ignore[union-attr]
+    before = len(state.specification.behaviour("EB-1").criteria)  # type: ignore[union-attr]
 
     driver._answer_question(state, ChoiceResponse(selected=["keep:EB-1"]))
 
-    assert len(state.profile.behaviour("EB-1").criteria) == before  # type: ignore[union-attr]
+    assert len(state.specification.behaviour("EB-1").criteria) == before  # type: ignore[union-attr]
 
 
 def test_answering_regenerate_lands_in_a_state_the_screens_already_draw() -> None:
@@ -237,7 +237,7 @@ def test_answering_regenerate_lands_in_a_state_the_screens_already_draw() -> Non
 
     driver._answer_question(state, ChoiceResponse(selected=["regenerate:EB-1"]))
 
-    behaviour = state.profile.behaviour("EB-1")
+    behaviour = state.specification.behaviour("EB-1")
     assert behaviour is not None
     assert behaviour.criteria  # regenerated, not left empty
 
@@ -245,7 +245,7 @@ def test_answering_regenerate_lands_in_a_state_the_screens_already_draw() -> Non
 def test_reviewing_a_product_edit_returns_to_the_draft_screen() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = a_state(step=InterviewStep.CRITERIA)
-    question = cascade.questions_for(state.profile, [edit("product.detail")])[0]
+    question = cascade.questions_for(state.specification, [edit("product.detail")])[0]
     driver.pending_questions = [question]
 
     driver._answer_question(
@@ -266,7 +266,7 @@ def test_no_flag_survives_the_turn() -> None:
         driver._answer_question(state, ChoiceResponse(selected=["keep:x"]))
 
     assert driver.pending_questions == []
-    dumped = state.profile.model_dump_json()
+    dumped = state.specification.model_dump_json()
     assert "stale" not in dumped and "out_of_date" not in dumped
 
 

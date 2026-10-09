@@ -35,21 +35,21 @@ import { api, TransportError, toSummary } from "./transport/api";
 import { Composer, Transcript } from "./Conversation";
 import { AddDocuments, DocumentTray } from "./DocumentTray";
 import { Done } from "./Done";
-import { Profile, stepPosition } from "./Profile";
+import { SpecificationView, stepPosition } from "./SpecificationView";
 import { InterviewRail } from "./InterviewRail";
 import { Button, Tooltip, cn } from "./ui";
 import {
   InterviewRepository,
   emptyRecord,
   addFixtures,
-  fixturesForProfile,
+  fixturesForSpecification,
   type LocalStorageProblem,
 } from "./storage/repository";
 import {
   normalizeFixtureName,
   validateFixtureSelection,
 } from "./fixture-policy";
-import { profileHasCriteria } from "./metrics";
+import { specificationHasCriteria } from "./metrics";
 import { downloadArchive } from "./download";
 import { ManualAuthoringEntry, ManualForm } from "./ManualForm";
 import { applyEnd, startTranscript, toPresentation } from "./wizard/transcript";
@@ -186,7 +186,7 @@ export function App() {
   const [loadingRecord, setLoadingRecord] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
-  const [profileOpen, setProfileOpen] = useState(true);
+  const [specificationOpen, setSpecificationOpen] = useState(true);
   const [manualOpen, setManualOpen] = useState(false);
   const [documentWidth, setDocumentWidth] = useState(DOCUMENT_WIDTH_DEFAULT);
   const [showMetrics, setShowMetrics] = useState(false);
@@ -214,7 +214,9 @@ export function App() {
       new Map((metricCatalogue ?? []).map((metric) => [metric.fqn, metric])),
     [metricCatalogue],
   );
-  const hasCriteria = view ? profileHasCriteria(view.profile) : false;
+  const hasCriteria = view
+    ? specificationHasCriteria(view.specification)
+    : false;
 
   useEffect(() => {
     setShowMetrics(false);
@@ -515,8 +517,8 @@ export function App() {
   const packageAndDownload = useCallback(
     async (localRecord: LocalInterviewRecord) => {
       const archive = await api.package(
-        localRecord.state.profile,
-        fixturesForProfile(localRecord),
+        localRecord.state.specification,
+        fixturesForSpecification(localRecord),
       );
       downloadArchive(archive);
     },
@@ -736,16 +738,16 @@ export function App() {
       </main>
       {showDocument &&
         view &&
-        (profileOpen ? (
+        (specificationOpen ? (
           <>
             <ResizeHandle width={documentWidth} onWidth={setDocumentWidth} />
             <aside
               style={{ width: `${documentWidth}%` }}
               className="min-w-[20rem] shrink-0 border-l border-border bg-muted"
             >
-              <Profile
+              <SpecificationView
                 key={view.id}
-                profile={view.profile}
+                specification={view.specification}
                 position={stepPosition(view.requests)}
                 interviewStep={view.stage}
                 busy={busy || operations.pendingSaves.has(view.id)}
@@ -756,7 +758,7 @@ export function App() {
                   metricState === "idle" || metricState === "loading"
                 }
                 metricsError={metricState === "error"}
-                onCollapse={() => setProfileOpen(false)}
+                onCollapse={() => setSpecificationOpen(false)}
                 done={view.done}
                 onFinish={() => void finish()}
                 onDownload={() => {
@@ -769,7 +771,7 @@ export function App() {
           <EdgeStrip
             side="right"
             label="Show document"
-            onClick={() => setProfileOpen(true)}
+            onClick={() => setSpecificationOpen(true)}
           />
         ))}
     </div>

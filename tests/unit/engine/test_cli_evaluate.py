@@ -22,25 +22,13 @@ from metis.engine.simulation.types import MetricRef, RunConfig, RunOutcome, RunR
 
 runner = CliRunner()
 
-MINIMAL_EXPERIMENT = """\
-schema_version: 2
-id: test-exp
-description: test experiment
-runner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory
-personas:
-  - id: alice
-    description: test persona
-scenarios:
-  - id: task-1
-    description: test scenario
-    persona_refs: [alice]
-"""
+MINIMAL_EXPERIMENT = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
 
 
 def _write_snapshot(experiment_dir: Path, content: str = MINIMAL_EXPERIMENT) -> Path:
     inputs_dir = experiment_dir / "inputs"
     inputs_dir.mkdir(parents=True)
-    (inputs_dir / "experiment.yaml").write_text(content)
+    (inputs_dir / "specification.yaml").write_text(content)
     return experiment_dir
 
 
@@ -206,7 +194,7 @@ def test_evaluate_rejects_a_directory_without_an_input_snapshot(tmp_path: Path) 
     assert "metisenginesimulate" in _compact(result.output)
 
 
-def test_evaluate_fails_when_the_input_snapshot_has_no_experiment_file(
+def test_evaluate_fails_when_the_input_snapshot_has_no_specification_file(
     tmp_path: Path,
 ) -> None:
     experiment_dir = tmp_path / "experiments" / "test-exp-20260101-010101"
@@ -216,7 +204,7 @@ def test_evaluate_fails_when_the_input_snapshot_has_no_experiment_file(
 
     assert result.exit_code != 0
     assert _compact(str(experiment_dir.resolve())) in _compact(result.output)
-    assert "experiment.yaml" in result.output
+    assert "specification.yaml" in result.output
 
 
 def test_evaluate_fails_for_a_malformed_run_record(tmp_path: Path) -> None:

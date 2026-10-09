@@ -82,22 +82,20 @@ def test_trial_model_defaults_the_attempt_field(tmp_path: Path) -> None:
     assert trial.attempt == 1
 
 
-def test_scenario_without_num_trials_plans_one_trial() -> None:
-    """The report must mirror the engine's default, not the wizard's.
-
-    metis-engine's Scenario schema defaults num_trials to 1; metis-wizard's
-    domain model defaults it to 3 and always writes the field explicitly. A
-    hand-written config that omits it runs once, so the plan must say one.
-    """
+def test_task_plan_uses_the_selected_trial_count() -> None:
     from metis.engine.reporting._report import build_plan
 
-    experiment = {
+    specification = {
         "personas": [{"id": "p"}],
-        "scenarios": [{"id": "s", "persona_refs": ["p"]}],
+        "tasks": [
+            {
+                "id": "TC-001",
+                "scenario_ref": "s",
+                "persona_ref": "p",
+                "num_trials": 1,
+                "criterion_refs": ["AC-1"],
+            }
+        ],
     }
-
-    plan = build_plan(experiment, [], {})
-
-    scenario = plan["scenarios"][0]
-    assert scenario["trials"] == 1
-    assert scenario["sessionsPlanned"] == 1
+    task = build_plan(specification, [], {})["tasks"][0]
+    assert task["trials"] == task["sessionsPlanned"] == 1

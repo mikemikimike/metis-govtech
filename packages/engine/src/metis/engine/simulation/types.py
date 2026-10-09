@@ -14,8 +14,11 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
 from metis.core import Artifact
+from metis.core.experiment import Task
+from metis.core.specification import Specification as CoreSpecification
+from metis.core.specification import SpecificationDocument
 
-_EXPERIMENT_VERSION = 2
+_SPECIFICATION_VERSION = 2
 _RUN_RECORD_VERSION = 2
 
 
@@ -236,13 +239,14 @@ class Persona(BaseModel, extra="ignore"):
 
 
 class MetricRef(BaseModel):
-    """A metric reference from experiment.yaml.
+    """A metric reference from specification.yaml.
 
     Accepts either:
       - a plain string: "metis.library.metrics.RoutingAccuracyMetric"
       - a single-key mapping: {"metis.library.metrics.TurnBudgetMetric": {"max_turns": 8}}
     """
 
+    criterion_id: str = ""
     fqn: str = Field(
         description=(
             "Fully-qualified import path of the metric class to run — a"
@@ -313,6 +317,7 @@ class MetricRef(BaseModel):
 
 
 class Scenario(BaseModel):
+    task_id: str = ""
     id: str
     description: str
     num_trials: int = 1
@@ -355,57 +360,25 @@ class Scenario(BaseModel):
         return self
 
 
-class Experiment(BaseModel):
-    schema_version: Literal[
-        2
-    ]  # required — no default; see schemas/README.md for bump rules
+class ExecutionDocument(SpecificationDocument):
+    """Required metadata for an executable specification document."""
+
+    schema_version: Literal[2]
     id: str
-    description: str
-    runner_factory_ref: str = Field(
-        min_length=1,
-        description="FQN of a RunnerFactory class (e.g. metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory)",
-    )
-    personas: list[Persona] = Field(min_length=1)
-    scenarios: list[Scenario] = Field(min_length=1)
-    fixture_content_descriptions: dict[str, str] = Field(
-        default_factory=dict,
-        description=(
-            "Optional map of fixture filename → Artifact.content_description."
-            " Fixtures not listed here are auto-summarized at run start."
-        ),
-    )
+    runner_factory_ref: str
 
-    @model_validator(mode="before")
-    @classmethod
-    def _check_version(cls, data: object) -> object:
-        if not isinstance(data, dict):
-            return data
-        v = data.get("schema_version")
-        if v is None:
-            raise ValueError(
-                "Missing required field 'schema_version'. "
-                f"Add 'schema_version: {_EXPERIMENT_VERSION}' to your experiment.yaml."
-            )
-        if v != _EXPERIMENT_VERSION:
-            raise ValueError(
-                f"Unsupported schema_version {v!r} (expected {_EXPERIMENT_VERSION}). "
-                "Update your experiment.yaml to the current schema version."
-            )
-        return data
+
+class Specification(CoreSpecification):
+    """A complete Specification validated for engine execution."""
+
+    _document_model = ExecutionDocument
+    schema_version: Literal[2]
 
     @model_validator(mode="after")
-    def _check_persona_refs(self) -> Self:
-        defined = {p.id for p in self.personas}
-        for scenario in self.scenarios:
-            missing = [ref for ref in scenario.persona_refs if ref not in defined]
-            if missing:
-                raise ValueError(
-                    f"Scenario '{scenario.id}' references undefined persona(s): {missing}"
-                )
-        return self
-
-    @model_validator(mode="after")
-    def _validate_runner_factory_ref(self) -> Self:
+    def _check_execution(self) -> Self:
+        errors = self.execution_errors()
+        if errors:
+            raise ValueError(" ".join(errors))
         from .runner_resolver import resolve_runner_factory
 
         try:
@@ -413,6 +386,37 @@ class Experiment(BaseModel):
         except (ImportError, TypeError, ValueError) as exc:
             raise ValueError(str(exc)) from exc
         return self
+
+    def resolved_tasks(self) -> list[Scenario]:
+        return [self.resolve_task(task) for task in self.tasks]
+
+    def resolve_task(self, task: Task) -> Scenario:
+        scenario = self.scenario(task.scenario_ref)
+        assert scenario is not None
+        refs = []
+        for cid in task.criterion_refs:
+            criterion = self.criterion(cid)
+            assert criterion is not None and criterion.metric_fqn
+            refs.append(
+                MetricRef(
+                    criterion_id=cid,
+                    fqn=criterion.metric_fqn,
+                    args=criterion.metric_args,
+                )
+            )
+        return Scenario(
+            id=scenario.id,
+            task_id=task.id,
+            description=scenario.description,
+            persona_refs=[task.persona_ref],
+            num_trials=task.num_trials,
+            max_turns=task.max_turns,
+            timeout_minutes=task.timeout_minutes,
+            response_wait_ms=task.response_wait_ms,
+            max_run_retries=task.max_run_retries,
+            fixtures=task.fixtures,
+            metric_refs=refs,
+        )
 
     @classmethod
     def load_file(cls, path: Path) -> Self:
@@ -429,6 +433,8 @@ class Experiment(BaseModel):
 class RunConfig(BaseModel, extra="ignore"):
     """Environment spec for a simulation run — defines which persona/scenario pair to run and the resource limits (turn cap, timeout) that bound execution."""
 
+    task_id: str = ""
+    trial_index: int = 1
     persona: str
     scenario: str
     metric_refs: list[MetricRef] = Field(default_factory=list)

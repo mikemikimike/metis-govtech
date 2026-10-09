@@ -1,6 +1,6 @@
-"""Hand-authored profiles used across the tests.
+"""Hand-authored specifications used across the tests.
 
-Writing one by hand is the point of `ProductProfile` carrying no step, no history and no
+Writing one by hand is the point of `Specification` carrying no step, no history and no
 interview id: this file proves the document is a pure artefact by building one without an
 interview ever having run.
 """
@@ -12,8 +12,9 @@ from metis.wizard.contracts import (
     Feature,
     Persona,
     Product,
-    ProductProfile,
     Scenario,
+    Specification,
+    Task,
 )
 
 TURN_BUDGET = "metis.library.metrics.TurnBudgetMetric"
@@ -21,9 +22,9 @@ CITATION_METRIC = "metis.library.metrics.SynthesisFaithfulnessMetric"
 BOUNDED_TROUBLESHOOTING = "metis.library.metrics.BoundedTroubleshootingMetric"
 
 
-def orca_handover() -> ProductProfile:
+def orca_handover() -> Specification:
     """A rich product handover whose separate facts must survive clarify."""
-    return ProductProfile(
+    return Specification(
         product=Product(
             name="Orca",
             users="Public Officers",
@@ -48,14 +49,14 @@ def orca_handover() -> ProductProfile:
     )
 
 
-def research_assistant() -> ProductProfile:
-    """A profile exercising every shape the compiler has to handle.
+def research_assistant() -> Specification:
+    """A specification exercising every shape the compiler has to handle.
 
     Deliberately contains: a ticked behaviour with several criteria, an unticked behaviour
     that still has criteria (dormant, not deleted), a criterion the user typed by hand, one
     scenario covering two behaviours, and a scenario with two personas.
     """
-    return ProductProfile(
+    return Specification(
         product=Product(
             name="Research assistant",
             description=(
@@ -183,12 +184,6 @@ def research_assistant() -> ProductProfile:
                     "Ask for a literature review on a topic the library covers well, "
                     "then ask a follow-up that needs a second document."
                 ),
-                behaviour_refs=[
-                    "EB-1",
-                    "EB-2",
-                ],  # M:N — one scenario covers two behaviours
-                persona_refs=["cooperative-delegator", "impatient-executive"],
-                num_trials=3,
             ),
             Scenario(
                 id="S-2",
@@ -197,8 +192,28 @@ def research_assistant() -> ProductProfile:
                     "Ask a question whose documents live behind a search that will "
                     "time out, forcing the retry path."
                 ),
-                behaviour_refs=["EB-3"],
-                persona_refs=["cooperative-delegator"],
+            ),
+        ],
+        tasks=[
+            Task(
+                id="TC-001",
+                scenario_ref="S-1",
+                persona_ref="cooperative-delegator",
+                criterion_refs=["AC-1-1", "AC-1-2"],
+                num_trials=3,
+            ),
+            Task(
+                id="TC-002",
+                scenario_ref="S-1",
+                persona_ref="impatient-executive",
+                criterion_refs=["AC-1-1", "AC-1-2"],
+                num_trials=3,
+            ),
+            Task(
+                id="TC-003",
+                scenario_ref="S-2",
+                persona_ref="cooperative-delegator",
+                criterion_refs=["AC-3-1"],
                 fixtures=["policy.pdf"],
                 num_trials=3,
             ),
