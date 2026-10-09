@@ -34,8 +34,8 @@ class RetryConfig(BaseModel):
     action_backoff_max_seconds: float = 10.0
     turn_max_retries: int = 1
     consecutive_turn_failures_limit: int = 2
-    run_max_retries: int = 2
-    run_retry_delay_seconds: float = 5.0
+    trial_max_retries: int = 2
+    trial_retry_delay_seconds: float = 5.0
 
 
 class OrcaPlaywrightRunnerConfig(BaseModel):

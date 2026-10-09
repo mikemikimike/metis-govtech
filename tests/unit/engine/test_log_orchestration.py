@@ -22,17 +22,19 @@ class TestOrchestrationLogger:
         content = (tmp_path / "simulate.log").read_text()
         assert "SCENARIO direct-question STARTED" in content
 
-    def test_run_started_includes_log_pointer(self, tmp_path: Path) -> None:
+    def test_trial_started_includes_log_pointer(self, tmp_path: Path) -> None:
         orch = OrchestrationLogger(log_dir=tmp_path)
-        orch.run_started("direct-question", "cooperative", trial_index=1, num_trials=1)
+        orch.trial_started(
+            "direct-question", "cooperative", trial_index=1, num_trials=1
+        )
         orch.close()
         content = (tmp_path / "simulate.log").read_text()
-        assert "RUN direct-question x cooperative [trial 1/1] STARTED" in content
+        assert "TRIAL direct-question x cooperative [trial 1/1] STARTED" in content
         assert "simulate-direct-question_cooperative-01.log" in content
 
-    def test_run_completed(self, tmp_path: Path) -> None:
+    def test_trial_completed(self, tmp_path: Path) -> None:
         orch = OrchestrationLogger(log_dir=tmp_path)
-        orch.run_completed(
+        orch.trial_completed(
             "direct-question",
             "cooperative",
             trial_index=1,
@@ -43,16 +45,16 @@ class TestOrchestrationLogger:
         )
         orch.close()
         content = (tmp_path / "simulate.log").read_text()
-        assert "RUN direct-question x cooperative [trial 1/1] COMPLETED" in content
+        assert "TRIAL direct-question x cooperative [trial 1/1] COMPLETED" in content
         assert "goal_achieved" in content
         assert "3 turns" in content
 
     def test_scenario_completed(self, tmp_path: Path) -> None:
         orch = OrchestrationLogger(log_dir=tmp_path)
-        orch.scenario_completed("direct-question", runs_passed=1, runs_total=1)
+        orch.scenario_completed("direct-question", trials_passed=1, trials_total=1)
         orch.close()
         content = (tmp_path / "simulate.log").read_text()
-        assert "SCENARIO direct-question COMPLETED (1/1 runs passed)" in content
+        assert "SCENARIO direct-question COMPLETED (1/1 trials passed)" in content
 
     def test_json_format(self, tmp_path: Path) -> None:
         import json
@@ -76,7 +78,7 @@ class TestOrchestrationLogger:
 
         content = (tmp_path / "simulate.log").read_text()
         assert "SCENARIO old STARTED" in content
-        assert "RESUME STARTED (2 runs to redo, 3 already complete)" in content
+        assert "RESUME STARTED (2 trials to redo, 3 already complete)" in content
 
 
 class TestOrchestrationTimestampFormat:

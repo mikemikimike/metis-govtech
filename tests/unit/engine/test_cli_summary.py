@@ -1,9 +1,9 @@
 """Tests for final summary output."""
 
 from metis.engine.tui.state import (
-    SimulationRunState,
     SimulationScenarioState,
     SimulationState,
+    SimulationTrialState,
 )
 
 
@@ -23,8 +23,8 @@ class TestFinalSummary:
         scenarios = [
             SimulationScenarioState(
                 scenario_id="scn",
-                runs=[
-                    SimulationRunState(
+                trials=[
+                    SimulationTrialState(
                         scenario_id="scn",
                         persona_id="per",
                         trial_index=1,
@@ -41,7 +41,7 @@ class TestFinalSummary:
             ),
         ]
         state = SimulationState(
-            experiment_id="orca-eval", scenarios=scenarios, total_runs=1
+            experiment_id="orca-eval", scenarios=scenarios, total_trials=1
         )
         summary = _format_final_summary(state, "/path/to/exp", "/path/to/exp/logs")
         assert "orca-eval" in summary
@@ -51,8 +51,8 @@ class TestFinalSummary:
     def test_summary_counts_outcome_categories(self) -> None:
         from metis.engine.cli import _format_final_summary
 
-        def _run(persona: str, phase: str, stop_reason: str) -> SimulationRunState:
-            return SimulationRunState(
+        def _run(persona: str, phase: str, stop_reason: str) -> SimulationTrialState:
+            return SimulationTrialState(
                 scenario_id="scn",
                 persona_id=persona,
                 trial_index=1,
@@ -68,7 +68,7 @@ class TestFinalSummary:
         scenarios = [
             SimulationScenarioState(
                 scenario_id="scn",
-                runs=[
+                trials=[
                     _run("per1", "completed", "goal_achieved"),
                     _run("per2", "completed", "user_abandoned"),
                     _run("per3", "completed", "timeout"),
@@ -78,7 +78,7 @@ class TestFinalSummary:
             ),
         ]
         state = SimulationState(
-            experiment_id="test-exp", scenarios=scenarios, total_runs=4
+            experiment_id="test-exp", scenarios=scenarios, total_trials=4
         )
         summary = _format_final_summary(state, "/exp", "/exp/logs")
         assert "4/4" in summary
@@ -93,8 +93,8 @@ class TestFinalSummary:
         scenarios = [
             SimulationScenarioState(
                 scenario_id="scn",
-                runs=[
-                    SimulationRunState(
+                trials=[
+                    SimulationTrialState(
                         scenario_id="scn",
                         persona_id="per",
                         trial_index=1,
@@ -111,7 +111,7 @@ class TestFinalSummary:
             ),
         ]
         state = SimulationState(
-            experiment_id="time-exp", scenarios=scenarios, total_runs=1
+            experiment_id="time-exp", scenarios=scenarios, total_trials=1
         )
         summary = _format_final_summary(state, "/exp", "/exp/logs")
         # Should contain a time formatted as Xm (minutes)
@@ -123,8 +123,8 @@ class TestFinalSummary:
         scenarios = [
             SimulationScenarioState(
                 scenario_id="scn",
-                runs=[
-                    SimulationRunState(
+                trials=[
+                    SimulationTrialState(
                         scenario_id="scn",
                         persona_id="per",
                         trial_index=1,
@@ -141,7 +141,7 @@ class TestFinalSummary:
             ),
         ]
         state = SimulationState(
-            experiment_id="log-exp", scenarios=scenarios, total_runs=1
+            experiment_id="log-exp", scenarios=scenarios, total_trials=1
         )
         log_dir = "/custom/log/path"
         summary = _format_final_summary(state, "/exp", log_dir)

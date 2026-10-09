@@ -89,8 +89,8 @@ class PlanTask(BaseModel):
     id: str
     personas: list[str]
     trials: int
-    sessionsPlanned: int
-    sessionsRun: int
+    trialsPlanned: int
+    trialsRun: int
     personasRun: list[str]
     metricsAsked: int
     metricsScored: int

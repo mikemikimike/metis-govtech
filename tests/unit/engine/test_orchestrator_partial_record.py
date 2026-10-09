@@ -1,4 +1,4 @@
-"""Tests for Orchestrator.partial_record — preserving in-progress run state."""
+"""Tests for Orchestrator.partial_record — preserving in-progress trial state."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     ChosenAction,
     Observation,
-    RunConfig,
     Scenario,
+    TrialConfig,
     UserAgentOutput,
 )
 
@@ -24,7 +24,7 @@ class _FakeRunner(Runner):
         self.calls = 0
         self.teardown_called = False
 
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         return None
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
@@ -63,20 +63,20 @@ def _scenario() -> Scenario:
 async def test_partial_record_preserves_completed_turns(tmp_path: Path) -> None:
     runner = _FakeRunner()
     scenario = _scenario()
-    run_config = RunConfig(persona="p1", scenario="s1")
+    trial_config = TrialConfig(persona="p1", scenario="s1")
     orch = Orchestrator(
         runner=runner,
         agent=_FakeAgent(),  # type: ignore[arg-type]
-        run_config=run_config,
+        trial_config=trial_config,
         scenario=scenario,
         run_dir=tmp_path,
         fixtures_dir=tmp_path / "fixtures",
         experiment_root=tmp_path,
     )
 
-    # Turn 2's send_turn raises; the exception escapes run().
+    # Turn 2's send_turn raises; the exception escapes execute().
     with pytest.raises(RuntimeError):
-        await orch.run()
+        await orch.execute()
 
     record = orch.partial_record("system_error")
 
@@ -89,21 +89,21 @@ async def test_partial_record_preserves_completed_turns(tmp_path: Path) -> None:
 
 
 def test_partial_record_callable_without_run(tmp_path: Path) -> None:
-    """Verify partial_record() works even when run() was never called."""
+    """Verify partial_record() works even when execute() was never called."""
     runner = _FakeRunner()
     scenario = _scenario()
-    run_config = RunConfig(persona="p1", scenario="s1")
+    trial_config = TrialConfig(persona="p1", scenario="s1")
     orch = Orchestrator(
         runner=runner,
         agent=_FakeAgent(),  # type: ignore[arg-type]
-        run_config=run_config,
+        trial_config=trial_config,
         scenario=scenario,
         run_dir=tmp_path,
         fixtures_dir=tmp_path / "fixtures",
         experiment_root=tmp_path,
     )
 
-    # Do NOT call run(); call partial_record() directly.
+    # Do NOT call execute(); call partial_record() directly.
     record = orch.partial_record("system_error")
 
     assert record.outcome.stop_reason == "system_error"

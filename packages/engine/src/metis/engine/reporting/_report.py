@@ -48,19 +48,19 @@ def load_report_sources(
         )
         return None
 
-    persona_of, trial_outcomes = _load_run_records(run_dir)
+    persona_of, trial_outcomes = _load_trial_records(run_dir)
     return specification, persona_of, trial_outcomes
 
 
-def _load_run_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
+def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
     """Read persona attribution and the exact recorded outcome of each trial.
 
     The persona lives on the simulation record, not on the trace, so it must come from
-    `runs/<name>/record.json`.
+    `trials/<name>/record.json`.
     """
     persona_of: dict[str, str] = {}
     trials: list[dict] = []
-    for record_path in sorted(run_dir.glob("runs/*/record.json")):
+    for record_path in sorted(run_dir.glob("trials/*/record.json")):
         try:
             record = json.loads(record_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
@@ -383,8 +383,8 @@ def build_plan(
                 "scenario": task["scenario_ref"],
                 "personas": [task["persona_ref"]],
                 "trials": task["num_trials"],
-                "sessionsPlanned": task["num_trials"],
-                "sessionsRun": len({(r["task_id"], r["trial_index"]) for r in results}),
+                "trialsPlanned": task["num_trials"],
+                "trialsRun": len({(r["task_id"], r["trial_index"]) for r in results}),
                 "personasRun": sorted({r["persona"] for r in results if r["persona"]}),
                 "metricsAsked": len(asked),
                 "metricsScored": len(

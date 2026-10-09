@@ -30,9 +30,9 @@ from metis.engine.logging import (
     teardown_engine_logging,
 )
 from metis.engine.tui import (
-    SimulationRunState,
     SimulationScenarioState,
     SimulationState,
+    SimulationTrialState,
     TailBuffer,
     TUIContext,
 )
@@ -41,8 +41,8 @@ if TYPE_CHECKING:
     import types as _types
 
     from metis.engine.evaluation.types import EvalResult
-    from metis.engine.simulation.experiment import RunPlanItem
-    from metis.engine.simulation.types import RunRecord, Specification
+    from metis.engine.simulation.experiment import TrialPlanItem
+    from metis.engine.simulation.types import Specification, TrialRecord
 
 app = typer.Typer(help="Run METIS evaluations against traces.")
 
@@ -191,13 +191,13 @@ def _format_final_summary(
     state: SimulationState, experiment_dir: str, log_dir: str
 ) -> str:
     """Build the static final summary printed after TUI exits."""
-    total = state.total_runs
-    completed = state.completed_runs
-    reasons = [r.stop_reason for sc in state.scenarios for r in sc.runs]
+    total = state.total_trials
+    completed = state.completed_trials
+    reasons = [t.stop_reason for sc in state.scenarios for t in sc.trials]
     achieved = sum(1 for r in reasons if r == "goal_achieved")
     abandoned = sum(1 for r in reasons if r == "user_abandoned")
     timed_out = sum(1 for r in reasons if r == "timeout")
-    # Remaining completed runs (e.g. system_error, max_turns) count as errors.
+    # Remaining completed trials (e.g. system_error, max_turns) count as errors.
     errored = completed - achieved - abandoned - timed_out
 
     elapsed = state.elapsed_seconds
@@ -208,7 +208,7 @@ def _format_final_summary(
 
     lines = [
         f"METIS {state.experiment_id} — completed in {elapsed_str}",
-        f"Simulation: {completed}/{total} runs "
+        f"Simulation: {completed}/{total} trials "
         f"({achieved} goal achieved, {abandoned} abandoned, "
         f"{timed_out} timeout, {errored} error)",
         f"Logs:   {log_dir}/",
@@ -254,10 +254,11 @@ def _configure_process_logging(log_level: str, *, use_tui: bool = False) -> None
     structlog.configure(cache_logger_on_first_use=False)
 
 
-def _record_files(experiment_dir: Path) -> list[Path]:
-    """Return run records in the same order used by the old CLI."""
+def _trial_record_files(experiment_dir: Path) -> list[Path]:
+    """Return trial records in the same order used by the old CLI."""
     return sorted(
-        experiment_dir.glob("runs/*/record.json"), key=lambda path: path.stat().st_mtime
+        experiment_dir.glob("trials/*/record.json"),
+        key=lambda path: path.stat().st_mtime,
     )
 
 
@@ -448,26 +449,26 @@ def _print_evaluation_summary(
     console.print(f"{'=' * 60}")
 
 
-def _classify_resume_runs(
+def _classify_resume_trials(
     experiment_dir: Path,
-    run_plan: list[RunPlanItem],
-) -> tuple[list[RunPlanItem], dict[tuple[str, str, int], RunRecord]]:
+    trial_plan: list[TrialPlanItem],
+) -> tuple[list[TrialPlanItem], dict[tuple[str, str, int], TrialRecord]]:
     """Return redo items and valid existing records keyed by plan identity."""
-    from metis.engine.simulation.experiment import run_folder_name
-    from metis.engine.simulation.types import RunRecord
+    from metis.engine.simulation.experiment import trial_folder_name
+    from metis.engine.simulation.types import TrialRecord
 
-    redo: list[RunPlanItem] = []
-    completed: dict[tuple[str, str, int], RunRecord] = {}
-    for item in run_plan:
+    redo: list[TrialPlanItem] = []
+    completed: dict[tuple[str, str, int], TrialRecord] = {}
+    for item in trial_plan:
         scenario, persona, trial_index = item
         record_path = (
             experiment_dir
-            / "runs"
-            / run_folder_name(scenario, persona, trial_index)
+            / "trials"
+            / trial_folder_name(scenario, persona, trial_index)
             / "record.json"
         )
         try:
-            record = RunRecord.load_file(record_path)
+            record = TrialRecord.load_file(record_path)
         except Exception:
             redo.append(item)
             continue
@@ -505,8 +506,8 @@ def _run_simulation(
     _configure_process_logging(log_level, use_tui=use_tui)
 
     from metis.engine.simulation.experiment import (
-        expand_run_plan,
-        run_experiment,
+        execute_experiment,
+        expand_trial_plan,
     )
     from metis.engine.simulation.types import Specification
 
@@ -531,18 +532,20 @@ def _run_simulation(
         fixtures_dir = experiment_dir / "inputs" / "fixtures"
 
     personas_by_id = {persona.id: persona for persona in specification.personas}
-    run_plan = expand_run_plan(specification, personas_by_id)
+    trial_plan = expand_trial_plan(specification, personas_by_id)
     if resume:
-        redo_plan, completed_records = _classify_resume_runs(experiment_dir, run_plan)
+        redo_plan, completed_records = _classify_resume_trials(
+            experiment_dir, trial_plan
+        )
         console.print(
-            f"Resume plan: {experiment_dir} — {len(redo_plan)} runs to redo, "
+            f"Resume plan: {experiment_dir} — {len(redo_plan)} trials to redo, "
             f"{len(completed_records)} already complete"
         )
         if not redo_plan:
             console.print("nothing to resume")
             return experiment_dir
     else:
-        redo_plan = run_plan
+        redo_plan = trial_plan
         completed_records = {}
 
     from metis.engine.simulation.runner_resolver import resolve_runner_factory
@@ -551,7 +554,7 @@ def _run_simulation(
 
     runner_factory = factory_cls()
 
-    run_max_retries, run_retry_delay_seconds = runner_factory.retry_defaults
+    trial_max_retries, trial_retry_delay_seconds = runner_factory.retry_defaults
 
     console.print(f"\n{'=' * 60}")
     console.print("  SIMULATION")
@@ -563,14 +566,14 @@ def _run_simulation(
     resolved_log_dir.mkdir(parents=True, exist_ok=True)
 
     scenarios_state: list[SimulationScenarioState] = []
-    total_run_count = 0
+    total_trial_count = 0
     for scenario in specification.resolved_tasks():
-        run_states: list[SimulationRunState] = []
+        trial_states: list[SimulationTrialState] = []
         for persona_ref in scenario.persona_refs:
             for trial_index in range(1, scenario.num_trials + 1):
-                total_run_count += 1
-                run_states.append(
-                    SimulationRunState(
+                total_trial_count += 1
+                trial_states.append(
+                    SimulationTrialState(
                         scenario_id=scenario.task_id or scenario.id,
                         persona_id=persona_ref,
                         trial_index=trial_index,
@@ -586,7 +589,7 @@ def _run_simulation(
         scenarios_state.append(
             SimulationScenarioState(
                 scenario_id=scenario.task_id or scenario.id,
-                runs=run_states,
+                trials=trial_states,
                 phase="pending",
             )
         )
@@ -594,11 +597,11 @@ def _run_simulation(
     sim_state = SimulationState(
         experiment_id=specification.id,
         scenarios=scenarios_state,
-        total_runs=total_run_count,
+        total_trials=total_trial_count,
     )
 
     for (scenario_id, persona_id, trial_index), record in completed_records.items():
-        sim_state.mark_run_completed(
+        sim_state.mark_trial_completed(
             scenario_id,
             persona_id,
             trial_index=trial_index,
@@ -643,24 +646,24 @@ def _run_simulation(
             shutdown_event.set()
             if not use_tui:
                 console.print(
-                    "\nInterrupt received — finishing current run. "
-                    "No new runs will start. Press Ctrl+C again to force abort.",
+                    "\nInterrupt received — finishing current trial. "
+                    "No new trials will start. Press Ctrl+C again to force abort.",
                     style="yellow",
                 )
 
     prev_handler = signal.signal(signal.SIGINT, _handle_sigint)
     try:
         with tui_ctx if tui_ctx else nullcontext():
-            run_experiment(
+            execute_experiment(
                 runner_factory=runner_factory,
                 specification=specification,
                 personas_by_id=personas_by_id,
                 output_dir=experiment_dir,
                 fixtures_dir=fixtures_dir,
                 concurrency=concurrency,
-                run_plan=redo_plan,
-                run_max_retries=run_max_retries,
-                run_retry_delay_seconds=run_retry_delay_seconds,
+                trial_plan=redo_plan,
+                trial_max_retries=trial_max_retries,
+                trial_retry_delay_seconds=trial_retry_delay_seconds,
                 state=sim_state,
                 orchestration_logger=orchestration_logger,
                 log_router=log_router,
@@ -805,25 +808,25 @@ def _run_evaluation(
     from metis.engine.evaluation.types import EvalResult
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
     from metis.engine.reporting import generate_report
-    from metis.engine.simulation.types import RunRecord
+    from metis.engine.simulation.types import TrialRecord
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
         os.environ["DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"] = "300"
 
     specification = _load_evaluation_specification(experiment_dir)
-    files = _record_files(experiment_dir)
+    files = _trial_record_files(experiment_dir)
     if not files:
         evaluation_log.write("EVALUATION COMPLETED — 0 records")
         return EvaluationOutcome(0, 0, 0, False)
 
     try:
-        records: list[RunRecord] = [RunRecord.load_file(path) for path in files]
+        records: list[TrialRecord] = [TrialRecord.load_file(path) for path in files]
     except Exception as exc:
-        console.print(f"Error: failed to load run record: {exc}", style="bold red")
-        raise EvaluationInputError("failed to load run record") from exc
+        console.print(f"Error: failed to load trial record: {exc}", style="bold red")
+        raise EvaluationInputError("failed to load trial record") from exc
 
-    console.print(f"  Loaded {len(records)} run record(s)")
-    evaluation_log.write(f"LOADED {len(records)} run record(s)")
+    console.print(f"  Loaded {len(records)} trial record(s)")
+    evaluation_log.write(f"LOADED {len(records)} trial record(s)")
     langfuse = get_langfuse_client()
     personas_by_id = {persona.id: persona for persona in specification.personas}
     scenarios_by_id = {
@@ -1076,8 +1079,8 @@ def simulate(
         concurrency=concurrency,
         resume=resume,
     )
-    if not _record_files(output_dir):
-        console.print("No run records found.", style="bold red")
+    if not _trial_record_files(output_dir):
+        console.print("No trial records found.", style="bold red")
         raise typer.Exit(code=1)
     _print_handoff(output_dir, command="simulate")
 
@@ -1173,8 +1176,8 @@ def run(
         concurrency=concurrency,
         resume=resume,
     )
-    if not _record_files(output_dir):
-        console.print("No run records found.", style="bold red")
+    if not _trial_record_files(output_dir):
+        console.print("No trial records found.", style="bold red")
         raise typer.Exit(code=1)
 
     try:

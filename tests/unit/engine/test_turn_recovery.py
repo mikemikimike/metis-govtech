@@ -12,8 +12,8 @@ from metis.engine.simulation.types import (
     ButtonClickAction,
     ChosenAction,
     Observation,
-    RunConfig,
     Scenario,
+    TrialConfig,
     UserAgentOutput,
 )
 
@@ -252,7 +252,7 @@ class _ScriptedRunner(Runner):
         self._script = list(script)
         self.sent: list[tuple[str, int]] = []
 
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         return None
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
@@ -306,7 +306,7 @@ def _orchestrator(runner: Runner, agent: object, tmp_path: Path) -> Orchestrator
     return Orchestrator(
         runner=runner,
         agent=agent,  # type: ignore[arg-type]
-        run_config=RunConfig(persona="p1", scenario="s1", max_turns=20),
+        trial_config=TrialConfig(persona="p1", scenario="s1", max_turns=20),
         scenario=Scenario(
             id="s1", description="a scenario", persona_refs=["p1"], max_turns=20
         ),
@@ -327,7 +327,7 @@ class TestI4DeliveryMultiplicity:
         runner = _ScriptedRunner([PostSubmissionObservationError("DOM gone")])
         orch = _orchestrator(runner, _GivingUpAgent(replies=1), tmp_path)
 
-        record = await orch.run()
+        record = await orch.execute()
 
         assert runner.sent == [("hello", 1)]
         assert record.outcome.stop_reason == "user_abandoned"
@@ -339,7 +339,7 @@ class TestI4DeliveryMultiplicity:
         runner = _ScriptedRunner([TransientDOMError("locator missing")])
         orch = _orchestrator(runner, _GivingUpAgent(replies=1), tmp_path)
 
-        await orch.run()
+        await orch.execute()
 
         assert runner.sent == [("hello", 1)]
 
@@ -352,7 +352,7 @@ class TestI4DeliveryMultiplicity:
         runner = _ScriptedRunner([TransientDOMError("locator missing")])
         orch = _orchestrator(runner, _GivingUpAgent(replies=1), tmp_path)
 
-        record = await orch.run()
+        record = await orch.execute()
 
         response = record.conversation[0].target_response
         assert [r["action_index"] for r in response["action_results"]] == [0]
@@ -375,7 +375,7 @@ class TestEscalation:
         orch = _orchestrator(runner, _GivingUpAgent(replies=3), tmp_path)
 
         with pytest.raises(ConsecutiveFailureEscalation, match="2 consecutive"):
-            await orch.run()
+            await orch.execute()
 
         assert runner.sent == [("hello", 1), ("try again", 1)]
 
@@ -394,7 +394,7 @@ class TestEscalation:
         )
         orch = _orchestrator(runner, _GivingUpAgent(replies=3), tmp_path)
 
-        record = await orch.run()
+        record = await orch.execute()
 
         assert len(runner.sent) == 3
         assert record.outcome.stop_reason == "user_abandoned"
@@ -423,7 +423,7 @@ class TestEscalation:
         runner = _ScriptedRunner([rejected, rejected, rejected])
         orch = _orchestrator(runner, _GivingUpAgent(replies=3), tmp_path)
 
-        record = await orch.run()
+        record = await orch.execute()
 
         assert len(runner.sent) == 3
         assert record.outcome.stop_reason == "user_abandoned"

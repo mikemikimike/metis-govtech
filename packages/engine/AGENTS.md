@@ -28,7 +28,7 @@ Commit the updated schema files alongside the model change.
 
 **v1.x policy (planned):** Starting with the 1.0 release, proper schema versioning will be enforced. Breaking changes will bump `schema_version`, and migration paths will be documented. The bump checklist below applies from 1.0 onward.
 
-When modifying `Specification` or `RunRecord`, check whether the change is **breaking** — i.e., whether data valid under the current version would fail `model_validate()` under the new model.
+When modifying `Specification` or `TrialRecord`, check whether the change is **breaking** — i.e., whether data valid under the current version would fail `model_validate()` under the new model.
 
 **A bump is required for:** new required fields, type changes, field renames, breaking changes in nested models.
 
@@ -36,7 +36,7 @@ When modifying `Specification` or `RunRecord`, check whether the change is **bre
 
 A breaking change to a nested model bumps the version of the root model that contains it:
 - Shared Profile nodes, `Scenario`, `Task`, and `Criterion` → bump `Specification`
-- `RunConfig`, `RunOutcome`, `Artifact`, `ConversationTurn` → bump `RunRecord`
+- `TrialConfig`, `TrialOutcome`, `Artifact`, `ConversationTurn` → bump `TrialRecord`
 
 ### Bump Checklist (applies from v1.0)
 

@@ -40,10 +40,10 @@ class OrcaPlaywrightRunnerFactory:
 
     @property
     def retry_defaults(self) -> tuple[int, float]:
-        """Return (run_max_retries, run_retry_delay_seconds) from config."""
+        """Return (trial_max_retries, trial_retry_delay_seconds) from config."""
         return (
-            self._config.retry.run_max_retries,
-            self._config.retry.run_retry_delay_seconds,
+            self._config.retry.trial_max_retries,
+            self._config.retry.trial_retry_delay_seconds,
         )
 
     async def start(self) -> None:

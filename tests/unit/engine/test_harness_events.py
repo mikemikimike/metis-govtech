@@ -1,9 +1,9 @@
 """Tests that harness emits structured events for TUI/logging integration."""
 
 from metis.engine.tui.state import (
-    SimulationRunState,
     SimulationScenarioState,
     SimulationState,
+    SimulationTrialState,
 )
 
 
@@ -27,8 +27,8 @@ class TestHarnessEventEmission:
         scenarios = [
             SimulationScenarioState(
                 scenario_id="scn",
-                runs=[
-                    SimulationRunState(
+                trials=[
+                    SimulationTrialState(
                         scenario_id="scn",
                         persona_id="per",
                         trial_index=1,
@@ -44,23 +44,25 @@ class TestHarnessEventEmission:
                 phase="pending",
             ),
         ]
-        state = SimulationState(experiment_id="test", scenarios=scenarios, total_runs=1)
+        state = SimulationState(
+            experiment_id="test", scenarios=scenarios, total_trials=1
+        )
 
         # Simulate what harness does
-        state.mark_run_started("scn", "per", trial_index=1)
+        state.mark_trial_started("scn", "per", trial_index=1)
         assert state.active_scenario is not None
 
-        state.mark_run_turn(
+        state.mark_trial_turn(
             "scn", "per", trial_index=1, turn=1, max_turns=20, detail="sending message"
         )
-        run = state.scenarios[0].runs[0]
-        assert run.current_turn == 1
+        trial = state.scenarios[0].trials[0]
+        assert trial.current_turn == 1
 
-        state.mark_run_completed(
+        state.mark_trial_completed(
             "scn",
             "per",
             trial_index=1,
             stop_reason="goal_achieved",
             duration_seconds=100.0,
         )
-        assert state.completed_runs == 1
+        assert state.completed_trials == 1

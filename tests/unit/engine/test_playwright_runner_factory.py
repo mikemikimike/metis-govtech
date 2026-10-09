@@ -129,7 +129,7 @@ async def test_run_response_wait_is_applied_without_changing_shared_config(
     tmp_path: Path,
 ) -> None:
     from metis.engine.simulation.runners.orca_playwright import OrcaPlaywrightRunner
-    from metis.engine.simulation.types import RunConfig
+    from metis.engine.simulation.types import TrialConfig
 
     shared = _make_config()
     runner = OrcaPlaywrightRunner(
@@ -142,7 +142,9 @@ async def test_run_response_wait_is_applied_without_changing_shared_config(
     with patch(
         "metis.engine.simulation.runners.orca_playwright.login", new_callable=AsyncMock
     ) as login:
-        await runner.setup(RunConfig(persona="p", scenario="s", response_wait_ms=45000))
+        await runner.setup(
+            TrialConfig(persona="p", scenario="s", response_wait_ms=45000)
+        )
     assert runner._config.timeouts.response_wait_ms == 45000
     assert shared.timeouts.response_wait_ms == 300000
     assert login.await_args is not None

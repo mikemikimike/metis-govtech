@@ -6,7 +6,7 @@ Hierarchy:
     │   ├── TransientDOMError
     │   ├── PostSubmissionObservationError
     │   └── TargetUnavailableError
-    ├── RunRecoverableError (caught by run layer)
+    ├── TrialRecoverableError (caught by trial layer)
     │   ├── AuthLossError
     │   ├── PageCrashError
     │   ├── ConsecutiveFailureEscalation
@@ -25,7 +25,7 @@ class TurnRecoverableError(SimulationError):
     pass
 
 
-class RunRecoverableError(SimulationError):
+class TrialRecoverableError(SimulationError):
     pass
 
 
@@ -41,20 +41,20 @@ class TargetUnavailableError(TurnRecoverableError):
     """The target kept answering 503 for longer than the runner's retry window."""
 
 
-class AuthLossError(RunRecoverableError):
+class AuthLossError(TrialRecoverableError):
     pass
 
 
-class PageCrashError(RunRecoverableError):
+class PageCrashError(TrialRecoverableError):
     pass
 
 
-class ConsecutiveFailureEscalation(RunRecoverableError):
+class ConsecutiveFailureEscalation(TrialRecoverableError):
     pass
 
 
-class TargetSessionLostError(RunRecoverableError):
-    """A session the runner was driving is gone (404) — reaped or deleted mid-run."""
+class TargetSessionLostError(TrialRecoverableError):
+    """A session the runner was driving is gone (404) — reaped or deleted mid-trial."""
 
 
 class ResponseTimeoutError(SimulationError):

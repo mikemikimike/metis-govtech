@@ -5,13 +5,13 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
-class RunRetryConfig(BaseModel):
-    """Run-level retry budget consumed by the experiment runner.
+class TrialRetryConfig(BaseModel):
+    """Trial-level retry budget consumed by the experiment runner.
 
-    A run that fails with a RunRecoverableError is torn down and retried
-    from scratch up to run_max_retries times, pausing run_retry_delay_seconds
+    A trial that fails with a TrialRecoverableError is torn down and retried
+    from scratch up to trial_max_retries times, pausing trial_retry_delay_seconds
     between attempts.
     """
 
-    run_max_retries: int = 2
-    run_retry_delay_seconds: float = 5.0
+    trial_max_retries: int = 2
+    trial_retry_delay_seconds: float = 5.0

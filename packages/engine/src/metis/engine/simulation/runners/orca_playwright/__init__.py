@@ -20,7 +20,7 @@ from ...types import (
     FormElement,
     FormFillAction,
     Observation,
-    RunConfig,
+    TrialConfig,
     UIState,
     UploadFileAction,
 )
@@ -114,7 +114,7 @@ class OrcaPlaywrightRunner(Runner):
         self._uploaded_files: set[str] = set()
         self._page_dirty = False
 
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         """Apply this run's response wait and prepare the browser session."""
         # Each runner owns its timeout settings, including during concurrent runs.
         self._config = self._config.model_copy(

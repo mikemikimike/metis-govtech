@@ -8,9 +8,9 @@ from pathlib import Path
 from metis.core import Artifact
 from metis.engine.simulation._artifact_store import _save_artifacts, infer_artifact_type
 from metis.engine.simulation.types import (
-    RunConfig,
-    RunOutcome,
-    RunRecord,
+    TrialConfig,
+    TrialOutcome,
+    TrialRecord,
 )
 
 
@@ -33,19 +33,19 @@ class TestInferArtifactType:
 
 class TestSaveArtifacts:
     def test_writes_manifest(self, tmp_path: Path) -> None:
-        run_dir = tmp_path / "runs" / "s1-p1-1"
+        run_dir = tmp_path / "trials" / "s1-p1-1"
         run_dir.mkdir(parents=True)
-        record = RunRecord(
-            config=RunConfig(persona="p1", scenario="s1", metric_refs=[]),
+        record = TrialRecord(
+            config=TrialConfig(persona="p1", scenario="s1", metric_refs=[]),
             target_session_id="sess-abc",
-            outcome=RunOutcome(
+            outcome=TrialOutcome(
                 stop_reason="goal_achieved", total_turns=3, duration_seconds=10.0
             ),
             conversation=[],
             artifacts=[
                 Artifact(
                     name="report.pdf",
-                    path="runs/s1-p1-1/artifacts/report.pdf",
+                    path="trials/s1-p1-1/artifacts/report.pdf",
                     at_turn=2,
                     state="received",
                 ),
@@ -70,7 +70,7 @@ class TestSaveArtifacts:
         by_name = {a["filename"]: a for a in manifest["artifacts"]}
         assert by_name["report.pdf"]["source"] == "target"
         assert by_name["report.pdf"]["path"] == str(
-            tmp_path / "runs/s1-p1-1/artifacts/report.pdf"
+            tmp_path / "trials/s1-p1-1/artifacts/report.pdf"
         )
         assert by_name["input.csv"]["source"] == "fixture"
         assert by_name["report.pdf"]["state"] == "received"
@@ -84,9 +84,9 @@ def test_manifest_keeps_logical_name_when_disk_path_is_decollided(tmp_path):
     art = Artifact(
         name="report.txt", source="target", path="report-2.txt", state="received"
     )
-    record = RunRecord(
-        config=RunConfig(persona="p", scenario="s"),
-        outcome=RunOutcome(
+    record = TrialRecord(
+        config=TrialConfig(persona="p", scenario="s"),
+        outcome=TrialOutcome(
             stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
         ),
         artifacts=[art],
@@ -102,9 +102,9 @@ def test_manifest_keeps_logical_name_when_disk_path_is_decollided(tmp_path):
 
 def test_manifest_carries_external_id(tmp_path: Path) -> None:
     """Built field-by-field, so the new field needs a deliberate line."""
-    record = RunRecord(
-        config=RunConfig(persona="p", scenario="s"),
-        outcome=RunOutcome(
+    record = TrialRecord(
+        config=TrialConfig(persona="p", scenario="s"),
+        outcome=TrialOutcome(
             stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
         ),
         artifacts=[

@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 
 from metis.engine.simulation.runner import Runner, RunnerFactory
-from metis.engine.simulation.types import ChosenAction, Observation, RunConfig
+from metis.engine.simulation.types import ChosenAction, Observation, TrialConfig
 
 
 class FakeRunner(Runner):
     """Minimal Runner for testing."""
 
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         pass
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:

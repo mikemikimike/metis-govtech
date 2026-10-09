@@ -6,16 +6,16 @@ import pytest
 from deepeval.test_case import LLMTestCase
 from pydantic import ValidationError
 
-from metis.engine.cli import _classify_resume_runs
+from metis.engine.cli import _classify_resume_trials
 from metis.engine.evaluation.orchestrator import _resolve_metrics, _run_metric
 from metis.engine.reporting._models import Report
 from metis.engine.reporting._report import build_report
-from metis.engine.simulation.experiment import expand_run_plan, run_folder_name
+from metis.engine.simulation.experiment import expand_trial_plan, trial_folder_name
 from metis.engine.simulation.types import (
-    RunConfig,
-    RunOutcome,
-    RunRecord,
     Specification,
+    TrialConfig,
+    TrialOutcome,
+    TrialRecord,
 )
 
 
@@ -95,9 +95,9 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
     import asyncio
 
     experiment = specification()
-    plan = expand_run_plan(experiment, {p.id: p for p in experiment.personas})
+    plan = expand_trial_plan(experiment, {p.id: p for p in experiment.personas})
     assert len(plan) == 2
-    names = [run_folder_name(*item) for item in plan]
+    names = [trial_folder_name(*item) for item in plan]
     assert len(set(names)) == 2
     rows = []
     outcomes = []
@@ -142,22 +142,22 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
                 "turns": 7,
             }
         )
-        path = tmp_path / "runs" / run_folder_name(*item) / "record.json"
+        path = tmp_path / "trials" / trial_folder_name(*item) / "record.json"
         path.parent.mkdir(parents=True)
-        record = RunRecord(
-            config=RunConfig(
+        record = TrialRecord(
+            config=TrialConfig(
                 task_id=scenario.task_id,
                 trial_index=index,
                 persona=persona.id,
                 scenario=scenario.id,
                 metric_refs=scenario.metric_refs,
             ),
-            outcome=RunOutcome(
+            outcome=TrialOutcome(
                 stop_reason="goal_achieved", total_turns=7, duration_seconds=1
             ),
         )
         path.write_text(record.model_dump_json())
-    assert _classify_resume_runs(tmp_path, plan)[0] == []
+    assert _classify_resume_trials(tmp_path, plan)[0] == []
     report = build_report(experiment.model_dump(), rows, trial_outcomes=outcomes)
     assert report["criteria"]["AC-UNI-22"]["rate"] == 0
     assert report["criteria"]["AC-LONG"]["rate"] == 100
@@ -220,9 +220,25 @@ def test_execution_settings_require_positive_limits_and_nonnegative_retries(
 
 def test_omitted_execution_settings_use_engine_defaults() -> None:
     document = specification().model_dump()
-    fields = ("max_turns", "timeout_minutes", "response_wait_ms", "max_run_retries")
-    for field in fields:
+    task_fields = (
+        "max_turns",
+        "timeout_minutes",
+        "response_wait_ms",
+        "max_run_retries",
+    )
+    resolved_fields = (
+        "max_turns",
+        "timeout_minutes",
+        "response_wait_ms",
+        "max_trial_retries",
+    )
+    for field in task_fields:
         document["tasks"][0].pop(field)
     parsed = Specification.model_validate(document)
     resolved = parsed.resolved_tasks()[0]
-    assert tuple(getattr(resolved, field) for field in fields) == (20, 15, 300000, None)
+    assert tuple(getattr(resolved, field) for field in resolved_fields) == (
+        20,
+        15,
+        300000,
+        None,
+    )

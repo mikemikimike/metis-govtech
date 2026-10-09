@@ -10,9 +10,9 @@ from metis.engine.simulation.exceptions import (
     PageCrashError,
     PostSubmissionObservationError,
     ResponseTimeoutError,
-    RunRecoverableError,
     SimulationError,
     TransientDOMError,
+    TrialRecoverableError,
     TurnRecoverableError,
 )
 from metis.engine.simulation.runners.orca_playwright._config import (
@@ -28,7 +28,7 @@ from metis.engine.simulation.runners.orca_playwright._retry import (
 from metis.engine.simulation.types import (
     ActionRetry,
     ConversationTurn,
-    RunRecord,
+    TrialRecord,
     TurnDiagnostics,
 )
 
@@ -83,29 +83,29 @@ class TestExceptionCatchPatterns:
         except TurnRecoverableError:
             pass  # correct
 
-    def test_run_layer_catches_auth_loss(self) -> None:
+    def test_trial_layer_catches_auth_loss(self) -> None:
         try:
             raise AuthLossError("redirected")
-        except RunRecoverableError:
+        except TrialRecoverableError:
             pass  # correct
 
-    def test_run_layer_catches_page_crash(self) -> None:
+    def test_trial_layer_catches_page_crash(self) -> None:
         try:
             raise PageCrashError("disconnected")
-        except RunRecoverableError:
+        except TrialRecoverableError:
             pass  # correct
 
-    def test_run_layer_catches_escalation(self) -> None:
+    def test_trial_layer_catches_escalation(self) -> None:
         try:
             raise ConsecutiveFailureEscalation("3 failures")
-        except RunRecoverableError:
+        except TrialRecoverableError:
             pass  # correct
 
-    def test_response_timeout_not_caught_by_turn_or_run(self) -> None:
+    def test_response_timeout_not_caught_by_turn_or_trial(self) -> None:
         with pytest.raises(ResponseTimeoutError):
             try:
                 raise ResponseTimeoutError("polling expired")
-            except (TurnRecoverableError, RunRecoverableError):
+            except (TurnRecoverableError, TrialRecoverableError):
                 pytest.fail("Should not be caught by these handlers")
 
     def test_all_are_simulation_errors(self) -> None:
@@ -121,9 +121,9 @@ class TestExceptionCatchPatterns:
 
 
 class TestDiagnosticsWiring:
-    """Verify diagnostics models integrate with RunRecord correctly."""
+    """Verify diagnostics models integrate with TrialRecord correctly."""
 
-    def test_full_run_record_with_diagnostics(self) -> None:
+    def test_full_trial_record_with_diagnostics(self) -> None:
         turn = ConversationTurn(
             turn_number=1,
             user_message="hello",
@@ -147,7 +147,7 @@ class TestDiagnosticsWiring:
             ),
         )
 
-        record = RunRecord.model_validate(
+        record = TrialRecord.model_validate(
             {
                 "schema_version": 2,
                 "config": {"persona": "p", "scenario": "s"},
@@ -186,6 +186,6 @@ class TestRetryConfigIntegration:
             auth={"username": "u", "password": "p"},
         )
         assert config.retry.action_max_attempts == 3
-        assert config.retry.run_max_retries == 2
+        assert config.retry.trial_max_retries == 2
         assert config.retry.turn_max_retries == 1
         assert config.retry.consecutive_turn_failures_limit == 2

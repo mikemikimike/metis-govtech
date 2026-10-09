@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 import yaml
 from pydantic import BaseModel, Field, SecretStr, field_validator
 
-from ...config import RunRetryConfig
+from ...config import TrialRetryConfig
 
 ENV_URL = "ORCA_API_URL"
 ENV_KEY = "ORCA_API_KEY"
@@ -66,7 +66,7 @@ class OrcaApiRunnerConfig(BaseModel):
     store_retry_window_s: float = 30.0
     delete_session_on_teardown: bool = False
     insecure: bool = False
-    retry: RunRetryConfig = Field(default_factory=RunRetryConfig)
+    retry: TrialRetryConfig = Field(default_factory=TrialRetryConfig)
 
     @field_validator("platform_ai_key")
     @classmethod

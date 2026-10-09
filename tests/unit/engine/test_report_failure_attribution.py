@@ -1,6 +1,6 @@
 """How a failed trial gets blamed — the report's failureSource rule (issue #329).
 
-`_load_run_records` decides whether a trial's failure is attributed to the
+`_load_trial_records` decides whether a trial's failure is attributed to the
 product under test or to METIS. Nothing tested it before this file.
 """
 
@@ -9,11 +9,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from metis.engine.reporting._report import _load_run_records, _turn_problems
+from metis.engine.reporting._report import _load_trial_records, _turn_problems
 
 
 def _write_record(run_dir: Path, name: str, record: dict) -> None:
-    trial_dir = run_dir / "runs" / name
+    trial_dir = run_dir / "trials" / name
     trial_dir.mkdir(parents=True)
     (trial_dir / "record.json").write_text(json.dumps(record))
 
@@ -37,7 +37,7 @@ def _record(*target_responses: dict, stop_reason: str = "max_turns") -> dict:
 
 def _only_trial(tmp_path: Path, record: dict) -> dict:
     _write_record(tmp_path, "trial-1", record)
-    _, trials = _load_run_records(tmp_path)
+    _, trials = _load_trial_records(tmp_path)
     assert len(trials) == 1
     return trials[0]
 

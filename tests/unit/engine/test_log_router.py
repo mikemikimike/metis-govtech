@@ -29,15 +29,15 @@ class TestLogRouter:
         LogRouter(log_dir=log_dir, log_format="text")
         assert log_dir.exists()
 
-    def test_open_run_creates_file(self, tmp_path: Path) -> None:
+    def test_open_trial_creates_file(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("direct-question", "cooperative", trial_index=1, num_trials=1)
+        router.open_trial("direct-question", "cooperative", trial_index=1, num_trials=1)
         expected = tmp_path / "simulate-direct-question_cooperative-01.log"
         assert expected.exists()
 
-    def test_reopened_run_replaces_old_log(self, tmp_path: Path) -> None:
+    def test_reopened_trial_replaces_old_log(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         self._process(
             router,
             {
@@ -48,8 +48,8 @@ class TestLogRouter:
                 "trial_index": 1,
             },
         )
-        router.close_run("scn", "per", trial_index=1)
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.close_trial("scn", "per", trial_index=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         self._process(
             router,
             {
@@ -60,7 +60,7 @@ class TestLogRouter:
                 "trial_index": 1,
             },
         )
-        router.close_run("scn", "per", trial_index=1)
+        router.close_trial("scn", "per", trial_index=1)
         content = (tmp_path / "simulate-scn_per-01.log").read_text()
         assert "old attempt" not in content
         assert "new attempt" in content
@@ -68,7 +68,7 @@ class TestLogRouter:
     def test_append_router_keeps_the_previous_log(self, tmp_path: Path) -> None:
         """A resumed process must not destroy the interrupted run's log."""
         first = LogRouter(log_dir=tmp_path, log_format="text")
-        first.open_run("scn", "per", trial_index=1, num_trials=1)
+        first.open_trial("scn", "per", trial_index=1, num_trials=1)
         self._process(
             first,
             {
@@ -79,10 +79,10 @@ class TestLogRouter:
                 "trial_index": 1,
             },
         )
-        first.close_run("scn", "per", trial_index=1)
+        first.close_trial("scn", "per", trial_index=1)
 
         resumed = LogRouter(log_dir=tmp_path, log_format="text", append=True)
-        resumed.open_run("scn", "per", trial_index=1, num_trials=1)
+        resumed.open_trial("scn", "per", trial_index=1, num_trials=1)
         self._process(
             resumed,
             {
@@ -93,7 +93,7 @@ class TestLogRouter:
                 "trial_index": 1,
             },
         )
-        resumed.close_run("scn", "per", trial_index=1)
+        resumed.close_trial("scn", "per", trial_index=1)
 
         content = (tmp_path / "simulate-scn_per-01.log").read_text()
         assert "old process" in content
@@ -102,10 +102,10 @@ class TestLogRouter:
 
     def test_trial_zero_padding_multi(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scenario", "persona", trial_index=1, num_trials=10)
+        router.open_trial("scenario", "persona", trial_index=1, num_trials=10)
         expected = tmp_path / "simulate-scenario_persona-01.log"
         assert expected.exists()
-        router.open_run("scenario", "persona", trial_index=10, num_trials=10)
+        router.open_trial("scenario", "persona", trial_index=10, num_trials=10)
         expected2 = tmp_path / "simulate-scenario_persona-10.log"
         assert expected2.exists()
 
@@ -118,7 +118,7 @@ class TestLogRouter:
 
     def test_process_routes_to_active_run_file(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "test message",
             "level": "info",
@@ -138,7 +138,7 @@ class TestLogRouter:
         router = LogRouter(
             log_dir=tmp_path, log_format="text", tail_buffers={"w0": tail}
         )
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "tail test",
             "level": "warning",
@@ -157,9 +157,9 @@ class TestLogRouter:
             f"tail prefix not ISO-8601 Z + (+elapsed): {matching[0]!r}"
         )
 
-    def test_close_run_flushes(self, tmp_path: Path) -> None:
+    def test_close_trial_flushes(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "flush test",
             "level": "debug",
@@ -169,7 +169,7 @@ class TestLogRouter:
             "trial_index": 1,
         }
         self._process(router, event_dict)
-        router.close_run("scn", "per", trial_index=1)
+        router.close_trial("scn", "per", trial_index=1)
         log_file = tmp_path / "simulate-scn_per-01.log"
         content = log_file.read_text()
         assert "flush test" in content
@@ -178,7 +178,7 @@ class TestLogRouter:
         import json
 
         router = LogRouter(log_dir=tmp_path, log_format="json")
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "json test",
             "level": "info",
@@ -208,7 +208,7 @@ class TestLogRouter:
 
     def test_text_file_includes_rendered_exception(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         rendered_tb = (
             "Traceback (most recent call last):\n"
             '  File "runner.py", line 42, in run\n'
@@ -234,7 +234,7 @@ class TestLogRouter:
 
     def test_text_file_no_exception_stays_single_line(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "ordinary event",
             "level": "info",
@@ -249,24 +249,24 @@ class TestLogRouter:
         # Exactly one line (plus the trailing newline written by process()).
         assert content == "[2026-08-05T10:00:00] [INFO    ] ordinary event\n"
 
-    def test_open_run_with_run_dir_creates_symlink(self, tmp_path: Path) -> None:
+    def test_open_trial_with_run_dir_creates_symlink(self, tmp_path: Path) -> None:
         log_dir = tmp_path / "logs"
         run_dir = tmp_path / "runs" / "my-run"
         run_dir.mkdir(parents=True)
         router = LogRouter(log_dir=log_dir, log_format="text")
-        router.open_run("scn", "per", trial_index=1, num_trials=1, run_dir=run_dir)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1, run_dir=run_dir)
         symlink = run_dir / "simulate.log"
         assert symlink.is_symlink(), "simulate.log should be a symlink"
         assert symlink.resolve() == (log_dir / "simulate-scn_per-01.log").resolve()
 
-    def test_open_run_with_run_dir_writes_visible_through_symlink(
+    def test_open_trial_with_run_dir_writes_visible_through_symlink(
         self, tmp_path: Path
     ) -> None:
         log_dir = tmp_path / "logs"
         run_dir = tmp_path / "runs" / "my-run"
         run_dir.mkdir(parents=True)
         router = LogRouter(log_dir=log_dir, log_format="text")
-        router.open_run("scn", "per", trial_index=1, num_trials=1, run_dir=run_dir)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1, run_dir=run_dir)
         event_dict = {
             "event": "hello through symlink",
             "level": "info",
@@ -280,15 +280,15 @@ class TestLogRouter:
         content = (run_dir / "simulate.log").read_text()
         assert "hello through symlink" in content
 
-    def test_open_run_without_run_dir_unchanged(self, tmp_path: Path) -> None:
+    def test_open_trial_without_run_dir_unchanged(self, tmp_path: Path) -> None:
         router = LogRouter(log_dir=tmp_path, log_format="text")
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         # No simulate.log symlink should appear at tmp_path level
         assert not (tmp_path / "simulate.log").exists()
         expected_log = tmp_path / "simulate-scn_per-01.log"
         assert expected_log.exists()
 
-    def test_open_run_symlink_failure_does_not_raise(
+    def test_open_trial_symlink_failure_does_not_raise(
         self, tmp_path, monkeypatch
     ) -> None:
         log_dir = tmp_path / "logs"
@@ -303,13 +303,13 @@ class TestLogRouter:
 
         monkeypatch.setattr(_Path, "symlink_to", broken_symlink)
         # Should not raise — guard swallows the error
-        router.open_run("scn", "per", trial_index=1, num_trials=1, run_dir=run_dir)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1, run_dir=run_dir)
 
     def test_json_file_carries_exception_field(self, tmp_path: Path) -> None:
         import json
 
         router = LogRouter(log_dir=tmp_path, log_format="json")
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         event_dict = {
             "event": "worker crash",
             "level": "error",
@@ -340,7 +340,7 @@ class TestTracebackEndToEnd:
     def test_exception_traceback_lands_in_text_run_file(self, tmp_path: Path) -> None:
         configure_logging(level="DEBUG", pretty=True)
         router = setup_engine_logging(tmp_path, log_format="text", use_tui=True)
-        router.open_run("scn", "per", trial_index=1, num_trials=1)
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
         log = get_logger("test.e2e")
         try:
             raise RuntimeError("kaboom-e2e")

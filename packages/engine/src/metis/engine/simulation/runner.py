@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from .types import ChosenAction, Observation, RunConfig
+    from .types import ChosenAction, Observation, TrialConfig
 
 
 class Runner(ABC):
@@ -26,7 +26,7 @@ class Runner(ABC):
     """
 
     @abstractmethod
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         """Prepare the connection (launch browser, authenticate, open session)."""
 
     @abstractmethod

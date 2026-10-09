@@ -22,7 +22,7 @@ def _write_source(tmp_path: Path) -> Path:
 
 
 def _write_record_marker(experiment_dir: Path) -> Path:
-    record_path = experiment_dir / "runs" / "task-1-alice-1" / "record.json"
+    record_path = experiment_dir / "trials" / "task-1-alice-1" / "record.json"
     record_path.parent.mkdir(parents=True, exist_ok=True)
     record_path.write_text("{}")
     return experiment_dir

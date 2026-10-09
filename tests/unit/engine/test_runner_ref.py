@@ -12,8 +12,8 @@ from metis.engine.simulation.runner_resolver import resolve_runner_factory
 from metis.engine.simulation.types import (
     ChosenAction,
     Observation,
-    RunConfig,
     Specification,
+    TrialConfig,
 )
 
 
@@ -129,7 +129,7 @@ class TestResolveRunnerFactory:
 
 
 class StubRunner(Runner):
-    async def setup(self, config: RunConfig) -> None:
+    async def setup(self, config: TrialConfig) -> None:
         pass
 
     async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:

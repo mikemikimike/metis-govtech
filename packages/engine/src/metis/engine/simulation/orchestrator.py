@@ -2,7 +2,7 @@
 
 Extracted from the former harness/_environment.py. The Orchestrator manages
 stopping conditions, UserAgent interaction, conversation recording, and
-RunRecord assembly without knowing anything about the transport layer.
+TrialRecord assembly without knowing anything about the transport layer.
 """
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ from .exceptions import (
     ConsecutiveFailureEscalation,
     PostSubmissionObservationError,
     ResponseTimeoutError,
-    RunRecoverableError,
     TargetSessionEnded,
     TargetUnavailableError,
+    TrialRecoverableError,
     TurnRecoverableError,
 )
 from .types import (
@@ -35,11 +35,11 @@ from .types import (
     ChosenAction,
     ConversationTurn,
     Observation,
-    RunConfig,
-    RunMeta,
-    RunOutcome,
-    RunRecord,
     Scenario,
+    TrialConfig,
+    TrialMeta,
+    TrialOutcome,
+    TrialRecord,
     TurnDiagnostics,
     UserAgentInput,
 )
@@ -116,7 +116,7 @@ class Orchestrator:
         self,
         runner: Runner,
         agent: UserAgent,
-        run_config: RunConfig,
+        trial_config: TrialConfig,
         scenario: Scenario,
         run_dir: Path,
         fixtures_dir: Path,
@@ -129,7 +129,7 @@ class Orchestrator:
     ) -> None:
         self._runner = runner
         self._agent = agent
-        self._run_config = run_config
+        self._trial_config = trial_config
         self._scenario = scenario
         self._run_dir = run_dir
         self._fixtures_dir = fixtures_dir
@@ -138,7 +138,7 @@ class Orchestrator:
             fixture_artifacts
             if fixture_artifacts is not None
             else build_fixture_artifacts(
-                run_config.fixtures, fixtures_dir, self._experiment_root
+                trial_config.fixtures, fixtures_dir, self._experiment_root
             )
         )
         # Staged fixtures by logical name — the enrichment loop swaps a
@@ -150,15 +150,15 @@ class Orchestrator:
         self._shutdown_event = shutdown_event
 
         # In-progress state mirrored here so a caller can still build a
-        # record if run() raises. run() overwrites these on entry.
+        # record if execute() raises. execute() overwrites these on entry.
         self._conversation: list[ConversationTurn] = []
         self._artifacts_collected: list[Artifact] = []
         self._start_time: float = time.time()
         self._target_session_id: str | None = None
 
-    async def run(self) -> RunRecord:
-        """Execute the full simulation run."""
-        run_config = self._run_config
+    async def execute(self) -> TrialRecord:
+        """Execute the full simulation trial."""
+        trial_config = self._trial_config
         start_time = time.time()
         conversation: list[ConversationTurn] = []
         artifacts_collected: list[Artifact] = []
@@ -174,12 +174,12 @@ class Orchestrator:
         self._target_session_id = None
 
         logger.info("=" * 60)
-        logger.info("[sim] START: %s x %s", run_config.persona, run_config.scenario)
+        logger.info("[sim] START: %s x %s", trial_config.persona, trial_config.scenario)
         logger.info(
             "[sim] Config: max_turns=%d, timeout=%d min, response_wait=%dms",
-            run_config.max_turns,
-            run_config.timeout_minutes,
-            run_config.response_wait_ms,
+            trial_config.max_turns,
+            trial_config.timeout_minutes,
+            trial_config.response_wait_ms,
         )
         logger.info("[sim] Scenario goal: %s", self._scenario.description[:120])
         logger.info("=" * 60)
@@ -210,7 +210,7 @@ class Orchestrator:
         consecutive_failures = 0
 
         try:
-            await self._runner.setup(run_config)
+            await self._runner.setup(trial_config)
 
             while True:
                 if self._shutdown_event and self._shutdown_event.is_set():
@@ -232,27 +232,27 @@ class Orchestrator:
                     "[turn %d] Starting (elapsed: %.1fs / %ds max)",
                     turn_count,
                     elapsed_s,
-                    run_config.timeout_minutes * 60,
+                    trial_config.timeout_minutes * 60,
                 )
 
                 if self._state:
-                    self._state.mark_run_turn(
+                    self._state.mark_trial_turn(
                         self._scenario.task_id or self._scenario.id,
-                        run_config.persona,
+                        trial_config.persona,
                         trial_index=self._trial_index,
                         turn=turn_count,
-                        max_turns=run_config.max_turns,
+                        max_turns=trial_config.max_turns,
                         detail="sending message...",
                     )
                     if self._tui_ctx:
                         self._tui_ctx.refresh()
 
                 # --- Stopping rule: max turns ---
-                if turn_count > run_config.max_turns:
+                if turn_count > trial_config.max_turns:
                     logger.info(
                         "[turn %d] STOP: max_turns reached (%d)",
                         turn_count,
-                        run_config.max_turns,
+                        trial_config.max_turns,
                     )
                     return self._build_record(
                         "max_turns",
@@ -263,12 +263,12 @@ class Orchestrator:
                     )
 
                 # --- Stopping rule: timeout ---
-                if elapsed_s >= run_config.timeout_minutes * 60:
+                if elapsed_s >= trial_config.timeout_minutes * 60:
                     logger.info(
                         "[turn %d] STOP: timeout (%.1fs >= %ds)",
                         turn_count,
                         elapsed_s,
-                        run_config.timeout_minutes * 60,
+                        trial_config.timeout_minutes * 60,
                     )
                     return self._build_record(
                         "timeout",
@@ -321,7 +321,7 @@ class Orchestrator:
                 forwarded, withheld = withhold_unstaged_uploads(
                     current_actions,
                     set(self._fixtures_by_name),
-                    set(run_config.fixtures),
+                    set(trial_config.fixtures),
                 )
 
                 # Send turn to target via runner
@@ -342,7 +342,7 @@ class Orchestrator:
                         start_time,
                         target_session_id or await self._runner.get_session_id(),
                     )
-                except RunRecoverableError:
+                except TrialRecoverableError:
                     # Escalated by the run layer, never absorbed here. Listed
                     # before the turn-recoverable handler for the reader's
                     # sake — the two families are disjoint, so this is
@@ -474,11 +474,11 @@ class Orchestrator:
                     )
 
                 # Re-check stopping after turn
-                if turn_count >= run_config.max_turns:
+                if turn_count >= trial_config.max_turns:
                     logger.info(
                         "[turn %d] STOP: max_turns reached (%d)",
                         turn_count,
-                        run_config.max_turns,
+                        trial_config.max_turns,
                     )
                     return self._build_record(
                         "max_turns",
@@ -489,12 +489,12 @@ class Orchestrator:
                     )
 
                 elapsed_after_turn = time.time() - start_time
-                if elapsed_after_turn >= run_config.timeout_minutes * 60:
+                if elapsed_after_turn >= trial_config.timeout_minutes * 60:
                     logger.info(
                         "[turn %d] STOP: timeout (%.1fs >= %ds)",
                         turn_count,
                         elapsed_after_turn,
-                        run_config.timeout_minutes * 60,
+                        trial_config.timeout_minutes * 60,
                     )
                     return self._build_record(
                         "timeout",
@@ -506,12 +506,12 @@ class Orchestrator:
 
                 # TUI update
                 if self._state:
-                    self._state.mark_run_turn(
+                    self._state.mark_trial_turn(
                         self._scenario.task_id or self._scenario.id,
-                        run_config.persona,
+                        trial_config.persona,
                         trial_index=self._trial_index,
                         turn=turn_count,
-                        max_turns=run_config.max_turns,
+                        max_turns=trial_config.max_turns,
                         detail="waiting for LLM...",
                     )
                     if self._tui_ctx:
@@ -528,7 +528,7 @@ class Orchestrator:
 
                 turn_payload = UserAgentInput(
                     observation=observation,
-                    run_meta=RunMeta(
+                    trial_meta=TrialMeta(
                         turn_number=turn_count,
                         elapsed_seconds=int(time.time() - start_time),
                     ),
@@ -634,13 +634,13 @@ class Orchestrator:
         artifacts_collected: list[Artifact],
         start_time: float,
         target_session_id: str | None,
-    ) -> RunRecord:
-        """Assemble the final RunRecord from accumulated state."""
+    ) -> TrialRecord:
+        """Assemble the final TrialRecord from accumulated state."""
         duration_seconds = time.time() - start_time
-        return RunRecord(
-            config=self._run_config,
+        return TrialRecord(
+            config=self._trial_config,
             target_session_id=target_session_id,
-            outcome=RunOutcome(
+            outcome=TrialOutcome(
                 stop_reason=stop_reason,
                 total_turns=len(conversation),
                 duration_seconds=round(duration_seconds, 1),
@@ -653,13 +653,13 @@ class Orchestrator:
             ),
         )
 
-    def partial_record(self, stop_reason: str) -> RunRecord:
-        """Build a RunRecord from whatever progress this run has made.
+    def partial_record(self, stop_reason: str) -> TrialRecord:
+        """Build a TrialRecord from whatever progress this trial has made.
 
-        Used by the experiment worker when run() raises unexpectedly, so
+        Used by the experiment worker when execute() raises unexpectedly, so
         completed turns are preserved instead of discarded. total_turns is
         the number of turns recorded so far; duration is measured from the
-        run's start.
+        trial's start.
         """
         return self._build_record(
             stop_reason,

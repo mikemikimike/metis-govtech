@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from metis.engine.reporting._models import Trial
-from metis.engine.reporting._report import _load_run_records
+from metis.engine.reporting._report import _load_trial_records
 
 _BASE: dict = {
     "config": {"persona": "p", "scenario": "s"},
@@ -21,20 +21,20 @@ _BASE: dict = {
 
 
 def _write_record(root: Path, folder: str, record: dict) -> None:
-    run = root / "runs" / folder
-    run.mkdir(parents=True)
-    (run / "record.json").write_text(json.dumps(record))
+    trial = root / "trials" / folder
+    trial.mkdir(parents=True)
+    (trial / "record.json").write_text(json.dumps(record))
 
 
-def test_a_clean_run_reports_attempt_one(tmp_path: Path) -> None:
+def test_a_clean_trial_reports_attempt_one(tmp_path: Path) -> None:
     _write_record(tmp_path, "s-p-1", _BASE)
 
-    _, trials = _load_run_records(tmp_path)
+    _, trials = _load_trial_records(tmp_path)
 
     assert trials[0]["attempt"] == 1
 
 
-def test_a_retried_run_reports_its_attempt(tmp_path: Path) -> None:
+def test_a_retried_trial_reports_its_attempt(tmp_path: Path) -> None:
     _write_record(
         tmp_path,
         "s-p-1",
@@ -55,7 +55,7 @@ def test_a_retried_run_reports_its_attempt(tmp_path: Path) -> None:
         },
     )
 
-    _, trials = _load_run_records(tmp_path)
+    _, trials = _load_trial_records(tmp_path)
 
     assert trials[0]["attempt"] == 2
     # The per-attempt detail is deliberately NOT mirrored into the report: it
@@ -98,4 +98,4 @@ def test_task_plan_uses_the_selected_trial_count() -> None:
         ],
     }
     task = build_plan(specification, [], {})["tasks"][0]
-    assert task["trials"] == task["sessionsPlanned"] == 1
+    assert task["trials"] == task["trialsPlanned"] == 1

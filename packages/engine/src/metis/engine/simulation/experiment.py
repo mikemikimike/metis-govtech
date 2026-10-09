@@ -20,16 +20,16 @@ from metis.core.logging import get_logger
 from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
 from ._fixture_artifacts import build_fixture_artifacts
 from .artifact_summarizer import resolve_fixture_descriptions
-from .exceptions import RunRecoverableError
+from .exceptions import TrialRecoverableError
 from .orchestrator import Orchestrator
 from .types import (
     Persona,
-    RunConfig,
-    RunFailure,
-    RunOutcome,
-    RunRecord,
     Scenario,
     Specification,
+    TrialConfig,
+    TrialFailure,
+    TrialOutcome,
+    TrialRecord,
 )
 from .user_agent.agent import UserAgent
 
@@ -42,12 +42,12 @@ if TYPE_CHECKING:
     from .runner import RunnerFactory
 
 
-class RunPlanItem(NamedTuple):
-    """One planned run: a scenario × persona pair at a specific trial.
+class TrialPlanItem(NamedTuple):
+    """One planned trial: a scenario × persona pair at a specific trial index.
 
     ``trial_index`` is 1-based: the first trial is 1 (not 0). It numbers the
     repeated trials of a scenario/persona pair (1..``scenario.num_trials``) and
-    is used verbatim in log filenames, run-folder names, and TUI/log output.
+    is used verbatim in log filenames, trial-folder names, and TUI/log output.
     """
 
     scenario: Scenario
@@ -56,20 +56,20 @@ class RunPlanItem(NamedTuple):
 
 
 __all__ = [
-    "RunPlanItem",
-    "expand_run_plan",
-    "run_experiment",
-    "run_folder_name",
+    "TrialPlanItem",
+    "execute_experiment",
+    "expand_trial_plan",
+    "trial_folder_name",
 ]
 
 logger = get_logger()
 
 
-def expand_run_plan(
+def expand_trial_plan(
     specification: Specification, personas_by_id: dict[str, Persona]
-) -> list[RunPlanItem]:
+) -> list[TrialPlanItem]:
     """Expand an experiment into scenario, persona, and 1-based trial items."""
-    runs: list[RunPlanItem] = []
+    trials: list[TrialPlanItem] = []
     for scenario in specification.resolved_tasks():
         for persona_ref in scenario.persona_refs:
             persona = personas_by_id.get(persona_ref)
@@ -80,27 +80,27 @@ def expand_run_plan(
                     f"Available: {available}"
                 )
             for trial_index in range(1, scenario.num_trials + 1):
-                runs.append(RunPlanItem(scenario, persona, trial_index))
-    return runs
+                trials.append(TrialPlanItem(scenario, persona, trial_index))
+    return trials
 
 
-def run_folder_name(scenario: Scenario, persona: Persona, trial_index: int) -> str:
-    """Return the run-folder name from the Task and Persona IDs. ``trial_index`` is 1-based (first trial is 1)."""
+def trial_folder_name(scenario: Scenario, persona: Persona, trial_index: int) -> str:
+    """Return the trial-folder name from the Task and Persona IDs. ``trial_index`` is 1-based (first trial is 1)."""
     pad = len(str(scenario.num_trials))
     return f"{scenario.task_id or scenario.id}-{persona.id}-{trial_index:0{pad}}"
 
 
-def run_experiment(
+def execute_experiment(
     runner_factory: RunnerFactory,
     specification: Specification,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
     *,
-    run_plan: list[RunPlanItem],
+    trial_plan: list[TrialPlanItem],
     output_dir: Path | None = None,
     concurrency: int = 1,
-    run_max_retries: int = 2,
-    run_retry_delay_seconds: float = 5.0,
+    trial_max_retries: int = 2,
+    trial_retry_delay_seconds: float = 5.0,
     # Optional hooks for TUI / structured-logging integration
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
@@ -113,16 +113,16 @@ def run_experiment(
     Sync entry point — delegates to the async orchestrator via asyncio.run().
     """
     asyncio.run(
-        _run_experiment_async(
+        _execute_experiment_async(
             runner_factory=runner_factory,
             specification=specification,
             personas_by_id=personas_by_id,
             fixtures_dir=fixtures_dir,
             output_dir=output_dir,
             concurrency=concurrency,
-            run_plan=run_plan,
-            run_max_retries=run_max_retries,
-            run_retry_delay_seconds=run_retry_delay_seconds,
+            trial_plan=trial_plan,
+            trial_max_retries=trial_max_retries,
+            trial_retry_delay_seconds=trial_retry_delay_seconds,
             state=state,
             orchestration_logger=orchestration_logger,
             log_router=log_router,
@@ -132,16 +132,16 @@ def run_experiment(
     )
 
 
-async def _run_experiment_async(
+async def _execute_experiment_async(
     runner_factory: RunnerFactory,
     specification: Specification,
     personas_by_id: dict[str, Persona],
     fixtures_dir: Path,
-    run_plan: list[RunPlanItem],
+    trial_plan: list[TrialPlanItem],
     output_dir: Path | None = None,
     concurrency: int = 1,
-    run_max_retries: int = 2,
-    run_retry_delay_seconds: float = 5.0,
+    trial_max_retries: int = 2,
+    trial_retry_delay_seconds: float = 5.0,
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
@@ -149,11 +149,11 @@ async def _run_experiment_async(
     shutdown_event: threading.Event | None = None,
 ) -> None:
     """Async experiment orchestrator with concurrent runner contexts."""
-    total_runs = len(run_plan)
+    total_trials = len(trial_plan)
 
     logger.info("=" * 60)
     logger.info("[experiment] STARTING EXPERIMENT")
-    logger.info("[experiment]   Total runs: %d", total_runs)
+    logger.info("[experiment]   Total trials: %d", total_trials)
     logger.info("[experiment]   Concurrency: %d worker(s)", concurrency)
     logger.info("[experiment]   Output dir: %s", output_dir or "results/ (default)")
     logger.info(
@@ -162,8 +162,10 @@ async def _run_experiment_async(
     logger.info("[experiment]   Personas: %s", ", ".join(personas_by_id.keys()))
     logger.info("=" * 60)
 
-    # Distribute runs across workers (round-robin for balanced load)
-    runs_per_worker: list[list[RunPlanItem]] = _distribute_runs(run_plan, concurrency)
+    # Distribute trials across workers (round-robin for balanced load)
+    trials_per_worker: list[list[TrialPlanItem]] = _distribute_trials(
+        trial_plan, concurrency
+    )
 
     # Console lock for safe Rich output from concurrent workers
     console_lock = asyncio.Lock()
@@ -189,21 +191,21 @@ async def _run_experiment_async(
     try:
         active_worker_ids: list[int] = []
         worker_tasks = []
-        for wid, worker_runs in enumerate(runs_per_worker):
-            if worker_runs:
+        for wid, worker_trials in enumerate(trials_per_worker):
+            if worker_trials:
                 active_worker_ids.append(wid)
                 worker_tasks.append(
                     _worker(
                         worker_id=wid,
                         runner_factory=runner_factory,
-                        worker_runs=worker_runs,
+                        worker_trials=worker_trials,
                         experiment_root=experiment_root,
                         fixtures_dir=fixtures_dir,
                         fixture_content_descriptions=resolved_fixture_descriptions,
                         console_lock=console_lock,
                         started_scenarios=started_scenarios,
-                        run_max_retries=run_max_retries,
-                        run_retry_delay_seconds=run_retry_delay_seconds,
+                        trial_max_retries=trial_max_retries,
+                        trial_retry_delay_seconds=trial_retry_delay_seconds,
                         state=state,
                         orchestration_logger=orchestration_logger,
                         log_router=log_router,
@@ -215,7 +217,7 @@ async def _run_experiment_async(
         raw_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
 
         # Collect results, log any worker crashes
-        all_records: list[RunRecord] = []
+        all_records: list[TrialRecord] = []
         for wid, result in zip(active_worker_ids, raw_results, strict=True):
             if isinstance(result, BaseException):
                 logger.error("[experiment] Worker w%d crashed: %s", wid, result)
@@ -246,31 +248,33 @@ async def _run_experiment_async(
 async def _worker(
     worker_id: int,
     runner_factory: RunnerFactory,
-    worker_runs: list[RunPlanItem],
+    worker_trials: list[TrialPlanItem],
     experiment_root: Path,
     fixtures_dir: Path,
     fixture_content_descriptions: dict[str, str],
     console_lock: asyncio.Lock,
     started_scenarios: set[str],
-    run_max_retries: int,
-    run_retry_delay_seconds: float,
+    trial_max_retries: int,
+    trial_retry_delay_seconds: float,
     state: SimulationState | None = None,
     orchestration_logger: OrchestrationLogger | None = None,
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
     shutdown_event: threading.Event | None = None,
-) -> list[RunRecord]:
-    """One concurrent worker: creates a fresh runner per run for isolation."""
+) -> list[TrialRecord]:
+    """One concurrent worker: creates a fresh runner per trial for isolation."""
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(worker=f"w{worker_id}")
 
     logger.info(
-        "[experiment] Worker w%d starting with %d run(s)", worker_id, len(worker_runs)
+        "[experiment] Worker w%d starting with %d trial(s)",
+        worker_id,
+        len(worker_trials),
     )
 
     try:
-        records: list[RunRecord] = []
-        for scenario, persona, trial_index in worker_runs:
+        records: list[TrialRecord] = []
+        for scenario, persona, trial_index in worker_trials:
             task_id = scenario.task_id or scenario.id
             if shutdown_event and shutdown_event.is_set():
                 logger.info(
@@ -290,8 +294,8 @@ async def _worker(
                 trial_label,
             )
 
-            folder_name = run_folder_name(scenario, persona, trial_index)
-            run_dir = experiment_root / "runs" / folder_name
+            folder_name = trial_folder_name(scenario, persona, trial_index)
+            run_dir = experiment_root / "trials" / folder_name
             run_dir.mkdir(parents=True, exist_ok=True)
 
             # Bind run context for structured logging
@@ -309,14 +313,14 @@ async def _worker(
                     orchestration_logger.scenario_started(task_id)
 
             if orchestration_logger:
-                orchestration_logger.run_started(
+                orchestration_logger.trial_started(
                     task_id,
                     persona.id,
                     trial_index=trial_index,
                     num_trials=scenario.num_trials,
                 )
             if log_router:
-                log_router.open_run(
+                log_router.open_trial(
                     task_id,
                     persona.id,
                     trial_index=trial_index,
@@ -324,7 +328,7 @@ async def _worker(
                     run_dir=run_dir,
                 )
             if state:
-                state.mark_run_started(
+                state.mark_trial_started(
                     task_id,
                     persona.id,
                     trial_index=trial_index,
@@ -347,7 +351,7 @@ async def _worker(
             # different reason in each of the two resume cases. An interrupted
             # run never wrote a record.json, so its attempts are genuinely
             # unrecoverable. A system_error run did write one, and
-            # _classify_resume_runs in cli.py reads it to decide the run needs
+            # _classify_resume_trials in cli.py reads it to decide the trial needs
             # redoing at all — so that record's attempt_number and prior_failures
             # are in hand at that moment, and are deliberately discarded when the
             # redone run overwrites the file. Carrying them forward is deferred,
@@ -357,12 +361,12 @@ async def _worker(
             # interrupted, then succeeded after a --resume reports attempt 1, so
             # the report's "retried" marker does not fire for it. Issue #346.
             max_attempts = 1 + (
-                scenario.max_run_retries
-                if scenario.max_run_retries is not None
-                else run_max_retries
+                scenario.max_trial_retries
+                if scenario.max_trial_retries is not None
+                else trial_max_retries
             )
-            prior_failures: list[RunFailure] = []
-            record: RunRecord | None = None
+            prior_failures: list[TrialFailure] = []
+            record: TrialRecord | None = None
 
             for attempt in range(1, max_attempts + 1):
                 # Every attempt at this run shares run_dir, so a retry used to
@@ -395,7 +399,7 @@ async def _worker(
                     fixture_content_descriptions,
                 )
 
-                run_config = RunConfig(
+                trial_config = TrialConfig(
                     persona=persona.id,
                     scenario=scenario.id,
                     task_id=task_id,
@@ -411,7 +415,7 @@ async def _worker(
                     orchestrator = Orchestrator(
                         runner=runner,
                         agent=agent,
-                        run_config=run_config,
+                        trial_config=trial_config,
                         scenario=scenario,
                         run_dir=run_dir,
                         fixtures_dir=fixtures_dir,
@@ -422,12 +426,12 @@ async def _worker(
                         tui_ctx=tui_ctx,
                         shutdown_event=shutdown_event,
                     )
-                    record = await orchestrator.run()
+                    record = await orchestrator.execute()
                     record.attempt_number = attempt
                     record.max_allowed_attempts = max_attempts
                     record.prior_failures = prior_failures
                     break
-                except RunRecoverableError as exc:
+                except TrialRecoverableError as exc:
                     partial = (
                         orchestrator.partial_record("system_error")
                         if orchestrator is not None
@@ -437,7 +441,7 @@ async def _worker(
                         partial.outcome.total_turns if partial is not None else 0
                     )
                     duration_ms = int((time.time() - run_start) * 1000)
-                    failure = RunFailure(
+                    failure = TrialFailure(
                         attempt_number=attempt,
                         failure_type=type(exc).__name__,
                         submission_phase="unknown",
@@ -464,10 +468,10 @@ async def _worker(
                             record.max_allowed_attempts = max_attempts
                             record.prior_failures = prior_failures
                         else:
-                            record = RunRecord(
-                                config=run_config,
+                            record = TrialRecord(
+                                config=trial_config,
                                 target_session_id=None,
-                                outcome=RunOutcome(
+                                outcome=TrialOutcome(
                                     stop_reason="system_error",
                                     total_turns=0,
                                     duration_seconds=(time.time() - run_start),
@@ -479,7 +483,7 @@ async def _worker(
                                 prior_failures=prior_failures,
                             )
                     else:
-                        await asyncio.sleep(run_retry_delay_seconds)
+                        await asyncio.sleep(trial_retry_delay_seconds)
                         run_start = time.time()
 
                 except Exception as exc:
@@ -506,7 +510,7 @@ async def _worker(
                         turn_reached,
                     )
                     prior_failures.append(
-                        RunFailure(
+                        TrialFailure(
                             attempt_number=attempt,
                             failure_type=type(exc).__name__,
                             submission_phase="unknown",
@@ -522,10 +526,10 @@ async def _worker(
                         record = (
                             partial
                             if partial is not None
-                            else RunRecord(
-                                config=run_config,
+                            else TrialRecord(
+                                config=trial_config,
                                 target_session_id=None,
-                                outcome=RunOutcome(
+                                outcome=TrialOutcome(
                                     stop_reason="system_error",
                                     total_turns=0,
                                     duration_seconds=(time.time() - run_start),
@@ -539,14 +543,14 @@ async def _worker(
                         record.prior_failures = prior_failures
                         break
 
-                    await asyncio.sleep(run_retry_delay_seconds)
+                    await asyncio.sleep(trial_retry_delay_seconds)
                     run_start = time.time()
 
             assert record is not None  # always set: loop runs at least once
 
             # Emit post-run orchestration events
             if state:
-                state.mark_run_completed(
+                state.mark_trial_completed(
                     task_id,
                     persona.id,
                     trial_index=trial_index,
@@ -554,7 +558,7 @@ async def _worker(
                     duration_seconds=record.outcome.duration_seconds,
                 )
             if orchestration_logger:
-                orchestration_logger.run_completed(
+                orchestration_logger.trial_completed(
                     task_id,
                     persona.id,
                     trial_index=trial_index,
@@ -564,7 +568,7 @@ async def _worker(
                     duration_seconds=record.outcome.duration_seconds,
                 )
             if log_router:
-                log_router.close_run(task_id, persona.id, trial_index=trial_index)
+                log_router.close_trial(task_id, persona.id, trial_index=trial_index)
 
             # Check scenario completion
             if (
@@ -573,17 +577,17 @@ async def _worker(
                 and _scenario_just_completed(state, task_id)
             ):
                 sc = next(s for s in state.scenarios if s.scenario_id == task_id)
-                passed = sum(1 for r in sc.runs if r.stop_reason == "goal_achieved")
+                passed = sum(1 for r in sc.trials if r.stop_reason == "goal_achieved")
                 orchestration_logger.scenario_completed(
-                    task_id, runs_passed=passed, runs_total=len(sc.runs)
+                    task_id, trials_passed=passed, trials_total=len(sc.trials)
                 )
 
             async with console_lock:
                 if tui_ctx:
                     tui_ctx.refresh()
 
-            # Save run record to disk
-            _save_run_record(record, run_dir)
+            # Save trial record to disk
+            _save_trial_record(record, run_dir)
             logger.info("[experiment] Saved record: %s", run_dir / "record.json")
 
             # Build per-turn timing breakdown
@@ -623,24 +627,24 @@ async def _worker(
         structlog.contextvars.unbind_contextvars("worker")
 
 
-def _distribute_runs(
-    runs: list[RunPlanItem],
+def _distribute_trials(
+    trials: list[TrialPlanItem],
     concurrency: int,
-) -> list[list[RunPlanItem]]:
-    """Distribute runs across workers using round-robin."""
-    slices: list[list[RunPlanItem]] = [[] for _ in range(concurrency)]
-    for i, run in enumerate(runs):
-        slices[i % concurrency].append(run)
+) -> list[list[TrialPlanItem]]:
+    """Distribute trials across workers using round-robin."""
+    slices: list[list[TrialPlanItem]] = [[] for _ in range(concurrency)]
+    for i, trial in enumerate(trials):
+        slices[i % concurrency].append(trial)
     return slices
 
 
-def _save_run_record(record: RunRecord, run_dir: Path) -> None:
-    """Save a run record as record.json inside the run folder."""
+def _save_trial_record(record: TrialRecord, run_dir: Path) -> None:
+    """Save a trial record as record.json inside the trial folder."""
     filepath = run_dir / "record.json"
     filepath.write_text(json.dumps(record.model_dump(), indent=2), encoding="utf-8")
 
 
 def _scenario_just_completed(state: SimulationState, scenario_id: str) -> bool:
-    """Return True when every run in the given scenario is now complete/failed."""
+    """Return True when every trial in the given scenario is now complete/failed."""
     sc = next((s for s in state.scenarios if s.scenario_id == scenario_id), None)
     return sc is not None and sc.phase == "completed"

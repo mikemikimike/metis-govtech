@@ -295,6 +295,38 @@ run the simulation again to create new records.
 Report JSON now uses `features` at the root, in `resultTable`, and in trial outcome
 items. Update report consumers and regenerate reports.
 
+#### `Run*` renamed to `Trial*`
+
+The individual-execution concept, previously misnamed `Run` throughout the engine, is
+now `Trial` everywhere, matching the glossary ("Run" means a grouping of repeated
+Trials of the same Test Case — not touched by this change; it stays conceptual, with
+no stored object).
+
+**Python API**
+
+- `RunConfig` → `TrialConfig`, `RunOutcome` → `TrialOutcome`, `RunFailure` →
+  `TrialFailure`, `RunRecord` → `TrialRecord`, `RunMeta` → `TrialMeta`
+- `RunRecoverableError` → `TrialRecoverableError`
+- `RunRetryConfig` → `TrialRetryConfig` (and the Playwright runner's own `RetryConfig`
+  fields `run_max_retries`/`run_retry_delay_seconds` → `trial_max_retries`/
+  `trial_retry_delay_seconds`)
+- `RunPlanItem` → `TrialPlanItem`; `run_experiment()` → `execute_experiment()`;
+  `expand_run_plan()` → `expand_trial_plan()`; `run_folder_name()` → `trial_folder_name()`
+- `Orchestrator.run()` → `Orchestrator.execute()`
+- `Scenario.max_run_retries` → `Scenario.max_trial_retries` (engine-internal only — the
+  public `Task.max_run_retries` field in `specification.yaml` is unchanged)
+
+**On disk**
+
+- The experiment-output `runs/<scenario>-<persona>-<trial>/` directory is now
+  `trials/<scenario>-<persona>-<trial>/`. Old `record.json` files under the old `runs/`
+  directory are not migrated or read — run the simulation again to produce
+  `trials/`-rooted output under the new field names.
+
+**Report JSON**
+
+- `PlanTask.sessionsPlanned` → `trialsPlanned`; `PlanTask.sessionsRun` → `trialsRun`.
+
 ### metis-api
 
 New package in v1.0 — the stateless HTTP door over the wizard. It replaces the

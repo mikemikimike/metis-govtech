@@ -104,7 +104,7 @@ class TestTheOrchestratorEnforcesIt:
         orch = _orchestrator(runner, _GivingUpAgent(replies=1), tmp_path)
 
         with pytest.raises(RunnerContractError, match="0 ActionResult rows for 1"):
-            await orch.run()
+            await orch.execute()
 
     @pytest.mark.asyncio
     async def test_the_violation_is_not_absorbed_by_the_recovery_ladder(
@@ -112,7 +112,7 @@ class TestTheOrchestratorEnforcesIt:
     ) -> None:
         # RunnerContractError descends straight from SimulationError
         # (exceptions.py), so it is disjoint from TurnRecoverableError,
-        # ResponseTimeoutError and RunRecoverableError — the three families
+        # ResponseTimeoutError and TrialRecoverableError — the three families
         # the ladder handles. It must escape run() untouched, and only one
         # send_turn call may have happened.
         from tests.unit.engine.test_turn_recovery import (
@@ -125,7 +125,7 @@ class TestTheOrchestratorEnforcesIt:
         orch = _orchestrator(runner, _GivingUpAgent(replies=1), tmp_path)
 
         with pytest.raises(RunnerContractError):
-            await orch.run()
+            await orch.execute()
         assert len(runner.sent) == 1
 
     @pytest.mark.asyncio
@@ -146,7 +146,7 @@ class TestTheOrchestratorEnforcesIt:
         )
         orch = _orchestrator(runner, _GivingUpAgent(replies=1), tmp_path)
 
-        record = await orch.run()
+        record = await orch.execute()
         assert record.outcome.stop_reason == "user_abandoned"
 
 
@@ -346,14 +346,14 @@ def _withholding_orchestrator(runner, agent, tmp_path, declared: list[str]):
     from pathlib import Path
 
     from metis.engine.simulation.orchestrator import Orchestrator
-    from metis.engine.simulation.types import RunConfig, Scenario
+    from metis.engine.simulation.types import Scenario, TrialConfig
 
     fixtures_dir = Path(tmp_path) / "fixtures"
     fixtures_dir.mkdir(exist_ok=True)
     return Orchestrator(
         runner=runner,
         agent=agent,  # type: ignore[arg-type]
-        run_config=RunConfig(persona="p1", scenario="s1", fixtures=declared),
+        trial_config=TrialConfig(persona="p1", scenario="s1", fixtures=declared),
         scenario=Scenario(
             id="s1", description="a scenario", persona_refs=["p1"], max_turns=20
         ),
@@ -383,7 +383,7 @@ class TestUploadsAreWithheldByTheCaller:
             runner, _UploadingAgent("evil.exe"), tmp_path, declared=[]
         )
 
-        record = await orch.run()
+        record = await orch.execute()
 
         assert runner.sent == [("hello", 0)]
         row = record.conversation[0].target_response["action_results"][0]
@@ -404,7 +404,7 @@ class TestUploadsAreWithheldByTheCaller:
             runner, _UploadingAgent("gone.csv"), tmp_path, declared=["gone.csv"]
         )
 
-        record = await orch.run()
+        record = await orch.execute()
 
         assert runner.sent == [("hello", 0)]
         row = record.conversation[0].target_response["action_results"][0]
@@ -423,7 +423,7 @@ class TestUploadsAreWithheldByTheCaller:
             runner, _UploadingAgent("report.pdf"), tmp_path, declared=["report.pdf"]
         )
 
-        record = await orch.run()
+        record = await orch.execute()
 
         assert runner.sent == [("hello", 0)]
         row = record.conversation[0].target_response["action_results"][0]
@@ -450,7 +450,7 @@ class TestUploadsAreWithheldByTheCaller:
             runner, _UploadingAgent("sales.csv"), tmp_path, declared=["sales.csv"]
         )
 
-        record = await orch.run()
+        record = await orch.execute()
 
         assert runner.sent == [("hello", 1)]
         row = record.conversation[0].target_response["action_results"][0]
