@@ -1,13 +1,13 @@
 # metis-engine
 
-Evaluation engine for METIS — simulation harness, trace extraction, grader execution, and report generation.
+Evaluation engine for METIS — simulation harness, trace extraction, and grader execution. Report generation lives in `metis-insights`.
 
 ## What it does
 
 1. **Simulate** — drives the target system through its selected runner with LLM-powered user personas
 2. **Extract** — fetches resulting Langfuse traces and builds DeepEval test cases
 3. **Evaluate** — runs 50+ graders (code-graded and LLM-judge) against the traces
-4. **Report** — generates terminal summary, JSON, and self-contained HTML reports
+4. **Results** — writes grader results to `reports/results.json`; `metis insights report` builds the report from them
 
 ## Setup
 
@@ -108,8 +108,9 @@ experiments/orca-eval-20260730-143022/
 │   ├── simulate-constrained-analysis_impatient-01.log
 │   └── ...
 └── reports/             # created by evaluate or run
-    ├── report.json      # Machine-readable results
-    └── report.html      # Visual report (open in browser)
+    ├── results.json     # Grader results (written by evaluate or run)
+    ├── report.json      # Machine-readable report (written by metis insights report)
+    └── report.html      # Visual report (written by metis insights report)
 ```
 
 ## Available graders
@@ -127,9 +128,11 @@ Each grader class carries a `tags` ClassVar for classification:
 ## Programmatic usage
 
 ```python
-from metis.engine import evaluate, generate_report, fetch_by_session_id
+from metis.engine import evaluate, fetch_by_session_id
 from metis.engine.extractor import get_langfuse_client
 ```
+
+Build a report from saved results with `metis.insights.save_report` or `metis insights report`.
 
 ## Schema management
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -10,6 +11,7 @@ from deepeval.test_case import LLMTestCase
 from deepeval.test_case.conversational_test_case import ConversationalTestCase, Turn
 from typer.testing import CliRunner
 
+from metis.core.reporting import EvaluationResults
 from metis.engine import cli
 from metis.engine.cli import EvaluationOutcome, app
 from metis.engine.evaluation.types import (
@@ -147,7 +149,7 @@ def test_evaluate_scores_the_named_experiment_directory(
         assert langfuse_timeout == 120
         assert verbose == 1
         assert not quiet
-        return EvaluationOutcome(1, 1, 0, True)
+        return EvaluationOutcome(1, 1, 0, None)
 
     monkeypatch.setattr(cli, "_run_evaluation", fake_evaluation)
     result = runner.invoke(
@@ -241,38 +243,111 @@ def test_evaluate_with_no_run_records_is_a_noop(tmp_path: Path) -> None:
     )
 
 
-def test_evaluation_overwrites_the_report_on_rerun(monkeypatch, tmp_path: Path) -> None:
-    output = _write_experiment_dir(tmp_path)
-    _write_record(output)
-
+def _patch_evaluation(monkeypatch, *, test_cases: list[object]) -> None:
     monkeypatch.setattr("metis.engine.extractor.get_langfuse_client", lambda: object())
     monkeypatch.setattr(
         "metis.engine.extractor.fetch_by_session_id",
-        lambda *_args, **_kwargs: SimpleNamespace(test_cases=[object()]),
+        lambda *_args, **_kwargs: SimpleNamespace(test_cases=test_cases),
     )
     monkeypatch.setattr(
         "metis.engine.evaluation.evaluate",
         lambda *_args, **_kwargs: _grader_eval_result(),
     )
-    report_versions = iter(("first", "second"))
 
-    def write_report(*_args: object, output_dir: Path, **_kwargs: object) -> None:
-        output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "report.json").write_text(next(report_versions))
-        (output_dir / "report.html").write_text("report")
 
-    monkeypatch.setattr("metis.engine.reporting.generate_report", write_report)
+def test_evaluation_writes_results_file_and_prints_report_command(
+    monkeypatch, tmp_path: Path
+) -> None:
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    _patch_evaluation(monkeypatch, test_cases=[object()])
 
     first = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
     second = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert first.exit_code == 0
     assert second.exit_code == 0
-    assert (output / "reports" / "report.json").read_text() == "second"
-    assert (output / "reports" / "report.html").exists()
+    results_file = output.resolve() / "reports" / "results.json"
+    results = EvaluationResults.load_file(results_file)
+    assert results.run_id == "report"
+    assert len(results.turn_results) == 1
+    assert len(results.session_results) == 1
+    # Engine no longer builds the report; insights does.
+    assert not (output / "reports" / "report.json").exists()
+    assert not (output / "reports" / "report.html").exists()
+    command = shlex.join(
+        ["metis", "insights", "report", "--results-file", str(results_file)]
+    )
+    assert _compact(f"Report: {command}") in _compact(second.output)
     evaluation_log = (output / "logs" / "evaluate.log").read_text()
     assert evaluation_log.count("EVALUATION STARTED") == 1
-    assert "REPORT WRITTEN" in evaluation_log
+    assert "RESULTS WRITTEN" in evaluation_log
+
+
+def test_report_command_is_shell_quoted_for_paths_with_spaces(
+    monkeypatch, tmp_path: Path
+) -> None:
+    output = _write_experiment_dir(tmp_path, name="test exp 20260101-010101")
+    _write_record(output)
+    _patch_evaluation(monkeypatch, test_cases=[object()])
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0
+    results_file = output.resolve() / "reports" / "results.json"
+    quoted = shlex.join(["--results-file", str(results_file)])
+    assert "'" in quoted
+    assert _compact(quoted) in _compact(result.output)
+
+
+def test_evaluation_with_no_successful_records_writes_no_results(
+    monkeypatch, tmp_path: Path
+) -> None:
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    _patch_evaluation(monkeypatch, test_cases=[])
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0
+    assert "No evaluable test cases" in result.output
+    assert not (output / "reports" / "results.json").exists()
+    assert "metisinsightsreport" not in _compact(result.output)
+
+
+def test_reevaluation_with_no_successes_removes_stale_results(
+    monkeypatch, tmp_path: Path
+) -> None:
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    _patch_evaluation(monkeypatch, test_cases=[object()])
+    runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+    assert (output / "reports" / "results.json").exists()
+    _patch_evaluation(monkeypatch, test_cases=[])
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0
+    # A results file from an earlier evaluation must not outlive one that scored
+    # nothing, or `metis insights report` would re-stamp stale scores as current.
+    assert not (output / "reports" / "results.json").exists()
+
+
+def test_report_command_keeps_square_brackets_in_paths(
+    monkeypatch, tmp_path: Path
+) -> None:
+    output = _write_experiment_dir(tmp_path, name="test [draft] 20260101-010101")
+    _write_record(output)
+    _patch_evaluation(monkeypatch, test_cases=[object()])
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0
+    results_file = output.resolve() / "reports" / "results.json"
+    command = shlex.join(
+        ["metis", "insights", "report", "--results-file", str(results_file)]
+    )
+    assert _compact(f"Report: {command}") in _compact(result.output)
 
 
 def test_evaluation_progress_advances_for_success_and_soft_failure(
@@ -315,9 +390,6 @@ def test_evaluation_progress_advances_for_success_and_soft_failure(
     monkeypatch.setattr(
         "metis.engine.evaluation.evaluate",
         lambda *_args, **_kwargs: _grader_eval_result(),
-    )
-    monkeypatch.setattr(
-        "metis.engine.reporting.generate_report", lambda *_args, **_kwargs: None
     )
 
     outcome = cli._run_evaluation(

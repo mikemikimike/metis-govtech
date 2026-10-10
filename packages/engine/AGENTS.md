@@ -4,7 +4,7 @@ See root [AGENTS.md](../../AGENTS.md) for monorepo-wide instructions.
 
 ## Package Purpose
 
-Evaluation runtime — simulation harness, trace extraction, metric execution, and report generation.
+Evaluation runtime — simulation harness, trace extraction, and grader execution. Report generation lives in `metis-insights`.
 
 ## Runner Contract
 

@@ -159,7 +159,7 @@ CLI ─▶ run_experiment ─▶ RunnerFactory.start()
 - `docs/runner-contract.md`: the runner invariants
 - `packages/engine/src/metis/engine/extractor/langfuse.py`: Langfuse fetch, and how
   artefacts are matched to traces
-- `packages/engine/src/metis/engine/reporting/_report.py`: how the report reads
+- `packages/insights/src/metis/insights/_report.py`: how the report reads
   `record.json`
 - `packages/library/src/metis/library/metrics/`: what metrics read from test-case
   metadata

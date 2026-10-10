@@ -6,17 +6,17 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from metis.engine.reporting._models import _REPORT_VERSION, Report
+from metis.insights._models import _REPORT_VERSION, Report
 
 
 @pytest.fixture
-def engine_pkg(repo_root: Path) -> Path:
-    return repo_root / "packages" / "engine"
+def insights_pkg(repo_root: Path) -> Path:
+    return repo_root / "packages" / "insights"
 
 
 @pytest.fixture
-def schema_dir(engine_pkg: Path) -> Path:
-    return engine_pkg / "schemas"
+def schema_dir(insights_pkg: Path) -> Path:
+    return insights_pkg / "schemas"
 
 
 class TestReportSchemaSync:

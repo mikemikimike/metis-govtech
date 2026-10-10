@@ -223,7 +223,7 @@ class EvaluationOutcome:
     total_records: int
     successful_records: int
     failed_records: int
-    report_written: bool
+    results_file: Path | None
 
 
 class EvaluationInputError(RuntimeError):
@@ -415,6 +415,13 @@ def _resume_command(experiment_dir: Path, command: str) -> str:
     )
 
 
+def _report_command(results_file: Path) -> str:
+    """Build the shell-safe command for reporting on an evaluation's results."""
+    return shlex.join(
+        ["metis", "insights", "report", "--results-file", str(results_file)]
+    )
+
+
 def _print_handoff(experiment_dir: Path, *, command: str) -> None:
     """Print the evaluate and resume commands for a simulation output."""
     resolved = experiment_dir.resolve()
@@ -446,6 +453,17 @@ def _print_evaluation_summary(
     )
     console.print(f"  Specification: {experiment_dir}")
     console.print(f"  Log: {experiment_dir / 'logs' / 'evaluate.log'}")
+    if outcome.results_file is not None:
+        # markup=False: Rich would drop a "[...]" segment of the path.
+        console.print(f"  Results: {outcome.results_file}", markup=False)
+        console.print(
+            f"  Report: {_report_command(outcome.results_file)}",
+            markup=False,
+            no_wrap=True,
+            overflow="ignore",
+            crop=False,
+            soft_wrap=True,
+        )
     console.print(f"{'=' * 60}")
 
 
@@ -805,9 +823,9 @@ def _run_evaluation(
     evaluation_log.write(f"EVALUATION STARTED — {experiment_dir}")
 
     from metis.engine.evaluation import evaluate as evaluate_graders
+    from metis.engine.evaluation.results import to_evaluation_results
     from metis.engine.evaluation.types import EvalResult
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
-    from metis.engine.reporting import generate_report
     from metis.engine.simulation.types import TrialRecord
 
     if not os.environ.get("DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE"):
@@ -817,7 +835,7 @@ def _run_evaluation(
     files = _trial_record_files(experiment_dir)
     if not files:
         evaluation_log.write("EVALUATION COMPLETED — 0 records")
-        return EvaluationOutcome(0, 0, 0, False)
+        return EvaluationOutcome(0, 0, 0, None)
 
     try:
         records: list[TrialRecord] = [TrialRecord.load_file(path) for path in files]
@@ -972,25 +990,22 @@ def _run_evaluation(
         if progress and task_id is not None:
             progress.update(task_id, description="Evaluation complete")
 
-    report_written = False
+    # An evaluation that scores nothing must not leave the previous evaluation's
+    # results behind for `metis insights report` to pick up as current.
+    results_path = experiment_dir / "reports" / "results.json"
+    results_path.unlink(missing_ok=True)
+    results_file: Path | None = None
     if eval_results:
         merged = EvalResult.merge(eval_results)
-        reports_dir = experiment_dir / "reports"
-        reports_dir.mkdir(parents=True, exist_ok=True)
-
-        generate_report(
-            merged,
-            run_id="report",
-            output_dir=reports_dir,
-        )
-        report_written = True
-        evaluation_log.write(f"REPORT WRITTEN — {reports_dir}")
+        to_evaluation_results(merged, run_id="report").save(results_path)
+        results_file = results_path
+        evaluation_log.write(f"RESULTS WRITTEN — {results_file}")
 
     outcome = EvaluationOutcome(
         total_records=len(records),
         successful_records=len(eval_results),
         failed_records=failed,
-        report_written=report_written,
+        results_file=results_file,
     )
     evaluation_log.write(
         "EVALUATION COMPLETED — "
@@ -1163,7 +1178,7 @@ def run(
         help="Continue the output named by --experiment-dir instead of starting a run",
     ),
 ) -> None:
-    """Run simulation followed by evaluation and report generation."""
+    """Run simulation followed by evaluation."""
     output_dir = _run_simulation(
         input_dir,
         experiment_dir,

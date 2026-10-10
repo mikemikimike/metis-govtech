@@ -58,8 +58,7 @@ uv run metis engine simulate --input-dir packages/engine/example-experiment/
 uv run metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 ```
 
-`run` writes `reports/report.json` and `reports/report.html` under the new
-`experiments/orca-eval-<timestamp>/` directory.
+`run` writes `reports/results.json` under the new `experiments/orca-eval-<timestamp>/` directory and prints the `metis insights report` command that builds `reports/report.json` and `reports/report.html`.
 
 Simulation uses the live TUI in a terminal. Use `--no-tui` to turn it off. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file in the named output.
 

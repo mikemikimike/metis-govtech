@@ -9,13 +9,15 @@ The JSON files here are **auto-generated**. Do not edit them directly; they will
 | Schema file | Pydantic model | Version constant | Source file |
 |---|---|---|---|
 | `specification.schema.json` | `Specification` | `_SPECIFICATION_VERSION` | `src/metis/engine/simulation/types.py` |
-| `report.schema.json` | `Report` | `_REPORT_VERSION` | `src/metis/engine/reporting/_models.py` |
 
 `TrialRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. Its version constant is `_TRIAL_RECORD_VERSION`.
 
+`report.schema.json` is published by `metis-insights`; see
+[`packages/insights/schemas/README.md`](../../insights/schemas/README.md).
+
 ## How to modify a schema
 
-1. Edit Profile fields in `packages/core/src/metis/core/profile.py` execution inputs in `packages/core/src/metis/core/experiment.py`, or their flat document in `packages/core/src/metis/core/specification.py`, engine execution validation in `src/metis/engine/simulation/types.py`, or report fields in `src/metis/engine/reporting/_models.py`
+1. Edit Profile fields in `packages/core/src/metis/core/profile.py` execution inputs in `packages/core/src/metis/core/experiment.py`, or their flat document in `packages/core/src/metis/core/specification.py`, engine execution validation in `src/metis/engine/simulation/types.py`
 2. Determine whether the change is breaking (see [Version bump rules](#version-bump-rules) below); if so, increment the `_*_VERSION` constant and update the `Literal[N]` annotation on the model field to match
 3. Run `make generate-schema` to regenerate the schema file
 4. Update `example-experiment/specification.yaml` if the `Specification` model changed

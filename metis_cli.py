@@ -3,6 +3,7 @@ from importlib.metadata import PackageNotFoundError, version
 import typer
 
 from metis.engine.cli import app as engine_app
+from metis.insights.cli import app as insights_app
 from metis.wizard.bootstrap import cli_app as wizard_app
 
 try:
@@ -34,6 +35,7 @@ def main(
 
 app.add_typer(engine_app, name="engine")
 app.add_typer(wizard_app, name="wizard")
+app.add_typer(insights_app, name="insights")
 
 
 if __name__ == "__main__":

@@ -127,6 +127,7 @@ ci:
 	$(MAKE) test
 	$(MAKE) -C packages/engine check-schema
 	$(MAKE) -C packages/wizard check-schema
+	$(MAKE) -C packages/insights check-schema
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

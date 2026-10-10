@@ -48,7 +48,8 @@ metis/
 │   ├── core/               # metis-core — domain schemas, interfaces, registry
 │   ├── library/            # metis-library — shared catalog (metrics, skills, etc.)
 │   ├── engine/             # metis-engine — evaluation runtime + trace ingesters
-│   └── wizard/             # metis-wizard — interactive config generator
+│   ├── wizard/             # metis-wizard — interactive config generator
+│   └── insights/           # metis-insights — report generation from evaluation results
 ├── apps/
 │   ├── api/                # REST backend
 │   └── web/                # React frontend
@@ -80,9 +81,9 @@ Key invariants:
 
 - **metis-core:** Domain schemas (Trace, Span, Score, etc.), abstract interfaces (BaseTraceIngester), plugin discovery via entry points.
 - **metis-library:** Shared catalog of graders, skills, and reusable components; referenced by FQN from wizard configs and executed by the engine.
-- **metis-engine:** Evaluation runtime — simulation harness, trace extraction (Langfuse), grader execution, and reporting. CLI: `metis engine simulate --input-dir <path>`.
+- **metis-engine:** Evaluation runtime — simulation harness, trace extraction (Langfuse), and grader execution. CLI: `metis engine simulate --input-dir <path>`.
 - **metis-wizard:** Interactive CLI for generating evaluation config YAML. CLI: `metis wizard init`.
-- **metis-insights:** Trajectory diagnostics and compliance analytics. CLI: `metis insights report --results-file <path>`.
+- **metis-insights:** Report generation from evaluation results — the terminal summary, `report.json`, and `report.html`. CLI: `metis insights report --results-file <path>`.
 - **apps/web:** React browser client. It calls `apps/api` over HTTP and stores Interview records and
   the display transcript in browser-local IndexedDB. It does not import Python packages or use the
   wizard's retired server/static-web path. It gives the user two ways to author an experiment: the
@@ -136,6 +137,7 @@ When working on a specific package, read its local `AGENTS.md` for package-speci
 - [`packages/library/AGENTS.md`](packages/library/AGENTS.md) — metis-library
 - [`packages/engine/AGENTS.md`](packages/engine/AGENTS.md) — metis-engine
 - [`packages/wizard/AGENTS.md`](packages/wizard/AGENTS.md) — metis-wizard
+- [`packages/insights/AGENTS.md`](packages/insights/AGENTS.md) — metis-insights
 - [`apps/api/AGENTS.md`](apps/api/AGENTS.md) — metis-api
 - [`apps/web/AGENTS.md`](apps/web/AGENTS.md) — metis-web
 

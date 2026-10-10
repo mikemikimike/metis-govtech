@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from metis.engine.reporting._report import _load_trial_records, _turn_problems
+from metis.insights._report import _load_trial_records, _turn_problems
 
 
 def _write_record(run_dir: Path, name: str, record: dict) -> None:
