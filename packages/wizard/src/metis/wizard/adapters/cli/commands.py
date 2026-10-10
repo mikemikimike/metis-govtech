@@ -82,7 +82,7 @@ def _new_interviewer(interview_id: str | None = None) -> Interviewer:
 
 
 def _matcher(interviewer: Interviewer) -> object:
-    """The metric matcher, wired to the same gateway.
+    """The grader matcher, wired to the same gateway.
 
     Every Criterion needs a Grader before the specification can be exported.
 

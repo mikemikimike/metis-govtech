@@ -102,9 +102,9 @@ MUST NOT depend on any other workspace member.
 | | |
 |---|---|
 | **Import Path** | `from metis.library import ...` |
-| **Purpose** | Shared catalog of metrics, skills, and reusable components consumed by both the execution path (engine) and the configuration path (wizard). The wizard references items by FQN; the engine resolves and executes them. Lightweight layer so consumers can enumerate catalog items without pulling in engine's heavier dependencies. |
+| **Purpose** | Shared catalog of graders, skills, and reusable components consumed by both the execution path (engine) and the configuration path (wizard). The wizard references items by FQN; the engine resolves and executes them. Lightweight layer so consumers can enumerate catalog items without pulling in engine's heavier dependencies. |
 
-MUST depend only on `metis-core`. MAY depend on evaluation framework libraries (DeepEval) required by the shared metric catalog.
+MUST depend only on `metis-core`. MAY depend on evaluation framework libraries (DeepEval) required by the shared grader catalog.
 
 ---
 
@@ -113,7 +113,7 @@ MUST depend only on `metis-core`. MAY depend on evaluation framework libraries (
 | | |
 |---|---|
 | **Import Path** | `from metis.engine import ...` |
-| **Purpose** | Evaluation runtime — ingests traces, executes metrics, produces evaluation reports. |
+| **Purpose** | Evaluation runtime — ingests traces, executes graders, produces evaluation reports. |
 
 MUST depend on `metis-core` and `metis-library`. MAY depend on HTTP, math, parsing, browser automation, and LLM client libraries. MUST be usable both as a library import and as a standalone CLI. Every `Runner` implementation MUST satisfy the normative runner contract in [runner-contract.md](runner-contract.md).
 

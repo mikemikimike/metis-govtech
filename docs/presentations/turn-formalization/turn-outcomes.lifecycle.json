@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "What Can Happen to an Action",
+    "output": "turn-outcomes.html",
+    "quality_profile": "showcase",
+    "animation": "trace",
+    "views": [
+      {
+        "id": "normal-path",
+        "label": "When nothing stops it",
+        "focus": [
+          "start",
+          "delivered",
+          "decision",
+          "completed"
+        ],
+        "note": "Any number of actions can land before the turn simply ends."
+      },
+      {
+        "id": "stopping-the-chain",
+        "label": "When something stops it",
+        "focus": [
+          "decision",
+          "failed",
+          "withheld",
+          "unknown",
+          "skipped"
+        ],
+        "note": "Whichever way it stops, everything still queued is skipped."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "The Turn"
+    },
+    {
+      "id": "stopping",
+      "label": "Ways It Can Stop"
+    },
+    {
+      "id": "terminal",
+      "label": "Aftermath"
+    }
+  ],
+  "states": [
+    {
+      "id": "start",
+      "type": "start",
+      "label": "Turn Begins",
+      "lane": "main",
+      "col": 0
+    },
+    {
+      "id": "delivered",
+      "type": "success",
+      "label": "Delivered",
+      "sublabel": "one or more actions land",
+      "tag": "\u00d7N",
+      "lane": "main",
+      "col": 1
+    },
+    {
+      "id": "decision",
+      "type": "decision",
+      "label": "Next Action",
+      "sublabel": "does it land?",
+      "lane": "main",
+      "col": 2
+    },
+    {
+      "id": "completed",
+      "type": "success",
+      "label": "Turn Ends",
+      "sublabel": "nothing left to run",
+      "lane": "main",
+      "col": 4
+    },
+    {
+      "id": "failed",
+      "type": "failure",
+      "label": "Failed",
+      "sublabel": "attempted, didn't land",
+      "lane": "stopping",
+      "col": 0
+    },
+    {
+      "id": "withheld",
+      "type": "neutral",
+      "label": "Withheld",
+      "sublabel": "refused before trying",
+      "lane": "stopping",
+      "col": 1
+    },
+    {
+      "id": "unknown",
+      "type": "neutral",
+      "label": "Unknown",
+      "sublabel": "can't tell what happened",
+      "lane": "stopping",
+      "col": 2
+    },
+    {
+      "id": "skipped",
+      "type": "neutral",
+      "label": "Skipped",
+      "sublabel": "never attempted",
+      "lane": "terminal",
+      "col": 1
+    }
+  ],
+  "transitions": [
+    {
+      "id": "t_start_delivered",
+      "from": "start",
+      "to": "delivered"
+    },
+    {
+      "id": "t_delivered_decision",
+      "from": "delivered",
+      "to": "decision"
+    },
+    {
+      "id": "t_decision_completed",
+      "from": "decision",
+      "to": "completed",
+      "label": "no more actions",
+      "variant": "default",
+      "route": "straight"
+    },
+    {
+      "id": "t_decision_failed",
+      "from": "decision",
+      "to": "failed",
+      "label": "didn't land",
+      "variant": "security",
+      "labelDy": 24
+    },
+    {
+      "id": "t_decision_withheld",
+      "from": "decision",
+      "to": "withheld",
+      "label": "refused early",
+      "variant": "security",
+      "route": "drop",
+      "labelDy": 50
+    },
+    {
+      "id": "t_decision_unknown",
+      "from": "decision",
+      "to": "unknown",
+      "label": "unclear",
+      "variant": "security",
+      "route": "drop"
+    },
+    {
+      "id": "t_failed_skipped",
+      "from": "failed",
+      "to": "skipped",
+      "variant": "dashed"
+    },
+    {
+      "id": "t_withheld_skipped",
+      "from": "withheld",
+      "to": "skipped",
+      "variant": "dashed"
+    },
+    {
+      "id": "t_unknown_skipped",
+      "from": "unknown",
+      "to": "skipped",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "The Shape Rule",
+      "items": [
+        "Any number of actions can be delivered",
+        "At most one action stops the chain",
+        "Everything queued after that one is skipped, never attempted"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Who Decides Which",
+      "items": [
+        "The target system decides delivered vs. failed",
+        "The framework decides withheld and unknown, before or after the fact"
+      ]
+    }
+  ]
+}

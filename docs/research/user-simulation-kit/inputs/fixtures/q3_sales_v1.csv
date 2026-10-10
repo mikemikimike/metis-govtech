@@ -1,0 +1,29 @@
+date,region,product,revenue,units_sold
+2024-07-05,North,Widget Pro,55.2,147
+2024-07-05,South,Widget Pro,35.8,95
+2024-07-05,East,Widget Pro,43.6,116
+2024-07-05,West,Widget Pro,47.1,125
+2024-07-12,North,DataSync,64.3,79
+2024-07-12,South,DataSync,39.2,48
+2024-07-12,East,DataSync,50.1,62
+2024-07-12,West,DataSync,54.0,66
+2024-08-02,North,Widget Pro,58.1,155
+2024-08-02,South,Widget Pro,37.6,100
+2024-08-02,East,Widget Pro,45.8,122
+2024-08-02,West,Widget Pro,49.5,132
+2024-08-09,North,DataSync,66.9,82
+2024-08-09,South,DataSync,40.8,50
+2024-08-09,East,DataSync,52.5,64
+2024-08-09,West,DataSync,56.6,69
+2024-09-06,North,Widget Pro,60.2,160
+2024-09-06,South,Widget Pro,39.0,104
+2024-09-06,East,Widget Pro,47.5,126
+2024-09-06,West,Widget Pro,51.2,136
+2024-09-06,North,DataSync,70.8,87
+2024-09-06,South,DataSync,43.1,53
+2024-09-06,East,DataSync,55.2,68
+2024-09-06,West,DataSync,59.6,73
+2024-09-27,North,Widget Pro,61.8,164
+2024-09-27,South,Widget Pro,40.1,107
+2024-09-27,East,Widget Pro,49.0,130
+2024-09-27,West,Widget Pro,52.8,140

@@ -294,67 +294,67 @@ def _add(bucket: dict, row: dict) -> None:
         bucket["fail"] += 1
 
 
-def _metric_refs(scenario: Mapping[str, Any]) -> list[str]:
-    """The metric FQNs one scenario asks for. A ref is a string or a single key mapping."""
+def _grader_refs(scenario: Mapping[str, Any]) -> list[str]:
+    """The grader FQNs one scenario asks for. A ref is a string or a single key mapping."""
     return [
         next(iter(ref)) if isinstance(ref, dict) else ref
-        for ref in scenario.get("metric_refs") or []
+        for ref in scenario.get("grader_refs") or []
     ]
 
 
 # ---------------------------------------------------------------------------
-# One row per metric result
+# One row per grader result
 # ---------------------------------------------------------------------------
 
 
 def flatten_results(
     test_results: Sequence[Row],
-    session_metrics: Sequence[Row] | None,
+    session_graders: Sequence[Row] | None,
     persona_of: Mapping[str, str],
 ) -> list[dict]:
-    """One row per metric result, tagged with its scenario and its persona."""
+    """One row per grader result, tagged with its scenario and its persona."""
     scenario_of = {
         t.get("session_id", ""): t.get("scenario_id", "") for t in test_results
     }
     rows: list[dict] = []
 
     for case in test_results:
-        for metric in case.get("metrics", []):
+        for grader in case.get("graders", []):
             rows.append(
                 {
-                    "metric": metric["name"],
-                    "criterion_id": metric.get("criterion_id", ""),
-                    "metric_fqn": metric.get("metric_fqn", ""),
-                    "metric_args": metric.get("metric_args", {}),
-                    "task_id": metric.get("task_id", ""),
-                    "trial_index": metric.get("trial_index", 1),
+                    "grader": grader["name"],
+                    "criterion_id": grader.get("criterion_id", ""),
+                    "grader_fqn": grader.get("grader_fqn", ""),
+                    "grader_args": grader.get("grader_args", {}),
+                    "task_id": grader.get("task_id", ""),
+                    "trial_index": grader.get("trial_index", 1),
                     "scenario": case.get("scenario_id", ""),
                     "persona": persona_of.get(case.get("session_id", "")),
-                    "skipped": bool(metric.get("skipped")),
-                    "success": bool(metric.get("success")),
-                    "reason": metric.get("reason", ""),
+                    "skipped": bool(grader.get("skipped")),
+                    "success": bool(grader.get("success")),
+                    "reason": grader.get("reason", ""),
                     "trace": case.get("trace_id", ""),
                     "session": case.get("session_id", ""),
                     "turn": f"{case.get('turn_index', 0) + 1}/{case.get('total_turns', 1)}",
                 }
             )
 
-    for session in session_metrics or []:
+    for session in session_graders or []:
         sid = session.get("session_id", "")
-        for metric in session.get("metrics", []):
+        for grader in session.get("graders", []):
             rows.append(
                 {
-                    "metric": metric["name"],
-                    "criterion_id": metric.get("criterion_id", ""),
-                    "metric_fqn": metric.get("metric_fqn", ""),
-                    "metric_args": metric.get("metric_args", {}),
-                    "task_id": metric.get("task_id", ""),
-                    "trial_index": metric.get("trial_index", 1),
+                    "grader": grader["name"],
+                    "criterion_id": grader.get("criterion_id", ""),
+                    "grader_fqn": grader.get("grader_fqn", ""),
+                    "grader_args": grader.get("grader_args", {}),
+                    "task_id": grader.get("task_id", ""),
+                    "trial_index": grader.get("trial_index", 1),
                     "scenario": scenario_of.get(sid, ""),
                     "persona": persona_of.get(sid),
-                    "skipped": bool(metric.get("skipped")),
-                    "success": bool(metric.get("success")),
-                    "reason": metric.get("reason", ""),
+                    "skipped": bool(grader.get("skipped")),
+                    "success": bool(grader.get("success")),
+                    "reason": grader.get("reason", ""),
                     "trace": sid,
                     "session": sid,
                     "turn": f"session, {session.get('num_turns', 0)} turns",
@@ -386,8 +386,8 @@ def build_plan(
                 "trialsPlanned": task["num_trials"],
                 "trialsRun": len({(r["task_id"], r["trial_index"]) for r in results}),
                 "personasRun": sorted({r["persona"] for r in results if r["persona"]}),
-                "metricsAsked": len(asked),
-                "metricsScored": len(
+                "gradersAsked": len(asked),
+                "gradersScored": len(
                     {r["criterion_id"] for r in results if not r["skipped"]} & asked
                 ),
             }
@@ -405,7 +405,7 @@ def build_report(
     test_results: Sequence[Row],
     *,
     persona_of: Mapping[str, str] | None = None,
-    session_metrics: Sequence[Row] | None = None,
+    session_graders: Sequence[Row] | None = None,
     run_id: str = "report",
     timestamp: str = "",
     latency_seconds: float | None = None,
@@ -418,11 +418,11 @@ def build_report(
     :param specification: The parsed specification.yaml frozen for this run.
     :param test_results: Per turn results, in the shape the JSON report writes.
     :param persona_of: Session id to persona id, from the simulation records.
-    :param session_metrics: Session level results, same shape as `test_results`.
+    :param session_graders: Session level results, same shape as `test_results`.
     :param trial_outcomes: Exact outcomes read from the simulation records.
     :returns: A plain dict, ready to serialise into the page.
     """
-    rows = flatten_results(test_results, session_metrics, persona_of or {})
+    rows = flatten_results(test_results, session_graders, persona_of or {})
 
     criteria: dict[str, dict] = {}
     behaviour_of: dict[str, str] = {}
@@ -447,9 +447,9 @@ def build_report(
     }
     # Labels are presentation only; importing and constructing Graders is unnecessary here.
     name_of = {
-        c["metric_fqn"]: c["metric_fqn"].rsplit(".", 1)[-1]
+        c["grader_fqn"]: c["grader_fqn"].rsplit(".", 1)[-1]
         for c in criteria.values()
-        if c.get("metric_fqn")
+        if c.get("grader_fqn")
     }
     unresolved: list[str] = []
 
@@ -461,7 +461,7 @@ def build_report(
             "session": defaultdict(_new_bucket),
             "evidence": [],
             "skips": Counter(),
-            "metricName": None,
+            "graderName": None,
         }
         for cid in criteria
     }
@@ -475,7 +475,7 @@ def build_report(
             "skip": 0,
             "sessions": set(),
             "behaviours": set(),
-            "metrics": set(),
+            "graders": set(),
             "partners": set(),
         }
 
@@ -491,8 +491,8 @@ def build_report(
             [cid] if cid in criteria and task and cid in task["criterion_refs"] else []
         )
         if not matched:
-            _add(unmapped[row["metric"]], row)
-            unmapped_reason[row["metric"]] = (
+            _add(unmapped[row["grader"]], row)
+            unmapped_reason[row["grader"]] = (
                 "Result has no matching Task and Criterion."
             )
             continue
@@ -509,14 +509,14 @@ def build_report(
             _add(slot, row)
             slot["sessions"].add(row["session"])
             slot["behaviours"] |= touched
-            slot["metrics"].add(cid)
+            slot["graders"].add(cid)
             if partner:
                 slot["partners"].add(partner)
 
         for cid in matched:
             slot = per_criterion[cid]
-            if slot["metricName"] is None:
-                slot["metricName"] = row["metric"]
+            if slot["graderName"] is None:
+                slot["graderName"] = row["grader"]
             _add(slot["all"], row)
             if row["persona"]:
                 _add(slot["persona"][row["persona"]], row)
@@ -529,8 +529,8 @@ def build_report(
                     "task_id": row["task_id"],
                     "trial_index": row["trial_index"],
                     "criterion_id": cid,
-                    "metric_fqn": row["metric_fqn"],
-                    "metric_args": row["metric_args"],
+                    "grader_fqn": row["grader_fqn"],
+                    "grader_args": row["grader_args"],
                     "status": (
                         "skip"
                         if row["skipped"]
@@ -578,15 +578,15 @@ def build_report(
         """Why a criterion has no pass rate. One cause each, checked in chain order.
 
         The chain can break in five places, and the reader needs to know which one,
-        because each asks for a different fix: write a metric, add the class to the
-        library, put the metric in the experiment, or make the run reach the behaviour.
+        because each asks for a different fix: write a grader, add the class to the
+        library, put the grader in the experiment, or make the run reach the behaviour.
         """
-        fqn = criterion.get("metric_fqn")
+        fqn = criterion.get("grader_fqn")
         name = name_of.get(fqn or "", "")
         if not fqn:
             return {
-                "cause": "no metric",
-                "note": "the spec names no metric for this criterion",
+                "cause": "no grader",
+                "note": "the spec names no grader for this criterion",
             }
         if criterion["id"] not in asked_criteria:
             return {
@@ -606,7 +606,7 @@ def build_report(
             }
         return {
             "cause": "no result",
-            "note": "the metric produced no result for this criterion",
+            "note": "the grader produced no result for this criterion",
         }
 
     out_criteria: dict[str, dict] = {}
@@ -618,10 +618,10 @@ def build_report(
             "given": description["given"],
             "when": description["when"],
             "then": description["then"],
-            "metric": slot["metricName"]
-            or name_of.get(criterion.get("metric_fqn") or "", ""),
-            "fqn": criterion.get("metric_fqn"),
-            "metric_args": criterion.get("metric_args", {}),
+            "grader": slot["graderName"]
+            or name_of.get(criterion.get("grader_fqn") or "", ""),
+            "fqn": criterion.get("grader_fqn"),
+            "grader_args": criterion.get("grader_args", {}),
             "pass": slot["all"]["pass"],
             "fail": slot["all"]["fail"],
             "skip": slot["all"]["skip"],
@@ -685,7 +685,7 @@ def build_report(
                         "skip": 0,
                         "sessions": 0,
                         "behaviours": 0,
-                        "metrics": 0,
+                        "graders": 0,
                         "partners": 0,
                         "partnerTotal": partner_total,
                     }
@@ -702,7 +702,7 @@ def build_report(
                     "skip": slot["skip"],
                     "sessions": len(slot["sessions"]),
                     "behaviours": len(slot["behaviours"]),
-                    "metrics": len(slot["metrics"]),
+                    "graders": len(slot["graders"]),
                     "partners": len(slot["partners"]),
                     "partnerTotal": partner_total,
                 }
@@ -753,17 +753,17 @@ def build_report(
     trial_rate = round(100 * trial_successes / len(trials)) if trials else None
     trial_rate_fraction = trial_successes / len(trials) if trials else None
 
-    # The scenario axis, once, shared by `axes.S` and the headline metric
+    # The scenario axis, once, shared by `axes.S` and the headline grader
     # pass rate below — the same total the page's JS used to recompute from
     # `axes.S` on every load.
     scenario_axis_rows = axis_rows("S", scenarios, len(personas))
-    metric_pass_total = sum(row["pass"] for row in scenario_axis_rows)
-    metric_ran_total = sum(row["ran"] for row in scenario_axis_rows)
-    metric_rate = (
-        round(100 * metric_pass_total / metric_ran_total) if metric_ran_total else None
+    grader_pass_total = sum(row["pass"] for row in scenario_axis_rows)
+    grader_ran_total = sum(row["ran"] for row in scenario_axis_rows)
+    grader_rate = (
+        round(100 * grader_pass_total / grader_ran_total) if grader_ran_total else None
     )
-    metric_rate_fraction = (
-        metric_pass_total / metric_ran_total if metric_ran_total else None
+    grader_rate_fraction = (
+        grader_pass_total / grader_ran_total if grader_ran_total else None
     )
 
     table_features = [
@@ -773,7 +773,7 @@ def build_report(
             "columns": [
                 {
                     "criterion": criterion["id"],
-                    "metric": out_criteria[criterion["id"]]["metric"],
+                    "grader": out_criteria[criterion["id"]]["grader"],
                 }
                 for behaviour in feature.get("behaviours") or []
                 for criterion in behaviour.get("criteria") or []
@@ -823,11 +823,11 @@ def build_report(
             "items": trials,
         },
         "scores": {
-            "metricPassRate": {
-                "rate": metric_rate,
-                "pass": metric_pass_total,
-                "ran": metric_ran_total,
-                "status": status(metric_rate_fraction),
+            "graderPassRate": {
+                "rate": grader_rate,
+                "pass": grader_pass_total,
+                "ran": grader_ran_total,
+                "status": status(grader_rate_fraction),
             },
             "trialSuccess": {
                 "rate": trial_rate,
@@ -855,7 +855,7 @@ def build_report(
         "criteria": out_criteria,
         "resultTable": {"features": table_features, "rows": table_rows},
         "unmapped": [
-            {"metric": name, **bucket, "why": unmapped_reason.get(name, "")}
+            {"grader": name, **bucket, "why": unmapped_reason.get(name, "")}
             for name, bucket in sorted(unmapped.items())
         ],
         "unresolved": unresolved,

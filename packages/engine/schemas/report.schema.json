@@ -48,9 +48,9 @@
           "title": "Behaviours",
           "type": "integer"
         },
-        "metrics": {
+        "graders": {
           "default": 0,
-          "title": "Metrics",
+          "title": "Graders",
           "type": "integer"
         },
         "partners": {
@@ -180,9 +180,9 @@
     },
     "Criterion": {
       "properties": {
-        "metric_args": {
+        "grader_args": {
           "additionalProperties": true,
-          "title": "Metric Args",
+          "title": "Grader Args",
           "type": "object"
         },
         "given": {
@@ -197,8 +197,8 @@
           "title": "Then",
           "type": "string"
         },
-        "metric": {
-          "title": "Metric",
+        "grader": {
+          "title": "Grader",
           "type": "string"
         },
         "fqn": {
@@ -303,7 +303,7 @@
         "given",
         "when",
         "then",
-        "metric"
+        "grader"
       ],
       "title": "Criterion",
       "type": "object"
@@ -358,14 +358,14 @@
           "title": "Criterion Id",
           "type": "string"
         },
-        "metric_fqn": {
+        "grader_fqn": {
           "default": "",
-          "title": "Metric Fqn",
+          "title": "Grader Fqn",
           "type": "string"
         },
-        "metric_args": {
+        "grader_args": {
           "additionalProperties": true,
-          "title": "Metric Args",
+          "title": "Grader Args",
           "type": "object"
         },
         "status": {
@@ -473,7 +473,7 @@
       "title": "Feature",
       "type": "object"
     },
-    "MetricPassRate": {
+    "GraderPassRate": {
       "properties": {
         "rate": {
           "anyOf": [
@@ -510,7 +510,7 @@
           "title": "Status"
         }
       },
-      "title": "MetricPassRate",
+      "title": "GraderPassRate",
       "type": "object"
     },
     "Plan": {
@@ -573,12 +573,12 @@
           "title": "Personasrun",
           "type": "array"
         },
-        "metricsAsked": {
-          "title": "Metricsasked",
+        "gradersAsked": {
+          "title": "Gradersasked",
           "type": "integer"
         },
-        "metricsScored": {
-          "title": "Metricsscored",
+        "gradersScored": {
+          "title": "Gradersscored",
           "type": "integer"
         }
       },
@@ -590,8 +590,8 @@
         "trialsPlanned",
         "trialsRun",
         "personasRun",
-        "metricsAsked",
-        "metricsScored"
+        "gradersAsked",
+        "gradersScored"
       ],
       "title": "PlanTask",
       "type": "object"
@@ -626,14 +626,14 @@
           "title": "Criterion",
           "type": "string"
         },
-        "metric": {
-          "title": "Metric",
+        "grader": {
+          "title": "Grader",
           "type": "string"
         }
       },
       "required": [
         "criterion",
-        "metric"
+        "grader"
       ],
       "title": "ResultTableColumn",
       "type": "object"
@@ -801,15 +801,15 @@
     },
     "Scores": {
       "properties": {
-        "metricPassRate": {
-          "$ref": "#/$defs/MetricPassRate"
+        "graderPassRate": {
+          "$ref": "#/$defs/GraderPassRate"
         },
         "trialSuccess": {
           "$ref": "#/$defs/TrialSuccess"
         }
       },
       "required": [
-        "metricPassRate",
+        "graderPassRate",
         "trialSuccess"
       ],
       "title": "Scores",
@@ -818,14 +818,14 @@
     "Timings": {
       "additionalProperties": true,
       "properties": {
-        "turn_metrics_seconds": {
+        "turn_graders_seconds": {
           "default": 0.0,
-          "title": "Turn Metrics Seconds",
+          "title": "Turn Graders Seconds",
           "type": "number"
         },
-        "session_metrics_seconds": {
+        "session_graders_seconds": {
           "default": 0.0,
-          "title": "Session Metrics Seconds",
+          "title": "Session Graders Seconds",
           "type": "number"
         }
       },
@@ -1058,10 +1058,10 @@
       "title": "TrialsSummary",
       "type": "object"
     },
-    "UnmappedMetric": {
+    "UnmappedGrader": {
       "properties": {
-        "metric": {
-          "title": "Metric",
+        "grader": {
+          "title": "Grader",
           "type": "string"
         },
         "pass": {
@@ -1086,9 +1086,9 @@
         }
       },
       "required": [
-        "metric"
+        "grader"
       ],
-      "title": "UnmappedMetric",
+      "title": "UnmappedGrader",
       "type": "object"
     }
   },
@@ -1227,7 +1227,7 @@
     },
     "unmapped": {
       "items": {
-        "$ref": "#/$defs/UnmappedMetric"
+        "$ref": "#/$defs/UnmappedGrader"
       },
       "title": "Unmapped",
       "type": "array"

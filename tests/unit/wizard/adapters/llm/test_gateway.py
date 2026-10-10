@@ -282,7 +282,7 @@ def test_raw_nested_fields_are_rejected_and_corrected_atomically() -> None:
                                 "name": "Refuse unsafe requests",
                                 "description": "refuses unsafe requests",
                                 "measured": True,
-                                "criteria": [{"metric_fqn": "forbidden"}],
+                                "criteria": [{"grader_fqn": "forbidden"}],
                             }
                         ],
                     },
@@ -349,8 +349,8 @@ def test_model_schema_has_no_persisted_or_runtime_fields() -> None:
     assert not names & {
         "id",
         "measured",
-        "metric_fqn",
-        "metric_args",
+        "grader_fqn",
+        "grader_args",
         "num_trials",
         "origin",
         "options",

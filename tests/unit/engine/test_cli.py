@@ -8,7 +8,7 @@ import pytest
 from metis.engine.cli import _validate_inputs
 
 MINIMAL_EXPERIMENT = dedent(
-    "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
+    "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
 )
 
 
@@ -58,7 +58,7 @@ def test_malformed_specification_yaml(
 
 def test_duplicate_persona_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: first\n  name: alice\n- id: alice\n  description: duplicate\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: first\n  name: alice\n- id: alice\n  description: duplicate\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
     )
     _write_experiment(tmp_path, content)
     with pytest.raises(SystemExit) as exc_info:
@@ -74,7 +74,7 @@ def test_duplicate_persona_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]
 
 def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: first\n  name: task-1\n- id: task-1\n  description: duplicate\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\n- id: TC-002\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-2-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n- id: F-2\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-2\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-2-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: first\n  name: task-1\n- id: task-1\n  description: duplicate\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\n- id: TC-002\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-2-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n- id: F-2\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-2\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-2-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
     )
     _write_experiment(tmp_path, content)
     with pytest.raises(SystemExit) as exc_info:
@@ -90,7 +90,7 @@ def test_duplicate_task_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
 
 def test_unknown_persona_ref(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: bob\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: bob\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
     )
     _write_experiment(tmp_path, content)
     with pytest.raises(SystemExit) as exc_info:
@@ -105,7 +105,7 @@ def test_unknown_persona_ref(tmp_path: Path, capsys: pytest.CaptureFixture[str])
 
 def test_missing_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures:\n  - missing.csv\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures:\n  - missing.csv\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
     )
     _write_experiment(tmp_path, content)
     with pytest.raises(SystemExit) as exc_info:
@@ -117,12 +117,12 @@ def test_missing_fixture(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     assert "does not exist" in out
 
 
-# --- Check 8: non-importable metric FQN ---
+# --- Check 8: non-importable grader FQN ---
 
 
-def test_bad_metric_fqn(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+def test_bad_grader_fqn(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: no.such.module.FakeMetric\n      metric_args: {}\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: no.such.module.FakeGrader\n      grader_args: {}\n"
     )
     _write_experiment(tmp_path, content)
     with pytest.raises(SystemExit) as exc_info:
@@ -132,11 +132,11 @@ def test_bad_metric_fqn(tmp_path: Path, capsys: pytest.CaptureFixture[str]):
     assert "could not be imported" in out
 
 
-def test_metric_not_basemetric_subclass(
+def test_grader_not_basemetric_subclass(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: os.path.join\n      metric_args: {}\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: os.path.join\n      grader_args: {}\n"
     )
     _write_experiment(tmp_path, content)
     with pytest.raises(SystemExit) as exc_info:
@@ -157,7 +157,7 @@ def test_valid_input_passes(tmp_path: Path):
 
 def test_valid_input_with_fixtures(tmp_path: Path):
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures:\n  - data.csv\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures:\n  - data.csv\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
     )
     _write_experiment(tmp_path, content)
     fixtures_dir = tmp_path / "fixtures"
@@ -166,48 +166,48 @@ def test_valid_input_with_fixtures(tmp_path: Path):
     _validate_inputs(tmp_path)
 
 
-# --- MetricRef input formats ---
+# --- GraderRef input formats ---
 
 
-def test_metric_ref_all_formats(tmp_path: Path):
-    """All accepted MetricRef formats parse without error."""
+def test_grader_ref_all_formats(tmp_path: Path):
+    """All accepted GraderRef formats parse without error."""
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\n  - AC-1-2\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: deepeval.metrics.AnswerRelevancyMetric\n      metric_args: {}\n    - id: AC-1-2\n      name: Check 2\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: deepeval.metrics.AnswerRelevancyMetric\n      metric_args:\n        threshold: 0.5\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\n  - AC-1-2\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: deepeval.metrics.AnswerRelevancyMetric\n      grader_args: {}\n    - id: AC-1-2\n      name: Check 2\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: deepeval.metrics.AnswerRelevancyMetric\n      grader_args:\n        threshold: 0.5\n"
     )
     _write_experiment(tmp_path, content)
     _validate_inputs(tmp_path)
 
 
-def test_metric_ref_legacy_class_format(tmp_path: Path):
+def test_grader_ref_legacy_class_format(tmp_path: Path):
     """Legacy {class: ..., args: ...} format parses without error."""
     from metis.engine.simulation.types import Specification
 
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: deepeval.metrics.AnswerRelevancyMetric\n      metric_args:\n        threshold: 0.5\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: deepeval.metrics.AnswerRelevancyMetric\n      grader_args:\n        threshold: 0.5\n"
     )
     (tmp_path / "specification.yaml").write_text(content)
     exp = Specification.load_file(tmp_path / "specification.yaml")
     assert (
-        exp.resolved_tasks()[0].metric_refs[0].fqn
+        exp.resolved_tasks()[0].grader_refs[0].fqn
         == "deepeval.metrics.AnswerRelevancyMetric"
     )
-    assert exp.resolved_tasks()[0].metric_refs[0].args == {"threshold": 0.5}
+    assert exp.resolved_tasks()[0].grader_refs[0].args == {"threshold": 0.5}
 
 
-def test_metric_ref_null_args(tmp_path: Path):
+def test_grader_ref_null_args(tmp_path: Path):
     """Single-key mapping with null args normalizes to empty dict."""
     from metis.engine.simulation.types import Specification
 
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: deepeval.metrics.AnswerRelevancyMetric\n      metric_args: {}\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: deepeval.metrics.AnswerRelevancyMetric\n      grader_args: {}\n"
     )
     (tmp_path / "specification.yaml").write_text(content)
     exp = Specification.load_file(tmp_path / "specification.yaml")
     assert (
-        exp.resolved_tasks()[0].metric_refs[0].fqn
+        exp.resolved_tasks()[0].grader_refs[0].fqn
         == "deepeval.metrics.AnswerRelevancyMetric"
     )
-    assert exp.resolved_tasks()[0].metric_refs[0].args == {}
+    assert exp.resolved_tasks()[0].grader_refs[0].args == {}
 
 
 # --- extra="ignore" on Persona ---
@@ -216,7 +216,7 @@ def test_metric_ref_null_args(tmp_path: Path):
 def test_extra_persona_fields_ignored(tmp_path: Path):
     """Extra fields on persona don't cause validation failure."""
     content = dedent(
-        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  tone: formal\n  mood: cheerful\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
+        "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: a persona\n  tone: formal\n  mood: cheerful\n  name: alice\nscenarios:\n- id: task-1\n  description: a task\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
     )
     _write_experiment(tmp_path, content)
     _validate_inputs(tmp_path)

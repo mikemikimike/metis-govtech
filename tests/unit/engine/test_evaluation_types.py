@@ -1,12 +1,12 @@
-"""Tests for MetricResult and TurnResult dataclasses."""
+"""Tests for GraderResult and TurnResult dataclasses."""
 
 from deepeval.test_case import LLMTestCase
 
-from metis.engine.evaluation.types import MetricResult, TurnResult
+from metis.engine.evaluation.types import GraderResult, TurnResult
 
 
-def test_metric_result_defaults():
-    mr = MetricResult(
+def test_grader_result_defaults():
+    mr = GraderResult(
         name="Test", score=0.8, reason="good", success=True, skipped=False
     )
     assert mr.evaluation_cost is None
@@ -14,8 +14,8 @@ def test_metric_result_defaults():
     assert mr.output_tokens is None
 
 
-def test_metric_result_with_cost():
-    mr = MetricResult(
+def test_grader_result_with_cost():
+    mr = GraderResult(
         name="Test",
         score=0.8,
         reason="good",
@@ -31,7 +31,7 @@ def test_metric_result_with_cost():
 
 def test_test_case_result():
     tc = LLMTestCase(input="hello", actual_output="world")
-    mr = MetricResult(name="M", score=1.0, reason="", success=True, skipped=False)
-    tcr = TurnResult(llm_test_case=tc, metric_results=[mr])
-    assert len(tcr.metric_results) == 1
+    mr = GraderResult(name="M", score=1.0, reason="", success=True, skipped=False)
+    tcr = TurnResult(llm_test_case=tc, grader_results=[mr])
+    assert len(tcr.grader_results) == 1
     assert tcr.llm_test_case.input == "hello"

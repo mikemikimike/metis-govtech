@@ -1,4 +1,4 @@
-"""Criterion prose → metric FQN, by embedding similarity.
+"""Criterion prose → grader FQN, by embedding similarity.
 
 A separate pass, not folded into criteria generation, for two reasons: the catalogue may grow
 large enough to need retrieval rather than a prompt, and a swappable matcher can be replaced
@@ -20,12 +20,12 @@ from typing import TYPE_CHECKING, Any, Protocol
 from metis.wizard.application.matching.library_catalogue import library_catalogue
 
 if TYPE_CHECKING:
-    from metis.wizard.contracts.metric_spec import MetricSpec
+    from metis.wizard.contracts.grader_spec import GraderSpec
     from metis.wizard.domain.specification import Criterion, Specification
 
 # One parameterised class that builds a judge from the criterion text. Not codegen: the
 # criterion travels as an argument, so there is no generated file to keep in sync.
-GENERATED_JUDGE_FQN = "metis.library.metrics.default.CriterionGEvalMetric"
+GENERATED_JUDGE_FQN = "metis.library.graders.default.CriterionGEvalGrader"
 
 DEFAULT_THRESHOLD = 0.62
 
@@ -45,7 +45,7 @@ class EmbeddingMatcher:
     """Best cosine match above a threshold, or the generated judge."""
 
     embedder: Embedder
-    specs: list[MetricSpec] = field(default_factory=library_catalogue)
+    specs: list[GraderSpec] = field(default_factory=library_catalogue)
     threshold: float = DEFAULT_THRESHOLD
     degraded: bool = False  # the provider failed at least once this run
     _catalogue_vectors: list[list[float]] | None = None
@@ -94,10 +94,10 @@ def match_specification(specification: Specification, matcher: EmbeddingMatcher)
     matched = 0
     for behaviour in specification.behaviours():
         for criterion in behaviour.criteria:
-            if criterion.metric_fqn:
+            if criterion.grader_fqn:
                 continue
-            criterion.metric_fqn = matcher.match(criterion)
-            criterion.metric_args = default_metric_args(criterion)
+            criterion.grader_fqn = matcher.match(criterion)
+            criterion.grader_args = default_grader_args(criterion)
             matched += 1
     return matched
 
@@ -106,24 +106,24 @@ def rematch(criterion: Criterion, matcher: EmbeddingMatcher) -> str:
     """Re-resolve after the criterion's text changed.
 
     Silent, and it takes nothing from the user: the matcher chose the previous value, so
-    re-choosing overwrites only its own work. This stops being true the day a metric picker
-    exists — a user-chosen metric would be destroyed here without a word.
+    re-choosing overwrites only its own work. This stops being true the day a grader picker
+    exists — a user-chosen grader would be destroyed here without a word.
     """
-    previous = criterion.metric_fqn
-    criterion.metric_fqn = matcher.match(criterion)
-    if previous != criterion.metric_fqn or criterion.metric_fqn == GENERATED_JUDGE_FQN:
-        criterion.metric_args = default_metric_args(criterion)
-    return criterion.metric_fqn
+    previous = criterion.grader_fqn
+    criterion.grader_fqn = matcher.match(criterion)
+    if previous != criterion.grader_fqn or criterion.grader_fqn == GENERATED_JUDGE_FQN:
+        criterion.grader_args = default_grader_args(criterion)
+    return criterion.grader_fqn
 
 
-def default_metric_args(criterion: Criterion) -> dict[str, Any]:
-    if criterion.metric_fqn == GENERATED_JUDGE_FQN:
+def default_grader_args(criterion: Criterion) -> dict[str, Any]:
+    if criterion.grader_fqn == GENERATED_JUDGE_FQN:
         return {"criterion": str(criterion.description), "name": criterion.name}
-    spec = next((s for s in library_catalogue() if s.fqn == criterion.metric_fqn), None)
+    spec = next((s for s in library_catalogue() if s.fqn == criterion.grader_fqn), None)
     return {p.name: p.default for p in spec.params if not p.required} if spec else {}
 
 
-def validate_metric_args(fqn: str | None, args: Any) -> None:
+def validate_grader_args(fqn: str | None, args: Any) -> None:
     if not fqn or not isinstance(args, dict):
         raise ValueError("Select a Grader and supply a JSON object.")
     try:

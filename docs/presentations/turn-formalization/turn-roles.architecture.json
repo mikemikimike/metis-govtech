@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "The Three Roles",
+    "output": "turn-roles.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "the-loop",
+        "label": "The full loop",
+        "focus": ["user_agent", "orchestrator", "runner", "target"],
+        "note": "One turn is one pass around this loop."
+      },
+      {
+        "id": "inside-the-framework",
+        "label": "Inside the framework",
+        "focus": ["orchestrator", "runner"],
+        "note": "The User Agent and the Target System sit outside what the framework controls."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "user_agent",
+      "type": "external",
+      "label": "User Agent",
+      "sublabel": "a persona deciding what to do",
+      "pos": [40, 260],
+      "size": [160, 72]
+    },
+    {
+      "id": "orchestrator",
+      "type": "backend",
+      "label": "Orchestrator",
+      "sublabel": "runs the turn, enforces the rules",
+      "pos": [280, 260],
+      "size": [160, 72]
+    },
+    {
+      "id": "runner",
+      "type": "backend",
+      "label": "Runner",
+      "sublabel": "the only role that touches the target",
+      "pos": [520, 260],
+      "size": [160, 72]
+    },
+    {
+      "id": "target",
+      "type": "cloud",
+      "label": "Target System",
+      "sublabel": "the real system being evaluated",
+      "pos": [760, 260],
+      "size": [160, 72]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Evaluation Framework",
+      "wraps": ["orchestrator", "runner"],
+      "pad": 24
+    }
+  ],
+  "connections": [
+    {
+      "from": "user_agent",
+      "to": "orchestrator",
+      "label": "decides the next actions",
+      "variant": "emphasis",
+      "labelDy": 60
+    },
+    {
+      "from": "orchestrator",
+      "to": "runner",
+      "label": "hands off the ordered sequence",
+      "variant": "emphasis",
+      "labelDy": 60
+    },
+    {
+      "from": "runner",
+      "to": "target",
+      "label": "carries them out, in order",
+      "variant": "emphasis",
+      "labelDy": 60
+    },
+    {
+      "from": "target",
+      "to": "user_agent",
+      "label": "the result shapes the next turn",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Three Roles",
+      "items": [
+        "User Agent: a persona (an LLM) deciding what to do next",
+        "Orchestrator: runs the turn and enforces its rules",
+        "Runner: the only role that actually talks to the real target system"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "What a Turn Is",
+      "items": [
+        "One round of observing, deciding, and acting",
+        "The decision can bundle several actions together, in a chosen order"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "The Target System",
+      "items": [
+        "The real system being evaluated, outside the framework's control",
+        "Different target systems support different things"
+      ]
+    }
+  ]
+}

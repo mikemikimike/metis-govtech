@@ -37,11 +37,11 @@ function render(
       specification={value}
       interviewStep={state.interviewStep}
       busy={state.busy}
-      showMetrics={false}
-      onShowMetricsChange={() => undefined}
-      metricByFqn={new Map()}
-      metricsLoading={false}
-      metricsError={false}
+      showGraders={false}
+      onShowGradersChange={() => undefined}
+      graderByFqn={new Map()}
+      gradersLoading={false}
+      gradersError={false}
     />,
   );
 }
@@ -130,7 +130,7 @@ test("the document keeps node names and descriptions in their presentation roles
               {
                 id: "AC-1-1",
                 name: "Supported answer",
-                metric_fqn: "metis.metrics.answer_quality",
+                grader_fqn: "metis.graders.answer_quality",
                 description: {
                   given: "a question",
                   when: "the answer returns",
@@ -188,7 +188,7 @@ test("the document keeps node names and descriptions in their presentation roles
   assert.doesNotMatch(markup, />analyst<\/span>/);
 });
 
-test("hides metric identifiers and shows only the human summary when enabled", () => {
+test("hides grader identifiers and shows only the human summary when enabled", () => {
   const value = specification();
   value.features = [
     {
@@ -205,7 +205,7 @@ test("hides metric identifiers and shows only the human summary when enabled", (
             {
               id: "AC-1-1",
               name: "Supported answer",
-              metric_fqn: "metis.metrics.answer_quality",
+              grader_fqn: "metis.graders.answer_quality",
               description: {
                 given: "a question",
                 when: "it answers",
@@ -218,30 +218,30 @@ test("hides metric identifiers and shows only the human summary when enabled", (
     },
   ];
   const hidden = render(value);
-  assert.doesNotMatch(hidden, /Answer quality metric/);
+  assert.doesNotMatch(hidden, /Answer quality grader/);
   const visible = renderToStaticMarkup(
     <SpecificationView
       specification={value}
-      showMetrics
-      onShowMetricsChange={() => undefined}
-      metricByFqn={
+      showGraders
+      onShowGradersChange={() => undefined}
+      graderByFqn={
         new Map([
           [
-            "metis.metrics.answer_quality",
+            "metis.graders.answer_quality",
             {
-              fqn: "metis.metrics.answer_quality",
-              name: "Answer quality metric",
+              fqn: "metis.graders.answer_quality",
+              name: "Answer quality grader",
               description: "Checks supported answers.",
             },
           ],
         ])
       }
-      metricsLoading={false}
-      metricsError={false}
+      gradersLoading={false}
+      gradersError={false}
     />,
   );
-  assert.match(visible, /Answer quality metric/);
-  assert.doesNotMatch(visible, /metis\.metrics\.answer_quality/);
+  assert.match(visible, /Answer quality grader/);
+  assert.doesNotMatch(visible, /metis\.graders\.answer_quality/);
 });
 
 test("the generic form renderer transports names, descriptions, and opaque targets", () => {
@@ -357,11 +357,11 @@ test("the docked composer fills the conversation column", () => {
 test("the Specification output action follows Interview completion", () => {
   const shared = {
     specification: specification(),
-    showMetrics: false,
-    onShowMetricsChange: () => undefined,
-    metricByFqn: new Map(),
-    metricsLoading: false,
-    metricsError: false,
+    showGraders: false,
+    onShowGradersChange: () => undefined,
+    graderByFqn: new Map(),
+    gradersLoading: false,
+    gradersError: false,
     onFinish: () => undefined,
     onDownload: () => undefined,
   };

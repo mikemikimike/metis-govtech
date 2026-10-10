@@ -136,7 +136,7 @@ system:
     Mirror that shape, and the shape of anything already in the document. The wizard allocates
     collision-free ids across the current specification.
 
-    The wizard owns ids, authorship, defaults, measured state, metric bindings and trials. The model
+    The wizard owns ids, authorship, defaults, measured state, grader bindings and trials. The model
     may never write any of them. Fixture assignments on existing Tasks remain the user's to
     change. A new Scenario draft may suggest fixture names only from `<available_fixture_names>`;
     these are proposals for user review. Persona drafts use `name` and `description`. Scenario drafts
@@ -145,11 +145,11 @@ system:
 
     Two semantic fields you may never write, at any step:
       - a behaviour's `measured` — that is the user's decision alone
-      - a criterion's `metric_fqn` — a separate matcher chooses it from the criterion's own
-        wording. You can see which metric each criterion is bound to, but you cannot set it. If
-        the user wants a different metric, do not touch `metric_fqn`; instead reword that
-        criterion's `given` / `when` / `then` so the wording points at the metric they mean, and
-        the matcher re-maps it. Say what you reworded, not that you changed the metric.
+      - a criterion's `grader_fqn` — a separate matcher chooses it from the criterion's own
+        wording. You can see which grader each criterion is bound to, but you cannot set it. If
+        the user wants a different grader, do not touch `grader_fqn`; instead reword that
+        criterion's `given` / `when` / `then` so the wording points at the grader they mean, and
+        the matcher re-maps it. Say what you reworded, not that you changed the grader.
 
     Do not return suggestion options. If you are unsure, explain the alternatives in `message`.
 
@@ -332,7 +332,7 @@ model_calls:
     remain valid across different evaluation scenarios. Use general input and output terms such as
     source data, text data, CSV data, user instructions, reports, presentations or slides. Give
     each criterion a different quality or condition, and make it suitable for evaluation by one
-    metric.
+    grader.
 
     Do not include details that belong to a scenario, such as a business subject, named dataset,
     reporting period, example value, named person, exact file name or requested presentation
@@ -349,7 +349,7 @@ model_calls:
     quarterly financial data, when the product creates a sales deck, then the slides show the
     correct Q3 revenue trends."
 
-    Do not set metric_fqn — that is resolved separately.
+    Do not set grader_fqn — that is resolved separately.
 
     `message`: a sentence introducing them.
   personas: |-
@@ -418,8 +418,8 @@ model_calls:
 
     Do what they asked, as patches. You may edit any part of the document they clearly meant,
     even if it belongs to an earlier step — except the three things you may never write. In
-    particular, if they ask for a different metric, reword the criterion rather than trying to set
-    `metric_fqn`.
+    particular, if they ask for a different grader, reword the criterion rather than trying to set
+    `grader_fqn`.
 
     Replacement language is a replacement, not an addition. If the user supplies a list and says
     "these are the personas/scenarios/behaviours I want", "use these instead", "revise the list to", or
@@ -451,6 +451,6 @@ model_calls:
     no edits to any other behaviour, no second criterion, no changes elsewhere in the document.
     Give / when / then. The criterion must test one quality only and be concrete enough that someone
     reading a trace or generated output could say whether it held. Make it suitable for evaluation
-    by one metric. Do not include an id or set metric_fqn — both are assigned separately.
+    by one grader. Do not include an id or set grader_fqn — both are assigned separately.
 
     `message`: a sentence introducing the one you are offering.

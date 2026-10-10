@@ -28,7 +28,7 @@ import {
   type ManualScenario,
   type ManualTestCase,
 } from "./manual";
-import { api, TransportError, type MetricSpec } from "./transport/api";
+import { api, TransportError, type GraderSpec } from "./transport/api";
 import { Button, cn, formatTrials, Mono } from "./ui";
 
 export function ManualAuthoringEntry({ onOpen }: { onOpen: () => void }) {
@@ -117,7 +117,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
     emptyManualExperiment,
   );
   const [library, setLibrary] = useState<ManualFixture[]>([]);
-  const [metrics, setMetrics] = useState<MetricSpec[] | null>(null);
+  const [metrics, setMetrics] = useState<GraderSpec[] | null>(null);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +135,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
   const loadMetrics = useCallback(() => {
     let live = true;
     setCatalogueError(null);
-    void api.metrics().then(
+    void api.graders().then(
       (rows) => {
         if (live) setMetrics(rows);
       },
@@ -808,9 +808,9 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                           errorFor(`task.${index}.settings.${scorer.fqn}`),
                         )}
                         value={
-                          task.metric_args_text?.[scorer.fqn] ??
+                          task.grader_args_text?.[scorer.fqn] ??
                           JSON.stringify(
-                            task.metric_args?.[scorer.fqn] ?? {},
+                            task.grader_args?.[scorer.fqn] ?? {},
                             null,
                             2,
                           )
@@ -818,8 +818,8 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                         placeholder="{}"
                         onChange={(value) =>
                           updateTask(index, {
-                            metric_args_text: {
-                              ...task.metric_args_text,
+                            grader_args_text: {
+                              ...task.grader_args_text,
                               [scorer.fqn]: value,
                             },
                           })
@@ -1005,12 +1005,12 @@ function ScorerPicker({
 }: {
   itemLabel: string;
   searchId: string;
-  metrics: MetricSpec[] | null;
+  metrics: GraderSpec[] | null;
   error: string | null;
-  selected: MetricSpec[];
+  selected: GraderSpec[];
   invalid?: string;
   onRetry: () => void;
-  onToggle: (metric: MetricSpec) => void;
+  onToggle: (metric: GraderSpec) => void;
 }) {
   const [query, setQuery] = useState("");
   const shown = useMemo(() => {

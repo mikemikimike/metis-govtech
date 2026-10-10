@@ -1,18 +1,18 @@
-"""Portable PPTX text extraction and deck-consuming metric wiring.
+"""Portable PPTX text extraction and deck-consuming grader wiring.
 
 Reads slide text through the stdlib ZIP/XML representation (no presentation
-library, no network) and checks that deck metrics consume the extracted
+library, no network) and checks that deck graders consume the extracted
 slides and skip cleanly when no deck exists.
 """
 
 import asyncio
 
-from metis.library.metrics import (
-    CrossSlideLogicalFlowMetric,
-    SlideSpecComplianceMetric,
-    SlideTitleQualityMetric,
+from metis.library.graders import (
+    CrossSlideLogicalFlowGrader,
+    SlideSpecComplianceGrader,
+    SlideTitleQualityGrader,
 )
-from metis.library.metrics._extraction import extract_deck_slides, read_pptx_slides
+from metis.library.graders._extraction import extract_deck_slides, read_pptx_slides
 
 from .conftest import artifact, make_case
 
@@ -52,16 +52,16 @@ def test_extract_deck_slides_reads_artifact(pptx_factory):
 
 
 def test_slide_title_quality_skips_without_deck():
-    metric = SlideTitleQualityMetric()
-    asyncio.run(metric.a_measure(make_case(metadata={})))
-    assert metric.skipped is True
-    assert metric._geval is None
+    grader = SlideTitleQualityGrader()
+    asyncio.run(grader.a_measure(make_case(metadata={})))
+    assert grader.skipped is True
+    assert grader._geval is None
 
 
 def test_slide_spec_compliance_uses_deck_slides_fallback(pptx_factory):
     # No deck_metadata in observations — count/titles come from the .pptx.
     path = pptx_factory([["Intro"], ["Method"], ["Results"]])
-    metric = SlideSpecComplianceMetric()
+    grader = SlideSpecComplianceGrader()
 
     class _Fake:
         score, reason, evaluation_cost = 1.0, "ok", 0.0
@@ -71,15 +71,15 @@ def test_slide_spec_compliance_uses_deck_slides_fallback(pptx_factory):
             self.tc = tc
             return 1.0
 
-    metric._geval = _Fake()
-    asyncio.run(metric.a_measure(_deck_case(path)))
-    assert metric.skipped is False  # deck was extractable via fallback
-    assert "3" in metric._geval.tc.context[0]  # slide count surfaced to judge
+    grader._geval = _Fake()
+    asyncio.run(grader.a_measure(_deck_case(path)))
+    assert grader.skipped is False  # deck was extractable via fallback
+    assert "3" in grader._geval.tc.context[0]  # slide count surfaced to judge
 
 
 def test_cross_slide_flow_includes_body_from_deck(pptx_factory):
     path = pptx_factory([["Problem", "costs rose"], ["Solution", "automate step"]])
-    metric = CrossSlideLogicalFlowMetric()
+    grader = CrossSlideLogicalFlowGrader()
 
     class _Fake:
         score, reason, evaluation_cost = 1.0, "ok", 0.0
@@ -89,7 +89,7 @@ def test_cross_slide_flow_includes_body_from_deck(pptx_factory):
             self.tc = tc
             return 1.0
 
-    metric._geval = _Fake()
-    asyncio.run(metric.a_measure(_deck_case(path)))
-    ctx = metric._geval.tc.context[0]
+    grader._geval = _Fake()
+    asyncio.run(grader.a_measure(_deck_case(path)))
+    ctx = grader._geval.tc.context[0]
     assert "Problem" in ctx and "automate step" in ctx  # title + body both present

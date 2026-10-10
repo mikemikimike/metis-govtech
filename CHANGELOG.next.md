@@ -57,9 +57,21 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   requirements. The Experiment holds Personas, Scenarios, Tasks, and execution settings.
   The Specification combines both in one document (#395).
 
+#### Breaking
+
+- Rename `Criterion.metric_fqn`/`metric_args` to `grader_fqn`/`grader_args`, matching
+  `GLOSSARY.md`'s **Grader** term for the concept these fields reference (#415).
+
 ### metis-library
 
-_No v1 changes yet._
+#### Breaking
+
+- Rename the `metis.library.metrics` subpackage to `metis.library.graders`, its two base
+  classes `MetisTurnMetric`/`MetisSessionMetric` to `MetisTurnGrader`/`MetisSessionGrader`,
+  and every `*Metric`-suffixed grader class (77 total, including the fallback judge
+  `CriterionGEvalMetric` → `CriterionGEvalGrader`) to its `*Grader` equivalent — e.g.
+  `TurnBudgetMetric` → `TurnBudgetGrader`. "Metric" never appears in `GLOSSARY.md`; the
+  glossary's term for this concept is **Grader** (#415).
 
 ### metis-engine
 
@@ -93,6 +105,17 @@ _No v1 changes yet._
   to `Orchestrator.execute()` to avoid a noun/verb collision with the renamed
   `Run` concept. The on-disk `runs/<folder>/` experiment-output directory is
   now `trials/<folder>/` (#200).
+
+- Rename every `Metric`-named symbol in `packages/engine/` to `Grader`
+  (`MetricRef` → `GraderRef`, `MetricPassRate` → `GraderPassRate`, `UnmappedMetric` →
+  `UnmappedGrader`, `MetricResult` → `GraderResult`, `SessionMetricResult`/`TurnMetricResult`
+  → `SessionGraderResult`/`TurnGraderResult`, and matching renames across the orchestrator,
+  CLI evaluation loop, and reporting pipeline), including report JSON fields
+  `metricPassRate`/`metricsAsked`/`metricsScored` → `graderPassRate`/`gradersAsked`/
+  `gradersScored`, `Scenario.metric_refs`/`TrialConfig.metric_refs` → `grader_refs`, and
+  `Timings.turn_metrics_seconds`/`session_metrics_seconds` →
+  `turn_graders_seconds`/`session_graders_seconds` (these measure grading wall-clock time,
+  not an unrelated observability signal — confirmed in scope by issue #415) (#415).
 
 ### metis-wizard
 
@@ -200,6 +223,14 @@ _No v1 changes yet._
   documents. The resolved-request transcript, stored step, and file methods are removed. Old
   session files are not migrated — start a new interview.
 
+- Rename every `Metric`-named symbol in `packages/wizard/` to `Grader`
+  (`MetricSpec`/`MetricParam`/`MetricSummary` → `GraderSpec`/`GraderParam`/`GraderSummary` in
+  `contracts/metric_spec.py`, renamed to `contracts/grader_spec.py`; `METRICS_PACKAGE` →
+  `GRADERS_PACKAGE`; the facade function `metric_catalogue()` → `grader_catalogue()`; and
+  matching renames across the matcher, driver, screens, and compiler), and the fallback judge
+  FQN `metis.library.metrics.default.CriterionGEvalMetric` →
+  `metis.library.graders.default.CriterionGEvalGrader` (#415).
+
 ### metis-api
 
 #### Added
@@ -220,7 +251,7 @@ _No v1 changes yet._
   can serve any operation. Typed wizard results map to 200, 400, 422, 503, and 500, all in one error
   shape. Runs as
   the `metis-api` executable and ships with a `Dockerfile` built from the repository root.
-- **Metric catalogue route.** `GET /api/v1/metrics` returns installed metric summaries through the
+- **Grader catalogue route.** `GET /api/v1/graders` returns installed grader summaries through the
   public wizard facade without user state or filesystem writes.
 - **Wizard client configuration route.** `GET /api/v1/wizard/config` returns the package-owned
   Interview busy message, so HTTP clients do not copy wizard presentation text.
@@ -244,6 +275,11 @@ _No v1 changes yet._
   `tests/fixtures/wizard/` directly instead of through a `sys.path` insertion. Test behaviour is
   unchanged.
 
+#### Breaking
+
+- Rename `GET /api/v1/metrics` to `GET /api/v1/graders`, and its response model
+  `MetricSummary` to `GraderSummary` (#415).
+
 ### metis-web
 
 #### Added
@@ -259,8 +295,8 @@ _No v1 changes yet._
   types and the stateless `apps/api` lifecycle routes, and stores local Interviews, fixture Blobs,
   and their display transcript in IndexedDB. The old wizard-owned web project and Python static
   output are retired.
-- **Metric details.** The Specification pane can request the optional metric catalogue once per page load
-  through `GET /api/v1/metrics`; the rest of the Interview remains usable when that route fails.
+- **Grader details.** The Specification pane can request the optional grader catalogue once per page load
+  through `GET /api/v1/graders`; the rest of the Interview remains usable when that route fails.
 - **Manual experiment authoring.** The opening screen offers a stateless form for
   Experiment details, Personas, Scenarios, and Test Cases. Each Test Case selects one
   Persona and one Scenario, with its own Trials, scorers, and files. The form retains
@@ -291,3 +327,12 @@ _No v1 changes yet._
 
 - Source analysis, hosted state, authentication, and evaluation execution remain outside this
   change.
+
+#### Breaking
+
+- Rename the web client's `metricCatalogue`/`metricState`/`metricByFqn` state,
+  `api.metrics()` call, and `Criterion.metric_fqn`/`metric_args` wire fields to
+  `graderCatalogue`/`graderState`/`graderByFqn`, `api.graders()`, and
+  `grader_fqn`/`grader_args`, matching the renamed `GET /api/v1/graders` route. The manual
+  form's `scorer`-prefixed UI identifiers are unchanged — intentional, see
+  `apps/web/AGENTS.md` (#415).

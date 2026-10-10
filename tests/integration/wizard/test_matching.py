@@ -1,4 +1,4 @@
-"""Criterion prose → metric FQN.
+"""Criterion prose → grader FQN.
 
 Written before the implementation. The property that matters most is the fallback: a matcher
 that cannot reach its embedding provider must still leave the user with a working experiment,
@@ -13,7 +13,7 @@ from metis.wizard.application.matching import (
     library_catalogue,
     match_specification,
 )
-from metis.wizard.contracts import Criterion, MetricSpec
+from metis.wizard.contracts import Criterion, GraderSpec
 from tests.fixtures.wizard.specifications import research_assistant
 
 
@@ -35,13 +35,13 @@ class FakeEmbedder:
         ]
 
 
-CITATION = MetricSpec(
-    fqn="metis.library.metrics.orchestration.SynthesisFaithfulnessMetric",
+CITATION = GraderSpec(
+    fqn="metis.library.graders.orchestration.SynthesisFaithfulnessGrader",
     name="Synthesis faithfulness",
     description="Whether claims are supported by the source they cite.",
 )
-TURNS = MetricSpec(
-    fqn="metis.library.metrics.universal.TurnBudgetMetric",
+TURNS = GraderSpec(
+    fqn="metis.library.graders.universal.TurnBudgetGrader",
     name="Turn budget",
     description="Interview completed within the allowed turn budget.",
 )
@@ -59,44 +59,44 @@ def a_criterion(then: str, **kw) -> Criterion:
 # ── the catalogue ──────────────────────────────────────────────────────────
 
 
-def test_the_catalogue_reads_real_metrics() -> None:
+def test_the_catalogue_reads_real_graders() -> None:
     specs = library_catalogue()
 
     assert specs
     assert all(spec.fqn and spec.name and spec.description for spec in specs)
-    assert any("TurnBudgetMetric" in spec.fqn for spec in specs)
+    assert any("TurnBudgetGrader" in spec.fqn for spec in specs)
 
 
-def test_the_catalogue_covers_every_exported_metric() -> None:
+def test_the_catalogue_covers_every_exported_grader() -> None:
     """The reader must find the whole library, not the one non-underscored module a submodule
-    walk would leave. Verified against the library's own export list, so a metric dropped in
+    walk would leave. Verified against the library's own export list, so a grader dropped in
     the file split is caught rather than silently absent from the picker."""
     import inspect
 
-    import metis.library.metrics as metrics
+    import metis.library.graders as graders
 
     exported = {
         name
-        for name, obj in vars(metrics).items()
+        for name, obj in vars(graders).items()
         if inspect.isclass(obj)
-        and obj.__name__.endswith("Metric")
+        and obj.__name__.endswith("Grader")
         and not obj.__name__.startswith(("Base", "Sync"))
-        and obj.__module__.startswith("metis.library.metrics")
+        and obj.__module__.startswith("metis.library.graders")
     }
     catalogued = {spec.fqn.rsplit(".", 1)[-1] for spec in library_catalogue()}
     assert catalogued == exported
 
 
-def test_the_catalogue_never_instantiates_a_metric(
+def test_the_catalogue_never_instantiates_a_grader(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Many metrics take constructor arguments; reading a display name must not build one."""
-    from metis.library.metrics import TurnBudgetMetric
+    """Many graders take constructor arguments; reading a display name must not build one."""
+    from metis.library.graders import TurnBudgetGrader
 
     def explode(*_a, **_kw):
-        raise AssertionError("the catalogue instantiated a metric")
+        raise AssertionError("the catalogue instantiated a grader")
 
-    monkeypatch.setattr(TurnBudgetMetric, "__init__", explode)
+    monkeypatch.setattr(TurnBudgetGrader, "__init__", explode)
 
     library_catalogue.cache_clear()
     assert library_catalogue()
@@ -136,7 +136,7 @@ def test_no_match_falls_through_to_the_generated_judge() -> None:
 
 
 def test_the_threshold_is_what_decides() -> None:
-    """A partial match: the criterion mentions both concepts, the metric only one."""
+    """A partial match: the criterion mentions both concepts, the grader only one."""
     criterion = a_criterion("it names the source it used, within the turn budget")
     embedder = FakeEmbedder(["source", "turn"])
 
@@ -178,7 +178,7 @@ def test_a_degraded_run_still_produces_a_loadable_experiment(tmp_path) -> None:
     specification = research_assistant()
     for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
-            criterion.metric_fqn = None
+            criterion.grader_fqn = None
 
     matcher = EmbeddingMatcher(
         embedder=FakeEmbedder([], fails=True), specs=[CITATION], threshold=0.5
@@ -197,15 +197,15 @@ def test_a_degraded_run_still_produces_a_loadable_experiment(tmp_path) -> None:
 # ── matching over a whole specification ──────────────────────────────────────────
 
 
-def test_only_criteria_without_a_metric_are_matched() -> None:
-    """Re-matching a criterion that already has a metric would be a wasted call."""
+def test_only_criteria_without_a_grader_are_matched() -> None:
+    """Re-matching a criterion that already has a grader would be a wasted call."""
     specification = research_assistant()
     embedder = FakeEmbedder(["source"])
     matcher = EmbeddingMatcher(embedder=embedder, specs=[CITATION], threshold=0.5)
 
     matched = match_specification(specification, matcher)
 
-    assert matched == 0  # the fixture already has metrics on everything
+    assert matched == 0  # the fixture already has graders on everything
 
 
 def test_dormant_criteria_also_have_graders() -> None:
@@ -213,14 +213,14 @@ def test_dormant_criteria_also_have_graders() -> None:
     specification = research_assistant()
     unticked = specification.behaviour("EB-2")
     assert unticked is not None
-    unticked.criteria[0].metric_fqn = None
+    unticked.criteria[0].grader_fqn = None
     matcher = EmbeddingMatcher(
         embedder=FakeEmbedder(["source"]), specs=[CITATION], threshold=0.5
     )
 
     match_specification(specification, matcher)
 
-    assert unticked.criteria[0].metric_fqn is not None
+    assert unticked.criteria[0].grader_fqn is not None
 
 
 def test_rematching_a_criterion_is_silent_and_free() -> None:
@@ -237,7 +237,7 @@ def test_rematching_a_criterion_is_silent_and_free() -> None:
     assert new_fqn == TURNS.fqn
 
 
-# ── metric arguments ───────────────────────────────────────────────────────
+# ── grader arguments ───────────────────────────────────────────────────────
 
 
 def test_arguments_are_left_at_their_defaults() -> None:
@@ -249,4 +249,4 @@ def test_arguments_are_left_at_their_defaults() -> None:
 
     matcher.match(criterion)
 
-    assert criterion.metric_args == {}
+    assert criterion.grader_args == {}

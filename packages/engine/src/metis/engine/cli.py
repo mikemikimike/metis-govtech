@@ -136,12 +136,12 @@ def _validate_inputs(input_dir: Path) -> None:
                 sys.exit(1)
 
     for scenario in specification.resolved_tasks():
-        for metric_ref in scenario.metric_refs:
-            fqn = metric_ref.fqn
+        for grader_ref in scenario.grader_refs:
+            fqn = grader_ref.fqn
             parts = fqn.rsplit(".", 1)
             if len(parts) != 2:
                 console.print(
-                    f"Error: metric '{fqn}' is not a valid fully-qualified name",
+                    f"Error: grader '{fqn}' is not a valid fully-qualified name",
                     style="bold red",
                 )
                 sys.exit(1)
@@ -150,14 +150,14 @@ def _validate_inputs(input_dir: Path) -> None:
                 module = importlib.import_module(module_path)
             except Exception as e:
                 console.print(
-                    f"Error: metric '{fqn}' could not be imported: {type(e).__name__}: {e}",
+                    f"Error: grader '{fqn}' could not be imported: {type(e).__name__}: {e}",
                     style="bold red",
                 )
                 sys.exit(1)
             cls = getattr(module, class_name, None)
             if cls is None:
                 console.print(
-                    f"Error: metric '{fqn}' could not be imported: "
+                    f"Error: grader '{fqn}' could not be imported: "
                     f"module '{module_path}' has no attribute '{class_name}'",
                     style="bold red",
                 )
@@ -170,7 +170,7 @@ def _validate_inputs(input_dir: Path) -> None:
                 )
             ):
                 console.print(
-                    f"Error: metric '{fqn}' is not a subclass of "
+                    f"Error: grader '{fqn}' is not a subclass of "
                     f"deepeval.metrics.BaseMetric or "
                     f"BaseConversationalMetric",
                     style="bold red",
@@ -178,10 +178,10 @@ def _validate_inputs(input_dir: Path) -> None:
                 sys.exit(1)
 
             try:
-                inspect.signature(cls).bind(**metric_ref.args)
+                inspect.signature(cls).bind(**grader_ref.args)
             except (TypeError, ValueError) as exc:
                 console.print(
-                    f"Error: Criterion '{metric_ref.criterion_id}' has invalid Grader parameters: {exc}",
+                    f"Error: Criterion '{grader_ref.criterion_id}' has invalid Grader parameters: {exc}",
                     style="bold red",
                 )
                 sys.exit(1)
@@ -743,50 +743,50 @@ def _update_evaluation_progress(
         console.print(f"Evaluation {record_number}/{total_records}: {description}")
 
 
-def _log_metric_results(
+def _log_grader_results(
     evaluation_log: EvaluationLogger,
     eval_result: EvalResult,
     *,
     record_label: str,
 ) -> None:
-    """Write complete metric outputs for every evaluated test case."""
-    metric_outputs: list[dict[str, object]] = []
+    """Write complete grader outputs for every evaluated test case."""
+    grader_outputs: list[dict[str, object]] = []
 
-    def _collect(scope: str, test_case: object, metric_results: list) -> None:
+    def _collect(scope: str, test_case: object, grader_results: list) -> None:
         test_case_name = getattr(test_case, "name", None)
-        for metric_result in metric_results:
-            metric_outputs.append(
+        for grader_result in grader_results:
+            grader_outputs.append(
                 {
                     "record": record_label,
                     "scope": scope,
                     "test_case": test_case_name,
-                    "metric": metric_result.name,
-                    "score": metric_result.score,
-                    "success": metric_result.success,
-                    "skipped": metric_result.skipped,
-                    "reason": metric_result.reason,
-                    "evaluation_cost": metric_result.evaluation_cost,
-                    "input_tokens": metric_result.input_tokens,
-                    "output_tokens": metric_result.output_tokens,
+                    "grader": grader_result.name,
+                    "score": grader_result.score,
+                    "success": grader_result.success,
+                    "skipped": grader_result.skipped,
+                    "reason": grader_result.reason,
+                    "evaluation_cost": grader_result.evaluation_cost,
+                    "input_tokens": grader_result.input_tokens,
+                    "output_tokens": grader_result.output_tokens,
                 }
             )
 
     for turn_result in eval_result.turn_results:
-        _collect("turn", turn_result.llm_test_case, turn_result.metric_results)
+        _collect("turn", turn_result.llm_test_case, turn_result.grader_results)
     for session_result in eval_result.session_results:
         _collect(
             "session",
             session_result.conversational_test_case,
-            session_result.metric_results,
+            session_result.grader_results,
         )
 
-    for metric_output in metric_outputs:
+    for grader_output in grader_outputs:
         evaluation_log.write(
-            "METRIC RESULT — "
-            + json.dumps(metric_output, ensure_ascii=False, default=str)
+            "GRADER RESULT — "
+            + json.dumps(grader_output, ensure_ascii=False, default=str)
         )
     evaluation_log.write(
-        f"METRIC RESULTS — record={record_label} count={len(metric_outputs)}"
+        f"GRADER RESULTS — record={record_label} count={len(grader_outputs)}"
     )
 
 
@@ -804,7 +804,7 @@ def _run_evaluation(
     evaluation_log = EvaluationLogger(experiment_dir / "logs")
     evaluation_log.write(f"EVALUATION STARTED — {experiment_dir}")
 
-    from metis.engine.evaluation import evaluate as evaluate_metrics
+    from metis.engine.evaluation import evaluate as evaluate_graders
     from metis.engine.evaluation.types import EvalResult
     from metis.engine.extractor import fetch_by_session_id, get_langfuse_client
     from metis.engine.reporting import generate_report
@@ -845,7 +845,7 @@ def _run_evaluation(
             session_id = record.target_session_id
             persona_id = record.config.persona
             scenario_id = record.config.scenario
-            metric_refs = record.config.metric_refs
+            grader_refs = record.config.grader_refs
             label = f"{persona_id} x {scenario_id}"
             record_failed = False
             failure_reason: str | None = None
@@ -877,14 +877,14 @@ def _run_evaluation(
                     failure_reason = "No target_session_id"
                     continue
 
-                if not metric_refs:
+                if not grader_refs:
                     console.print(
-                        "  WARNING: No metric_refs in run config — skipping evaluation",
+                        "  WARNING: No grader_refs in run config — skipping evaluation",
                         style="yellow",
                     )
                     failed += 1
                     record_failed = True
-                    failure_reason = "No metric_refs in run config"
+                    failure_reason = "No grader_refs in run config"
                     continue
 
                 try:
@@ -912,14 +912,14 @@ def _run_evaluation(
                     evaluation_log.write(
                         f"RECORD {index + 1}/{len(records)} {label} — EVALUATING"
                     )
-                    for metric_ref in metric_refs:
+                    for grader_ref in grader_refs:
                         evaluation_log.write(
-                            "METRIC CONFIG — "
+                            "GRADER CONFIG — "
                             + json.dumps(
                                 {
                                     "record": label,
-                                    "fqn": metric_ref.fqn,
-                                    "args": metric_ref.args,
+                                    "fqn": grader_ref.fqn,
+                                    "args": grader_ref.args,
                                 },
                                 ensure_ascii=False,
                                 default=str,
@@ -934,14 +934,14 @@ def _run_evaluation(
                         label=label,
                         phase="evaluating",
                     )
-                    eval_result = evaluate_metrics(
+                    eval_result = evaluate_graders(
                         fetch_result,
-                        metric_refs,
+                        grader_refs,
                         task_id=record.config.task_id,
                         trial_index=record.config.trial_index,
                     )
                     eval_results.append(eval_result)
-                    _log_metric_results(
+                    _log_grader_results(
                         evaluation_log,
                         eval_result,
                         record_label=label,

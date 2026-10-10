@@ -205,7 +205,7 @@ uv run pytest tests/unit/core/   # single package
 
 METIS is designed for extensibility at two main points:
 
-- **Custom metrics** — implement `BaseMetric` from `metis.core` and register via `MetricRegistry`
+- **Custom graders** — implement a grader class in `metis.library.graders` (see `packages/library/AGENTS.md`)
 - **Custom trace ingesters** — implement `BaseTraceIngester` and register via the `metis.trace_ingesters` entry point group
 
 For details on contracts and constraints, see the [Architecture Specification](docs/architecture.md).

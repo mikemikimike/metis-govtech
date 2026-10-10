@@ -1,7 +1,7 @@
 """Tests for observable execution metadata written by the Langfuse extractor.
 
 The extractor writes ``stop_reason`` and ``cancellation_available`` into the
-metric-visible metadata of every test case. These tests use a mocked Langfuse
+grader-visible metadata of every test case. These tests use a mocked Langfuse
 client (no network) and assert that the fields reach both the per-trace
 ``LLMTestCase`` metadata and the session ``ConversationalTestCase`` metadata,
 and that they are marked unavailable (never invented) when the caller does

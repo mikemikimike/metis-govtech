@@ -238,29 +238,29 @@ class Persona(BaseModel, extra="ignore"):
 # ---------------------------------------------------------------------------
 
 
-class MetricRef(BaseModel):
-    """A metric reference from specification.yaml.
+class GraderRef(BaseModel):
+    """A grader reference from specification.yaml.
 
     Accepts either:
-      - a plain string: "metis.library.metrics.RoutingAccuracyMetric"
-      - a single-key mapping: {"metis.library.metrics.TurnBudgetMetric": {"max_turns": 8}}
+      - a plain string: "metis.library.graders.RoutingAccuracyGrader"
+      - a single-key mapping: {"metis.library.graders.TurnBudgetGrader": {"max_turns": 8}}
     """
 
     criterion_id: str = ""
     fqn: str = Field(
         description=(
-            "Fully-qualified import path of the metric class to run — a"
-            " MetisTurnMetric or MetisSessionMetric subclass, e.g."
-            " 'metis.library.metrics.RoutingAccuracyMetric'. Resolved at"
+            "Fully-qualified import path of the grader class to run — a"
+            " MetisTurnGrader or MetisSessionGrader subclass, e.g."
+            " 'metis.library.graders.RoutingAccuracyGrader'. Resolved at"
             " runtime via importlib."
         )
     )
     args: dict[str, Any] = Field(
         default_factory=dict,
         description=(
-            "Keyword arguments for the metric's constructor (invoked as"
+            "Keyword arguments for the grader's constructor (invoked as"
             " cls(**args)), mapping each parameter name to its value. Empty"
-            " when the metric takes no configuration."
+            " when the grader takes no configuration."
         ),
     )
 
@@ -293,7 +293,7 @@ class MetricRef(BaseModel):
                 },
             ],
             "description": (
-                "A metric reference. Accepts a plain FQN string,"
+                "A grader reference. Accepts a plain FQN string,"
                 " a single-key mapping {FQN: {args}}, or"
                 " {fqn: str, args: dict}."
             ),
@@ -323,7 +323,7 @@ class Scenario(BaseModel):
     num_trials: int = 1
     fixtures: list[str] = Field(default_factory=list)
     persona_refs: list[str] = Field(min_length=1)
-    metric_refs: list[MetricRef] = Field(default_factory=list)
+    grader_refs: list[GraderRef] = Field(default_factory=list)
     max_turns: int = 20
     timeout_minutes: int = 15
     response_wait_ms: int = 300000
@@ -396,12 +396,12 @@ class Specification(CoreSpecification):
         refs = []
         for cid in task.criterion_refs:
             criterion = self.criterion(cid)
-            assert criterion is not None and criterion.metric_fqn
+            assert criterion is not None and criterion.grader_fqn
             refs.append(
-                MetricRef(
+                GraderRef(
                     criterion_id=cid,
-                    fqn=criterion.metric_fqn,
-                    args=criterion.metric_args,
+                    fqn=criterion.grader_fqn,
+                    args=criterion.grader_args,
                 )
             )
         return Scenario(
@@ -415,7 +415,7 @@ class Specification(CoreSpecification):
             response_wait_ms=task.response_wait_ms,
             max_trial_retries=task.max_run_retries,
             fixtures=task.fixtures,
-            metric_refs=refs,
+            grader_refs=refs,
         )
 
     @classmethod
@@ -437,7 +437,7 @@ class TrialConfig(BaseModel, extra="ignore"):
     trial_index: int = 1
     persona: str
     scenario: str
-    metric_refs: list[MetricRef] = Field(default_factory=list)
+    grader_refs: list[GraderRef] = Field(default_factory=list)
     max_turns: int = 20
     timeout_minutes: int = 15
     response_wait_ms: int = 300000

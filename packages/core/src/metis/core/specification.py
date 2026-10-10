@@ -241,7 +241,7 @@ class Specification(BaseModel):
                 errors.append(f"Duplicate or empty ID: {node.id!r}.")
             seen.add(node.id)
         for criterion in [c for b in self.behaviours() for c in b.criteria]:
-            if not criterion.metric_fqn:
+            if not criterion.grader_fqn:
                 errors.append(f"Criterion {criterion.id} needs a Grader.")
         measured = {c.id for b in self.measured_behaviours() for c in b.criteria}
         for task in self.tasks:

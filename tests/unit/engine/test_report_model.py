@@ -7,28 +7,28 @@ import pytest
 
 from metis.engine.reporting._report import build_report
 from metis.engine.reporting._types import (
-    SessionMetricResult,
+    SessionGraderResult,
     SessionReport,
-    TurnMetricResult,
+    TurnGraderResult,
     TurnReport,
 )
 
 
-class TestTurnMetricResult:
+class TestTurnGraderResult:
     def test_required_fields(self):
-        m = TurnMetricResult(
-            name="TestMetric",
+        m = TurnGraderResult(
+            name="TestGrader",
             score=0.85,
             reason="good",
             success=True,
             skipped=False,
         )
-        assert m.name == "TestMetric"
+        assert m.name == "TestGrader"
         assert m.score == 0.85
 
     def test_optional_cost_fields(self):
-        m = TurnMetricResult(
-            name="TestMetric",
+        m = TurnGraderResult(
+            name="TestGrader",
             score=0.85,
             reason="good",
             success=True,
@@ -42,8 +42,8 @@ class TestTurnMetricResult:
         assert m.output_tokens == 50
 
     def test_optional_cost_fields_default_none(self):
-        m = TurnMetricResult(
-            name="TestMetric",
+        m = TurnGraderResult(
+            name="TestGrader",
             score=0.85,
             reason="good",
             success=True,
@@ -65,29 +65,29 @@ class TestTurnReport:
             input="hello",
             output="world",
             routed_to="direct",
-            metrics=[],
+            graders=[],
         )
         assert t.trace_id == "trace-1"
-        assert t.metrics == []
+        assert t.graders == []
 
 
-class TestSessionMetricResult:
+class TestSessionGraderResult:
     def test_construction(self):
-        m = SessionMetricResult(
-            name="SessionMetric",
+        m = SessionGraderResult(
+            name="SessionGrader",
             score=0.9,
             reason="ok",
             success=True,
             skipped=False,
         )
-        assert m.name == "SessionMetric"
+        assert m.name == "SessionGrader"
 
 
 class TestSessionReport:
     def test_construction(self):
         s = SessionReport(
             session_id="sess-1",
-            metrics=[],
+            graders=[],
         )
         assert s.session_id == "sess-1"
 

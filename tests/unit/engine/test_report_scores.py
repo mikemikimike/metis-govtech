@@ -10,13 +10,13 @@ from typing import Any
 from metis.engine.reporting import _report
 
 
-def _metric_row(session_id: str, scenario_id: str, *, success: bool) -> dict[str, Any]:
+def _grader_row(session_id: str, scenario_id: str, *, success: bool) -> dict[str, Any]:
     return {
         "session_id": session_id,
         "scenario_id": scenario_id,
-        "metrics": [
+        "graders": [
             {
-                "name": "Metric1",
+                "name": "Grader1",
                 "criterion_id": "c1",
                 "task_id": "TC-001",
                 "trial_index": 1,
@@ -56,7 +56,7 @@ def _specification() -> dict[str, Any]:
                             {
                                 "id": "c1",
                                 "description": {"given": "g", "when": "w", "then": "t"},
-                                "metric_fqn": "pkg.metrics.Metric1",
+                                "grader_fqn": "pkg.graders.Grader1",
                             }
                         ],
                     }
@@ -67,20 +67,20 @@ def _specification() -> dict[str, Any]:
 
 
 class TestScores:
-    def test_metric_pass_rate_sums_the_scenario_axis(self) -> None:
-        """3 of 4 metric results pass, matching the 75% shown on axes.S."""
+    def test_grader_pass_rate_sums_the_scenario_axis(self) -> None:
+        """3 of 4 grader results pass, matching the 75% shown on axes.S."""
         test_results = [
-            _metric_row("sess-1", "s1", success=True),
-            _metric_row("sess-1", "s1", success=True),
-            _metric_row("sess-1", "s1", success=True),
-            _metric_row("sess-1", "s1", success=False),
+            _grader_row("sess-1", "s1", success=True),
+            _grader_row("sess-1", "s1", success=True),
+            _grader_row("sess-1", "s1", success=True),
+            _grader_row("sess-1", "s1", success=False),
         ]
         report = _report.build_report(
             _specification(),
             test_results,
             persona_of={"sess-1": "p1"},
         )
-        assert report["scores"]["metricPassRate"] == {
+        assert report["scores"]["graderPassRate"] == {
             "rate": 75,
             "pass": 3,
             "ran": 4,
@@ -108,7 +108,7 @@ class TestScores:
 
     def test_no_data_leaves_rate_and_status_blank(self) -> None:
         report = _report.build_report(_specification(), [], persona_of={})
-        assert report["scores"]["metricPassRate"] == {
+        assert report["scores"]["graderPassRate"] == {
             "rate": None,
             "pass": 0,
             "ran": 0,

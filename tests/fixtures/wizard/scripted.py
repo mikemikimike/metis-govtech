@@ -270,7 +270,7 @@ class ScriptedInterviewer:
 
 @dataclass
 class ScriptedMatcher:
-    """Give every generated Criterion one runnable offline metric."""
+    """Give every generated Criterion one runnable offline grader."""
 
     degraded: bool = False
 

@@ -1,12 +1,12 @@
 # metis-engine
 
-Evaluation engine for METIS — simulation harness, trace extraction, metric execution, and report generation.
+Evaluation engine for METIS — simulation harness, trace extraction, grader execution, and report generation.
 
 ## What it does
 
 1. **Simulate** — drives the target system through its selected runner with LLM-powered user personas
 2. **Extract** — fetches resulting Langfuse traces and builds DeepEval test cases
-3. **Evaluate** — runs 50+ metrics (code-graded and LLM-judge) against the traces
+3. **Evaluate** — runs 50+ graders (code-graded and LLM-judge) against the traces
 4. **Report** — generates terminal summary, JSON, and self-contained HTML reports
 
 ## Setup
@@ -103,7 +103,7 @@ experiments/orca-eval-20260730-143022/
 ├── runs/                # Per-run conversation records
 ├── logs/
 │   ├── simulate.log                                  # Orchestration timeline (index)
-│   ├── evaluate.log                                  # Models, metrics, outputs, timeline
+│   ├── evaluate.log                                  # Models, graders, outputs, timeline
 │   ├── simulate-direct-question_cooperative-01.log   # Per-run detail (always DEBUG)
 │   ├── simulate-constrained-analysis_impatient-01.log
 │   └── ...
@@ -112,11 +112,11 @@ experiments/orca-eval-20260730-143022/
     └── report.html      # Visual report (open in browser)
 ```
 
-## Available metrics
+## Available graders
 
-All metrics are imported from `metis.library.metrics` (e.g. `metis.library.metrics.RoutingAccuracyMetric`).
+All graders are imported from `metis.library.graders` (e.g. `metis.library.graders.RoutingAccuracyGrader`).
 
-Each metric class carries a `tags` ClassVar for classification:
+Each grader class carries a `tags` ClassVar for classification:
 
 | Tag dimension | Values |
 |---------------|--------|

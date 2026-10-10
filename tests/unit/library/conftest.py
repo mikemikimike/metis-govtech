@@ -1,7 +1,7 @@
-"""Shared fixtures and builders for metis-library metric tests.
+"""Shared fixtures and builders for metis-library grader tests.
 
 These helpers construct the exact ``LLMTestCase`` / ``ConversationalTestCase``
-shapes that the CSV-aligned metrics read, plus a portable in-memory PPTX so
+shapes that the CSV-aligned graders read, plus a portable in-memory PPTX so
 deck extraction can be exercised without a presentation library or network.
 """
 

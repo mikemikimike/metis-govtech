@@ -74,7 +74,7 @@ from metis.wizard.contracts import (
     UserResponse,
     WizardRequest,
 )
-from metis.wizard.contracts.metric_spec import MetricSummary
+from metis.wizard.contracts.grader_spec import GraderSummary
 from metis.wizard.domain.permissions import InterviewStep
 
 
@@ -85,10 +85,10 @@ def configure_interview_runtime(*, api_key: str, base_url: str, model: str) -> N
     configure_interview_runtime(api_key=api_key, base_url=base_url, model=model)
 
 
-def metric_catalogue() -> list[MetricSummary]:
-    """Return installed metric display metadata without exposing matcher internals."""
+def grader_catalogue() -> list[GraderSummary]:
+    """Return installed grader display metadata without exposing matcher internals."""
     return [
-        MetricSummary(
+        GraderSummary(
             fqn=spec.fqn,
             name=spec.name,
             description=spec.description,
@@ -141,7 +141,7 @@ __all__ = [
     "InterviewerUnavailable",
     "MissingData",
     "MissingDataCode",
-    "MetricSummary",
+    "GraderSummary",
     "Specification",
     "Perspective",
     "PerspectiveDefinition",
@@ -159,7 +159,7 @@ __all__ = [
     "extract_documents",
     "handle_interview",
     "interview_client_config",
-    "metric_catalogue",
+    "grader_catalogue",
     "package_specification",
     "render_review",
     "write_experiment",

@@ -1413,7 +1413,7 @@ class OrcaApiRunnerFactory:
         refusing them"* and says so nowhere in the API. An experiment that
         crosses its allowance mid-flight therefore swaps the model under test
         with nothing in the run record to mark where — so the runs before and
-        after are not comparable, and no metric can detect it.
+        after are not comparable, and no grader can detect it.
 
         One read-lane call says so before the spend rather than after. Never
         blocks: the evaluator may have accepted the downgrade, and the

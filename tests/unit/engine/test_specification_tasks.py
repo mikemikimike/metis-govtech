@@ -7,7 +7,7 @@ from deepeval.test_case import LLMTestCase
 from pydantic import ValidationError
 
 from metis.engine.cli import _classify_resume_trials
-from metis.engine.evaluation.orchestrator import _resolve_metrics, _run_metric
+from metis.engine.evaluation.orchestrator import _resolve_graders, _run_grader
 from metis.engine.reporting._models import Report
 from metis.engine.reporting._report import build_report
 from metis.engine.simulation.experiment import expand_trial_plan, trial_folder_name
@@ -50,8 +50,8 @@ def specification() -> Specification:
                                         "when": "the session ends",
                                         "then": "at most 4 turns",
                                     },
-                                    "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-                                    "metric_args": {"max_turns": 4},
+                                    "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                    "grader_args": {"max_turns": 4},
                                 }
                             ],
                         }
@@ -81,7 +81,7 @@ def specification() -> Specification:
         }
     ).model_dump()
     short = data["features"][0]["behaviours"][0]["criteria"][0]
-    long = {**short, "id": "AC-LONG", "metric_args": {"max_turns": 10}}
+    long = {**short, "id": "AC-LONG", "grader_args": {"max_turns": 10}}
     data["features"][0]["behaviours"][0]["criteria"].append(long)
     first = data["tasks"][0]
     data["tasks"].append({**first, "id": "TC-002", "criterion_refs": ["AC-LONG"]})
@@ -103,23 +103,23 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
     outcomes = []
     for item in plan:
         scenario, persona, index = item
-        metric = _resolve_metrics(scenario.metric_refs)[0]
+        grader = _resolve_graders(scenario.grader_refs)[0]
         case = LLMTestCase(
             input="A question", actual_output="An answer", metadata={"total_turns": 7}
         )
-        result = await _run_metric(metric, case, asyncio.Semaphore(1))
-        assert result.metric_args == scenario.metric_refs[0].args
-        assert result.criterion_id == scenario.metric_refs[0].criterion_id
+        result = await _run_grader(grader, case, asyncio.Semaphore(1))
+        assert result.grader_args == scenario.grader_refs[0].args
+        assert result.criterion_id == scenario.grader_refs[0].criterion_id
         rows.append(
             {
                 "session_id": scenario.task_id,
                 "scenario_id": scenario.id,
-                "metrics": [
+                "graders": [
                     {
                         "name": result.name,
                         "criterion_id": result.criterion_id,
-                        "metric_fqn": result.metric_fqn,
-                        "metric_args": result.metric_args,
+                        "grader_fqn": result.grader_fqn,
+                        "grader_args": result.grader_args,
                         "task_id": scenario.task_id,
                         "trial_index": index,
                         "success": result.success,
@@ -150,7 +150,7 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
                 trial_index=index,
                 persona=persona.id,
                 scenario=scenario.id,
-                metric_refs=scenario.metric_refs,
+                grader_refs=scenario.grader_refs,
             ),
             outcome=TrialOutcome(
                 stop_reason="goal_achieved", total_turns=7, duration_seconds=1
@@ -163,7 +163,7 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
     assert report["criteria"]["AC-LONG"]["rate"] == 100
     assert [r["task_id"] for r in report["resultTable"]["rows"]] == ["TC-001", "TC-002"]
     saved = Report.model_validate(report).model_dump()
-    assert saved["criteria"]["AC-LONG"]["evidence"][0]["metric_args"] == {
+    assert saved["criteria"]["AC-LONG"]["evidence"][0]["grader_args"] == {
         "max_turns": 10
     }
 

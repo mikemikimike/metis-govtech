@@ -5,7 +5,7 @@ Produces:
 1. A terminal summary table.
 2. The product evaluation report, as an HTML page and as JSON data.
 
-The report joins each metric result to its Criterion in the Specification. A reader
+The report joins each grader result to its Criterion in the Specification. A reader
 can see which Behaviour needs attention and which Persona or Scenario is hard to test. Every number comes from a file the run already
 wrote; no model writes any of its text. A run with no product specification writes no report.
 """
@@ -22,13 +22,13 @@ from metis.core.console import console
 from metis.core.logging import get_logger
 from metis.engine.evaluation.types import EvalDurations, EvalResult, SessionResult
 from metis.engine.reporting._types import (
-    SessionMetricResult,
+    SessionGraderResult,
     SessionReport,
-    TurnMetricResult,
+    TurnGraderResult,
     TurnReport,
 )
 
-from ._aggregation import aggregate_metrics
+from ._aggregation import aggregate_graders
 from ._models import Report
 from ._report import build_report, load_report_sources
 from ._report_page import render_report_page
@@ -61,7 +61,7 @@ def format_terminal_summary(
     routing_summary: RoutingSummary | None = None,
     session_results: list[SessionReport] | None = None,
 ) -> str:
-    """Print a compact terminal summary of all metric results."""
+    """Print a compact terminal summary of all grader results."""
     lines = []
     lines.append(f"\n{'=' * 70}")
     lines.append(f"  EVAL RUN: {run_id}")
@@ -79,15 +79,15 @@ def format_terminal_summary(
             lines.append(f"  -> {agent:<20} {count}")
         lines.append("")
 
-    metric_agg = aggregate_metrics(
+    grader_agg = aggregate_graders(
         [t.model_dump() for t in turn_results],
         [s.model_dump() for s in session_results] if session_results else None,
     )
 
-    lines.append(f"  {'Metric':<40} {'Pass':>6} {'Fail':>6} {'Skip':>6} {'Rate':>7}")
+    lines.append(f"  {'Grader':<40} {'Pass':>6} {'Fail':>6} {'Skip':>6} {'Rate':>7}")
     lines.append(f"  {'-' * 40} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 7}")
 
-    for name, agg in sorted(metric_agg.items()):
+    for name, agg in sorted(grader_agg.items()):
         evaluated = agg["pass_count"] + agg["fail"]
         rate = agg["pass_count"] / evaluated if evaluated > 0 else 0
         marker = " " if agg["fail"] == 0 else "!"
@@ -96,9 +96,9 @@ def format_terminal_summary(
             f" {marker}{name:<40} {agg['pass_count']:>6} {agg['fail']:>6} {agg['skip']:>6} {rate_str:>7}"
         )
 
-    total_pass = sum(a["pass_count"] for a in metric_agg.values())
-    total_fail = sum(a["fail"] for a in metric_agg.values())
-    total_skip = sum(a["skip"] for a in metric_agg.values())
+    total_pass = sum(a["pass_count"] for a in grader_agg.values())
+    total_fail = sum(a["fail"] for a in grader_agg.values())
+    total_skip = sum(a["skip"] for a in grader_agg.values())
     evaluated = total_pass + total_fail
     lines.append(
         f"\n  {'TOTAL':<40} {total_pass:>6} {total_fail:>6} "
@@ -136,16 +136,16 @@ def save_report(
 
     d = durations or EvalDurations()
     timings = {
-        "turn_metrics_seconds": d.turn_metrics_seconds,
-        "session_metrics_seconds": d.session_metrics_seconds,
+        "turn_graders_seconds": d.turn_graders_seconds,
+        "session_graders_seconds": d.session_graders_seconds,
     }
-    latency = round(d.turn_metrics_seconds + d.session_metrics_seconds, 1) or None
+    latency = round(d.turn_graders_seconds + d.session_graders_seconds, 1) or None
 
     report = build_report(
         specification,
         [t.model_dump() for t in turn_results],
         persona_of=persona_of,
-        session_metrics=[s.model_dump() for s in session_results]
+        session_graders=[s.model_dump() for s in session_results]
         if session_results
         else None,
         run_id=run_id,
@@ -206,7 +206,7 @@ def generate_report(
 
         lf = get_langfuse_client()
         fetch_result = fetch_by_session_id(session_id, lf, experiment_root=experiment_dir)
-        eval_result = evaluate(fetch_result, metric_refs)
+        eval_result = evaluate(fetch_result, grader_refs)
         report_result = generate_report(eval_result, run_id="my-run-001")
         console.print(report_result.html_path)
     """
@@ -268,13 +268,13 @@ def _convert_turn_results(eval_result: EvalResult) -> list[TurnReport]:
         tc = tcr.llm_test_case
         metadata = tc.metadata or {}
         trace_id = metadata.get("trace_id", "unknown")
-        metrics_data: list[TurnMetricResult] = []
-        for mr in tcr.metric_results:
-            metrics_data.append(
-                TurnMetricResult(
+        graders_data: list[TurnGraderResult] = []
+        for mr in tcr.grader_results:
+            graders_data.append(
+                TurnGraderResult(
                     criterion_id=mr.criterion_id,
-                    metric_fqn=mr.metric_fqn,
-                    metric_args=mr.metric_args,
+                    grader_fqn=mr.grader_fqn,
+                    grader_args=mr.grader_args,
                     task_id=mr.task_id,
                     trial_index=mr.trial_index,
                     name=mr.name,
@@ -299,7 +299,7 @@ def _convert_turn_results(eval_result: EvalResult) -> list[TurnReport]:
                 input=tc.input or "",
                 output=tc.actual_output or "",
                 routed_to=routed_to or "direct",
-                metrics=metrics_data,
+                graders=graders_data,
             )
         )
     return results
@@ -313,13 +313,13 @@ def _convert_session_results(
     for scr in session_results:
         ctc = scr.conversational_test_case
         sid = (ctc.metadata or {}).get("session_id", "unknown")
-        metrics_out: list[SessionMetricResult] = []
-        for mr in scr.metric_results:
-            metrics_out.append(
-                SessionMetricResult(
+        graders_out: list[SessionGraderResult] = []
+        for mr in scr.grader_results:
+            graders_out.append(
+                SessionGraderResult(
                     criterion_id=mr.criterion_id,
-                    metric_fqn=mr.metric_fqn,
-                    metric_args=mr.metric_args,
+                    grader_fqn=mr.grader_fqn,
+                    grader_args=mr.grader_args,
                     task_id=mr.task_id,
                     trial_index=mr.trial_index,
                     name=mr.name,
@@ -332,7 +332,7 @@ def _convert_session_results(
         entries.append(
             SessionReport(
                 session_id=sid,
-                metrics=metrics_out,
+                graders=graders_out,
             )
         )
     return entries

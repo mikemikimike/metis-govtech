@@ -3,9 +3,9 @@
 from metis.engine.reporting._models import _REPORT_VERSION, Report
 from metis.engine.reporting._report import build_report, load_report_sources
 from metis.engine.reporting._types import (
-    SessionMetricResult,
+    SessionGraderResult,
     SessionReport,
-    TurnMetricResult,
+    TurnGraderResult,
     TurnReport,
 )
 from metis.engine.reporting.generator import (
@@ -17,9 +17,9 @@ from metis.engine.reporting.generator import (
 __all__ = [
     "Report",
     "ReportResult",
-    "SessionMetricResult",
+    "SessionGraderResult",
     "SessionReport",
-    "TurnMetricResult",
+    "TurnGraderResult",
     "TurnReport",
     "_REPORT_VERSION",
     "build_report",

@@ -254,7 +254,7 @@ def test_the_scenarios_screen_reports_five_of_five() -> None:
     assert (request.step, request.steps) == (5, 5)
 
 
-def test_criteria_cards_carry_no_metric_annotation() -> None:
+def test_criteria_cards_carry_no_grader_annotation() -> None:
     request = _compose_at(InterviewStep.CRITERIA)
 
     components = [component for card in request.cards for component in card.components]
@@ -921,7 +921,7 @@ def test_ticking_costs_no_model_call() -> None:
     assert specification.behaviour("EB-2").measured is True  # type: ignore[union-attr]
 
 
-# ── a reworded criterion re-maps its metric, silently ───────────────────────
+# ── a reworded criterion re-maps its grader, silently ───────────────────────
 
 _AC1 = "features[F-1].behaviours[EB-1].criteria[AC-1-1].description.then"
 
@@ -929,7 +929,7 @@ _AC1 = "features[F-1].behaviours[EB-1].criteria[AC-1-1].description.then"
 @dataclass
 class RewordingInterviewer(ScriptedInterviewer):
     """A chat that rewords one criterion, the way the model is told to when the user asks
-    for a different metric — it never touches metric_fqn itself."""
+    for a different grader — it never touches grader_fqn itself."""
 
     def chat(self, specification, step, text, target, context=None):
         self.calls.append("chat")
@@ -953,12 +953,12 @@ class RecordingMatcher:
 
     def match(self, criterion) -> str:
         self.matched.append(criterion.id)
-        return "metis.library.metrics.routing.RoutingAccuracyMetric"
+        return "metis.library.graders.routing.RoutingAccuracyGrader"
 
 
 def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
-    """The other half of the metric rule: the model rewords, the matcher re-picks. Only the
-    criterion whose text changed is rematched — untouched ones keep their metric and cost
+    """The other half of the grader rule: the model rewords, the matcher re-picks. Only the
+    criterion whose text changed is rematched — untouched ones keep their grader and cost
     no call."""
     specification = research_assistant()
     matcher = RecordingMatcher()
@@ -975,8 +975,8 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
 
     assert matcher.matched == ["AC-1-1"]  # only the reworded criterion
     assert (
-        specification.behaviour("EB-1").criteria[0].metric_fqn  # type: ignore[union-attr]
-        == "metis.library.metrics.routing.RoutingAccuracyMetric"
+        specification.behaviour("EB-1").criteria[0].grader_fqn  # type: ignore[union-attr]
+        == "metis.library.graders.routing.RoutingAccuracyGrader"
     )
 
 
@@ -1085,7 +1085,7 @@ def _suggest_on(specification, interviewer, matcher=None):
 
 def test_suggest_one_for_me_adds_exactly_one_criterion_and_matches_it() -> None:
     """The happy path: the model returns one add under EB-1, it is applied, and only the new
-    criterion is matched — the two it already had keep their metrics and cost no call."""
+    criterion is matched — the two it already had keep their graders and cost no call."""
     specification = research_assistant()
     matcher = RecordingMatcher()
     driver, _ = _suggest_on(specification, ScriptedInterviewer(), matcher)
@@ -1262,6 +1262,6 @@ def test_criterion_parameter_form_changes_the_selected_requirement() -> None:
     )
     assert state.pending is not None
     driver.handle(
-        state, state.pending, FormResponse(values={"metric_args": '{"max_turns":4}'})
+        state, state.pending, FormResponse(values={"grader_args": '{"max_turns":4}'})
     )
-    assert criterion.metric_args == {"max_turns": 4}
+    assert criterion.grader_args == {"max_turns": 4}

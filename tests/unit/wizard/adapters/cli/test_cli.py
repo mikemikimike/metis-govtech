@@ -181,7 +181,7 @@ def test_a_non_retryable_failure_stops_without_offering_a_retry(
 
 
 def test_the_cli_wires_a_matcher() -> None:
-    """Without one, every criterion keeps metric_fqn=None and the experiment measures
+    """Without one, every criterion keeps grader_fqn=None and the experiment measures
     almost nothing the user chose."""
     matcher = cli._matcher(StubInterviewer())
 
@@ -198,16 +198,16 @@ def test_the_matcher_uses_the_same_gateway() -> None:
     assert matcher.embedder is interviewer  # type: ignore[attr-defined]
 
 
-def test_an_unmatched_specification_loses_the_users_metrics() -> None:
+def test_an_unmatched_specification_loses_the_users_graders() -> None:
     """The failure the wiring prevents, stated as a fact rather than a warning.
 
-    Without a matcher every criterion keeps metric_fqn=None, and the result is a file that
+    Without a matcher every criterion keeps grader_fqn=None, and the result is a file that
     validates and loads, and measures nothing at all.
     """
     specification = research_assistant()
     for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
-            criterion.metric_fqn = None  # what a turn leaves behind with no matcher
+            criterion.grader_fqn = None  # what a turn leaves behind with no matcher
 
     from metis.wizard.application.compile import CompilationError
 
@@ -216,40 +216,40 @@ def test_an_unmatched_specification_loses_the_users_metrics() -> None:
 
 
 def test_a_matched_specification_keeps_them() -> None:
-    """The same specification, matched — every scenario carries the metrics its behaviours earned."""
+    """The same specification, matched — every scenario carries the graders its behaviours earned."""
     from metis.wizard.application.matching import match_specification
 
     specification = research_assistant()
     for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
-            criterion.metric_fqn = None
+            criterion.grader_fqn = None
 
     match_specification(specification, cli._matcher(StubInterviewer()))  # type: ignore[arg-type]
     document = compile_experiment(specification, "matched")
 
     # the stub embeds everything identically, so matches land on the fallback or a real
-    # metric — either way every scenario ends up measured by something, which is the whole
+    # grader — either way every scenario ends up measured by something, which is the whole
     # difference from the unmatched case above.
     assert all(task["criterion_refs"] for task in document["tasks"])
 
 
 def test_every_criterion_ends_up_measured_by_something() -> None:
-    """A criterion with no metric is a criterion nothing checks. There should be none."""
+    """A criterion with no grader is a criterion nothing checks. There should be none."""
     from metis.wizard.application.matching import match_specification
 
     specification = research_assistant()
     for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
-            criterion.metric_fqn = None
+            criterion.grader_fqn = None
 
     match_specification(specification, cli._matcher(StubInterviewer()))  # type: ignore[arg-type]
 
     for behaviour in specification.measured_behaviours():
         for criterion in behaviour.criteria:
-            assert criterion.metric_fqn
+            assert criterion.grader_fqn
             assert (
-                criterion.metric_fqn == GENERATED_JUDGE_FQN
-                or "Metric" in criterion.metric_fqn
+                criterion.grader_fqn == GENERATED_JUDGE_FQN
+                or "Grader" in criterion.grader_fqn
             )
 
 

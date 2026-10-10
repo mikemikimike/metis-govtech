@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class MetricResult:
-    """Result of a single metric evaluation."""
+class GraderResult:
+    """Result of a single grader evaluation."""
 
     name: str
     score: float | None
@@ -24,8 +24,8 @@ class MetricResult:
     success: bool
     skipped: bool
     criterion_id: str = ""
-    metric_fqn: str = ""
-    metric_args: dict[str, Any] = field(default_factory=dict)
+    grader_fqn: str = ""
+    grader_args: dict[str, Any] = field(default_factory=dict)
     task_id: str = ""
     trial_index: int = 1
     evaluation_cost: float | None = None
@@ -35,34 +35,34 @@ class MetricResult:
 
 @dataclass
 class TurnResult:
-    """Result of evaluating per-turn metrics against a single LLMTestCase."""
+    """Result of evaluating per-turn graders against a single LLMTestCase."""
 
     llm_test_case: LLMTestCase
-    metric_results: list[MetricResult]
+    grader_results: list[GraderResult]
 
 
 @dataclass
 class SessionResult:
-    """Result of evaluating session metrics against a ConversationalTestCase."""
+    """Result of evaluating session graders against a ConversationalTestCase."""
 
     conversational_test_case: ConversationalTestCase
-    metric_results: list[MetricResult]
+    grader_results: list[GraderResult]
 
 
 @dataclass
 class EvalDurations:
     """Wall-clock time spent in each evaluation phase (seconds)."""
 
-    turn_metrics_seconds: float = 0.0
-    session_metrics_seconds: float = 0.0
+    turn_graders_seconds: float = 0.0
+    session_graders_seconds: float = 0.0
 
 
 @dataclass
 class EvalResult:
     """Result of an evaluation run.
 
-    :param turn_results: Per-turn metric results (each contains the LLMTestCase and its metrics).
-    :param session_results: Per-session metric results (each contains the ConversationalTestCase and its metrics).
+    :param turn_results: Per-turn grader results (each contains the LLMTestCase and its graders).
+    :param session_results: Per-session grader results (each contains the ConversationalTestCase and its graders).
     :param routing_summary: Aggregate routing statistics.
     :param durations: Wall-clock time spent in each evaluation phase.
     """
@@ -95,9 +95,9 @@ class EvalResult:
         for r in results:
             merged_turn_results.extend(r.turn_results)
             merged_session_results.extend(r.session_results)
-            merged_durations.turn_metrics_seconds += r.durations.turn_metrics_seconds
-            merged_durations.session_metrics_seconds += (
-                r.durations.session_metrics_seconds
+            merged_durations.turn_graders_seconds += r.durations.turn_graders_seconds
+            merged_durations.session_graders_seconds += (
+                r.durations.session_graders_seconds
             )
             total_traces += r.routing_summary["total_traces"]
             total_sessions += r.routing_summary["total_sessions"]

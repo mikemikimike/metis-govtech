@@ -249,12 +249,12 @@ def _criterion_components(behaviour: Behaviour) -> list[AnyCardComponent]:
         components.append(CardText(label="When", text=criterion.description.when))
         components.append(CardText(label="Then", text=criterion.description.then))
         components.append(
-            CardText(label="Grader", text=criterion.metric_fqn or "Not selected")
+            CardText(label="Grader", text=criterion.grader_fqn or "Not selected")
         )
         components.append(
             CardText(
                 label="Parameters",
-                text=json.dumps(criterion.metric_args, sort_keys=True),
+                text=json.dumps(criterion.grader_args, sort_keys=True),
             )
         )
         components.append(

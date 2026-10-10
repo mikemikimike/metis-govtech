@@ -24,7 +24,7 @@
 import { useState } from "react";
 import type {
   Behaviour,
-  MetricSpec,
+  GraderSpec,
   Specification,
   Feature,
   WizardRequest,
@@ -90,11 +90,11 @@ export function SpecificationView({
   position,
   interviewStep,
   busy,
-  showMetrics,
-  onShowMetricsChange,
-  metricByFqn,
-  metricsLoading,
-  metricsError,
+  showGraders,
+  onShowGradersChange,
+  graderByFqn,
+  gradersLoading,
+  gradersError,
   onCollapse,
   onFinish,
   onDownload,
@@ -104,11 +104,11 @@ export function SpecificationView({
   position?: StepPosition | null;
   interviewStep?: string;
   busy?: boolean;
-  showMetrics: boolean;
-  onShowMetricsChange: (show: boolean) => void;
-  metricByFqn: ReadonlyMap<string, MetricSpec>;
-  metricsLoading: boolean;
-  metricsError: boolean;
+  showGraders: boolean;
+  onShowGradersChange: (show: boolean) => void;
+  graderByFqn: ReadonlyMap<string, GraderSpec>;
+  gradersLoading: boolean;
+  gradersError: boolean;
   onCollapse?: () => void;
   // The shell owns whether the local Interview has reached its end.
   done?: boolean;
@@ -122,7 +122,7 @@ export function SpecificationView({
   const hasCriteria = features.some((feature) =>
     feature.behaviours.some((behaviour) => behaviour.criteria.length > 0),
   );
-  const metricsAvailable = !metricsLoading && !metricsError;
+  const gradersAvailable = !gradersLoading && !gradersError;
 
   // The user is choosing which behaviours to measure on the combined Behaviours screen, and a
   // criteria blank must not appear until that choice is committed with Continue. The commit signal
@@ -183,30 +183,30 @@ export function SpecificationView({
           the headings to meet. */}
       <div className="quiet-scrollbar flex-1 overflow-y-auto overflow-x-hidden rounded-[12px] bg-card text-sm text-card-foreground shadow-sm">
         <div className="flex flex-col gap-8 px-5 pb-5">
-          {/* The header carries only the pane's metric controls, pinned to the right. It draws
+          {/* The header carries only the pane's grader controls, pinned to the right. It draws
               nothing until there is a control to hold, so an early document opens straight onto
               Product rather than onto an empty strip. */}
-          {(hasCriteria || metricsError) && (
+          {(hasCriteria || gradersError) && (
             <header className="flex flex-wrap items-center justify-end gap-2 pt-5">
               {hasCriteria && (
                 <Button
                   type="button"
                   variant="ghost"
-                  active={showMetrics}
-                  disabled={!metricsAvailable}
-                  aria-pressed={showMetrics}
+                  active={showGraders}
+                  disabled={!gradersAvailable}
+                  aria-pressed={showGraders}
                   title={
-                    metricsError ? "Metric details unavailable" : "Show metrics"
+                    gradersError ? "Grader details unavailable" : "Show graders"
                   }
-                  onClick={() => onShowMetricsChange(!showMetrics)}
+                  onClick={() => onShowGradersChange(!showGraders)}
                   className="px-2 py-1 text-xs"
                 >
-                  Show metrics
+                  Show graders
                 </Button>
               )}
-              {metricsError && (
+              {gradersError && (
                 <span role="alert" className="text-xs text-destructive">
-                  Metric details unavailable
+                  Grader details unavailable
                 </span>
               )}
             </header>
@@ -252,8 +252,8 @@ export function SpecificationView({
                     key={feature.id}
                     feature={feature}
                     selecting={selecting}
-                    showMetrics={showMetrics}
-                    metricByFqn={metricByFqn}
+                    showGraders={showGraders}
+                    graderByFqn={graderByFqn}
                   />
                 ))}
               </div>
@@ -607,13 +607,13 @@ function ScenarioRow({
 function FeatureView({
   feature,
   selecting,
-  showMetrics,
-  metricByFqn,
+  showGraders,
+  graderByFqn,
 }: {
   feature: Feature;
   selecting?: boolean;
-  showMetrics: boolean;
-  metricByFqn: ReadonlyMap<string, MetricSpec>;
+  showGraders: boolean;
+  graderByFqn: ReadonlyMap<string, GraderSpec>;
 }) {
   const [open, setOpen] = useState(true);
   // How much of this feature is actually being measured. A bare total said the feature holds two
@@ -664,8 +664,8 @@ function FeatureView({
                 key={b.id}
                 behaviour={b}
                 selecting={selecting}
-                showMetrics={showMetrics}
-                metricByFqn={metricByFqn}
+                showGraders={showGraders}
+                graderByFqn={graderByFqn}
               />
             ))}
           </ul>
@@ -678,13 +678,13 @@ function FeatureView({
 function BehaviourView({
   behaviour,
   selecting,
-  showMetrics,
-  metricByFqn,
+  showGraders,
+  graderByFqn,
 }: {
   behaviour: Behaviour;
   selecting?: boolean;
-  showMetrics: boolean;
-  metricByFqn: ReadonlyMap<string, MetricSpec>;
+  showGraders: boolean;
+  graderByFqn: ReadonlyMap<string, GraderSpec>;
 }) {
   // A behaviour the user hasn't ticked is dormant: its criteria are kept but won't be
   // measured, so it reads de-emphasised.
@@ -741,8 +741,8 @@ function BehaviourView({
         // rows. Each criterion is spaced from the next for the same reason.
         <ul className="col-start-2 mt-1.5 flex flex-col gap-3 text-xs">
           {behaviour.criteria.map((c) => {
-            const metric = c.metric_fqn
-              ? metricByFqn.get(c.metric_fqn)
+            const grader = c.grader_fqn
+              ? graderByFqn.get(c.grader_fqn)
               : undefined;
             return (
               <li
@@ -786,11 +786,11 @@ function BehaviourView({
                   </span>
                   <span className="text-foreground">{c.description.then}</span>
                 </div>
-                {showMetrics && metric && (
+                {showGraders && grader && (
                   <Mono className="block break-words rounded border border-border bg-muted px-2 py-1 leading-relaxed">
-                    <span className="block text-foreground">{metric.name}</span>
+                    <span className="block text-foreground">{grader.name}</span>
                     <span className="block text-muted-foreground">
-                      {metric.description}
+                      {grader.description}
                     </span>
                   </Mono>
                 )}

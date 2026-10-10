@@ -36,7 +36,7 @@ type EndOperation = operations["end_api_v1_wizard_interview_end_post"];
 type ExtractDocumentsOperation =
   operations["extract_document_text_api_v1_wizard_documents_extract_post"];
 type CompileOperation = operations["compile__api_v1_wizard_compile_post"];
-type MetricsOperation = operations["metrics_api_v1_metrics_get"];
+type GradersOperation = operations["graders_api_v1_graders_get"];
 type ConfigOperation = operations["config_api_v1_wizard_config_get"];
 type PackageOperation = operations["package_api_v1_wizard_package_post"];
 type PackageWireRequest = Schema["Body_package_api_v1_wizard_package_post"];
@@ -147,7 +147,7 @@ export type InterviewFailure = Omit<
 };
 export type InterviewResult = InterviewSuccess | InterviewFailure;
 export type CompileResult = Schema["CompileResult"];
-export type MetricSpec = Schema["MetricSummary"];
+export type GraderSpec = Schema["GraderSummary"];
 export type StartRequest = Schema["InterviewStartRequest"];
 export type StartResponse = JsonResponse<StartOperation>;
 export type TurnRequest = Schema["InterviewTurnRequest"];
@@ -156,7 +156,7 @@ export type EndRequest = Schema["InterviewEndRequest"];
 export type EndResponse = JsonResponse<EndOperation>;
 export type ExtractDocumentsResponse = JsonResponse<ExtractDocumentsOperation>;
 export type CompileResponse = JsonResponse<CompileOperation>;
-export type MetricsResponse = JsonResponse<MetricsOperation>;
+export type GradersResponse = JsonResponse<GradersOperation>;
 export type ConfigResponse = JsonResponse<ConfigOperation>;
 export type PackageRequest = Omit<PackageWireRequest, "files"> & {
   files?: PackageFile[] | null;
@@ -456,7 +456,7 @@ export const api = {
       ...JSON_POST,
       body: JSON.stringify(specification),
     }),
-  metrics: () => call<MetricsResponse>("/api/v1/metrics"),
+  graders: () => call<GradersResponse>("/api/v1/graders"),
   config: () => call<ConfigResponse>("/api/v1/wizard/config"),
   extractDocuments: (files: readonly File[]) => {
     const form = new FormData();

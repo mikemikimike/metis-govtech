@@ -98,12 +98,12 @@ def _check(patch: Patch) -> str | None:
                 "I've made that change. I can't tick it for you, though — "
                 "which behaviours actually matter is your call, not mine."
             )
-        if patch.path.endswith(".metric_fqn"):
-            # Metrics are chosen by the matcher from the criterion's wording, never written
+        if patch.path.endswith(".grader_fqn"):
+            # Graders are chosen by the matcher from the criterion's wording, never written
             # directly. The model is told to reword instead; if one slips through anyway, the
             # user hears about the wording, not a field they have never seen.
             return (
-                "The metric is chosen from how the criterion is worded, so I can't set it "
+                "The grader is chosen from how the criterion is worded, so I can't set it "
                 "directly — but rewording the criterion will point it at the right one."
             )
         # A model patch for an address no step owns. The path is package bookkeeping the user

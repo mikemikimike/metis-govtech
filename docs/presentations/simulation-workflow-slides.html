@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Simulation Turn Workflow</title>
+<style>
+  :root {
+    --bg: #12141a;
+    --bg-alt: #191c24;
+    --fg: #e8e9ee;
+    --fg-dim: #9aa0ae;
+    --accent: #7fb0ff;
+    --accent-dim: #3d5a80;
+    --rule: #2c313d;
+    --ok: #7fd99a;
+    --stop: #e6a55f;
+    --skip: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+  .deck { position: relative; width: 100vw; height: 100vh; }
+  .slide {
+    position: absolute; inset: 0; display: none;
+    flex-direction: column; justify-content: center;
+    padding: 6vh 8vw; gap: 1.2em;
+  }
+  .slide.active { display: flex; }
+  h1 { font-size: 2.6em; margin: 0 0 .2em; font-weight: 600; }
+  h2 { font-size: 1.9em; margin: 0 0 .4em; font-weight: 600; color: var(--fg); }
+  .kicker { color: var(--accent); font-size: 1.05em; letter-spacing: .04em; text-transform: uppercase; margin: 0; }
+  .subtitle { color: var(--fg-dim); font-size: 1.3em; margin: 0; }
+  .status { color: var(--fg-dim); font-size: .95em; margin-top: 2em; }
+  p, li { font-size: 1.25em; line-height: 1.5; color: var(--fg); }
+  ul { margin: 0; padding-left: 1.1em; }
+  li { margin-bottom: .5em; }
+  li b { color: var(--accent); }
+  pre {
+    background: var(--bg-alt); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 1.1em 1.4em; font-size: 1.15em; line-height: 1.5; color: var(--fg);
+    overflow-x: auto; margin: 0;
+  }
+  .cols { display: flex; gap: 3em; align-items: flex-start; }
+  .cols > div { flex: 1; }
+  table { border-collapse: collapse; font-size: 1.15em; width: 100%; }
+  th, td { text-align: left; padding: .5em .9em; border-bottom: 1px solid var(--rule); }
+  th { color: var(--accent); font-weight: 600; }
+  .tag { display: inline-block; padding: .1em .6em; border-radius: 5px; font-size: .85em; font-weight: 600; }
+  .tag.ok { background: rgba(127,217,154,.15); color: var(--ok); }
+  .tag.stop { background: rgba(230,165,95,.15); color: var(--stop); }
+  .tag.skip { background: rgba(107,114,128,.2); color: var(--skip); }
+  .progress {
+    position: fixed; bottom: 0; left: 0; height: 3px; background: var(--accent);
+    transition: width .2s ease;
+  }
+  .counter {
+    position: fixed; top: 1.2em; right: 1.6em; color: var(--fg-dim);
+    font-size: .95em; font-family: monospace;
+  }
+  .hint {
+    position: fixed; bottom: 1.2em; right: 1.6em; color: var(--fg-dim);
+    font-size: .85em; font-family: monospace;
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <section class="slide">
+    <p class="kicker">METIS · metis-engine</p>
+    <h1>The Simulation Turn Workflow</h1>
+    <p class="subtitle">How a persona drives a target system, one turn at a time</p>
+    <p class="status">Describes the design in issue #373 — approved in chat, not yet implemented.</p>
+  </section>
+
+  <section class="slide">
+    <h2>Four roles</h2>
+    <pre>User Agent  ──decides──▶  Orchestrator  ──dispatches──▶  Runner  ──▶  Target System
+(the persona)              (runs the loop,                (the only role
+                            enforces the rules)             that touches
+                                                             the real target)</pre>
+    <ul>
+      <li><b>User Agent</b> — a persona, driven by an LLM, pursuing a goal against the target</li>
+      <li><b>Orchestrator</b> — owns the run: dispatches, checks the rules, decides whether to continue</li>
+      <li><b>Runner</b> — the adapter for one specific target; the only thing that touches it</li>
+      <li><b>Target System</b> — whatever is under evaluation; METIS has no code for it</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>The Runner abstract class</h2>
+    <pre>class Runner(ABC):
+
+    async def setup(config)                 — open the connection
+    async def send_turn(message, actions)
+                          -&gt; Observation     — do the turn, report back
+    async def teardown()                    — close the connection
+    async def get_session_id()              — target's session id, if any</pre>
+    <ul>
+      <li>Every runner — Playwright, Orca's API, anything else — implements exactly these four methods, nothing more</li>
+      <li><b>send_turn</b> is where the contract lives: its own docstring cites I1, I3, I4, I5 by name</li>
+      <li>A Runner knows nothing about personas, scenarios, or when to stop — only "here's a turn, tell me what happened"</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>What a turn is</h2>
+    <pre>  read last Observation ──▶ decide (a sequence of actions) ──▶ act
+        ▲                                                        │
+        └────────────────────── next turn ──────────────────────┘</pre>
+    <ul>
+      <li>One turn = one persona decision — not one transport call</li>
+      <li>A <code>max_turns</code> budget counts decisions, the same across every target</li>
+      <li>Underneath, a runner may do one request or several retries — invisible to the loop</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>The action vocabulary</h2>
+    <table>
+      <tr><th>Menu</th><th>Set by</th><th>Per</th><th>Answers</th></tr>
+      <tr><td>declared vocabulary</td><td>the runner</td><td>once</td><td>what the persona may <i>ever</i> emit</td></tr>
+      <tr><td>offered actions</td><td>the target</td><td>each turn</td><td>what's reachable <i>right now</i></td></tr>
+      <tr><td>chosen sequence</td><td>the persona</td><td>each turn</td><td>what the persona <i>picked</i></td></tr>
+    </table>
+    <p>Only two kinds are framework-provided: <b>send a message</b> and <b>attach a file</b> —
+       because something outside the runner has to recognise them. Everything else is
+       runner-private: a button, a form field, a shortcut.</p>
+  </section>
+
+  <section class="slide">
+    <h2>The Action class hierarchy</h2>
+    <pre>                     Action
+                       │
+      ┌────────────────┼────────────────┐
+      ▼                ▼                ▼
+SendMessageAction UploadFileAction  (runner-private
+                                     leaves — one per
+                                     runner-specific
+                                     control)</pre>
+    <ul>
+      <li><b>SendMessageAction</b>, <b>UploadFileAction</b> — the caller must recognise these on their own</li>
+      <li>Everything else — <code>PlaywrightFillAction</code>, <code>OrcaAnswerFormAction</code>, … — nobody outside that runner ever sees it</li>
+      <li>A leaf <b>may inherit both</b> provided branches — one atomic step that both attaches a file and asks about it</li>
+      <li>An atom is atomic: if the fixture was never staged, the whole composite is withheld, prose included</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>The Action base class</h2>
+    <pre>class Action(BaseModel, extra="forbid"):
+    type: str
+
+    terminal: ClassVar[bool] = False   — ends the turn; default is "no"
+    usage: ClassVar[str]                — persona-facing text, no default
+
+class SendMessageAction(Action, extra="forbid"):
+    type: Literal["send_message"] = "send_message"
+    text: str
+
+    terminal: ClassVar[bool] = True     — this one overrides the default</pre>
+    <ul>
+      <li><b>terminal</b> defaults to <code>False</code>; a leaf overrides it to <code>True</code> only if choosing it ends the turn (I8)</li>
+      <li><b>usage</b> has <i>no default</i> — a leaf that omits it raises <code>AttributeError</code> the moment anything reads it, which the startup check exploits to catch a persona-unexplainable action before any persona runs</li>
+      <li><code>extra="forbid"</code> — a persona can't smuggle an unexpected field onto an action the runner never declared</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>A turn is an ordered, dependent sequence</h2>
+    <pre>  PlaywrightFillAction(name)
+            │
+            ▼
+  PlaywrightFillAction(email)
+            │
+            ▼
+  PlaywrightFillAction(amount)
+            │
+            ▼
+  PlaywrightSubmitAction()      ◀── terminal: ends the turn</pre>
+    <p class="status">This runner's own classes (design section 10) — Orca's API runner uses <code>OrcaAnswerFormAction</code>/<code>OrcaSubmitFormAction</code> instead.</p>
+    <ul>
+      <li>Actions run in the order the persona gave them — never reordered, never parallel</li>
+      <li>Each depends on the ones before: the first that doesn't land stops the rest</li>
+      <li>At most one action per turn is <b>terminal</b>, and it must be last</li>
+      <li>A terminal action is not required — an upload-only turn is legitimate</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>Worked example: five fields, one turn</h2>
+    <p><code>PlaywrightFillAction(f1) ... PlaywrightFillAction(f5), PlaywrightSubmitAction()</code>
+       — sent as <b>one</b> turn, carried out in <b>one</b> round trip.</p>
+    <ul>
+      <li>Six actions in, six result rows out — not six turns</li>
+      <li>If the target rejects <code>f3</code>, fields 4–5 and the submit are never attempted</li>
+      <li>The report shows exactly which field stopped the chain</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>What comes back</h2>
+    <table>
+      <tr><th>Channel</th><th>Reports on</th></tr>
+      <tr><td><code>text</code>, <code>artifacts</code></td><td>what the target said and produced</td></tr>
+      <tr><td><code>action_results</code></td><td>one row per action, each with its own outcome</td></tr>
+      <tr><td><code>available_actions</code></td><td>what the target is offering next</td></tr>
+      <tr><td><code>status_labels</code></td><td>anything the reply raises that no single action explains</td></tr>
+    </table>
+    <p>Kept separate on purpose — a rejected upload is never mistaken for a target outage.</p>
+  </section>
+
+  <section class="slide">
+    <h2>Five outcomes, always in this shape</h2>
+    <pre>  delivered  delivered  delivered   failed   skipped   skipped
+  └──────────── the chain ran ────────┘ └stop┘  └── never attempted ──┘</pre>
+    <p>
+      <span class="tag ok">delivered</span> went through &nbsp;·&nbsp;
+      <span class="tag stop">failed</span> attempted, didn't land &nbsp;·&nbsp;
+      <span class="tag stop">withheld</span> refused before trying &nbsp;·&nbsp;
+      <span class="tag stop">unknown</span> can't tell what happened &nbsp;·&nbsp;
+      <span class="tag skip">skipped</span> never attempted
+    </p>
+    <p>At most one "stop" row per turn. Nothing but <span class="tag skip">skipped</span> follows it.</p>
+  </section>
+
+  <section class="slide">
+    <h2>The invariants</h2>
+    <div class="cols">
+      <div>
+        <p class="status">A turn's shape</p>
+        <ul>
+          <li><b>I1 — Completeness.</b> Every action gets exactly one result row, in order. None vanish.</li>
+          <li><b>I2 — Minimal verdict.</b> Every row's outcome is one of the five values — never a bare pass/fail.</li>
+          <li><b>I6 — Ordered dependence.</b> Once one action fails to land, everything after it is skipped.</li>
+          <li><b>I8 — Terminal cardinality.</b> At most one action ends a turn, and it comes last.</li>
+        </ul>
+      </div>
+      <div>
+        <p class="status">A runner's promises</p>
+        <ul>
+          <li><b>I3 — Session usability.</b> The connection stays usable next turn, or the runner says it doesn't.</li>
+          <li><b>I4 — Delivery multiplicity.</b> A turn is carried out at most once — never re-sent.</li>
+          <li><b>I7 — Declared vocabulary.</b> A persona can never be offered an action nothing can execute.</li>
+        </ul>
+        <p class="status">I5 is retired in this design — the number stays vacant.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <h2>Who checks what</h2>
+    <p class="subtitle">Same eight invariants — ranked by how much you should trust each one</p>
+    <table>
+      <tr><th>Rule</th><th>Invariant</th><th>Enforced by</th></tr>
+      <tr><td>Outcome is one of five values, never a boolean</td><td>I2</td><td>type system</td></tr>
+      <tr><td>One result row per action, in order</td><td>I1</td><td>every turn, automatically</td></tr>
+      <tr><td>Outcomes form the ran → stopped → skipped shape</td><td>I6, I8</td><td>every turn, automatically</td></tr>
+      <tr><td>A runner never declares an action it can't execute</td><td>I7</td><td>startup, once</td></tr>
+      <tr><td>Session stays usable; a turn is never re-sent</td><td>I3, I4</td><td>reviewer</td></tr>
+      <tr><td>The persona-facing explanation is actually clear</td><td class="status">not numbered</td><td>reviewer</td></tr>
+    </table>
+    <ul>
+      <li><b>Type system</b> — can't even construct the bad value; no test or reviewer needed</li>
+      <li><b>Automatic, per turn / at startup</b> — code checks it and raises on violation; caught the moment it happens, not baked into the type</li>
+      <li><b>Reviewer</b> — nothing in the code checks it at all; a person reads the runner and judges whether the promise holds</li>
+    </ul>
+    <p class="status">I3 and I4 sit at the weakest tier — exactly the gap the next slide's conformance suite is aimed at closing.</p>
+  </section>
+
+  <section class="slide">
+    <h2>Can we formalize this?</h2>
+    <pre>  RUNNING ──(delivered)──▶ RUNNING
+     │
+     └─(failed/withheld/unknown)─▶ STOPPED ──(skipped)*──▶ STOPPED
+
+  every turn's outcome column matches:  delivered* (failed|withheld|unknown)? skipped*</pre>
+    <ul>
+      <li><b>Property-based tests</b> — fuzz action sequences, assert the pattern always holds. Cheap, fits pytest.</li>
+      <li><b>A conformance suite</b> — the same checks, packaged so any new runner proves itself. Already tracked.</li>
+      <li><b>A full formal model</b> — worth it only if raise/recover bugs keep recurring across turns.</li>
+    </ul>
+  </section>
+
+</div>
+<div class="counter" id="counter"></div>
+<div class="progress" id="progress"></div>
+<div class="hint">← → space · click left/right half</div>
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let i = 0;
+  const counter = document.getElementById('counter');
+  const progress = document.getElementById('progress');
+  function render() {
+    slides.forEach((s, idx) => s.classList.toggle('active', idx === i));
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    progress.style.width = ((i + 1) / slides.length * 100) + '%';
+  }
+  function go(delta) {
+    i = Math.max(0, Math.min(slides.length - 1, i + delta));
+    render();
+  }
+  document.addEventListener('keydown', (e) => {
+    if (['ArrowRight', ' ', 'PageDown'].includes(e.key)) go(1);
+    if (['ArrowLeft', 'Backspace', 'PageUp'].includes(e.key)) go(-1);
+  });
+  document.getElementById('deck').addEventListener('click', (e) => {
+    const half = window.innerWidth / 2;
+    go(e.clientX > half ? 1 : -1);
+  });
+  render();
+</script>
+</body>
+</html>

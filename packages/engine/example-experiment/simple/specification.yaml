@@ -21,8 +21,8 @@ features:
         given: a request that Orca can answer directly
         when: the session ends
         then: it used no more than 4 turns
-      metric_fqn: metis.library.metrics.TurnBudgetMetric
-      metric_args:
+      grader_fqn: metis.library.graders.TurnBudgetGrader
+      grader_args:
         max_turns: 4
 
 personas:

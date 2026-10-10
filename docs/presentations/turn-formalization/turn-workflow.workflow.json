@@ -1,0 +1,238 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "A Turn, Step by Step",
+    "output": "turn-workflow.html",
+    "quality_profile": "showcase",
+    "animation": "trace",
+    "views": [
+      {
+        "id": "happy-path",
+        "label": "The normal loop",
+        "focus": [
+          "observe",
+          "decide",
+          "check",
+          "carry_out",
+          "respond",
+          "record"
+        ],
+        "note": "Follow one turn from observing the last result to recording what happened."
+      },
+      {
+        "id": "stopping-early",
+        "label": "When something doesn't land",
+        "focus": [
+          "carry_out",
+          "stop",
+          "record"
+        ],
+        "note": "The rest of the sequence is skipped, never attempted."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "ua",
+      "label": "User Agent"
+    },
+    {
+      "id": "orch",
+      "label": "Orchestrator"
+    },
+    {
+      "id": "run",
+      "label": "Runner"
+    },
+    {
+      "id": "tgt",
+      "label": "Target System"
+    }
+  ],
+  "phases": [
+    {
+      "id": "observe_decide",
+      "label": "Observe & Decide",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "check_act",
+      "label": "Check & Carry Out",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "report",
+      "label": "Report",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ],
+  "groups": [
+    {
+      "id": "exception_group",
+      "label": "If a step fails",
+      "lane": "orch",
+      "fromCol": 4,
+      "toCol": 4,
+      "variant": "security"
+    }
+  ],
+  "mainPath": [
+    "observe",
+    "decide",
+    "check",
+    "carry_out",
+    "respond",
+    "record"
+  ],
+  "nodes": [
+    {
+      "id": "observe",
+      "lane": "ua",
+      "col": 0,
+      "type": "frontend",
+      "label": "Observe",
+      "sublabel": "read the last result",
+      "width": 132
+    },
+    {
+      "id": "decide",
+      "lane": "ua",
+      "col": 1,
+      "type": "backend",
+      "label": "Decide",
+      "sublabel": "choose an ordered set of actions",
+      "width": 132
+    },
+    {
+      "id": "check",
+      "lane": "orch",
+      "col": 2,
+      "type": "security",
+      "label": "Check the Sequence",
+      "sublabel": "does the plan make sense?",
+      "width": 132
+    },
+    {
+      "id": "carry_out",
+      "lane": "run",
+      "col": 3,
+      "type": "backend",
+      "label": "Carry Out",
+      "sublabel": "one action at a time, in order",
+      "width": 132
+    },
+    {
+      "id": "respond",
+      "lane": "tgt",
+      "col": 4,
+      "type": "external",
+      "label": "Target Responds",
+      "sublabel": "reply, error, or silence",
+      "width": 132
+    },
+    {
+      "id": "record",
+      "lane": "orch",
+      "col": 5,
+      "type": "database",
+      "label": "Record the Outcome",
+      "sublabel": "one result per action",
+      "width": 132
+    },
+    {
+      "id": "stop",
+      "lane": "orch",
+      "col": 4,
+      "type": "security",
+      "label": "Stop the Sequence",
+      "sublabel": "an action doesn't land",
+      "width": 132
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_observe_decide",
+      "from": "observe",
+      "to": "decide",
+      "role": "main"
+    },
+    {
+      "id": "e_decide_check",
+      "from": "decide",
+      "to": "check",
+      "label": "an ordered set of actions",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "e_check_carry",
+      "from": "check",
+      "to": "carry_out",
+      "label": "runner receives them in order",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "id": "e_carry_respond",
+      "from": "carry_out",
+      "to": "respond",
+      "role": "main"
+    },
+    {
+      "id": "e_respond_record",
+      "from": "respond",
+      "to": "record",
+      "label": "one outcome per action",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop"
+    },
+    {
+      "id": "e_carry_stop",
+      "from": "carry_out",
+      "to": "stop",
+      "label": "this one doesn't land",
+      "variant": "security",
+      "role": "branch"
+    },
+    {
+      "id": "e_stop_record",
+      "from": "stop",
+      "to": "record",
+      "label": "everything queued after is skipped",
+      "variant": "dashed",
+      "role": "error"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "What a Turn Is",
+      "items": [
+        "Observe, decide, then act",
+        "One decision can bundle several actions together, in a chosen order"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Order Is the Rule",
+      "items": [
+        "Actions execute in the order chosen",
+        "If one doesn't land, everything queued after it is skipped"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Reporting",
+      "items": [
+        "Every action gets its own outcome",
+        "No single pass/fail flag for the whole turn"
+      ]
+    }
+  ]
+}

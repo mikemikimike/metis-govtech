@@ -62,8 +62,8 @@ class TestRunnerRefField:
                                         "when": "the agent responds",
                                         "then": "the requirement is met",
                                     },
-                                    "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-                                    "metric_args": {},
+                                    "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                    "grader_args": {},
                                 }
                             ],
                         }
@@ -235,8 +235,8 @@ class TestRunnerRefValidation:
                                         "when": "the agent responds",
                                         "then": "the requirement is met",
                                     },
-                                    "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-                                    "metric_args": {},
+                                    "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                    "grader_args": {},
                                 }
                             ],
                         }

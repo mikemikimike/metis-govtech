@@ -7,7 +7,7 @@ held is streamed from ``GET /files/{fileId}/content`` into the run's
 ``artifacts/`` directory and reported as a ``download`` artifact whose path
 is a POSIX-relative string under the experiment root — the same shape the
 browser runner produces, so the orchestrator, the artifact manifest and
-artifact-aware metrics need no transport-specific change.
+artifact-aware graders need no transport-specific change.
 """
 
 from __future__ import annotations

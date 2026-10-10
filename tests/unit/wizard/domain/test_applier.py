@@ -11,7 +11,7 @@ from tests.fixtures.wizard.specifications import research_assistant
 
 EB1_MEASURED = "features[F-1].behaviours[EB-1].measured"
 EB1_DESCRIPTION = "features[F-1].behaviours[EB-1].description"
-AC1_METRIC = "features[F-1].behaviours[EB-1].criteria[AC-1-1].metric_fqn"
+AC1_GRADER = "features[F-1].behaviours[EB-1].criteria[AC-1-1].grader_fqn"
 
 
 def patch(path: str, value=None, *, op=PatchOp.SET, origin=PatchOrigin.MODEL) -> Patch:
@@ -149,28 +149,28 @@ def test_model_whole_entity_set_is_refused() -> None:
     assert specification.scenario("S-1").description.startswith("Ask for")  # type: ignore[union-attr]
 
 
-# ── the metric is the matcher's, not the model's ────────────────────────────
+# ── the grader is the matcher's, not the model's ────────────────────────────
 
 
-def test_metric_fqn_is_owned_by_no_step() -> None:
+def test_grader_fqn_is_owned_by_no_step() -> None:
     """Like measured, it appears in no entry — the matcher resolves it, never the model."""
-    assert owner_of(AC1_METRIC) is None
+    assert owner_of(AC1_GRADER) is None
     for globs in StepPermissions.values():
-        assert not any("metric_fqn" in g for g in globs)
+        assert not any("grader_fqn" in g for g in globs)
 
 
-def test_rejecting_a_metric_write_points_at_rewording() -> None:
+def test_rejecting_a_grader_write_points_at_rewording() -> None:
     """A stray model write is refused with wording help, not the raw internal path."""
     specification = research_assistant()
 
-    result = apply(specification, [patch(AC1_METRIC, "some.other.Metric")])
+    result = apply(specification, [patch(AC1_GRADER, "some.other.Grader")])
 
     assert result.applied == []
     message = result.rejected[0].message
     assert "reword" in message.lower()
-    assert "metric_fqn" not in message  # the raw field name never surfaces
-    assert AC1_METRIC not in message  # nor the raw path
-    assert specification.behaviour("EB-1").criteria[0].metric_fqn != "some.other.Metric"  # type: ignore[union-attr]
+    assert "grader_fqn" not in message  # the raw field name never surfaces
+    assert AC1_GRADER not in message  # nor the raw path
+    assert specification.behaviour("EB-1").criteria[0].grader_fqn != "some.other.Grader"  # type: ignore[union-attr]
 
 
 # ── the fields inside a bundled value ──────────────────────────────────────
@@ -252,7 +252,7 @@ def test_a_model_cannot_change_fixtures_on_an_existing_scenario() -> None:
     assert specification.task("TC-001").fixtures == before  # type: ignore[union-attr]
 
 
-def test_a_bundled_feature_cannot_carry_a_tick_or_a_metric() -> None:
+def test_a_bundled_feature_cannot_carry_a_tick_or_a_grader() -> None:
     """The recursion case. `Feature.model_validate` builds nested behaviours and criteria from
     raw dicts without re-entering the coercion, so the nesting is the whole smuggling route."""
     specification = research_assistant()
@@ -280,7 +280,7 @@ def test_a_bundled_feature_cannot_carry_a_tick_or_a_metric() -> None:
                                         "when": "analysis is requested",
                                         "then": "the gaps are flagged before any figure is quoted",
                                     },
-                                    "metric_fqn": "some.other.Metric",
+                                    "grader_fqn": "some.other.Grader",
                                 }
                             ],
                         }
@@ -299,7 +299,7 @@ def test_a_bundled_feature_cannot_carry_a_tick_or_a_metric() -> None:
     # drafts and direct forms use the materializer and start selected.
     assert behaviour.measured is False
     assert behaviour.criteria[0].description.then.startswith("the gaps are flagged")
-    assert behaviour.criteria[0].metric_fqn is None  # still the matcher's to resolve
+    assert behaviour.criteria[0].grader_fqn is None  # still the matcher's to resolve
 
 
 def test_a_bundled_item_cannot_claim_the_user_typed_it() -> None:

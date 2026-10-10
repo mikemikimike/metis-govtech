@@ -20,7 +20,7 @@ def test_the_route_table_is_exactly_health_interview_lifecycle_compile_and_packa
 
     assert set(paths) == {
         "/health",
-        "/api/v1/metrics",
+        "/api/v1/graders",
         "/api/v1/wizard/config",
         "/api/v1/wizard/documents/extract",
         "/api/v1/wizard/package",
@@ -31,8 +31,8 @@ def test_the_route_table_is_exactly_health_interview_lifecycle_compile_and_packa
     }
 
 
-def test_metric_route_documents_success_and_internal_error(client: TestClient) -> None:
-    responses = client.get("/openapi.json").json()["paths"]["/api/v1/metrics"]["get"][
+def test_grader_route_documents_success_and_internal_error(client: TestClient) -> None:
+    responses = client.get("/openapi.json").json()["paths"]["/api/v1/graders"]["get"][
         "responses"
     ]
     assert {"200", "500"} <= set(responses)

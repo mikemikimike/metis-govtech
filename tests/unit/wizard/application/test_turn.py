@@ -180,7 +180,7 @@ def test_explicit_none_disables_the_configured_matcher(
 
         def match(self, _criterion):
             self.calls += 1
-            return "configured.metric"
+            return "configured.grader"
 
     matcher = ConfiguredMatcher()
     monkeypatch.setattr(turn_module, "_DEFAULT_MATCHER", matcher)
@@ -209,7 +209,7 @@ def test_explicit_none_disables_the_configured_matcher(
 
     assert isinstance(result, InterviewSuccess)
     assert matcher.calls == 0
-    assert result.state.specification.behaviour("EB-1").criteria[0].metric_fqn is None  # type: ignore[union-attr]
+    assert result.state.specification.behaviour("EB-1").criteria[0].grader_fqn is None  # type: ignore[union-attr]
 
 
 def test_a_late_answer_is_caught_by_the_request_id() -> None:
@@ -291,7 +291,7 @@ def test_model_failure_is_retryable_with_the_state_intact() -> None:
 
 def test_end_finishes_a_completable_interview() -> None:
     specification = research_assistant()
-    specification.behaviour("EB-1").criteria[0].metric_fqn = None  # type: ignore[union-attr]
+    specification.behaviour("EB-1").criteria[0].grader_fqn = None  # type: ignore[union-attr]
     result = _end(
         InterviewState(
             specification=specification,
@@ -305,7 +305,7 @@ def test_end_finishes_a_completable_interview() -> None:
     assert result.outcome == "done"
     assert result.state.confirmed
     assert result.state.pending is None
-    assert result.state.specification.behaviour("EB-1").criteria[0].metric_fqn  # type: ignore[union-attr]
+    assert result.state.specification.behaviour("EB-1").criteria[0].grader_fqn  # type: ignore[union-attr]
 
 
 def test_missing_product_details_can_be_completed_before_review() -> None:

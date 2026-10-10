@@ -67,7 +67,7 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
   });
   await api.end(state);
   await api.compile(state.specification);
-  await api.metrics();
+  await api.graders();
   await api.config();
   await api.package(state.specification, []);
 
@@ -78,7 +78,7 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
       "/api/v1/wizard/interview/turn",
       "/api/v1/wizard/interview/end",
       "/api/v1/wizard/compile",
-      "/api/v1/metrics",
+      "/api/v1/graders",
       "/api/v1/wizard/config",
       "/api/v1/wizard/package",
     ],
@@ -219,7 +219,7 @@ test("packages a synthesized manual Specification and its fixtures as multipart"
         fixtures: ["policy.pdf"],
         scorers: [
           {
-            fqn: "metis.library.metrics.TurnBudgetMetric",
+            fqn: "metis.library.graders.TurnBudgetGrader",
             name: "Turn budget",
             description: "Checks the turn budget.",
           },

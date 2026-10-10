@@ -18,8 +18,8 @@ _REPORT_VERSION = 2
 
 
 class Timings(BaseModel, extra="allow"):
-    turn_metrics_seconds: float = 0.0
-    session_metrics_seconds: float = 0.0
+    turn_graders_seconds: float = 0.0
+    session_graders_seconds: float = 0.0
 
 
 class Routing(BaseModel, extra="allow"):
@@ -63,7 +63,7 @@ class TrialsSummary(BaseModel):
     items: list[Trial] = Field(default_factory=list)
 
 
-class MetricPassRate(BaseModel):
+class GraderPassRate(BaseModel):
     rate: int | None = None
     pass_: int = Field(0, alias="pass")
     ran: int = 0
@@ -80,7 +80,7 @@ class TrialSuccess(BaseModel):
 
 
 class Scores(BaseModel):
-    metricPassRate: MetricPassRate
+    graderPassRate: GraderPassRate
     trialSuccess: TrialSuccess
 
 
@@ -92,8 +92,8 @@ class PlanTask(BaseModel):
     trialsPlanned: int
     trialsRun: int
     personasRun: list[str]
-    metricsAsked: int
-    metricsScored: int
+    gradersAsked: int
+    gradersScored: int
 
 
 class Plan(BaseModel):
@@ -110,7 +110,7 @@ class AxisRow(BaseModel):
     skip: int = 0
     sessions: int = 0
     behaviours: int = 0
-    metrics: int = 0
+    graders: int = 0
     partners: int = 0
     partnerTotal: int = 0
 
@@ -136,8 +136,8 @@ class EvidenceItem(BaseModel):
     task_id: str = ""
     trial_index: int = 1
     criterion_id: str = ""
-    metric_fqn: str = ""
-    metric_args: dict[str, Any] = Field(default_factory=dict)
+    grader_fqn: str = ""
+    grader_args: dict[str, Any] = Field(default_factory=dict)
     status: str
     message: str
     trace: str
@@ -148,11 +148,11 @@ class EvidenceItem(BaseModel):
 
 
 class Criterion(BaseModel):
-    metric_args: dict[str, Any] = Field(default_factory=dict)
+    grader_args: dict[str, Any] = Field(default_factory=dict)
     given: str
     when: str
     then: str
-    metric: str
+    grader: str
     fqn: str | None = None
     pass_: int = Field(0, alias="pass")
     fail: int = 0
@@ -187,7 +187,7 @@ class Feature(BaseModel):
 
 class ResultTableColumn(BaseModel):
     criterion: str
-    metric: str
+    grader: str
 
 
 class ResultTableFeature(BaseModel):
@@ -216,8 +216,8 @@ class ResultTable(BaseModel):
     rows: list[ResultTableRow]
 
 
-class UnmappedMetric(BaseModel):
-    metric: str
+class UnmappedGrader(BaseModel):
+    grader: str
     pass_: int = Field(0, alias="pass")
     fail: int = 0
     skip: int = 0
@@ -256,7 +256,7 @@ class Report(BaseModel):
     behaviours: dict[str, Behaviour]
     criteria: dict[str, Criterion]
     resultTable: ResultTable
-    unmapped: list[UnmappedMetric]
+    unmapped: list[UnmappedGrader]
     unresolved: list[str]
 
     model_config = {"populate_by_name": True}

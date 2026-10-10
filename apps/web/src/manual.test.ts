@@ -12,12 +12,12 @@ import {
 } from "./manual.ts";
 
 const synthesisScorer = {
-  fqn: "metis.library.metrics.SynthesisFaithfulnessMetric",
+  fqn: "metis.library.graders.SynthesisFaithfulnessGrader",
   name: "Synthesis faithfulness",
   description: "Checks that the answer uses its evidence.",
 };
 const budgetScorer = {
-  fqn: "metis.library.metrics.TurnBudgetMetric",
+  fqn: "metis.library.graders.TurnBudgetGrader",
   name: "Turn budget",
   description: "Checks that the conversation stays within its turn budget.",
 };
@@ -185,8 +185,8 @@ test("the same Persona and Scenario can have separate test cases and scorer sett
   first.id = "TC-first";
   second.id = "TC-second";
   second.persona_ref = first.persona_ref;
-  first.metric_args_text = { [budgetScorer.fqn]: '{"max_turns":4}' };
-  second.metric_args_text = { [budgetScorer.fqn]: '{"max_turns":10}' };
+  first.grader_args_text = { [budgetScorer.fqn]: '{"max_turns":4}' };
+  second.grader_args_text = { [budgetScorer.fqn]: '{"max_turns":10}' };
   const specification = synthesizeManualSpecification(experiment);
   assert.deepEqual(
     specification.tasks.slice(0, 2).map((t) => t.id),
@@ -198,13 +198,13 @@ test("the same Persona and Scenario can have separate test cases and scorer sett
     5,
   );
   assert.deepEqual(
-    specification.features[0].behaviours[0].criteria[1].metric_args,
+    specification.features[0].behaviours[0].criteria[1].grader_args,
     {
       max_turns: 4,
     },
   );
   assert.deepEqual(
-    specification.features[0].behaviours[1].criteria[1].metric_args,
+    specification.features[0].behaviours[1].criteria[1].grader_args,
     {
       max_turns: 10,
     },
@@ -213,7 +213,7 @@ test("the same Persona and Scenario can have separate test cases and scorer sett
     specification.tasks[0].criterion_refs,
     specification.tasks[1].criterion_refs,
   );
-  first.metric_args_text[budgetScorer.fqn] = "[]";
+  first.grader_args_text[budgetScorer.fqn] = "[]";
   assert.ok(
     manualFieldErrors(experiment, []).some(
       (error) => error.field === `task.0.settings.${budgetScorer.fqn}`,
