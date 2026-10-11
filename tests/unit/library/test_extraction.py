@@ -7,7 +7,7 @@ from pathlib import Path
 from deepeval.test_case import LLMTestCase
 
 from metis.core import Artifact
-from metis.library.metrics._extraction import (
+from metis.library.graders._extraction import (
     _artifact_paths,
     _latest_target_pdf_path,
     get_artifacts,

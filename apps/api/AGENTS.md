@@ -24,7 +24,7 @@ something, it belongs in the returned `InterviewState`, not on the app.
 ```
 src/metis/api/
 ├── main.py            the app composition root: /health, routers, and error handlers
-├── routes/metrics.py  read-only installed metric catalogue route
+├── routes/graders.py  read-only installed grader catalogue route
 ├── routes/wizard.py   client config, Interview lifecycle, compile, and package routes
 ├── settings.py        environment-backed settings and the production dependency composition
 ├── cli.py             the `metis-api` executable (Uvicorn on metis.api.main:app)
@@ -36,8 +36,8 @@ The dependency arrow is `apps/api -> metis.wizard`. The router calls `handle_int
 onto an HTTP status (200/400/422/503/500) in one error shape. No stage, Specification, prompt, matching,
 fixture validation, or compilation rule lives here.
 
-`GET /api/v1/metrics` is a stateless catalogue route owned by `routes/metrics.py`. It reads stable
-`MetricSummary` values from the public wizard facade only. It does not read Interview state or write
+`GET /api/v1/graders` is a stateless catalogue route owned by `routes/graders.py`. It reads stable
+`GraderSummary` values from the public wizard facade only. It does not read Interview state or write
 files.
 
 `GET /api/v1/wizard/config` returns package-owned opening copy, working status, and perspective

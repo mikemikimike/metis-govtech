@@ -49,7 +49,7 @@ import {
   normalizeFixtureName,
   validateFixtureSelection,
 } from "./fixture-policy";
-import { specificationHasCriteria } from "./metrics";
+import { specificationHasCriteria } from "./graders";
 import { downloadArchive } from "./download";
 import { ManualAuthoringEntry, ManualForm } from "./ManualForm";
 import { applyEnd, startTranscript, toPresentation } from "./wizard/transcript";
@@ -189,15 +189,15 @@ export function App() {
   const [specificationOpen, setSpecificationOpen] = useState(true);
   const [manualOpen, setManualOpen] = useState(false);
   const [documentWidth, setDocumentWidth] = useState(DOCUMENT_WIDTH_DEFAULT);
-  const [showMetrics, setShowMetrics] = useState(false);
-  const [metricCatalogue, setMetricCatalogue] = useState<Awaited<
-    ReturnType<typeof api.metrics>
+  const [showGraders, setShowGraders] = useState(false);
+  const [graderCatalogue, setGraderCatalogue] = useState<Awaited<
+    ReturnType<typeof api.graders>
   > | null>(null);
-  const [metricState, setMetricState] = useState<
+  const [graderState, setGraderState] = useState<
     "idle" | "loading" | "ready" | "error"
   >("idle");
-  const metricRequest = useRef<Promise<
-    Awaited<ReturnType<typeof api.metrics>>
+  const graderRequest = useRef<Promise<
+    Awaited<ReturnType<typeof api.graders>>
   > | null>(null);
 
   const view = useMemo(() => record && toPresentation(record), [record]);
@@ -209,17 +209,17 @@ export function App() {
     String(record?.submission_revision ?? 0),
   );
   const pending = record?.state.pending ?? undefined;
-  const metricByFqn = useMemo(
+  const graderByFqn = useMemo(
     () =>
-      new Map((metricCatalogue ?? []).map((metric) => [metric.fqn, metric])),
-    [metricCatalogue],
+      new Map((graderCatalogue ?? []).map((grader) => [grader.fqn, grader])),
+    [graderCatalogue],
   );
   const hasCriteria = view
     ? specificationHasCriteria(view.specification)
     : false;
 
   useEffect(() => {
-    setShowMetrics(false);
+    setShowGraders(false);
   }, [record?.id]);
 
   const nearFoot = useRef(true);
@@ -294,16 +294,16 @@ export function App() {
     };
   }, [operations, refreshList]);
   useEffect(() => {
-    if (!hasCriteria || metricRequest.current) return;
-    setMetricState("loading");
-    const request = api.metrics();
-    metricRequest.current = request;
+    if (!hasCriteria || graderRequest.current) return;
+    setGraderState("loading");
+    const request = api.graders();
+    graderRequest.current = request;
     void request.then(
       (rows) => {
-        setMetricCatalogue(rows);
-        setMetricState("ready");
+        setGraderCatalogue(rows);
+        setGraderState("ready");
       },
-      () => setMetricState("error"),
+      () => setGraderState("error"),
     );
   }, [hasCriteria]);
 
@@ -751,13 +751,13 @@ export function App() {
                 position={stepPosition(view.requests)}
                 interviewStep={view.stage}
                 busy={busy || operations.pendingSaves.has(view.id)}
-                showMetrics={showMetrics}
-                onShowMetricsChange={setShowMetrics}
-                metricByFqn={metricByFqn}
-                metricsLoading={
-                  metricState === "idle" || metricState === "loading"
+                showGraders={showGraders}
+                onShowGradersChange={setShowGraders}
+                graderByFqn={graderByFqn}
+                gradersLoading={
+                  graderState === "idle" || graderState === "loading"
                 }
-                metricsError={metricState === "error"}
+                gradersError={graderState === "error"}
                 onCollapse={() => setSpecificationOpen(false)}
                 done={view.done}
                 onFinish={() => void finish()}

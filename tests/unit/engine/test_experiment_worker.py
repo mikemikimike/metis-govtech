@@ -89,7 +89,7 @@ def simple_scenario() -> Scenario:
         persona_refs=["tester"],
         num_trials=1,
         max_turns=1,
-        metric_refs=[],
+        grader_refs=[],
     )
 
 
@@ -104,7 +104,7 @@ def _make_canned_record(scenario: Scenario, persona: Persona) -> TrialRecord:
         config=TrialConfig(
             persona=persona.id,
             scenario=scenario.id,
-            metric_refs=[],
+            grader_refs=[],
             max_turns=1,
         ),
         target_session_id="sess-mock-123",
@@ -220,7 +220,7 @@ def _partial_record(
 ) -> TrialRecord:
     """A TrialRecord standing in for orchestrator.partial_record() output."""
     return TrialRecord(
-        config=TrialConfig(persona=persona.id, scenario=scenario.id, metric_refs=[]),
+        config=TrialConfig(persona=persona.id, scenario=scenario.id, grader_refs=[]),
         target_session_id="sess-partial",
         outcome=TrialOutcome(
             stop_reason=stop_reason,
@@ -246,7 +246,7 @@ class TestWorkerUnexpectedCrash:
             num_trials=1,
             max_turns=5,
             max_trial_retries=0,  # no retry: isolate preservation
-            metric_refs=[],
+            grader_refs=[],
         )
         factory = MockRunnerFactory()
         await factory.start()
@@ -294,7 +294,7 @@ class TestWorkerUnexpectedCrash:
             num_trials=1,
             max_turns=5,
             max_trial_retries=1,  # -> max_attempts == 2
-            metric_refs=[],
+            grader_refs=[],
         )
         factory = MockRunnerFactory()
         await factory.start()
@@ -343,7 +343,7 @@ class TestWorkerUnexpectedCrash:
             num_trials=1,
             max_turns=5,
             max_trial_retries=0,
-            metric_refs=[],
+            grader_refs=[],
         )
         factory = MockRunnerFactory()
         await factory.start()
@@ -382,7 +382,7 @@ class TestWorkerUnexpectedCrash:
             num_trials=1,
             max_turns=5,
             max_trial_retries=0,
-            metric_refs=[],
+            grader_refs=[],
         )
         factory = MockRunnerFactory()
         await factory.start()
@@ -428,7 +428,7 @@ class TestWorkerUnexpectedCrash:
             num_trials=1,
             max_turns=5,
             max_trial_retries=0,  # single attempt — immediately exhausted
-            metric_refs=[],
+            grader_refs=[],
         )
         factory = MockRunnerFactory()
         await factory.start()
@@ -510,8 +510,8 @@ class TestFixtureContentDescriptions:
                                             "when": "the agent responds",
                                             "then": "the requirement is met",
                                         },
-                                        "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-                                        "metric_args": {},
+                                        "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                        "grader_args": {},
                                     }
                                 ],
                             }
@@ -565,8 +565,8 @@ class TestFixtureContentDescriptions:
                                             "when": "the agent responds",
                                             "then": "the requirement is met",
                                         },
-                                        "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-                                        "metric_args": {},
+                                        "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                        "grader_args": {},
                                     }
                                 ],
                             }
@@ -697,8 +697,8 @@ class TestFixtureContentDescriptions:
                                             "when": "the agent responds",
                                             "then": "the requirement is met",
                                         },
-                                        "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-                                        "metric_args": {},
+                                        "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                        "grader_args": {},
                                     }
                                 ],
                             }
@@ -723,8 +723,8 @@ class TestFixtureContentDescriptions:
                                             "when": "the agent responds",
                                             "then": "the requirement is met",
                                         },
-                                        "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-                                        "metric_args": {},
+                                        "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                        "grader_args": {},
                                     }
                                 ],
                             }
@@ -861,7 +861,7 @@ class TestAttemptScopedArtifacts:
             num_trials=1,
             max_turns=5,
             max_trial_retries=1,  # -> max_attempts == 2
-            metric_refs=[],
+            grader_refs=[],
         )
         seen: list[int] = []
 
@@ -937,7 +937,7 @@ class TestAttemptScopedArtifacts:
             num_trials=1,
             max_turns=5,
             max_trial_retries=0,  # one attempt per process
-            metric_refs=[],
+            grader_refs=[],
         )
         label = ["first process"]
         should_fail = [True]

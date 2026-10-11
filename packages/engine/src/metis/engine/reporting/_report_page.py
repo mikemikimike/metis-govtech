@@ -15,7 +15,7 @@ REPORT_BODY = """\
   </header>
 
   <section class="summary" aria-label="Run summary">
-    <article class="summary-card" id="metric-summary"></article>
+    <article class="summary-card" id="grader-summary"></article>
     <article class="summary-card" id="trial-summary"></article>
   </section>
 
@@ -30,14 +30,14 @@ REPORT_BODY = """\
         <p id="result-view-description" class="section-description">Feature and behaviour scores show the lowest score in each group.</p>
       </div>
       <div class="tree-tools">
-        <label class="search"><span>Search</span><input id="tree-search" type="search" placeholder="Feature, behaviour, criterion, metric"></label>
+        <label class="search"><span>Search</span><input id="tree-search" type="search" placeholder="Feature, behaviour, criterion, grader"></label>
         <button id="fail-only" class="quiet-button" type="button" aria-pressed="false">Fail only</button>
         <button id="expand-all" class="quiet-button" type="button">Expand all</button>
       </div>
     </div>
     <div id="tree-view" role="tabpanel" aria-labelledby="tree-tab">
       <div class="investigation-grid">
-        <div class="tree-wrap"><div class="tree-pan-cue">Swipe to metric →</div><div id="tree-canvas" class="tree-canvas"></div></div>
+        <div class="tree-wrap"><div class="tree-pan-cue">Swipe to grader →</div><div id="tree-canvas" class="tree-canvas"></div></div>
         <aside id="selection-panel" class="selection-panel" aria-live="polite"></aside>
       </div>
       <div class="status-key" aria-label="Status key">
@@ -52,7 +52,7 @@ REPORT_BODY = """\
         <button id="table-fail-only" class="quiet-button" type="button" aria-pressed="false">Fail only</button>
         <span id="table-count" class="section-count"></span>
       </div>
-      <div class="table-status-key" aria-label="Metric aggregation notes"><span>Metric cells show trial pass rate</span><span id="table-threshold-note"></span><span>Skipped and not run excluded</span></div>
+      <div class="table-status-key" aria-label="Grader aggregation notes"><span>Grader cells show trial pass rate</span><span id="table-threshold-note"></span><span>Skipped and not run excluded</span></div>
       <div id="results-table" class="results-table-wrap"></div>
     </div>
   </section>
@@ -64,7 +64,7 @@ REPORT_BODY = """\
     <div id="outcome-detail" class="outcome-detail"></div>
   </section>
 
-  <footer>Values come from the product specification, metric results, and trial records.</footer>
+  <footer>Values come from the product specification, grader results, and trial records.</footer>
 </main>
 <div id="tree-tip" class="tree-tip" role="tooltip"></div>
 """
@@ -124,12 +124,12 @@ const summaryCard=(label,rate,detail,threshold)=>{
 };
 const trials=V.trials||{attempted:0,successful:0,rate:null,items:[]};
 const trialScore=V.scores?.trialSuccess||{rate:null,successful:0,attempted:0};
-const metricScore=V.scores?.metricPassRate||{rate:null,pass:0,ran:0};
+const graderScore=V.scores?.graderPassRate||{rate:null,pass:0,ran:0};
 const scoredFeatures=allFeatures.filter(feature=>feature.rate!=null),belowFeatures=scoredFeatures.filter(feature=>feature.rate<TH);
 if(!scoredFeatures.length)document.getElementById("executive-summary").textContent="No feature score was evaluated.";
 else{const lowestFeature=scoredFeatures.reduce((lowest,feature)=>feature.rate<lowest.rate?feature:lowest),featureScores=scoredFeatures.length===1?"feature score":"feature scores";document.getElementById("executive-summary").textContent=belowFeatures.length?`${belowFeatures.length} of ${scoredFeatures.length} ${featureScores} ${belowFeatures.length===1?"is":"are"} below the ${TH}% threshold; ${lowestFeature.name} is lowest at ${lowestFeature.rate}%.`:`All ${scoredFeatures.length} ${featureScores} ${scoredFeatures.length===1?"meets":"meet"} the ${TH}% threshold; ${lowestFeature.name} is lowest at ${lowestFeature.rate}%.`}
 document.getElementById("trial-summary").innerHTML=summaryCard("Trial success",trialScore.rate,`${trialScore.successful} of ${trialScore.attempted} trials passed`,TH);
-document.getElementById("metric-summary").innerHTML=summaryCard("Evaluated metric pass rate",metricScore.rate,`${metricScore.pass} of ${metricScore.ran} results passed`,TH);
+document.getElementById("grader-summary").innerHTML=summaryCard("Evaluated grader pass rate",graderScore.rate,`${graderScore.pass} of ${graderScore.ran} results passed`,TH);
 
 const tip=document.getElementById("tree-tip");
 const showTip=(event,html)=>{tip.innerHTML=html;tip.classList.add("on");const r=tip.getBoundingClientRect();tip.style.left=Math.min(event.clientX+12,innerWidth-r.width-12)+"px";tip.style.top=Math.max(12,event.clientY-r.height-12)+"px"};
@@ -139,7 +139,7 @@ function leafMatches(feature,behaviour,cid){
  const criterion=C[cid]||{};
  if(failOnly&&statusOf(criterion)!=="fail")return false;
  if(!query)return true;
- return [feature.name,feature.id,behaviour.label,behaviour.statement,cid,criterion.metric,criterion.given,criterion.when,criterion.then].join(" ").toLowerCase().includes(query);
+ return [feature.name,feature.id,behaviour.label,behaviour.statement,cid,criterion.grader,criterion.given,criterion.when,criterion.then].join(" ").toLowerCase().includes(query);
 }
 
 function renderTree(){
@@ -161,13 +161,13 @@ function renderTree(){
  if(!rows.length){host.innerHTML='<div class="tree-empty">No result matches this view.</div>';syncExpandControl();return}
  const ROW_PITCH=88,TREE_TOP=48,TREE_BOTTOM=16;
  const H=Math.max(360,TREE_TOP+(rows.length-1)*ROW_PITCH+33+TREE_BOTTOM),W=1250,rowY=i=>TREE_TOP+i*ROW_PITCH;
- const X={product:14,feature:210,behaviour:472,criterion:734,metric:996};
- const widths={product:160,feature:230,behaviour:230,criterion:230,metric:240};
+ const X={product:14,feature:210,behaviour:472,criterion:734,grader:996};
+ const widths={product:160,feature:230,behaviour:230,criterion:230,grader:240};
  const centre=(start,end)=>(rowY(start)+rowY(end))/2;
  const link=(x1,y1,x2,y2,active=false,status="")=>{const mid=Math.round((x1+x2)/2);return `<path d="M${x1} ${y1} H${mid} V${y2} H${x2}" class="tree-link${active?' active':''}${status?' state-'+status:''}"/>`};
  let svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-label="Product result tree">`;
  const productY=centre(0,rows.length-1);
- for(const group of featureGroups){const featureY=centre(group.start,group.end);svg+=link(X.product+widths.product,productY,X.feature,featureY);for(const bg of group.behaviourGroups){const by=centre(bg.start,bg.end);svg+=link(X.feature+widths.feature,featureY,X.behaviour,by);for(let i=bg.start;i<=bg.end;i++){const row=rows[i],y=rowY(i),active=selected?.id===row.cid,st=row.criterion?statusOf(row.criterion):"";svg+=link(X.behaviour+widths.behaviour,by,X.criterion,y,active,st);if(row.cid)svg+=link(X.criterion+widths.criterion,y,X.metric,y,active,st)}}}
+ for(const group of featureGroups){const featureY=centre(group.start,group.end);svg+=link(X.product+widths.product,productY,X.feature,featureY);for(const bg of group.behaviourGroups){const by=centre(bg.start,bg.end);svg+=link(X.feature+widths.feature,featureY,X.behaviour,by);for(let i=bg.start;i<=bg.end;i++){const row=rows[i],y=rowY(i),active=selected?.id===row.cid,st=row.criterion?statusOf(row.criterion):"";svg+=link(X.behaviour+widths.behaviour,by,X.criterion,y,active,st);if(row.cid)svg+=link(X.criterion+widths.criterion,y,X.grader,y,active,st)}}}
  const box=(x,y,w,h,status,kind,id,title,score,code,note,selectable=false,expanded=null)=>{
   const active=selectable&&selected?.id===id;
   const classes=["tree-node",`state-${status}`,`kind-${kind}`,active?"selected":"",selectable?"selectable":""].filter(Boolean).join(" ");
@@ -186,13 +186,13 @@ function renderTree(){
  for(const group of featureGroups){const feature=group.feature,y=centre(group.start,group.end),closed=shutFeatures.has(feature.id);svg+=box(X.feature,y,widths.feature,62,statusOf(feature),"feature",feature.id,feature.name,rateText(feature.rate),feature.id,"",false,!closed);
   for(const bg of group.behaviourGroups){const b=bg.behaviour,yb=centre(bg.start,bg.end),closedB=shutBehaviours.has(bg.bid);svg+=box(X.behaviour,yb,widths.behaviour,62,statusOf(b),"behaviour",bg.bid,b.label,rateText(b.rate),bg.bid,"",false,!closedB)}
  }
- rows.forEach((row,i)=>{if(!row.cid)return;const c=row.criterion,y=rowY(i),st=statusOf(c),metricName=c.metric||(c.fqn||"").split(".").pop()||"No metric";svg+=box(X.criterion,y,widths.criterion,58,st,"criterion",row.cid,row.cid,rateText(c.rate),"Criterion",LABELS[st],true);svg+=box(X.metric,y,widths.metric,58,st,"metric",row.cid,metricName,rateText(c.rate),"Metric",LABELS[st],true)});
+ rows.forEach((row,i)=>{if(!row.cid)return;const c=row.criterion,y=rowY(i),st=statusOf(c),graderName=c.grader||(c.fqn||"").split(".").pop()||"No grader";svg+=box(X.criterion,y,widths.criterion,58,st,"criterion",row.cid,row.cid,rateText(c.rate),"Criterion",LABELS[st],true);svg+=box(X.grader,y,widths.grader,58,st,"grader",row.cid,graderName,rateText(c.rate),"Grader",LABELS[st],true)});
  host.innerHTML=svg+"</svg>";
  syncExpandControl();
  host.querySelectorAll('.tree-node[role="button"]').forEach(node=>{
-  const activate=()=>{hideTip();const kind=node.dataset.kind,id=node.dataset.id;if(kind==="feature"){shutFeatures.has(id)?shutFeatures.delete(id):shutFeatures.add(id);renderTree();return}if(kind==="behaviour"){shutBehaviours.has(id)?shutBehaviours.delete(id):shutBehaviours.add(id);renderTree();return}if(kind==="criterion"||kind==="metric"){if(selected?.id!==id)resultFilters={persona:null,scenario:null};selected={type:kind,id};renderTree();renderSelection();if(innerWidth<=1000)document.getElementById("selection-panel").scrollIntoView({behavior:"auto",block:"start"})}};
+  const activate=()=>{hideTip();const kind=node.dataset.kind,id=node.dataset.id;if(kind==="feature"){shutFeatures.has(id)?shutFeatures.delete(id):shutFeatures.add(id);renderTree();return}if(kind==="behaviour"){shutBehaviours.has(id)?shutBehaviours.delete(id):shutBehaviours.add(id);renderTree();return}if(kind==="criterion"||kind==="grader"){if(selected?.id!==id)resultFilters={persona:null,scenario:null};selected={type:kind,id};renderTree();renderSelection();if(innerWidth<=1000)document.getElementById("selection-panel").scrollIntoView({behavior:"auto",block:"start"})}};
   node.addEventListener("click",activate);node.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();activate()}});
-  node.addEventListener("mousemove",e=>{const kind=node.dataset.kind;if(kind==="criterion"||kind==="metric"){const c=C[node.dataset.id];showTip(e,`<strong>${esc(kind==="metric"?(c.metric||"No metric"):node.dataset.id)}</strong><span>${esc(LABELS[statusOf(c)])} · ${rateText(c.rate)}</span>`)}else if(kind==="feature"){showTip(e,"Feature score = lowest behaviour score.")}else if(kind==="behaviour"){showTip(e,"Behaviour score = lowest criterion score.")}});node.addEventListener("mouseleave",hideTip);
+  node.addEventListener("mousemove",e=>{const kind=node.dataset.kind;if(kind==="criterion"||kind==="grader"){const c=C[node.dataset.id];showTip(e,`<strong>${esc(kind==="grader"?(c.grader||"No grader"):node.dataset.id)}</strong><span>${esc(LABELS[statusOf(c)])} · ${rateText(c.rate)}</span>`)}else if(kind==="feature"){showTip(e,"Feature score = lowest behaviour score.")}else if(kind==="behaviour"){showTip(e,"Behaviour score = lowest criterion score.")}});node.addEventListener("mouseleave",hideTip);
  });
 }
 
@@ -214,7 +214,7 @@ function resultFilter(c,key,label){
 const filterIncludes=(key,value)=>resultFilters[key]===null||resultFilters[key].includes(value);
 function filteredEvidence(c){return (c.evidence||[]).filter(item=>filterIncludes("persona",item.persona)&&filterIncludes("scenario",item.scenario))}
 function evidenceList(c,evidence){
- if(!(c.evidence||[]).length)return `<div class="blank-note">${esc(c.blank?.note||"No metric result was recorded.")}</div>`;
+ if(!(c.evidence||[]).length)return `<div class="blank-note">${esc(c.blank?.note||"No grader result was recorded.")}</div>`;
  if(!evidence.length)return '<div class="blank-note filter-empty">No results match these filters.<button type="button" data-clear-result-filters>Clear filters</button></div>';
  return `<div class="evidence-list">${evidence.map(item=>`<article class="evidence-item ${esc(item.status)}"><div class="evidence-head"><span class="evidence-status">${esc(LABELS[item.status]||item.status)}</span><span>${esc(item.persona||"No persona")} · ${esc(item.scenario||"No scenario")}</span></div><p>${esc(item.message||"No message recorded")}</p><div class="evidence-meta"><span>${esc(item.session||item.trace||"No trial ID")}</span><span>${esc(item.turn)}</span><span>${esc(item.trace)}</span></div></article>`).join("")}</div>`;
 }
@@ -227,11 +227,11 @@ function bindResultFilters(c,panel){
 }
 function renderSelection(){
  const panel=document.getElementById("selection-panel");
- if(!selected){panel.innerHTML=`<div class="empty-selection"><div class="path-visual"><i></i><i></i><i></i><i></i></div><h3>Select a criterion or metric</h3><p>Feature → Behaviour → Criterion → Metric</p></div>`;return}
- const c=C[selected.id],metricName=c.metric||(c.fqn||"").split(".").pop()||"No metric";
+ if(!selected){panel.innerHTML=`<div class="empty-selection"><div class="path-visual"><i></i><i></i><i></i><i></i></div><h3>Select a criterion or grader</h3><p>Feature → Behaviour → Criterion → Grader</p></div>`;return}
+ const c=C[selected.id],graderName=c.grader||(c.fqn||"").split(".").pop()||"No grader";
  panel.innerHTML=`<div class="selected-title"><h3>${esc(selected.id)}</h3></div>${resultRail(c)}
   <div class="gwt"><div><b>Given</b><span>${esc(c.given)}</span></div><div><b>When</b><span>${esc(c.when)}</span></div><div><b>Then</b><span>${esc(c.then)}</span></div></div>
-  <div class="metric-field"><span>Metric</span><strong>${esc(metricName)}</strong></div>
+  <div class="grader-field"><span>Grader</span><strong>${esc(graderName)}</strong></div>
   ${individualResults(c)}`;
  bindResultFilters(c,panel);
 }
@@ -248,7 +248,7 @@ const tableCaseByKey=new Map();
 const activeTrialByCase=new Map();
 for(const trial of tableData.rows||[]){const key=trial.task_id;let testCase=tableCaseByKey.get(key);if(!testCase){testCase={id:`case-${tableCases.length+1}`,taskId:trial.task_id,persona:trial.persona||"",scenario:trial.scenario||"",trials:[]};tableCaseByKey.set(key,testCase);tableCases.push(testCase)}testCase.trials.push(trial)}
 const trialSquares=(testCase,stateOf,labelOf)=>`<span class="trial-statuses">${testCase.trials.map((trial,index)=>{const state=stateOf(trial);return `<i class="trial-mark ${state}" title="Trial ${trial.trial_index||index+1}: ${esc(labelOf(trial,state))}" aria-label="Trial ${index+1}: ${esc(labelOf(trial,state))}"></i>`}).join("")}</span>`;
-const metricCell=(testCase,column)=>{const results=testCase.trials.map(trial=>(trial.results||{})[column.criterion]).filter(result=>result?.evaluated),passed=results.filter(result=>result.status==="pass").length,evaluated=results.length,notEvaluated=testCase.trials.length-evaluated;if(!evaluated)return '<span class="table-score notEvaluated" aria-label="Not evaluated">—</span>';const rate=Math.round(100*passed/evaluated),state=rate>=TH?"pass":"fail",detail=`${passed} of ${evaluated} evaluated trials passed${notEvaluated?` · ${notEvaluated} not evaluated`:""}`;return `<span class="table-score ${state}" title="${esc(detail)}" aria-label="${esc(LABELS[state])}, ${rate}%. ${esc(detail)}">${rate}%</span>`};
+const graderCell=(testCase,column)=>{const results=testCase.trials.map(trial=>(trial.results||{})[column.criterion]).filter(result=>result?.evaluated),passed=results.filter(result=>result.status==="pass").length,evaluated=results.length,notEvaluated=testCase.trials.length-evaluated;if(!evaluated)return '<span class="table-score notEvaluated" aria-label="Not evaluated">—</span>';const rate=Math.round(100*passed/evaluated),state=rate>=TH?"pass":"fail",detail=`${passed} of ${evaluated} evaluated trials passed${notEvaluated?` · ${notEvaluated} not evaluated`:""}`;return `<span class="table-score ${state}" title="${esc(detail)}" aria-label="${esc(LABELS[state])}, ${rate}%. ${esc(detail)}">${rate}%</span>`};
 const outcomeCell=testCase=>trialSquares(testCase,trial=>trial.category||"abandoned",(trial,state)=>outcomeLabel[state]||state);
 const trialTrace=(row,index)=>{const turns=row.conversation||[],category=row.category||"abandoned";return `<section class="trial-trace"><div class="trial-trace-head"><div><strong>Trial ${index+1}</strong><span>${esc(row.id)}</span>${row.attempt>1?'<span class="trial-retried">retried · attempt '+row.attempt+'</span>':""}</div><span class="outcome-state ${category}"><i></i>${esc(outcomeLabel[category]||category)}</span><span>${turns.length} turn${turns.length===1?"":"s"}</span></div>${turns.length?turns.map(turn=>`<article class="conversation-turn"><span class="turn-number">Turn ${turn.turn}</span><div><b>User agent</b><p>${esc(turn.user||"No user message recorded")}</p></div><div><b>Product</b><p>${esc(turn.product||"No product response recorded")}</p>${(turn.errors||[]).map(error=>`<p class="turn-error">${esc(error)}</p>`).join("")}</div></article>`).join(""):'<div class="conversation-empty">No conversation was recorded for this trial.</div>'}</section>`};
 const testCaseTraces=testCase=>{const active=Math.min(activeTrialByCase.get(testCase.id)??0,testCase.trials.length-1),trial=testCase.trials[active];return `<div class="test-case-detail"><div class="trial-tabs" role="tablist" aria-label="Trials">${testCase.trials.map((item,index)=>{const category=item.category||"abandoned",selected=index===active;return `<button type="button" role="tab" id="${testCase.id}-trial-${index}-tab" aria-controls="${testCase.id}-trial-panel" aria-selected="${selected}" data-trial-tab data-test-case="${testCase.id}" data-trial-index="${index}"><i class="${category}"></i>Trial ${index+1}</button>`}).join("")}</div><div id="${testCase.id}-trial-panel" role="tabpanel" aria-labelledby="${testCase.id}-trial-${active}-tab">${trialTrace(trial,active)}</div></div>`};
@@ -262,10 +262,10 @@ function renderResultsTable(){
  const visibleTrials=rows.reduce((total,testCase)=>total+testCase.trials.length,0),allTrials=tableCases.reduce((total,testCase)=>total+testCase.trials.length,0);
  document.getElementById("table-count").textContent=`${rows.length} of ${tableCases.length} test cases · ${visibleTrials} of ${allTrials} trials`;
  const groupHead=tableData.features.map(feature=>`<th class="feature-group" colspan="${Math.max(1,(feature.columns||[]).length)}">${esc(feature.name)}</th>`).join("");
- const metricHead=tableData.features.flatMap(feature=>(feature.columns||[]).map(column=>`<th class="metric-heading" title="${esc(column.metric)}"><strong>${esc(clip(column.metric||"No metric",24))}</strong><span>${esc(column.criterion)}</span></th>`)).join("");
+ const graderHead=tableData.features.flatMap(feature=>(feature.columns||[]).map(column=>`<th class="grader-heading" title="${esc(column.grader)}"><strong>${esc(clip(column.grader||"No grader",24))}</strong><span>${esc(column.criterion)}</span></th>`)).join("");
  const columnCount=4+tableColumns.length;
- const body=rows.map(testCase=>{const expanded=expandedTrial===testCase.id;return `<tr class="result-table-row"><td class="expand-cell"><button type="button" data-expand-trial="${testCase.id}" aria-expanded="${expanded}" aria-label="${expanded?"Hide":"Show"} trials for ${esc(testCase.persona)} and ${esc(testCase.scenario)}"><i></i></button></td><td class="persona-cell"><strong>${esc(testCase.persona||"No persona")}</strong><span>${esc(testCase.taskId)} · ${testCase.trials.length} trial${testCase.trials.length===1?"":"s"}</span></td><td>${esc(testCase.scenario||"No scenario")}</td><td>${outcomeCell(testCase)}</td>${tableColumns.map(column=>`<td class="metric-result-cell">${metricCell(testCase,column)}</td>`).join("")}</tr>${expanded?`<tr class="conversation-row"><td colspan="${columnCount}">${testCaseTraces(testCase)}</td></tr>`:""}`}).join("");
- document.getElementById("results-table").innerHTML=rows.length?`<table class="results-table"><thead><tr><th class="sticky-meta expand-cell" rowspan="2"></th><th class="sticky-meta persona-cell" rowspan="2">Persona</th><th class="sticky-meta scenario-cell" rowspan="2">Scenario</th><th class="sticky-meta outcome-cell" rowspan="2">Trial outcomes</th>${groupHead}</tr><tr>${metricHead}</tr></thead><tbody>${body}</tbody></table>`:'<div class="blank-note">No test cases match this view.</div>';
+ const body=rows.map(testCase=>{const expanded=expandedTrial===testCase.id;return `<tr class="result-table-row"><td class="expand-cell"><button type="button" data-expand-trial="${testCase.id}" aria-expanded="${expanded}" aria-label="${expanded?"Hide":"Show"} trials for ${esc(testCase.persona)} and ${esc(testCase.scenario)}"><i></i></button></td><td class="persona-cell"><strong>${esc(testCase.persona||"No persona")}</strong><span>${esc(testCase.taskId)} · ${testCase.trials.length} trial${testCase.trials.length===1?"":"s"}</span></td><td>${esc(testCase.scenario||"No scenario")}</td><td>${outcomeCell(testCase)}</td>${tableColumns.map(column=>`<td class="grader-result-cell">${graderCell(testCase,column)}</td>`).join("")}</tr>${expanded?`<tr class="conversation-row"><td colspan="${columnCount}">${testCaseTraces(testCase)}</td></tr>`:""}`}).join("");
+ document.getElementById("results-table").innerHTML=rows.length?`<table class="results-table"><thead><tr><th class="sticky-meta expand-cell" rowspan="2"></th><th class="sticky-meta persona-cell" rowspan="2">Persona</th><th class="sticky-meta scenario-cell" rowspan="2">Scenario</th><th class="sticky-meta outcome-cell" rowspan="2">Trial outcomes</th>${groupHead}</tr><tr>${graderHead}</tr></thead><tbody>${body}</tbody></table>`:'<div class="blank-note">No test cases match this view.</div>';
  document.querySelectorAll("[data-expand-trial]").forEach(button=>button.onclick=()=>{expandedTrial=expandedTrial===button.dataset.expandTrial?"":button.dataset.expandTrial;renderResultsTable()});
  bindTrialTabs();
 }

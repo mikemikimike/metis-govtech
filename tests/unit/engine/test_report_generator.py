@@ -1,7 +1,7 @@
 """save_report() writes UTF-8 regardless of host locale (issue #385).
 
 The report page hardcodes a literal → in its own template text
-(_report_page.py's "Swipe to metric →"), so any write that falls back to
+(_report_page.py's "Swipe to grader →"), so any write that falls back to
 the platform's locale encoding crashes on a cp1252 machine — U+2192 isn't
 representable there — and leaves a 0-byte file on disk behind a swallowed
 UnicodeEncodeError. Writing must always pass encoding="utf-8" explicitly,

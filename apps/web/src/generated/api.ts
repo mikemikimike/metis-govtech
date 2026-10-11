@@ -172,7 +172,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/metrics": {
+    "/api/v1/graders": {
         parameters: {
             query?: never;
             header?: never;
@@ -180,10 +180,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List installed metric summaries
-         * @description Return read-only metric metadata for web presentation.
+         * List installed grader summaries
+         * @description Return read-only grader metadata for web presentation.
          */
-        get: operations["metrics_api_v1_metrics_get"];
+        get: operations["graders_api_v1_graders_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -495,10 +495,10 @@ export interface components {
             /** Name */
             name: string;
             description: components["schemas"]["CriterionDescription"];
-            /** Metric Fqn */
-            metric_fqn?: string | null;
-            /** Metric Args */
-            metric_args?: {
+            /** Grader Fqn */
+            grader_fqn?: string | null;
+            /** Grader Args */
+            grader_args?: {
                 [key: string]: unknown;
             };
         };
@@ -651,6 +651,18 @@ export interface components {
             values?: {
                 [key: string]: string;
             };
+        };
+        /**
+         * GraderSummary
+         * @description The small, stable grader shape exposed to presentation clients.
+         */
+        GraderSummary: {
+            /** Fqn */
+            fqn: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
         };
         /**
          * InterviewConfig
@@ -859,18 +871,6 @@ export interface components {
             request_id: string;
             /** Response */
             response: components["schemas"]["ChatResponse"] | components["schemas"]["ChoiceResponse"] | components["schemas"]["FormResponse"];
-        };
-        /**
-         * MetricSummary
-         * @description The small, stable metric shape exposed to presentation clients.
-         */
-        MetricSummary: {
-            /** Fqn */
-            fqn: string;
-            /** Name */
-            name: string;
-            /** Description */
-            description: string;
         };
         /**
          * MissingData
@@ -1603,7 +1603,7 @@ export interface operations {
             };
         };
     };
-    metrics_api_v1_metrics_get: {
+    graders_api_v1_graders_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1618,7 +1618,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MetricSummary"][];
+                    "application/json": components["schemas"]["GraderSummary"][];
                 };
             };
             /** @description Internal Server Error */

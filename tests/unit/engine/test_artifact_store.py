@@ -36,7 +36,7 @@ class TestSaveArtifacts:
         run_dir = tmp_path / "trials" / "s1-p1-1"
         run_dir.mkdir(parents=True)
         record = TrialRecord(
-            config=TrialConfig(persona="p1", scenario="s1", metric_refs=[]),
+            config=TrialConfig(persona="p1", scenario="s1", grader_refs=[]),
             target_session_id="sess-abc",
             outcome=TrialOutcome(
                 stop_reason="goal_achieved", total_turns=3, duration_seconds=10.0

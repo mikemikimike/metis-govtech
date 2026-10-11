@@ -28,7 +28,7 @@ import {
   type ManualScenario,
   type ManualTestCase,
 } from "./manual";
-import { api, TransportError, type MetricSpec } from "./transport/api";
+import { api, TransportError, type GraderSpec } from "./transport/api";
 import { Button, cn, formatTrials, Mono } from "./ui";
 
 export function ManualAuthoringEntry({ onOpen }: { onOpen: () => void }) {
@@ -117,7 +117,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
     emptyManualExperiment,
   );
   const [library, setLibrary] = useState<ManualFixture[]>([]);
-  const [metrics, setMetrics] = useState<MetricSpec[] | null>(null);
+  const [graders, setGraders] = useState<GraderSpec[] | null>(null);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,12 +132,12 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
   const scenarioIdRefs = useRef<Array<HTMLInputElement | null>>([]);
   const taskPersonaRefs = useRef<Array<HTMLSelectElement | null>>([]);
 
-  const loadMetrics = useCallback(() => {
+  const loadGraders = useCallback(() => {
     let live = true;
     setCatalogueError(null);
-    void api.metrics().then(
+    void api.graders().then(
       (rows) => {
-        if (live) setMetrics(rows);
+        if (live) setGraders(rows);
       },
       (cause) => {
         if (!live) return;
@@ -153,7 +153,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
     };
   }, []);
 
-  useEffect(() => loadMetrics(), [loadMetrics]);
+  useEffect(() => loadGraders(), [loadGraders]);
 
   useEffect(() => {
     if (
@@ -778,11 +778,11 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                   <ScorerPicker
                     itemLabel={itemLabel}
                     searchId={`manual-task-${index}-scorer-search`}
-                    metrics={metrics}
+                    graders={graders}
                     error={catalogueError}
                     invalid={errorFor(`task.${index}.scorers`)}
                     selected={task.scorers}
-                    onRetry={() => loadMetrics()}
+                    onRetry={() => loadGraders()}
                     onToggle={(scorer) => {
                       const selected = task.scorers.some(
                         (value) => value.fqn === scorer.fqn,
@@ -808,9 +808,9 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                           errorFor(`task.${index}.settings.${scorer.fqn}`),
                         )}
                         value={
-                          task.metric_args_text?.[scorer.fqn] ??
+                          task.grader_args_text?.[scorer.fqn] ??
                           JSON.stringify(
-                            task.metric_args?.[scorer.fqn] ?? {},
+                            task.grader_args?.[scorer.fqn] ?? {},
                             null,
                             2,
                           )
@@ -818,8 +818,8 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                         placeholder="{}"
                         onChange={(value) =>
                           updateTask(index, {
-                            metric_args_text: {
-                              ...task.metric_args_text,
+                            grader_args_text: {
+                              ...task.grader_args_text,
                               [scorer.fqn]: value,
                             },
                           })
@@ -996,7 +996,7 @@ function TextArea({
 function ScorerPicker({
   itemLabel,
   searchId,
-  metrics,
+  graders,
   error,
   selected,
   invalid,
@@ -1005,23 +1005,23 @@ function ScorerPicker({
 }: {
   itemLabel: string;
   searchId: string;
-  metrics: MetricSpec[] | null;
+  graders: GraderSpec[] | null;
   error: string | null;
-  selected: MetricSpec[];
+  selected: GraderSpec[];
   invalid?: string;
   onRetry: () => void;
-  onToggle: (metric: MetricSpec) => void;
+  onToggle: (grader: GraderSpec) => void;
 }) {
   const [query, setQuery] = useState("");
   const shown = useMemo(() => {
     const value = query.trim().toLowerCase();
-    if (!metrics || !value) return metrics ?? [];
-    return metrics.filter(
-      (metric) =>
-        metric.name.toLowerCase().includes(value) ||
-        metric.description.toLowerCase().includes(value),
+    if (!graders || !value) return graders ?? [];
+    return graders.filter(
+      (grader) =>
+        grader.name.toLowerCase().includes(value) ||
+        grader.description.toLowerCase().includes(value),
     );
-  }, [metrics, query]);
+  }, [graders, query]);
 
   return (
     <fieldset
@@ -1041,7 +1041,7 @@ function ScorerPicker({
             Retry
           </Button>
         </div>
-      ) : metrics === null ? (
+      ) : graders === null ? (
         <p className="text-sm text-muted-foreground">Loading scorers…</p>
       ) : (
         <>
@@ -1064,28 +1064,28 @@ function ScorerPicker({
               invalid ? "border-destructive" : "border-border",
             )}
           >
-            {shown.map((metric) => {
+            {shown.map((grader) => {
               const checked = selected.some(
-                (value) => value.fqn === metric.fqn,
+                (value) => value.fqn === grader.fqn,
               );
               return (
                 <label
-                  key={metric.fqn}
+                  key={grader.fqn}
                   className="flex cursor-pointer items-start gap-3 border-b border-border px-3 py-3 last:border-b-0 hover:bg-muted"
                 >
                   <input
                     type="checkbox"
-                    aria-label={`${itemLabel}, ${metric.name}`}
+                    aria-label={`${itemLabel}, ${grader.name}`}
                     checked={checked}
-                    onChange={() => onToggle(metric)}
+                    onChange={() => onToggle(grader)}
                     className="mt-1 h-4 w-4 accent-[hsl(var(--accent))]"
                   />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="text-sm font-medium text-foreground">
-                      {metric.name}
+                      {grader.name}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {metric.description}
+                      {grader.description}
                     </span>
                   </span>
                 </label>

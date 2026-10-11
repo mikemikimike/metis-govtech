@@ -2,13 +2,13 @@
 Type definitions for the Langfuse trace extractor.
 
 Contains all TypedDicts and dataclasses used to represent structured data
-extracted from Langfuse observations and passed to DeepEval metrics.
+extracted from Langfuse observations and passed to DeepEval graders.
 """
 
 from dataclasses import dataclass, field
 from typing import TypedDict
 
-from metis.library.metrics._types import (
+from metis.library.graders._types import (
     ChatMessage,
     Delegation,
     ObservationSummary,

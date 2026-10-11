@@ -40,8 +40,8 @@ Keep `schema_version: 2` on `next`. Use the complete example in
 
 - Keep `id` and `runner_factory_ref`. Use `product.description` for the description.
 - Keep the Product → Feature → Behaviour → Criterion hierarchy and `measured` state.
-- Put each Grader FQN and argument map on its Criterion as `metric_fqn` and
-  `metric_args`. Use separate Criteria for different requirements or settings.
+- Put each Grader FQN and argument map on its Criterion as `grader_fqn` and
+  `grader_args`. Use separate Criteria for different requirements or settings.
   Every Criterion needs a Grader, including dormant Criteria.
 - Keep only ID, name, and description on each Scenario. Create a Task for each
   selected Scenario and Persona pair. Move fixtures and Trial counts to that Task.
@@ -77,7 +77,7 @@ except for the Criterion Grader fields in the table.
 | `scenarios[].persona_refs` | One Task for each Persona, with `tasks[].scenario_ref` and `tasks[].persona_ref` |
 | `scenarios[].fixtures` | `tasks[].fixtures` on each of those Tasks |
 | `scenarios[].num_trials` | `tasks[].num_trials` on each of those Tasks |
-| `scenarios[].metric_refs` | One Criterion for each Grader, with `metric_fqn` and `metric_args`. Tasks select Criteria with `tasks[].criterion_refs`. |
+| `scenarios[].metric_refs` | One Criterion for each Grader, with `grader_fqn` and `grader_args`. Tasks select Criteria with `tasks[].criterion_refs`. |
 | `scenarios[].max_turns`, `timeout_minutes`, `response_wait_ms`, `max_run_retries` | Move each value to the same field on every Task for that Scenario. |
 | Profile `scenarios[].behaviour_refs` | Removed. Coverage comes from Task → Criterion → Behaviour. |
 
@@ -90,16 +90,16 @@ Check these points when you convert a file:
   `response_wait_ms`, and `max_run_retries`. Their defaults are `20`, `15`,
   `300000`, and the runner's retry default. Set `max_run_retries: 0` to disable
   run retries. Move explicit Scenario values to each corresponding Task.
-  A Grader argument such as `TurnBudgetMetric` `max_turns` sets the passing
+  A Grader argument such as `TurnBudgetGrader` `max_turns` sets the passing
   budget only. The Task's `max_turns` controls execution.
 - **Grader formats.** The old `metric_refs` item had three formats. Each becomes
   one Criterion:
 
   | Old `metric_refs` item | Criterion fields |
   |---|---|
-  | `metis.library.metrics.X` | `metric_fqn: metis.library.metrics.X`, `metric_args: {}` |
-  | `metis.library.metrics.X: {max_turns: 4}` | `metric_fqn: metis.library.metrics.X`, `metric_args: {max_turns: 4}` |
-  | `{class: metis.library.metrics.X, args: {...}}` | `metric_fqn: metis.library.metrics.X`, `metric_args: {...}` |
+  | `metis.library.graders.X` | `grader_fqn: metis.library.graders.X`, `grader_args: {}` |
+  | `metis.library.graders.X: {max_turns: 4}` | `grader_fqn: metis.library.graders.X`, `grader_args: {max_turns: 4}` |
+  | `{class: metis.library.graders.X, args: {...}}` | `grader_fqn: metis.library.graders.X`, `grader_args: {...}` |
 
 - **Where a Criterion goes.** Put the Criterion under the Behaviour that it
   measures, and set `measured: true` on that Behaviour. If a Criterion with the
@@ -144,11 +144,11 @@ features:
               given: an evaluation interaction
               when: the interaction is evaluated
               then: the session completed within the allowed turn budget
-            metric_fqn: metis.library.metrics.TurnBudgetMetric
-            metric_args:
+            grader_fqn: metis.library.graders.TurnBudgetGrader
+            grader_args:
               max_turns: 4
   # AC-ORCA-2 already exists under its Orchestration Behaviour. It now has
-  # metric_fqn: metis.library.metrics.DirectHandleRecognitionMetric.
+  # grader_fqn: metis.library.graders.DirectHandleRecognitionGrader.
 
 scenarios:
   - id: direct-question
@@ -277,11 +277,34 @@ executable, or the `apps/api/Dockerfile` built from the repository root.
 
 ### metis-core
 
-_No breaking changes in v1.0._
+#### `Criterion.metric_fqn`/`metric_args` renamed to `grader_fqn`/`grader_args`
+
+**Python API**
+
+- `Criterion.metric_fqn` → `Criterion.grader_fqn`
+- `Criterion.metric_args` → `Criterion.grader_args`
+
+**On disk**
+
+- Every `specification.yaml`'s `metric_fqn:`/`metric_args:` Criterion keys are now
+  `grader_fqn:`/`grader_args:`. Old files are not migrated — update them by hand or
+  recompile.
 
 ### metis-library
 
-_No breaking changes in v1.0._
+#### `metrics` subpackage renamed to `graders`
+
+"Metric" never appears in `GLOSSARY.md`; the glossary's term for a procedure that evaluates
+a trial against a criterion is **Grader**.
+
+**Python API**
+
+- Import path `metis.library.metrics` → `metis.library.graders`
+- Base classes `MetisTurnMetric`/`MetisSessionMetric` → `MetisTurnGrader`/`MetisSessionGrader`
+- Every `*Metric`-suffixed class → its `*Grader` equivalent, e.g.
+  `metis.library.metrics.TurnBudgetMetric` → `metis.library.graders.TurnBudgetGrader`. The
+  fallback judge `metis.library.metrics.default.CriterionGEvalMetric` →
+  `metis.library.graders.default.CriterionGEvalGrader`.
 
 ### metis-engine
 
@@ -327,6 +350,30 @@ no stored object).
 
 - `PlanTask.sessionsPlanned` → `trialsPlanned`; `PlanTask.sessionsRun` → `trialsRun`.
 
+#### `Metric*` renamed to `Grader*`
+
+Every `Metric`-named symbol in the engine is now `Grader`, matching `metis-library`'s
+rename and the glossary.
+
+**Python API**
+
+- `MetricRef` → `GraderRef`; `Scenario.metric_refs`/`TrialConfig.metric_refs` → `grader_refs`
+- `MetricPassRate` → `GraderPassRate`; `UnmappedMetric` → `UnmappedGrader`
+- `MetricResult` → `GraderResult`; `SessionMetricResult`/`TurnMetricResult` →
+  `SessionGraderResult`/`TurnGraderResult`
+- `EvalDurations.turn_metrics_seconds`/`session_metrics_seconds` →
+  `turn_graders_seconds`/`session_graders_seconds`
+
+**Report JSON**
+
+- `Scores.metricPassRate` → `graderPassRate`; `PlanTask.metricsAsked`/`metricsScored` →
+  `gradersAsked`/`gradersScored`
+- `EvidenceItem.metric_fqn`/`metric_args` → `grader_fqn`/`grader_args`
+- `AxisRow.metrics` → `graders`; `ResultTableColumn.metric` → `grader`
+- `Timings.turn_metrics_seconds`/`session_metrics_seconds` →
+  `turn_graders_seconds`/`session_graders_seconds`
+- `unmapped[].metric` → `unmapped[].grader`
+
 ### metis-api
 
 New package in v1.0 — the stateless HTTP door over the wizard. It replaces the
@@ -336,6 +383,11 @@ It is stateless — each turn or end request carries the whole client-held state
 `POST /api/v1/wizard/interview/end`, `POST /api/v1/wizard/compile`,
 `POST /api/v1/wizard/package`, and `/health`. There is no prior version to migrate from; point web
 clients here.
+
+#### `GET /api/v1/metrics` renamed to `GET /api/v1/graders`
+
+**What to change:** point clients at `/api/v1/graders`. The response shape is unchanged —
+only the path and the `MetricSummary` → `GraderSummary` schema name change.
 
 ### metis-web
 
@@ -347,6 +399,10 @@ transcript and fixture Blobs are browser-local; there is no server Interview lis
 cross-device state. A completed Interview downloads one `specification.zip` containing
 `specification.yaml` and its validated `fixtures/` files. The API retains no fixture bytes.
 Use `make check-web` for non-mutating web checks and `make build-web` for the production bundle.
-The web gets optional metric details from `GET /api/v1/metrics` after a Specification contains a
+
+The grader catalogue route the web client calls is now `GET /api/v1/graders`
+(`api.graders()` in `transport/api.ts`, was `api.metrics()`). `Criterion.grader_fqn`/
+`grader_args` wire fields were `metric_fqn`/`metric_args`.
+The web gets optional grader details from `GET /api/v1/graders` after a Specification contains a
 Criterion. The manual form supports direct authoring. Source analysis, hosted state,
 authentication, and evaluation execution remain deferred.

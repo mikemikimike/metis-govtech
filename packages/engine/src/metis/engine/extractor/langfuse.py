@@ -8,7 +8,7 @@ High-level entry point:
 
 - :func:`fetch_by_session_id` — fetch all traces for a specific session
 
-Lower-level extraction helpers are also re-exported for use by metrics.
+Lower-level extraction helpers are also re-exported for use by graders.
 """
 
 import time
@@ -36,7 +36,7 @@ from metis.engine.extractor.types import (
     ToolCallSummary,
 )
 from metis.engine.simulation.types import Persona, Scenario
-from metis.library.metrics._types import (
+from metis.library.graders._types import (
     ClarificationRequest,
     ConversationalTestCaseMetadata,
     LlmTestCaseMetadata,
@@ -385,11 +385,11 @@ def _trace_to_test_case(
     time_to_first_token, level/status_message, completion_start_time,
     prompt_id/name/version, and environment. Trace-level metadata, tags,
     user_id, and total_cost are also dropped. Expand the serialization
-    below if a new metric needs any of these.
+    below if a new grader needs any of these.
 
     :param ext: Pre-extracted data bundle for this trace.
     :param session_context: Session-level positioning info.
-    :returns: A :class:`~deepeval.test_case.LLMTestCase` ready for metric evaluation.
+    :returns: A :class:`~deepeval.test_case.LLMTestCase` ready for grader evaluation.
     """
     trace = ext.trace
     trace_input = trace.input if isinstance(trace.input, str) else str(trace.input)
@@ -577,13 +577,13 @@ def fetch_by_session_id(
     :param artifacts: Collected artifacts from the session record, injected into
         each test case's metadata.
     :param scenario: Scenario object from specification.yaml (passed through to
-        metric metadata).
+        grader metadata).
     :param persona: Persona object from specification.yaml (passed through to
-        metric metadata).
-    :param stop_reason: Why the session stopped (passed through to metric
+        grader metadata).
+    :param stop_reason: Why the session stopped (passed through to grader
         metadata as observable execution state).
     :param cancellation_available: Whether the user could cancel the run
-        (passed through to metric metadata as observable execution state).
+        (passed through to grader metadata as observable execution state).
     :returns: :class:`FetchLangfuseResult` with test cases ready for evaluation.
     """
     deadline = time.time() + retry_timeout

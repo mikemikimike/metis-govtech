@@ -7,8 +7,8 @@ exists.
 
 `_validate_inputs` is the engine's real load path, not a stand-in: it parses `specification.yaml`
 through `Specification`, checks persona references resolve, checks every fixture file is present,
-and imports every metric FQN via `importlib` to confirm it is a real metric class. That last
-part is the one that matters most here — metric FQNs are strings until run time, so a typo in
+and imports every grader FQN via `importlib` to confirm it is a real grader class. That last
+part is the one that matters most here — grader FQNs are strings until run time, so a typo in
 a compiled file is invisible until something tries to import it.
 """
 
@@ -25,7 +25,7 @@ from metis.wizard.application.compile import (
     write_experiment,
     write_review,
 )
-from tests.fixtures.wizard.specifications import CITATION_METRIC, research_assistant
+from tests.fixtures.wizard.specifications import CITATION_GRADER, research_assistant
 
 EXPERIMENT_ID = "research-assistant"
 
@@ -61,10 +61,10 @@ def test_the_engine_loads_the_compiled_experiment(tmp_path: Path) -> None:
     assert (input_dir / "review.md").is_file()
 
 
-def test_the_gate_would_catch_an_unimportable_metric(tmp_path: Path) -> None:
+def test_the_gate_would_catch_an_unimportable_grader(tmp_path: Path) -> None:
     """Proves the gate is actually checking, rather than passing vacuously.
 
-    FQNs are resolved by importlib at run time, so an experiment naming a metric that has
+    FQNs are resolved by importlib at run time, so an experiment naming a grader that has
     moved stops loading. Not silent — which is what this asserts.
     """
     from metis.engine.cli import _validate_inputs
@@ -72,14 +72,14 @@ def test_the_gate_would_catch_an_unimportable_metric(tmp_path: Path) -> None:
     input_dir = _input_dir(tmp_path)
     experiment = input_dir / "specification.yaml"
     original = experiment.read_text()
-    # The metrics' old home, deleted when they moved to metis-library. Deliberately dead —
+    # The graders' old home, deleted when they moved to metis-library. Deliberately dead —
     # an experiment compiled before the move names this and must fail loudly. Sourced from
-    # the fixture so this cannot quietly become a no-op if the compiled metrics change.
-    dead_fqn = CITATION_METRIC.replace("metis.library.", "metis.engine.")
-    assert CITATION_METRIC in original, (
-        "the corrupted metric must actually be compiled in"
+    # the fixture so this cannot quietly become a no-op if the compiled graders change.
+    dead_fqn = CITATION_GRADER.replace("metis.library.", "metis.engine.")
+    assert CITATION_GRADER in original, (
+        "the corrupted grader must actually be compiled in"
     )
-    experiment.write_text(original.replace(CITATION_METRIC, dead_fqn))
+    experiment.write_text(original.replace(CITATION_GRADER, dead_fqn))
 
     with pytest.raises(SystemExit) as exit_info:
         _validate_inputs(input_dir)
@@ -126,15 +126,15 @@ def test_the_manual_specification_package_passes_the_engine_input_gate(
         "TC-002",
         "TC-003",
     ]
-    metrics = {
-        scenario.id: [ref.fqn for ref in scenario.metric_refs]
+    graders = {
+        scenario.id: [ref.fqn for ref in scenario.grader_refs]
         for scenario in EngineSpecification.model_validate(experiment).resolved_tasks()
     }
-    assert metrics == {
+    assert graders == {
         "supported-answer": [
-            "metis.library.metrics.SynthesisFaithfulnessMetric",
-            "metis.library.metrics.TurnBudgetMetric",
+            "metis.library.graders.SynthesisFaithfulnessGrader",
+            "metis.library.graders.TurnBudgetGrader",
         ],
-        "short-recovery": ["metis.library.metrics.TurnBudgetMetric"],
+        "short-recovery": ["metis.library.graders.TurnBudgetGrader"],
     }
     _validate_inputs(extracted)

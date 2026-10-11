@@ -1,15 +1,15 @@
-"""Tests for the custom _evaluate_turn_metrics loop."""
+"""Tests for the custom _evaluate_turn_graders loop."""
 
 import asyncio
 from typing import ClassVar
 
 from deepeval.test_case import LLMTestCase
 
-from metis.library.metrics._base import MetisTurnMetric, mark_skipped
+from metis.library.graders._base import MetisTurnGrader, mark_skipped
 
 
-class FakeCodeMetric(MetisTurnMetric):
-    """A fake code-graded turn metric for testing."""
+class FakeCodeGrader(MetisTurnGrader):
+    """A fake code-graded turn grader for testing."""
 
     tags: ClassVar[tuple[str, ...]] = ("test", "per-turn", "code-graded")
     async_mode = False
@@ -31,11 +31,11 @@ class FakeCodeMetric(MetisTurnMetric):
 
     @property
     def __name__(self):
-        return "Fake Code Metric"
+        return "Fake Code Grader"
 
 
-class FakeSkipMetric(MetisTurnMetric):
-    """A fake metric that always skips."""
+class FakeSkipGrader(MetisTurnGrader):
+    """A fake grader that always skips."""
 
     tags: ClassVar[tuple[str, ...]] = ("test", "per-turn", "code-graded")
     async_mode = False
@@ -54,11 +54,11 @@ class FakeSkipMetric(MetisTurnMetric):
 
     @property
     def __name__(self):
-        return "Fake Skip Metric"
+        return "Fake Skip Grader"
 
 
-class FakeAsyncMetric(MetisTurnMetric):
-    """A fake async metric for testing."""
+class FakeAsyncGrader(MetisTurnGrader):
+    """A fake async grader for testing."""
 
     tags: ClassVar[tuple[str, ...]] = ("test", "per-turn", "judge-graded")
 
@@ -79,52 +79,52 @@ class FakeAsyncMetric(MetisTurnMetric):
 
     @property
     def __name__(self):
-        return "Fake Async Metric"
+        return "Fake Async Grader"
 
 
-def test_evaluate_turn_metrics_sync():
-    from metis.engine.evaluation.orchestrator import _evaluate_turn_metrics
+def test_evaluate_turn_graders_sync():
+    from metis.engine.evaluation.orchestrator import _evaluate_turn_graders
 
     tc = LLMTestCase(input="hi", actual_output="hello")
-    results = asyncio.run(_evaluate_turn_metrics([tc], [FakeCodeMetric()]))
+    results = asyncio.run(_evaluate_turn_graders([tc], [FakeCodeGrader()]))
 
     assert len(results) == 1
-    assert len(results[0].metric_results) == 1
-    mr = results[0].metric_results[0]
-    assert mr.name == "Fake Code Metric"
+    assert len(results[0].grader_results) == 1
+    mr = results[0].grader_results[0]
+    assert mr.name == "Fake Code Grader"
     assert mr.score == 0.9
     assert mr.skipped is False
 
 
-def test_evaluate_turn_metrics_skipped():
-    from metis.engine.evaluation.orchestrator import _evaluate_turn_metrics
+def test_evaluate_turn_graders_skipped():
+    from metis.engine.evaluation.orchestrator import _evaluate_turn_graders
 
     tc = LLMTestCase(input="hi", actual_output="hello")
-    results = asyncio.run(_evaluate_turn_metrics([tc], [FakeSkipMetric()]))
+    results = asyncio.run(_evaluate_turn_graders([tc], [FakeSkipGrader()]))
 
-    mr = results[0].metric_results[0]
+    mr = results[0].grader_results[0]
     assert mr.skipped is True
     assert mr.score == 1.0
     assert mr.reason == "not applicable"
 
 
-def test_evaluate_turn_metrics_async():
-    from metis.engine.evaluation.orchestrator import _evaluate_turn_metrics
+def test_evaluate_turn_graders_async():
+    from metis.engine.evaluation.orchestrator import _evaluate_turn_graders
 
     tc = LLMTestCase(input="hi", actual_output="hello")
-    results = asyncio.run(_evaluate_turn_metrics([tc], [FakeAsyncMetric()]))
+    results = asyncio.run(_evaluate_turn_graders([tc], [FakeAsyncGrader()]))
 
-    mr = results[0].metric_results[0]
-    assert mr.name == "Fake Async Metric"
+    mr = results[0].grader_results[0]
+    assert mr.name == "Fake Async Grader"
     assert mr.score == 0.7
     assert mr.skipped is False
 
 
-def test_evaluate_turn_metrics_multiple():
-    from metis.engine.evaluation.orchestrator import _evaluate_turn_metrics
+def test_evaluate_turn_graders_multiple():
+    from metis.engine.evaluation.orchestrator import _evaluate_turn_graders
 
     tc = LLMTestCase(input="hi", actual_output="hello")
-    metrics = [FakeCodeMetric(), FakeSkipMetric(), FakeAsyncMetric()]
-    results = asyncio.run(_evaluate_turn_metrics([tc], metrics))
+    graders = [FakeCodeGrader(), FakeSkipGrader(), FakeAsyncGrader()]
+    results = asyncio.run(_evaluate_turn_graders([tc], graders))
 
-    assert len(results[0].metric_results) == 3
+    assert len(results[0].grader_results) == 3

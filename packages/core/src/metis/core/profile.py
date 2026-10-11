@@ -30,15 +30,15 @@ class CriterionDescription(BaseModel):
     then: str
 
     def __str__(self) -> str:
-        """Return the clauses as the flat text used for metric matching."""
+        """Return the clauses as the flat text used for grader matching."""
         return f"Given {self.given}, when {self.when}, then {self.then}."
 
 
 class Criterion(NamedNode[CriterionDescription]):
     # The id is scoped to its behaviour: AC-1-1, AC-1-2.
     # resolved by the matcher, never by the model. `None` means matching has not run yet.
-    metric_fqn: str | None = None
-    metric_args: dict[str, Any] = Field(default_factory=dict)
+    grader_fqn: str | None = None
+    grader_args: dict[str, Any] = Field(default_factory=dict)
 
 
 class Behaviour(NamedNode[str]):

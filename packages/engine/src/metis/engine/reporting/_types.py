@@ -21,12 +21,12 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class SessionMetricResult(BaseModel):
-    """Shape of a single metric result inside SessionReport."""
+class SessionGraderResult(BaseModel):
+    """Shape of a single grader result inside SessionReport."""
 
     criterion_id: str = ""
-    metric_fqn: str = ""
-    metric_args: dict[str, Any] = Field(default_factory=dict)
+    grader_fqn: str = ""
+    grader_args: dict[str, Any] = Field(default_factory=dict)
     task_id: str = ""
     trial_index: int = 1
     name: str
@@ -40,15 +40,15 @@ class SessionReport(BaseModel):
     """Report-ready projection of a SessionResult."""
 
     session_id: str
-    metrics: list[SessionMetricResult]
+    graders: list[SessionGraderResult]
 
 
-class TurnMetricResult(BaseModel):
-    """Shape of a single metric result inside TurnReport."""
+class TurnGraderResult(BaseModel):
+    """Shape of a single grader result inside TurnReport."""
 
     criterion_id: str = ""
-    metric_fqn: str = ""
-    metric_args: dict[str, Any] = Field(default_factory=dict)
+    grader_fqn: str = ""
+    grader_args: dict[str, Any] = Field(default_factory=dict)
     task_id: str = ""
     trial_index: int = 1
     name: str
@@ -72,4 +72,4 @@ class TurnReport(BaseModel):
     input: str
     output: str
     routed_to: str
-    metrics: list[TurnMetricResult]
+    graders: list[TurnGraderResult]

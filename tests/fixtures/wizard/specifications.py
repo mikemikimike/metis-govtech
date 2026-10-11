@@ -17,9 +17,9 @@ from metis.wizard.contracts import (
     Task,
 )
 
-TURN_BUDGET = "metis.library.metrics.TurnBudgetMetric"
-CITATION_METRIC = "metis.library.metrics.SynthesisFaithfulnessMetric"
-BOUNDED_TROUBLESHOOTING = "metis.library.metrics.BoundedTroubleshootingMetric"
+TURN_BUDGET = "metis.library.graders.TurnBudgetGrader"
+CITATION_GRADER = "metis.library.graders.SynthesisFaithfulnessGrader"
+BOUNDED_TROUBLESHOOTING = "metis.library.graders.BoundedTroubleshootingGrader"
 
 
 def orca_handover() -> Specification:
@@ -94,7 +94,7 @@ def research_assistant() -> Specification:
                                         "every factual claim names the document it came from"
                                     ),
                                 ),
-                                metric_fqn=CITATION_METRIC,
+                                grader_fqn=CITATION_GRADER,
                             ),
                             Criterion(
                                 id="AC-1-2",
@@ -106,7 +106,7 @@ def research_assistant() -> Specification:
                                         "it says so rather than citing an unrelated document"
                                     ),
                                 ),
-                                metric_fqn=CITATION_METRIC,
+                                grader_fqn=CITATION_GRADER,
                             ),
                         ],
                     ),
@@ -124,7 +124,7 @@ def research_assistant() -> Specification:
                                     when="the answer is returned",
                                     then="it is under 500 words",
                                 ),
-                                metric_fqn=TURN_BUDGET,
+                                grader_fqn=TURN_BUDGET,
                             ),
                         ],
                     ),
@@ -151,7 +151,7 @@ def research_assistant() -> Specification:
                                     when="the agent has retried three times",
                                     then="it stops and reports what it attempted",
                                 ),
-                                metric_fqn=BOUNDED_TROUBLESHOOTING,
+                                grader_fqn=BOUNDED_TROUBLESHOOTING,
                             ),
                         ],
                     ),

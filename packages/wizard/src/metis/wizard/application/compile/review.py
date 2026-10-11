@@ -13,12 +13,12 @@ if TYPE_CHECKING:
 
 
 def _criterion_lines(criterion: Criterion) -> list[str]:
-    measured = criterion.metric_fqn or "not yet matched"
+    measured = criterion.grader_fqn or "not yet matched"
     return [
         f"    - **{criterion.name}** — given {criterion.description.given}, "
         f"when {criterion.description.when}, then {criterion.description.then}",
         f"      *measured by:* `{measured}`",
-        f"      *parameters:* `{json.dumps(criterion.metric_args, ensure_ascii=False, sort_keys=True)}`",
+        f"      *parameters:* `{json.dumps(criterion.grader_args, ensure_ascii=False, sort_keys=True)}`",
     ]
 
 

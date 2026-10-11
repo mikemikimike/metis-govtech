@@ -51,7 +51,7 @@ class TestTrialConfigFromScenario:
         rc = TrialConfig(
             persona="p1",
             scenario=s.id,
-            metric_refs=s.metric_refs,
+            grader_refs=s.grader_refs,
             max_turns=s.max_turns,
             timeout_minutes=s.timeout_minutes,
             response_wait_ms=s.response_wait_ms,
@@ -72,7 +72,7 @@ class TestTrialConfigFromScenario:
         rc = TrialConfig(
             persona="p1",
             scenario=s.id,
-            metric_refs=s.metric_refs,
+            grader_refs=s.grader_refs,
             max_turns=s.max_turns,
             timeout_minutes=s.timeout_minutes,
             response_wait_ms=s.response_wait_ms,
@@ -96,7 +96,7 @@ class TestResponseTimeoutResolution:
         rc = TrialConfig(
             persona="p1",
             scenario=s.id,
-            metric_refs=s.metric_refs,
+            grader_refs=s.grader_refs,
             max_turns=s.max_turns,
             timeout_minutes=s.timeout_minutes,
             response_wait_ms=s.response_wait_ms,

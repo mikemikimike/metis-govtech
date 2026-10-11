@@ -48,7 +48,7 @@
         "description": {
           "$ref": "#/$defs/CriterionDescription"
         },
-        "metric_fqn": {
+        "grader_fqn": {
           "anyOf": [
             {
               "type": "string"
@@ -58,11 +58,11 @@
             }
           ],
           "default": null,
-          "title": "Metric Fqn"
+          "title": "Grader Fqn"
         },
-        "metric_args": {
+        "grader_args": {
           "additionalProperties": true,
-          "title": "Metric Args",
+          "title": "Grader Args",
           "type": "object"
         }
       },

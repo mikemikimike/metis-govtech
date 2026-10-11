@@ -362,12 +362,12 @@ class StepDriver:
     def _rematch_reworded(
         self, state: DriverState, before_texts: dict[str, str]
     ) -> None:
-        """Re-resolve the metric for any criterion whose wording just changed.
+        """Re-resolve the grader for any criterion whose wording just changed.
 
-        This is the other half of the "you may not write metric_fqn" rule: the model reweds
-        the criterion instead, and the matcher — not the model — chooses the metric that new
+        This is the other half of the "you may not write grader_fqn" rule: the model reweds
+        the criterion instead, and the matcher — not the model — chooses the grader that new
         wording points at. Without this, `match_specification` would skip a criterion that already
-        has a metric, so a reword would leave the old metric in place. Silent by design: the
+        has a grader, so a reword would leave the old grader in place. Silent by design: the
         matcher only ever overwrites its own earlier choice.
 
         A criterion the chat *added* is absent from `before_texts`, so it counts as changed
@@ -411,19 +411,19 @@ class StepDriver:
                 return
 
         if request.target and any(
-            field.id == "metric_args" for field in request.fields
+            field.id == "grader_args" for field in request.fields
         ):
             criterion = specification.criterion(request.target)
             if criterion is None:
                 return self._refuse_form_target()
-            from metis.wizard.application.matching.matcher import validate_metric_args
+            from metis.wizard.application.matching.matcher import validate_grader_args
 
             try:
-                args = json.loads(values.get("metric_args", "{}"))
-                validate_metric_args(criterion.metric_fqn, args)
+                args = json.loads(values.get("grader_args", "{}"))
+                validate_grader_args(criterion.grader_fqn, args)
             except (ValueError, TypeError) as exc:
                 return self._refuse_field_edit(f"Invalid Grader parameters: {exc}")
-            criterion.metric_args = args
+            criterion.grader_args = args
             return
 
         # A target keeps a manual child attached to the parent that offered the action. The
@@ -512,7 +512,7 @@ class StepDriver:
             issued_ids=state.issued_ids,
             user_typed=state.user_typed,
         )
-        # The new criterion has no metric yet; match it, and only it, if a matcher is wired.
+        # The new criterion has no grader yet; match it, and only it, if a matcher is wired.
         self._match_new(behaviour, {c.id for c in behaviour.criteria[:-1]})
 
     def _handle_choice(
@@ -542,12 +542,12 @@ class StepDriver:
             if criterion is None:
                 return
             state.pending = FormRequest(
-                prompt=f"Set parameters for {criterion.name}. Enter a JSON object. Current values: {json.dumps(criterion.metric_args)}",
+                prompt=f"Set parameters for {criterion.name}. Enter a JSON object. Current values: {json.dumps(criterion.grader_args)}",
                 fields=[
                     FormField(
-                        id="metric_args",
+                        id="grader_args",
                         label="Grader parameters",
-                        placeholder=json.dumps(criterion.metric_args),
+                        placeholder=json.dumps(criterion.grader_args),
                     )
                 ],
                 target=criterion.id,
@@ -878,7 +878,7 @@ class StepDriver:
         return patch.op is PatchOp.ADD and patch.path.endswith(prefix)
 
     def _match_new(self, behaviour: Behaviour, before_ids: set[str]) -> None:
-        """Resolve a metric for any criterion the suggestion just added under this behaviour."""
+        """Resolve a grader for any criterion the suggestion just added under this behaviour."""
         if self.matcher is None:
             return
         from metis.wizard.application.matching import rematch
@@ -1094,7 +1094,7 @@ class StepDriver:
             state.step = InterviewStep.BEHAVIOURS
 
     def match(self, state: DriverState) -> None:
-        """Resolve metrics for criteria that lack them.
+        """Resolve graders for criteria that lack them.
 
         A separate pass, run after criteria generation rather than folded into it. If the
         provider is unreachable every criterion falls through to the generated judge, which is
@@ -1110,7 +1110,7 @@ class StepDriver:
             self.pending_warnings.append(
                 Warning(
                     text=(
-                        "I couldn't reach the service that picks metrics, so I've written "
+                        "I couldn't reach the service that picks graders, so I've written "
                         "a custom judge for each criterion instead. The evaluation still "
                         "runs."
                     ),

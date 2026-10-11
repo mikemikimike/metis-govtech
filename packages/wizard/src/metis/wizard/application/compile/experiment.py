@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from metis.wizard.application.matching.matcher import validate_metric_args
+from metis.wizard.application.matching.matcher import validate_grader_args
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -35,7 +35,7 @@ def compile_experiment(
     for behaviour in document.behaviours():
         for criterion in behaviour.criteria:
             try:
-                validate_metric_args(criterion.metric_fqn, criterion.metric_args)
+                validate_grader_args(criterion.grader_fqn, criterion.grader_args)
             except (ValueError, TypeError) as exc:
                 errors.append(f"Criterion {criterion.id}: {exc}")
     if errors:

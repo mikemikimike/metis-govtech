@@ -404,7 +404,7 @@ async def _worker(
                     scenario=scenario.id,
                     task_id=task_id,
                     trial_index=trial_index,
-                    metric_refs=scenario.metric_refs,
+                    grader_refs=scenario.grader_refs,
                     max_turns=scenario.max_turns,
                     timeout_minutes=scenario.timeout_minutes,
                     response_wait_ms=scenario.response_wait_ms,

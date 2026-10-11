@@ -50,6 +50,7 @@ from metis.wizard.contracts.documents import (
     ExtractedDocument,
     InterviewDocument,
 )
+from metis.wizard.contracts.grader_spec import GraderParam, GraderSpec
 from metis.wizard.contracts.interview_state import (
     CapabilityConfidence,
     CapabilityEvidence,
@@ -58,7 +59,6 @@ from metis.wizard.contracts.interview_state import (
     Perspective,
     Turn,
 )
-from metis.wizard.contracts.metric_spec import MetricParam, MetricSpec
 from metis.wizard.contracts.output import (
     BehaviourDraft,
     ClarifyResult,
@@ -140,8 +140,8 @@ __all__ = [
     "DocumentExtractionErrorCode",
     "DocumentExtractionResult",
     "ExtractedDocument",
-    "MetricParam",
-    "MetricSpec",
+    "GraderParam",
+    "GraderSpec",
     "Option",
     "OptionId",
     "Patch",

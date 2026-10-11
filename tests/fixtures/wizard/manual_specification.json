@@ -28,8 +28,8 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Synthesis faithfulness: Checks that the answer uses its evidence."
               },
-              "metric_fqn": "metis.library.metrics.SynthesisFaithfulnessMetric",
-              "metric_args": {}
+              "grader_fqn": "metis.library.graders.SynthesisFaithfulnessGrader",
+              "grader_args": {}
             },
             {
               "id": "AC-1-2",
@@ -39,8 +39,8 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
               },
-              "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-              "metric_args": {}
+              "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+              "grader_args": {}
             }
           ]
         },
@@ -58,8 +58,8 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Synthesis faithfulness: Checks that the answer uses its evidence."
               },
-              "metric_fqn": "metis.library.metrics.SynthesisFaithfulnessMetric",
-              "metric_args": {}
+              "grader_fqn": "metis.library.graders.SynthesisFaithfulnessGrader",
+              "grader_args": {}
             },
             {
               "id": "AC-2-2",
@@ -69,8 +69,8 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
               },
-              "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-              "metric_args": {}
+              "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+              "grader_args": {}
             }
           ]
         },
@@ -88,8 +88,8 @@
                 "when": "Recover after a failed search.",
                 "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
               },
-              "metric_fqn": "metis.library.metrics.TurnBudgetMetric",
-              "metric_args": {}
+              "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+              "grader_args": {}
             }
           ]
         }

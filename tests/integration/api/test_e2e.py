@@ -57,4 +57,4 @@ def test_interview_lifecycle_compiles_an_engine_valid_experiment(
 
     experiment = Specification.load_file(experiment_path)
     assert experiment.scenarios
-    assert all(scenario.metric_refs for scenario in experiment.resolved_tasks())
+    assert all(scenario.grader_refs for scenario in experiment.resolved_tasks())

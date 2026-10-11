@@ -1,4 +1,4 @@
-"""Single source of truth for metric aggregation across report outputs."""
+"""Single source of truth for grader aggregation across report outputs."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from metis.engine.reporting._types import SessionReport, TurnReport
 
 
-class MetricAggregate(TypedDict):
+class GraderAggregate(TypedDict):
     pass_count: int
     fail: int
     skip: int
@@ -19,25 +19,25 @@ class MetricAggregate(TypedDict):
     avg_score: float
 
 
-def aggregate_metrics(
+def aggregate_graders(
     turn_results: list[TurnReport],
     session_results: list[SessionReport] | None = None,
-) -> dict[str, MetricAggregate]:
+) -> dict[str, GraderAggregate]:
     """Aggregate pass/fail/skip counts and scores by Criterion identity.
 
-    Processes both per-trace metrics (from turn_results) and session-level
-    metrics (from session_results) into a single unified summary.
+    Processes both per-trace graders (from turn_results) and session-level
+    graders (from session_results) into a single unified summary.
     """
-    agg: dict[str, MetricAggregate] = {}
+    agg: dict[str, GraderAggregate] = {}
 
     for result in turn_results:
-        for metric in result.get("metrics", []):
-            _accumulate(agg, metric)
+        for grader in result.get("graders", []):
+            _accumulate(agg, grader)
 
     if session_results:
         for sess in session_results:
-            for metric in sess.get("metrics", []):
-                _accumulate(agg, metric)
+            for grader in sess.get("graders", []):
+                _accumulate(agg, grader)
 
     for entry in agg.values():
         evaluated = entry["pass_count"] + entry["fail"]
@@ -49,10 +49,10 @@ def aggregate_metrics(
     return agg
 
 
-def _accumulate(agg: dict[str, MetricAggregate], metric: Mapping[str, Any]) -> None:
-    name = metric.get("criterion_id") or metric["name"]
+def _accumulate(agg: dict[str, GraderAggregate], grader: Mapping[str, Any]) -> None:
+    name = grader.get("criterion_id") or grader["name"]
     if name not in agg:
-        agg[name] = MetricAggregate(
+        agg[name] = GraderAggregate(
             pass_count=0,
             fail=0,
             skip=0,
@@ -61,10 +61,10 @@ def _accumulate(agg: dict[str, MetricAggregate], metric: Mapping[str, Any]) -> N
             avg_score=0.0,
         )
     entry = agg[name]
-    if metric.get("skipped"):
+    if grader.get("skipped"):
         entry["skip"] += 1
-    elif metric["success"]:
+    elif grader["success"]:
         entry["pass_count"] += 1
     else:
         entry["fail"] += 1
-    entry["scores"].append(metric["score"])
+    entry["scores"].append(grader["score"])

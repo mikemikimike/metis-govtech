@@ -212,11 +212,11 @@ of the library.
 
 ## Package-Specific Notes
 
-The metric catalogue now reads from **metis-library** (`metis.library.metrics.*`), so
+The grader catalogue now reads from **metis-library** (`metis.library.graders.*`), so
 `application/matching/library_catalogue.py` is back on the DAG. It enumerates the classes
-re-exported flat from `metis.library.metrics.__init__` and emits canonical FQNs
-`metis.library.metrics.<Class>`; the `MetricSpec`/`MetricParam` types it returns live in
-`contracts/metric_spec.py`.
+re-exported flat from `metis.library.graders.__init__` and emits canonical FQNs
+`metis.library.graders.<Class>`; the `GraderSpec`/`GraderParam` types it returns live in
+`contracts/grader_spec.py`.
 
 The compiler validates the shared Specification in `metis.core.specification` and writes one
 `specification.yaml`. It does not depend on the engine. Tasks own execution references,

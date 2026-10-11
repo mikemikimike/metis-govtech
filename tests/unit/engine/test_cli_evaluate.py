@@ -14,12 +14,12 @@ from metis.engine import cli
 from metis.engine.cli import EvaluationOutcome, app
 from metis.engine.evaluation.types import (
     EvalResult,
-    MetricResult,
+    GraderResult,
     SessionResult,
     TurnResult,
 )
 from metis.engine.simulation.types import (
-    MetricRef,
+    GraderRef,
     TrialConfig,
     TrialOutcome,
     TrialRecord,
@@ -27,7 +27,7 @@ from metis.engine.simulation.types import (
 
 runner = CliRunner()
 
-MINIMAL_EXPERIMENT = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      metric_fqn: metis.library.metrics.TurnBudgetMetric\n      metric_args: {}\n"
+MINIMAL_EXPERIMENT = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
 
 
 def _write_snapshot(experiment_dir: Path, content: str = MINIMAL_EXPERIMENT) -> Path:
@@ -47,7 +47,7 @@ def _write_record(
         config=TrialConfig(
             persona="alice",
             scenario="task-1",
-            metric_refs=[MetricRef(fqn="example.metrics.TestMetric", args={})],
+            grader_refs=[GraderRef(fqn="example.graders.TestGrader", args={})],
         ),
         outcome=TrialOutcome(
             stop_reason="goal_achieved",
@@ -62,9 +62,9 @@ def _write_record(
     return record_path
 
 
-def _metric_eval_result() -> EvalResult:
-    turn_metrics = [
-        MetricResult(
+def _grader_eval_result() -> EvalResult:
+    turn_graders = [
+        GraderResult(
             name="Routing Accuracy",
             score=0.9,
             reason="Correct route",
@@ -74,7 +74,7 @@ def _metric_eval_result() -> EvalResult:
             input_tokens=120,
             output_tokens=30,
         ),
-        MetricResult(
+        GraderResult(
             name="Turn Budget",
             score=1.0,
             reason="Within budget",
@@ -82,7 +82,7 @@ def _metric_eval_result() -> EvalResult:
             skipped=False,
         ),
     ]
-    session_metric = MetricResult(
+    session_grader = GraderResult(
         name="Session Efficiency",
         score=0.7,
         reason="Efficient session",
@@ -95,7 +95,7 @@ def _metric_eval_result() -> EvalResult:
                 llm_test_case=LLMTestCase(
                     input="hi", actual_output="ok", name="trace-1"
                 ),
-                metric_results=turn_metrics,
+                grader_results=turn_graders,
             )
         ],
         session_results=[
@@ -103,7 +103,7 @@ def _metric_eval_result() -> EvalResult:
                 conversational_test_case=ConversationalTestCase(
                     turns=[Turn(role="user", content="hi")], name="session-1"
                 ),
-                metric_results=[session_metric],
+                grader_results=[session_grader],
             )
         ],
     )
@@ -252,7 +252,7 @@ def test_evaluation_overwrites_the_report_on_rerun(monkeypatch, tmp_path: Path) 
     )
     monkeypatch.setattr(
         "metis.engine.evaluation.evaluate",
-        lambda *_args, **_kwargs: _metric_eval_result(),
+        lambda *_args, **_kwargs: _grader_eval_result(),
     )
     report_versions = iter(("first", "second"))
 
@@ -314,7 +314,7 @@ def test_evaluation_progress_advances_for_success_and_soft_failure(
     )
     monkeypatch.setattr(
         "metis.engine.evaluation.evaluate",
-        lambda *_args, **_kwargs: _metric_eval_result(),
+        lambda *_args, **_kwargs: _grader_eval_result(),
     )
     monkeypatch.setattr(
         "metis.engine.reporting.generate_report", lambda *_args, **_kwargs: None
@@ -347,8 +347,8 @@ def test_evaluation_progress_advances_for_success_and_soft_failure(
     assert "alice x task-1 — EVALUATING" in evaluation_log
     assert "alice x task-1 — DONE" in evaluation_log
     assert "alice x task-1 — FAILED — trace unavailable" in evaluation_log
-    assert '"fqn": "example.metrics.TestMetric"' in evaluation_log
-    assert '"metric": "Routing Accuracy"' in evaluation_log
+    assert '"fqn": "example.graders.TestGrader"' in evaluation_log
+    assert '"grader": "Routing Accuracy"' in evaluation_log
     assert '"score": 0.9' in evaluation_log
     assert '"success": true' in evaluation_log
     assert '"reason": "Correct route"' in evaluation_log
@@ -356,8 +356,8 @@ def test_evaluation_progress_advances_for_success_and_soft_failure(
     assert '"input_tokens": 120' in evaluation_log
     assert '"output_tokens": 30' in evaluation_log
     assert '"scope": "session"' in evaluation_log
-    assert '"metric": "Session Efficiency"' in evaluation_log
-    assert '"metric": "Turn Budget"' in evaluation_log
+    assert '"grader": "Session Efficiency"' in evaluation_log
+    assert '"grader": "Turn Budget"' in evaluation_log
     assert '"skipped": false' in evaluation_log
 
     cli._update_evaluation_progress(

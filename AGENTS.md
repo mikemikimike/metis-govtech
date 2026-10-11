@@ -78,9 +78,9 @@ Key invariants:
 
 ## Architecture
 
-- **metis-core:** Domain schemas (Trace, Span, Score, etc.), abstract interfaces (BaseMetric, BaseTraceIngester), MetricRegistry, plugin discovery via entry points.
-- **metis-library:** Shared catalog of metrics, skills, and reusable components; referenced by FQN from wizard configs and executed by the engine.
-- **metis-engine:** Evaluation runtime — simulation harness, trace extraction (Langfuse), metric execution, and reporting. CLI: `metis engine simulate --input-dir <path>`.
+- **metis-core:** Domain schemas (Trace, Span, Score, etc.), abstract interfaces (BaseTraceIngester), plugin discovery via entry points.
+- **metis-library:** Shared catalog of graders, skills, and reusable components; referenced by FQN from wizard configs and executed by the engine.
+- **metis-engine:** Evaluation runtime — simulation harness, trace extraction (Langfuse), grader execution, and reporting. CLI: `metis engine simulate --input-dir <path>`.
 - **metis-wizard:** Interactive CLI for generating evaluation config YAML. CLI: `metis wizard init`.
 - **metis-insights:** Trajectory diagnostics and compliance analytics. CLI: `metis insights report --results-file <path>`.
 - **apps/web:** React browser client. It calls `apps/api` over HTTP and stores Interview records and

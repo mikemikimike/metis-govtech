@@ -2,13 +2,13 @@
 
 ## Introduction
 
-metis-engine is the evaluation runtime for METIS. It drives a target system through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation metrics, and generates reports. Simulation and evaluation are separate commands, with `run` available for the combined flow.
+metis-engine is the evaluation runtime for METIS. It drives a target system through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation graders, and generates reports. Simulation and evaluation are separate commands, with `run` available for the combined flow.
 
 This guide is for anyone setting up evaluations against a web-based agentic system. By the end, you will have:
 
 - A working local installation
 - A completed evaluation run using the bundled example experiment
-- The knowledge to write your own experiments with custom personas, scenarios, and metrics
+- The knowledge to write your own experiments with custom personas, scenarios, and graders
 
 For the overall METIS architecture and other packages, see the [project README](../../README.md).
 
@@ -51,7 +51,7 @@ Set Langfuse and OpenAI credentials, plus the credentials for your selected Orca
 | Group | Variables | Purpose |
 |-------|-----------|---------|
 | Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Trace storage and retrieval |
-| OpenAI | `OPENAI_API_KEY` | Powers the LLM judge (metrics) and simulated user agent |
+| OpenAI | `OPENAI_API_KEY` | Powers the LLM judge (graders) and simulated user agent |
 | Orca API runner | `ORCA_API_URL`, `ORCA_API_KEY` | Target URL and API key for the example experiment |
 | Orca browser runner | `ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD` | Target URL and login credentials when selecting the browser runner |
 
@@ -80,7 +80,7 @@ Run the bundled example experiment to verify everything works end-to-end.
 
 ### The Example Experiment
 
-The directory `packages/engine/example-experiment/` contains a complete experiment definition written for Orca. The personas, task descriptions, fixture files, and metric selections assume Orca's specific multi-agent architecture.
+The directory `packages/engine/example-experiment/` contains a complete experiment definition written for Orca. The personas, task descriptions, fixture files, and grader selections assume Orca's specific multi-agent architecture.
 
 ```
 example-experiment/
@@ -136,7 +136,7 @@ The combined `run` command closes the Simulation TUI before it starts the evalua
 
 1. **Simulate** — the user agent interacts with Orca through the selected runner
 2. **Extract** — traces are fetched from Langfuse
-3. **Evaluate** — metrics score the extracted traces
+3. **Evaluate** — graders score the extracted traces
 4. **Report** — results are written to disk
 
 ### Where Results Land
@@ -159,7 +159,7 @@ experiments/orca-eval-20260730-143022/
 
 The structure of `report.json` is defined by a [JSON Schema](../../packages/engine/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
 
-Use `logs/evaluate.log` to review extraction, each configured metric, the actual judge model reported by DeepEval, metric scores, pass or fail results, reasons, errors, cost, token counts, soft failures, hard failures, and final record counts for the latest evaluation attempt.
+Use `logs/evaluate.log` to review extraction, each configured grader, the actual judge model reported by DeepEval, grader scores, pass or fail results, reasons, errors, cost, token counts, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
 See the [report contract](report.md) for the report's scoring,
 status, failure-evidence, and information-architecture rules.
@@ -324,17 +324,17 @@ response_wait_ms: 450000
 max_run_retries: 0
 ```
 
-### Metric References
+### Grader References
 
-Each Criterion specifies a metric class in `metric_fqn` and its constructor
-arguments in `metric_args`. Tasks select Criterion IDs through `criterion_refs`.
+Each Criterion specifies a grader class in `grader_fqn` and its constructor
+arguments in `grader_args`. Tasks select Criterion IDs through `criterion_refs`.
 **Plain (no parameters):**
 
-Set these fields on a Criterion that uses the metric's defaults:
+Set these fields on a Criterion that uses the grader's defaults:
 
 ```yaml
-metric_fqn: metis.library.metrics.RoutingAccuracyMetric
-metric_args: {}
+grader_fqn: metis.library.graders.RoutingAccuracyGrader
+grader_args: {}
 ```
 
 **With parameters:**
@@ -350,21 +350,21 @@ criteria:
       given: a request for a Q3 revenue report
       when: the session ends
       then: the session used no more than 8 turns
-    metric_fqn: metis.library.metrics.TurnBudgetMetric
-    metric_args:
+    grader_fqn: metis.library.graders.TurnBudgetGrader
+    grader_args:
       max_turns: 8
 ```
 
-Use `metric_args: {}` when the metric needs no explicit arguments. Parameters
-are passed to the metric class's `__init__`. See [Writing Custom Metrics](#writing-custom-metrics).
+Use `grader_args: {}` when the grader needs no explicit arguments. Parameters
+are passed to the grader class's `__init__`. See [Writing Custom Graders](#writing-custom-graders).
 
-Two Criteria can use the same metric with different arguments. Each receives a
+Two Criteria can use the same grader with different arguments. Each receives a
 separate score identified by its Criterion ID. A turn-budget score does not
 change the engine's execution turn limit.
 
 ### Working Reference
 
-For a complete working example with personas, scenarios, fixtures, and metrics already configured, see [`packages/engine/example-experiment/`](../../packages/engine/example-experiment/) and its [README](../../packages/engine/example-experiment/README.md).
+For a complete working example with personas, scenarios, fixtures, and graders already configured, see [`packages/engine/example-experiment/`](../../packages/engine/example-experiment/) and its [README](../../packages/engine/example-experiment/README.md).
 
 ---
 
@@ -451,7 +451,7 @@ The Simulation TUI and evaluation progress are visible regardless of verbosity l
 | Variable | Description |
 |----------|-------------|
 | `HEADED=true` | Show the browser window (useful for debugging) |
-| `DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE` | Override DeepEval's per-metric timeout (default: 300s) |
+| `DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE` | Override DeepEval's per-grader timeout (default: 300s) |
 
 ### Interrupt Handling
 
@@ -464,22 +464,22 @@ The Simulation TUI auto-disables when stderr is not a terminal, such as in CI or
 
 ---
 
-## Writing Custom Metrics
+## Writing Custom Graders
 
-The built-in metrics in `metis.library.metrics` cover common evaluation dimensions, but you can write your own for domain-specific needs.
+The built-in graders in `metis.library.graders` cover common evaluation dimensions, but you can write your own for domain-specific needs.
 
-### Metric Basics
+### Grader Basics
 
-A metric is a Python class that:
-1. Extends `SyncBaseMetric` (from `metis.library.metrics`)
+A grader is a Python class that:
+1. Extends `MetisTurnGrader` (from `metis.library.graders`)
 2. Defines a `tags` ClassVar
 3. Implements `measure(self, test_case: LLMTestCase) -> float`
 4. Implements `is_successful(self) -> bool`
 5. Exposes a `__name__` property
 
-### Code-Graded Metric Example
+### Code-Graded Grader Example
 
-A metric that programmatically checks a property of the trace without calling an LLM judge:
+A grader that programmatically checks a property of the trace without calling an LLM judge:
 
 ```python
 """Check that the session completed within the allowed turn budget."""
@@ -488,14 +488,15 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase
 
-from metis.library.metrics._base import SyncBaseMetric
-from metis.library.metrics._types import LlmTestCaseMetadata
+from metis.library.graders._base import MetisTurnGrader, mark_skipped
+from metis.library.graders._types import LlmTestCaseMetadata
 
 
-class TurnBudgetMetric(SyncBaseMetric):
+class TurnBudgetGrader(MetisTurnGrader):
     """Session completed within the allowed turn budget."""
 
     tags: ClassVar[tuple[str, ...]] = ("universal", "per-turn", "code-graded")
+    async_mode = False
 
     def __init__(self, threshold: float = 1.0, max_turns: int = 10):
         self.threshold = threshold
@@ -509,11 +510,7 @@ class TurnBudgetMetric(SyncBaseMetric):
         total_turns = metadata.get("total_turns")
 
         if total_turns is None:
-            self.skipped = True
-            self.score = 1.0
-            self.reason = "total_turns not present in metadata — skipped"
-            self.success = True
-            return self.score
+            return mark_skipped(self, "total_turns not present in metadata")
 
         self.score = 1.0 if total_turns <= self.max_turns else 0.0
         self.reason = f"Session used {total_turns} turn(s) (budget: {self.max_turns})"
@@ -528,9 +525,9 @@ class TurnBudgetMetric(SyncBaseMetric):
         return self.success
 ```
 
-### Judge-Graded Metric Example
+### Judge-Graded Grader Example
 
-A metric that uses GEval-style prompting to assess a qualitative dimension:
+A grader that uses GEval-style prompting to assess a qualitative dimension:
 
 ```python
 """Evaluate the quality of direct chatbot responses."""
@@ -539,19 +536,20 @@ from typing import ClassVar, cast
 
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from metis.library.metrics._base import (
+from metis.library.graders._base import (
     EVIDENCE_INSTRUCTION,
-    SyncBaseMetric,
+    MetisTurnGrader,
     _ContextAwareGEval,
 )
-from metis.library.metrics._judge import _get_judge_model
-from metis.library.metrics._types import LlmTestCaseMetadata
+from metis.library.graders._judge import _get_judge_model
+from metis.library.graders._types import LlmTestCaseMetadata
 
 
-class ResponseQualityMetric(SyncBaseMetric):
+class ResponseQualityGrader(MetisTurnGrader):
     """Evaluates whether the response is helpful, appropriate, and concise."""
 
     tags: ClassVar[tuple[str, ...]] = ("universal", "per-turn", "judge-graded")
+    async_mode = False
 
     def __init__(self, threshold: float = 0.6):
         self.threshold = threshold
@@ -591,7 +589,7 @@ class ResponseQualityMetric(SyncBaseMetric):
         self.score = geval.score
         self.reason = geval.reason
         self.success = (self.score or 0) >= self.threshold
-        self._absorb_geval_cost(geval)
+        self._accrue_cost(geval.evaluation_cost)
         return self.score or 0.0
 
     @property
@@ -602,24 +600,24 @@ class ResponseQualityMetric(SyncBaseMetric):
         return self.success
 ```
 
-### Making Your Metric Discoverable
+### Making Your Grader Discoverable
 
-Place your metric in any importable Python module and set its fully-qualified name on a Criterion:
+Place your grader in any importable Python module and set its fully-qualified name on a Criterion:
 
 ```yaml
-metric_fqn: my_package.metrics.ResponseQualityMetric
-metric_args: {}
+grader_fqn: my_package.graders.ResponseQualityGrader
+grader_args: {}
 ```
 
-The module must be importable from the environment where `metis engine evaluate` runs. If it's part of the METIS workspace, place it under `packages/library/src/metis/library/metrics/` and re-export from `__init__.py`.
+The module must be importable from the environment where `metis engine evaluate` runs. If it's part of the METIS workspace, place it under `packages/library/src/metis/library/graders/` and re-export from `__init__.py`.
 
 ### Accepting Parameters from YAML
 
 Set constructor arguments on the Criterion in `specification.yaml`:
 
 ```yaml
-metric_fqn: my_package.metrics.TurnBudgetMetric
-metric_args:
+grader_fqn: my_package.graders.TurnBudgetGrader
+grader_args:
   max_turns: 4
 ```
 
@@ -627,7 +625,7 @@ The YAML values are passed as keyword arguments to `__init__`.
 
 ### The Tags Convention
 
-Every metric must define a `tags` ClassVar as a tuple of strings:
+Every grader must define a `tags` ClassVar as a tuple of strings:
 
 ```python
 tags: ClassVar[tuple[str, ...]] = ("orchestration", "per-turn", "code-graded")
@@ -635,7 +633,7 @@ tags: ClassVar[tuple[str, ...]] = ("orchestration", "per-turn", "code-graded")
 
 | Dimension | Values | Meaning |
 |-----------|--------|---------|
-| Component | `orchestration`, `analysis`, `presentation`, `universal` | Which system component the metric evaluates |
+| Component | `orchestration`, `analysis`, `presentation`, `universal` | Which system component the grader evaluates |
 | Granularity | `per-turn`, `session-level` | Whether it scores individual turns or the full session |
 | Grading | `code-graded`, `judge-graded` | Whether it uses programmatic logic or an LLM judge |
 
@@ -668,11 +666,11 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 |---------|--------------|-----|
 | "No traces found" or extraction times out | Langfuse timeout too short, bad credentials, or target system not instrumented | Increase `--langfuse-timeout`, verify Langfuse keys in `.env`, confirm your target writes traces to Langfuse |
 | "Fixture not found" error | Path is absolute or has a typo | Use the filename only (relative to `fixtures/`), verify the file exists in the fixtures directory |
-| "Metric import failed" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the metric is installed in your venv |
+| "Grader import failed" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the grader is installed in your venv |
 | Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task’s `response_wait_ms` |
 | Simulation TUI not appearing | Running in a non-TTY environment | Expected — the Simulation TUI requires an interactive terminal. Use linear output or run in a real terminal |
 | Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current turn | Press Ctrl+C a second time to force-abort |
-| "Metric is not a subclass of BaseMetric" | Class doesn't inherit from the correct base | Ensure your metric extends `SyncBaseMetric` or `deepeval.metrics.BaseMetric` |
+| "Grader is not a subclass of BaseMetric" | Class doesn't inherit from the correct base | Ensure your grader extends `MetisTurnGrader`, `MetisSessionGrader`, or `deepeval.metrics.BaseMetric` |
 | Duplicate persona/scenario ID error | Two entries share the same `id` | Use unique IDs for every persona and scenario |
 
 ---
@@ -1025,7 +1023,7 @@ If your target is not browser-based:
 
 3. **Your `.env` only needs your own variables** plus the ones required by the engine core:
    - `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` — needed if you want evaluation (trace extraction)
-   - `OPENAI_API_KEY` — needed for the simulated user agent and LLM-judge metrics
+   - `OPENAI_API_KEY` — needed for the simulated user agent and LLM-judge graders
    - Any variables your own factory reads in `__init__()`
 
 #### Installability Requirement
@@ -1056,7 +1054,7 @@ recorded results to show whether the product meets those Criteria.
 
 The engine freezes the document under the output directory's `inputs/` directory.
 Reporting reads this copy and joins scores by Criterion ID. The report retains
-the metric configuration used for each Criterion.
+the grader configuration used for each Criterion.
 
 #### Schema Reference
 
@@ -1095,8 +1093,8 @@ features:
               given: <string>       # Precondition
               when: <string>        # Action or trigger
               then: <string>        # Expected outcome
-            metric_fqn: <string>
-            metric_args: {}         # Metric constructor arguments
+            grader_fqn: <string>
+            grader_args: {}         # Grader constructor arguments
 
 personas:
   - id: <string>
@@ -1158,8 +1156,8 @@ tasks:
 | `description.given` | Yes | Precondition or setup state |
 | `description.when` | Yes | User action or trigger |
 | `description.then` | Yes | Expected system response or outcome |
-| `metric_fqn` | Yes for execution | Fully-qualified metric class name; drafts can use `null` |
-| `metric_args` | No | Constructor arguments; defaults to `{}` |
+| `grader_fqn` | Yes for execution | Fully-qualified grader class name; drafts can use `null` |
+| `grader_args` | No | Constructor arguments; defaults to `{}` |
 
 #### Minimal Example
 
@@ -1188,8 +1186,8 @@ features:
               given: a user asks a factual question
               when: the session ends
               then: the session used no more than 4 turns
-            metric_fqn: metis.library.metrics.TurnBudgetMetric
-            metric_args:
+            grader_fqn: metis.library.graders.TurnBudgetGrader
+            grader_args:
               max_turns: 4
 ```
 
@@ -1197,18 +1195,18 @@ Add the experiment ID, runner, Personas, Scenarios, and Tasks to make a complete
 Specification. The [minimal template](#minimal-template) below shows these fields
 together. Use `measured: true` for Behaviours selected by Tasks. Unmeasured
 Behaviours and their Criteria can remain in the document. Every Criterion needs
-a metric before the engine can load the specification.
+a grader before the engine can load the specification.
 
 ### Langfuse Requirement
 
-The `evaluate` command requires that your target system writes traces to [Langfuse](https://langfuse.com). The engine uses the session ID returned by `Runner.get_session_id()` to fetch traces from Langfuse, then feeds them to your configured metrics.
+The `evaluate` command requires that your target system writes traces to [Langfuse](https://langfuse.com). The engine uses the session ID returned by `Runner.get_session_id()` to fetch traces from Langfuse, then feeds them to your configured graders.
 
 #### What This Means in Practice
 
 | Phase | Langfuse needed? | What happens without it |
 |-------|-----------------|------------------------|
 | `simulate` | No | Simulation runs normally — the engine drives your target and records conversations |
-| `evaluate` | **Yes** | Extraction fails — no traces to score. Metrics receive empty inputs. |
+| `evaluate` | **Yes** | Extraction fails — no traces to score. Graders receive empty inputs. |
 | `run` (combined) | **Yes** (for eval) | Simulation succeeds, evaluation fails at the extraction step |
 
 #### Simulation-Only Fallback
@@ -1226,7 +1224,7 @@ This produces run records with full conversation transcripts in `experiments/<id
 - Collected artifacts
 
 You lose:
-- Metric scoring (requires traces)
+- Grader scoring (requires traces)
 - The structured HTML/JSON report
 - Per-turn internal reasoning visible in traces
 
@@ -1278,8 +1276,8 @@ features:
               given: a user asks a factual question
               when: the session ends
               then: the session used no more than 4 turns
-            metric_fqn: metis.library.metrics.TurnBudgetMetric
-            metric_args:
+            grader_fqn: metis.library.graders.TurnBudgetGrader
+            grader_args:
               max_turns: 4
 
 personas:
@@ -1314,16 +1312,16 @@ Before running `metis engine simulate --input-dir my-experiment/`:
   ```bash
   # For custom runners: whatever your factory needs
   # For evaluation: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_BASE_URL
-  # For user agent / judge metrics: OPENAI_API_KEY
+  # For user agent / judge graders: OPENAI_API_KEY
   ```
 
 - [ ] **Fixtures exist:** Every filename in a Task's `fixtures:` list exists in `my-experiment/fixtures/`.
 
 - [ ] **References match:** Each Task selects an existing Scenario, Persona, and Criteria under measured Behaviours. Every Scenario and measured Behaviour has Task coverage.
 
-- [ ] **Metrics importable:** Every Criterion's `metric_fqn` resolves to an installed class.
+- [ ] **Graders importable:** Every Criterion's `grader_fqn` resolves to an installed class.
   ```bash
-  python -c "from metis.library.metrics import TurnBudgetMetric"
+  python -c "from metis.library.graders import TurnBudgetGrader"
   ```
 
 - [ ] **Dry-run validation:** Load the experiment to catch schema errors early:
@@ -1341,6 +1339,6 @@ Start with the minimal template above, verify it runs end-to-end, then layer in 
 
 1. **Add fixtures** — put files in `fixtures/`, reference them in `tasks[].fixtures`, and ensure your runner handles `file_upload` actions
 2. **Add personas** — write 2-3 personas with contrasting behavioral profiles, select each one in a Task through `persona_ref`
-3. **Add metrics** — start with code-graded metrics (fast, deterministic), then add judge-graded metrics
+3. **Add graders** — start with code-graded graders (fast, deterministic), then add judge-graded graders
 4. **Extend coverage** — define more Features, Behaviours, and Criteria, then select the Criteria in Tasks
-5. **Tune parameters** — adjust Criterion `metric_args` and Task `num_trials` based on observed runs
+5. **Tune parameters** — adjust Criterion `grader_args` and Task `num_trials` based on observed runs

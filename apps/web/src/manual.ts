@@ -1,4 +1,4 @@
-import type { MetricSpec, Specification } from "./transport/api";
+import type { GraderSpec, Specification } from "./transport/api";
 
 export interface ManualPersona {
   id: string;
@@ -20,10 +20,10 @@ export interface ManualTestCase {
   timeout_minutes?: number;
   response_wait_ms?: number;
   max_run_retries?: number | null;
-  scorers: MetricSpec[];
+  scorers: GraderSpec[];
   fixtures: string[];
-  metric_args_text?: Record<string, string>;
-  metric_args?: Record<string, Record<string, unknown>>;
+  grader_args_text?: Record<string, string>;
+  grader_args?: Record<string, Record<string, unknown>>;
 }
 
 export interface ManualExperiment {
@@ -74,9 +74,9 @@ export function scorerParameters(
   task: ManualTestCase,
   fqn: string,
 ): Record<string, unknown> {
-  const text = task.metric_args_text?.[fqn];
+  const text = task.grader_args_text?.[fqn];
   const value: unknown =
-    text === undefined ? (task.metric_args?.[fqn] ?? {}) : JSON.parse(text);
+    text === undefined ? (task.grader_args?.[fqn] ?? {}) : JSON.parse(text);
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new Error("Scorer settings must be a JSON object.");
   return value as Record<string, unknown>;
@@ -104,8 +104,8 @@ export function synthesizeManualSpecification(
           when: scenario?.description.trim() ?? "",
           then: `the result is evaluated by ${scorer.name}: ${scorer.description}`,
         },
-        metric_fqn: scorer.fqn,
-        metric_args: scorerParameters(task, scorer.fqn),
+        grader_fqn: scorer.fqn,
+        grader_args: scorerParameters(task, scorer.fqn),
       })),
     };
   });
