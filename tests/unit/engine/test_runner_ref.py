@@ -39,7 +39,7 @@ class TestRunnerRefField:
                     "persona_ref": "p1",
                     "fixtures": [],
                     "num_trials": 1,
-                    "criterion_refs": ["AC-1-1"],
+                    "behaviour_refs": ["EB-1"],
                 }
             ],
             "features": [
@@ -212,7 +212,7 @@ class TestRunnerRefValidation:
                     "persona_ref": "p1",
                     "fixtures": [],
                     "num_trials": 1,
-                    "criterion_refs": ["AC-1-1"],
+                    "behaviour_refs": ["EB-1"],
                 }
             ],
             "features": [

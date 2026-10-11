@@ -141,7 +141,7 @@ system:
     change. A new Scenario draft may suggest fixture names only from `<available_fixture_names>`;
     these are proposals for user review. Persona drafts use `name` and `description`. Scenario drafts
     use `name`, `description`, and `tasks`. Each Task draft has `persona_ref`,
-    `criterion_refs`, and `fixtures`. The application assigns Task IDs.
+    `behaviour_refs`, and `fixtures`. The application assigns Task IDs.
 
     Two semantic fields you may never write, at any step:
       - a behaviour's `measured` — that is the user's decision alone
@@ -389,7 +389,7 @@ model_calls:
     Draft the whole set of scenarios in one go. A scenario is one simulated situation. It can
     exercise several behaviours at once, and one behaviour can be probed by several scenarios.
 
-    Every behaviour with measured=true must be covered by at least one scenario. Select criterion_refs from each measured Behaviour in Tasks. Select one persona_ref
+    Every behaviour with measured=true must be covered by at least one scenario. Select measured Behaviour IDs in each Task's behaviour_refs. Every selected Behaviour runs all its Criteria. Select one persona_ref
     per Task. Every Scenario needs at least one Task. Those, the
     description, and any fixture suggestions are the Scenario draft. Suggest only available file
     names. The user reviews those suggestions and sets the trial count.

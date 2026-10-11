@@ -45,13 +45,13 @@ class PersonaDraft(_StrictDraft):
 class TaskDraft(_StrictDraft):
     scenario_ref: str
     persona_ref: str
-    criterion_refs: list[str]
+    behaviour_refs: list[str]
     fixtures: list[str] = Field(default_factory=list)
 
 
 class ScenarioTaskDraft(_StrictDraft):
     persona_ref: str
-    criterion_refs: list[str]
+    behaviour_refs: list[str]
     fixtures: list[str] = Field(default_factory=list)
 
 

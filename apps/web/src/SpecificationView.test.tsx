@@ -161,7 +161,7 @@ test("the document keeps node names and descriptions in their presentation roles
         timeout_minutes: 15,
         response_wait_ms: 300000,
         max_run_retries: null,
-        criterion_refs: ["AC-1-1"],
+        behaviour_refs: ["EB-1"],
       },
     ],
     scenarios: [

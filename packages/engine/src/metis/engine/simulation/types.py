@@ -394,16 +394,18 @@ class Specification(CoreSpecification):
         scenario = self.scenario(task.scenario_ref)
         assert scenario is not None
         refs = []
-        for cid in task.criterion_refs:
-            criterion = self.criterion(cid)
-            assert criterion is not None and criterion.grader_fqn
-            refs.append(
-                GraderRef(
-                    criterion_id=cid,
-                    fqn=criterion.grader_fqn,
-                    args=criterion.grader_args,
+        for behaviour_id in task.behaviour_refs:
+            behaviour = self.behaviour(behaviour_id)
+            assert behaviour is not None
+            for criterion in behaviour.criteria:
+                assert criterion.grader_fqn
+                refs.append(
+                    GraderRef(
+                        criterion_id=criterion.id,
+                        fqn=criterion.grader_fqn,
+                        args=criterion.grader_args,
+                    )
                 )
-            )
         return Scenario(
             id=scenario.id,
             task_id=task.id,

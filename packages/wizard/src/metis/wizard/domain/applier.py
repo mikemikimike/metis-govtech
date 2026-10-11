@@ -132,7 +132,7 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
             "behaviours": {"id", "name", "description", "criteria"},
             "criteria": {"id", "name", "description"},
             "personas": {"id", "name", "description"},
-            "tasks": {"id", "scenario_ref", "persona_ref", "criterion_refs"},
+            "tasks": {"id", "scenario_ref", "persona_ref", "behaviour_refs"},
             "scenarios": {
                 "id",
                 "name",

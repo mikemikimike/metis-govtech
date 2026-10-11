@@ -113,7 +113,7 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
                         tasks=[
                             {
                                 "persona_ref": "impatient-executive-2",
-                                "criterion_refs": [],
+                                "behaviour_refs": [],
                                 "fixtures": ["policy.md"],
                             }
                         ],
@@ -199,7 +199,7 @@ def test_an_unavailable_scenario_fixture_rejects_only_its_patch() -> None:
                     tasks=[
                         {
                             "persona_ref": "impatient-executive",
-                            "criterion_refs": ["AC-1-1"],
+                            "behaviour_refs": ["EB-1"],
                             "fixtures": ["malformed_dataset.csv"],
                         }
                     ],
@@ -214,7 +214,7 @@ def test_an_unavailable_scenario_fixture_rejects_only_its_patch() -> None:
                     tasks=[
                         {
                             "persona_ref": "impatient-executive",
-                            "criterion_refs": ["AC-1-1"],
+                            "behaviour_refs": ["EB-1"],
                             "fixtures": ["policy.md"],
                         }
                     ],
@@ -653,7 +653,7 @@ def test_materializer_uses_dot_free_ids_for_every_specification_node() -> None:
             tasks=[
                 {
                     "persona_ref": persona.id,
-                    "criterion_refs": [],
+                    "behaviour_refs": [],
                     "fixtures": [],
                 }
             ],

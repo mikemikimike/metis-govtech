@@ -232,11 +232,11 @@
           "title": "Num Trials",
           "type": "integer"
         },
-        "criterion_refs": {
+        "behaviour_refs": {
           "items": {
             "type": "string"
           },
-          "title": "Criterion Refs",
+          "title": "Behaviour Refs",
           "type": "array"
         },
         "max_turns": {

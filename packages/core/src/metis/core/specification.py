@@ -206,13 +206,8 @@ class Specification(BaseModel):
         return self.experiment.trial_count()
 
     def scenarios_covering(self, behaviour_id: str) -> list[Scenario]:
-        criteria = {
-            c.id for b in self.behaviours() if b.id == behaviour_id for c in b.criteria
-        }
         covered = {
-            t.scenario_ref
-            for t in self.tasks
-            if criteria.intersection(t.criterion_refs)
+            t.scenario_ref for t in self.tasks if behaviour_id in t.behaviour_refs
         }
         return [s for s in self.scenarios if s.id in covered]
 
@@ -243,7 +238,10 @@ class Specification(BaseModel):
         for criterion in [c for b in self.behaviours() for c in b.criteria]:
             if not criterion.grader_fqn:
                 errors.append(f"Criterion {criterion.id} needs a Grader.")
-        measured = {c.id for b in self.measured_behaviours() for c in b.criteria}
+        measured = {b.id for b in self.measured_behaviours()}
+        for behaviour in self.measured_behaviours():
+            if not behaviour.criteria:
+                errors.append(f"Measured Behaviour {behaviour.id} needs a Criterion.")
         for task in self.tasks:
             if any(char in task.id for char in ("/", "\\", "\x00")) or task.id in {
                 ".",
@@ -256,14 +254,12 @@ class Specification(BaseModel):
                 errors.append(f"Task {task.id} needs an existing Scenario and Persona.")
             if task.num_trials < 1:
                 errors.append(f"Task {task.id} needs at least one Trial.")
-            if not task.criterion_refs or any(
-                ref not in measured for ref in task.criterion_refs
+            if not task.behaviour_refs or any(
+                ref not in measured for ref in task.behaviour_refs
             ):
-                errors.append(
-                    f"Task {task.id} must select Criteria of measured Behaviours."
-                )
-            if len(set(task.criterion_refs)) != len(task.criterion_refs):
-                errors.append(f"Task {task.id} repeats a Criterion.")
+                errors.append(f"Task {task.id} must select measured Behaviours.")
+            if len(set(task.behaviour_refs)) != len(task.behaviour_refs):
+                errors.append(f"Task {task.id} repeats a Behaviour.")
             if len(set(task.fixtures)) != len(task.fixtures):
                 errors.append(f"Task {task.id} repeats a fixture.")
             if any(
@@ -294,6 +290,6 @@ def collect_specification_ids(specification: Specification) -> set[str]:
         *(persona.id for persona in specification.personas),
         *(scenario.id for scenario in specification.scenarios),
         *(task.id for task in specification.tasks),
-        *(ref for task in specification.tasks for ref in task.criterion_refs),
+        *(ref for task in specification.tasks for ref in task.behaviour_refs),
     }
     return ids

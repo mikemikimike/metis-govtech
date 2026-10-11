@@ -210,8 +210,8 @@ test("the same Persona and Scenario can have separate test cases and scorer sett
     },
   );
   assert.notDeepEqual(
-    specification.tasks[0].criterion_refs,
-    specification.tasks[1].criterion_refs,
+    specification.tasks[0].behaviour_refs,
+    specification.tasks[1].behaviour_refs,
   );
   first.grader_args_text[budgetScorer.fqn] = "[]";
   assert.ok(

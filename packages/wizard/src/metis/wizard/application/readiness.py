@@ -66,26 +66,21 @@ def scenario_readiness(specification: Specification) -> list[MissingData]:
                 )
             )
     for task in specification.tasks:
-        if not task.criterion_refs or not all(
-            specification.criterion(ref)
-            and any(
-                c.id == ref
-                for b in specification.measured_behaviours()
-                for c in b.criteria
-            )
-            for ref in task.criterion_refs
+        if not task.behaviour_refs or not all(
+            any(b.id == ref for b in specification.measured_behaviours())
+            for ref in task.behaviour_refs
         ):
             gaps.append(
                 _gap(
                     MissingDataCode.SCENARIO_NO_SELECTED_BEHAVIOUR,
                     task.id,
-                    f"{task.id} needs Criteria from a measured Behaviour.",
+                    f"{task.id} needs measured Behaviours.",
                 )
             )
         if (
             task.persona_ref not in persona_ids
             or not specification.scenario(task.scenario_ref)
-            or any(specification.criterion(ref) is None for ref in task.criterion_refs)
+            or any(specification.behaviour(ref) is None for ref in task.behaviour_refs)
         ):
             gaps.append(
                 _gap(

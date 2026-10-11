@@ -376,7 +376,7 @@ def test_raw_scenario_fixtures_are_retried_until_they_match_the_context() -> Non
                         "tasks": [
                             {
                                 "persona_ref": "impatient-executive",
-                                "criterion_refs": ["AC-1-1"],
+                                "behaviour_refs": ["EB-1"],
                                 "fixtures": ["unknown.csv"],
                             }
                         ],

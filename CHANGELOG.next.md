@@ -64,6 +64,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Breaking
 
+- Tasks use `behaviour_refs` to select measured Behaviours. Execution requires each selected Behaviour to have Criteria and evaluates all of them. Criterion score identity stays unchanged (#413).
+
 - Rename `Criterion.metric_fqn`/`metric_args` to `grader_fqn`/`grader_args`, matching
   `GLOSSARY.md`'s **Grader** term for the concept these fields reference (#415).
 
@@ -81,6 +83,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-engine
 
 #### Changed
+
+- Resolve each Task's selected Behaviours to all their Criterion Graders, with separate Criterion IDs and settings in execution and saved Trial records (#413).
 
 - Run, resume, evaluate, and report from `specification.yaml`. Execute explicit Tasks,
   preserve Criterion Grader arguments, and retain Task/Trial/Criterion identity in scores.
@@ -137,6 +141,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `report.html` into the same experiment's `reports/` directory. It owns `Report` and
   `report.schema.json`, and `make ci` checks that schema (#417).
 
+#### Changed
+
+- Expand Task Behaviour selections for plan counts, Criterion score attribution, and missing-result explanations (#413).
+
 ### metis-wizard
 
 #### Added
@@ -184,6 +192,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   model has not supplied them.
 
 #### Changed
+
+- Draft, edit, copy, and validate Task Behaviour selections in the Interview. Export Behaviour references in the shared Specification (#413).
 
 - Wizard prompts now group Features by main product functions and Behaviours by distinct
   expectations for success. Slide creation and revision share one Feature. Explicit deliverable
@@ -326,6 +336,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   field that needs a change, shows what to change, and moves the focus to the first one.
 
 #### Changed
+
+- Use Behaviour references in manual authoring and show Behaviour selections in the Specification pane. Preserve incompatible saved Interviews and show them as unreadable (#413).
 
 - The Specification pane shows Test Cases, their Trial counts, and file choices (#395).
 

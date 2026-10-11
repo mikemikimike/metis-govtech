@@ -230,7 +230,7 @@ def test_a_matched_specification_keeps_them() -> None:
     # the stub embeds everything identically, so matches land on the fallback or a real
     # grader — either way every scenario ends up measured by something, which is the whole
     # difference from the unmatched case above.
-    assert all(task["criterion_refs"] for task in document["tasks"])
+    assert all(task["behaviour_refs"] for task in document["tasks"])
 
 
 def test_every_criterion_ends_up_measured_by_something() -> None:

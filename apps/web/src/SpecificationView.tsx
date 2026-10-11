@@ -327,8 +327,8 @@ export function SpecificationView({
                         <ScenarioRow label="Persona">
                           <Chip>{task.persona_ref}</Chip>
                         </ScenarioRow>
-                        <ScenarioRow label="Criteria">
-                          {task.criterion_refs.map((ref) => (
+                        <ScenarioRow label="Behaviours">
+                          {task.behaviour_refs.map((ref) => (
                             <Chip key={ref}>{ref}</Chip>
                           ))}
                         </ScenarioRow>

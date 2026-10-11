@@ -113,8 +113,8 @@ export type Persona = Schema["Persona"];
 export type Scenario = Schema["Scenario"];
 export type Task = Omit<
   Schema["Task"],
-  "fixtures" | "criterion_refs" | "num_trials"
-> & { fixtures: string[]; criterion_refs: string[]; num_trials: number };
+  "fixtures" | "behaviour_refs" | "num_trials"
+> & { fixtures: string[]; behaviour_refs: string[]; num_trials: number };
 export type Product = Schema["Product"];
 export type Specification = Omit<
   Schema["Specification"],
@@ -231,7 +231,7 @@ function normalizeSpecification(
     tasks: (specification.tasks ?? []).map((task) => ({
       ...task,
       fixtures: task.fixtures ?? [],
-      criterion_refs: task.criterion_refs ?? [],
+      behaviour_refs: task.behaviour_refs ?? [],
       num_trials: task.num_trials ?? 3,
       max_turns: task.max_turns ?? 20,
       timeout_minutes: task.timeout_minutes ?? 15,

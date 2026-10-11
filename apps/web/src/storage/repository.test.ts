@@ -155,6 +155,22 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
         id: "missing-capability-evidence",
         state: { ...state, context: { perspective: "end_user" } },
       });
+      for (const [id, references] of [
+        ["invalid-task-references", [42]],
+        ["missing-task-references", undefined],
+      ]) {
+        tx.objectStore("interviews").put({
+          ...healthy,
+          id,
+          state: {
+            ...state,
+            specification: {
+              ...state.specification,
+              tasks: [{ id: "TC-001", behaviour_refs: references }],
+            },
+          },
+        });
+      }
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     };
@@ -165,9 +181,24 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
     (await repository.list()).map((record) => record.id),
     ["healthy-record"],
   );
-  assert.equal(repository.problems.length, 3);
+  assert.equal(repository.problems.length, 5);
   assert.equal(await repository.read("bad-record"), undefined);
   assert.equal(await repository.read("missing-capability-evidence"), undefined);
+  assert.equal(await repository.read("invalid-task-references"), undefined);
+  assert.equal(await repository.read("missing-task-references"), undefined);
+  const preserved = await new Promise<unknown>((resolve, reject) => {
+    const request = fakeIndexedDB.open("metis-web", 4);
+    request.onsuccess = () => {
+      const row = request.result
+        .transaction("interviews", "readonly")
+        .objectStore("interviews")
+        .get("invalid-task-references");
+      row.onsuccess = () => resolve(row.result);
+      row.onerror = () => reject(row.error);
+    };
+    request.onerror = () => reject(request.error);
+  });
+  assert.ok(preserved);
 });
 
 test("rejects an invalid update before it can replace a healthy record", async () => {
@@ -256,7 +287,7 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
         description: "First scenario",
         scenario_ref: "S-1",
         persona_ref: "P-1",
-        criterion_refs: [],
+        behaviour_refs: [],
         fixtures: ["shared.txt"],
         num_trials: 1,
         max_turns: 20,
@@ -270,7 +301,7 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
         description: "Second scenario",
         scenario_ref: "S-1",
         persona_ref: "P-1",
-        criterion_refs: [],
+        behaviour_refs: [],
         fixtures: ["shared.txt"],
         num_trials: 1,
         max_turns: 20,

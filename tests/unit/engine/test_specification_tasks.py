@@ -75,7 +75,7 @@ def specification() -> Specification:
                     "persona_ref": "P-1",
                     "fixtures": [],
                     "num_trials": 1,
-                    "criterion_refs": ["AC-UNI-22"],
+                    "behaviour_refs": ["B-1"],
                 }
             ],
         }
@@ -83,49 +83,65 @@ def specification() -> Specification:
     short = data["features"][0]["behaviours"][0]["criteria"][0]
     long = {**short, "id": "AC-LONG", "grader_args": {"max_turns": 10}}
     data["features"][0]["behaviours"][0]["criteria"].append(long)
+    data["features"][0]["behaviours"][0]["criteria"].append({**short, "id": "AC-TWIN"})
     first = data["tasks"][0]
-    data["tasks"].append({**first, "id": "TC-002", "criterion_refs": ["AC-LONG"]})
+    data["features"][0]["behaviours"].append(
+        {
+            **data["features"][0]["behaviours"][0],
+            "id": "B-2",
+            "criteria": [{**short, "id": "AC-OTHER"}],
+        }
+    )
+    data["tasks"].append({**first, "id": "TC-002", "behaviour_refs": ["B-2"]})
     return Specification.model_validate(data)
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("result_scope", ["turn", "session"])
 async def test_task_scores_keep_criterion_configuration_and_trial_identity(
     tmp_path: Path,
+    result_scope: str,
 ) -> None:
     import asyncio
 
     experiment = specification()
     plan = expand_trial_plan(experiment, {p.id: p for p in experiment.personas})
-    assert len(plan) == 2
+    assert [
+        [ref.criterion_id for ref in scenario.grader_refs] for scenario, _, _ in plan
+    ] == [["AC-UNI-22", "AC-LONG", "AC-TWIN"], ["AC-OTHER"]]
     names = [trial_folder_name(*item) for item in plan]
     assert len(set(names)) == 2
     rows = []
     outcomes = []
     for item in plan:
         scenario, persona, index = item
-        grader = _resolve_graders(scenario.grader_refs)[0]
         case = LLMTestCase(
             input="A question", actual_output="An answer", metadata={"total_turns": 7}
         )
-        result = await _run_grader(grader, case, asyncio.Semaphore(1))
-        assert result.grader_args == scenario.grader_refs[0].args
-        assert result.criterion_id == scenario.grader_refs[0].criterion_id
+        scores = []
+        for grader, ref in zip(
+            _resolve_graders(scenario.grader_refs), scenario.grader_refs, strict=True
+        ):
+            result = await _run_grader(grader, case, asyncio.Semaphore(1))
+            assert result.grader_args == ref.args
+            assert result.criterion_id == ref.criterion_id
+            scores.append(
+                {
+                    "name": result.name,
+                    "criterion_id": result.criterion_id,
+                    "grader_fqn": result.grader_fqn,
+                    "grader_args": result.grader_args,
+                    "task_id": scenario.task_id,
+                    "trial_index": index,
+                    "success": result.success,
+                    "skipped": result.skipped,
+                }
+            )
         rows.append(
             {
                 "session_id": scenario.task_id,
                 "scenario_id": scenario.id,
-                "graders": [
-                    {
-                        "name": result.name,
-                        "criterion_id": result.criterion_id,
-                        "grader_fqn": result.grader_fqn,
-                        "grader_args": result.grader_args,
-                        "task_id": scenario.task_id,
-                        "trial_index": index,
-                        "success": result.success,
-                        "skipped": result.skipped,
-                    }
-                ],
+                "graders": scores,
             }
         )
         outcomes.append(
@@ -158,10 +174,19 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
         )
         path.write_text(record.model_dump_json())
     assert _classify_resume_trials(tmp_path, plan)[0] == []
-    report = build_report(experiment.model_dump(), rows, trial_outcomes=outcomes)
+    report = build_report(
+        experiment.model_dump(),
+        rows if result_scope == "turn" else [],
+        session_graders=rows if result_scope == "session" else [],
+        trial_outcomes=outcomes,
+    )
     assert report["criteria"]["AC-UNI-22"]["rate"] == 0
     assert report["criteria"]["AC-LONG"]["rate"] == 100
+    assert report["criteria"]["AC-TWIN"]["rate"] == 0
+    assert report["criteria"]["AC-TWIN"]["evidence"][0]["task_id"] == "TC-001"
     assert [r["task_id"] for r in report["resultTable"]["rows"]] == ["TC-001", "TC-002"]
+    assert [task["gradersAsked"] for task in report["plan"]["tasks"]] == [3, 1]
+    assert [task["gradersScored"] for task in report["plan"]["tasks"]] == [3, 1]
     saved = Report.model_validate(report).model_dump()
     assert saved["criteria"]["AC-LONG"]["evidence"][0]["grader_args"] == {
         "max_turns": 10
@@ -175,7 +200,11 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
         "duplicate_criterion",
         "scenario",
         "persona",
-        "criterion",
+        "behaviour",
+        "duplicate_behaviour",
+        "empty_selection",
+        "unmeasured",
+        "empty_criteria",
         "coverage",
         "trials",
     ],
@@ -189,8 +218,16 @@ def test_specification_rejects_invalid_task_graph(fault: str) -> None:
         criteria[1]["id"] = criteria[0]["id"]
     elif fault in {"scenario", "persona"}:
         data["tasks"][0][f"{fault}_ref"] = "missing"
-    elif fault == "criterion":
-        data["tasks"][0]["criterion_refs"] = ["missing"]
+    elif fault == "behaviour":
+        data["tasks"][0]["behaviour_refs"] = ["missing"]
+    elif fault == "duplicate_behaviour":
+        data["tasks"][0]["behaviour_refs"] = ["B-1", "B-1"]
+    elif fault == "empty_selection":
+        data["tasks"][0]["behaviour_refs"] = []
+    elif fault == "unmeasured":
+        data["features"][0]["behaviours"][0]["measured"] = False
+    elif fault == "empty_criteria":
+        data["features"][0]["behaviours"][0]["criteria"] = []
     elif fault == "coverage":
         data["tasks"] = []
     else:

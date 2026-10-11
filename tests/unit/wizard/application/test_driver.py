@@ -559,7 +559,7 @@ def test_task_cards_show_planned_trials() -> None:
 
 
 @pytest.mark.parametrize(
-    "fault", ["persona", "scenario", "criterion", "trials", "coverage"]
+    "fault", ["persona", "scenario", "behaviour", "trials", "coverage"]
 )
 def test_task_readiness_blocks_incomplete_inputs(fault: str) -> None:
     specification = research_assistant()
@@ -567,8 +567,8 @@ def test_task_readiness_blocks_incomplete_inputs(fault: str) -> None:
         specification.tasks[0].persona_ref = "missing"
     elif fault == "scenario":
         specification.tasks[0].scenario_ref = "missing"
-    elif fault == "criterion":
-        specification.tasks[0].criterion_refs = ["missing"]
+    elif fault == "behaviour":
+        specification.tasks[0].behaviour_refs = ["missing"]
     elif fault == "trials":
         specification.tasks[0].num_trials = 0
     else:
@@ -580,9 +580,9 @@ def test_task_readiness_blocks_incomplete_inputs(fault: str) -> None:
 
 def test_task_readiness_clears_after_correction() -> None:
     specification = research_assistant()
-    specification.tasks[0].criterion_refs = []
+    specification.tasks[0].behaviour_refs = []
     assert any(w.blocking for w in _scenarios_screen(specification).warnings)
-    specification.tasks[0].criterion_refs = ["AC-1-1"]
+    specification.tasks[0].behaviour_refs = ["EB-1"]
     assert not _scenarios_screen(specification).warnings
 
 
@@ -591,6 +591,27 @@ def _scenario_edit_state():
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = driver_state(specification=specification, step=InterviewStep.SCENARIOS)
     return driver, state, driver.compose(state)
+
+
+def test_task_behaviour_choices_select_all_owned_criteria() -> None:
+    driver, state, request = _scenario_edit_state()
+    card = next(card for card in request.cards if card.id == "TC-001")
+    choices = next(
+        c for c in card.components if c.type == "options" and c.label == "Behaviours"
+    )
+    assert [(str(option.id), option.selected) for option in choices.options] == [
+        ("cover:TC-001:EB-1", True),
+        ("cover:TC-001:EB-3", False),
+    ]
+    driver.handle(state, request, ChoiceResponse(selected=["cover:TC-001:EB-3"]))
+    assert state.specification.tasks[0].behaviour_refs == ["EB-1", "EB-3"]
+
+    driver.handle(
+        state, driver.compose(state), ChoiceResponse(selected=["cover:TC-001:EB-1"])
+    )
+    assert state.specification.tasks[0].behaviour_refs == ["EB-3"]
+    behaviour = state.specification.behaviour("EB-1")
+    assert behaviour is not None and len(behaviour.criteria) == 2
 
 
 def test_a_trial_edit_recomposes_the_scenario_total() -> None:
@@ -1243,9 +1264,9 @@ def test_copy_task_retains_settings_and_assigns_a_new_id() -> None:
     assert copied.max_run_retries == 0
     assert copied.scenario_ref == original.scenario_ref
     assert copied.persona_ref == original.persona_ref
-    assert copied.criterion_refs == original.criterion_refs
-    copied.criterion_refs.clear()
-    assert original.criterion_refs
+    assert copied.behaviour_refs == original.behaviour_refs
+    copied.behaviour_refs.clear()
+    assert original.behaviour_refs
 
 
 def test_criterion_parameter_form_changes_the_selected_requirement() -> None:

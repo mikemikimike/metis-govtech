@@ -122,7 +122,7 @@ const policyTask = (fixtures: string[]) => ({
   description: "Ask about one policy rule.",
   scenario_ref: "S-1",
   persona_ref: "P-1",
-  criterion_refs: [],
+  behaviour_refs: [],
   fixtures,
   num_trials: 1,
   max_turns: 20,

@@ -99,7 +99,7 @@ def test_edits_that_derive_nothing_ask_nothing() -> None:
     nothing = [
         edit("features[F-1].behaviours[EB-1].measured", False),
         edit("personas[cooperative-delegator].description", "different words"),
-        edit("tasks[TC-001].criterion_refs", ["AC-1-1"]),
+        edit("tasks[TC-001].behaviour_refs", ["AC-1-1"]),
         edit("tasks[TC-001].num_trials", 5),
         edit("tasks[TC-001].fixtures", ["a.pdf"]),
         edit("product.name", "New name"),
