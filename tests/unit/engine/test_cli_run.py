@@ -47,7 +47,7 @@ def test_run_composes_phases_and_prints_recovery_command(
         phases.append("evaluation")
         evaluation_paths.append(path)
         evaluation_options.update(kwargs)
-        return EvaluationOutcome(1, 0, 1, False)
+        return EvaluationOutcome(1, 0, 1, None)
 
     monkeypatch.setattr(cli, "_run_simulation", fake_simulation)
     monkeypatch.setattr(cli, "_run_evaluation", fake_evaluation)
@@ -84,6 +84,7 @@ def test_run_composes_phases_and_prints_recovery_command(
         in result.output
     )
     assert "PIPELINE COMPLETE" in result.output
+    assert "metisinsightsreport" not in "".join(result.output.split())
 
 
 def test_run_resume_evaluates_the_resumed_directory(
@@ -99,7 +100,7 @@ def test_run_resume_evaluates_the_resumed_directory(
 
     def fake_evaluation(path: Path, **_kwargs: object) -> EvaluationOutcome:
         evaluation_paths.append(path)
-        return EvaluationOutcome(1, 1, 0, True)
+        return EvaluationOutcome(1, 1, 0, experiment_dir / "reports" / "results.json")
 
     monkeypatch.setattr(cli, "_run_simulation", fake_simulation)
     monkeypatch.setattr(cli, "_run_evaluation", fake_evaluation)
@@ -113,6 +114,7 @@ def test_run_resume_evaluates_the_resumed_directory(
     assert simulation_options["resume"] is True
     assert evaluation_paths == [experiment_dir]
     assert "PIPELINE COMPLETE" in result.output
+    assert "metisinsightsreport--results-file" in "".join(result.output.split())
 
 
 def test_run_zero_simulation_records_exits_one(monkeypatch, tmp_path: Path) -> None:

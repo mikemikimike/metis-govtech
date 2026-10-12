@@ -374,6 +374,29 @@ rename and the glossary.
   `turn_graders_seconds`/`session_graders_seconds`
 - `unmapped[].metric` → `unmapped[].grader`
 
+#### Report generation moved to `metis insights report`
+
+`metis engine evaluate` and `run` no longer write `reports/report.json` or
+`reports/report.html`. They write `reports/results.json` and print the command that
+builds the report:
+
+```bash
+metis insights report --results-file experiments/<run>/reports/results.json
+```
+
+Scripts that read `report.json` after `evaluate` must run that command first.
+
+**Python API**
+
+- `metis.engine.generate_report` and `metis.engine.ReportResult` are removed. Evaluate,
+  then call `metis.insights.save_report(results, experiment_dir)` with an
+  `metis.core.reporting.EvaluationResults`, or run the CLI command above.
+- `metis.engine.reporting` is removed. `Report`, `build_report`, and
+  `load_report_sources` are now in `metis.insights`. `TurnReport`, `SessionReport`,
+  `TurnGraderResult`, and `SessionGraderResult` are now in `metis.core.reporting`.
+- `report.schema.json` moved from `packages/engine/schemas/` to
+  `packages/insights/schemas/`. Its content and version (`Report v2`) are unchanged.
+
 ### metis-api
 
 New package in v1.0 — the stateless HTTP door over the wizard. It replaces the

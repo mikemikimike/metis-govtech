@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from metis.engine.reporting._report import build_report
-from metis.engine.reporting._types import (
+from metis.core.reporting import (
     SessionGraderResult,
     SessionReport,
     TurnGraderResult,
     TurnReport,
 )
+from metis.insights._report import build_report
 
 
 class TestTurnGraderResult:
@@ -157,7 +157,7 @@ class TestReportModel:
         return json.loads(report_path.read_text())
 
     def test_validates_real_report(self, sample_report: dict):
-        from metis.engine.reporting._models import Report
+        from metis.insights._models import Report
 
         report = Report.model_validate(sample_report)
         assert report.product == "Orca"
@@ -167,7 +167,7 @@ class TestReportModel:
         assert isinstance(report.criteria, dict)
 
     def test_round_trips_to_dict(self, sample_report: dict):
-        from metis.engine.reporting._models import Report
+        from metis.insights._models import Report
 
         report = Report.model_validate(sample_report)
         dumped = report.model_dump()

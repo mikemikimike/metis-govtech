@@ -12,6 +12,7 @@ dependencies = [
     "metis-engine",
     "metis-library",
     "metis-wizard",
+    "metis-insights",
     "metis-api",
 ]
 
@@ -30,6 +31,7 @@ metis-core = { workspace = true }
 metis-engine = { workspace = true }
 metis-library = { workspace = true }
 metis-wizard = { workspace = true }
+metis-insights = { workspace = true }
 metis-api = { workspace = true }
 
 [tool.uv.workspace]

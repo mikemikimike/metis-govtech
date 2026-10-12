@@ -8,6 +8,7 @@ members = [
     "metis-api",
     "metis-core",
     "metis-engine",
+    "metis-insights",
     "metis-library",
     "metis-wizard",
 ]
@@ -1059,6 +1060,7 @@ dependencies = [
     { name = "metis-api" },
     { name = "metis-core" },
     { name = "metis-engine" },
+    { name = "metis-insights" },
     { name = "metis-library" },
     { name = "metis-wizard" },
 ]
@@ -1076,6 +1078,7 @@ requires-dist = [
     { name = "metis-api", editable = "apps/api" },
     { name = "metis-core", editable = "packages/core" },
     { name = "metis-engine", editable = "packages/engine" },
+    { name = "metis-insights", editable = "packages/insights" },
     { name = "metis-library", editable = "packages/library" },
     { name = "metis-wizard", editable = "packages/wizard" },
 ]
@@ -1180,6 +1183,27 @@ requires-dist = [
     { name = "typer", specifier = ">=0.9.0" },
 ]
 provides-extras = ["playwright"]
+
+[[package]]
+name = "metis-insights"
+version = "1.0.0a1"
+source = { editable = "packages/insights" }
+dependencies = [
+    { name = "metis-core" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "rich" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "metis-core", editable = "packages/core" },
+    { name = "pydantic", specifier = ">=2" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rich", specifier = ">=13.0.0" },
+    { name = "typer", specifier = ">=0.9.0" },
+]
 
 [[package]]
 name = "metis-library"

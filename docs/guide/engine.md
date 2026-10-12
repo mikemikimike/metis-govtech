@@ -2,7 +2,7 @@
 
 ## Introduction
 
-metis-engine is the evaluation runtime for METIS. It drives a target system through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation graders, and generates reports. Simulation and evaluation are separate commands, with `run` available for the combined flow.
+metis-engine is the evaluation runtime for METIS. It drives a target system through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation graders, and writes their results for [`metis insights report`](insights.md) to turn into a report. Simulation and evaluation are separate commands, with `run` available for the combined flow.
 
 This guide is for anyone setting up evaluations against a web-based agentic system. By the end, you will have:
 
@@ -137,11 +137,11 @@ The combined `run` command closes the Simulation TUI before it starts the evalua
 1. **Simulate** — the user agent interacts with Orca through the selected runner
 2. **Extract** — traces are fetched from Langfuse
 3. **Evaluate** — graders score the extracted traces
-4. **Report** — results are written to disk
+4. **Results** — grader results are written to `reports/results.json`; build the report with [`metis insights report`](insights.md)
 
 ### Where Results Land
 
-Each run produces output in `experiments/<id>-<timestamp>/`. The `reports/` directory is created by `evaluate` or `run`; simulation-only runs stop after `runs/` and `logs/`:
+Each run produces output in `experiments/<id>-<timestamp>/`. The `reports/` directory is created by `evaluate` or `run`, which write `results.json`; `metis insights report` adds `report.json` and `report.html`. Simulation-only runs stop after `runs/` and `logs/`:
 
 ```
 experiments/orca-eval-20260730-143022/
@@ -153,11 +153,12 @@ experiments/orca-eval-20260730-143022/
 │   ├── simulate-TC-001_cooperative-delegator-01.log  # Per-run detail
 │   └── ...
 └── reports/             # created by evaluate or run
-    ├── report.json      # Machine-readable results
-    └── report.html      # Visual report (open in browser)
+    ├── results.json     # Grader results (written by evaluate or run)
+    ├── report.json      # Machine-readable report (written by metis insights report)
+    └── report.html      # Visual report (written by metis insights report)
 ```
 
-The structure of `report.json` is defined by a [JSON Schema](../../packages/engine/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
+The structure of `report.json` is defined by a [JSON Schema](../../packages/insights/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
 
 Use `logs/evaluate.log` to review extraction, each configured grader, the actual judge model reported by DeepEval, grader scores, pass or fail results, reasons, errors, cost, token counts, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
@@ -380,7 +381,7 @@ metis engine run --input-dir <source path> [simulation and evaluation options]
 metis engine run --resume --experiment-dir <output path> [simulation and evaluation options]
 ```
 
-`simulate` writes run records only. It prints the exact command needed to evaluate the output directory it created. `evaluate` scores the output directory that you name, uses its frozen input snapshot, and overwrites `logs/evaluate.log`, `reports/report.json`, and `reports/report.html`. `run` performs both phases.
+`simulate` writes run records only. It prints the exact command needed to evaluate the output directory it created. `evaluate` scores the output directory that you name, uses its frozen input snapshot, and overwrites `logs/evaluate.log` and `reports/results.json`, then prints the `metis insights report` command that builds the report. `run` performs both phases.
 
 ### Simulation options
 

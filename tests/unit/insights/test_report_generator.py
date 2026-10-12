@@ -1,4 +1,4 @@
-"""save_report() writes UTF-8 regardless of host locale (issue #385).
+"""metis.insights.report.save_report() writes UTF-8 regardless of host locale (issue #385).
 
 The report page hardcodes a literal → in its own template text
 (_report_page.py's "Swipe to grader →"), so any write that falls back to
@@ -15,7 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from metis.engine.reporting.generator import save_report
+from metis.core.reporting import EvaluationResults
+from metis.insights.report import save_report
 
 
 def test_save_report_writes_utf8(
@@ -35,10 +36,12 @@ def test_save_report_writes_utf8(
 
     monkeypatch.setattr(pathlib.Path, "write_text", spy_write_text)
 
-    paths = save_report([], "run-1", output_dir=tmp_path / "results")
+    paths = save_report(EvaluationResults(run_id="run-1"), tmp_path)
 
     assert paths is not None
     html_path, json_path = paths
+    assert html_path == tmp_path / "reports" / "report.html"
+    assert json_path == tmp_path / "reports" / "report.json"
     assert encodings_used == ["utf-8", "utf-8"]
 
     html_text = html_path.read_text(encoding="utf-8")

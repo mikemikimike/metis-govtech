@@ -8,8 +8,6 @@ from pydantic import ValidationError
 
 from metis.engine.cli import _classify_resume_trials
 from metis.engine.evaluation.orchestrator import _resolve_graders, _run_grader
-from metis.engine.reporting._models import Report
-from metis.engine.reporting._report import build_report
 from metis.engine.simulation.experiment import expand_trial_plan, trial_folder_name
 from metis.engine.simulation.types import (
     Specification,
@@ -17,6 +15,8 @@ from metis.engine.simulation.types import (
     TrialOutcome,
     TrialRecord,
 )
+from metis.insights._models import Report
+from metis.insights._report import build_report
 
 
 def specification() -> Specification:

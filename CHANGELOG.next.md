@@ -57,6 +57,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   requirements. The Experiment holds Personas, Scenarios, Tasks, and execution settings.
   The Specification combines both in one document (#395).
 
+- `metis.core.reporting`: the serializable grader-result types (`TurnReport`,
+  `SessionReport`, `TurnGraderResult`, `SessionGraderResult`) and `EvaluationResults`,
+  the version-guarded `reports/results.json` file that `metis-engine` writes and
+  `metis-insights` reads (#417).
+
 #### Breaking
 
 - Rename `Criterion.metric_fqn`/`metric_args` to `grader_fqn`/`grader_args`, matching
@@ -116,6 +121,21 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `Timings.turn_metrics_seconds`/`session_metrics_seconds` →
   `turn_graders_seconds`/`session_graders_seconds` (these measure grading wall-clock time,
   not an unrelated observability signal — confirmed in scope by issue #415) (#415).
+
+- `evaluate` and `run` write `reports/results.json` and print the
+  `metis insights report --results-file <path>` command instead of building the report.
+  They no longer print the pass/fail/skip table or write `report.json`/`report.html`.
+  `generate_report`, `ReportResult`, and the `metis.engine.reporting` subpackage are
+  removed, and `report.schema.json` moved to `metis-insights` (#417).
+
+### metis-insights
+
+#### Added
+
+- New package. `metis insights report --results-file <path>` reads an evaluation's
+  `results.json`, prints the pass/fail/skip summary, and writes `report.json` and
+  `report.html` into the same experiment's `reports/` directory. It owns `Report` and
+  `report.schema.json`, and `make ci` checks that schema (#417).
 
 ### metis-wizard
 

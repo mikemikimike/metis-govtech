@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from metis.engine.reporting import _report
+from metis.insights import _report
 
 
 def _grader_row(session_id: str, scenario_id: str, *, success: bool) -> dict[str, Any]:

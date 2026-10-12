@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from metis.engine.reporting._models import Trial
-from metis.engine.reporting._report import _load_trial_records
+from metis.insights._models import Trial
+from metis.insights._report import _load_trial_records
 
 _BASE: dict = {
     "config": {"persona": "p", "scenario": "s"},
@@ -83,7 +83,7 @@ def test_trial_model_defaults_the_attempt_field(tmp_path: Path) -> None:
 
 
 def test_task_plan_uses_the_selected_trial_count() -> None:
-    from metis.engine.reporting._report import build_plan
+    from metis.insights._report import build_plan
 
     specification = {
         "personas": [{"id": "p"}],

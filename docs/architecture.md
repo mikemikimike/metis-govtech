@@ -113,7 +113,7 @@ MUST depend only on `metis-core`. MAY depend on evaluation framework libraries (
 | | |
 |---|---|
 | **Import Path** | `from metis.engine import ...` |
-| **Purpose** | Evaluation runtime — ingests traces, executes graders, produces evaluation reports. |
+| **Purpose** | Evaluation runtime — ingests traces and executes graders. |
 
 MUST depend on `metis-core` and `metis-library`. MAY depend on HTTP, math, parsing, browser automation, and LLM client libraries. MUST be usable both as a library import and as a standalone CLI. Every `Runner` implementation MUST satisfy the normative runner contract in [runner-contract.md](runner-contract.md).
 
@@ -317,7 +317,7 @@ A root `Makefile` MUST provide the following targets as the public development a
 | `check` | Composition: `lint` + `format-check` + `typecheck`. |
 | `check-web` | Run non-mutating `apps/web` formatter, type checker, tests, and API drift checks. |
 | `build-web` | Run the production `apps/web` build. This target writes the normal Vite output. |
-| `ci` | Composition: `check` + `check-web` + `build-web` + `test` + engine and wizard schema checks. MUST mirror what CI pipelines execute. |
+| `ci` | Composition: `check` + `check-web` + `build-web` + `test` + engine, wizard, and insights schema checks. MUST mirror what CI pipelines execute. |
 | `clean` | Remove all generated/cached files across the monorepo. |
 
 **Rules:**

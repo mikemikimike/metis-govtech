@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from metis.engine.reporting._types import SessionReport, TurnReport
+    from metis.core.reporting import SessionReport, TurnReport
 
 
 class GraderAggregate(TypedDict):

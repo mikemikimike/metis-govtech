@@ -8,7 +8,6 @@ from metis.engine.extractor import (
     fetch_by_session_id,
     get_langfuse_client,
 )
-from metis.engine.reporting import ReportResult, generate_report
 
 try:
     __version__ = version("metis-engine")
@@ -18,10 +17,8 @@ except PackageNotFoundError:
 __all__ = [
     "EvalResult",
     "FetchLangfuseResult",
-    "ReportResult",
     "__version__",
     "evaluate",
     "fetch_by_session_id",
-    "generate_report",
     "get_langfuse_client",
 ]
