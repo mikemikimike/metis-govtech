@@ -27,7 +27,7 @@ def _base_experiment(**overrides: object) -> dict:
                 "persona_ref": "p1",
                 "fixtures": [],
                 "num_trials": 1,
-                "criterion_refs": ["AC-1-1"],
+                "behaviour_refs": ["EB-1"],
             }
         ],
         "features": [

@@ -338,7 +338,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
           tasks: assigned.map((task) => ({
             ...task,
             fixtures: task.fixtures ?? [],
-            criterion_refs: task.criterion_refs ?? [],
+            behaviour_refs: task.behaviour_refs ?? [],
             num_trials: task.num_trials ?? 3,
           })),
         },

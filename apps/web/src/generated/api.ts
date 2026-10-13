@@ -1137,8 +1137,8 @@ export interface components {
              * @default 3
              */
             num_trials: number;
-            /** Criterion Refs */
-            criterion_refs?: string[];
+            /** Behaviour Refs */
+            behaviour_refs?: string[];
             /**
              * Max Turns
              * @default 20

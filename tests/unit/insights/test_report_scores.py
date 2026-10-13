@@ -5,6 +5,7 @@ re-deriving it from the raw axis/trial data.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from metis.insights import _report
@@ -37,7 +38,7 @@ def _specification() -> dict[str, Any]:
                 "scenario_ref": "s1",
                 "persona_ref": "p1",
                 "num_trials": 2,
-                "criterion_refs": ["c1"],
+                "behaviour_refs": ["b1"],
             }
         ],
         "personas": [{"id": "p1"}],
@@ -67,6 +68,30 @@ def _specification() -> dict[str, Any]:
 
 
 class TestScores:
+    def test_task_selection_controls_score_attribution_and_missing_results(
+        self,
+    ) -> None:
+        specification = _specification()
+        behaviour = specification["features"][0]["behaviours"][0]
+        behaviour["measured"] = True
+        other = deepcopy(behaviour)
+        other["id"] = "b2"
+        other["criteria"][0]["id"] = "c3"
+        specification["features"][0]["behaviours"].append(other)
+        behaviour["criteria"].append({**behaviour["criteria"][0], "id": "c2"})
+        foreign_result = _grader_row("sess-1", "s1", success=True)
+        foreign_result["graders"][0]["criterion_id"] = "c3"
+
+        report = _report.build_report(specification, [foreign_result])
+
+        task = report["plan"]["tasks"][0]
+        assert (task["gradersAsked"], task["gradersScored"]) == (2, 0)
+        assert report["criteria"]["c1"]["blank"]["cause"] == "no result"
+        assert report["criteria"]["c2"]["blank"]["cause"] == "no result"
+        assert report["criteria"]["c3"]["blank"]["cause"] == "not asked"
+        assert report["criteria"]["c3"]["evidence"] == []
+        assert report["unmapped"][0]["pass"] == 1
+
     def test_grader_pass_rate_sums_the_scenario_axis(self) -> None:
         """3 of 4 grader results pass, matching the 75% shown on axes.S."""
         test_results = [

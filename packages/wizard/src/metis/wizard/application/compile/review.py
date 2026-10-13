@@ -79,7 +79,7 @@ def render_review(specification: Specification, experiment_id: str) -> str:
             "",
             f"- Scenario: {task.scenario_ref}",
             f"- Persona: {task.persona_ref}",
-            f"- Criteria: {', '.join(task.criterion_refs)}",
+            f"- Behaviours: {', '.join(task.behaviour_refs)}",
             f"- Trials: {task.num_trials}",
             f"- Files: {', '.join(task.fixtures)}",
             "",

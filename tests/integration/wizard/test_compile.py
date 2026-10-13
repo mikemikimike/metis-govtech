@@ -27,16 +27,20 @@ def test_specification_round_trip_and_golden(fixtures_dir: Path) -> None:
     assert loaded.features == specification.features
     assert loaded.tasks == specification.tasks
     assert loaded.trial_count() == 9
-    assert document["tasks"][0]["criterion_refs"] == ["AC-1-1", "AC-1-2"]
+    assert document["tasks"][0]["behaviour_refs"] == ["EB-1"]
+    assert [ref.criterion_id for ref in loaded.resolved_tasks()[0].grader_refs] == [
+        "AC-1-1",
+        "AC-1-2",
+    ]
 
 
-@pytest.mark.parametrize("fault", ["persona", "criterion", "trials", "coverage"])
+@pytest.mark.parametrize("fault", ["persona", "behaviour", "trials", "coverage"])
 def test_invalid_specification_is_not_written(tmp_path: Path, fault: str) -> None:
     specification = research_assistant()
     if fault == "persona":
         specification.tasks[0].persona_ref = "missing"
-    elif fault == "criterion":
-        specification.tasks[0].criterion_refs = ["missing"]
+    elif fault == "behaviour":
+        specification.tasks[0].behaviour_refs = ["missing"]
     elif fault == "trials":
         specification.tasks[0].num_trials = 0
     else:

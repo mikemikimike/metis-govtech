@@ -369,14 +369,14 @@ def flatten_results(
 
 
 def build_plan(
-    experiment: Mapping[str, Any], rows: list[dict], name_of: dict[str, str]
+    experiment: Mapping[str, Any], rows: list[dict], task_criteria: dict[str, set[str]]
 ) -> dict:
     """Compare planned Tasks and Trials with the recorded scores."""
     plan_personas = [p["id"] for p in experiment.get("personas", [])]
     tasks = []
     for task in experiment.get("tasks", []):
         results = [r for r in rows if r.get("task_id") == task["id"]]
-        asked = set(task["criterion_refs"])
+        asked = task_criteria[task["id"]]
         tasks.append(
             {
                 "id": task["id"],
@@ -433,14 +433,21 @@ def build_report(
                 behaviour_of[criterion["id"]] = behaviour["id"]
 
     tasks = {t["id"]: t for t in specification.get("tasks", [])}
+    task_criteria = {
+        task_id: {
+            cid
+            for cid, behaviour_id in behaviour_of.items()
+            if behaviour_id in task["behaviour_refs"]
+        }
+        for task_id, task in tasks.items()
+    }
     covers = {
         scenario["id"]: list(
             {
-                behaviour_of[cid]
+                behaviour_id
                 for t in tasks.values()
                 if t["scenario_ref"] == scenario["id"]
-                for cid in t["criterion_refs"]
-                if cid in behaviour_of
+                for behaviour_id in t["behaviour_refs"]
             }
         )
         for scenario in specification.get("scenarios", [])
@@ -487,9 +494,7 @@ def build_report(
     for row in rows:
         cid = row["criterion_id"]
         task = tasks.get(row["task_id"])
-        matched = (
-            [cid] if cid in criteria and task and cid in task["criterion_refs"] else []
-        )
+        matched = [cid] if task and cid in task_criteria[task["id"]] else []
         if not matched:
             _add(unmapped[row["grader"]], row)
             unmapped_reason[row["grader"]] = (
@@ -571,7 +576,7 @@ def build_report(
                 )
         return out
 
-    asked_criteria = {cid for task in tasks.values() for cid in task["criterion_refs"]}
+    asked_criteria = {cid for selected in task_criteria.values() for cid in selected}
     appeared = {row["criterion_id"] for row in rows}
 
     def blank_cause(criterion: Mapping[str, Any], slot: dict) -> dict:
@@ -836,7 +841,7 @@ def build_report(
                 "status": status(trial_rate_fraction),
             },
         },
-        "plan": build_plan(specification, rows, name_of),
+        "plan": build_plan(specification, rows, task_criteria),
         "personas": personas,
         "scenarios": scenarios,
         "describe": {

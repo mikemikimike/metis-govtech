@@ -74,7 +74,7 @@ syntax.
 
 ```python
 # criteria are kept when a behaviour is unticked — they go dormant rather than being
-# deleted, and Tasks can select only Criteria of `measured` behaviours. this is what
+# deleted, and Tasks can select only `measured` behaviours. this is what
 # lets the tick stay live without needing any staleness tracking.
 behaviour.measured = False
 ```

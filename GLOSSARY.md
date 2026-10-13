@@ -15,7 +15,7 @@
 | Scenario | A concrete instantiation of a **feature**, specifying the particular situation and conditions in which the agent is evaluated. |
 | Persona | A concrete simulated user whose characteristics and behaviour are relevant to an evaluation interaction. |
 | Fixture | An artefact or piece of environment state selected by a **task** to execute its **scenario**. It may be supplied by the user or generated dynamically. A fixture is an input, not an expected answer or scoring rule. |
-| Test Case / Task | A complete specification of a particular evaluation problem, combining a **scenario**, a **persona**, **fixtures**, a Trial count, and references to **criteria**. Each Task has an ID. **Test case** and **task** are interchangeable terms. |
+| Test Case / Task | A complete specification of a particular evaluation problem, combining a **scenario**, a **persona**, **fixtures**, a Trial count, and references to **expected behaviours**. Each selected Behaviour supplies all its Criteria. Each Task has an ID. **Test case** and **task** are interchangeable terms. |
 | Trial | One execution of a **test case** against a **target agentic system**, producing a **trace** and evaluation outputs. |
 | Run | A grouping of repeated **trials** of the same **test case**. |
 | Experiment | A collection of **runs** used to evaluate one or more **target agentic systems** across a set of **test cases**. |

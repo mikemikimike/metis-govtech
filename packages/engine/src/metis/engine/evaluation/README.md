@@ -39,7 +39,7 @@ The judge model is configured in `metis.library.graders._judge` and shared by al
 
 ## Input
 
-The orchestrator takes a `FetchLangfuseResult` (from the extractor) and a list of `GraderRef` objects resolved from Task Criterion references in `specification.yaml`. Graders are resolved by FQN at runtime via `importlib.import_module`.
+The orchestrator takes a `FetchLangfuseResult` (from the extractor) and a list of `GraderRef` objects resolved from all Criteria under each Task's selected Behaviours in `specification.yaml`. Graders are resolved by FQN at runtime via `importlib.import_module`.
 
 ## Output
 

@@ -487,7 +487,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p",
                         "fixtures": ["q3.csv"],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-1-1"],
+                        "behaviour_refs": ["EB-1"],
                     }
                 ],
                 "features": [
@@ -542,7 +542,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p",
                         "fixtures": [],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-1-1"],
+                        "behaviour_refs": ["EB-1"],
                     }
                 ],
                 "features": [
@@ -658,7 +658,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p1",
                         "fixtures": [],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-1-1"],
+                        "behaviour_refs": ["EB-1"],
                     },
                     {
                         "id": "TC-002",
@@ -666,7 +666,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p2",
                         "fixtures": [],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-1-1"],
+                        "behaviour_refs": ["EB-1"],
                     },
                     {
                         "id": "TC-003",
@@ -674,7 +674,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p1",
                         "fixtures": [],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-2-1"],
+                        "behaviour_refs": ["EB-2"],
                     },
                 ],
                 "features": [

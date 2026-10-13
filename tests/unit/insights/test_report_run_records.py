@@ -93,9 +93,9 @@ def test_task_plan_uses_the_selected_trial_count() -> None:
                 "scenario_ref": "s",
                 "persona_ref": "p",
                 "num_trials": 1,
-                "criterion_refs": ["AC-1"],
+                "behaviour_refs": ["B-1"],
             }
         ],
     }
-    task = build_plan(specification, [], {})["tasks"][0]
+    task = build_plan(specification, [], {"TC-001": {"AC-1"}})["tasks"][0]
     assert task["trials"] == task["trialsPlanned"] == 1

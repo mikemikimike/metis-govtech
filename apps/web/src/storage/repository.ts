@@ -77,6 +77,12 @@ function validState(value: unknown): value is InterviewState {
     Array.isArray(state.specification.personas) &&
     Array.isArray(state.specification.scenarios) &&
     Array.isArray(state.specification.tasks) &&
+    state.specification.tasks.every(
+      (task) =>
+        !!task &&
+        Array.isArray(task.behaviour_refs) &&
+        task.behaviour_refs.every((ref) => typeof ref === "string"),
+    ) &&
     Array.isArray(state.history) &&
     Array.isArray(state.user_typed) &&
     Array.isArray(state.issued_ids) &&

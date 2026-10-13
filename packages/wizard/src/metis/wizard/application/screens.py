@@ -429,22 +429,21 @@ def scenarios_screen(
                         ],
                     ),
                     CardOptionGroup(
-                        label="Criteria",
+                        label="Behaviours",
                         options=[
                             Option(
-                                id=OptionId(action="cover", target=task.id, via=c.id),
-                                label=c.name
+                                id=OptionId(action="cover", target=task.id, via=b.id),
+                                label=b.name
                                 if b.measured
-                                else f"{c.name} (not measured)",
-                                selected=c.id in task.criterion_refs,
+                                else f"{b.name} (not measured)",
+                                selected=b.id in task.behaviour_refs,
                                 patch=_wizard_patch(
-                                    f"tasks[{task.id}].criterion_refs",
-                                    sorted(set(task.criterion_refs) ^ {c.id}),
+                                    f"tasks[{task.id}].behaviour_refs",
+                                    sorted(set(task.behaviour_refs) ^ {b.id}),
                                 ),
                             )
                             for b in specification.behaviours()
-                            for c in b.criteria
-                            if b.measured or c.id in task.criterion_refs
+                            if b.measured or b.id in task.behaviour_refs
                         ]
                         + [
                             Option(
@@ -452,12 +451,12 @@ def scenarios_screen(
                                 label=f"{ref} (missing; remove this reference)",
                                 selected=True,
                                 patch=_wizard_patch(
-                                    f"tasks[{task.id}].criterion_refs",
-                                    [cid for cid in task.criterion_refs if cid != ref],
+                                    f"tasks[{task.id}].behaviour_refs",
+                                    [bid for bid in task.behaviour_refs if bid != ref],
                                 ),
                             )
-                            for ref in task.criterion_refs
-                            if specification.criterion(ref) is None
+                            for ref in task.behaviour_refs
+                            if specification.behaviour(ref) is None
                         ],
                     ),
                     CardNumberField(

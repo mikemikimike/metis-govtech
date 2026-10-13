@@ -580,13 +580,9 @@ class StepDriver:
                     persona_ref=original.persona_ref
                     if original
                     else state.specification.personas[0].id,
-                    criterion_refs=list(original.criterion_refs)
+                    behaviour_refs=list(original.behaviour_refs)
                     if original
-                    else [
-                        c.id
-                        for b in state.specification.measured_behaviours()
-                        for c in b.criteria
-                    ],
+                    else [b.id for b in state.specification.measured_behaviours()],
                     fixtures=list(original.fixtures) if original else [],
                 ),
                 PatchOrigin.WIZARD,

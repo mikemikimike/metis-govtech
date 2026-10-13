@@ -263,7 +263,8 @@ scenarios:
 ### Tasks (Test Cases)
 
 Each Task selects one Scenario and one Persona. It also specifies the files,
-Trial count, and Criteria for that Test Case.
+Trial count, and measured Behaviours for that Test Case. Each selected Behaviour
+supplies all its Criteria.
 
 ```yaml
 tasks:
@@ -272,13 +273,13 @@ tasks:
     persona_ref: cooperative-delegator
     fixtures: [q3_sales.csv]
     num_trials: 1
-    criterion_refs: [AC-DA-1]
+    behaviour_refs: [EB-DA-1]
   - id: TC-002
     scenario_ref: constrained-analysis
     persona_ref: impatient-executive
     fixtures: [q3_sales.csv]
     num_trials: 1
-    criterion_refs: [AC-DA-1]
+    behaviour_refs: [EB-DA-1]
 ```
 
 | Field | Required | Default | Description |
@@ -288,18 +289,18 @@ tasks:
 | `persona_ref` | Yes | — | One Persona ID |
 | `fixtures` | No | `[]` | Filenames in `fixtures/` to upload |
 | `num_trials` | No | `3` | Number of independent runs; at least `1` |
-| `criterion_refs` | Yes for execution | `[]` | Criteria under measured Behaviours to evaluate |
+| `behaviour_refs` | Yes for execution | `[]` | Measured Behaviour IDs. Each selected Behaviour must have Criteria |
 
 **How runs are generated:** Each Task produces `num_trials` independent runs.
 The example above produces two runs. Two Tasks can select the same Scenario and
-Persona with different fixtures or Criteria.
+Persona with different fixtures or Behaviours.
 
 Keep Task IDs when you edit or reorder Tasks. Give new and copied Tasks
 new IDs. Results and resume checks use the Task ID and Trial index.
 
 Every reference must resolve to an existing ID. IDs must be unique across the
 document. Each Scenario needs at least one Task. Each measured Behaviour needs
-at least one of its Criteria selected by a Task. A Task cannot repeat a Criterion
+at least one Criterion and must be selected by a Task. A Task cannot repeat a Behaviour
 or fixture reference.
 
 Tasks also accept optional execution settings:
@@ -328,7 +329,8 @@ max_run_retries: 0
 ### Grader References
 
 Each Criterion specifies a grader class in `grader_fqn` and its constructor
-arguments in `grader_args`. Tasks select Criterion IDs through `criterion_refs`.
+arguments in `grader_args`. Tasks select Behaviour IDs through `behaviour_refs`.
+Each selected Behaviour supplies all its Criteria, including each Criterion's Grader settings.
 **Plain (no parameters):**
 
 Set these fields on a Criterion that uses the grader's defaults:
@@ -340,8 +342,7 @@ grader_args: {}
 
 **With parameters:**
 
-For example, `AC-DA-1` in the Tasks above can refer to this Criterion under a
-measured Behaviour:
+For example, Behaviour `EB-DA-1` in the Tasks above can contain this Criterion:
 
 ```yaml
 criteria:
@@ -668,7 +669,7 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 | "No traces found" or extraction times out | Langfuse timeout too short, bad credentials, or target system not instrumented | Increase `--langfuse-timeout`, verify Langfuse keys in `.env`, confirm your target writes traces to Langfuse |
 | "Fixture not found" error | Path is absolute or has a typo | Use the filename only (relative to `fixtures/`), verify the file exists in the fixtures directory |
 | "Grader import failed" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the grader is installed in your venv |
-| Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task’s `response_wait_ms` |
+| Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task's `response_wait_ms` |
 | Simulation TUI not appearing | Running in a non-TTY environment | Expected — the Simulation TUI requires an interactive terminal. Use linear output or run in a real terminal |
 | Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current turn | Press Ctrl+C a second time to force-abort |
 | "Grader is not a subclass of BaseMetric" | Class doesn't inherit from the correct base | Ensure your grader extends `MetisTurnGrader`, `MetisSessionGrader`, or `deepeval.metrics.BaseMetric` |
@@ -983,7 +984,7 @@ tasks:
     persona_ref: cooperative
     fixtures: []
     num_trials: 1
-    criterion_refs: [AC-CHAT-1]
+    behaviour_refs: [EB-CHAT-1]
 ```
 
 Include the Product and Feature hierarchy as well. The
@@ -1050,7 +1051,7 @@ the Profile and Experiment configuration.
 | Simulation setup | `id`, `runner_factory_ref`, `personas`, `scenarios`, `tasks` | Select the runner and define each Test Case and its Trials |
 | Evaluation requirements (Profile) | `product`, `features` | Describe the product, expected Behaviours, Criteria, and Grader settings |
 
-Tasks select Criteria from the Profile. Reports combine the planned Tasks and
+Tasks select measured Behaviours from the Profile. Reports combine the planned Tasks and
 recorded results to show whether the product meets those Criteria.
 
 The engine freezes the document under the output directory's `inputs/` directory.
@@ -1111,7 +1112,7 @@ tasks:
   - id: <string>
     scenario_ref: <scenario-id>
     persona_ref: <persona-id>
-    criterion_refs: [<criterion-id>]
+    behaviour_refs: [<behaviour-id>]
     fixtures: [<filename>]
     num_trials: <integer>
 ```
@@ -1297,7 +1298,7 @@ tasks:
     persona_ref: cooperative
     fixtures: []
     num_trials: 1
-    criterion_refs: [AC-CHAT-1]
+    behaviour_refs: [EB-CHAT-1]
 ```
 
 #### Pre-Flight Checklist
@@ -1318,7 +1319,7 @@ Before running `metis engine simulate --input-dir my-experiment/`:
 
 - [ ] **Fixtures exist:** Every filename in a Task's `fixtures:` list exists in `my-experiment/fixtures/`.
 
-- [ ] **References match:** Each Task selects an existing Scenario, Persona, and Criteria under measured Behaviours. Every Scenario and measured Behaviour has Task coverage.
+- [ ] **References match:** Each Task selects an existing Scenario, Persona, and measured Behaviours. Every Scenario and measured Behaviour has Task coverage.
 
 - [ ] **Graders importable:** Every Criterion's `grader_fqn` resolves to an installed class.
   ```bash
@@ -1341,5 +1342,5 @@ Start with the minimal template above, verify it runs end-to-end, then layer in 
 1. **Add fixtures** — put files in `fixtures/`, reference them in `tasks[].fixtures`, and ensure your runner handles `file_upload` actions
 2. **Add personas** — write 2-3 personas with contrasting behavioral profiles, select each one in a Task through `persona_ref`
 3. **Add graders** — start with code-graded graders (fast, deterministic), then add judge-graded graders
-4. **Extend coverage** — define more Features, Behaviours, and Criteria, then select the Criteria in Tasks
+4. **Extend coverage** — define more Features, Behaviours, and Criteria, then select the Behaviours in Tasks
 5. **Tune parameters** — adjust Criterion `grader_args` and Task `num_trials` based on observed runs

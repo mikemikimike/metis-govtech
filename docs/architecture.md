@@ -220,7 +220,8 @@ and the Feature → Behaviour → Criterion hierarchy. `metis.core.experiment.Ex
 holds Personas, Scenarios, Tasks, and execution settings.
 `metis.core.specification.Specification` contains a Profile and the configuration needed to conduct an Experiment.
 The serialized document keeps these fields at the top level.
-Each Task selects one Scenario, one Persona, fixtures, a Trial count, and Criteria.
+Each Task selects one Scenario, one Persona, fixtures, a Trial count, and measured Behaviours.
+Every selected Behaviour supplies all its Criteria to grading.
 Each Criterion owns its Grader FQN and parameters. Scores retain Task, Trial,
 and Criterion identity plus the Grader configuration.
 

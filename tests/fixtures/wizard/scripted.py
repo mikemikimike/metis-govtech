@@ -200,9 +200,7 @@ class ScriptedInterviewer:
         context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("draft_scenarios")
-        covered = [
-            c.id for b in specification.measured_behaviours() for c in b.criteria
-        ]
+        covered = [b.id for b in specification.measured_behaviours()]
         personas = [p.id for p in specification.personas]
         return StepResult(
             message="Two situations should cover everything you picked.",
@@ -218,7 +216,7 @@ class ScriptedInterviewer:
                         "tasks": [
                             {
                                 "persona_ref": persona,
-                                "criterion_refs": covered,
+                                "behaviour_refs": covered,
                                 "fixtures": [],
                             }
                             for persona in personas

@@ -45,7 +45,7 @@ class Behaviour(NamedNode[str]):
     # the user's tick, and the only real decision in the interview. The model never writes
     # it — the path is absent from StepPermissions entirely.
     measured: bool = False
-    # Keep dormant Criteria in the document. Tasks can select only measured Criteria.
+    # Keep dormant Criteria in the document when their Behaviour is not measured.
     criteria: list[Criterion] = Field(default_factory=list)
 
 
