@@ -17,7 +17,7 @@
 // second drawing of what is already on screen.
 //
 // It is a live mirror of the specification the package built, drawn fresh each time the payload arrives.
-// It holds no persistent change history and no whole-specification diff. Each product value remembers
+// It holds no persistent change history and no whole-specification diff. Each target value remembers
 // only the string it last received while mounted, which is enough to mark an arrival or correction;
 // once that reveal has finished, the text looks like content that arrived ten turns ago.
 
@@ -74,12 +74,12 @@ export function stepPosition(requests: WizardRequest[]): StepPosition | null {
 // placeholder. The blanks stay hidden while measurement selection is still pending, then appear
 // after Continue and the arrival animation runs as each criterion mounts.
 //
-// Clarify now writes the Product section on every useful answer, so it follows the same rule as the
+// Clarify now writes the Target section on every useful answer, so it follows the same rule as the
 // later drafting steps instead of being a special case.
-type WritingTarget = "product" | "behaviours" | "personas" | "scenarios";
+type WritingTarget = "target" | "behaviours" | "personas" | "scenarios";
 
 const WRITING_TARGET: Record<string, WritingTarget> = {
-  clarify: "product",
+  clarify: "target",
   behaviours: "behaviours",
   criteria: "personas",
   personas: "scenarios",
@@ -115,7 +115,7 @@ export function SpecificationView({
   onFinish?: () => void;
   onDownload?: () => void;
 }) {
-  const { product } = specification;
+  const { target } = specification;
   const { features } = specification;
   const writing =
     busy && interviewStep ? WRITING_TARGET[interviewStep] : undefined;
@@ -185,7 +185,7 @@ export function SpecificationView({
         <div className="flex flex-col gap-8 px-5 pb-5">
           {/* The header carries only the pane's grader controls, pinned to the right. It draws
               nothing until there is a control to hold, so an early document opens straight onto
-              Product rather than onto an empty strip. */}
+              Target rather than onto an empty strip. */}
           {(hasCriteria || gradersError) && (
             <header className="flex flex-wrap items-center justify-end gap-2 pt-5">
               {hasCriteria && (
@@ -212,18 +212,18 @@ export function SpecificationView({
             </header>
           )}
 
-          <Section title="Product" writing={writing === "product"}>
+          <Section title="Target" writing={writing === "target"}>
             <div className="flex flex-col gap-4">
-              <ProductField label="Name" value={product.name} />
-              <ProductField
+              <TargetField label="Name" value={target.name} />
+              <TargetField
                 label="Description"
-                value={product.description}
+                value={target.description}
                 preserveLines
               />
-              <ProductField label="Users" value={product.users} preserveLines />
-              <ProductField
+              <TargetField label="Users" value={target.users} preserveLines />
+              <TargetField
                 label="Details"
-                value={product.detail}
+                value={target.detail}
                 preserveLines
               />
             </div>
@@ -327,8 +327,8 @@ export function SpecificationView({
                         <ScenarioRow label="Persona">
                           <Chip>{task.persona_ref}</Chip>
                         </ScenarioRow>
-                        <ScenarioRow label="Criteria">
-                          {task.criterion_refs.map((ref) => (
+                        <ScenarioRow label="Behaviours">
+                          {task.behaviour_refs.map((ref) => (
                             <Chip key={ref}>{ref}</Chip>
                           ))}
                         </ScenarioRow>
@@ -411,7 +411,7 @@ function SpecificationFooter({
 // reserved region, and the dotted edge carries that message rather than the lines themselves.
 //
 // The frame specifically means "a list will grow here": Behaviours, Personas and Scenarios all fill
-// with lists of items, so all three get the identical framed placeholder. A Product field is one
+// with lists of items, so all three get the identical framed placeholder. A Target field is one
 // piece of prose, not a list, so it takes the same lines without the frame — framing a single line
 // would promise a growing region that never arrives.
 //
@@ -549,7 +549,7 @@ function Section({
   );
 }
 
-function ProductField({
+function TargetField({
   label,
   value,
   preserveLines = false,

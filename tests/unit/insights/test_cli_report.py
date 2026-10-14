@@ -14,7 +14,7 @@ from metis.insights.cli import app
 
 runner = CliRunner()
 
-SPECIFICATION = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\nproduct:\n  name: Test product\n  users: Test users\n  description: Test product\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  criterion_refs:\n  - AC-1-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
+SPECIFICATION = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\ntarget:\n  name: Test target\n  users: Test users\n  description: Test target\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  behaviour_refs:\n  - EB-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
 
 
 def _compact(value: str) -> str:
@@ -82,7 +82,7 @@ def test_report_writes_report_files_beside_results(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     reports_dir = results_file.parent
     report = json.loads((reports_dir / "report.json").read_text(encoding="utf-8"))
-    assert Report.model_validate(report).product == "Test product"
+    assert Report.model_validate(report).target == "Test target"
     assert report["criteria"]["AC-1-1"]["rate"] == 100
     assert (reports_dir / "report.html").read_text(encoding="utf-8")
     assert "AC-1-1" in result.output

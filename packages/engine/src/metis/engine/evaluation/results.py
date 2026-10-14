@@ -2,7 +2,7 @@
 
 EvalResult holds deepeval test cases, which only this package can import. The
 models in metis.core.reporting are their serializable projection, which
-`metis insights report` reads to build the product evaluation report.
+`metis insights report` reads to build the target evaluation report.
 """
 
 from __future__ import annotations

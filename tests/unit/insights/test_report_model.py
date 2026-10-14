@@ -94,7 +94,7 @@ class TestSessionReport:
 
 def test_specification_fields_map_to_report():
     specification = {
-        "product": {"name": "Assistant"},
+        "target": {"name": "Assistant"},
         "features": [
             {
                 "id": "F-1",
@@ -160,7 +160,7 @@ class TestReportModel:
         from metis.insights._models import Report
 
         report = Report.model_validate(sample_report)
-        assert report.product == "Orca"
+        assert report.target == "Orca"
         assert report.run == "report"
         assert isinstance(report.features, list)
         assert isinstance(report.behaviours, dict)
@@ -171,6 +171,6 @@ class TestReportModel:
 
         report = Report.model_validate(sample_report)
         dumped = report.model_dump()
-        assert dumped["product"] == sample_report["product"]
+        assert dumped["target"] == sample_report["target"]
         assert dumped["threshold"] == sample_report["threshold"]
         assert set(dumped["behaviours"]) == set(sample_report["behaviours"])

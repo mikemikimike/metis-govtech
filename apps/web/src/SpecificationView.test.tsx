@@ -7,7 +7,7 @@ import { Done } from "./Done";
 import { SpecificationView } from "./SpecificationView";
 
 function specification(
-  product: Partial<Specification["product"]> = {},
+  target: Partial<Specification["target"]> = {},
 ): Specification {
   return {
     schema_version: 2,
@@ -15,12 +15,12 @@ function specification(
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
     tasks: [],
-    product: {
+    target: {
       name: "",
       users: "",
       description: "",
       detail: "",
-      ...product,
+      ...target,
     },
     features: [],
     personas: [],
@@ -62,23 +62,23 @@ function occurrences(value: string, part: string): number {
   return value.split(part).length - 1;
 }
 
-test("the empty document scaffolds all four Product fields", () => {
+test("the empty document scaffolds all four Target fields", () => {
   const markup = render(specification());
-  const product = section(markup, "Product", "Behaviours");
+  const target = section(markup, "Target", "Behaviours");
 
-  assert.match(product, />Name<\/h3>/);
-  assert.match(product, />Description<\/h3>/);
-  assert.match(product, />Users<\/h3>/);
-  assert.match(product, />Details<\/h3>/);
-  assert.equal(occurrences(product, "placeholder-rule"), 12);
+  assert.match(target, />Name<\/h3>/);
+  assert.match(target, />Description<\/h3>/);
+  assert.match(target, />Users<\/h3>/);
+  assert.match(target, />Details<\/h3>/);
+  assert.equal(occurrences(target, "placeholder-rule"), 12);
 });
 
-test("each written Product value replaces only its own placeholder", () => {
+test("each written Target value replaces only its own placeholder", () => {
   const markup = render(specification({ users: "policy analysts" }));
-  const product = section(markup, "Product", "Behaviours");
+  const target = section(markup, "Target", "Behaviours");
 
-  assert.match(product, /policy analysts/);
-  assert.equal(occurrences(product, "placeholder-rule"), 9);
+  assert.match(target, /policy analysts/);
+  assert.equal(occurrences(target, "placeholder-rule"), 9);
 });
 
 test("resumed values are complete and preserve paragraphs and line lists", () => {
@@ -90,23 +90,23 @@ test("resumed values are complete and preserve paragraphs and line lists", () =>
       detail: "Searches the library.\nReturns cited answers.",
     }),
   );
-  const product = section(markup, "Product", "Behaviours");
+  const target = section(markup, "Target", "Behaviours");
 
-  assert.match(product, /People\n- policy analysts\n- reviewers/);
-  assert.match(product, /Searches the library\.\nReturns cited answers\./);
-  assert.equal(occurrences(product, "placeholder-rule"), 0);
+  assert.match(target, /People\n- policy analysts\n- reviewers/);
+  assert.match(target, /Searches the library\.\nReturns cited answers\./);
+  assert.equal(occurrences(target, "placeholder-rule"), 0);
 });
 
-test("clarify marks only Product and leaves its document content read-only", () => {
+test("clarify marks only Target and leaves its document content read-only", () => {
   const markup = render(specification(), {
     busy: true,
     interviewStep: "clarify",
   });
-  const product = section(markup, "Product", "Behaviours");
+  const target = section(markup, "Target", "Behaviours");
 
   assert.equal(occurrences(markup, "is-writing"), 1);
   assert.equal(occurrences(markup, "section-writing-marker"), 1);
-  assert.doesNotMatch(product, /<(?:input|textarea|button)\b/);
+  assert.doesNotMatch(target, /<(?:input|textarea|button)\b/);
 });
 
 test("the document keeps node names and descriptions in their presentation roles", () => {
@@ -161,7 +161,7 @@ test("the document keeps node names and descriptions in their presentation roles
         timeout_minutes: 15,
         response_wait_ms: 300000,
         max_run_retries: null,
-        criterion_refs: ["AC-1-1"],
+        behaviour_refs: ["EB-1"],
       },
     ],
     scenarios: [

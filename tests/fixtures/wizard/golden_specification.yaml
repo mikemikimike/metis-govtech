@@ -1,7 +1,7 @@
 schema_version: 2
 id: research-assistant
 runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
-product:
+target:
   name: Research assistant
   users: Policy analysts and their managers. Some know exactly what they want; others are
     exploring and do not.
@@ -89,9 +89,8 @@ tasks:
   persona_ref: cooperative-delegator
   fixtures: []
   num_trials: 3
-  criterion_refs:
-  - AC-1-1
-  - AC-1-2
+  behaviour_refs:
+  - EB-1
   max_turns: 20
   timeout_minutes: 15
   response_wait_ms: 300000
@@ -101,9 +100,8 @@ tasks:
   persona_ref: impatient-executive
   fixtures: []
   num_trials: 3
-  criterion_refs:
-  - AC-1-1
-  - AC-1-2
+  behaviour_refs:
+  - EB-1
   max_turns: 20
   timeout_minutes: 15
   response_wait_ms: 300000
@@ -114,8 +112,8 @@ tasks:
   fixtures:
   - policy.pdf
   num_trials: 3
-  criterion_refs:
-  - AC-3-1
+  behaviour_refs:
+  - EB-3
   max_turns: 20
   timeout_minutes: 15
   response_wait_ms: 300000

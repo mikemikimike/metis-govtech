@@ -118,7 +118,7 @@ def question_from_request(
 def questions_for(specification: Specification, patches: list[Patch]) -> list[Question]:
     """What to ask, in order, given what was just edited.
 
-    `specification` is the document from before the patches. A product field written while the
+    `specification` is the document from before the patches. A target field written while the
     first tree is being drafted cannot invalidate that same draft — there was no older tree.
 
     Sequenced deliberately: criteria first, then each scenario covering the behaviour. The user
@@ -128,7 +128,7 @@ def questions_for(specification: Specification, patches: list[Patch]) -> list[Qu
     for impact in impacts_for(specification, patches):
         if impact.kind == "tree":
             text = (
-                "That changes the product description. The current draft came "
+                "That changes the target description. The current draft came "
                 "from the previous version — what should I do with that draft?"
             )
         elif impact.kind == "criteria":

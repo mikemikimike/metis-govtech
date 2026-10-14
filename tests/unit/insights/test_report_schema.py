@@ -63,4 +63,4 @@ class TestReportSchemaSync:
             pytest.skip("sample report.json not available")
         data = json.loads(fixture_path.read_text())
         report = Report.model_validate(data)
-        assert report.product
+        assert report.target

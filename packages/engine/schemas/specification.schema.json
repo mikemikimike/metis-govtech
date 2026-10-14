@@ -151,7 +151,32 @@
       "title": "Persona",
       "type": "object"
     },
-    "Product": {
+    "Scenario": {
+      "additionalProperties": false,
+      "description": "The situation in which Tasks evaluate the target.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "Scenario",
+      "type": "object"
+    },
+    "Target": {
       "properties": {
         "name": {
           "title": "Name",
@@ -176,32 +201,7 @@
         "users",
         "description"
       ],
-      "title": "Product",
-      "type": "object"
-    },
-    "Scenario": {
-      "additionalProperties": false,
-      "description": "The situation in which Tasks evaluate the product.",
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "description": {
-          "title": "Description",
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "description"
-      ],
-      "title": "Scenario",
+      "title": "Target",
       "type": "object"
     },
     "Task": {
@@ -232,11 +232,11 @@
           "title": "Num Trials",
           "type": "integer"
         },
-        "criterion_refs": {
+        "behaviour_refs": {
           "items": {
             "type": "string"
           },
-          "title": "Criterion Refs",
+          "title": "Behaviour Refs",
           "type": "array"
         },
         "max_turns": {
@@ -295,8 +295,8 @@
       "title": "Runner Factory Ref",
       "type": "string"
     },
-    "product": {
-      "$ref": "#/$defs/Product"
+    "target": {
+      "$ref": "#/$defs/Target"
     },
     "features": {
       "items": {
@@ -338,7 +338,7 @@
     "schema_version",
     "id",
     "runner_factory_ref",
-    "product"
+    "target"
   ],
   "title": "Specification v2",
   "type": "object"

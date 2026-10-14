@@ -1,7 +1,7 @@
 settings:
   clarify_turn_cap: 5
 
-opening_question: "Tell me about your product — what it does and who it's for."
+opening_question: "Tell me about your target — what it does and who it's for."
 
 perspectives:
   - id: end_user
@@ -15,7 +15,7 @@ perspectives:
     question: "Are our responses audited, grounded, and within compliance policy scope?"
   - id: security
     label: "Security"
-    question: "Is our system safe against malicious attacks?"
+    question: "Is our target safe against malicious attacks?"
 
 statuses:
   working: "Working on your Interview…"

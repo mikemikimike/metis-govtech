@@ -17,9 +17,9 @@ from metis.wizard.contracts import (
     Patch,
     PatchOp,
     Perspective,
-    Product,
     Specification,
     StepResult,
+    Target,
     WarningSource,
 )
 from metis.wizard.domain.permissions import InterviewStep
@@ -36,9 +36,7 @@ def driver_state(**values: object) -> ApplicationDriverState:
 
 def empty_state(step=InterviewStep.CLARIFY, history=None) -> ApplicationDriverState:
     return driver_state(
-        specification=Specification(
-            product=Product(name="X", description="", users="")
-        ),
+        specification=Specification(target=Target(name="X", description="", users="")),
         step=step,
         history=history or [],
     )
@@ -98,23 +96,23 @@ def test_below_the_cap_it_keeps_asking() -> None:
     assert state.step is InterviewStep.CLARIFY
 
 
-def test_clarify_commits_product_but_not_behaviours() -> None:
-    """Clarify writes the product before the next question, but never drafts behaviours."""
+def test_clarify_commits_target_but_not_behaviours() -> None:
+    """Clarify writes the target before the next question, but never drafts behaviours."""
     driver = StepDriver(interviewer=ScriptedInterviewer(clarify_questions=5))
     state = empty_state(history=after_opening())
 
     request = driver.compose(state)
 
     assert request.prompt
-    assert state.specification.product.name == "Research assistant"
-    assert state.specification.product.users == "Policy analysts"
-    assert state.specification.product.description
-    assert state.specification.product.detail
+    assert state.specification.target.name == "Research assistant"
+    assert state.specification.target.users == "Policy analysts"
+    assert state.specification.target.description
+    assert state.specification.target.detail
     assert state.specification.features == []
     assert state.specification.scenarios == []
 
 
-def test_a_thin_answer_writes_no_product_fields() -> None:
+def test_a_thin_answer_writes_no_target_fields() -> None:
     @dataclass
     class ThinInterviewer(ScriptedInterviewer):
         def clarify(self, specification, history, context=None):
@@ -128,12 +126,12 @@ def test_a_thin_answer_writes_no_product_fields() -> None:
     request = driver.compose(state)
 
     assert request.prompt == "Tell me a little more."
-    assert state.specification.product.description == ""
-    assert state.specification.product.users == ""
+    assert state.specification.target.description == ""
+    assert state.specification.target.users == ""
     assert state.step is InterviewStep.CLARIFY
 
 
-def test_clarify_rejects_a_non_product_patch() -> None:
+def test_clarify_rejects_a_non_target_patch() -> None:
     @dataclass
     class WritesABehaviour(NeverDone):
         def clarify(self, specification, history, context=None):
@@ -191,7 +189,7 @@ def test_model_drafts_cannot_change_interview_context() -> None:
     assert state.context == before
 
 
-def test_a_later_product_edit_does_not_move_the_step() -> None:
+def test_a_later_target_edit_does_not_move_the_step() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = empty_state(step=InterviewStep.CRITERIA)
 
@@ -202,14 +200,14 @@ def test_a_later_product_edit_does_not_move_the_step() -> None:
             patches=[
                 {
                     "op": "set",
-                    "path": "product.description",
+                    "path": "target.description",
                     "value": "A corrected description",
                 }
             ],
         ),
     )
 
-    assert state.specification.product.description == "A corrected description"
+    assert state.specification.target.description == "A corrected description"
     assert state.step is InterviewStep.CRITERIA
 
 
@@ -234,7 +232,7 @@ def test_every_screen_reports_a_position_consistent_with_its_step() -> None:
     steps because clarify is the first, even though a chat rather than a screen composes it.
     """
     expected = {
-        InterviewStep.CLARIFY: ("Understanding your product", 1),
+        InterviewStep.CLARIFY: ("Understanding your target", 1),
         InterviewStep.BEHAVIOURS: ("Behaviours", 2),
         InterviewStep.CRITERIA: ("Acceptance criteria", 3),
         InterviewStep.PERSONAS: ("Personas", 4),
@@ -524,7 +522,7 @@ def test_drafted_behaviours_start_measured_on_the_behaviour_screen() -> None:
     every drafted behaviour starts measured, so each card draws a ticked measurement box, and
     the screen carries the measurement instruction rather than a bare review prompt."""
     specification = Specification(
-        product=Product(name="Agent", description="An agent.", users="Operators")
+        target=Target(name="Agent", description="An agent.", users="Operators")
     )
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
@@ -559,7 +557,7 @@ def test_task_cards_show_planned_trials() -> None:
 
 
 @pytest.mark.parametrize(
-    "fault", ["persona", "scenario", "criterion", "trials", "coverage"]
+    "fault", ["persona", "scenario", "behaviour", "trials", "coverage"]
 )
 def test_task_readiness_blocks_incomplete_inputs(fault: str) -> None:
     specification = research_assistant()
@@ -567,8 +565,8 @@ def test_task_readiness_blocks_incomplete_inputs(fault: str) -> None:
         specification.tasks[0].persona_ref = "missing"
     elif fault == "scenario":
         specification.tasks[0].scenario_ref = "missing"
-    elif fault == "criterion":
-        specification.tasks[0].criterion_refs = ["missing"]
+    elif fault == "behaviour":
+        specification.tasks[0].behaviour_refs = ["missing"]
     elif fault == "trials":
         specification.tasks[0].num_trials = 0
     else:
@@ -580,9 +578,9 @@ def test_task_readiness_blocks_incomplete_inputs(fault: str) -> None:
 
 def test_task_readiness_clears_after_correction() -> None:
     specification = research_assistant()
-    specification.tasks[0].criterion_refs = []
+    specification.tasks[0].behaviour_refs = []
     assert any(w.blocking for w in _scenarios_screen(specification).warnings)
-    specification.tasks[0].criterion_refs = ["AC-1-1"]
+    specification.tasks[0].behaviour_refs = ["EB-1"]
     assert not _scenarios_screen(specification).warnings
 
 
@@ -591,6 +589,27 @@ def _scenario_edit_state():
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = driver_state(specification=specification, step=InterviewStep.SCENARIOS)
     return driver, state, driver.compose(state)
+
+
+def test_task_behaviour_choices_select_all_owned_criteria() -> None:
+    driver, state, request = _scenario_edit_state()
+    card = next(card for card in request.cards if card.id == "TC-001")
+    choices = next(
+        c for c in card.components if c.type == "options" and c.label == "Behaviours"
+    )
+    assert [(str(option.id), option.selected) for option in choices.options] == [
+        ("cover:TC-001:EB-1", True),
+        ("cover:TC-001:EB-3", False),
+    ]
+    driver.handle(state, request, ChoiceResponse(selected=["cover:TC-001:EB-3"]))
+    assert state.specification.tasks[0].behaviour_refs == ["EB-1", "EB-3"]
+
+    driver.handle(
+        state, driver.compose(state), ChoiceResponse(selected=["cover:TC-001:EB-1"])
+    )
+    assert state.specification.tasks[0].behaviour_refs == ["EB-3"]
+    behaviour = state.specification.behaviour("EB-1")
+    assert behaviour is not None and len(behaviour.criteria) == 2
 
 
 def test_a_trial_edit_recomposes_the_scenario_total() -> None:
@@ -716,7 +735,7 @@ def test_each_review_gates_its_continue_action_on_complete_content() -> None:
 
 def test_the_final_continue_uses_full_specification_readiness() -> None:
     specification = research_assistant()
-    specification.product.name = ""
+    specification.target.name = ""
 
     request = _scenarios_screen(specification)
 
@@ -1243,9 +1262,9 @@ def test_copy_task_retains_settings_and_assigns_a_new_id() -> None:
     assert copied.max_run_retries == 0
     assert copied.scenario_ref == original.scenario_ref
     assert copied.persona_ref == original.persona_ref
-    assert copied.criterion_refs == original.criterion_refs
-    copied.criterion_refs.clear()
-    assert original.criterion_refs
+    assert copied.behaviour_refs == original.behaviour_refs
+    copied.behaviour_refs.clear()
+    assert original.behaviour_refs
 
 
 def test_criterion_parameter_form_changes_the_selected_requirement() -> None:

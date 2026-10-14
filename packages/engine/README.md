@@ -88,7 +88,7 @@ An experiment is a directory containing `specification.yaml` and a `fixtures/` f
 
 ```
 my-experiment/
-├── specification.yaml  # Product, Criteria, Personas, Scenarios, and Tasks
+├── specification.yaml  # Target, Criteria, Personas, Scenarios, and Tasks
 └── fixtures/            # Files uploaded during simulation
     └── data.csv
 ```

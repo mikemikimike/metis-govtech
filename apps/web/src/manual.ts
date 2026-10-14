@@ -115,7 +115,7 @@ export function synthesizeManualSpecification(
     id: experiment.id.trim(),
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
-    product: {
+    target: {
       name: experiment.id.trim(),
       description,
       users: "The personas defined in this manual experiment.",
@@ -144,7 +144,7 @@ export function synthesizeManualSpecification(
       timeout_minutes: task.timeout_minutes ?? 15,
       response_wait_ms: task.response_wait_ms ?? 300000,
       max_run_retries: task.max_run_retries ?? null,
-      criterion_refs: behaviours[index].criteria.map((c) => c.id),
+      behaviour_refs: [behaviours[index].id],
     })),
     scenarios: experiment.scenarios.map((scenario) => {
       const id = scenario.id.trim();

@@ -27,10 +27,10 @@ class TestRunnerRefField:
             "runner_factory_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
             "personas": [{"id": "p1", "description": "persona", "name": "p1"}],
             "scenarios": [{"id": "s1", "description": "scenario", "name": "s1"}],
-            "product": {
-                "name": "Test product",
+            "target": {
+                "name": "Test target",
                 "users": "Test users",
-                "description": "Test product",
+                "description": "Test target",
             },
             "tasks": [
                 {
@@ -39,7 +39,7 @@ class TestRunnerRefField:
                     "persona_ref": "p1",
                     "fixtures": [],
                     "num_trials": 1,
-                    "criterion_refs": ["AC-1-1"],
+                    "behaviour_refs": ["EB-1"],
                 }
             ],
             "features": [
@@ -200,10 +200,10 @@ class TestRunnerRefValidation:
             "runner_factory_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
             "personas": [{"id": "p1", "description": "persona", "name": "p1"}],
             "scenarios": [{"id": "s1", "description": "scenario", "name": "s1"}],
-            "product": {
-                "name": "Test product",
+            "target": {
+                "name": "Test target",
                 "users": "Test users",
-                "description": "Test product",
+                "description": "Test target",
             },
             "tasks": [
                 {
@@ -212,7 +212,7 @@ class TestRunnerRefValidation:
                     "persona_ref": "p1",
                     "fixtures": [],
                     "num_trials": 1,
-                    "criterion_refs": ["AC-1-1"],
+                    "behaviour_refs": ["EB-1"],
                 }
             ],
             "features": [

@@ -889,7 +889,7 @@ export interface components {
          * @description Stable codes for gaps that stop a Specification from being runnable.
          * @enum {string}
          */
-        MissingDataCode: "product_incomplete" | "behaviours_incomplete" | "no_measured_behaviour" | "criteria_incomplete" | "no_personas" | "no_scenarios" | "behaviour_uncovered" | "scenario_no_selected_behaviour" | "scenario_no_persona" | "scenario_unknown_reference" | "scenario_invalid_trials";
+        MissingDataCode: "target_incomplete" | "behaviours_incomplete" | "no_measured_behaviour" | "criteria_incomplete" | "no_personas" | "no_scenarios" | "behaviour_uncovered" | "scenario_no_selected_behaviour" | "scenario_no_persona" | "scenario_unknown_reference" | "scenario_invalid_trials";
         /**
          * Option
          * @description Shared — deliberately unprefixed.
@@ -993,32 +993,9 @@ export interface components {
             /** Question */
             question: string;
         };
-        /** Product */
-        Product: {
-            /** Name */
-            name: string;
-            /** Users */
-            users: string;
-            /** Description */
-            description: string;
-            /**
-             * Detail
-             * @default
-             */
-            detail: string;
-        };
-        /**
-         * ProductProfile
-         * @description The product context and requirements that an evaluation measures.
-         */
-        ProductProfile: {
-            product: components["schemas"]["Product"];
-            /** Features */
-            features?: components["schemas"]["Feature"][];
-        };
         /**
          * Scenario
-         * @description The situation in which Tasks evaluate the product.
+         * @description The situation in which Tasks evaluate the target.
          */
         Scenario: {
             /** Id */
@@ -1105,7 +1082,7 @@ export interface components {
              * @default metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
              */
             runner_factory_ref: string;
-            product: components["schemas"]["Product"];
+            target: components["schemas"]["Target"];
             /** Features */
             features?: components["schemas"]["Feature"][];
             /** Personas */
@@ -1118,6 +1095,29 @@ export interface components {
             fixture_content_descriptions?: {
                 [key: string]: string;
             };
+        };
+        /** Target */
+        Target: {
+            /** Name */
+            name: string;
+            /** Users */
+            users: string;
+            /** Description */
+            description: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        };
+        /**
+         * TargetProfile
+         * @description The target context and requirements that an evaluation measures.
+         */
+        TargetProfile: {
+            target: components["schemas"]["Target"];
+            /** Features */
+            features?: components["schemas"]["Feature"][];
         };
         /**
          * Task
@@ -1137,8 +1137,8 @@ export interface components {
              * @default 3
              */
             num_trials: number;
-            /** Criterion Refs */
-            criterion_refs?: string[];
+            /** Behaviour Refs */
+            behaviour_refs?: string[];
             /**
              * Max Turns
              * @default 20

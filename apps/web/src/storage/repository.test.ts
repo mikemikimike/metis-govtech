@@ -29,7 +29,7 @@ const state: InterviewState = {
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
     tasks: [],
-    product: { name: "", users: "", description: "", detail: "" },
+    target: { name: "", users: "", description: "", detail: "" },
     features: [],
     personas: [],
     scenarios: [],
@@ -48,7 +48,7 @@ const state: InterviewState = {
 };
 
 test("migrates saved Interviews with their description and fixture bytes", async () => {
-  const request = fakeIndexedDB.open("metis-web", 2);
+  const request = fakeIndexedDB.open("metis-web", 4);
   const database = await new Promise<IDBDatabase>((resolve, reject) => {
     request.onupgradeneeded = () =>
       request.result.createObjectStore("interviews", { keyPath: "id" });
@@ -56,10 +56,29 @@ test("migrates saved Interviews with their description and fixture bytes", async
     request.onerror = () => reject(request.error);
   });
   const bytes = new Blob(["policy bytes"], { type: "text/markdown" });
+  const { target, ...specification } = state.specification;
+  const pending = {
+    type: "form",
+    request_id: "resume-target-name",
+    stage: "clarify",
+    prompt: "Enter product details.",
+    fields: [{ id: "product.name", label: "Product name" }],
+    answer: { "product.name": "A product named product.name" },
+  };
   const oldRecord = {
     ...emptyRecord("legacy-opening-files", state, "clarify", []),
     storage_version: 3,
     transcript: [
+      {
+        kind: "interaction",
+        request_id: pending.request_id,
+        request: pending,
+        response: {
+          type: "form",
+          values: { "product.name": "A product named product.name" },
+        },
+        status: "answered",
+      },
       {
         kind: "initial_description",
         id: "initial-message",
@@ -68,6 +87,9 @@ test("migrates saved Interviews with their description and fixture bytes", async
     ],
     state: {
       ...state,
+      specification: { ...specification, product: target },
+      pending,
+      history: [{ role: "user", text: "Keep product.name in my description." }],
       context: {
         perspective: "end_user",
         capability_evidence: {
@@ -91,6 +113,11 @@ test("migrates saved Interviews with their description and fixture bytes", async
     transaction
       .objectStore("interviews")
       .put({ ...oldRecord, id: "version-four", storage_version: 4 });
+    transaction.objectStore("interviews").put({
+      ...oldRecord,
+      id: "version-five",
+      storage_version: 5,
+    });
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
   });
@@ -98,7 +125,7 @@ test("migrates saved Interviews with their description and fixture bytes", async
 
   const migrated = await new InterviewRepository().read("legacy-opening-files");
 
-  assert.equal(migrated?.storage_version, 5);
+  assert.equal(migrated?.storage_version, 6);
   assert.equal(
     migrated?.state.context.opening_description,
     "The opening explanation.",
@@ -106,8 +133,42 @@ test("migrates saved Interviews with their description and fixture bytes", async
   assert.deepEqual(migrated?.state.context.documents, []);
   assert.equal(await migrated?.fixtures[0]?.blob.text(), "policy bytes");
   const versionFour = await new InterviewRepository().read("version-four");
-  assert.equal(versionFour?.storage_version, 5);
+  assert.equal(versionFour?.storage_version, 6);
   assert.equal(await versionFour?.fixtures[0]?.blob.text(), "policy bytes");
+  const versionFive = await new InterviewRepository().read("version-five");
+  assert.equal(versionFive?.storage_version, 6);
+  assert.deepEqual(versionFive?.state.specification.target, target);
+  assert.equal(
+    versionFive?.state.history[0]?.text,
+    "Keep product.name in my description.",
+  );
+  assert.equal(versionFive?.state.pending?.type, "form");
+  if (versionFive?.state.pending?.type === "form") {
+    assert.equal(versionFive.state.pending.fields[0]?.id, "target.name");
+    assert.equal(
+      versionFive.state.pending.answer["target.name"],
+      "A product named product.name",
+    );
+  }
+  const interaction = versionFive?.transcript[0];
+  assert.equal(interaction?.kind, "interaction");
+  if (
+    interaction?.kind === "interaction" &&
+    interaction.response?.type === "form"
+  ) {
+    assert.equal(
+      interaction.response.values?.["target.name"],
+      "A product named product.name",
+    );
+  }
+  assert.equal(await versionFive?.fixtures[0]?.blob.text(), "policy bytes");
+  assert.ok(versionFive);
+  await new InterviewRepository().put(versionFive);
+  assert.deepEqual(
+    await new InterviewRepository().read("version-five"),
+    versionFive,
+  );
+  await new InterviewRepository().delete("version-five");
   await new InterviewRepository().delete("version-four");
   await new InterviewRepository().delete("legacy-opening-files");
 });
@@ -127,7 +188,7 @@ test("local repository creates, orders, reads and deletes browser records", asyn
     (await repository.list()).map((record) => record.id),
     ["storage-test-b", "storage-test-a"],
   );
-  assert.equal((await repository.read("storage-test-a"))?.storage_version, 5);
+  assert.equal((await repository.read("storage-test-a"))?.storage_version, 6);
   await repository.delete("storage-test-a");
   assert.equal(await repository.read("storage-test-a"), undefined);
   await repository.delete("storage-test-b");
@@ -138,7 +199,7 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
   const healthy = emptyRecord("healthy-record", state, "clarify", []);
   await repository.put(healthy);
   await new Promise<void>((resolve, reject) => {
-    const request = fakeIndexedDB.open("metis-web", 4);
+    const request = fakeIndexedDB.open("metis-web", 5);
     request.onsuccess = () => {
       const tx = request.result.transaction("interviews", "readwrite");
       tx.objectStore("interviews").put({
@@ -155,6 +216,22 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
         id: "missing-capability-evidence",
         state: { ...state, context: { perspective: "end_user" } },
       });
+      for (const [id, references] of [
+        ["invalid-task-references", [42]],
+        ["missing-task-references", undefined],
+      ]) {
+        tx.objectStore("interviews").put({
+          ...healthy,
+          id,
+          state: {
+            ...state,
+            specification: {
+              ...state.specification,
+              tasks: [{ id: "TC-001", behaviour_refs: references }],
+            },
+          },
+        });
+      }
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     };
@@ -165,9 +242,24 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
     (await repository.list()).map((record) => record.id),
     ["healthy-record"],
   );
-  assert.equal(repository.problems.length, 3);
+  assert.equal(repository.problems.length, 5);
   assert.equal(await repository.read("bad-record"), undefined);
   assert.equal(await repository.read("missing-capability-evidence"), undefined);
+  assert.equal(await repository.read("invalid-task-references"), undefined);
+  assert.equal(await repository.read("missing-task-references"), undefined);
+  const preserved = await new Promise<unknown>((resolve, reject) => {
+    const request = fakeIndexedDB.open("metis-web", 5);
+    request.onsuccess = () => {
+      const row = request.result
+        .transaction("interviews", "readonly")
+        .objectStore("interviews")
+        .get("invalid-task-references");
+      row.onsuccess = () => resolve(row.result);
+      row.onerror = () => reject(row.error);
+    };
+    request.onerror = () => reject(request.error);
+  });
+  assert.ok(preserved);
 });
 
 test("rejects an invalid update before it can replace a healthy record", async () => {
@@ -256,7 +348,7 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
         description: "First scenario",
         scenario_ref: "S-1",
         persona_ref: "P-1",
-        criterion_refs: [],
+        behaviour_refs: [],
         fixtures: ["shared.txt"],
         num_trials: 1,
         max_turns: 20,
@@ -270,7 +362,7 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
         description: "Second scenario",
         scenario_ref: "S-1",
         persona_ref: "P-1",
-        criterion_refs: [],
+        behaviour_refs: [],
         fixtures: ["shared.txt"],
         num_trials: 1,
         max_turns: 20,

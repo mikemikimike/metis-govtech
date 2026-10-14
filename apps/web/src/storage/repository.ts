@@ -9,8 +9,8 @@ import { fixtureNameIdentity } from "../fixture-policy.ts";
 
 const DB_NAME = "metis-web";
 const STORE_NAME = "interviews";
-const DB_VERSION = 4;
-const STORAGE_VERSION = 5 as const;
+const DB_VERSION = 5;
+const STORAGE_VERSION = 6 as const;
 const INTERVIEW_STEPS: readonly InterviewStep[] = [
   "clarify",
   "behaviours",
@@ -73,10 +73,20 @@ function validState(value: unknown): value is InterviewState {
     !!state.specification &&
     typeof state.specification === "object" &&
     state.specification.schema_version === 2 &&
+    storedObject(state.specification.target) &&
+    typeof state.specification.target.name === "string" &&
+    typeof state.specification.target.description === "string" &&
+    typeof state.specification.target.users === "string" &&
     Array.isArray(state.specification.features) &&
     Array.isArray(state.specification.personas) &&
     Array.isArray(state.specification.scenarios) &&
     Array.isArray(state.specification.tasks) &&
+    state.specification.tasks.every(
+      (task) =>
+        !!task &&
+        Array.isArray(task.behaviour_refs) &&
+        task.behaviour_refs.every((ref) => typeof ref === "string"),
+    ) &&
     Array.isArray(state.history) &&
     Array.isArray(state.user_typed) &&
     Array.isArray(state.issued_ids) &&
@@ -126,6 +136,61 @@ function validTranscriptEntry(value: unknown): value is TranscriptEntry {
   );
 }
 
+function storedObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function targetPath(value: unknown): unknown {
+  return typeof value === "string" && value.startsWith("product.")
+    ? `target.${value.slice("product.".length)}`
+    : value;
+}
+
+// Requests can contain field IDs and patch paths. Keep all user prose unchanged.
+function targetRequest(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(targetRequest);
+  if (!storedObject(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      if ((key === "answer" || key === "values") && storedObject(entry)) {
+        return [
+          key,
+          Object.fromEntries(
+            Object.entries(entry).map(([field, text]) => [
+              targetPath(field),
+              text,
+            ]),
+          ),
+        ];
+      }
+      if (["id", "path", "target", "subject"].includes(key)) {
+        return [key, targetPath(entry)];
+      }
+      return [key, key === "value" ? entry : targetRequest(entry)];
+    }),
+  );
+}
+
+function targetSpecification(value: unknown): unknown {
+  if (!storedObject(value) || !("product" in value)) return value;
+  const { product, ...specification } = value;
+  return { ...specification, target: specification.target ?? product };
+}
+
+function targetTranscript(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((entry) => {
+    if (!storedObject(entry) || entry.kind !== "interaction") return entry;
+    return {
+      ...entry,
+      request: targetRequest(entry.request),
+      ...(entry.response === undefined
+        ? {}
+        : { response: targetRequest(entry.response) }),
+    };
+  });
+}
+
 function currentRecord(
   value: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -147,8 +212,14 @@ function currentRecord(
   return {
     ...value,
     storage_version: STORAGE_VERSION,
+    transcript: targetTranscript(value.transcript),
     state: {
       ...state,
+      specification: targetSpecification(state.specification),
+      pending: targetRequest(state.pending),
+      user_typed: Array.isArray(state.user_typed)
+        ? state.user_typed.map(targetPath)
+        : state.user_typed,
       context: {
         ...context,
         opening_description:
@@ -292,7 +363,8 @@ export class InterviewRepository {
           if (
             storageVersion === 2 ||
             storageVersion === 3 ||
-            storageVersion === 4
+            storageVersion === 4 ||
+            storageVersion === 5
           ) {
             const row = value as unknown as Record<string, unknown>;
             current.update(currentRecord(row));
@@ -324,7 +396,7 @@ export function emptyRecord(
     id,
     created_at: now,
     updated_at: now,
-    title: state.specification.product.name.trim() || "Untitled Interview",
+    title: state.specification.target.name.trim() || "Untitled Interview",
     stage,
     state,
     transcript,

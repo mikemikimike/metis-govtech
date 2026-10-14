@@ -195,9 +195,9 @@ def _task(
     offset: int = 0,
 ) -> Task:
     if specification.persona(draft.persona_ref) is None or any(
-        specification.criterion(ref) is None for ref in draft.criterion_refs
+        specification.behaviour(ref) is None for ref in draft.behaviour_refs
     ):
-        raise ValueError("Task references unknown Persona or Criterion IDs.")
+        raise ValueError("Task references unknown Persona or Behaviour IDs.")
     available = {
         fixture_name_identity(name): normalize_fixture_name(name)
         for name in (allowed_fixture_names or set())
@@ -215,7 +215,7 @@ def _task(
         id=f"TC-{number:03}",
         scenario_ref=scenario_id,
         persona_ref=draft.persona_ref,
-        criterion_refs=list(draft.criterion_refs),
+        behaviour_refs=list(draft.behaviour_refs),
         fixtures=fixtures,
     )
 

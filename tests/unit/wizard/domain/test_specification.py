@@ -9,7 +9,7 @@ import yaml
 
 import metis.wizard
 from metis.core.experiment import Experiment
-from metis.core.profile import ProductProfile
+from metis.core.profile import TargetProfile
 from metis.wizard.contracts import Specification
 from tests.fixtures.wizard.specifications import research_assistant
 
@@ -30,7 +30,7 @@ def test_round_trips_through_json_unchanged() -> None:
     assert parsed == original
     # spot-check the structured criterion description and references
     assert parsed.behaviour("EB-3").criteria[0].description.then.startswith("it stops")  # type: ignore[union-attr]
-    assert parsed.task("TC-001").criterion_refs == ["AC-1-1", "AC-1-2"]  # type: ignore[union-attr]
+    assert parsed.task("TC-001").behaviour_refs == ["EB-1"]  # type: ignore[union-attr]
 
 
 def test_save_and_load_round_trip(tmp_path: Path) -> None:
@@ -43,14 +43,14 @@ def test_save_and_load_round_trip(tmp_path: Path) -> None:
         "schema_version",
         "id",
         "runner_factory_ref",
-        "product",
+        "target",
         "features",
     ]
 
 
 def test_specification_combines_profile_and_experiment() -> None:
     source = research_assistant()
-    profile = ProductProfile(product=source.product, features=source.features)
+    profile = TargetProfile(target=source.target, features=source.features)
     experiment = Experiment(
         id="research",
         personas=source.personas,
@@ -61,13 +61,13 @@ def test_specification_combines_profile_and_experiment() -> None:
 
     assert specification.profile is profile
     assert specification.experiment is experiment
-    assert set(profile.model_dump()) == {"product", "features"}
+    assert set(profile.model_dump()) == {"target", "features"}
     assert profile.criterion("AC-1-1") == specification.criterion("AC-1-1")
     assert experiment.task("TC-001") == specification.task("TC-001")
 
-    specification.product.name = "Research assistant"
+    specification.target.name = "Research assistant"
     specification.tasks = specification.tasks[:1]
-    assert profile.product.name == "Research assistant"
+    assert profile.target.name == "Research assistant"
     assert len(experiment.tasks) == 1
     document = specification.model_dump(mode="json")
     assert document == {
@@ -78,9 +78,9 @@ def test_specification_combines_profile_and_experiment() -> None:
     assert Specification.model_validate(document) == specification
 
     copied = specification.model_copy(deep=True)
-    copied.profile.product.name = "Copy"
+    copied.profile.target.name = "Copy"
     copied.experiment.tasks.clear()
-    assert specification.product.name == "Research assistant"
+    assert specification.target.name == "Research assistant"
     assert len(specification.tasks) == 1
 
 
@@ -169,7 +169,7 @@ def test_full_specification_validates_against_committed_schema() -> None:
 def test_save_and_load_round_trip_survives_non_ascii(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A product description the interview or a hand-authored specification wrote can
+    """A target description the interview or a hand-authored specification wrote can
     contain any character a person can type — not just ASCII. save()/load()
     must round-trip it exactly, and never rely on the platform's locale
     encoding to do so (issue #385)."""
@@ -185,7 +185,7 @@ def test_save_and_load_round_trip_survives_non_ascii(
     monkeypatch.setattr(pathlib.Path, "write_text", spy_write_text)
 
     specification = research_assistant()
-    specification.product.description = "Swipe to metric → see detail"
+    specification.target.description = "Swipe to metric → see detail"
     path = tmp_path / "specification.yaml"
 
     specification.save(path)

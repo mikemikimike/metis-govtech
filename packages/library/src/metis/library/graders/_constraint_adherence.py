@@ -33,7 +33,7 @@ class ConstraintAdherenceGrader(MetisTurnGrader):
                     "all explicit constraints and "
                     "negative instructions from the "
                     "user.\n\n"
-                    "SYSTEM CONTEXT: This agent is an "
+                    "TARGET CONTEXT: This agent is an "
                     "orchestrator that delegates tasks "
                     "to "
                     "specialised subagents. When the "

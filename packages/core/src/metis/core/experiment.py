@@ -12,7 +12,7 @@ class Persona(NamedNode[str]):
 
 
 class Scenario(NamedNode[str], extra="forbid"):
-    """The situation in which Tasks evaluate the product."""
+    """The situation in which Tasks evaluate the target."""
 
 
 class Task(BaseModel, extra="forbid"):
@@ -23,7 +23,7 @@ class Task(BaseModel, extra="forbid"):
     persona_ref: str
     fixtures: list[str] = Field(default_factory=list)
     num_trials: int = Field(default=3, strict=True)
-    criterion_refs: list[str] = Field(default_factory=list)
+    behaviour_refs: list[str] = Field(default_factory=list)
     max_turns: int = Field(default=20, gt=0, strict=True)
     timeout_minutes: int = Field(default=15, gt=0, strict=True)
     response_wait_ms: int = Field(default=300000, gt=0, strict=True)

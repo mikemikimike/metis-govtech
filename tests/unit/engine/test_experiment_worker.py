@@ -475,10 +475,10 @@ class TestFixtureContentDescriptions:
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
                 "personas": [{"id": "p", "description": "d", "name": "p"}],
                 "scenarios": [{"id": "s", "description": "d", "name": "s"}],
-                "product": {
-                    "name": "Test product",
+                "target": {
+                    "name": "Test target",
                     "users": "Test users",
-                    "description": "Test product",
+                    "description": "Test target",
                 },
                 "tasks": [
                     {
@@ -487,7 +487,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p",
                         "fixtures": ["q3.csv"],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-1-1"],
+                        "behaviour_refs": ["EB-1"],
                     }
                 ],
                 "features": [
@@ -530,10 +530,10 @@ class TestFixtureContentDescriptions:
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
                 "personas": [{"id": "p", "description": "d", "name": "p"}],
                 "scenarios": [{"id": "s", "description": "d", "name": "s"}],
-                "product": {
-                    "name": "Test product",
+                "target": {
+                    "name": "Test target",
                     "users": "Test users",
-                    "description": "Test product",
+                    "description": "Test target",
                 },
                 "tasks": [
                     {
@@ -542,7 +542,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p",
                         "fixtures": [],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-1-1"],
+                        "behaviour_refs": ["EB-1"],
                     }
                 ],
                 "features": [
@@ -646,10 +646,10 @@ class TestFixtureContentDescriptions:
                     {"id": "s1", "description": "d", "name": "s1"},
                     {"id": "s2", "description": "d", "name": "s2"},
                 ],
-                "product": {
-                    "name": "Test product",
+                "target": {
+                    "name": "Test target",
                     "users": "Test users",
-                    "description": "Test product",
+                    "description": "Test target",
                 },
                 "tasks": [
                     {
@@ -658,7 +658,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p1",
                         "fixtures": [],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-1-1"],
+                        "behaviour_refs": ["EB-1"],
                     },
                     {
                         "id": "TC-002",
@@ -666,7 +666,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p2",
                         "fixtures": [],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-1-1"],
+                        "behaviour_refs": ["EB-1"],
                     },
                     {
                         "id": "TC-003",
@@ -674,7 +674,7 @@ class TestFixtureContentDescriptions:
                         "persona_ref": "p1",
                         "fixtures": [],
                         "num_trials": 1,
-                        "criterion_refs": ["AC-2-1"],
+                        "behaviour_refs": ["EB-2"],
                     },
                 ],
                 "features": [

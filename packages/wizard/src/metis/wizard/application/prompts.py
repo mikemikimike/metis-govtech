@@ -293,12 +293,12 @@ def _capability_evidence(context: InterviewContext | None) -> str:
             "materially change that map."
         ),
         CapabilityConfidence.MEDIUM: (
-            "Consider an unselected capability only when it relates to the product "
+            "Consider an unselected capability only when it relates to the target "
             "description or later answers and could materially change the provisional "
             "evaluation map."
         ),
         CapabilityConfidence.HIGH: (
-            "Rely on the selection unless other product evidence suggests an omitted "
+            "Rely on the selection unless other target evidence suggests an omitted "
             "capability that could materially change the provisional evaluation map."
         ),
     }[evidence.confidence]

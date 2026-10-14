@@ -21,8 +21,8 @@ from metis.wizard.application.interviewer import InterviewerOutputError
 from metis.wizard.contracts import (
     ClarifyResult,
     InterviewDocument,
-    Product,
     Specification,
+    Target,
 )
 from tests.fixtures.wizard.context import interview_context
 
@@ -113,7 +113,7 @@ def test_gateway_connection_failure_is_a_retryable_interviewer_error() -> None:
     with pytest.raises(InterviewerOutputError, match="could not complete"):
         gateway.clarify(
             specification=Specification(
-                product=Product(name="", description="", users="")
+                target=Target(name="", description="", users="")
             ),
             history=[],
             context=interview_context(),
@@ -376,7 +376,7 @@ def test_raw_scenario_fixtures_are_retried_until_they_match_the_context() -> Non
                         "tasks": [
                             {
                                 "persona_ref": "impatient-executive",
-                                "criterion_refs": ["AC-1-1"],
+                                "behaviour_refs": ["EB-1"],
                                 "fixtures": ["unknown.csv"],
                             }
                         ],
@@ -426,18 +426,18 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     """The patch envelope is valid, but its value is not a Feature.
 
     The model-facing schema and domain validation belong inside the same retry loop. The
-    failed attempt must not apply its earlier product edit to the real specification.
+    failed attempt must not apply its earlier target edit to the real specification.
     """
-    from metis.wizard.contracts import FeatureDraft, Product, Specification
+    from metis.wizard.contracts import FeatureDraft, Specification, Target
 
-    specification = Specification(product=Product(name="X", description="", users=""))
+    specification = Specification(target=Target(name="X", description="", users=""))
     bad = json.dumps(
         {
             "message": "drafted",
             "patches": [
                 {
                     "op": "set",
-                    "path": "product.description",
+                    "path": "target.description",
                     "value": "changed too early",
                 },
                 {
@@ -480,7 +480,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
             "patches": [
                 {
                     "op": "set",
-                    "path": "product.description",
+                    "path": "target.description",
                     "value": "an orchestrator",
                 },
                 {
@@ -508,7 +508,7 @@ def test_a_malformed_nested_patch_value_is_retried_atomically() -> None:
     feature = result.patches[-1].value
     assert isinstance(feature, FeatureDraft)
     assert feature.behaviours[0].description
-    assert specification.product.description == ""
+    assert specification.target.description == ""
     assert specification.features == []
     retry_messages = completions.calls[2]["messages"]
     assert [message["role"] for message in retry_messages] == [

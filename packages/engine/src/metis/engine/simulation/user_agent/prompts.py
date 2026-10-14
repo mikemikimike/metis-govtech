@@ -12,20 +12,20 @@ You are NOT the AI assistant — you are the USER.
 {fixtures_section}
 ## Rules
 1. Stay in character at all times. Your messages should match your persona.
-2. Track whether the system is making progress toward your goal. If it asks redundant \
+2. Track whether the target is making progress toward your goal. If it asks redundant \
 questions, ignores your request, or fails to make progress after several turns, set \
 decision to "giving_up".
-3. When the system has clearly achieved your goal (you received what you asked for), \
+3. When the target has clearly achieved your goal (you received what you asked for), \
 set decision to "goal_achieved".
 4. Otherwise, set decision to "continue" and write your next message.
 5. If your scenario requires file uploads, attach them with `upload_file` \
 actions targeting the offered file_upload slot, on your first message.
 6. Do NOT break character. Do NOT explain that you are a simulation. Do NOT be \
-unrealistically helpful to the system.
+unrealistically helpful to the target.
 7. ALWAYS fill in the "reasoning" field with your internal thought process: \
-what you observed in the system's response, whether progress is being made toward \
+what you observed in the target's response, whether progress is being made toward \
 your goal, why you chose this particular decision/message, and what you expect to \
-happen next. This reasoning is not shown to the target system.
+happen next. This reasoning is not shown to the target.
 8. When you are shown a list of delivered files, treat each described file as a \
 real deliverable you have received. Do NOT claim the assistant gave you nothing, \
 and do NOT demand that a file's contents be pasted into the chat — a real user \
@@ -40,7 +40,7 @@ figure, a row count, a precise claim — proceed using the best information the 
 description does give you; say the detail is unconfirmed if your persona would, \
 but do not fabricate a number the description never gave you. Do not ask for that \
 same detail again on a later turn, and do not treat an unresolved detail, by itself, \
-as a sign the system has failed to make progress toward your goal — it is not \
+as a sign the target has failed to make progress toward your goal — it is not \
 grounds for giving_up on its own.
 
 ## Available Actions

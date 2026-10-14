@@ -57,7 +57,7 @@ FEEDBACK_INSTRUCTION = (
 # design names out loud. CLARIFY is step one even though the model, not a screen builder,
 # composes its chat; DONE is terminal and carries no header.
 _STEP_TITLES: dict[InterviewStep, str] = {
-    InterviewStep.CLARIFY: "Understanding your product",
+    InterviewStep.CLARIFY: "Understanding your target",
     InterviewStep.BEHAVIOURS: "Behaviours",
     InterviewStep.CRITERIA: "Acceptance criteria",
     InterviewStep.PERSONAS: "Personas",
@@ -145,19 +145,17 @@ BEHAVIOUR_INSTRUCTION = (
 )
 
 
-def product_completion_form(specification: Specification) -> FormRequest | None:
-    """Ask for required Product fields that the model did not supply."""
+def target_completion_form(specification: Specification) -> FormRequest | None:
+    """Ask for required Target fields that the model did not supply."""
     fields: list[FormField] = []
-    if not specification.product.name.strip():
-        fields.append(
-            FormField(id="product.name", label="Product name", multiline=False)
-        )
-    if not specification.product.description.strip():
-        fields.append(FormField(id="product.description", label="Product description"))
+    if not specification.target.name.strip():
+        fields.append(FormField(id="target.name", label="Target name", multiline=False))
+    if not specification.target.description.strip():
+        fields.append(FormField(id="target.description", label="Target description"))
     if not fields:
         return None
     return FormRequest(
-        prompt="Enter the missing product details to continue to the behaviour review.",
+        prompt="Enter the missing target details to continue to the behaviour review.",
         fields=fields,
     )
 
@@ -218,7 +216,7 @@ def behaviours_screen(specification: Specification, message: str) -> ChoiceReque
                 label="Continue",
                 primary=True,
                 # A disabled Continue is still shown, marked unavailable. Readiness through this
-                # review requires a complete Product and at least one measured Behaviour.
+                # review requires a complete Target and at least one measured Behaviour.
                 enabled=_ready_through(specification, InterviewStep.BEHAVIOURS),
             ),
         ],
@@ -429,22 +427,21 @@ def scenarios_screen(
                         ],
                     ),
                     CardOptionGroup(
-                        label="Criteria",
+                        label="Behaviours",
                         options=[
                             Option(
-                                id=OptionId(action="cover", target=task.id, via=c.id),
-                                label=c.name
+                                id=OptionId(action="cover", target=task.id, via=b.id),
+                                label=b.name
                                 if b.measured
-                                else f"{c.name} (not measured)",
-                                selected=c.id in task.criterion_refs,
+                                else f"{b.name} (not measured)",
+                                selected=b.id in task.behaviour_refs,
                                 patch=_wizard_patch(
-                                    f"tasks[{task.id}].criterion_refs",
-                                    sorted(set(task.criterion_refs) ^ {c.id}),
+                                    f"tasks[{task.id}].behaviour_refs",
+                                    sorted(set(task.behaviour_refs) ^ {b.id}),
                                 ),
                             )
                             for b in specification.behaviours()
-                            for c in b.criteria
-                            if b.measured or c.id in task.criterion_refs
+                            if b.measured or b.id in task.behaviour_refs
                         ]
                         + [
                             Option(
@@ -452,12 +449,12 @@ def scenarios_screen(
                                 label=f"{ref} (missing; remove this reference)",
                                 selected=True,
                                 patch=_wizard_patch(
-                                    f"tasks[{task.id}].criterion_refs",
-                                    [cid for cid in task.criterion_refs if cid != ref],
+                                    f"tasks[{task.id}].behaviour_refs",
+                                    [bid for bid in task.behaviour_refs if bid != ref],
                                 ),
                             )
-                            for ref in task.criterion_refs
-                            if specification.criterion(ref) is None
+                            for ref in task.behaviour_refs
+                            if specification.behaviour(ref) is None
                         ],
                     ),
                     CardNumberField(
@@ -468,7 +465,7 @@ def scenarios_screen(
                         max=TRIALS_MAX,
                     ),
                     CardUploadField(
-                        label="Files sent to your system",
+                        label="Files sent to your target",
                         id=OptionId(action="files", target=task.id),
                         value=list(task.fixtures),
                         available=list(available_fixture_names or []),

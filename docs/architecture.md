@@ -215,12 +215,13 @@ package route, and it MUST NOT add a route or create an Interview record. Server
 
 In this first version the manual form collects only what an engine run absolutely needs. The engine
 reads the complete `specification.yaml`. Reporting reads its frozen copy at
-`inputs/specification.yaml`. `metis.core.profile.ProductProfile` holds Product context
+`inputs/specification.yaml`. `metis.core.profile.TargetProfile` holds Target context
 and the Feature → Behaviour → Criterion hierarchy. `metis.core.experiment.Experiment`
 holds Personas, Scenarios, Tasks, and execution settings.
 `metis.core.specification.Specification` contains a Profile and the configuration needed to conduct an Experiment.
 The serialized document keeps these fields at the top level.
-Each Task selects one Scenario, one Persona, fixtures, a Trial count, and Criteria.
+Each Task selects one Scenario, one Persona, fixtures, a Trial count, and measured Behaviours.
+Every selected Behaviour supplies all its Criteria to grading.
 Each Criterion owns its Grader FQN and parameters. Scores retain Task, Trial,
 and Criterion identity plus the Grader configuration.
 
@@ -228,7 +229,7 @@ The normal local run uses two processes: `PORT=8001 uv run metis-api` and
 `npm --prefix apps/web run dev`.
 The Vite proxy uses `METIS_API_ORIGIN`, defaulting to `http://127.0.0.1:8001`.
 The opening web screen renders the complete ordered capability catalogue and sends the selected
-ids and confidence with the product description in one start request.
+ids and confidence with the target description in one start request.
 
 ---
 

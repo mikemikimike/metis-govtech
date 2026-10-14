@@ -22,7 +22,7 @@ const state: InterviewState = {
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
     tasks: [],
-    product: { name: "Test", users: "", description: "", detail: "" },
+    target: { name: "Test", users: "", description: "", detail: "" },
     features: [],
     personas: [],
     scenarios: [],

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-metis-engine is the evaluation runtime for METIS. It drives a target system through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation graders, and writes their results for [`metis insights report`](insights.md) to turn into a report. Simulation and evaluation are separate commands, with `run` available for the combined flow.
+metis-engine is the evaluation runtime for METIS. It drives a target through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation graders, and writes their results for [`metis insights report`](insights.md) to turn into a report. Simulation and evaluation are separate commands, with `run` available for the combined flow.
 
 This guide is for anyone setting up evaluations against a web-based agentic system. By the end, you will have:
 
@@ -193,7 +193,7 @@ schema_version: 2
 
 id: my-evaluation
 runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
-product:
+target:
   name: Orca
   users: Programme managers and analysts.
   description: Evaluate routing and analysis capabilities.
@@ -204,7 +204,7 @@ product:
 | `schema_version` | Yes | Always `2` (current version) |
 | `id` | Yes | Identifier used in the output directory name |
 | `runner_factory_ref` | Yes | Importable RunnerFactory class |
-| `product` | Yes | Product name, users, description, and optional detail |
+| `target` | Yes | Target name, users, description, and optional detail |
 | `features` | Yes for execution | Features, Behaviours, and Criteria to measure |
 | `personas` | Yes for execution | User types selected by Tasks |
 | `scenarios` | Yes for execution | Situations selected by Tasks |
@@ -213,7 +213,7 @@ product:
 
 ### Personas
 
-Personas are LLM-powered simulated users. During simulation, each persona interacts with the target system according to its behavioral profile — communication style, patience level, domain expertise, and goals.
+Personas are LLM-powered simulated users. During simulation, each persona interacts with the target according to its behavioral profile — communication style, patience level, domain expertise, and goals.
 
 ```yaml
 personas:
@@ -250,7 +250,7 @@ scenarios:
   - id: constrained-analysis
     name: Constrained analysis
     description: >
-      Upload q3_sales.csv and ask the system to analyse Q3 revenue by region
+      Upload q3_sales.csv and ask the target to analyse Q3 revenue by region
       using the median, exclude outliers, and produce a report with charts.
 ```
 
@@ -263,7 +263,8 @@ scenarios:
 ### Tasks (Test Cases)
 
 Each Task selects one Scenario and one Persona. It also specifies the files,
-Trial count, and Criteria for that Test Case.
+Trial count, and measured Behaviours for that Test Case. Each selected Behaviour
+supplies all its Criteria.
 
 ```yaml
 tasks:
@@ -272,13 +273,13 @@ tasks:
     persona_ref: cooperative-delegator
     fixtures: [q3_sales.csv]
     num_trials: 1
-    criterion_refs: [AC-DA-1]
+    behaviour_refs: [EB-DA-1]
   - id: TC-002
     scenario_ref: constrained-analysis
     persona_ref: impatient-executive
     fixtures: [q3_sales.csv]
     num_trials: 1
-    criterion_refs: [AC-DA-1]
+    behaviour_refs: [EB-DA-1]
 ```
 
 | Field | Required | Default | Description |
@@ -288,18 +289,18 @@ tasks:
 | `persona_ref` | Yes | — | One Persona ID |
 | `fixtures` | No | `[]` | Filenames in `fixtures/` to upload |
 | `num_trials` | No | `3` | Number of independent runs; at least `1` |
-| `criterion_refs` | Yes for execution | `[]` | Criteria under measured Behaviours to evaluate |
+| `behaviour_refs` | Yes for execution | `[]` | Measured Behaviour IDs. Each selected Behaviour must have Criteria |
 
 **How runs are generated:** Each Task produces `num_trials` independent runs.
 The example above produces two runs. Two Tasks can select the same Scenario and
-Persona with different fixtures or Criteria.
+Persona with different fixtures or Behaviours.
 
 Keep Task IDs when you edit or reorder Tasks. Give new and copied Tasks
 new IDs. Results and resume checks use the Task ID and Trial index.
 
 Every reference must resolve to an existing ID. IDs must be unique across the
 document. Each Scenario needs at least one Task. Each measured Behaviour needs
-at least one of its Criteria selected by a Task. A Task cannot repeat a Criterion
+at least one Criterion and must be selected by a Task. A Task cannot repeat a Behaviour
 or fixture reference.
 
 Tasks also accept optional execution settings:
@@ -328,7 +329,8 @@ max_run_retries: 0
 ### Grader References
 
 Each Criterion specifies a grader class in `grader_fqn` and its constructor
-arguments in `grader_args`. Tasks select Criterion IDs through `criterion_refs`.
+arguments in `grader_args`. Tasks select Behaviour IDs through `behaviour_refs`.
+Each selected Behaviour supplies all its Criteria, including each Criterion's Grader settings.
 **Plain (no parameters):**
 
 Set these fields on a Criterion that uses the grader's defaults:
@@ -340,8 +342,7 @@ grader_args: {}
 
 **With parameters:**
 
-For example, `AC-DA-1` in the Tasks above can refer to this Criterion under a
-measured Behaviour:
+For example, Behaviour `EB-DA-1` in the Tasks above can contain this Criterion:
 
 ```yaml
 criteria:
@@ -414,7 +415,7 @@ The `run` command accepts the union of the simulation and evaluation options. It
 
 ### Concurrency
 
-The `--concurrency N` flag runs N simulation workers in parallel. The default is `5`. Reduce to `1` for sequential execution or increase based on your target system's capacity.
+The `--concurrency N` flag runs N simulation workers in parallel. The default is `5`. Reduce to `1` for sequential execution or increase based on your target's capacity.
 
 Runs are distributed round-robin across workers. Each worker processes its slice sequentially — one run at a time — while all workers run concurrently via `asyncio.gather`. How isolation and resource sharing work depends on the runner.
 
@@ -565,9 +566,9 @@ class ResponseQualityGrader(MetisTurnGrader):
                 name="Response Quality",
                 model=_get_judge_model(),
                 criteria=(
-                    "Evaluate the system's response.\n\n"
+                    "Evaluate the target's response.\n\n"
                     "The 'input' is the user's request.\n"
-                    "The 'actual_output' is the system's response.\n\n"
+                    "The 'actual_output' is the target's response.\n\n"
                     "Rate on three dimensions:\n"
                     "1. Helpful: Does it answer the question?\n"
                     "2. Tone: Is the tone appropriate?\n"
@@ -665,10 +666,10 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 
 | Symptom | Likely Cause | Fix |
 |---------|--------------|-----|
-| "No traces found" or extraction times out | Langfuse timeout too short, bad credentials, or target system not instrumented | Increase `--langfuse-timeout`, verify Langfuse keys in `.env`, confirm your target writes traces to Langfuse |
+| "No traces found" or extraction times out | Langfuse timeout too short, bad credentials, or target not instrumented | Increase `--langfuse-timeout`, verify Langfuse keys in `.env`, confirm your target writes traces to Langfuse |
 | "Fixture not found" error | Path is absolute or has a typo | Use the filename only (relative to `fixtures/`), verify the file exists in the fixtures directory |
 | "Grader import failed" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the grader is installed in your venv |
-| Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task’s `response_wait_ms` |
+| Simulation hangs indefinitely | Target unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task's `response_wait_ms` |
 | Simulation TUI not appearing | Running in a non-TTY environment | Expected — the Simulation TUI requires an interactive terminal. Use linear output or run in a real terminal |
 | Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current turn | Press Ctrl+C a second time to force-abort |
 | "Grader is not a subclass of BaseMetric" | Class doesn't inherit from the correct base | Ensure your grader extends `MetisTurnGrader`, `MetisSessionGrader`, or `deepeval.metrics.BaseMetric` |
@@ -676,7 +677,7 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 
 ---
 
-## Adapting to Your Target System
+## Adapting to Your Target
 
 The bundled example targets Orca through its API runner. You can supply a custom runner for a REST API, WebSocket endpoint, browser UI, or another interface.
 
@@ -689,7 +690,7 @@ This section covers:
 
 ### Writing a Custom Runner
 
-The engine interacts with your target system through two abstractions:
+The engine interacts with your target through two abstractions:
 
 - **`Runner`** — handles a single simulation attempt (one persona × one scenario). It translates messages and actions into transport-specific calls and returns observations.
 - **`RunnerFactory`** — manages shared resources (connection pools, browser instances) and creates fresh `Runner` instances per attempt.
@@ -706,7 +707,7 @@ from metis.engine.simulation.types import ChosenAction, Observation, RunConfig
 
 
 class Runner(ABC):
-    """Transport layer — connects the simulation to a target system."""
+    """Transport layer — connects the simulation to a target."""
 
     @abstractmethod
     async def setup(self, config: RunConfig) -> None:
@@ -738,10 +739,10 @@ class Runner(ABC):
 
     @abstractmethod
     async def get_session_id(self) -> str | None:
-        """Return the target system's session identifier.
+        """Return the target's session identifier.
 
         The engine stores this in the run record for trace extraction.
-        Return None if your system has no concept of sessions.
+        Return None if your target has no concept of sessions.
         """
 ```
 
@@ -749,7 +750,7 @@ class Runner(ABC):
 
 These Pydantic models are defined in `metis.engine.simulation.types`:
 
-**`Observation`** — what the target system returned after a turn:
+**`Observation`** — what the target returned after a turn:
 
 ```python
 class Observation(BaseModel):
@@ -830,10 +831,10 @@ The engine instantiates your factory with `factory_cls()` (no arguments). Read a
 
 #### Complete REST API Runner Example
 
-Below is a complete, runnable implementation that drives a target system exposing a JSON chat endpoint:
+Below is a complete, runnable implementation that drives a target exposing a JSON chat endpoint:
 
 ```python
-"""REST API runner for a chat-based target system."""
+"""REST API runner for a chat-based target."""
 
 from __future__ import annotations
 
@@ -860,7 +861,7 @@ class RestRunnerConfig:
 
 
 class RestRunner(Runner):
-    """Drives a target system via its REST API."""
+    """Drives a target via its REST API."""
 
     def __init__(self, config: RestRunnerConfig, fixtures_dir: Path) -> None:
         self._config = config
@@ -983,10 +984,10 @@ tasks:
     persona_ref: cooperative
     fixtures: []
     num_trials: 1
-    criterion_refs: [AC-CHAT-1]
+    behaviour_refs: [EB-CHAT-1]
 ```
 
-Include the Product and Feature hierarchy as well. The
+Include the Target and Feature hierarchy as well. The
 [minimal template](#minimal-template) shows the complete document and defines
 Criterion `AC-CHAT-1`.
 
@@ -1037,7 +1038,7 @@ Your runner module must be importable from the environment where `metis engine s
 
 ### Profile Configuration (specification.yaml)
 
-The Profile contains Product context and the Feature, Behaviour, and Criterion
+The Profile contains Target context and the Feature, Behaviour, and Criterion
 hierarchy, including Grader settings. The Experiment configuration contains Personas, Scenarios,
 Tasks, the experiment ID, and the runner reference. The Specification combines
 the Profile and Experiment configuration.
@@ -1048,10 +1049,10 @@ the Profile and Experiment configuration.
 | Concern | Fields in `specification.yaml` | Purpose |
 |---------|--------------------------------|---------|
 | Simulation setup | `id`, `runner_factory_ref`, `personas`, `scenarios`, `tasks` | Select the runner and define each Test Case and its Trials |
-| Evaluation requirements (Profile) | `product`, `features` | Describe the product, expected Behaviours, Criteria, and Grader settings |
+| Evaluation requirements (Profile) | `target`, `features` | Describe the target, expected Behaviours, Criteria, and Grader settings |
 
-Tasks select Criteria from the Profile. Reports combine the planned Tasks and
-recorded results to show whether the product meets those Criteria.
+Tasks select measured Behaviours from the Profile. Reports combine the planned Tasks and
+recorded results to show whether the target meets those Criteria.
 
 The engine freezes the document under the output directory's `inputs/` directory.
 Reporting reads this copy and joins scores by Criterion ID. The report retains
@@ -1072,9 +1073,9 @@ coverage when it loads the document. From a specification in
 schema_version: 2
 id: <string>              # Experiment identifier
 runner_factory_ref: <string>  # Importable RunnerFactory class
-product:
-  name: <string>           # Target system name
-  users: <string>          # Prose that describes the product users
+target:
+  name: <string>           # Target name
+  users: <string>          # Prose that describes the target users
   description: <string>    # Short description of what is evaluated
   detail: <string>         # Longer context about the evaluation scope
 
@@ -1111,7 +1112,7 @@ tasks:
   - id: <string>
     scenario_ref: <scenario-id>
     persona_ref: <persona-id>
-    criterion_refs: [<criterion-id>]
+    behaviour_refs: [<behaviour-id>]
     fixtures: [<filename>]
     num_trials: <integer>
 ```
@@ -1120,16 +1121,16 @@ tasks:
 
 **`schema_version`** — the specification schema version. The current version is `2`. The engine requires this field and rejects an unsupported version.
 
-**`product`** — top-level metadata:
+**`target`** — top-level metadata:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Name of the target system being evaluated |
-| `users` | Yes | Prose that describes who uses the product |
+| `name` | Yes | Name of the target being evaluated |
+| `users` | Yes | Prose that describes who uses the target |
 | `description` | Yes | Short evaluation description |
 | `detail` | No | Extended context about the evaluation's purpose and scope |
 
-**`features[]`** — product functions or user workflows being evaluated:
+**`features[]`** — target functions or user workflows being evaluated:
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -1144,7 +1145,7 @@ tasks:
 |-------|----------|-------------|
 | `id` | Yes | Identifier (conventionally `EB-<FEATURE>-N`) |
 | `name` | Yes | Human-readable behaviour name |
-| `description` | Yes | Full description of what the system must do |
+| `description` | Yes | Full description of what the target must do |
 | `measured` | No | `true` when the evaluation measures this behaviour; defaults to `false` |
 | `criteria` | No | Acceptance criteria; defaults to `[]`. Measured Behaviours need Task coverage |
 
@@ -1165,7 +1166,7 @@ tasks:
 This Profile excerpt defines a turn-budget requirement for a chatbot:
 
 ```yaml
-product:
+target:
   name: My Chatbot
   users: People who need concise answers.
   description: Evaluate the number of turns used for direct questions.
@@ -1200,7 +1201,7 @@ a grader before the engine can load the specification.
 
 ### Langfuse Requirement
 
-The `evaluate` command requires that your target system writes traces to [Langfuse](https://langfuse.com). The engine uses the session ID returned by `Runner.get_session_id()` to fetch traces from Langfuse, then feeds them to your configured graders.
+The `evaluate` command requires that your target writes traces to [Langfuse](https://langfuse.com). The engine uses the session ID returned by `Runner.get_session_id()` to fetch traces from Langfuse, then feeds them to your configured graders.
 
 #### What This Means in Practice
 
@@ -1212,7 +1213,7 @@ The `evaluate` command requires that your target system writes traces to [Langfu
 
 #### Simulation-Only Fallback
 
-If your target system does not instrument with Langfuse, you can still use METIS for simulation:
+If your target does not instrument with Langfuse, you can still use METIS for simulation:
 
 ```bash
 # Run simulation only — no trace extraction needed
@@ -1245,7 +1246,7 @@ The engine then fetches traces using:
 
 ### Writing Your Own Experiment
 
-Use this template and checklist when creating an experiment from scratch for a new target system.
+Use this template and checklist when creating an experiment from scratch for a new target.
 
 #### Minimal Template
 
@@ -1256,7 +1257,7 @@ schema_version: 2
 id: my-target-eval
 runner_factory_ref: my_package.runners.MyRunnerFactory
 
-product:
+target:
   name: My Chatbot
   users: People who need concise answers.
   description: Evaluate the number of turns used for direct questions.
@@ -1297,7 +1298,7 @@ tasks:
     persona_ref: cooperative
     fixtures: []
     num_trials: 1
-    criterion_refs: [AC-CHAT-1]
+    behaviour_refs: [EB-CHAT-1]
 ```
 
 #### Pre-Flight Checklist
@@ -1318,7 +1319,7 @@ Before running `metis engine simulate --input-dir my-experiment/`:
 
 - [ ] **Fixtures exist:** Every filename in a Task's `fixtures:` list exists in `my-experiment/fixtures/`.
 
-- [ ] **References match:** Each Task selects an existing Scenario, Persona, and Criteria under measured Behaviours. Every Scenario and measured Behaviour has Task coverage.
+- [ ] **References match:** Each Task selects an existing Scenario, Persona, and measured Behaviours. Every Scenario and measured Behaviour has Task coverage.
 
 - [ ] **Graders importable:** Every Criterion's `grader_fqn` resolves to an installed class.
   ```bash
@@ -1341,5 +1342,5 @@ Start with the minimal template above, verify it runs end-to-end, then layer in 
 1. **Add fixtures** — put files in `fixtures/`, reference them in `tasks[].fixtures`, and ensure your runner handles `file_upload` actions
 2. **Add personas** — write 2-3 personas with contrasting behavioral profiles, select each one in a Task through `persona_ref`
 3. **Add graders** — start with code-graded graders (fast, deterministic), then add judge-graded graders
-4. **Extend coverage** — define more Features, Behaviours, and Criteria, then select the Criteria in Tasks
+4. **Extend coverage** — define more Features, Behaviours, and Criteria, then select the Behaviours in Tasks
 5. **Tune parameters** — adjust Criterion `grader_args` and Task `num_trials` based on observed runs

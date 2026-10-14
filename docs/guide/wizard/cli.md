@@ -54,7 +54,7 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 
 ## Start an Interview
 
-1. Give the Wizard a plain description of the target system:
+1. Give the Wizard a plain description of the target:
 
    ```bash
    metis wizard init "A research assistant that answers questions from internal documents and cites each source."
@@ -90,7 +90,7 @@ When the Interview is complete, the CLI writes these files and removes `intervie
 
 | File | Contents |
 |---|---|
-| `specification.yaml` | Product, Features, Behaviours, Criteria and Grader settings, Personas, Scenarios, and Tasks |
+| `specification.yaml` | Target, Features, Behaviours, Criteria and Grader settings, Personas, Scenarios, and Tasks |
 | `review.md` | A human-readable review of the specification |
 
 The CLI also shows the total trial count. Run the result with:

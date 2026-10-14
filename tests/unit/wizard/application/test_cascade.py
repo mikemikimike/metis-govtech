@@ -8,8 +8,8 @@ from metis.wizard.contracts import (
     Patch,
     PatchOp,
     PatchOrigin,
-    Product,
     Specification,
+    Target,
 )
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
@@ -54,21 +54,21 @@ def test_the_wizard_offers_no_opinion_on_whether_they_still_hold() -> None:
     assert request.multi is False
 
 
-def test_editing_the_product_reaches_the_whole_tree() -> None:
-    for path in ("product.description", "product.detail"):
+def test_editing_the_target_reaches_the_whole_tree() -> None:
+    for path in ("target.description", "target.detail"):
         questions = cascade.questions_for(research_assistant(), [edit(path)])
 
         assert [q.kind for q in questions] == ["tree"]
 
 
-def test_initial_product_capture_does_not_invalidate_its_own_draft() -> None:
-    specification = Specification(product=Product(name="X", description="", users=""))
+def test_initial_target_capture_does_not_invalidate_its_own_draft() -> None:
+    specification = Specification(target=Target(name="X", description="", users=""))
 
     questions = cascade.questions_for(
         specification,
         [
-            edit("product.description", "A new product"),
-            edit("product.detail", "Tools"),
+            edit("target.description", "A new target"),
+            edit("target.detail", "Tools"),
         ],
     )
 
@@ -80,7 +80,7 @@ def test_description_and_detail_edits_ask_about_the_tree_once() -> None:
 
     questions = cascade.questions_for(
         specification,
-        [edit("product.description"), edit("product.detail")],
+        [edit("target.description"), edit("target.detail")],
     )
 
     assert [question.kind for question in questions] == ["tree"]
@@ -99,10 +99,10 @@ def test_edits_that_derive_nothing_ask_nothing() -> None:
     nothing = [
         edit("features[F-1].behaviours[EB-1].measured", False),
         edit("personas[cooperative-delegator].description", "different words"),
-        edit("tasks[TC-001].criterion_refs", ["AC-1-1"]),
+        edit("tasks[TC-001].behaviour_refs", ["AC-1-1"]),
         edit("tasks[TC-001].num_trials", 5),
         edit("tasks[TC-001].fixtures", ["a.pdf"]),
-        edit("product.name", "New name"),
+        edit("target.name", "New name"),
     ]
 
     assert cascade.questions_for(specification, nothing) == []
@@ -165,13 +165,13 @@ def test_regenerating_clears_what_the_model_wrote() -> None:
     assert behaviour.criteria == []  # both were CHAT-authored
 
 
-def test_a_product_edit_clears_everything_derived_from_it() -> None:
-    """Features and scenarios were all derived from the product description."""
+def test_a_target_edit_clears_everything_derived_from_it() -> None:
+    """Features and scenarios were all derived from the target description."""
     specification = research_assistant()
 
     cascade.clear_for_regeneration(
         specification,
-        cascade.Question(text="", subject="product.description", kind="tree"),
+        cascade.Question(text="", subject="target.description", kind="tree"),
         set(),
     )
 
@@ -198,9 +198,7 @@ def test_chat_on_the_initial_draft_opens_free_text() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = DriverState(
         specification=Specification(
-            product=Product(
-                name="X", description="Answers research questions.", users=""
-            )
+            target=Target(name="X", description="Answers research questions.", users="")
         ),
         context=interview_context(),
         step=InterviewStep.BEHAVIOURS,
@@ -242,10 +240,10 @@ def test_answering_regenerate_lands_in_a_state_the_screens_already_draw() -> Non
     assert behaviour.criteria  # regenerated, not left empty
 
 
-def test_reviewing_a_product_edit_returns_to_the_draft_screen() -> None:
+def test_reviewing_a_target_edit_returns_to_the_draft_screen() -> None:
     driver = StepDriver(interviewer=ScriptedInterviewer())
     state = a_state(step=InterviewStep.CRITERIA)
-    question = cascade.questions_for(state.specification, [edit("product.detail")])[0]
+    question = cascade.questions_for(state.specification, [edit("target.detail")])[0]
     driver.pending_questions = [question]
 
     driver._answer_question(

@@ -38,7 +38,7 @@ class ArtifactNote(NamedTuple):
     type. ``text`` is persona-visible: ``send_turn`` copies it into
     ``Observation.response_notices``, which is rendered into the simulated
     user's prompt. ``file_id`` is the runner's own bookkeeping and must never
-    reach that prompt — a real user of a chat product is never shown a backend
+    reach that prompt — a real user of a chat target is never shown a backend
     file id, and ``response_notices`` is not a diagnostics channel (see
     :meth:`OrcaApiRunner._reconcile_session_artifacts`).
 

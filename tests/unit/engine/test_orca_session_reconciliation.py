@@ -395,7 +395,7 @@ class TestSweepDeduplicateMerge:
         """``response_notices`` is prompt text, not a diagnostics channel.
 
         It is rendered under "Problems reported on your previous turn — take
-        them into account", and no real user of a chat product is ever shown a
+        them into account", and no real user of a chat target is ever shown a
         backend file id. The id still has to travel with the note so both
         collection lanes' diagnostics can be reconciled by identity rather than
         by name; it rides in ``ArtifactNote.file_id``, which stops at the

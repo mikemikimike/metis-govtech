@@ -105,7 +105,7 @@ def main(
         False, "--version", "-V", callback=version_callback, is_eager=True
     ),
 ) -> None:
-    """Turn a description of your product into a runnable evaluation."""
+    """Turn a description of your target into a runnable evaluation."""
 
 
 # ── the corridor ─────────────────────────────────────────────────────────────
@@ -268,7 +268,7 @@ def _load_env() -> list[Path]:
 @app.command()
 def init(
     description: str = typer.Argument(
-        ..., help="A raw description of the product or agent to evaluate."
+        ..., help="A raw description of the target or agent to evaluate."
     ),
     out_dir: Path = typer.Option(
         Path("evaluation"),

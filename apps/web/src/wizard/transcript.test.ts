@@ -32,7 +32,7 @@ const state: InterviewState = {
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
     tasks: [],
-    product: { name: "", users: "", description: "", detail: "" },
+    target: { name: "", users: "", description: "", detail: "" },
     features: [],
     personas: [],
     scenarios: [],
@@ -62,7 +62,7 @@ test("transcript projects start and one answered turn without changing API state
     "transcript-test",
     state,
     "clarify",
-    startTranscript("A product", state),
+    startTranscript("A target", state),
   );
   const nextState = {
     ...state,
@@ -70,7 +70,7 @@ test("transcript projects start and one answered turn without changing API state
   };
   const next = applyTurn(record, success(nextState), {
     type: "chat",
-    text: "A product",
+    text: "A target",
   });
   assert.equal(
     next.transcript.filter((entry) => entry.kind === "interaction").length,
@@ -172,7 +172,7 @@ test("failed end leaves the pending display entry available", () => {
     "end-test",
     state,
     "clarify",
-    startTranscript("A product", state),
+    startTranscript("A target", state),
   );
   const failed = {
     type: "failure" as const,
@@ -227,7 +227,7 @@ test("choice and form receipts keep the offered fields and selections", () => {
     { ...state, pending: choiceRequest },
     "behaviours",
     [
-      { kind: "initial_description", id: "initial", description: "A product" },
+      { kind: "initial_description", id: "initial", description: "A target" },
       {
         kind: "interaction",
         request_id: "choice-1",
@@ -285,10 +285,10 @@ test("replaying a response does not duplicate a request ID", () => {
     "duplicate-test",
     state,
     "clarify",
-    startTranscript("A product", state),
+    startTranscript("A target", state),
   );
   const nextState = { ...state, pending: { ...pending, request_id: "req-2" } };
-  const response = { type: "chat" as const, text: "A product" };
+  const response = { type: "chat" as const, text: "A target" };
   const once = applyTurn(record, success(nextState), response);
   const twice = applyTurn(once, success(nextState), response);
   assert.deepEqual(twice.transcript, once.transcript);

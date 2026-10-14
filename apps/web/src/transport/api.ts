@@ -113,9 +113,9 @@ export type Persona = Schema["Persona"];
 export type Scenario = Schema["Scenario"];
 export type Task = Omit<
   Schema["Task"],
-  "fixtures" | "criterion_refs" | "num_trials"
-> & { fixtures: string[]; criterion_refs: string[]; num_trials: number };
-export type Product = Schema["Product"];
+  "fixtures" | "behaviour_refs" | "num_trials"
+> & { fixtures: string[]; behaviour_refs: string[]; num_trials: number };
+export type Target = Schema["Target"];
 export type Specification = Omit<
   Schema["Specification"],
   "features" | "personas" | "scenarios" | "tasks"
@@ -231,7 +231,7 @@ function normalizeSpecification(
     tasks: (specification.tasks ?? []).map((task) => ({
       ...task,
       fixtures: task.fixtures ?? [],
-      criterion_refs: task.criterion_refs ?? [],
+      behaviour_refs: task.behaviour_refs ?? [],
       num_trials: task.num_trials ?? 3,
       max_turns: task.max_turns ?? 20,
       timeout_minutes: task.timeout_minutes ?? 15,
@@ -295,7 +295,7 @@ export interface InteractionEntry {
 }
 export type TranscriptEntry = InitialDescriptionEntry | InteractionEntry;
 export interface LocalInterviewRecord {
-  storage_version: 5;
+  storage_version: 6;
   submission_revision?: number;
   id: string;
   created_at: number;
@@ -481,5 +481,5 @@ export function toSummary(record: LocalInterviewRecord): InterviewSummary {
   return { id: record.id, title: record.title, updated: record.updated_at };
 }
 export function titleFor(specification: Specification): string {
-  return specification.product.name.trim() || "Untitled Interview";
+  return specification.target.name.trim() || "Untitled Interview";
 }

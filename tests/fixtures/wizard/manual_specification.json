@@ -2,7 +2,7 @@
   "schema_version": 2,
   "id": "manual-research",
   "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
-  "product": {
+  "target": {
     "name": "manual-research",
     "description": "Check research answers and recovery.",
     "users": "The personas defined in this manual experiment.",
@@ -117,14 +117,11 @@
         "policy.pdf"
       ],
       "num_trials": 2,
-      "criterion_refs": [
-        "AC-1-1",
-        "AC-1-2"
-      ],
       "max_turns": 20,
       "timeout_minutes": 15,
       "response_wait_ms": 300000,
-      "max_run_retries": null
+      "max_run_retries": null,
+      "behaviour_refs": ["EB-1"]
     },
     {
       "id": "",
@@ -134,14 +131,11 @@
         "policy.pdf"
       ],
       "num_trials": 2,
-      "criterion_refs": [
-        "AC-2-1",
-        "AC-2-2"
-      ],
       "max_turns": 20,
       "timeout_minutes": 15,
       "response_wait_ms": 300000,
-      "max_run_retries": null
+      "max_run_retries": null,
+      "behaviour_refs": ["EB-2"]
     },
     {
       "id": "",
@@ -151,13 +145,11 @@
         "notes.txt"
       ],
       "num_trials": 1,
-      "criterion_refs": [
-        "AC-3-1"
-      ],
       "max_turns": 20,
       "timeout_minutes": 15,
       "response_wait_ms": 300000,
-      "max_run_retries": null
+      "max_run_retries": null,
+      "behaviour_refs": ["EB-3"]
     }
   ],
   "scenarios": [

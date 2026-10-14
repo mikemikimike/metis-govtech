@@ -36,7 +36,7 @@ def _start_body() -> dict[str, object]:
 
 def _empty_specification() -> dict[str, object]:
     return Specification.model_validate(
-        {"product": {"name": "", "description": "", "users": ""}}
+        {"target": {"name": "", "description": "", "users": ""}}
     ).model_dump(mode="json")
 
 
@@ -240,7 +240,7 @@ def test_an_exhausted_model_during_end_is_a_503_with_safe_state(make_client) -> 
     state = InterviewState(
         specification=Specification.model_validate(
             {
-                "product": {
+                "target": {
                     "name": "Policy helper",
                     "description": "Answers policy questions",
                     "users": "Policy analysts",

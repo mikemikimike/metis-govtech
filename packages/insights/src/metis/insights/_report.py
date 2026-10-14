@@ -75,7 +75,7 @@ def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
 
         stop_reason = str(outcome.get("stop_reason") or "unknown")
         conversation = record.get("conversation") or []
-        product_errors = [
+        target_errors = [
             problem for turn in conversation for problem in _turn_problems(turn)
         ]
         failure_source = _failure_source(
@@ -85,12 +85,12 @@ def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
         message = outcome.get("failure_message") or message
         message = message or outcome.get("message") or outcome.get("error")
         message = message or record.get("error")
-        if not message and product_errors:
-            message = product_errors[-1]
+        if not message and target_errors:
+            message = target_errors[-1]
         if stop_reason == "goal_achieved":
             failure_source = "outcome"
-        elif not failure_source and product_errors:
-            failure_source = "product"
+        elif not failure_source and target_errors:
+            failure_source = "target"
 
         if stop_reason == "system_error" and (not failure_source or not message):
             legacy_source, legacy_message = _legacy_failure_details(
@@ -135,7 +135,7 @@ def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
                     {
                         "turn": int(turn.get("turn_number") or index + 1),
                         "user": str(turn.get("user_message") or ""),
-                        "product": str(
+                        "target": str(
                             (turn.get("target_response") or {}).get("text") or ""
                         ),
                         "errors": _turn_problems(turn),
@@ -159,7 +159,7 @@ def _row_index(row: dict) -> int:
 
 
 def _turn_problems(turn: dict) -> list[str]:
-    """Problem strings from one recorded turn that count against the product.
+    """Problem strings from one recorded turn that count against the target.
 
     Notices first, then the ``detail`` of each failed action row in
     ``action_index`` order. Three things here look like defensive noise and
@@ -167,11 +167,11 @@ def _turn_problems(turn: dict) -> list[str]:
     record from an older engine, a hand-built fixture or a third-party runner
     arrives with no validator having run on it:
 
-    - the **sort**, because ``product_errors[-1]`` becomes the report's
+    - the **sort**, because ``target_errors[-1]`` becomes the report's
       headline message and I1's ordering guarantee binds only the write path;
     - the **detail fallback**, because I2's non-empty-detail rule binds only
       the write path too, and dropping a row with an empty detail would empty
-      ``product_errors`` and flip ``failureSource`` to ``evaluationRunner`` —
+      ``target_errors`` and flip ``failureSource`` to ``evaluationRunner`` —
       blaming METIS for the target's own failure;
     - the **withheld exclusion**, which keeps the opposite misattribution out:
       an action METIS itself rejected before dispatch never reached the
@@ -198,9 +198,9 @@ def _failure_source(value: object) -> str | None:
         return None
     normalised = str(value).strip().lower().replace("-", "_")
     return {
-        "product": "product",
-        "target": "product",
-        "orca": "product",
+        "product": "target",
+        "target": "target",
+        "orca": "target",
         "user_agent": "userAgent",
         "useragent": "userAgent",
         "evaluation_runner": "evaluationRunner",
@@ -369,14 +369,14 @@ def flatten_results(
 
 
 def build_plan(
-    experiment: Mapping[str, Any], rows: list[dict], name_of: dict[str, str]
+    experiment: Mapping[str, Any], rows: list[dict], task_criteria: dict[str, set[str]]
 ) -> dict:
     """Compare planned Tasks and Trials with the recorded scores."""
     plan_personas = [p["id"] for p in experiment.get("personas", [])]
     tasks = []
     for task in experiment.get("tasks", []):
         results = [r for r in rows if r.get("task_id") == task["id"]]
-        asked = set(task["criterion_refs"])
+        asked = task_criteria[task["id"]]
         tasks.append(
             {
                 "id": task["id"],
@@ -433,14 +433,21 @@ def build_report(
                 behaviour_of[criterion["id"]] = behaviour["id"]
 
     tasks = {t["id"]: t for t in specification.get("tasks", [])}
+    task_criteria = {
+        task_id: {
+            cid
+            for cid, behaviour_id in behaviour_of.items()
+            if behaviour_id in task["behaviour_refs"]
+        }
+        for task_id, task in tasks.items()
+    }
     covers = {
         scenario["id"]: list(
             {
-                behaviour_of[cid]
+                behaviour_id
                 for t in tasks.values()
                 if t["scenario_ref"] == scenario["id"]
-                for cid in t["criterion_refs"]
-                if cid in behaviour_of
+                for behaviour_id in t["behaviour_refs"]
             }
         )
         for scenario in specification.get("scenarios", [])
@@ -487,9 +494,7 @@ def build_report(
     for row in rows:
         cid = row["criterion_id"]
         task = tasks.get(row["task_id"])
-        matched = (
-            [cid] if cid in criteria and task and cid in task["criterion_refs"] else []
-        )
+        matched = [cid] if task and cid in task_criteria[task["id"]] else []
         if not matched:
             _add(unmapped[row["grader"]], row)
             unmapped_reason[row["grader"]] = (
@@ -571,7 +576,7 @@ def build_report(
                 )
         return out
 
-    asked_criteria = {cid for task in tasks.values() for cid in task["criterion_refs"]}
+    asked_criteria = {cid for selected in task_criteria.values() for cid in selected}
     appeared = {row["criterion_id"] for row in rows}
 
     def blank_cause(criterion: Mapping[str, Any], slot: dict) -> dict:
@@ -806,7 +811,7 @@ def build_report(
         table_rows.append({**trial, "results": results})
 
     return {
-        "product": (specification.get("product") or {}).get("name", "the product"),
+        "target": (specification.get("target") or {}).get("name", "the target"),
         "run": run_id,
         "date": (timestamp or "")[:10],
         "sessions": len({t.get("session_id", "") for t in test_results}),
@@ -836,7 +841,7 @@ def build_report(
                 "status": status(trial_rate_fraction),
             },
         },
-        "plan": build_plan(specification, rows, name_of),
+        "plan": build_plan(specification, rows, task_criteria),
         "personas": personas,
         "scenarios": scenarios,
         "describe": {

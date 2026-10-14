@@ -45,8 +45,9 @@ Keep `schema_version: 2` on `next`. Use the complete example in
   Every Criterion needs a Grader, including dormant Criteria.
 - Keep only ID, name, and description on each Scenario. Create a Task for each
   selected Scenario and Persona pair. Move fixtures and Trial counts to that Task.
-  Select Criteria with `criterion_refs`. Give each Task a unique, ID.
-- Derive coverage through Task → Criterion → Behaviour. Every Scenario needs a
+  Select measured Behaviours with `behaviour_refs`. Give each Task a unique ID.
+  Every selected Behaviour supplies all its Criteria and must have at least one.
+- Derive coverage through Task → Behaviour. Every Scenario needs a
   Task, and every measured Behaviour needs coverage. Engine execution limits keep
   their defaults.
 - Use `InterviewState.specification` for the complete document and the
@@ -63,6 +64,16 @@ Keep `schema_version: 2` on `next`. Use the complete example in
 The domain `Task` below was previously used for a product function. That older
 concept is now `Feature`. The current Task is an explicit Test Case.
 
+#### Update pre-release Task references
+
+Replace each `tasks[].criterion_refs` list with `tasks[].behaviour_refs`.
+Find the parent Behaviour for each selected Criterion. Keep each Behaviour ID once.
+Review the result because a selected Behaviour runs all its Criteria.
+Keep `schema_version: 2` and start a new run with the converted document.
+Recreate saved Interviews whose Tasks use Criterion references. The browser keeps
+these records in storage and shows that they cannot be read. It does not convert
+pending controls or delete fixture data.
+
 #### From `experiment.yaml` to `specification.yaml`
 
 Use this table to find where each `experiment.yaml` field goes. Profile fields
@@ -77,9 +88,9 @@ except for the Criterion Grader fields in the table.
 | `scenarios[].persona_refs` | One Task for each Persona, with `tasks[].scenario_ref` and `tasks[].persona_ref` |
 | `scenarios[].fixtures` | `tasks[].fixtures` on each of those Tasks |
 | `scenarios[].num_trials` | `tasks[].num_trials` on each of those Tasks |
-| `scenarios[].metric_refs` | One Criterion for each Grader, with `grader_fqn` and `grader_args`. Tasks select Criteria with `tasks[].criterion_refs`. |
+| `scenarios[].metric_refs` | One Criterion for each Grader, with `grader_fqn` and `grader_args`. Tasks select their parent Behaviours with `tasks[].behaviour_refs`. |
 | `scenarios[].max_turns`, `timeout_minutes`, `response_wait_ms`, `max_run_retries` | Move each value to the same field on every Task for that Scenario. |
-| Profile `scenarios[].behaviour_refs` | Removed. Coverage comes from Task → Criterion → Behaviour. |
+| Profile `scenarios[].behaviour_refs` | Move to `tasks[].behaviour_refs` on each Task for that Scenario. |
 
 Check these points when you convert a file:
 
@@ -147,7 +158,7 @@ features:
             grader_fqn: metis.library.graders.TurnBudgetGrader
             grader_args:
               max_turns: 4
-  # AC-ORCA-2 already exists under its Orchestration Behaviour. It now has
+  # AC-ORCA-2 already exists under Orchestration Behaviour EB-ORCA-2. It now has
   # grader_fqn: metis.library.graders.DirectHandleRecognitionGrader.
 
 scenarios:
@@ -161,13 +172,13 @@ tasks:
     persona_ref: cooperative-delegator
     fixtures: []
     num_trials: 3
-    criterion_refs: [AC-ORCA-2, AC-EXEC-3]
+    behaviour_refs: [EB-ORCA-2, EB-EXEC-1]
   - id: TC-002
     scenario_ref: direct-question
     persona_ref: impatient-executive
     fixtures: []
     num_trials: 3
-    criterion_refs: [AC-ORCA-2, AC-EXEC-3]
+    behaviour_refs: [EB-ORCA-2, EB-EXEC-1]
 ```
 
 The full converted file is
@@ -429,3 +440,20 @@ The grader catalogue route the web client calls is now `GET /api/v1/graders`
 The web gets optional grader details from `GET /api/v1/graders` after a Specification contains a
 Criterion. The manual form supports direct authoring. Source analysis, hosted state,
 authentication, and evaluation execution remain deferred.
+
+
+## Evaluation subject: Product → Target (#429)
+
+- Import `Target` and `TargetProfile` from `metis.core.profile` in place of
+  `Product` and `ProductProfile`. Use `Specification.target` and `profile.target`.
+- Change the top-level `product` key to `target` in specification YAML, API JSON,
+  and saved Interview state. Change patch and form paths from `product.*` to
+  `target.*`. The missing-data code is now `target_incomplete`.
+- Report JSON uses `target` for the report name and each conversation response.
+  Target failures use `failureSource: "target"`. Regenerate reports from results
+  after updating their saved `inputs/specification.yaml`.
+- Browser storage upgrades saved Interviews automatically. It updates the
+  specification key and form paths, and preserves user text and file bytes.
+  Other clients must update their saved state before sending it to the API.
+
+Specification schema version remains `2` under the `next` pre-release policy.

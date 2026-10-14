@@ -32,7 +32,7 @@ const baseState = (): InterviewState => ({
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
     tasks: [],
-    product: { name: "", users: "", description: "", detail: "" },
+    target: { name: "", users: "", description: "", detail: "" },
     features: [],
     personas: [],
     scenarios: [],
@@ -122,7 +122,7 @@ const policyTask = (fixtures: string[]) => ({
   description: "Ask about one policy rule.",
   scenario_ref: "S-1",
   persona_ref: "P-1",
-  criterion_refs: [],
+  behaviour_refs: [],
   fixtures,
   num_trials: 1,
   max_turns: 20,
@@ -183,7 +183,7 @@ test("runs an offline document start, reload, review, end and package flow", asy
           {
             type: "upload",
             id: { action: "files", target: "S-1" },
-            label: "Files sent to your system",
+            label: "Files sent to your target",
             value: files,
             available: ["policy.md", "notes.txt"],
           },

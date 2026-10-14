@@ -176,7 +176,7 @@ async def send_message(
 async def upload_file(
     page: Page, file_path: Path, config: OrcaPlaywrightRunnerConfig | None = None
 ) -> None:
-    """Upload a file via the target system's attach-file flow."""
+    """Upload a file via the target's attach-file flow."""
     filename = file_path.name
     logger.info("[upload] Step 1/5: Starting upload of '%s' (%s)", filename, file_path)
 

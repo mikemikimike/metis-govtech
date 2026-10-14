@@ -45,7 +45,7 @@ class ScriptedInterviewer:
     ) -> ClarifyResult:
         self.calls.append("clarify")
         asked = sum(1 for t in history if t.role == "assistant")
-        if history and history[0].text.startswith("Tell me about your product"):
+        if history and history[0].text.startswith("Tell me about your target"):
             asked -= 1
         if asked >= self.clarify_questions:
             latest_answer = next(
@@ -54,39 +54,39 @@ class ScriptedInterviewer:
             )
             patches = []
             if latest_answer and self.clarify_questions >= clarify_turn_cap():
-                current_detail = specification.product.detail.strip()
+                current_detail = specification.target.detail.strip()
                 merged_detail = "\n".join(
                     part for part in (current_detail, latest_answer) if part
                 )
                 patches.append(
                     Patch(
                         op=PatchOp.SET,
-                        path="product.detail",
+                        path="target.detail",
                         value=merged_detail,
                     )
                 )
             return ClarifyResult(message="", done=True, patches=patches)
         patches = []
-        if not specification.product.description or not specification.product.users:
+        if not specification.target.description or not specification.target.users:
             patches = [
                 Patch(
                     op=PatchOp.SET,
-                    path="product.name",
+                    path="target.name",
                     value="Research assistant",
                 ),
                 Patch(
                     op=PatchOp.SET,
-                    path="product.users",
+                    path="target.users",
                     value="Policy analysts",
                 ),
                 Patch(
                     op=PatchOp.SET,
-                    path="product.description",
+                    path="target.description",
                     value="Answers research questions over an internal library.",
                 ),
                 Patch(
                     op=PatchOp.SET,
-                    path="product.detail",
+                    path="target.detail",
                     value="It uses search and can recover from a timeout.",
                 ),
             ]
@@ -200,9 +200,7 @@ class ScriptedInterviewer:
         context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("draft_scenarios")
-        covered = [
-            c.id for b in specification.measured_behaviours() for c in b.criteria
-        ]
+        covered = [b.id for b in specification.measured_behaviours()]
         personas = [p.id for p in specification.personas]
         return StepResult(
             message="Two situations should cover everything you picked.",
@@ -218,7 +216,7 @@ class ScriptedInterviewer:
                         "tasks": [
                             {
                                 "persona_ref": persona,
-                                "criterion_refs": covered,
+                                "behaviour_refs": covered,
                                 "fixtures": [],
                             }
                             for persona in personas
