@@ -19,8 +19,8 @@
 | Trial | One execution of a **test case** against a **target agentic system**, producing a **trace** and evaluation outputs. |
 | Run | A grouping of repeated **trials** of the same **test case**. |
 | Experiment | A collection of **runs** used to evaluate one or more **target agentic systems** across a set of **test cases**. |
-| Trace | The observable record of what occurred during a **trial**, including interactions, actions, tool calls, observations, and relevant state changes. |
-| Session | A collection of **traces** corresponding to exactly one **trial**. METIS assumes a one-to-one correspondence between a session and a trial: the target agentic system's conversation for a trial produces the traces that make up its session. |
+| Trace | The observable record of what occurred during a **trial**, including interactions, actions, tool calls, observations, relevant state changes, and references to where artefacts can be retrieved. |
+| Session | A collection of **traces** corresponding to exactly one **trial**, including references to where artefacts can be retrieved. METIS assumes a one-to-one correspondence between a session and a trial: the target agentic system's conversation for a trial produces the traces that make up its session. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |
 | Trial Score | The value produced by applying a **grader** to a **trial** for a particular **criterion**. |
 | Grader Passing Threshold | A configurable rule applied to the **trial score** from the **grader** to mark it as pass or fail. |
@@ -29,6 +29,8 @@
 | Run-Time Evals | Evaluations that continuously measure live traffic and real user interaction as a target model or **target agentic system** runs. |
 
 Note: **Expected Behaviour** corresponds to the `Behaviour` data models.
+
+Note: Artefact references in **traces** and **sessions** identify where the artefacts can be retrieved. They do not contain the artefacts themselves.
 
 ## Baseline and Feature-specific
 
