@@ -151,7 +151,32 @@
       "title": "Persona",
       "type": "object"
     },
-    "Product": {
+    "Scenario": {
+      "additionalProperties": false,
+      "description": "The situation in which Tasks evaluate the target.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ],
+      "title": "Scenario",
+      "type": "object"
+    },
+    "Target": {
       "properties": {
         "name": {
           "title": "Name",
@@ -176,32 +201,7 @@
         "users",
         "description"
       ],
-      "title": "Product",
-      "type": "object"
-    },
-    "Scenario": {
-      "additionalProperties": false,
-      "description": "The situation in which Tasks evaluate the product.",
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "description": {
-          "title": "Description",
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "description"
-      ],
-      "title": "Scenario",
+      "title": "Target",
       "type": "object"
     },
     "Task": {
@@ -298,8 +298,8 @@
       "title": "Runner Factory Ref",
       "type": "string"
     },
-    "product": {
-      "$ref": "#/$defs/Product"
+    "target": {
+      "$ref": "#/$defs/Target"
     },
     "features": {
       "items": {
@@ -338,7 +338,7 @@
     }
   },
   "required": [
-    "product"
+    "target"
   ],
   "title": "Specification v2",
   "type": "object"

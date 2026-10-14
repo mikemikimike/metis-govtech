@@ -200,8 +200,8 @@ before dispatch, which the callee therefore never saw. A callee MUST NOT set
 `withheld`; it can have no opinion about an action it was never given, and a
 runner that sets it is claiming the caller's authority. A withheld row is always
 a failure row — `succeeded` is `False` and `detail` carries the caller's reason —
-but it is not a product failure and MUST NOT be attributed to the target. The
-consumers that count product evidence, the persona prompt and the HTML report,
+but it is not a target failure and MUST NOT be attributed to the target. The
+consumers that count target evidence, the persona prompt and the HTML report,
 both exclude withheld rows.
 
 ## 6. Edge cases

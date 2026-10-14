@@ -33,8 +33,8 @@ from metis.wizard.contracts import (
     Patch,
     PatchOp,
     Perspective,
-    Product,
     Specification,
+    Target,
 )
 from metis.wizard.contracts.interview_state import HISTORY_LIMIT, InterviewState, Turn
 from metis.wizard.domain.permissions import InterviewStep
@@ -87,7 +87,7 @@ def _end(state, *, interviewer=None, matcher=None):
 
 
 def _empty_specification() -> Specification:
-    return Specification(product=Product(name="", description="", users=""))
+    return Specification(target=Target(name="", description="", users=""))
 
 
 def _pending_choice(request_id: str = "req-1") -> InterviewState:
@@ -308,14 +308,14 @@ def test_end_finishes_a_completable_interview() -> None:
     assert result.state.specification.behaviour("EB-1").criteria[0].grader_fqn  # type: ignore[union-attr]
 
 
-def test_missing_product_details_can_be_completed_before_review() -> None:
+def test_missing_target_details_can_be_completed_before_review() -> None:
     class IncompleteInterviewer(ScriptedInterviewer):
         def clarify(self, specification, history, context=None):
             return ClarifyResult(
                 done=True,
                 message="",
                 patches=[
-                    Patch(op=PatchOp.SET, path=f"product.{key}", value="")
+                    Patch(op=PatchOp.SET, path=f"target.{key}", value="")
                     for key in ("name", "description")
                 ],
             )
@@ -328,8 +328,8 @@ def test_missing_product_details_can_be_completed_before_review() -> None:
         started.state,
         FormResponse(
             values={
-                "product.name": "Policy assistant",
-                "product.description": "Answers policy questions.",
+                "target.name": "Policy assistant",
+                "target.description": "Answers policy questions.",
             }
         ),
         interviewer=interviewer,
@@ -455,7 +455,7 @@ def test_failed_end_preserves_pending_state_for_a_later_turn() -> None:
 
     state = InterviewState(
         specification=Specification(
-            product=Product(name="Tool", description="A tool", users="Analysts")
+            target=Target(name="Tool", description="A tool", users="Analysts")
         ),
         context=interview_context(),
         pending=ChoiceRequest(

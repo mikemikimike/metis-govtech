@@ -193,7 +193,7 @@ schema_version: 2
 
 id: my-evaluation
 runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
-product:
+target:
   name: Orca
   users: Programme managers and analysts.
   description: Evaluate routing and analysis capabilities.
@@ -204,7 +204,7 @@ product:
 | `schema_version` | Yes | Always `2` (current version) |
 | `id` | Yes | Identifier used in the output directory name |
 | `runner_factory_ref` | Yes | Importable RunnerFactory class |
-| `product` | Yes | Product name, users, description, and optional detail |
+| `target` | Yes | Target name, users, description, and optional detail |
 | `features` | Yes for execution | Features, Behaviours, and Criteria to measure |
 | `personas` | Yes for execution | User types selected by Tasks |
 | `scenarios` | Yes for execution | Situations selected by Tasks |
@@ -987,7 +987,7 @@ tasks:
     behaviour_refs: [EB-CHAT-1]
 ```
 
-Include the Product and Feature hierarchy as well. The
+Include the Target and Feature hierarchy as well. The
 [minimal template](#minimal-template) shows the complete document and defines
 Criterion `AC-CHAT-1`.
 
@@ -1038,7 +1038,7 @@ Your runner module must be importable from the environment where `metis engine s
 
 ### Profile Configuration (specification.yaml)
 
-The Profile contains Product context and the Feature, Behaviour, and Criterion
+The Profile contains Target context and the Feature, Behaviour, and Criterion
 hierarchy, including Grader settings. The Experiment configuration contains Personas, Scenarios,
 Tasks, the experiment ID, and the runner reference. The Specification combines
 the Profile and Experiment configuration.
@@ -1049,10 +1049,10 @@ the Profile and Experiment configuration.
 | Concern | Fields in `specification.yaml` | Purpose |
 |---------|--------------------------------|---------|
 | Simulation setup | `id`, `runner_factory_ref`, `personas`, `scenarios`, `tasks` | Select the runner and define each Test Case and its Trials |
-| Evaluation requirements (Profile) | `product`, `features` | Describe the product, expected Behaviours, Criteria, and Grader settings |
+| Evaluation requirements (Profile) | `target`, `features` | Describe the target, expected Behaviours, Criteria, and Grader settings |
 
 Tasks select measured Behaviours from the Profile. Reports combine the planned Tasks and
-recorded results to show whether the product meets those Criteria.
+recorded results to show whether the target meets those Criteria.
 
 The engine freezes the document under the output directory's `inputs/` directory.
 Reporting reads this copy and joins scores by Criterion ID. The report retains
@@ -1073,9 +1073,9 @@ coverage when it loads the document. From a specification in
 schema_version: 2
 id: <string>              # Experiment identifier
 runner_factory_ref: <string>  # Importable RunnerFactory class
-product:
+target:
   name: <string>           # Target name
-  users: <string>          # Prose that describes the product users
+  users: <string>          # Prose that describes the target users
   description: <string>    # Short description of what is evaluated
   detail: <string>         # Longer context about the evaluation scope
 
@@ -1121,16 +1121,16 @@ tasks:
 
 **`schema_version`** — the specification schema version. The current version is `2`. The engine requires this field and rejects an unsupported version.
 
-**`product`** — top-level metadata:
+**`target`** — top-level metadata:
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | Yes | Name of the target being evaluated |
-| `users` | Yes | Prose that describes who uses the product |
+| `users` | Yes | Prose that describes who uses the target |
 | `description` | Yes | Short evaluation description |
 | `detail` | No | Extended context about the evaluation's purpose and scope |
 
-**`features[]`** — product functions or user workflows being evaluated:
+**`features[]`** — target functions or user workflows being evaluated:
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -1166,7 +1166,7 @@ tasks:
 This Profile excerpt defines a turn-budget requirement for a chatbot:
 
 ```yaml
-product:
+target:
   name: My Chatbot
   users: People who need concise answers.
   description: Evaluate the number of turns used for direct questions.
@@ -1257,7 +1257,7 @@ schema_version: 2
 id: my-target-eval
 runner_factory_ref: my_package.runners.MyRunnerFactory
 
-product:
+target:
   name: My Chatbot
   users: People who need concise answers.
   description: Evaluate the number of turns used for direct questions.

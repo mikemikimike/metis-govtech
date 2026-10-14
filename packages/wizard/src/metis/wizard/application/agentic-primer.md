@@ -23,14 +23,14 @@ agents, carries state between turns, and takes actions with consequences. Most o
 wrong happens on the way to the answer rather than in the answer, and none of it is visible
 if you only ever ask about features.
 
-A product owner will describe what their system does. They will rarely volunteer what it does
-when a tool times out, because that is not how anyone thinks about their own product. Your
+A target owner will describe what their system does. They will rarely volunteer what it does
+when a tool times out, because that is not how anyone thinks about their own target. Your
 job in the interview is to get at the machinery underneath the description, and your job
 afterwards is to turn it into situations that make the machinery show itself.
 
 ## How much of it is actually the model's decision
 
-"Agent" covers a wide range, and where a product sits on that range changes what is worth
+"Agent" covers a wide range, and where a target sits on that range changes what is worth
 measuring. The useful question is how much the model's output controls what happens next.
 
 At one end the model writes text and code decides everything else — there is no path to
@@ -42,7 +42,7 @@ workflow can start another.
 Each step up adds a class of failure the step below cannot have. Routing adds the wrong
 branch. Tool calls add the wrong tool and the wrong arguments. Loops add never stopping and
 stopping too early. Multi-agent adds everything that happens in a handoff. If you do not know
-where the product sits, you do not know which of the paragraphs below are even relevant —
+where the target sits, you do not know which of the paragraphs below are even relevant —
 so find out early, in plain terms: does it decide what to do next, or does it just fill in
 the text?
 
@@ -55,7 +55,7 @@ network access, the ability to change a record is writing plus a credential that
 Terminal access with no permission to execute is not an ability. A search API with no network
 is not an ability.
 
-This matters because product owners describe purpose, not reach. "It answers policy
+This matters because target owners describe purpose, not reach. "It answers policy
 questions" tells you nothing about whether it can also read the shared drive, send mail under
 the organisation's name, or restart a job. Ask what it is connected to and what those
 connections let it do, and you usually learn about half the abilities on this list:
@@ -78,7 +78,7 @@ that neither does alone.
 
 Everything below is one of three things: the agent itself gets it wrong, someone deliberately
 makes it get it wrong, or something it depends on fails or lies to it. The distinction is
-worth holding onto because product owners can usually imagine the first, rarely think about
+worth holding onto because target owners can usually imagine the first, rarely think about
 the second, and almost never think about the third.
 
 ### The agent gets it wrong on its own
@@ -121,7 +121,7 @@ when to give up.
 
 **Instructions arriving as data.** Content the agent reads — a document, a web page, a tool
 result, a file someone uploaded, something written into its memory earlier — containing text
-that reads like an instruction. Whether the agent follows it. This is the one product owners
+that reads like an instruction. Whether the agent follows it. This is the one target owners
 almost never raise on their own, and the more places a system reads from, the more surfaces it
 has. Anything that takes input from outside the room is a surface: a search result, an
 attachment, a screen it is looking at.
@@ -156,7 +156,7 @@ And who is exposed when it goes wrong? Harm to the person in front of it — bad
 on, their data shown to someone else. Harm to people who are not in the room — a decision
 applied unevenly across a group, a statement published about someone. Harm to the
 organisation — a commitment it did not intend to make, a system taken down, a claim it now
-has to stand behind. Product owners will name the first kind readily and need prompting for
+has to stand behind. Target owners will name the first kind readily and need prompting for
 the other two.
 
 ## What the transcript has to contain

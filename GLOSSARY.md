@@ -1,13 +1,13 @@
 | Term | Definition |
 |------|------------|
 | Target | The agentic system under evaluation, considered at a specific version or configuration. |
-| Profile | The product context and requirements for a **target**: its **features**, **expected behaviours**, and **criteria**, including the selected **graders** and their settings. |
+| Profile | The context and requirements for a **target**: its **features**, **expected behaviours**, and **criteria**, including the selected **graders** and their settings. |
 | Specification | The evaluation document containing a **profile** and the configuration needed to conduct an **experiment**. |
 | Interview | The wizard's guided process that builds a **specification** by asking the user a sequence of questions. |
 | Document | A user-supplied file that can inform **evaluation planning** and may be sent to the **target** as a **fixture** for a **task**. |
 | Perspective | The point of view the user answers the **Interview** from (who the evaluation is for), distinct from a **Persona**. |
 | Capability | An ability a **target** can have, drawn from the ARC framework and distinct from an **Expected Behaviour** or **Feature**. |
-| Feature | A product function or user workflow that the **target** is expected to perform, such as creating slide decks. |
+| Feature | A function or user workflow that the **target** is expected to perform, such as creating slide decks. |
 | Baseline | A scope qualifier for an **expected behaviour**, **criterion**, or **grader** that can be applied to every **target**. Baseline graders are provided by the library. |
 | Feature-specific | A scope qualifier for an **expected behaviour**, **criterion**, or **grader** arising from the requirements, constraints, or operating context of a particular **feature**. A feature-specific grader is provided by the library where one exists, or otherwise authored directly from its **criterion** as a *custom* grader. |
 | Expected Behaviour | An expected behaviour describing how the agent should act while performing a **feature**. |

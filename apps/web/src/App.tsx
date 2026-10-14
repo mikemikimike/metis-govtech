@@ -960,7 +960,7 @@ export function OpeningScreen({
               </div>
               <Button type="button" variant="ghost" onClick={onBack}>
                 <ArrowLeft size={15} strokeWidth={1.75} aria-hidden />
-                Edit product
+                Edit target
               </Button>
             </div>
             <div className="flex flex-col gap-4">

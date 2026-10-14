@@ -1,7 +1,7 @@
 settings:
   clarify_turn_cap: 5
 
-opening_question: "Tell me about your product — what it does and who it's for."
+opening_question: "Tell me about your target — what it does and who it's for."
 
 perspectives:
   - id: end_user

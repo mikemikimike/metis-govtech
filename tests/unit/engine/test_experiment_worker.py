@@ -475,10 +475,10 @@ class TestFixtureContentDescriptions:
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
                 "personas": [{"id": "p", "description": "d", "name": "p"}],
                 "scenarios": [{"id": "s", "description": "d", "name": "s"}],
-                "product": {
-                    "name": "Test product",
+                "target": {
+                    "name": "Test target",
                     "users": "Test users",
-                    "description": "Test product",
+                    "description": "Test target",
                 },
                 "tasks": [
                     {
@@ -530,10 +530,10 @@ class TestFixtureContentDescriptions:
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
                 "personas": [{"id": "p", "description": "d", "name": "p"}],
                 "scenarios": [{"id": "s", "description": "d", "name": "s"}],
-                "product": {
-                    "name": "Test product",
+                "target": {
+                    "name": "Test target",
                     "users": "Test users",
-                    "description": "Test product",
+                    "description": "Test target",
                 },
                 "tasks": [
                     {
@@ -646,10 +646,10 @@ class TestFixtureContentDescriptions:
                     {"id": "s1", "description": "d", "name": "s1"},
                     {"id": "s2", "description": "d", "name": "s2"},
                 ],
-                "product": {
-                    "name": "Test product",
+                "target": {
+                    "name": "Test target",
                     "users": "Test users",
-                    "description": "Test product",
+                    "description": "Test target",
                 },
                 "tasks": [
                     {

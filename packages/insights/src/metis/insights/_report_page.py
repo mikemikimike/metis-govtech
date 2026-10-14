@@ -1,4 +1,4 @@
-"""Render the product evaluation report as one self-contained HTML page."""
+"""Render the target evaluation report as one self-contained HTML page."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ REPORT_BODY = """\
     <div id="outcome-detail" class="outcome-detail"></div>
   </section>
 
-  <footer>Values come from the product specification, grader results, and trial records.</footer>
+  <footer>Values come from the target specification, grader results, and trial records.</footer>
 </main>
 <div id="tree-tip" class="tree-tip" role="tooltip"></div>
 """
@@ -97,7 +97,7 @@ function syncExpandControl(){
  button.setAttribute("aria-pressed",String(allExpanded));
 }
 
-document.getElementById("report-title").textContent=V.product;
+document.getElementById("report-title").textContent=V.target;
 document.getElementById("threshold-note").textContent=`Pass threshold ${TH}%`;
 document.getElementById("table-threshold-note").textContent=`Pass threshold ${TH}%`;
 
@@ -161,13 +161,13 @@ function renderTree(){
  if(!rows.length){host.innerHTML='<div class="tree-empty">No result matches this view.</div>';syncExpandControl();return}
  const ROW_PITCH=88,TREE_TOP=48,TREE_BOTTOM=16;
  const H=Math.max(360,TREE_TOP+(rows.length-1)*ROW_PITCH+33+TREE_BOTTOM),W=1250,rowY=i=>TREE_TOP+i*ROW_PITCH;
- const X={product:14,feature:210,behaviour:472,criterion:734,grader:996};
- const widths={product:160,feature:230,behaviour:230,criterion:230,grader:240};
+ const X={target:14,feature:210,behaviour:472,criterion:734,grader:996};
+ const widths={target:160,feature:230,behaviour:230,criterion:230,grader:240};
  const centre=(start,end)=>(rowY(start)+rowY(end))/2;
  const link=(x1,y1,x2,y2,active=false,status="")=>{const mid=Math.round((x1+x2)/2);return `<path d="M${x1} ${y1} H${mid} V${y2} H${x2}" class="tree-link${active?' active':''}${status?' state-'+status:''}"/>`};
- let svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-label="Product result tree">`;
- const productY=centre(0,rows.length-1);
- for(const group of featureGroups){const featureY=centre(group.start,group.end);svg+=link(X.product+widths.product,productY,X.feature,featureY);for(const bg of group.behaviourGroups){const by=centre(bg.start,bg.end);svg+=link(X.feature+widths.feature,featureY,X.behaviour,by);for(let i=bg.start;i<=bg.end;i++){const row=rows[i],y=rowY(i),active=selected?.id===row.cid,st=row.criterion?statusOf(row.criterion):"";svg+=link(X.behaviour+widths.behaviour,by,X.criterion,y,active,st);if(row.cid)svg+=link(X.criterion+widths.criterion,y,X.grader,y,active,st)}}}
+ let svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-label="Target result tree">`;
+ const targetY=centre(0,rows.length-1);
+ for(const group of featureGroups){const featureY=centre(group.start,group.end);svg+=link(X.target+widths.target,targetY,X.feature,featureY);for(const bg of group.behaviourGroups){const by=centre(bg.start,bg.end);svg+=link(X.feature+widths.feature,featureY,X.behaviour,by);for(let i=bg.start;i<=bg.end;i++){const row=rows[i],y=rowY(i),active=selected?.id===row.cid,st=row.criterion?statusOf(row.criterion):"";svg+=link(X.behaviour+widths.behaviour,by,X.criterion,y,active,st);if(row.cid)svg+=link(X.criterion+widths.criterion,y,X.grader,y,active,st)}}}
  const box=(x,y,w,h,status,kind,id,title,score,code,note,selectable=false,expanded=null)=>{
   const active=selectable&&selected?.id===id;
   const classes=["tree-node",`state-${status}`,`kind-${kind}`,active?"selected":"",selectable?"selectable":""].filter(Boolean).join(" ");
@@ -182,7 +182,7 @@ function renderTree(){
   return out+`</g>`;
  };
  const dataErrors=(V.unresolved||[]).length;
- svg+=box(X.product,productY,widths.product,66,dataErrors?"dataError":"neutral","product","product",V.product,"","Product",dataErrors?`${dataErrors} data errors`:"",false);
+ svg+=box(X.target,targetY,widths.target,66,dataErrors?"dataError":"neutral","target","target",V.target,"","Target",dataErrors?`${dataErrors} data errors`:"",false);
  for(const group of featureGroups){const feature=group.feature,y=centre(group.start,group.end),closed=shutFeatures.has(feature.id);svg+=box(X.feature,y,widths.feature,62,statusOf(feature),"feature",feature.id,feature.name,rateText(feature.rate),feature.id,"",false,!closed);
   for(const bg of group.behaviourGroups){const b=bg.behaviour,yb=centre(bg.start,bg.end),closedB=shutBehaviours.has(bg.bid);svg+=box(X.behaviour,yb,widths.behaviour,62,statusOf(b),"behaviour",bg.bid,b.label,rateText(b.rate),bg.bid,"",false,!closedB)}
  }
@@ -250,7 +250,7 @@ for(const trial of tableData.rows||[]){const key=trial.task_id;let testCase=tabl
 const trialSquares=(testCase,stateOf,labelOf)=>`<span class="trial-statuses">${testCase.trials.map((trial,index)=>{const state=stateOf(trial);return `<i class="trial-mark ${state}" title="Trial ${trial.trial_index||index+1}: ${esc(labelOf(trial,state))}" aria-label="Trial ${index+1}: ${esc(labelOf(trial,state))}"></i>`}).join("")}</span>`;
 const graderCell=(testCase,column)=>{const results=testCase.trials.map(trial=>(trial.results||{})[column.criterion]).filter(result=>result?.evaluated),passed=results.filter(result=>result.status==="pass").length,evaluated=results.length,notEvaluated=testCase.trials.length-evaluated;if(!evaluated)return '<span class="table-score notEvaluated" aria-label="Not evaluated">—</span>';const rate=Math.round(100*passed/evaluated),state=rate>=TH?"pass":"fail",detail=`${passed} of ${evaluated} evaluated trials passed${notEvaluated?` · ${notEvaluated} not evaluated`:""}`;return `<span class="table-score ${state}" title="${esc(detail)}" aria-label="${esc(LABELS[state])}, ${rate}%. ${esc(detail)}">${rate}%</span>`};
 const outcomeCell=testCase=>trialSquares(testCase,trial=>trial.category||"abandoned",(trial,state)=>outcomeLabel[state]||state);
-const trialTrace=(row,index)=>{const turns=row.conversation||[],category=row.category||"abandoned";return `<section class="trial-trace"><div class="trial-trace-head"><div><strong>Trial ${index+1}</strong><span>${esc(row.id)}</span>${row.attempt>1?'<span class="trial-retried">retried · attempt '+row.attempt+'</span>':""}</div><span class="outcome-state ${category}"><i></i>${esc(outcomeLabel[category]||category)}</span><span>${turns.length} turn${turns.length===1?"":"s"}</span></div>${turns.length?turns.map(turn=>`<article class="conversation-turn"><span class="turn-number">Turn ${turn.turn}</span><div><b>User agent</b><p>${esc(turn.user||"No user message recorded")}</p></div><div><b>Product</b><p>${esc(turn.product||"No product response recorded")}</p>${(turn.errors||[]).map(error=>`<p class="turn-error">${esc(error)}</p>`).join("")}</div></article>`).join(""):'<div class="conversation-empty">No conversation was recorded for this trial.</div>'}</section>`};
+const trialTrace=(row,index)=>{const turns=row.conversation||[],category=row.category||"abandoned";return `<section class="trial-trace"><div class="trial-trace-head"><div><strong>Trial ${index+1}</strong><span>${esc(row.id)}</span>${row.attempt>1?'<span class="trial-retried">retried · attempt '+row.attempt+'</span>':""}</div><span class="outcome-state ${category}"><i></i>${esc(outcomeLabel[category]||category)}</span><span>${turns.length} turn${turns.length===1?"":"s"}</span></div>${turns.length?turns.map(turn=>`<article class="conversation-turn"><span class="turn-number">Turn ${turn.turn}</span><div><b>User agent</b><p>${esc(turn.user||"No user message recorded")}</p></div><div><b>Target</b><p>${esc(turn.target||"No target response recorded")}</p>${(turn.errors||[]).map(error=>`<p class="turn-error">${esc(error)}</p>`).join("")}</div></article>`).join(""):'<div class="conversation-empty">No conversation was recorded for this trial.</div>'}</section>`};
 const testCaseTraces=testCase=>{const active=Math.min(activeTrialByCase.get(testCase.id)??0,testCase.trials.length-1),trial=testCase.trials[active];return `<div class="test-case-detail"><div class="trial-tabs" role="tablist" aria-label="Trials">${testCase.trials.map((item,index)=>{const category=item.category||"abandoned",selected=index===active;return `<button type="button" role="tab" id="${testCase.id}-trial-${index}-tab" aria-controls="${testCase.id}-trial-panel" aria-selected="${selected}" data-trial-tab data-test-case="${testCase.id}" data-trial-index="${index}"><i class="${category}"></i>Trial ${index+1}</button>`}).join("")}</div><div id="${testCase.id}-trial-panel" role="tabpanel" aria-labelledby="${testCase.id}-trial-${active}-tab">${trialTrace(trial,active)}</div></div>`};
 function bindTrialTabs(){document.querySelectorAll("[data-trial-tab]").forEach(button=>button.onclick=()=>{const testCase=tableCases.find(item=>item.id===button.dataset.testCase),detail=button.closest(".test-case-detail");if(!testCase||!detail)return;activeTrialByCase.set(testCase.id,Number(button.dataset.trialIndex));detail.outerHTML=testCaseTraces(testCase);bindTrialTabs()})}
 function renderResultsTable(){
@@ -276,7 +276,7 @@ const outcomeConfig=[{key:"succeeded",label:"Succeeded"},{key:"abandoned",label:
 let activeOutcome="error";
 const outcomeItems=trials.items||[];
 document.getElementById("outcome-count").textContent=`${trials.attempted} attempted`;
-const failureSourceLabel=source=>source==="product"?(V.product||"Product"):source==="userAgent"?"User agent":source==="evaluationRunner"?"Evaluation runner":source==="outcome"?"No error":"Not recorded";
+const failureSourceLabel=source=>source==="target"?(V.target||"Target"):source==="userAgent"?"User agent":source==="evaluationRunner"?"Evaluation runner":source==="outcome"?"No error":"Not recorded";
 const recordedOutcomeMessage=item=>{const message=item.message||item.stopReason||"unknown";if(item.category==="succeeded")return "No error";if(item.category==="abandoned"&&message===item.stopReason)return "No error message recorded";return message};
 let openOutcomeGroup="";
 function renderOutcomes(){
@@ -296,7 +296,7 @@ let redrawTimer;addEventListener("resize",()=>{clearTimeout(redrawTimer);redrawT
 """
 
 
-def render_report_page(report: dict, *, title: str = "Product evaluation") -> str:
+def render_report_page(report: dict, *, title: str = "Target evaluation") -> str:
     """Build one offline HTML document from a report dictionary."""
     data = json.dumps(report, separators=(",", ":"), default=str).replace("</", "<\\/")
     script = REPORT_SCRIPT.replace(DATA_TOKEN, data)

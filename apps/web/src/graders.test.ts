@@ -9,7 +9,7 @@ const specification: Specification = {
   runner_factory_ref:
     "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
   tasks: [],
-  product: { name: "", users: "", description: "", detail: "" },
+  target: { name: "", users: "", description: "", detail: "" },
   features: [
     {
       id: "F-1",

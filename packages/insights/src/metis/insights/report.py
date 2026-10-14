@@ -1,13 +1,13 @@
-"""Terminal summary and persistence of the product evaluation report.
+"""Terminal summary and persistence of the target evaluation report.
 
 Produces:
 1. A terminal summary table.
-2. The product evaluation report, as an HTML page and as JSON data.
+2. The target evaluation report, as an HTML page and as JSON data.
 
 The report joins each grader result to its Criterion in the Specification. A reader
 can see which Behaviour needs attention and which Persona or Scenario is hard to test.
 Every number comes from a file the run already wrote; no model writes any of its text.
-A run with no product specification writes no report.
+A run with no target specification writes no report.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ def format_terminal_summary(
 def save_report(
     results: EvaluationResults, experiment_dir: Path
 ) -> tuple[Path, Path] | None:
-    """Write the product evaluation report into `experiment_dir/reports/`.
+    """Write the target evaluation report into `experiment_dir/reports/`.
 
     The report reads `inputs/specification.yaml` and `trials/*/record.json` from the
     experiment directory. `simulate` freezes the input document there. A run with no
@@ -134,7 +134,7 @@ def save_report(
         encoding="utf-8",
     )
     html_path.write_text(
-        render_report_page(report, title=report["product"]), encoding="utf-8"
+        render_report_page(report, title=report["target"]), encoding="utf-8"
     )
 
     logger.info(

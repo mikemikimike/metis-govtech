@@ -210,6 +210,6 @@ class StepResult(BaseModel):
 
 
 class ClarifyResult(StepResult):
-    """A clarify question plus product edits and the option to finish early."""
+    """A clarify question plus target edits and the option to finish early."""
 
     done: bool = False

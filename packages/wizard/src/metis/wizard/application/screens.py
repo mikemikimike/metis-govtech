@@ -57,7 +57,7 @@ FEEDBACK_INSTRUCTION = (
 # design names out loud. CLARIFY is step one even though the model, not a screen builder,
 # composes its chat; DONE is terminal and carries no header.
 _STEP_TITLES: dict[InterviewStep, str] = {
-    InterviewStep.CLARIFY: "Understanding your product",
+    InterviewStep.CLARIFY: "Understanding your target",
     InterviewStep.BEHAVIOURS: "Behaviours",
     InterviewStep.CRITERIA: "Acceptance criteria",
     InterviewStep.PERSONAS: "Personas",
@@ -145,19 +145,17 @@ BEHAVIOUR_INSTRUCTION = (
 )
 
 
-def product_completion_form(specification: Specification) -> FormRequest | None:
-    """Ask for required Product fields that the model did not supply."""
+def target_completion_form(specification: Specification) -> FormRequest | None:
+    """Ask for required Target fields that the model did not supply."""
     fields: list[FormField] = []
-    if not specification.product.name.strip():
-        fields.append(
-            FormField(id="product.name", label="Product name", multiline=False)
-        )
-    if not specification.product.description.strip():
-        fields.append(FormField(id="product.description", label="Product description"))
+    if not specification.target.name.strip():
+        fields.append(FormField(id="target.name", label="Target name", multiline=False))
+    if not specification.target.description.strip():
+        fields.append(FormField(id="target.description", label="Target description"))
     if not fields:
         return None
     return FormRequest(
-        prompt="Enter the missing product details to continue to the behaviour review.",
+        prompt="Enter the missing target details to continue to the behaviour review.",
         fields=fields,
     )
 
@@ -218,7 +216,7 @@ def behaviours_screen(specification: Specification, message: str) -> ChoiceReque
                 label="Continue",
                 primary=True,
                 # A disabled Continue is still shown, marked unavailable. Readiness through this
-                # review requires a complete Product and at least one measured Behaviour.
+                # review requires a complete Target and at least one measured Behaviour.
                 enabled=_ready_through(specification, InterviewStep.BEHAVIOURS),
             ),
         ],

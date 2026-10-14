@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from pydantic_core import CoreSchema
 
 from metis.core.experiment import Experiment, Persona, Scenario, Task
-from metis.core.profile import Behaviour, Criterion, Feature, Product, ProductProfile
+from metis.core.profile import Behaviour, Criterion, Feature, Target, TargetProfile
 
 _SPECIFICATION_VERSION = 2
 
@@ -34,7 +34,7 @@ class SpecificationDocument(BaseModel):
     runner_factory_ref: str = (
         "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
     )
-    product: Product
+    target: Target
     features: list[Feature] = Field(default_factory=list)
     personas: list[Persona] = Field(default_factory=list)
     scenarios: list[Scenario] = Field(default_factory=list)
@@ -60,7 +60,7 @@ class Specification(BaseModel):
     """A Profile and an Experiment, authored by hand or through the Interview."""
 
     schema_version: Literal[2] = _SPECIFICATION_VERSION
-    profile: ProductProfile
+    profile: TargetProfile
     experiment: Experiment
     _document_model: ClassVar[type[SpecificationDocument]] = SpecificationDocument
 
@@ -72,8 +72,8 @@ class Specification(BaseModel):
         document = cls._document_model.model_validate(data)
         return {
             "schema_version": document.schema_version,
-            "profile": ProductProfile(
-                product=document.product, features=document.features
+            "profile": TargetProfile(
+                target=document.target, features=document.features
             ),
             "experiment": Experiment(
                 id=document.id,
@@ -112,12 +112,12 @@ class Specification(BaseModel):
         return schema
 
     @property
-    def product(self) -> Product:
-        return self.profile.product
+    def target(self) -> Target:
+        return self.profile.target
 
-    @product.setter
-    def product(self, value: Product) -> None:
-        self.profile.product = value
+    @target.setter
+    def target(self, value: Target) -> None:
+        self.profile.target = value
 
     @property
     def features(self) -> list[Feature]:

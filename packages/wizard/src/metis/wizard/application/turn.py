@@ -69,8 +69,8 @@ from metis.wizard.contracts.turn import (
 )
 from metis.wizard.domain.permissions import InterviewStep
 from metis.wizard.domain.specification import (
-    Product,
     Specification,
+    Target,
     collect_specification_ids,
 )
 
@@ -104,7 +104,7 @@ def configure_interview_dependencies(
 def derive_stage(state: InterviewState) -> InterviewStep:
     """The first stage the Specification has not yet satisfied — the interview's position, computed.
 
-    Read top to bottom: a missing product needs clarification; a Behaviour list that is empty,
+    Read top to bottom: a missing target needs clarification; a Behaviour list that is empty,
     measures nothing, or has not been confirmed needs the Behaviour review; a measured Behaviour
     with no criteria needs the Criteria review; no personas needs the Persona review; a Scenario
     set that is not runnable, or a review not yet confirmed, needs the Scenario review. Everything
@@ -240,7 +240,7 @@ def _start(
 ) -> InterviewResult:
     """Begin a fresh interview with the user's description as its first input."""
     specification = Specification(
-        product=Product(name="", description=request.description, users="")
+        target=Target(name="", description=request.description, users="")
     )
     working = _lift(
         InterviewState(
@@ -517,10 +517,10 @@ def package_specification(
 
 
 def experiment_id(specification: Specification) -> str:
-    """A filename-safe id from the product name, falling back when it is empty."""
+    """A filename-safe id from the target name, falling back when it is empty."""
     if specification.id:
         return specification.id
-    slug = re.sub(r"[^a-z0-9]+", "-", specification.product.name.lower()).strip("-")
+    slug = re.sub(r"[^a-z0-9]+", "-", specification.target.name.lower()).strip("-")
     return slug or "experiment"
 
 

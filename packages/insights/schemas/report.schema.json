@@ -158,8 +158,8 @@
           "title": "User",
           "type": "string"
         },
-        "product": {
-          "title": "Product",
+        "target": {
+          "title": "Target",
           "type": "string"
         },
         "errors": {
@@ -173,7 +173,7 @@
       "required": [
         "turn",
         "user",
-        "product"
+        "target"
       ],
       "title": "ConversationTurn",
       "type": "object"
@@ -1094,8 +1094,8 @@
   },
   "description": "Top-level model for report.json.\n\nThis is the contract downstream consumers depend on.",
   "properties": {
-    "product": {
-      "title": "Product",
+    "target": {
+      "title": "Target",
       "type": "string"
     },
     "run": {
@@ -1241,7 +1241,7 @@
     }
   },
   "required": [
-    "product",
+    "target",
     "run",
     "date",
     "sessions",

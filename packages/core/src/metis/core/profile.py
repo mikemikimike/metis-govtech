@@ -1,4 +1,4 @@
-"""Product context and the Feature, Behaviour, and Criterion hierarchy."""
+"""Target context and the Feature, Behaviour, and Criterion hierarchy."""
 
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ class NamedNode(BaseModel, Generic[DescriptionT]):
     description: DescriptionT
 
 
-class Product(BaseModel):
+class Target(BaseModel):
     name: str
-    users: str  # prose — who the product serves
-    description: str  # prose — the short description of the product
-    detail: str = ""  # prose — useful depth, including how the product works
+    users: str  # prose — who the target serves
+    description: str  # prose — the short description of the target
+    detail: str = ""  # prose — useful depth, including how the target works
 
 
 class CriterionDescription(BaseModel):
@@ -53,10 +53,10 @@ class Feature(NamedNode[str]):
     behaviours: list[Behaviour] = Field(default_factory=list)
 
 
-class ProductProfile(BaseModel):
-    """The product context and requirements that an evaluation measures."""
+class TargetProfile(BaseModel):
+    """The target context and requirements that an evaluation measures."""
 
-    product: Product
+    target: Target
     features: list[Feature] = Field(default_factory=list)
 
     def behaviours(self) -> list[Behaviour]:

@@ -12,7 +12,7 @@ Core data models and abstractions for the METIS suite. Zero workspace dependenci
 - Public logging API: `from metis.core.logging import get_logger, configure_logging`
 - Public console API: `from metis.core.console import console`
 
-- `metis.core.profile` owns Product context, Features, Behaviours, and Criteria.
+- `metis.core.profile` owns Target context, Features, Behaviours, and Criteria.
 - `metis.core.experiment` owns Personas, Scenarios, Tasks, and execution settings.
 - `metis.core.specification` combines a Profile and an Experiment. Its document
   adapter keeps YAML and API JSON flat.

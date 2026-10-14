@@ -355,7 +355,7 @@ def test_trials_and_files_are_owned_by_no_step() -> None:
 
 def test_an_unowned_address_is_refused_without_leaking_its_path() -> None:
     """The generic refusal names 'part of that change', never the bookkeeping address."""
-    result = apply(research_assistant(), [patch("product.invented_field", "x")])
+    result = apply(research_assistant(), [patch("target.invented_field", "x")])
 
     message = result.rejected[0].message
     assert "invented_field" not in message
@@ -385,20 +385,20 @@ def test_a_behaviour_edit_from_the_criteria_step_is_applied() -> None:
 def test_an_address_no_step_owns_is_writable_nowhere() -> None:
     specification = research_assistant()
 
-    result = apply(specification, [patch("product.invented_field", "x")])
+    result = apply(specification, [patch("target.invented_field", "x")])
 
     assert result.applied == []
-    assert owner_of("product.invented_field") is None
+    assert owner_of("target.invented_field") is None
 
 
-def test_clarify_owns_the_product_prose_and_measured_is_owned_nowhere() -> None:
-    """Clarify owns the product prose. The measurement flag is the user's only real decision,
+def test_clarify_owns_the_target_prose_and_measured_is_owned_nowhere() -> None:
+    """Clarify owns the target prose. The measurement flag is the user's only real decision,
     so no step owns it: the model can write it at no point, and only a WIZARD-origin tick can."""
     assert StepPermissions[InterviewStep.CLARIFY] == [
-        "product.name",
-        "product.users",
-        "product.description",
-        "product.detail",
+        "target.name",
+        "target.users",
+        "target.description",
+        "target.detail",
     ]
     assert owner_of(EB1_MEASURED) is None
 
@@ -605,12 +605,12 @@ def test_materializer_uses_dot_free_ids_for_every_specification_node() -> None:
         CriterionDraft,
         FeatureDraft,
         PersonaDraft,
-        Product,
         ScenarioDraft,
         Specification,
+        Target,
     )
 
-    specification = Specification(product=Product(name="X", users="", description=""))
+    specification = Specification(target=Target(name="X", users="", description=""))
     issued: set[str] = set()
     typed: set[str] = set()
     feature = materializer.add_feature(
@@ -721,7 +721,7 @@ def test_tree_regeneration_does_not_reuse_removed_ids() -> None:
     issued = collect_specification_ids(specification)
     cascade.clear_for_regeneration(
         specification,
-        cascade.Question(text="", subject="product.description", kind="tree"),
+        cascade.Question(text="", subject="target.description", kind="tree"),
         set(),
     )
     assert specification.features == [] and specification.scenarios == []
@@ -743,9 +743,9 @@ def test_tree_regeneration_does_not_reuse_removed_ids() -> None:
 
 
 def test_persona_slug_collisions_get_deterministic_suffixes() -> None:
-    from metis.wizard.contracts import PersonaDraft, Product, Specification
+    from metis.wizard.contracts import PersonaDraft, Specification, Target
 
-    specification = Specification(product=Product(name="X", users="", description=""))
+    specification = Specification(target=Target(name="X", users="", description=""))
     issued: set[str] = set()
     first = materializer.add_persona(
         specification,

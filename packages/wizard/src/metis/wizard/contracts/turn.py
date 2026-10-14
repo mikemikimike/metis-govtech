@@ -96,7 +96,7 @@ class InterviewErrorCode(StrEnum):
 class MissingDataCode(StrEnum):
     """Stable codes for gaps that stop a Specification from being runnable."""
 
-    PRODUCT_INCOMPLETE = "product_incomplete"
+    TARGET_INCOMPLETE = "target_incomplete"
     BEHAVIOURS_INCOMPLETE = "behaviours_incomplete"
     NO_MEASURED_BEHAVIOUR = "no_measured_behaviour"
     CRITERIA_INCOMPLETE = "criteria_incomplete"

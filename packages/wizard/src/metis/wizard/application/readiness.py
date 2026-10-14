@@ -104,12 +104,12 @@ def scenario_readiness(specification: Specification) -> list[MissingData]:
 def specification_readiness(specification: Specification) -> list[MissingData]:
     """Return all objective gaps before a Specification can produce a runnable experiment."""
     gaps: list[MissingData] = []
-    if not specification.product.name or not specification.product.description:
+    if not specification.target.name or not specification.target.description:
         gaps.append(
             MissingData(
-                code=MissingDataCode.PRODUCT_INCOMPLETE,
+                code=MissingDataCode.TARGET_INCOMPLETE,
                 stage=InterviewStep.CLARIFY,
-                message="The product name and description are required.",
+                message="The target name and description are required.",
             )
         )
 

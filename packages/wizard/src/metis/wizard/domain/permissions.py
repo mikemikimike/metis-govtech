@@ -36,7 +36,7 @@ class InterviewStep(StrEnum):
 
 
 # Note that BEHAVIOURS grants no path for `measured`: the measurement ticks are PatchOrigin.WIZARD,
-# so they never reach an address check. Clarify owns the product prose. The driver narrows a clarify
+# so they never reach an address check. Clarify owns the target prose. The driver narrows a clarify
 # result to those four paths before applying it; the global owner lookup remains what lets a later
 # step correct an earlier step's fields.
 # Note that each step owns both the *container* and its *elements*. ADD addresses the list
@@ -44,10 +44,10 @@ class InterviewStep(StrEnum):
 # (`features[F-1]`). Listing only one of the two silently forbids half the operations.
 StepPermissions: dict[InterviewStep, list[str]] = {
     InterviewStep.CLARIFY: [
-        "product.name",
-        "product.users",
-        "product.description",
-        "product.detail",
+        "target.name",
+        "target.users",
+        "target.description",
+        "target.detail",
     ],
     InterviewStep.BEHAVIOURS: [
         "features",

@@ -193,7 +193,7 @@ For `pending.type: "form"`, use the exact field IDs from `pending.fields`:
 {
   "type": "form",
   "values": {
-    "product_name": "Policy assistant"
+    "target_name": "Policy assistant"
   }
 }
 ```

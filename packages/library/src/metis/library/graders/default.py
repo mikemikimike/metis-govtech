@@ -6,7 +6,7 @@ bound to this class with its own text as an argument. So a criterion nobody wrot
 still gets judged, and no file is generated that would then need keeping in sync.
 
 An experiment that leans on this heavily is telling you something worth knowing: those are
-behaviours the product owner cared about that nothing in the library covers.
+behaviours the target owner cared about that nothing in the library covers.
 """
 
 from typing import cast
@@ -36,7 +36,7 @@ class CriterionGEvalGrader(GEval):
             model=_get_judge_model(),
             criteria=(
                 "Evaluate whether the agent's response satisfies this acceptance "
-                "criterion, which was written by the product owner:\n\n"
+                "criterion, which was written by the target owner:\n\n"
                 f"{criterion}\n\n"
                 "The 'input' is what the user asked. The 'actual_output' is what the "
                 "agent produced.\n\n"

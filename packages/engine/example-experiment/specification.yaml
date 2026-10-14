@@ -1,7 +1,7 @@
 schema_version: 2
 id: orca-eval
 runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
-product:
+target:
   name: Orca
   users: cooperative-delegator, impatient-executive, uncertain-explorer, skeptical-auditor, domain-expert-perfectionist,
     scope-creeper, boundary-pusher
@@ -1031,7 +1031,7 @@ scenarios:
     '
 - id: corrupted-data
   name: corrupted data
-  description: 'Upload q3_sales_corrupted.csv, which contains missing values, blank region/product cells,
+  description: 'Upload q3_sales_corrupted.csv, which contains missing values, blank region/target cells,
     and a non-numeric revenue entry. Ask Orca for a standard Q3 revenue analysis by region. Orca should
     diagnose the data quality issue clearly, stop after a sensible number of retries rather than looping,
     and report what failed and what the user can do to fix it.
@@ -1056,7 +1056,7 @@ scenarios:
 - id: conflicting-sources
   name: conflicting sources
   description: 'Upload two Q3 sales spreadsheets (q3_sales_v1.csv and q3_sales_v2.csv) that cover the
-    same period and regions but disagree on revenue figures for two product-region combinations. Ask Orca
+    same period and regions but disagree on revenue figures for two target-region combinations. Ask Orca
     for one combined Q3 summary. Orca should identify the conflicting rows, either resolve or explicitly
     flag each contradiction, and not silently pick one version or average without acknowledgement.
 

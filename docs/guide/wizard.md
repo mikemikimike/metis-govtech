@@ -33,7 +33,7 @@ The Interview produces one Specification with these related concepts:
 
 | Concept | Contents |
 |---|---|
-| Profile | The product and its users, Features, Behaviours, Criteria, and their scorer settings |
+| Profile | The target and its users, Features, Behaviours, Criteria, and their scorer settings |
 | Specification | The Profile and the configuration needed to conduct an Experiment |
 | Experiment | A collection of Runs used to evaluate one or more targets across a set of Test Cases |
 

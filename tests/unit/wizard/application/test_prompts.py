@@ -14,8 +14,8 @@ from metis.wizard.application import prompts
 from metis.wizard.application.config import opening_question
 from metis.wizard.contracts import (
     InterviewDocument,
-    Product,
     Specification,
+    Target,
 )
 from metis.wizard.contracts.interview_state import Perspective, Turn
 from tests.fixtures.wizard.context import interview_context
@@ -243,7 +243,7 @@ def test_clarify_uses_one_shared_catalogue_template(
     document = _document()
     document["model_calls"]["clarify"] += "\nSHARED CLARIFY MARKER"
     _install_document(monkeypatch, document)
-    empty = Specification(product=Product(name="", users="", description=""))
+    empty = Specification(target=Target(name="", users="", description=""))
 
     prompt = prompts.clarify(empty, [], context=interview_context())
 

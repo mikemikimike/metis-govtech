@@ -88,12 +88,12 @@ _DEFAULT_MESSAGES = {
     InterviewStep.SCENARIOS: "Here are the current scenarios.",
 }
 
-_CLARIFY_PRODUCT_PATHS = frozenset(
+_CLARIFY_TARGET_PATHS = frozenset(
     {
-        "product.name",
-        "product.users",
-        "product.description",
-        "product.detail",
+        "target.name",
+        "target.users",
+        "target.description",
+        "target.detail",
     }
 )
 
@@ -176,7 +176,7 @@ class StepDriver:
                 self._run(
                     state,
                     result,
-                    allowed_paths=_CLARIFY_PRODUCT_PATHS,
+                    allowed_paths=_CLARIFY_TARGET_PATHS,
                 )
                 # The call at the bound is record-only. Its patches are required, but its
                 # message must never become a sixth question or enter the transcript.
@@ -187,9 +187,9 @@ class StepDriver:
             step = InterviewStep.BEHAVIOURS
 
         if step is InterviewStep.BEHAVIOURS:
-            # A model can finish clarification without filling required Product fields.
+            # A model can finish clarification without filling required Target fields.
             # Collect them directly so the review cannot strand the user at Continue.
-            completion = screens.product_completion_form(specification)
+            completion = screens.target_completion_form(specification)
             if completion is not None:
                 return completion
             if not specification.features:
@@ -390,7 +390,7 @@ class StepDriver:
         specification = state.specification
 
         if state.step is InterviewStep.BEHAVIOURS and request.target is None:
-            completion = screens.product_completion_form(specification)
+            completion = screens.target_completion_form(specification)
             if completion is not None and request.fields == completion.fields:
                 apply(
                     specification,

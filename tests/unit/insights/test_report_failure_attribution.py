@@ -1,7 +1,7 @@
 """How a failed trial gets blamed — the report's failureSource rule (issue #329).
 
 `_load_trial_records` decides whether a trial's failure is attributed to the
-product under test or to METIS. Nothing tested it before this file.
+target under test or to METIS. Nothing tested it before this file.
 """
 
 from __future__ import annotations
@@ -43,10 +43,10 @@ def _only_trial(tmp_path: Path, record: dict) -> dict:
 
 
 class TestBlameAttribution:
-    def test_an_upload_the_target_rejected_is_the_products_failure(
+    def test_an_upload_the_target_rejected_is_the_targets_failure(
         self, tmp_path: Path
     ) -> None:
-        """The rejection reached us from the target, so the product owns it —
+        """The rejection reached us from the target, so the target owns it —
         and the rejection text, not the bare stop_reason, is the headline."""
         trial = _only_trial(
             tmp_path,
@@ -64,14 +64,14 @@ class TestBlameAttribution:
                 }
             ),
         )
-        assert trial["failureSource"] == "product"
+        assert trial["failureSource"] == "target"
         assert "413" in trial["message"]
 
-    def test_an_action_metis_withheld_is_not_the_products_failure(
+    def test_an_action_metis_withheld_is_not_the_targets_failure(
         self, tmp_path: Path
     ) -> None:
         """The persona named a fixture the scenario never staged. The target
-        never saw the action, so blaming the product would be a lie."""
+        never saw the action, so blaming the target would be a lie."""
         trial = _only_trial(
             tmp_path,
             _record(
@@ -89,15 +89,15 @@ class TestBlameAttribution:
                 }
             ),
         )
-        assert trial["failureSource"] != "product"
+        assert trial["failureSource"] != "target"
         assert trial["failureSource"] == "evaluationRunner"
 
-    def test_a_failed_row_with_no_detail_still_blames_the_product(
+    def test_a_failed_row_with_no_detail_still_blames_the_target(
         self, tmp_path: Path
     ) -> None:
         """I2 forbids this shape on the write path, but this read path never
         rebuilds the model. Filtering on `detail` truthiness would empty
-        product_errors and blame METIS for the target's own failure."""
+        target_errors and blame METIS for the target's own failure."""
         trial = _only_trial(
             tmp_path,
             _record(
@@ -107,18 +107,18 @@ class TestBlameAttribution:
                 }
             ),
         )
-        assert trial["failureSource"] == "product"
+        assert trial["failureSource"] == "target"
         assert trial["message"] == "action 3 failed with no detail recorded"
 
-    def test_a_turn_notice_alone_blames_the_product(self, tmp_path: Path) -> None:
+    def test_a_turn_notice_alone_blames_the_target(self, tmp_path: Path) -> None:
         trial = _only_trial(
             tmp_path,
             _record({"text": "", "response_notices": ["Turn failed: guardrail"]}),
         )
-        assert trial["failureSource"] == "product"
+        assert trial["failureSource"] == "target"
         assert trial["message"] == "Turn failed: guardrail"
 
-    def test_a_clean_trial_is_not_blamed_on_the_product(self, tmp_path: Path) -> None:
+    def test_a_clean_trial_is_not_blamed_on_the_target(self, tmp_path: Path) -> None:
         trial = _only_trial(
             tmp_path, _record({"text": "here you go"}, stop_reason="goal_achieved")
         )
@@ -129,7 +129,7 @@ class TestTheHeadlineIsTheLastProblem:
     def test_rows_are_sorted_so_the_last_action_is_the_headline(
         self, tmp_path: Path
     ) -> None:
-        """product_errors[-1] becomes the message, so order decides what the
+        """target_errors[-1] becomes the message, so order decides what the
         reader sees. I1 guarantees ascending order on the write path only."""
         trial = _only_trial(
             tmp_path,
