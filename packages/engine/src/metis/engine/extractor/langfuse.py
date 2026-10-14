@@ -11,6 +11,7 @@ High-level entry point:
 Lower-level extraction helpers are also re-exported for use by graders.
 """
 
+import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -24,9 +25,13 @@ from deepeval.test_case.conversational_test_case import (
 )
 from deepeval.test_case.llm_test_case import ToolCall
 from langfuse import Langfuse
-from langfuse.api import ObservationsView, TraceWithDetails
 
 from metis.core import Artifact, resolve_artifact_path
+from metis.engine.extractor.observation_v2 import (
+    ObservationV2,
+    group_by_trace,
+    select_root,
+)
 from metis.engine.extractor.types import (
     ChatMessage,
     Delegation,
@@ -104,11 +109,118 @@ def get_langfuse_client() -> Langfuse:
 
 
 # ---------------------------------------------------------------------------
+# v2 observations fetch (replaces v1 trace.list / observations.get_many)
+#
+# Two-step fetch, defensive against issue #435: Orca's agents run on Agno,
+# traced via OpenInference's Agno instrumentation. That instrumentation
+# writes its own session id to the `session.id` span attribute on agent-run
+# spans (`*.arun`, e.g. `Orca.arun`), clobbering the Langfuse session id
+# `propagate_attributes(session_id=...)` set there — the two writers share
+# the same attribute key, and the instrumentation's write comes last. A
+# small number of other observations (seen so far: a GENERATION ending a
+# delegated subagent run) carry no session id at all, apparently because
+# they started outside the `propagate_attributes` scope. Either way, an
+# `observations_v_2.get_many` call filtered on `sessionId` silently drops
+# that observation and leaves its children pointing at a parent that isn't
+# in the result — no error is raised. A trace's own id and parent links are
+# unaffected (the instrumentation never touches those), so filtering on
+# `traceId` instead always returns the complete, unbroken tree.
+#
+# "In the meantime METIS uses the two-step fetch ... which doesn't depend
+# on each observation's session label" (issue #435): the `sessionId` filter
+# is used only to discover which traces exist in the session — the root
+# `orca-chat` span always carries the correct session id, so this step is
+# reliable — and each trace is then re-fetched in full with a `traceId`
+# filter for the actual observation list. This costs one extra network
+# round-trip per trace (the same shape the old v1 `trace.list` +
+# `observations.get_many` pair had), traded for not silently losing every
+# agent-run span and any observation Orca's instrumentation forgot to tag.
+# ---------------------------------------------------------------------------
+
+
+def _page_through_observations(
+    langfuse: Langfuse, observation_filter: list[dict[str, str]]
+) -> list[ObservationV2]:
+    """Page through `observations_v_2.get_many` for one structured filter.
+
+    Shared by the session-scoped and trace-scoped fetches below. Does NOT
+    pass `parse_io_as_json` — nprd rejects it with an HTTP 400 as of
+    2026-10-14 ("no longer supported on the v2 observations endpoint. Input/
+    output fields are always returned as raw strings"). `ObservationV2`'s own
+    validator restores dict/list typing for input/output that look like JSON.
+    """
+    observations: list[ObservationV2] = []
+    cursor: str | None = None
+
+    while True:
+        response = langfuse.api.observations_v_2.get_many(
+            fields="core,basic,io,metadata",
+            filter=json.dumps(observation_filter),
+            limit=1000,
+            cursor=cursor,
+        )
+        observations.extend(ObservationV2.model_validate(raw) for raw in response.data)
+        cursor = response.meta.cursor
+        if not cursor:
+            break
+
+    return observations
+
+
+def _fetch_session_observations(
+    langfuse: Langfuse, session_id: str
+) -> list[ObservationV2]:
+    """Fetch every observation for a session via the v2 endpoint, paginated.
+
+    Used only to discover which trace ids exist in the session (the root
+    `orca-chat` span always carries the correct session id — see the module
+    note above on issue #435). Do NOT use this list as a trace's full
+    observation set: fetch each trace by id with `_fetch_trace_observations`
+    instead, since this session-filtered list silently drops agent-run spans
+    and other observations missing a session id.
+
+    v4 has no `session_id` kwarg on this endpoint; filtering happens via the
+    structured `filter` parameter, which — per the Langfuse API contract —
+    overrides every other query-param filter once set. `limit` here is the
+    page size (max 1000), not a cap on the number of traces returned.
+    """
+    session_filter = [
+        {
+            "type": "string",
+            "column": "sessionId",
+            "operator": "=",
+            "value": session_id,
+        }
+    ]
+    return _page_through_observations(langfuse, session_filter)
+
+
+def _fetch_trace_observations(langfuse: Langfuse, trace_id: str) -> list[ObservationV2]:
+    """Fetch every observation in one trace via the v2 endpoint, paginated.
+
+    Filtering on `traceId` always returns the complete, unbroken tree,
+    because a span's trace id and parent are set once at creation and are
+    never overwritten the way `session.id` is (see the module note on
+    issue #435). This is the call that must back each trace's observation
+    list — never the session-filtered list from `_fetch_session_observations`.
+    """
+    trace_filter = [
+        {
+            "type": "string",
+            "column": "traceId",
+            "operator": "=",
+            "value": trace_id,
+        }
+    ]
+    return _page_through_observations(langfuse, trace_filter)
+
+
+# ---------------------------------------------------------------------------
 # Observation extractors
 # ---------------------------------------------------------------------------
 
 
-def _extract_tool_calls(observations: list[ObservationsView]) -> list[ObservationsView]:
+def _extract_tool_calls(observations: list[ObservationV2]) -> list[ObservationV2]:
     """Extract tool/function calls from observations.
 
     :param observations: List of Langfuse observation objects.
@@ -117,7 +229,7 @@ def _extract_tool_calls(observations: list[ObservationsView]) -> list[Observatio
     return [obs for obs in observations if obs.type == "TOOL"]
 
 
-def _extract_delegation(observations: list[ObservationsView]) -> Delegation | None:
+def _extract_delegation(observations: list[ObservationV2]) -> Delegation | None:
     """Find the subagent delegation from observations.
 
     Returns a dict with:
@@ -162,7 +274,7 @@ def _extract_delegation(observations: list[ObservationsView]) -> Delegation | No
 
 
 def _extract_spoke_context(
-    observations: list[ObservationsView],
+    observations: list[ObservationV2],
 ) -> dict[str, Any] | None:
     """Extract spoke_context from the trace (cached parameters from prior turns).
 
@@ -195,7 +307,7 @@ def _extract_spoke_context(
 
 
 def _extract_assistant_messages(
-    observations: list[ObservationsView],
+    observations: list[ObservationV2],
 ) -> list[ChatMessage]:
     """Extract assistant GENERATION outputs from the trace (LLM responses).
 
@@ -220,7 +332,7 @@ def _extract_assistant_messages(
     return messages
 
 
-def _extract_subagent_output(observations: list[ObservationsView]) -> str | None:
+def _extract_subagent_output(observations: list[ObservationV2]) -> str | None:
     """Extract the subagent's response (before Orca synthesis).
 
     Priority order:
@@ -274,7 +386,7 @@ def _extract_subagent_output(observations: list[ObservationsView]) -> str | None
 
 
 def _extract_clarification_requests(
-    observations: list[ObservationsView],
+    observations: list[ObservationV2],
 ) -> list[ClarificationRequest]:
     """Extract request_user_input tool calls (clarification questions).
 
@@ -291,7 +403,7 @@ def _extract_clarification_requests(
 
 
 def _extract_orca_chat_metadata(
-    observations: list[ObservationsView],
+    observations: list[ObservationV2],
 ) -> OrcaChatMetadata:
     """Extract metadata from the ``orca-chat`` observation span.
 
@@ -341,9 +453,9 @@ class _TraceExtraction:
     avoid redundant extraction and API calls.
     """
 
-    trace: TraceWithDetails
-    observations: list[ObservationsView]
-    tool_calls: list[ObservationsView]
+    trace: ObservationV2
+    observations: list[ObservationV2]
+    tool_calls: list[ObservationV2]
     delegation: Delegation | None
     subagent_output: str | None
     spoke_context: dict[str, Any] | None
@@ -353,7 +465,7 @@ class _TraceExtraction:
 
 
 def _extract_all(
-    trace: TraceWithDetails, observations: list[ObservationsView]
+    trace: ObservationV2, observations: list[ObservationV2]
 ) -> _TraceExtraction:
     """Run all extraction helpers once and return a bundled result."""
     return _TraceExtraction(
@@ -398,7 +510,7 @@ def _trace_to_test_case(
     context = [ext.subagent_output] if ext.subagent_output else None
 
     meta = LlmTestCaseMetadata(
-        trace_id=trace.id,
+        trace_id=trace.trace_id,
         session_id=session_context.session_id,
         turn_index=session_context.turn_index,
         total_turns=session_context.total_turns,
@@ -499,7 +611,7 @@ def _session_to_conversational_test_case(
             Turn(
                 role="user",
                 content=trace_input,
-                metadata={"trace_id": trace.id},
+                metadata={"trace_id": trace.trace_id},
             )
         )
 
@@ -514,14 +626,14 @@ def _session_to_conversational_test_case(
                 content=trace_output,
                 tools_called=tool_calls if tool_calls else None,
                 metadata={
-                    "trace_id": trace.id,
+                    "trace_id": trace.trace_id,
                     "routed_to": routed_to,
                     "num_tool_calls": len(tool_calls),
                 },
             )
         )
 
-        session_metadata["trace_ids"].append(trace.id)
+        session_metadata["trace_ids"].append(trace.trace_id)
 
     if not turns:
         return None
@@ -549,7 +661,7 @@ class FetchLangfuseResult:
 
     test_cases: list[LLMTestCase] = field(default_factory=list)
     session_test_cases: list[ConversationalTestCase] = field(default_factory=list)
-    sessions: dict[str, list[TraceWithDetails]] = field(default_factory=dict)
+    sessions: dict[str, list[ObservationV2]] = field(default_factory=dict)
     skipped: int = 0
 
 
@@ -567,6 +679,13 @@ def fetch_by_session_id(
     cancellation_available: bool | None = None,
 ) -> FetchLangfuseResult:
     """Fetch traces for a specific session and build test cases.
+
+    Issues a two-step fetch against the v2 observations endpoint, defensive
+    against issue #435: one session-wide, sessionId-filtered call to find
+    which traces exist, then one traceId-filtered call per trace for its
+    full observation list. See the module note above
+    `_fetch_session_observations` for why the session-filtered list cannot
+    be reused directly as a trace's observation set.
 
     :param session_id: Langfuse session ID.
     :param langfuse: Initialized Langfuse client.
@@ -586,11 +705,21 @@ def fetch_by_session_id(
         (passed through to grader metadata as observable execution state).
     :returns: :class:`FetchLangfuseResult` with test cases ready for evaluation.
     """
+    # Two-step fetch, defensive against issue #435 (see the module note above
+    # `_fetch_session_observations`): the session-wide, sessionId-filtered
+    # fetch is used ONLY to discover which traces exist and pick each one's
+    # root observation — the root always carries the correct session id, so
+    # this step is reliable. Each trace's full observation list is then
+    # re-fetched below by `traceId`, which never depends on any child
+    # observation's session label and so never silently drops agent-run
+    # spans the way the session-filtered list does.
     deadline = time.time() + retry_timeout
-    traces: list[TraceWithDetails] = []
+    traces: list[ObservationV2] = []
 
     while True:
-        traces = langfuse.api.trace.list(session_id=session_id, limit=limit).data
+        all_observations = _fetch_session_observations(langfuse, session_id)
+        grouped = group_by_trace(all_observations)
+        traces = [select_root(trace_id, obs) for trace_id, obs in grouped.items()]
         if traces or time.time() >= deadline:
             break
         time.sleep(10)
@@ -598,8 +727,11 @@ def fetch_by_session_id(
     if not traces:
         return FetchLangfuseResult()
 
-    # Sort traces chronologically within the session
-    traces.sort(key=lambda t: t.timestamp or "")
+    # Sort traces chronologically within the session, THEN cap to `limit` —
+    # slicing before the sort would keep an arbitrary (dict-insertion-order)
+    # subset instead of the earliest N traces.
+    traces.sort(key=lambda t: t.start_time or datetime.min)
+    traces = traces[:limit]
 
     session_artifacts: list[Artifact] = artifacts or []
 
@@ -617,9 +749,11 @@ def fetch_by_session_id(
             skipped += 1
             continue
 
-        observations: list[ObservationsView] = langfuse.api.observations.get_many(
-            trace_id=trace.id
-        ).data
+        # Re-fetch by traceId rather than reusing the session-filtered list —
+        # see the module note on issue #435 above `_fetch_session_observations`.
+        observations: list[ObservationV2] = _fetch_trace_observations(
+            langfuse, trace.trace_id
+        )
         ext = _extract_all(trace, observations)
         extractions.append(ext)
 
