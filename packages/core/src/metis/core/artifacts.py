@@ -46,7 +46,7 @@ class Artifact(BaseModel):
     name: str
     source: Literal["fixture", "target"] = "target"
     state: Literal["received", "unfetched", "unavailable"]
-    #: The target system's own identifier for this file (Orca's ``fileId``).
+    #: The target's own identifier for this file (Orca's ``fileId``).
     #: Target-agnostic by name because ``metis-core`` must not know about Orca.
     #: ``None`` for runners with no such identifier, such as the browser runner.
     #:

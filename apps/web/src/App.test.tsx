@@ -70,7 +70,7 @@ const state = {
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
     tasks: [],
-    product: { name: "", users: "", description: "", detail: "" },
+    target: { name: "", users: "", description: "", detail: "" },
     features: [],
     personas: [],
     scenarios: [],
@@ -317,12 +317,12 @@ test("loads opening choices and sends complete start evidence on begin", async (
   assert.equal(phase, "capabilities");
 
   opening = renderOpening();
-  const editProduct = findElement(opening, (element) =>
+  const editTarget = findElement(opening, (element) =>
     Children.toArray(element.props.children as ReactNode).includes(
-      "Edit product",
+      "Edit target",
     ),
   );
-  (editProduct.props.onClick as () => void)();
+  (editTarget.props.onClick as () => void)();
   assert.equal(phase, "describe");
   opening = renderOpening();
   const restoredComposer = findElement(
@@ -449,7 +449,7 @@ test("Scenario review exposes early fixture suggestions for user selection", () 
     component: {
       type: "upload",
       id: { action: "files", target: "S-1" },
-      label: "Files sent to your system",
+      label: "Files sent to your target",
       value: ["policy.pdf"],
       available: ["policy.pdf", "terms.pdf"],
     },

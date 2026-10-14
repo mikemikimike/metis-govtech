@@ -115,7 +115,7 @@ export type Task = Omit<
   Schema["Task"],
   "fixtures" | "behaviour_refs" | "num_trials"
 > & { fixtures: string[]; behaviour_refs: string[]; num_trials: number };
-export type Product = Schema["Product"];
+export type Target = Schema["Target"];
 export type Specification = Omit<
   Schema["Specification"],
   "features" | "personas" | "scenarios" | "tasks"
@@ -295,7 +295,7 @@ export interface InteractionEntry {
 }
 export type TranscriptEntry = InitialDescriptionEntry | InteractionEntry;
 export interface LocalInterviewRecord {
-  storage_version: 5;
+  storage_version: 6;
   submission_revision?: number;
   id: string;
   created_at: number;
@@ -481,5 +481,5 @@ export function toSummary(record: LocalInterviewRecord): InterviewSummary {
   return { id: record.id, title: record.title, updated: record.updated_at };
 }
 export function titleFor(specification: Specification): string {
-  return specification.product.name.trim() || "Untitled Interview";
+  return specification.target.name.trim() || "Untitled Interview";
 }

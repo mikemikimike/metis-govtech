@@ -12,7 +12,7 @@ def test_wizard_config_returns_package_owned_working_status(
     body = response.json()
     assert (
         body["opening_question"]
-        == "Tell me about your product — what it does and who it's for."
+        == "Tell me about your target — what it does and who it's for."
     )
     assert body["working_status"] == "Working on your Interview…"
     assert [item["id"] for item in body["perspectives"]] == [

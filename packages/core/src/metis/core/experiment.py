@@ -12,7 +12,7 @@ class Persona(NamedNode[str]):
 
 
 class Scenario(NamedNode[str], extra="forbid"):
-    """The situation in which Tasks evaluate the product."""
+    """The situation in which Tasks evaluate the target."""
 
 
 class Task(BaseModel, extra="forbid"):

@@ -20,8 +20,8 @@ from metis.wizard.contracts import (
     InterviewTurnRequest,
     Option,
     OptionId,
-    Product,
     Specification,
+    Target,
 )
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
@@ -30,7 +30,7 @@ from tests.fixtures.wizard.context import interview_context
 def _state() -> InterviewState:
     return InterviewState(
         specification=Specification(
-            product=Product(name="n", description="d", users="u")
+            target=Target(name="n", description="d", users="u")
         ),
         context=interview_context(),
         pending=ChoiceRequest(

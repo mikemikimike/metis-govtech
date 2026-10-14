@@ -16,7 +16,7 @@
         "id": "inside-the-framework",
         "label": "Inside the framework",
         "focus": ["orchestrator", "runner"],
-        "note": "The User Agent and the Target System sit outside what the framework controls."
+        "note": "The User Agent and the Target sit outside what the framework controls."
       }
     ]
   },
@@ -48,7 +48,7 @@
     {
       "id": "target",
       "type": "cloud",
-      "label": "Target System",
+      "label": "Target",
       "sublabel": "the real system being evaluated",
       "pos": [760, 260],
       "size": [160, 72]
@@ -100,7 +100,7 @@
       "items": [
         "User Agent: a persona (an LLM) deciding what to do next",
         "Orchestrator: runs the turn and enforces its rules",
-        "Runner: the only role that actually talks to the real target system"
+        "Runner: the only role that actually talks to the real target"
       ]
     },
     {
@@ -113,10 +113,10 @@
     },
     {
       "dot": "rose",
-      "title": "The Target System",
+      "title": "The Target",
       "items": [
         "The real system being evaluated, outside the framework's control",
-        "Different target systems support different things"
+        "Different targets support different things"
       ]
     }
   ]

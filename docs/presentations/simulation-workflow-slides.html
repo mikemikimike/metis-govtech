@@ -72,13 +72,13 @@
   <section class="slide">
     <p class="kicker">METIS · metis-engine</p>
     <h1>The Simulation Turn Workflow</h1>
-    <p class="subtitle">How a persona drives a target system, one turn at a time</p>
+    <p class="subtitle">How a persona drives a target, one turn at a time</p>
     <p class="status">Describes the design in issue #373 — approved in chat, not yet implemented.</p>
   </section>
 
   <section class="slide">
     <h2>Four roles</h2>
-    <pre>User Agent  ──decides──▶  Orchestrator  ──dispatches──▶  Runner  ──▶  Target System
+    <pre>User Agent  ──decides──▶  Orchestrator  ──dispatches──▶  Runner  ──▶  Target
 (the persona)              (runs the loop,                (the only role
                             enforces the rules)             that touches
                                                              the real target)</pre>
@@ -86,7 +86,7 @@
       <li><b>User Agent</b> — a persona, driven by an LLM, pursuing a goal against the target</li>
       <li><b>Orchestrator</b> — owns the run: dispatches, checks the rules, decides whether to continue</li>
       <li><b>Runner</b> — the adapter for one specific target; the only thing that touches it</li>
-      <li><b>Target System</b> — whatever is under evaluation; METIS has no code for it</li>
+      <li><b>Target</b> — whatever is under evaluation; METIS has no code for it</li>
     </ul>
   </section>
 

@@ -36,7 +36,7 @@
 JetBrains Mono variable WOFF2 subsets from Google Fonts service revision v24.
 These fixed bytes are shared by the viewer and its SVG/raster exports.
 No local() source: an installed copy must not override the bundled font.
-Uncovered characters (including CJK) still use the system fallback stack.
+Uncovered characters (including CJK) still use the target fallback stack.
 Upstream: https://github.com/JetBrains/JetBrainsMono
 
 cyrillic-ext    1664 bytes  sha256 9343de2ca5d9549f792e7962375af8efb0f320c7643bfd36c884b5a30e5c396f
@@ -5525,7 +5525,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           <h3>Who Decides Which</h3>
         </div>
         <ul>
-          <li>&bull; The target system decides delivered vs. failed</li>
+          <li>&bull; The target decides delivered vs. failed</li>
           <li>&bull; The framework decides withheld and unknown, before or after the fact</li>
         </ul>
       </div>

@@ -1,4 +1,4 @@
-"""Pydantic models for the product evaluation report (report.json).
+"""Pydantic models for the target evaluation report (report.json).
 
 These models define the contract for the JSON report that downstream
 consumers (web frontend, insights, external integrations) depend on.
@@ -33,7 +33,7 @@ class Routing(BaseModel, extra="allow"):
 class ConversationTurn(BaseModel):
     turn: int
     user: str
-    product: str
+    target: str
     errors: list[str] = Field(default_factory=list)
 
 
@@ -232,7 +232,7 @@ class Report(BaseModel):
     This is the contract downstream consumers depend on.
     """
 
-    product: str
+    target: str
     run: str
     date: str
     sessions: int

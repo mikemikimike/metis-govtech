@@ -34,24 +34,24 @@ def _behaviour_lines(behaviour: Behaviour) -> list[str]:
 
 
 def render_review(specification: Specification, experiment_id: str) -> str:
-    product = specification.product
+    target = specification.target
     out: list[str] = [
-        f"# {product.name} — evaluation review",
+        f"# {target.name} — evaluation review",
         "",
         f"Experiment id: `{experiment_id}`",
         "",
         "## What it is",
         "",
-        product.description,
+        target.description,
         "",
         "## Who uses it",
         "",
-        product.users,
+        target.users,
         "",
     ]
 
-    if product.detail:
-        out += ["## How it works", "", product.detail, ""]
+    if target.detail:
+        out += ["## How it works", "", target.detail, ""]
 
     out += ["## What should be true", ""]
     for feature in specification.features:
@@ -118,7 +118,7 @@ def write_review(specification: Specification, experiment_id: str, path: Path) -
     text = render_review(specification, experiment_id)
     # encoding is explicit — write_text() otherwise falls back to the platform
     # locale encoding (cp1252 on Windows), and this text is arbitrary user- or
-    # model-authored prose (product.description, criteria, personas) that can
+    # model-authored prose (target.description, criteria, personas) that can
     # contain any character.
     Path(path).write_text(text, encoding="utf-8")
     return text

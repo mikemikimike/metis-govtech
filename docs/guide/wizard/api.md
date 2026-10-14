@@ -78,7 +78,7 @@ Keep each original file. If a Scenario uses it, send the original bytes to `/pac
 
 | Request field | Required | Description |
 |---|---|---|
-| `description` | Yes | Description of the target system. |
+| `description` | Yes | Description of the target. |
 | `known_capability_ids` | Yes | Capability IDs from `/config`. The list can be empty. |
 | `capability_confidence` | Yes | `low`, `medium`, or `high`. |
 | `perspective` | No | Defaults to `end_user`; other values come from `/config`. |
@@ -193,7 +193,7 @@ For `pending.type: "form"`, use the exact field IDs from `pending.fields`:
 {
   "type": "form",
   "values": {
-    "product_name": "Policy assistant"
+    "target_name": "Policy assistant"
   }
 }
 ```

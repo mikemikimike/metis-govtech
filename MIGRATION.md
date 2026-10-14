@@ -440,3 +440,20 @@ The grader catalogue route the web client calls is now `GET /api/v1/graders`
 The web gets optional grader details from `GET /api/v1/graders` after a Specification contains a
 Criterion. The manual form supports direct authoring. Source analysis, hosted state,
 authentication, and evaluation execution remain deferred.
+
+
+## Evaluation subject: Product → Target (#429)
+
+- Import `Target` and `TargetProfile` from `metis.core.profile` in place of
+  `Product` and `ProductProfile`. Use `Specification.target` and `profile.target`.
+- Change the top-level `product` key to `target` in specification YAML, API JSON,
+  and saved Interview state. Change patch and form paths from `product.*` to
+  `target.*`. The missing-data code is now `target_incomplete`.
+- Report JSON uses `target` for the report name and each conversation response.
+  Target failures use `failureSource: "target"`. Regenerate reports from results
+  after updating their saved `inputs/specification.yaml`.
+- Browser storage upgrades saved Interviews automatically. It updates the
+  specification key and form paths, and preserves user text and file bytes.
+  Other clients must update their saved state before sending it to the API.
+
+Specification schema version remains `2` under the `next` pre-release policy.

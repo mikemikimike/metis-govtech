@@ -1,6 +1,6 @@
 # METIS Wizard
 
-The METIS Wizard turns a description of a target agentic system into an evaluation specification.
+The METIS Wizard turns a description of a target into an evaluation specification.
 The METIS Engine runs that specification.
 
 ## Choose an interface
@@ -33,15 +33,15 @@ The Interview produces one Specification with these related concepts:
 
 | Concept | Contents |
 |---|---|
-| Profile | The product and its users, Features, Behaviours, Criteria, and their scorer settings |
+| Profile | The target and its users, Features, Behaviours, Criteria, and their scorer settings |
 | Specification | The Profile and the configuration needed to conduct an Experiment |
-| Experiment | A collection of Runs used to evaluate one or more target agentic systems across a set of Test Cases |
+| Experiment | A collection of Runs used to evaluate one or more targets across a set of Test Cases |
 
 The interface guides give the exact files or archive that each interface produces.
 
 ## Interview flow
 
-1. Describe the target system. In the web client and the API, you can also add documents.
+1. Describe the target. In the web client and the API, you can also add documents.
 2. Select the evaluation Perspective (who the evaluation is for, such as an end user or an
    engineer). Web and API only. The CLI always uses End user.
 3. Select the known ARC capabilities and a confidence value.
@@ -69,10 +69,10 @@ This context is separate from the Specification.
 
 ## How the Interview uses your answers
 
-- Clarification covers the main things the system does first, then asks for detail where needed.
+- Clarification covers the main things the target does first, then asks for detail where needed.
   It does not ask again about what the description or documents already explain.
-- Features are grouped by the work the system does for its users.
-- The Perspective sets which Behaviours matter most. The capabilities show what the system can do
+- Features are grouped by the work the target does for its users.
+- The Perspective sets which Behaviours matter most. The capabilities show what the target can do
   in each Feature.
 
 ## Run the evaluation

@@ -15,7 +15,7 @@ its Grader and parameters.
 
 ```
 example-experiment/
-├── specification.yaml   # Product, features, behaviours, criteria, personas, scenarios, and tasks
+├── specification.yaml   # Target, features, behaviours, criteria, personas, scenarios, and tasks
 ├── simple/              # One Task, one Trial, one Grader, no uploaded files
 │   ├── specification.yaml
 │   └── fixtures/

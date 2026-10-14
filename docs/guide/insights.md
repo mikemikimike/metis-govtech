@@ -1,6 +1,6 @@
 # metis-insights
 
-`metis insights report` turns the grader results of one evaluation into the product
+`metis insights report` turns the grader results of one evaluation into the target
 evaluation report. It is the step after `metis engine evaluate` (or `run`), which scores
 the traces and writes `reports/results.json` but builds no report.
 
@@ -44,7 +44,7 @@ It also prints the terminal pass/fail/skip table per Criterion.
 - **Report written.** Exit code 0, and the paths of both files are printed.
 - **No specification.** When `inputs/specification.yaml` is missing or unreadable, the
   summary still prints, the command says which path it looked for, and it exits 0. A run
-  without a product specification opts out of the report.
+  without a target specification opts out of the report.
 - **Unreadable results.** A missing file, malformed JSON, or a `results.json` written by
   a different version of metis-engine (`Unsupported schema_version …`) exits 1 and
   writes nothing. Re-run `metis engine evaluate` to produce a current file.

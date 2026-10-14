@@ -902,7 +902,7 @@ export function OpeningScreen({
                     value={description}
                     onValueChange={onDescription}
                     roomy
-                    placeholder="Describe your system and attached documents…"
+                    placeholder="Describe your target and attached documents…"
                     onSend={onContinue}
                     sourceControl={
                       <div className="flex items-center gap-2">
@@ -952,7 +952,7 @@ export function OpeningScreen({
             <div className="flex items-center justify-between gap-4">
               <div className="flex flex-col gap-1">
                 <h1 className="text-2xl font-semibold text-foreground">
-                  What can the system do?
+                  What can the target do?
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   Select the capabilities you know are present.
@@ -960,7 +960,7 @@ export function OpeningScreen({
               </div>
               <Button type="button" variant="ghost" onClick={onBack}>
                 <ArrowLeft size={15} strokeWidth={1.75} aria-hidden />
-                Edit product
+                Edit target
               </Button>
             </div>
             <div className="flex flex-col gap-4">
@@ -1159,7 +1159,7 @@ export function CapabilityPicker({
           hideLegend && "sr-only",
         )}
       >
-        What can the system do?
+        What can the target do?
       </legend>
       <div className="grid items-start gap-4 md:grid-cols-3">
         {categories.map((category) => (

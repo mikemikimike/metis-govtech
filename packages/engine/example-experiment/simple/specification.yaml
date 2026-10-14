@@ -1,14 +1,14 @@
 schema_version: 2
 id: orca-simple
 runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
-product:
+target:
   name: Orca
   users: Programme managers, senior directors, and domain specialists.
   description: An agentic system that answers questions and coordinates specialist agents.
 features:
 - id: XC-UNI
   name: Universal Behaviours
-  description: Expected behaviours that apply across product workflows.
+  description: Expected behaviours that apply across target workflows.
   behaviours:
   - id: EB-UNI-1
     name: Efficient information gathering

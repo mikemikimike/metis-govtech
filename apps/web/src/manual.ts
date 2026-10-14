@@ -115,7 +115,7 @@ export function synthesizeManualSpecification(
     id: experiment.id.trim(),
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
-    product: {
+    target: {
       name: experiment.id.trim(),
       description,
       users: "The personas defined in this manual experiment.",

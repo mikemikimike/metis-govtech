@@ -6,7 +6,7 @@ directory: `turn-roles.html`, `turn-workflow.html`, `turn-example.html`,
 
 1. **The three roles.** User Agent decides what to do; Orchestrator manages
    the run and enforces the rules; Runner is the only one that touches the
-   real target system. A "turn" is what happens between the User Agent
+   real target. A "turn" is what happens between the User Agent
    deciding and the Runner reporting back. *(Diagram: `turn-roles.html`)*
 
 2. **What a turn is.** One round of observe → decide → act. The User
@@ -35,10 +35,10 @@ directory: `turn-roles.html`, `turn-workflow.html`, `turn-example.html`,
 4. **Why order matters.** Concrete, code-free examples: a five-field form
    should cost one turn, not five; "attach a file, then ask about it" only
    makes sense if the attach happens first. Without an explicit order,
-   different target systems have ended up guessing differently about how a
+   different targets have ended up guessing differently about how a
    message and a batch of actions relate, and disagreeing with each other.
 
-5. **Who decides what actions are possible.** Different target systems
+5. **Who decides what actions are possible.** Different targets
    support different things — a plain chat box only lets you type, a web
    form lets you click and fill fields, an API might accept structured
    answers. Each system defines its own menu of actions. The framework
@@ -57,7 +57,7 @@ directory: `turn-roles.html`, `turn-workflow.html`, `turn-example.html`,
    in that turn is skipped. *(Diagram: `turn-outcomes.html`)*
 
 8. **Worked example.** The five-field form, narrated in plain terms: fill
-   field 1, fill field 2, ..., submit — one round-trip to the target system
+   field 1, fill field 2, ..., submit — one round-trip to the target
    for the whole turn, with one outcome recorded per field, so it's clear
    afterward exactly which field (if any) the target rejected.
    *(Diagram: `turn-example.html`)*
@@ -65,7 +65,7 @@ directory: `turn-roles.html`, `turn-workflow.html`, `turn-example.html`,
 9. **Why this matters for evaluation.** Data scientists reading a report
    get a clean, per-action account of what happened instead of one
    ambiguous "did the turn succeed" flag; project managers get a design
-   that scales predictably as new target systems are added, instead of
+   that scales predictably as new targets are added, instead of
    every new integration inventing its own rules.
 
 10. **Worth flagging.** Whether the User Agent (an LLM) reliably produces

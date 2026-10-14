@@ -41,6 +41,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Use Target for the evaluation subject in interface labels, prompts, code
+  documentation, and guides (#429).
+
 - **Clarified `GLOSSARY.md`'s Session definition.** A session now explicitly
   corresponds to exactly one trial: the target agentic system's conversation
   for a trial produces the traces that make up its session. This resolves an
@@ -63,6 +66,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `metis-insights` reads (#417).
 
 #### Breaking
+
+- Target and TargetProfile replace Product and ProductProfile. Specifications
+  use the `target` key across Python, YAML, and API JSON (#429).
 
 - Tasks use `behaviour_refs` to select measured Behaviours. Execution requires each selected Behaviour to have Criteria and evaluates all of them. Criterion score identity stays unchanged (#413).
 
@@ -143,6 +149,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Use Target in report JSON, failure sources, and report labels (#429).
+
 - Expand Task Behaviour selections for plan counts, Criterion score attribution, and missing-result explanations (#413).
 
 ### metis-wizard
@@ -192,6 +200,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   model has not supplied them.
 
 #### Changed
+
+- Use Target in Interview prompts, fields, patch paths, and validation codes (#429).
 
 - Draft, edit, copy, and validate Task Behaviour selections in the Interview. Export Behaviour references in the shared Specification (#413).
 
@@ -336,6 +346,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   field that needs a change, shows what to change, and moves the focus to the first one.
 
 #### Changed
+
+- Use Target in authoring views and upgrade saved Interviews while preserving
+  user text, pending forms, and file bytes (#429).
 
 - Use Behaviour references in manual authoring and show Behaviour selections in the Specification pane. Preserve incompatible saved Interviews and show them as unreadable (#413).
 

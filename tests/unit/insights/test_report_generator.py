@@ -24,7 +24,7 @@ def test_save_report_writes_utf8(
 ) -> None:
     (tmp_path / "inputs").mkdir()
     (tmp_path / "inputs" / "specification.yaml").write_text(
-        "product:\n  name: Test Product\n", encoding="utf-8"
+        "target:\n  name: Test Target\n", encoding="utf-8"
     )
 
     encodings_used: list[str | None] = []

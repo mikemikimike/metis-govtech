@@ -46,9 +46,9 @@ forwards `/api` requests to that address.
 
 ## Start a guided Interview
 
-1. Enter a description of the target system.
+1. Enter a description of the target.
 2. Select who the evaluation is for. Hover over or focus a Perspective to see its guiding question.
-3. Select all ARC capabilities that you know the system has. The list can be empty.
+3. Select all ARC capabilities that you know the target has. The list can be empty.
 4. Select Low, Medium, or High confidence. The value states how complete the full selection is.
 5. Select **Start interview**. This sends all opening values in one request.
 
@@ -69,7 +69,7 @@ Document facts:
 - The API extracts text from UTF-8 TXT, Markdown, PDF text layers, and DOCX files.
 - The API does not run OCR. Scanned PDFs give no text.
 - The Wizard can suggest an opening document as a Test Case fixture. Review each suggestion under
-  **Files sent to your system**.
+  **Files sent to your target**.
 - The final package contains only files that a Test Case uses.
 
 ## Finish and download

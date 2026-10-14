@@ -851,7 +851,7 @@ export function Composer({
   initialText?: string;
   value?: string;
   onValueChange?: (value: string) => void;
-  // Give the opening product prompt enough room for a useful first description. Conversation
+  // Give the opening target prompt enough room for a useful first description. Conversation
   // replies keep the smaller composer.
   roomy?: boolean;
   // A pencil-sparkles mark inside the input, left of the text. Only the opening screen's hero

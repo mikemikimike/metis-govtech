@@ -2,7 +2,7 @@
   "schema_version": 2,
   "id": "manual-research",
   "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
-  "product": {
+  "target": {
     "name": "manual-research",
     "description": "Check research answers and recovery.",
     "users": "The personas defined in this manual experiment.",

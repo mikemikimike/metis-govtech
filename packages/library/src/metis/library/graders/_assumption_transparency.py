@@ -31,7 +31,7 @@ class AssumptionTransparencyGrader(MetisTurnGrader):
                 criteria=(
                     "Evaluate whether the agent explicitly "
                     "states assumptions it made.\n\n"
-                    "SYSTEM CONTEXT: This agent is an "
+                    "TARGET CONTEXT: This agent is an "
                     "orchestrator that delegates tasks "
                     "to "
                     "specialised subagents (Data "
@@ -63,7 +63,7 @@ class AssumptionTransparencyGrader(MetisTurnGrader):
                     "Do NOT flag as unstated "
                     "assumptions:\n"
                     "- Delegating to a subagent (this is "
-                    "the system's normal workflow)\n"
+                    "the target's normal workflow)\n"
                     "- Reading a file the user "
                     "uploaded\n"
                     "- Using available tools to "

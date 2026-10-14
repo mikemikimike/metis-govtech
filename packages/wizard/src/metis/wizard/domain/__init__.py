@@ -12,9 +12,9 @@ from metis.wizard.domain.specification import (
     Feature,
     NamedNode,
     Persona,
-    Product,
     Scenario,
     Specification,
+    Target,
 )
 from metis.wizard.domain.types import InteractionType
 
@@ -27,7 +27,7 @@ __all__ = [
     "PatchOp",
     "PatchOrigin",
     "Persona",
-    "Product",
+    "Target",
     "Specification",
     "NamedNode",
     "Scenario",

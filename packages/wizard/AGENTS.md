@@ -6,7 +6,7 @@ IMPORTANT: Always talk in ASD-STE100 Simplified Technical English.
 
 ## Package Purpose
 
-Interactive wizard that turns a prose description of a product into a runnable `specification.yaml`.
+Interactive wizard that turns a prose description of a target into a runnable `specification.yaml`.
 Depends on metis-core and metis-library.
 
 The design record lives in these files:

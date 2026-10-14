@@ -1,14 +1,14 @@
 | Term | Definition |
 |------|------------|
-| Target Agentic System | The agentic system under evaluation, considered at a specific version or configuration. |
-| Profile | The product context and requirements for a **target agentic system**: its **features**, **expected behaviours**, and **criteria**, including the selected **graders** and their settings. |
+| Target | The agentic system under evaluation, considered at a specific version or configuration. |
+| Profile | The context and requirements for a **target**: its **features**, **expected behaviours**, and **criteria**, including the selected **graders** and their settings. |
 | Specification | The evaluation document containing a **profile** and the configuration needed to conduct an **experiment**. |
 | Interview | The wizard's guided process that builds a **specification** by asking the user a sequence of questions. |
-| Document | A user-supplied file that can inform **evaluation planning** and may be sent to the target agentic system as a **fixture** for a **task**. |
+| Document | A user-supplied file that can inform **evaluation planning** and may be sent to the **target** as a **fixture** for a **task**. |
 | Perspective | The point of view the user answers the **Interview** from (who the evaluation is for), distinct from a **Persona**. |
-| Capability | An ability a **target agentic system** can have, drawn from the ARC framework and distinct from an **Expected Behaviour** or **Feature**. |
-| Feature | A product function or user workflow that the **target agentic system** is expected to perform, such as creating slide decks. |
-| Baseline | A scope qualifier for an **expected behaviour**, **criterion**, or **grader** that can be applied to every **target agentic system**. Baseline graders are provided by the library. |
+| Capability | An ability a **target** can have, drawn from the ARC framework and distinct from an **Expected Behaviour** or **Feature**. |
+| Feature | A function or user workflow that the **target** is expected to perform, such as creating slide decks. |
+| Baseline | A scope qualifier for an **expected behaviour**, **criterion**, or **grader** that can be applied to every **target**. Baseline graders are provided by the library. |
 | Feature-specific | A scope qualifier for an **expected behaviour**, **criterion**, or **grader** arising from the requirements, constraints, or operating context of a particular **feature**. A feature-specific grader is provided by the library where one exists, or otherwise authored directly from its **criterion** as a *custom* grader. |
 | Expected Behaviour | An expected behaviour describing how the agent should act while performing a **feature**. |
 | Criterion | A specific, assessable property used to determine whether an **expected behaviour** was exhibited in an individual **trial**. |
@@ -16,23 +16,25 @@
 | Persona | A concrete simulated user whose characteristics and behaviour are relevant to an evaluation interaction. |
 | Fixture | An artefact or piece of environment state selected by a **task** to execute its **scenario**. It may be supplied by the user or generated dynamically. A fixture is an input, not an expected answer or scoring rule. |
 | Test Case / Task | A complete specification of a particular evaluation problem, combining a **scenario**, a **persona**, **fixtures**, a Trial count, and references to **expected behaviours**. Each selected Behaviour supplies all its Criteria. Each Task has an ID. **Test case** and **task** are interchangeable terms. |
-| Trial | One execution of a **test case** against a **target agentic system**, producing a **trace** and evaluation outputs. |
+| Trial | One execution of a **test case** against a **target**, producing a **trace** and evaluation outputs. |
 | Run | A grouping of repeated **trials** of the same **test case**. |
-| Experiment | A collection of **runs** used to evaluate one or more **target agentic systems** across a set of **test cases**. |
-| Trace | The observable record of what occurred during a **trial**, including interactions, actions, tool calls, observations, and relevant state changes. |
-| Session | A collection of **traces** corresponding to exactly one **trial**. METIS assumes a one-to-one correspondence between a session and a trial: the target agentic system's conversation for a trial produces the traces that make up its session. |
+| Experiment | A collection of **runs** used to evaluate one or more **targets** across a set of **test cases**. |
+| Trace | The observable record of what occurred during a **trial**, including interactions, actions, tool calls, observations, relevant state changes, and references to where artefacts can be retrieved. |
+| Session | A collection of **traces** corresponding to exactly one **trial**, including references to where artefacts can be retrieved. METIS assumes a one-to-one correspondence between a session and a trial: the **target**'s conversation for a trial produces the traces that make up its session. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |
 | Trial Score | The value produced by applying a **grader** to a **trial** for a particular **criterion**. |
 | Grader Passing Threshold | A configurable rule applied to the **trial score** from the **grader** to mark it as pass or fail. |
 | Result | The pass rate of a set of **trial scores**. |
-| Test-Time Evals | Evaluations that measure a target model or **target agentic system** against curated datasets before release. |
-| Run-Time Evals | Evaluations that continuously measure live traffic and real user interaction as a target model or **target agentic system** runs. |
+| Test-Time Evals | Evaluations that measure a target model or **target** against curated datasets before release. |
+| Run-Time Evals | Evaluations that continuously measure live traffic and real user interaction as a target model or **target** runs. |
 
 Note: **Expected Behaviour** corresponds to the `Behaviour` data models.
 
+Note: Artefact references in **traces** and **sessions** identify where the artefacts can be retrieved. They do not contain the artefacts themselves.
+
 ## Baseline and Feature-specific
 
-**Baseline** — applies to any **target agentic system**, whatever the feature. Baseline expected behaviour should include baseline criteria and graders. Baseline graders should come from the library.
+**Baseline** — applies to any **target**, whatever the feature. Baseline expected behaviour should include baseline criteria and graders. Baseline graders should come from the library.
 
 - fluency — is the response grammatically correct and natural?
 - instruction following — did the agent do what the user asked?

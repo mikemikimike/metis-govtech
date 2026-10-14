@@ -25,7 +25,7 @@ def specification() -> Specification:
             "schema_version": 2,
             "id": "task-identity",
             "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
-            "product": {
+            "target": {
                 "name": "Chatbot",
                 "users": "Analysts",
                 "description": "Answer questions.",

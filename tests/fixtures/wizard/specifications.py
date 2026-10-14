@@ -11,9 +11,9 @@ from metis.wizard.contracts import (
     CriterionDescription,
     Feature,
     Persona,
-    Product,
     Scenario,
     Specification,
+    Target,
     Task,
 )
 
@@ -23,9 +23,9 @@ BOUNDED_TROUBLESHOOTING = "metis.library.graders.BoundedTroubleshootingGrader"
 
 
 def orca_handover() -> Specification:
-    """A rich product handover whose separate facts must survive clarify."""
+    """A rich target handover whose separate facts must survive clarify."""
     return Specification(
-        product=Product(
+        target=Target(
             name="Orca",
             users="Public Officers",
             description=(
@@ -57,7 +57,7 @@ def research_assistant() -> Specification:
     scenario covering two behaviours, and a scenario with two personas.
     """
     return Specification(
-        product=Product(
+        target=Target(
             name="Research assistant",
             description=(
                 "An agent that answers research questions over an internal document "

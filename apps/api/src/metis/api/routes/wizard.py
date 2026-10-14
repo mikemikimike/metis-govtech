@@ -98,7 +98,7 @@ def _example_state(pending: dict[str, object] | None) -> InterviewState:
     return InterviewState.model_validate(
         {
             "specification": {
-                "product": {
+                "target": {
                     "name": "Research assistant",
                     "users": "Policy analysts",
                     "description": "Answers policy questions from approved sources.",
@@ -144,18 +144,18 @@ _CHOICE_STATE = _example_state(
 _FORM_STATE = _example_state(
     {
         "type": "form",
-        "prompt": "Add the missing product details.",
+        "prompt": "Add the missing target details.",
         "request_id": "req-form-example",
         "stage": "clarify",
         "fields": [
             {
-                "id": "product_name",
-                "label": "Product name",
+                "id": "target_name",
+                "label": "Target name",
                 "multiline": False,
             },
             {
-                "id": "product_description",
-                "label": "Product description",
+                "id": "target_description",
+                "label": "Target description",
             },
         ],
     }
@@ -207,8 +207,8 @@ _TURN_EXAMPLES: dict[str, Example] = {
                 "response": {
                     "type": "form",
                     "values": {
-                        "product_name": "Policy research assistant",
-                        "product_description": (
+                        "target_name": "Policy research assistant",
+                        "target_description": (
                             "Answers policy questions from approved sources."
                         ),
                     },

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from metis.wizard.domain.specification import Specification
 
 BEHAVIOUR_DESCRIPTION = "description"
-PRODUCT_WIDE = ("product.description", "product.detail")
+TARGET_WIDE = ("target.description", "target.detail")
 
 
 @dataclass(frozen=True)
@@ -35,13 +35,13 @@ def impacts_for(specification: Specification, patches: list[Patch]) -> list[Impa
     for patch in patches:
         path = patch.path
 
-        if path in PRODUCT_WIDE:
+        if path in TARGET_WIDE:
             has_derived_work = bool(specification.features) or bool(
                 specification.scenarios
             )
             if not has_derived_work:
                 continue
-            key = ("tree", "product")
+            key = ("tree", "target")
             if key not in seen:
                 seen.add(key)
                 impacts.append(Impact(subject=path, kind="tree"))

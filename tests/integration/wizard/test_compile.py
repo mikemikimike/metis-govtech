@@ -23,7 +23,7 @@ def test_specification_round_trip_and_golden(fixtures_dir: Path) -> None:
     assert output == to_yaml(compile_experiment(specification, "research-assistant"))
     assert output == (fixtures_dir / "golden_specification.yaml").read_text()
     loaded = Specification.model_validate(yaml.safe_load(output))
-    assert loaded.product == specification.product
+    assert loaded.target == specification.target
     assert loaded.features == specification.features
     assert loaded.tasks == specification.tasks
     assert loaded.trial_count() == 9
@@ -53,16 +53,16 @@ def test_invalid_specification_is_not_written(tmp_path: Path, fault: str) -> Non
 
 def test_specification_and_review_preserve_unicode(tmp_path: Path) -> None:
     specification = research_assistant()
-    specification.product.description = "Swipe → see detail"
+    specification.target.description = "Swipe → see detail"
     path = tmp_path / "specification.yaml"
     write_experiment(specification, "research-assistant", path)
     assert (
-        Specification.load_file(path).product.description
-        == specification.product.description
+        Specification.load_file(path).target.description
+        == specification.target.description
     )
     review = render_review(specification, "research-assistant")
-    assert specification.product.description in review
-    assert specification.product.detail in review
+    assert specification.target.description in review
+    assert specification.target.detail in review
     assert "TC-001" in review
     assert "9 trials" in review
 

@@ -17,7 +17,7 @@ from metis.core.profile import Criterion as Criterion
 from metis.core.profile import CriterionDescription as CriterionDescription
 from metis.core.profile import Feature as Feature
 from metis.core.profile import NamedNode as NamedNode
-from metis.core.profile import Product as Product
+from metis.core.profile import Target as Target
 from metis.core.specification import Specification as CoreSpecification
 from metis.core.specification import (
     collect_specification_ids as collect_specification_ids,

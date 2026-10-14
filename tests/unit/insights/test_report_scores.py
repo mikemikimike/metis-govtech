@@ -31,7 +31,7 @@ def _grader_row(session_id: str, scenario_id: str, *, success: bool) -> dict[str
 
 def _specification() -> dict[str, Any]:
     return {
-        "product": {"name": "Test Product"},
+        "target": {"name": "Test Target"},
         "tasks": [
             {
                 "id": "TC-001",
