@@ -1,6 +1,6 @@
 # Simulation Framework
 
-LLM-driven persona simulation for end-to-end testing of an AI assistant. Drives real conversations through a target system via a pluggable runner and writes frozen run records for later evaluation.
+LLM-driven persona simulation for end-to-end testing of an AI assistant. Drives real conversations through a target via a pluggable runner and writes frozen run records for later evaluation.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ CLI (sync) → run_experiment() → asyncio.run()
 ```
 
 ```
-User Agent (Python/AsyncOpenAI)  →  Runner  →  Target System
+User Agent (Python/AsyncOpenAI)  →  Runner  →  Target
 ```
 
 - **User Agent** — embodies the persona, generates next messages; imported and called directly by the orchestrator

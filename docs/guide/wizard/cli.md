@@ -54,7 +54,7 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 
 ## Start an Interview
 
-1. Give the Wizard a plain description of the target system:
+1. Give the Wizard a plain description of the target:
 
    ```bash
    metis wizard init "A research assistant that answers questions from internal documents and cites each source."

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-metis-engine is the evaluation runtime for METIS. It drives a target system through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation graders, and writes their results for [`metis insights report`](insights.md) to turn into a report. Simulation and evaluation are separate commands, with `run` available for the combined flow.
+metis-engine is the evaluation runtime for METIS. It drives a target through a runner using LLM-powered simulated user personas. Orca runners support its API and browser UI. It then extracts the resulting traces from Langfuse, runs configurable evaluation graders, and writes their results for [`metis insights report`](insights.md) to turn into a report. Simulation and evaluation are separate commands, with `run` available for the combined flow.
 
 This guide is for anyone setting up evaluations against a web-based agentic system. By the end, you will have:
 
@@ -213,7 +213,7 @@ product:
 
 ### Personas
 
-Personas are LLM-powered simulated users. During simulation, each persona interacts with the target system according to its behavioral profile — communication style, patience level, domain expertise, and goals.
+Personas are LLM-powered simulated users. During simulation, each persona interacts with the target according to its behavioral profile — communication style, patience level, domain expertise, and goals.
 
 ```yaml
 personas:
@@ -250,7 +250,7 @@ scenarios:
   - id: constrained-analysis
     name: Constrained analysis
     description: >
-      Upload q3_sales.csv and ask the system to analyse Q3 revenue by region
+      Upload q3_sales.csv and ask the target to analyse Q3 revenue by region
       using the median, exclude outliers, and produce a report with charts.
 ```
 
@@ -415,7 +415,7 @@ The `run` command accepts the union of the simulation and evaluation options. It
 
 ### Concurrency
 
-The `--concurrency N` flag runs N simulation workers in parallel. The default is `5`. Reduce to `1` for sequential execution or increase based on your target system's capacity.
+The `--concurrency N` flag runs N simulation workers in parallel. The default is `5`. Reduce to `1` for sequential execution or increase based on your target's capacity.
 
 Runs are distributed round-robin across workers. Each worker processes its slice sequentially — one run at a time — while all workers run concurrently via `asyncio.gather`. How isolation and resource sharing work depends on the runner.
 
@@ -566,9 +566,9 @@ class ResponseQualityGrader(MetisTurnGrader):
                 name="Response Quality",
                 model=_get_judge_model(),
                 criteria=(
-                    "Evaluate the system's response.\n\n"
+                    "Evaluate the target's response.\n\n"
                     "The 'input' is the user's request.\n"
-                    "The 'actual_output' is the system's response.\n\n"
+                    "The 'actual_output' is the target's response.\n\n"
                     "Rate on three dimensions:\n"
                     "1. Helpful: Does it answer the question?\n"
                     "2. Tone: Is the tone appropriate?\n"
@@ -666,10 +666,10 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 
 | Symptom | Likely Cause | Fix |
 |---------|--------------|-----|
-| "No traces found" or extraction times out | Langfuse timeout too short, bad credentials, or target system not instrumented | Increase `--langfuse-timeout`, verify Langfuse keys in `.env`, confirm your target writes traces to Langfuse |
+| "No traces found" or extraction times out | Langfuse timeout too short, bad credentials, or target not instrumented | Increase `--langfuse-timeout`, verify Langfuse keys in `.env`, confirm your target writes traces to Langfuse |
 | "Fixture not found" error | Path is absolute or has a typo | Use the filename only (relative to `fixtures/`), verify the file exists in the fixtures directory |
 | "Grader import failed" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the grader is installed in your venv |
-| Simulation hangs indefinitely | Target system unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task's `response_wait_ms` |
+| Simulation hangs indefinitely | Target unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task's `response_wait_ms` |
 | Simulation TUI not appearing | Running in a non-TTY environment | Expected — the Simulation TUI requires an interactive terminal. Use linear output or run in a real terminal |
 | Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current turn | Press Ctrl+C a second time to force-abort |
 | "Grader is not a subclass of BaseMetric" | Class doesn't inherit from the correct base | Ensure your grader extends `MetisTurnGrader`, `MetisSessionGrader`, or `deepeval.metrics.BaseMetric` |
@@ -677,7 +677,7 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 
 ---
 
-## Adapting to Your Target System
+## Adapting to Your Target
 
 The bundled example targets Orca through its API runner. You can supply a custom runner for a REST API, WebSocket endpoint, browser UI, or another interface.
 
@@ -690,7 +690,7 @@ This section covers:
 
 ### Writing a Custom Runner
 
-The engine interacts with your target system through two abstractions:
+The engine interacts with your target through two abstractions:
 
 - **`Runner`** — handles a single simulation attempt (one persona × one scenario). It translates messages and actions into transport-specific calls and returns observations.
 - **`RunnerFactory`** — manages shared resources (connection pools, browser instances) and creates fresh `Runner` instances per attempt.
@@ -707,7 +707,7 @@ from metis.engine.simulation.types import ChosenAction, Observation, RunConfig
 
 
 class Runner(ABC):
-    """Transport layer — connects the simulation to a target system."""
+    """Transport layer — connects the simulation to a target."""
 
     @abstractmethod
     async def setup(self, config: RunConfig) -> None:
@@ -739,10 +739,10 @@ class Runner(ABC):
 
     @abstractmethod
     async def get_session_id(self) -> str | None:
-        """Return the target system's session identifier.
+        """Return the target's session identifier.
 
         The engine stores this in the run record for trace extraction.
-        Return None if your system has no concept of sessions.
+        Return None if your target has no concept of sessions.
         """
 ```
 
@@ -750,7 +750,7 @@ class Runner(ABC):
 
 These Pydantic models are defined in `metis.engine.simulation.types`:
 
-**`Observation`** — what the target system returned after a turn:
+**`Observation`** — what the target returned after a turn:
 
 ```python
 class Observation(BaseModel):
@@ -831,10 +831,10 @@ The engine instantiates your factory with `factory_cls()` (no arguments). Read a
 
 #### Complete REST API Runner Example
 
-Below is a complete, runnable implementation that drives a target system exposing a JSON chat endpoint:
+Below is a complete, runnable implementation that drives a target exposing a JSON chat endpoint:
 
 ```python
-"""REST API runner for a chat-based target system."""
+"""REST API runner for a chat-based target."""
 
 from __future__ import annotations
 
@@ -861,7 +861,7 @@ class RestRunnerConfig:
 
 
 class RestRunner(Runner):
-    """Drives a target system via its REST API."""
+    """Drives a target via its REST API."""
 
     def __init__(self, config: RestRunnerConfig, fixtures_dir: Path) -> None:
         self._config = config
@@ -1074,7 +1074,7 @@ schema_version: 2
 id: <string>              # Experiment identifier
 runner_factory_ref: <string>  # Importable RunnerFactory class
 product:
-  name: <string>           # Target system name
+  name: <string>           # Target name
   users: <string>          # Prose that describes the product users
   description: <string>    # Short description of what is evaluated
   detail: <string>         # Longer context about the evaluation scope
@@ -1125,7 +1125,7 @@ tasks:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Name of the target system being evaluated |
+| `name` | Yes | Name of the target being evaluated |
 | `users` | Yes | Prose that describes who uses the product |
 | `description` | Yes | Short evaluation description |
 | `detail` | No | Extended context about the evaluation's purpose and scope |
@@ -1145,7 +1145,7 @@ tasks:
 |-------|----------|-------------|
 | `id` | Yes | Identifier (conventionally `EB-<FEATURE>-N`) |
 | `name` | Yes | Human-readable behaviour name |
-| `description` | Yes | Full description of what the system must do |
+| `description` | Yes | Full description of what the target must do |
 | `measured` | No | `true` when the evaluation measures this behaviour; defaults to `false` |
 | `criteria` | No | Acceptance criteria; defaults to `[]`. Measured Behaviours need Task coverage |
 
@@ -1201,7 +1201,7 @@ a grader before the engine can load the specification.
 
 ### Langfuse Requirement
 
-The `evaluate` command requires that your target system writes traces to [Langfuse](https://langfuse.com). The engine uses the session ID returned by `Runner.get_session_id()` to fetch traces from Langfuse, then feeds them to your configured graders.
+The `evaluate` command requires that your target writes traces to [Langfuse](https://langfuse.com). The engine uses the session ID returned by `Runner.get_session_id()` to fetch traces from Langfuse, then feeds them to your configured graders.
 
 #### What This Means in Practice
 
@@ -1213,7 +1213,7 @@ The `evaluate` command requires that your target system writes traces to [Langfu
 
 #### Simulation-Only Fallback
 
-If your target system does not instrument with Langfuse, you can still use METIS for simulation:
+If your target does not instrument with Langfuse, you can still use METIS for simulation:
 
 ```bash
 # Run simulation only — no trace extraction needed
@@ -1246,7 +1246,7 @@ The engine then fetches traces using:
 
 ### Writing Your Own Experiment
 
-Use this template and checklist when creating an experiment from scratch for a new target system.
+Use this template and checklist when creating an experiment from scratch for a new target.
 
 #### Minimal Template
 

@@ -21,7 +21,7 @@ def read_capability_evidence(
     """Show the capability catalogue and read the required opening evidence."""
     categories = load_config().capability_categories
     choices: list[tuple[CapabilityId, str]] = []
-    out("\nKnown capabilities (select any that you know the system has):")
+    out("\nKnown capabilities (select any that you know the target has):")
     for category in categories:
         out(f"\n{category.name}")
         out("─" * len(category.name))

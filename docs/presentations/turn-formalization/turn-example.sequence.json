@@ -33,7 +33,7 @@
     { "id": "user_agent", "type": "external", "label": "User Agent", "sublabel": "the persona" },
     { "id": "orchestrator", "type": "backend", "label": "Orchestrator", "sublabel": "runs the turn" },
     { "id": "runner", "type": "backend", "label": "Runner", "sublabel": "talks to the target" },
-    { "id": "target", "type": "cloud", "label": "Target System", "sublabel": "a five-field form" }
+    { "id": "target", "type": "cloud", "label": "Target", "sublabel": "a five-field form" }
   ],
   "segments": [
     { "from": 160, "to": 220, "label": "Decide" },

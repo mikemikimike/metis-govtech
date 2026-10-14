@@ -251,9 +251,9 @@ class UserAgent:
         return response
 
     async def generate_response(self, turn_payload: UserAgentInput) -> UserAgentOutput:
-        """Given the system's response, generate the user's next message.
+        """Given the target's response, generate the user's next message.
 
-        :param turn_payload: Structured payload containing the target system's
+        :param turn_payload: Structured payload containing the target's
             observation and optional session metadata.
         """
         observation = turn_payload.observation

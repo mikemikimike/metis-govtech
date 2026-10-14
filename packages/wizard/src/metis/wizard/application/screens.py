@@ -467,7 +467,7 @@ def scenarios_screen(
                         max=TRIALS_MAX,
                     ),
                     CardUploadField(
-                        label="Files sent to your system",
+                        label="Files sent to your target",
                         id=OptionId(action="files", target=task.id),
                         value=list(task.fixtures),
                         available=list(available_fixture_names or []),

@@ -11,7 +11,7 @@ in this repository or outside it.
 
 ## 1. What a runner is for
 
-A runner is the only component that touches the target system. It receives one
+A runner is the only component that touches the target. It receives one
 persona turn — prose plus a list of chosen actions — translates it into
 whatever transport the target speaks, and returns an `Observation`: a
 first-hand, mechanical account of what happened.

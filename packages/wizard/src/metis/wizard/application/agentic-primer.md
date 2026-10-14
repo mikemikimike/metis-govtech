@@ -48,7 +48,7 @@ the text?
 
 ## What it can actually do
 
-The sharpest interview question is not what the system is for but what it is able to do. An
+The sharpest interview question is not what the target is for but what it is able to do. An
 ability exists only where an action and the thing that enables it are both present: the
 ability to run code is executing plus an interpreter, the ability to search is querying plus
 network access, the ability to change a record is writing plus a credential that permits it.
@@ -65,7 +65,7 @@ Talking to people, in text or images or voice. Sending communications that forma
 the organisation. Committing the organisation to something — a payment, a refund, a booking,
 an order. Reading the open internet. Driving a screen the way a person would. Calling APIs
 and other machine interfaces. Writing and running code. Creating, changing and deleting files
-and records. Changing configuration, credentials, or the resources the system runs on.
+and records. Changing configuration, credentials, or the resources the target runs on.
 
 Two things are worth noticing about that list. The abilities near the end are the ones people
 forget to mention and the ones that make failures expensive. And the worst problems tend not
@@ -161,7 +161,7 @@ the other two.
 
 ## What the transcript has to contain
 
-An evaluation reads traces. Anything the system does not record cannot be measured, no matter
+An evaluation reads traces. Anything the target does not record cannot be measured, no matter
 how well the criterion is written — if tool calls are not in the trace, no criterion about
 tool selection can ever be checked. Worth knowing what gets captured, and worth preferring
 criteria that rest on what will actually be there.
@@ -182,7 +182,7 @@ Machinery statements sit alongside feature statements — *stops after repeated 
 says what it tried* next to *the refund amount is correct*. Both are things that should be
 true; neither is more real than the other.
 
-A behaviour is worth writing when the system could plausibly fail it. Statements that are
+A behaviour is worth writing when the target could plausibly fail it. Statements that are
 true by construction — it cannot send mail, so it will not send the wrong mail — measure
 nothing.
 
@@ -198,7 +198,7 @@ criteria recovers from that.
 Build the situation that forces the interesting path. The refund on an order that does not
 exist. The question whose documents are behind a search that times out. The request that
 changes after the work has started. The document that contains a line telling the agent to do
-something else. The request that is one step past what the system is allowed to commit to.
+something else. The request that is one step past what the target is allowed to commit to.
 The scenario that can be finished properly or finished fast, but not both.
 
 Where two abilities meet, put a scenario there. That is where the failures nobody anticipated live.

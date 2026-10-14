@@ -189,7 +189,7 @@
       "dot": "rose",
       "title": "Who Decides Which",
       "items": [
-        "The target system decides delivered vs. failed",
+        "The target decides delivered vs. failed",
         "The framework decides withheld and unknown, before or after the fact"
       ]
     }

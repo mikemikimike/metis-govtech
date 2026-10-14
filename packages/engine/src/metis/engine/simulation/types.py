@@ -118,7 +118,7 @@ class UserAgentOutput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# UI State (captured from the target system)
+# UI State (captured from the target)
 # ---------------------------------------------------------------------------
 
 
@@ -135,7 +135,7 @@ class FormElement(BaseModel):
 
 
 class UIState(BaseModel):
-    """Complete UI state captured after a target system response."""
+    """Complete UI state captured after a target response."""
 
     text: str = ""
     artifacts: list[Artifact] = Field(default_factory=list)
@@ -181,7 +181,7 @@ class ActionResult(BaseModel):
 
 
 class Observation(BaseModel):
-    """What the target system returned after a turn (transport-agnostic).
+    """What the target returned after a turn (transport-agnostic).
 
     Each field has exactly one owner, and the owner is what the field
     describes — see ``docs/runner-contract.md``. ``action_results`` belongs to

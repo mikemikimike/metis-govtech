@@ -15,7 +15,7 @@ perspectives:
     question: "Are our responses audited, grounded, and within compliance policy scope?"
   - id: security
     label: "Security"
-    question: "Is our system safe against malicious attacks?"
+    question: "Is our target safe against malicious attacks?"
 
 statuses:
   working: "Working on your Interview…"

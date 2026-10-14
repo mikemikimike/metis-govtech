@@ -183,7 +183,7 @@ test("runs an offline document start, reload, review, end and package flow", asy
           {
             type: "upload",
             id: { action: "files", target: "S-1" },
-            label: "Files sent to your system",
+            label: "Files sent to your target",
             value: files,
             available: ["policy.md", "notes.txt"],
           },

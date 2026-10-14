@@ -449,7 +449,7 @@ test("Scenario review exposes early fixture suggestions for user selection", () 
     component: {
       type: "upload",
       id: { action: "files", target: "S-1" },
-      label: "Files sent to your system",
+      label: "Files sent to your target",
       value: ["policy.pdf"],
       available: ["policy.pdf", "terms.pdf"],
     },

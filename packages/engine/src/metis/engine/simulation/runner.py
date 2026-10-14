@@ -1,4 +1,4 @@
-"""Runner ABC — transport layer connecting the simulation to a target system."""
+"""Runner ABC — transport layer connecting the simulation to a target."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 class Runner(ABC):
-    """Transport layer — connects the simulation to a target system.
+    """Transport layer — connects the simulation to a target.
 
     Implementations translate (message, actions) pairs into transport-specific
     operations (browser DOM, REST API, RPC) and return an Observation.
@@ -56,7 +56,7 @@ class Runner(ABC):
 
     @abstractmethod
     async def get_session_id(self) -> str | None:
-        """Return the target system's session identifier, if available."""
+        """Return the target's session identifier, if available."""
 
 
 class RunnerFactory(Protocol):

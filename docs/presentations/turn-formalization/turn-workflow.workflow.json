@@ -47,7 +47,7 @@
     },
     {
       "id": "tgt",
-      "label": "Target System"
+      "label": "Target"
     }
   ],
   "phases": [

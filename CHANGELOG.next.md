@@ -41,6 +41,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Use Target for the evaluation subject in interface labels, prompts, code
+  documentation, and guides (#429).
+
 - **Clarified `GLOSSARY.md`'s Session definition.** A session now explicitly
   corresponds to exactly one trial: the target agentic system's conversation
   for a trial produces the traces that make up its session. This resolves an
