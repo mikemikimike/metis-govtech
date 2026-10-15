@@ -27,6 +27,7 @@ text never leaves the gateway — a code guarantee, not a prompt instruction.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -37,6 +38,7 @@ from pydantic import BaseModel, ValidationError
 
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import (
+    InterviewContextBudgetError,
     InterviewerOutputError,
     InterviewerUnavailable,
 )
@@ -89,11 +91,23 @@ class GatewayInterviewer:
     """Structured-output calls against the gateway."""
 
     model: str = field(default_factory=lambda: os.environ.get(MODEL_VAR, DEFAULT_MODEL))
+    context_tokens: int = field(
+        default_factory=lambda: int(
+            os.environ.get("INTERVIEW_CONTEXT_TOKENS", "128000")
+        )
+    )
+    output_tokens: int = field(
+        default_factory=lambda: int(os.environ.get("INTERVIEW_OUTPUT_TOKENS", "16384"))
+    )
     _client: Any = None
     interview_id: str | None = None
 
     def __post_init__(self) -> None:
         check_credentials()
+        if not 0 < self.output_tokens < self.context_tokens:
+            raise ValueError(
+                "INTERVIEW_OUTPUT_TOKENS must be positive and below INTERVIEW_CONTEXT_TOKENS."
+            )
         if self._client is None:
             # The drop-in traces every call; unconfigured it is a quiet no-op. The OpenAI client
             # does not connect on construction, so this stays offline until a call is made.
@@ -138,19 +152,39 @@ class GatewayInterviewer:
         ]
         last_error: Exception | None = None
 
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema.__name__,
+                "schema": schema.model_json_schema(),
+                "strict": True,
+            },
+        }
         for attempt in range(ATTEMPTS):
+            # One token per UTF-8 byte is a conservative bound for byte-based model
+            # tokenizers. Include schema, retry history, framing, and reserved output.
+            input_bound = (
+                len(
+                    json.dumps(
+                        {"messages": messages, "response_format": response_format},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+                )
+                + 4096
+            )
+            if input_bound + self.output_tokens > self.context_tokens:
+                raise InterviewContextBudgetError(
+                    f"Request for {self.model} needs a conservative budget of "
+                    f"{input_bound + self.output_tokens:,} tokens; configured context is "
+                    f"{self.context_tokens:,}. No input was truncated. Set INTERVIEW_CONTEXT_TOKENS "
+                    "to the provider's supported limit or reduce the documents."
+                )
             try:
                 response = self._client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    response_format={
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": schema.__name__,
-                            "schema": schema.model_json_schema(),
-                            "strict": True,
-                        },
-                    },
+                    response_format=response_format,
+                    max_completion_tokens=self.output_tokens,
                 )
             except APIError as exc:
                 raise InterviewerOutputError(

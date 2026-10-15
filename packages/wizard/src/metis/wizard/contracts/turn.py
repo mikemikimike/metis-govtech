@@ -89,6 +89,7 @@ class InterviewErrorCode(StrEnum):
     RESPONSE_TYPE_MISMATCH = "response_type_mismatch"
     RESPONSE_NOT_OFFERED = "response_not_offered"
     MODEL_UNAVAILABLE = "model_unavailable"
+    CONTEXT_BUDGET_EXCEEDED = "context_budget_exceeded"
     COMPLETION_FAILED = "completion_failed"
     INTERNAL_ERROR = "internal_error"
 

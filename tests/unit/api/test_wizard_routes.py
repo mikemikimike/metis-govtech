@@ -117,7 +117,7 @@ def test_extract_returns_typed_file_error_and_no_partial_result(
     assert response.json() == {
         "type": "failure",
         "code": "unsupported_file_type",
-        "message": "archive.xlsx: Interview text is supported only for TXT, Markdown, PDF, and DOCX files.",
+        "message": "archive.xlsx: Interview text is supported only for TXT, Markdown, YAML, JSON, CSV, PDF, and DOCX files.",
         "retryable": False,
     }
 

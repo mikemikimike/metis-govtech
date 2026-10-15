@@ -17,7 +17,10 @@ from metis.wizard import (
     handle_interview,
 )
 from metis.wizard.application.driver import DriverState
-from metis.wizard.application.interviewer import InterviewerOutputError
+from metis.wizard.application.interviewer import (
+    InterviewContextBudgetError,
+    InterviewerOutputError,
+)
 from metis.wizard.application.screens import behaviours_screen, scenarios_screen
 from metis.wizard.application.turn import _reconcile_locks
 from metis.wizard.contracts import (
@@ -269,24 +272,38 @@ def test_a_behaviour_measurement_change_stays_pending_before_continue() -> None:
     assert not result.state.specification.behaviour("EB-1").measured  # type: ignore[union-attr]
 
 
-class ClarifyUnavailable(ScriptedInterviewer):
-    def clarify(self, specification, history, context=None):
-        raise InterviewerOutputError("three attempts, all failed")
+@pytest.mark.parametrize(
+    "error, code, retryable",
+    [
+        (
+            InterviewerOutputError("three attempts, all failed"),
+            InterviewErrorCode.MODEL_UNAVAILABLE,
+            True,
+        ),
+        (
+            InterviewContextBudgetError("Request exceeds context budget"),
+            InterviewErrorCode.CONTEXT_BUDGET_EXCEEDED,
+            False,
+        ),
+    ],
+)
+def test_model_failure_preserves_state(error, code, retryable) -> None:
+    class FailingInterviewer(ScriptedInterviewer):
+        def clarify(self, specification, history, context=None):
+            raise error
 
-
-def test_model_failure_is_retryable_with_the_state_intact() -> None:
     opening = _start()
     assert isinstance(opening, InterviewSuccess)
 
     result = _turn(
         opening.state,
         ChatResponse(text="a policy tool"),
-        interviewer=ClarifyUnavailable(),
+        interviewer=FailingInterviewer(),
     )
 
     assert isinstance(result, InterviewFailure)
-    assert result.code is InterviewErrorCode.MODEL_UNAVAILABLE
-    assert result.retryable
+    assert result.code is code
+    assert result.retryable is retryable
     assert result.state == opening.state
 
 

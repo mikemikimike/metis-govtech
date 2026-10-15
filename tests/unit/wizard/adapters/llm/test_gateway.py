@@ -745,6 +745,26 @@ def test_generated_metadata_reaches_saved_specification(path, metadata):
 
 
 @pytest.mark.parametrize(
+    "context_tokens, replies, calls",
+    [
+        (5000, ["{}"], 0),
+        (30000, ["x" * 30000], 1),
+    ],
+)
+def test_context_budget_covers_schema_output_and_retries(
+    context_tokens, replies, calls
+) -> None:
+    from metis.wizard.application.interviewer import InterviewContextBudgetError
+
+    gateway, completions = interviewer(replies)
+    gateway.context_tokens = context_tokens
+    gateway.output_tokens = 1000
+    with pytest.raises(InterviewContextBudgetError, match="No input was truncated"):
+        gateway._ask(simple_prompt(), ClarifyResult)
+    assert len(completions.calls) == calls
+
+
+@pytest.mark.parametrize(
     "first_patches",
     [
         [],

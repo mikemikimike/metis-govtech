@@ -26,6 +26,17 @@ export INTERVIEW_MODEL="gpt-5.6-luna"
 ```
 
 The testbed uses the endpoint for Wizard calls and semantic similarity embeddings.
+Use a chat model that the API key can access. Set `INTERVIEW_CONTEXT_TOKENS` to
+its supported context limit and `INTERVIEW_OUTPUT_TOKENS` to the output reserve
+(defaults: 128,000 and 16,384). Wizard checks a conservative UTF-8 byte-based token
+bound before every chat request, including its schema and retry history. The
+bound can reject input that a model-specific tokenizer could fit. No input is
+truncated. A context error states the budget and the required bound.
+
+Document text can contain up to 500,000 characters per file and 1,000,000 in total.
+The API config supplies the same limits to clients. TXT, Markdown, YAML, JSON,
+CSV, PDF, and DOCX support text extraction.
+
 Langfuse remains optional and follows the Wizard configuration.
 
 Orca product input files stay local. Restore the product documents described in

@@ -251,6 +251,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Accept optional flat string metadata in model-proposed Persona and Scenario
   drafts and preserve it in saved Specifications. Guide generation to use supplied
   facts and omit unspecified metadata (#441).
+- Support large supporting documents with shared limits of 500,000 characters per
+  file and 1,000,000 total. Read YAML, JSON, and CSV text. Check the configured
+  model context budget before each request without truncating input.
 
 - **Opening documents.** Flat Interview start requests can carry files as `{name, text?}`. The
   wizard keeps the opening description and document context in client-held state, with supported

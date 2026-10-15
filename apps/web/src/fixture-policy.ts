@@ -1,5 +1,7 @@
 export const ACCEPTED_FIXTURE_EXTENSIONS = [
   "csv",
+  "yaml",
+  "yml",
   "pdf",
   "docx",
   "xlsx",
