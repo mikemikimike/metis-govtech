@@ -87,8 +87,21 @@ The archive contains:
 
 ```text
 specification.zip
-├── specification.yaml
-└── fixtures/
+├── inputs/
+│   └── interview_state.json
+└── outputs/
+    ├── specification.yaml
+    └── fixtures/
+```
+
+The API compiles the Specification from the same final Interview state that it saves in the
+archive. This state keeps document names, extracted text, and limited recent history. The full
+display transcript stays in browser storage.
+
+Extract the archive into `evaluation/`, then run:
+
+```bash
+metis engine run --input-dir evaluation/outputs/
 ```
 
 The browser sends only the original fixture files that the current Tasks use. The API builds
@@ -120,7 +133,8 @@ Editor rules:
   clears those selections. Select a replacement before you download.
 - Each Scenario needs at least one test case.
 
-The archive contains a complete `specification.yaml` and the selected fixtures.
+The manual export contains an empty `inputs/` folder, `outputs/specification.yaml`, and the
+selected files under `outputs/fixtures/`. It contains no Interview state.
 
 ## Browser storage and current limits
 

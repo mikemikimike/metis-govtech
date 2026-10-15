@@ -466,9 +466,13 @@ export const api = {
       body: form,
     });
   },
-  package: (specification: Specification, files: readonly PackageFile[]) => {
+  package: (
+    source: { state: InterviewState } | { specification: Specification },
+    files: readonly PackageFile[],
+  ) => {
     const form = new FormData();
-    form.append("specification", JSON.stringify(specification));
+    if ("state" in source) form.append("state", JSON.stringify(source.state));
+    else form.append("specification", JSON.stringify(source.specification));
     for (const file of files) form.append("files", file.blob, file.name);
     return callBlob("/api/v1/wizard/package", {
       method: "POST",

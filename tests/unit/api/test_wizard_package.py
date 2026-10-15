@@ -4,10 +4,13 @@ import io
 import zipfile
 
 import pytest
+import yaml
 from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 from metis.api.routes.wizard import package as package_route
+from metis.wizard import InterviewState, compile_specification
+from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.specifications import research_assistant
 
 
@@ -29,11 +32,12 @@ def test_package_returns_a_portable_zip_with_specification_and_fixtures(
     assert "specification.zip" in response.headers["content-disposition"]
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         assert set(archive.namelist()) == {
-            "specification.yaml",
-            "fixtures/",
-            "fixtures/policy.pdf",
+            "inputs/",
+            "outputs/specification.yaml",
+            "outputs/fixtures/",
+            "outputs/fixtures/policy.pdf",
         }
-        assert archive.read("fixtures/policy.pdf") == b"policy bytes"
+        assert archive.read("outputs/fixtures/policy.pdf") == b"policy bytes"
 
 
 def test_package_includes_unreferenced_fixture_bytes_without_server_state(
@@ -56,9 +60,9 @@ def test_package_includes_unreferenced_fixture_bytes_without_server_state(
 
     assert first.status_code == second.status_code == 200
     with zipfile.ZipFile(io.BytesIO(first.content)) as archive:
-        assert archive.read("fixtures/notes.txt") == b"notes"
+        assert archive.read("outputs/fixtures/notes.txt") == b"notes"
     with zipfile.ZipFile(io.BytesIO(second.content)) as archive:
-        assert "fixtures/notes.txt" not in archive.namelist()
+        assert "outputs/fixtures/notes.txt" not in archive.namelist()
 
 
 def test_package_rejects_a_specification_with_a_missing_fixture(
@@ -84,7 +88,7 @@ def test_package_rejects_an_invalid_specification(client: TestClient) -> None:
     assert response.json() == {
         "type": "failure",
         "code": "validation_error",
-        "message": "The submitted Specification is invalid.",
+        "message": "Supply one valid Interview state or manual Specification.",
         "retryable": False,
     }
 
@@ -166,3 +170,50 @@ def test_package_closes_uploads_after_unexpected_failure() -> None:
         )
 
     assert stream.closed
+
+
+def test_interview_export_preserves_the_state_used_to_compile(
+    client: TestClient,
+) -> None:
+    state = InterviewState(
+        specification=research_assistant(),
+        context=interview_context(),
+        confirmed=True,
+        history=[{"role": "user", "text": "Check the policy."}],
+    )
+    response = client.post(
+        "/api/v1/wizard/package",
+        data={"state": state.model_dump_json()},
+        files=[("files", ("policy.pdf", b"policy bytes", "application/pdf"))],
+    )
+    assert response.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert set(archive.namelist()) == {
+            "inputs/",
+            "inputs/interview_state.json",
+            "outputs/specification.yaml",
+            "outputs/fixtures/",
+            "outputs/fixtures/policy.pdf",
+        }
+        saved = InterviewState.model_validate_json(
+            archive.read("inputs/interview_state.json")
+        )
+        assert saved == state
+        compiled = compile_specification(saved.specification)
+        assert yaml.safe_load(
+            archive.read("outputs/specification.yaml")
+        ) == compiled.specification.model_dump(mode="json")
+        for task in compiled.specification.tasks:
+            for name in task.fixtures:
+                assert archive.read(f"outputs/fixtures/{name}") == b"policy bytes"
+
+
+@pytest.mark.parametrize(
+    "fields", [{}, {"state": "{}"}, {"state": "{}", "specification": _specification()}]
+)
+def test_package_requires_one_valid_source(
+    client: TestClient, fields: dict[str, str]
+) -> None:
+    response = client.post("/api/v1/wizard/package", data=fields)
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"

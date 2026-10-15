@@ -28,14 +28,13 @@ Request/Specification schema failures become 422 through the app's validation ha
 
 from __future__ import annotations
 
-import json
 from contextlib import suppress
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
 from fastapi.openapi.models import Example
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from metis.wizard import (
     CompilationError,
@@ -311,13 +310,20 @@ def config() -> InterviewConfig:
     },
 )
 def package(
-    specification: str = Form(...),
-    files: list[UploadFile] | None = File(default=None),
+    specification: Annotated[str | None, Form()] = None,
+    files: Annotated[list[UploadFile] | None, File()] = None,
+    state: Annotated[str | None, Form()] = None,
 ) -> Response | JSONResponse:
     """Build one request-scoped engine-ready ZIP without retaining uploaded files."""
     uploads = files or []
     try:
-        parsed = Specification.model_validate_json(specification)
+        if (specification is None) == (state is None):
+            raise ValueError("Supply exactly one of state or specification.")
+        parsed = (
+            InterviewState.model_validate_json(state)
+            if state is not None
+            else Specification.model_validate_json(specification or "")
+        )
         fixtures: list[SpecificationFixture] = []
         for upload in uploads:
             fixtures.append(
@@ -327,20 +333,18 @@ def package(
                 )
             )
         archive = package_specification(parsed, fixtures)
-    except (json.JSONDecodeError, ValidationError):
-        return JSONResponse(
-            ServiceError(
-                code="validation_error",
-                message="The submitted Specification is invalid.",
-                retryable=False,
-            ).model_dump(),
-            status_code=400,
-        )
     except (CompilationError, SpecificationError) as exc:
         return JSONResponse(
             ServiceError(
-                code="compilation_failed",
-                message=str(exc),
+                code="compilation_failed", message=str(exc), retryable=False
+            ).model_dump(),
+            status_code=400,
+        )
+    except ValueError:
+        return JSONResponse(
+            ServiceError(
+                code="validation_error",
+                message="Supply one valid Interview state or manual Specification.",
                 retryable=False,
             ).model_dump(),
             status_code=400,

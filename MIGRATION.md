@@ -50,10 +50,17 @@ Keep `schema_version: 2` on `next`. Use the complete example in
 - Derive coverage through Task → Behaviour. Every Scenario needs a
   Task, and every measured Behaviour needs coverage. Engine execution limits keep
   their defaults.
-- Use `InterviewState.specification` for the complete document and the
-  `specification` form field for `/package`.
+- Use `InterviewState.specification` for the complete document. For `/package`, send the
+  full final Interview state in the `state` form field. For manual exports, send the
+  user-authored Specification in the `specification` form field. Send exactly one source.
 - Use `/compile` response keys `specification.yaml` and `specification`. Retain the returned
-  Specification so later edits keep Task IDs. ZIP exports contain one YAML and `fixtures/`.
+  Specification so later edits keep Task IDs. Exports put the YAML and `fixtures/` under
+  `outputs/`. Pass that folder to Engine as `--input-dir`. Interview exports save the final
+  state as `inputs/interview_state.json`; manual exports include an empty `inputs/` folder.
+- For an interrupted CLI Interview saved with the earlier layout, move `interview_state.json`
+  into `inputs/` before calling `resume`. Move existing fixture files into `outputs/fixtures/`.
+  Keep Task fixture references relative to that folder. Completed CLI exports retain the state;
+  `outputs/specification.yaml` marks completion.
 - Recreate old browser drafts with the current format. Old drafts with `state.profile` or without Tasks are
   not valid current Interview state. There is no automatic conversion.
 - Start a new run after conversion. Old run records have no Task/Criterion identity

@@ -257,7 +257,10 @@ test("runs an offline document start, reload, review, end and package flow", asy
         },
       );
     if (path.endsWith("/package")) {
-      const form = init?.body as FormData;
+      const form = init?.body;
+      assert.ok(form instanceof FormData);
+      assert.equal(form.get("state"), JSON.stringify(finalState));
+      assert.equal(form.has("specification"), false);
       assert.deepEqual(
         (form.getAll("files") as File[]).map((file) => file.name),
         ["notes.txt"],
@@ -370,7 +373,7 @@ test("runs an offline document start, reload, review, end and package flow", asy
   ]);
   await repository.put(withFixture);
   const archive = await api.package(
-    withFixture.state.specification,
+    { state: withFixture.state },
     fixturesForSpecification(withFixture),
   );
   assert.equal(await archive.text(), "zip bytes");
@@ -436,7 +439,10 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
         status: 200,
       });
     if (path.endsWith("/package")) {
-      const body = init?.body as FormData;
+      const body = init?.body;
+      assert.ok(body instanceof FormData);
+      assert.equal(body.get("state"), JSON.stringify(finalState));
+      assert.equal(body.has("specification"), false);
       assert.deepEqual(
         (body.getAll("files") as File[]).map((file) => file.name),
         ["policy.pdf"],
@@ -506,7 +512,7 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
     ["policy.pdf", "unused.json"],
   );
   const archive = await api.package(
-    withFixture.state.specification,
+    { state: withFixture.state },
     fixturesForSpecification(withFixture),
   );
   assert.equal(await archive.text(), "zip bytes");

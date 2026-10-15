@@ -334,13 +334,15 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
       );
       const archive = await api.package(
         {
-          ...submitted,
-          tasks: assigned.map((task) => ({
-            ...task,
-            fixtures: task.fixtures ?? [],
-            behaviour_refs: task.behaviour_refs ?? [],
-            num_trials: task.num_trials ?? 3,
-          })),
+          specification: {
+            ...submitted,
+            tasks: assigned.map((task) => ({
+              ...task,
+              fixtures: task.fixtures ?? [],
+              behaviour_refs: task.behaviour_refs ?? [],
+              num_trials: task.num_trials ?? 3,
+            })),
+          },
         },
         usedFiles,
       );

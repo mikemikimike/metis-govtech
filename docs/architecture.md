@@ -177,8 +177,16 @@ MAY depend on all `packages/*` members. For the wizard it depends on the `metis.
 Interview interface only (`apps/api -> metis.wizard`): the router calls `handle_interview`,
 `compile_specification`, and the in-memory specification packager and maps typed results onto HTTP
 responses. No stage, Specification, prompt, matching, fixture validation, or compilation rule lives in
-the API. The package route accepts a Specification JSON part and request-scoped fixture bytes and returns
-one `specification.zip`; it retains no uploaded files.
+the API. The package route accepts one JSON source part: `state` for an Interview or
+`specification` for a manual export. It accepts request-scoped fixture bytes and returns one
+`specification.zip`; it retains no uploaded files.
+
+Wizard exports share `inputs/` and `outputs/` at the experiment root. Interview exports MUST
+compile from the same final state saved as `inputs/interview_state.json`. Manual exports MUST
+include an empty `inputs/` folder. The Specification and fixtures belong under `outputs/`;
+the existing CLI review belongs at `outputs/review.md`. Engine reads the `outputs/` folder.
+The CLI publishes `outputs/specification.yaml` last as its completion marker and retains
+recovery state until export succeeds. Wizard MUST NOT create Testbed embedding caches or scores.
 
 `GET /api/v1/wizard/config` returns the wizard-owned ordered ARC capability categories with the
 opening copy and perspective definitions. `POST /api/v1/wizard/interview/start` accepts the

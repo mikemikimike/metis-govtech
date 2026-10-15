@@ -52,13 +52,16 @@ def test_specification_has_engine_input_shape_and_opaque_bytes(tmp_path: Path) -
 
     with zipfile.ZipFile(target) as archive:
         assert archive.namelist() == [
-            "specification.yaml",
-            "fixtures/",
-            "fixtures/data.csv",
-            "fixtures/policy.html",
+            "inputs/",
+            "outputs/specification.yaml",
+            "outputs/fixtures/",
+            "outputs/fixtures/data.csv",
+            "outputs/fixtures/policy.html",
         ]
-        assert archive.read("fixtures/policy.html") == b"<script>alert(1)</script>"
-        assert "features:" in archive.read("specification.yaml").decode()
+        assert (
+            archive.read("outputs/fixtures/policy.html") == b"<script>alert(1)</script>"
+        )
+        assert "features:" in archive.read("outputs/specification.yaml").decode()
 
 
 def test_specification_keeps_an_explicit_empty_fixtures_directory(
@@ -68,7 +71,11 @@ def test_specification_keeps_an_explicit_empty_fixtures_directory(
     write_specification(_document(), tmp_path / "fixtures", target)
 
     with zipfile.ZipFile(target) as archive:
-        assert archive.namelist() == ["specification.yaml", "fixtures/"]
+        assert archive.namelist() == [
+            "inputs/",
+            "outputs/specification.yaml",
+            "outputs/fixtures/",
+        ]
 
 
 def test_specification_can_include_a_portable_specification(tmp_path: Path) -> None:
@@ -86,11 +93,12 @@ def test_specification_can_include_a_portable_specification(tmp_path: Path) -> N
 
     with zipfile.ZipFile(target) as archive:
         assert archive.namelist() == [
-            "specification.yaml",
-            "fixtures/",
+            "inputs/",
+            "outputs/specification.yaml",
+            "outputs/fixtures/",
         ]
         saved = Specification.model_validate(
-            yaml.safe_load(archive.read("specification.yaml"))
+            yaml.safe_load(archive.read("outputs/specification.yaml"))
         )
 
     assert saved == specification
@@ -116,14 +124,15 @@ def test_in_memory_packager_contains_specification_and_fixtures() -> None:
 
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
         assert set(archive.namelist()) == {
-            "specification.yaml",
-            "fixtures/",
-            "fixtures/policy.pdf",
+            "inputs/",
+            "outputs/specification.yaml",
+            "outputs/fixtures/",
+            "outputs/fixtures/policy.pdf",
         }
-        assert archive.read("fixtures/policy.pdf") == b"policy bytes"
+        assert archive.read("outputs/fixtures/policy.pdf") == b"policy bytes"
         assert (
             Specification.model_validate(
-                yaml.safe_load(archive.read("specification.yaml"))
+                yaml.safe_load(archive.read("outputs/specification.yaml"))
             )
             == specification
         )
@@ -141,7 +150,7 @@ def test_in_memory_packager_includes_unreferenced_fixtures() -> None:
     )
 
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
-        assert archive.read("fixtures/notes.txt") == b"unreferenced notes"
+        assert archive.read("outputs/fixtures/notes.txt") == b"unreferenced notes"
 
 
 @pytest.mark.parametrize("name", ["../invoice.pdf", "CON.txt", "", "bad\\name.pdf"])
@@ -154,7 +163,11 @@ def test_in_memory_packager_keeps_an_empty_fixture_directory() -> None:
     archive_bytes = build_specification_archive(_document(), [])
 
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
-        assert archive.namelist() == ["specification.yaml", "fixtures/"]
+        assert archive.namelist() == [
+            "inputs/",
+            "outputs/specification.yaml",
+            "outputs/fixtures/",
+        ]
 
 
 @pytest.mark.parametrize(

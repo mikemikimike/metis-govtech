@@ -82,7 +82,7 @@ The CLI writes the files to `evaluation/` by default. From the web client or the
 Engine:
 
 ```bash
-metis engine run --input-dir evaluation/
+metis engine run --input-dir evaluation/outputs/
 ```
 
 See the [Engine guide](engine.md) for the evaluation run and the [Report guide](report.md) for the

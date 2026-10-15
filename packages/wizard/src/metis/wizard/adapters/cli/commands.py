@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import inspect
 import sys
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
@@ -31,6 +32,7 @@ from metis.wizard import (
     derive_stage,
     handle_interview,
 )
+from metis.wizard.application import export_layout
 from metis.wizard.application.trials import format_trials
 
 if TYPE_CHECKING:
@@ -192,12 +194,7 @@ def _fail(failure: InterviewFailure) -> NoReturn:
 
 
 def _write_outputs(state: InterviewState, out_dir: Path) -> None:
-    """Write `specification.yaml` and `review.md` beside each other, then clear the state.
-
-    `simulate` freezes the specification into the run's inputs/, and the engine's verdict report
-    joins results onto it. The saved interview state is removed once the files exist — the
-    interview is finished, so there is nothing to resume.
-    """
+    """Save the final state and review, then publish the completed Specification."""
     from metis.wizard.application.compile import render_review
     from metis.wizard.application.turn import experiment_id
 
@@ -205,12 +202,22 @@ def _write_outputs(state: InterviewState, out_dir: Path) -> None:
     compiled = compile_specification(specification)
     review = render_review(specification, experiment_id(specification))
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    specification_path = out_dir / "specification.yaml"
-    review_path = out_dir / "review.md"
-    specification_path.write_text(compiled.specification_yaml, encoding="utf-8")
+    _save(state, out_dir)
+    (out_dir / export_layout.FIXTURES).mkdir(parents=True, exist_ok=True)
+    specification_path = out_dir / export_layout.SPECIFICATION
+    review_path = out_dir / export_layout.REVIEW
     review_path.write_text(review, encoding="utf-8")
-    _state_path(out_dir).unlink(missing_ok=True)
+    # Publish the completion marker only after every other file is saved.
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=specification_path.parent, delete=False
+    ) as temporary:
+        temporary_path = Path(temporary.name)
+        try:
+            temporary.write(compiled.specification_yaml)
+            temporary.close()
+            temporary_path.replace(specification_path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
     typer.echo(f"\nWrote {specification_path}")
     typer.echo(f"Wrote {review_path}")
@@ -221,12 +228,13 @@ def _write_outputs(state: InterviewState, out_dir: Path) -> None:
 
 
 def _state_path(out_dir: Path) -> Path:
-    return out_dir / "interview_state.json"
+    return out_dir / export_layout.INTERVIEW_STATE
 
 
 def _save(state: InterviewState, out_dir: Path) -> None:
     """Persist the client-held state so an interrupted interview can resume from it."""
-    out_dir.mkdir(parents=True, exist_ok=True)
+    _state_path(out_dir).parent.mkdir(parents=True, exist_ok=True)
+    (out_dir / export_layout.SPECIFICATION).unlink(missing_ok=True)
     _state_path(out_dir).write_text(state.model_dump_json(), encoding="utf-8")
 
 
@@ -273,7 +281,7 @@ def init(
     out_dir: Path = typer.Option(
         Path("evaluation"),
         "--out-dir",
-        help="Where to write the specification and review.",
+        help="The experiment root for inputs/ and outputs/.",
     ),
     restart: bool = typer.Option(
         False,
@@ -286,6 +294,12 @@ def init(
     # credentials, so an accidental re-run of `init` reports the collision rather than
     # overwriting an interview in progress. `--restart` is the one way past this.
     state_path = _state_path(out_dir)
+    if (out_dir / export_layout.SPECIFICATION).is_file() and not restart:
+        typer.echo(
+            "Error: this export is complete. Use --restart to start a new Interview.",
+            err=True,
+        )
+        raise typer.Exit(1)
     if state_path.is_file() and not restart:
         typer.echo(
             f"Error: an interview is already in progress at {state_path}.\n\n"
@@ -330,16 +344,24 @@ def resume(
     out_dir: Path = typer.Option(
         Path("evaluation"),
         "--out-dir",
-        help="The directory holding interview_state.json.",
+        help="The experiment root holding inputs/interview_state.json.",
     ),
 ) -> None:
     """Pick up an interview where it left off."""
     from metis.wizard.adapters.cli.render import render
 
+    if (out_dir / export_layout.SPECIFICATION).is_file():
+        typer.echo("This export is complete.")
+        return
     path = _state_path(out_dir)
     if not path.is_file():
         typer.echo(f"Error: no interview to resume at {path}.", err=True)
         raise typer.Exit(1)
+
+    state = _load(out_dir)
+    if state.pending is None:
+        _write_outputs(state, out_dir)
+        return
 
     _load_env()
 
@@ -348,11 +370,6 @@ def resume(
     except InterviewerUnavailable as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
-
-    state = _load(out_dir)
-    if state.pending is None:
-        typer.echo("Error: this interview has no pending screen to resume.", err=True)
-        raise typer.Exit(1)
 
     typer.echo(f"Resuming at the {state.pending.stage} step.")
 

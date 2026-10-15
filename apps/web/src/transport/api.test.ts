@@ -69,7 +69,7 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
   await api.compile(state.specification);
   await api.graders();
   await api.config();
-  await api.package(state.specification, []);
+  await api.package({ state }, []);
 
   assert.deepEqual(
     calls.map((call) => call.path),
@@ -230,7 +230,7 @@ test("packages a synthesized manual Specification and its fixtures as multipart"
   const policy = new File(["policy"], "policy.pdf", {
     type: "application/pdf",
   });
-  const archive = await api.package(specification, [
+  const archive = await api.package({ specification }, [
     { name: policy.name, blob: policy },
   ]);
 
@@ -252,7 +252,7 @@ test("package failures preserve the API error shape", async () => {
     );
 
   await assert.rejects(
-    api.package(state.specification, []),
+    api.package({ state }, []),
     (cause: unknown) =>
       cause instanceof TransportError &&
       cause.status === 400 &&

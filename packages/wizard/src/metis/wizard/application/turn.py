@@ -503,17 +503,26 @@ def compile_specification(specification: Specification) -> CompileResult:
 
 
 def package_specification(
-    specification: Specification,
+    source: Specification | InterviewState,
     fixtures: Iterable[SpecificationFixture],
 ) -> bytes:
-    """Compile a Specification and package request-scoped fixture streams in an engine-ready ZIP."""
+    """Compile a manual Specification or final Interview state into a portable export."""
+    specification = (
+        source.specification if isinstance(source, InterviewState) else source
+    )
     gaps = specification_readiness(specification)
     if gaps:
         raise CompilationError(
             "Specification is not runnable: " + "; ".join(gap.message for gap in gaps)
         )
     document = compile_experiment(specification, experiment_id(specification))
-    return build_specification_archive(document, fixtures)
+    return build_specification_archive(
+        document,
+        fixtures,
+        interview_state_json=source.model_dump_json()
+        if isinstance(source, InterviewState)
+        else None,
+    )
 
 
 def experiment_id(specification: Specification) -> str:

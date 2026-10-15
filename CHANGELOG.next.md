@@ -225,6 +225,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Wizard exports use `inputs/` and `outputs/`. Interview exports retain the final state used to compile the Specification. CLI recovery uses the completed Specification as its completion marker. (#453)
+
 - Use Target in Interview prompts, fields, patch paths, and validation codes (#429).
 
 - Draft, edit, copy, and validate Task Behaviour selections in the Interview. Export Behaviour references in the shared Specification (#413).
@@ -328,6 +330,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Package exports accept either final Interview state or a manual Specification. ZIP files use the shared export layout; manual exports include an empty `inputs/` folder. (#453)
+
 - Return `specification.yaml` and the Specification with assigned Task IDs from compile.
   Package one specification and its fixtures (#395).
 
@@ -370,6 +374,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   field that needs a change, shows what to change, and moves the focus to the first one.
 
 #### Changed
+
+- Interview downloads send the final state for compilation and export. Interview and manual downloads use the shared `inputs/` and `outputs/` layout. (#453)
 
 - Use Target in authoring views and upgrade saved Interviews while preserving
   user text, pending forms, and file bytes (#429).

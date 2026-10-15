@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from metis.wizard.application import export_layout
 from metis.wizard.application.fixtures import (
     FixtureCandidate,
     FixtureError,
@@ -54,7 +55,7 @@ def write_specification(
     fixture_dir: Path,
     target: Path,
 ) -> Path:
-    """Write specification.yaml and fixtures at the root of a ZIP archive."""
+    """Write the shared export layout into a ZIP archive."""
 
     fixture_root = Path(fixture_dir)
     destination = Path(target)
@@ -83,6 +84,8 @@ def write_specification(
 def build_specification_archive(
     document: dict[str, Any],
     fixtures: Iterable[SpecificationFixture],
+    *,
+    interview_state_json: str | None = None,
 ) -> bytes:
     """Build a complete specification ZIP from request-scoped fixture streams.
 
@@ -116,10 +119,15 @@ def build_specification_archive(
         with zipfile.ZipFile(
             output, mode="w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
         ) as archive:
-            archive.writestr("specification.yaml", to_yaml(document))
-            archive.writestr("fixtures/", b"")
+            archive.writestr(f"{export_layout.INPUTS}/", b"")
+            if interview_state_json is not None:
+                archive.writestr(
+                    str(export_layout.INTERVIEW_STATE), interview_state_json
+                )
+            archive.writestr(str(export_layout.SPECIFICATION), to_yaml(document))
+            archive.writestr(f"{export_layout.FIXTURES}/", b"")
             for name in sorted(normalized):
-                archive.writestr(f"fixtures/{name}", normalized[name])
+                archive.writestr(str(export_layout.FIXTURES / name), normalized[name])
     except (OSError, zipfile.BadZipFile) as exc:
         raise SpecificationError(f"Could not create specification.zip: {exc}") from exc
     return output.getvalue()
