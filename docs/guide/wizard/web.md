@@ -157,3 +157,7 @@ selected files under `outputs/fixtures/`. It contains no Interview state.
 Scorer settings in the manual form accept a JSON object. The downloaded document
 stores these settings on Criteria. Each test case becomes one Task in the YAML. The form retains Task IDs returned
 by the backend through later edits.
+
+In the manual form, open **Additional context** under a Persona or Scenario to
+add optional metadata. Enter a unique key and a text value for each row. The
+downloaded Specification preserves these values. Remove a row to omit it.

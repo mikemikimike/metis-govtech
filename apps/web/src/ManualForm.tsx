@@ -25,11 +25,97 @@ import {
   type ManualExperiment,
   type ManualFixture,
   type ManualPersona,
+  type ManualMetadataEntry,
   type ManualScenario,
   type ManualTestCase,
 } from "./manual";
 import { api, TransportError, type GraderSpec } from "./transport/api";
 import { Button, cn, formatTrials, Mono } from "./ui";
+
+function AdditionalContext({
+  entries = [],
+  label,
+  prefix,
+  errorFor,
+  onChange,
+}: {
+  entries?: ManualMetadataEntry[];
+  label: string;
+  prefix: string;
+  errorFor: (field: string) => string | undefined;
+  onChange: (entries: ManualMetadataEntry[]) => void;
+}) {
+  const hasErrors = entries.some((_, index) =>
+    errorFor(`${prefix}.metadata.${index}.key`),
+  );
+  return (
+    <details className="mt-4" open={hasErrors || undefined}>
+      <summary className="cursor-pointer text-sm font-medium">
+        Additional context
+      </summary>
+      <div className="mt-4 flex flex-col gap-4">
+        <p className="text-xs text-muted-foreground">
+          Optional metadata. Keys must be unique. All values are text.
+        </p>
+        {entries.map((entry, index) => {
+          const error = errorFor(`${prefix}.metadata.${index}.key`);
+          return (
+            <div key={index} className="flex items-start gap-2">
+              <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+                <Field label="Key" error={error}>
+                  <TextInput
+                    ariaLabel={`${label}, context ${index + 1}, Key`}
+                    value={entry.key}
+                    placeholder="Key"
+                    invalid={Boolean(error)}
+                    onChange={(key) =>
+                      onChange(
+                        entries.map((row, i) =>
+                          i === index ? { ...row, key } : row,
+                        ),
+                      )
+                    }
+                  />
+                </Field>
+                <Field label="Value">
+                  <TextInput
+                    ariaLabel={`${label}, context ${index + 1}, Value`}
+                    value={entry.value}
+                    placeholder="Value"
+                    onChange={(value) =>
+                      onChange(
+                        entries.map((row, i) =>
+                          i === index ? { ...row, value } : row,
+                        ),
+                      )
+                    }
+                  />
+                </Field>
+              </div>
+              <div className="pt-6">
+                <RemoveButton
+                  label={`Remove ${label} context ${index + 1}`}
+                  onClick={() =>
+                    onChange(entries.filter((_, i) => i !== index))
+                  }
+                />
+              </div>
+            </div>
+          );
+        })}
+        <div>
+          <Button
+            variant="secondary"
+            onClick={() => onChange([...entries, { key: "", value: "" }])}
+          >
+            <Plus size={14} strokeWidth={1.75} aria-hidden />
+            Add context
+          </Button>
+        </div>
+      </div>
+    </details>
+  );
+}
 
 export function ManualAuthoringEntry({ onOpen }: { onOpen: () => void }) {
   return (
@@ -570,6 +656,15 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                           {persona.description.trim()}
                         </p>
                       )}
+                      <AdditionalContext
+                        entries={persona.metadata}
+                        label={itemLabel}
+                        prefix={`persona.${index}`}
+                        errorFor={errorFor}
+                        onChange={(metadata) =>
+                          updatePersona(index, { metadata })
+                        }
+                      />
                     </article>
                   );
                 })}
@@ -651,6 +746,13 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                     }
                   />
                 </Field>
+                <AdditionalContext
+                  entries={scenario.metadata}
+                  label={`Scenario ${index + 1}`}
+                  prefix={`scenario.${index}`}
+                  errorFor={errorFor}
+                  onChange={(metadata) => updateScenario(index, { metadata })}
+                />
                 {scenario.id.trim() &&
                   !experiment.tasks.some(
                     (task) => task.scenario_ref === scenario.id.trim(),

@@ -1,11 +1,18 @@
 import type { GraderSpec, Specification } from "./transport/api";
 
+export interface ManualMetadataEntry {
+  key: string;
+  value: string;
+}
+
 export interface ManualPersona {
+  metadata?: ManualMetadataEntry[];
   id: string;
   description: string;
 }
 
 export interface ManualScenario {
+  metadata?: ManualMetadataEntry[];
   id: string;
   description: string;
 }
@@ -82,6 +89,30 @@ export function scorerParameters(
   return value as Record<string, unknown>;
 }
 
+function metadataKeyError(
+  entries: readonly ManualMetadataEntry[],
+  index: number,
+): string | undefined {
+  const key = entries[index].key;
+  if (!key.trim()) return "Enter a key.";
+  if (entries.slice(0, index).some((entry) => entry.key === key))
+    return "Use a unique key.";
+  return undefined;
+}
+
+function metadataFields(entries: readonly ManualMetadataEntry[] = []): {
+  metadata?: Record<string, string>;
+} {
+  if (!entries.length) return {};
+  entries.forEach((_, index) => {
+    const error = metadataKeyError(entries, index);
+    if (error) throw new Error(error);
+  });
+  return {
+    metadata: Object.fromEntries(entries.map(({ key, value }) => [key, value])),
+  };
+}
+
 export function synthesizeManualSpecification(
   experiment: ManualExperiment,
 ): Specification {
@@ -131,7 +162,12 @@ export function synthesizeManualSpecification(
     ],
     personas: experiment.personas.map((persona) => {
       const id = persona.id.trim();
-      return { id, name: id, description: persona.description.trim() };
+      return {
+        id,
+        name: id,
+        description: persona.description.trim(),
+        ...metadataFields(persona.metadata),
+      };
     }),
     tasks: experiment.tasks.map((task, index) => ({
       id: task.id,
@@ -152,6 +188,7 @@ export function synthesizeManualSpecification(
         id,
         name: id,
         description: scenario.description.trim(),
+        ...metadataFields(scenario.metadata),
       };
     }),
   };
@@ -170,11 +207,17 @@ export interface ManualFieldError {
 function definitionErrors(
   kind: "persona" | "scenario",
   label: string,
-  items: readonly { id: string; description: string }[],
+  items: readonly (ManualPersona | ManualScenario)[],
 ): ManualFieldError[] {
   const errors: ManualFieldError[] = [];
   const ids = items.map((item) => item.id.trim());
   items.forEach((item, index) => {
+    const entries = item.metadata ?? [];
+    entries.forEach((_, row) => {
+      const message = metadataKeyError(entries, row);
+      if (message)
+        errors.push({ field: `${kind}.${index}.metadata.${row}.key`, message });
+    });
     const id = ids[index];
     if (!id)
       errors.push({ field: `${kind}.${index}.id`, message: "Enter an ID." });

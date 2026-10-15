@@ -382,6 +382,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- **Manual metadata.** Personas and Scenarios have optional Additional context
+  key/value fields. Export preserves the text values and checks for blank or
+  duplicate keys (#441).
+
 - **Opening documents.** A plus button in the composer opens a compact document tray. Original files
   stay in local Interview storage, and only files assigned to Scenarios enter the package.
 
