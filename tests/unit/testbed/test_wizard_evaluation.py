@@ -270,3 +270,58 @@ def test_saved_versions_compare_the_latest_execution(
     assert comparison.older_id == "20261014T000000Z"
     assert comparison.newer_id == "20261015T000000Z"
     assert set(comparison.changes.values()) == {0.0}
+
+
+def test_structured_failure_is_saved_with_diagnostic_specification(
+    tmp_path: Path,
+    evaluation_config: Path,
+) -> None:
+    from tests.fixtures.wizard.context import interview_context
+
+    from metis.testbed.evaluation import MetisWizardTarget
+    from metis.wizard import InterviewFailure
+    from metis.wizard.contracts.interview_state import InterviewState
+    from metis.wizard.contracts.turn import (
+        InterviewErrorCode,
+        MissingData,
+        MissingDataCode,
+    )
+    from metis.wizard.domain.permissions import InterviewStep
+
+    failure = InterviewFailure(
+        code=InterviewErrorCode.COMPLETION_FAILED,
+        message="Missing coverage",
+        retryable=False,
+        diagnostic_state=InterviewState(
+            specification=_travel().model_dump(), context=interview_context()
+        ),
+        missing=[
+            MissingData(
+                code=MissingDataCode.BEHAVIOUR_UNCOVERED,
+                stage=InterviewStep.SCENARIOS,
+                subject="EB-1",
+                message="EB-1 needs coverage",
+            )
+        ],
+    )
+
+    class FailingTarget(ReferenceTarget):
+        def end(self, state):
+            return MetisWizardTarget._state(self, failure)
+
+    record, output = run_evaluation(
+        EvaluationRequest(
+            config_path=evaluation_config,
+            results_root=tmp_path,
+            target_version="failure",
+        ),
+        target=FailingTarget(),
+        interaction=OneShotInteraction(),
+        similarity=ExactSimilarity(),
+    )
+    for case in record.cases:
+        assert case.failure == failure.model_dump(mode="json")
+        assert case.lifecycle_outcome == "failed"
+        assert case.events[0].operation == "start"
+        assert (output / case.generated_specification).is_file()
+    assert "EB-1 needs coverage" in (output / "report.md").read_text()

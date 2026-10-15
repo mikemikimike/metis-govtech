@@ -287,7 +287,7 @@ def test_a_behaviour_measurement_change_stays_pending_before_continue() -> None:
         ),
     ],
 )
-def test_model_failure_preserves_state(error, code, retryable) -> None:
+def test_model_failure_preserves_state_and_diagnostics(error, code, retryable) -> None:
     class FailingInterviewer(ScriptedInterviewer):
         def clarify(self, specification, history, context=None):
             raise error
@@ -305,6 +305,9 @@ def test_model_failure_preserves_state(error, code, retryable) -> None:
     assert result.code is code
     assert result.retryable is retryable
     assert result.state == opening.state
+
+    assert result.diagnostic_state is not None
+    assert str(error) in (result.diagnostic_message or result.message)
 
 
 def test_end_finishes_a_completable_interview() -> None:

@@ -141,6 +141,8 @@ class InterviewFailure(BaseModel):
     retryable: bool
     state: InterviewState | None = None
     missing: list[MissingData] = Field(default_factory=list)
+    diagnostic_state: InterviewState | None = None
+    diagnostic_message: str | None = None
 
 
 InterviewResult: TypeAlias = Annotated[

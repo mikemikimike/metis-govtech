@@ -119,6 +119,12 @@ def wizard(
         "",
     )
     console.print(table)
+    for result in record.cases:
+        if result.error:
+            reason = (
+                result.error if len(result.error) <= 240 else result.error[:237] + "..."
+            )
+            console.print(f"{result.case_id}: {reason}", markup=False)
     console.print(f"Saved: {output}")
 
 

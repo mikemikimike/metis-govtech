@@ -87,7 +87,11 @@ packages/testbed/results/
 
 `run.json` is the machine-readable aggregate. `report.md` shows the scores,
 alignments, missing items, and additional items. Each Test Case keeps its own result
-and generated Specification. The reference Specification remains in its case
+and generated Specification. Wizard failures retain their code,
+retryable flag, missing requirements, safe retry state, and available diagnostic
+state. The report includes these details. A failed completion can save a draft
+Specification for inspection; this does not certify that it is runnable.
+The reference Specification remains in its case
 directory and never enters the Wizard Interview.
 
 The saved metadata is intentionally small:

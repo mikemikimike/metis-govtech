@@ -803,6 +803,9 @@ export interface components {
             state?: components["schemas"]["InterviewState"] | null;
             /** Missing */
             missing?: components["schemas"]["MissingData"][];
+            diagnostic_state?: components["schemas"]["InterviewState"] | null;
+            /** Diagnostic Message */
+            diagnostic_message?: string | null;
         };
         /**
          * InterviewStartRequest

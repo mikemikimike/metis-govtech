@@ -161,6 +161,7 @@ class CaseResult(BaseModel):
     case_id: str
     status: CaseStatus
     lifecycle_outcome: str | None = None
+    failure: dict[str, JsonValue] | None = None
     error: str | None = None
     scores: SpecificationScores | None = None
     generated_specification: str | None = None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import re
 import subprocess
 from datetime import UTC, datetime
@@ -10,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import yaml
-from pydantic import TypeAdapter
+from pydantic import JsonValue, TypeAdapter
 
 from metis.core.specification import Specification
 from metis.testbed.contracts import (
@@ -64,6 +65,22 @@ class MissingCaseInput(FileNotFoundError):
     """A configured Test Case cannot run because an input is unavailable."""
 
 
+class WizardTargetError(RuntimeError):
+    """Keep the complete failure returned by a Wizard operation."""
+
+    def __init__(self, failure: InterviewFailure) -> None:
+        self.failure = failure
+        self.events: list[InteractionEvent] = []
+        details = (
+            "; ".join(item.message for item in failure.missing)
+            or failure.diagnostic_message
+            or ""
+        )
+        super().__init__(
+            f"{failure.code}: {failure.message}" + (f" {details}" if details else "")
+        )
+
+
 class MetisWizardTarget:
     """Translate the METIS headless Interview interface into testbed states."""
 
@@ -75,7 +92,7 @@ class MetisWizardTarget:
 
     def _state(self, result: object) -> WizardState:
         if isinstance(result, InterviewFailure):
-            raise RuntimeError(f"{result.code}: {result.message}")
+            raise WizardTargetError(result)
         if not isinstance(result, InterviewSuccess):
             raise TypeError("The Wizard returned an unknown result.")
         return WizardState(
@@ -135,24 +152,33 @@ class OneShotInteraction:
     mode = InteractionMode.ONE_SHOT
 
     def run(self, target: WizardTarget, evidence: WizardInput) -> Candidate:
-        started = target.start(evidence)
-        finished = target.end(started)
+        events: list[InteractionEvent] = []
+
+        def record(
+            operation: str, state: WizardState, response: JsonValue = None
+        ) -> None:
+            events.append(
+                InteractionEvent(
+                    operation=operation,
+                    outcome=state.outcome,
+                    stage=state.stage,
+                    request=state.pending,
+                    response=response,
+                )
+            )
+
+        try:
+            started = target.start(evidence)
+            record("start", started)
+            finished = target.end(started)
+            record("end", finished)
+        except WizardTargetError as exc:
+            exc.events = events
+            raise
         return Candidate(
             specification=finished.specification,
             outcome=finished.outcome,
-            events=[
-                InteractionEvent(
-                    operation="start",
-                    outcome=started.outcome,
-                    stage=started.stage,
-                    request=started.pending,
-                ),
-                InteractionEvent(
-                    operation="end",
-                    outcome=finished.outcome,
-                    stage=finished.stage,
-                ),
-            ],
+            events=events,
             raw_output=finished.raw_output,
         )
 
@@ -286,7 +312,15 @@ def _render_report(record: EvaluationRecord) -> str:
         lines.extend([f"### {result.case_id}", ""])
         if result.error:
             lines.extend([result.error, ""])
-            continue
+        if result.failure:
+            lines.extend(
+                [
+                    "```json",
+                    json.dumps(result.failure, indent=2, ensure_ascii=False),
+                    "```",
+                    "",
+                ]
+            )
         if result.scores is None:
             lines.extend(["No scores were produced.", ""])
             continue
@@ -407,6 +441,23 @@ def run_evaluation(
                 raw_output=candidate.raw_output,
                 generated_specification=(
                     f"cases/{_safe_segment(case.id)}/generated-specification.yaml"
+                ),
+            )
+        except WizardTargetError as exc:
+            diagnostic = exc.failure.diagnostic_state or exc.failure.state
+            if diagnostic is not None:
+                generated[case_id] = diagnostic.specification
+            result = CaseResult(
+                case_id=case_id,
+                status=CaseStatus.FAILED,
+                lifecycle_outcome="failed",
+                error=str(exc),
+                failure=exc.failure.model_dump(mode="json"),
+                events=exc.events,
+                generated_specification=(
+                    f"cases/{_safe_segment(case_id)}/generated-specification.yaml"
+                    if diagnostic is not None
+                    else None
                 ),
             )
         except MissingCaseInput as exc:
