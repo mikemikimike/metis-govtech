@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from metis.testbed.contracts import (
@@ -13,40 +12,15 @@ from metis.testbed.contracts import (
     Similarity,
     SpecificationScores,
 )
-from metis.wizard.application.matching import cosine
+from metis.testbed.embeddings import named_text as _text
 
 if TYPE_CHECKING:
     from metis.core.profile import Criterion
     from metis.core.specification import Specification
-    from metis.wizard.application.matching import Embedder
 
 
 def _clamp(value: float) -> float:
     return max(0.0, min(1.0, value))
-
-
-@dataclass
-class EmbeddingSimilarity:
-    """Batch and cache embeddings used by every level of one evaluation."""
-
-    embedder: Embedder
-    _vectors: dict[str, list[float]] = field(default_factory=dict)
-
-    def matrix(self, left: list[str], right: list[str]) -> list[list[float]]:
-        missing = list(
-            dict.fromkeys(text for text in [*left, *right] if text not in self._vectors)
-        )
-        if missing:
-            vectors = self.embedder.embed(missing)
-            if len(vectors) != len(missing):
-                raise ValueError(
-                    "The embedding provider returned the wrong number of vectors."
-                )
-            self._vectors.update(zip(missing, vectors, strict=True))
-        return [
-            [_clamp(cosine(self._vectors[a], self._vectors[b])) for b in right]
-            for a in left
-        ]
 
 
 def _optimal_pairs(scores: list[list[float]]) -> list[tuple[int, int]]:
@@ -156,10 +130,6 @@ def _level(
             if index not in paired_generated
         ],
     )
-
-
-def _text(name: str, description: object) -> str:
-    return f"{name}\n{description}"
 
 
 def _feature_score(
@@ -488,4 +458,4 @@ def grader_identity(criterion: Criterion) -> str:
     )
 
 
-__all__ = ["EmbeddingSimilarity", "compare_specifications", "grader_identity"]
+__all__ = ["compare_specifications", "grader_identity"]

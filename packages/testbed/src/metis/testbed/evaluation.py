@@ -14,9 +14,11 @@ import yaml
 from pydantic import JsonValue, TypeAdapter
 
 from metis.core.specification import Specification
+from metis.testbed.calculation import calculate_scores
 from metis.testbed.contracts import (
     AggregateLevel,
     AggregateScores,
+    BehaviourNNSummary,
     Candidate,
     CaseConfig,
     CaseResult,
@@ -325,10 +327,24 @@ def _render_report(record: EvaluationRecord) -> str:
             f"| Case average | {' | '.join(aggregate)} | — |",
             f"| Item weighted | {' | '.join(weighted)} | — |",
             "",
-            "## Differences",
-            "",
         ]
     )
+    lines.extend(
+        [
+            "## Behaviour overlap (experimental)",
+            "",
+            "Mean nearest-neighbour similarity measures overlap within each set. Lower means less similarity to the closest neighbours. Compare behaviour counts; this is not a coverage score or a pass/fail gate. A set with fewer than two behaviours has no score.",
+            "",
+            "| Test Case | Text version | Reference count | Generated count | Reference mean NN | Generated mean NN |",
+            "|---|---|---:|---:|---:|---:|",
+        ]
+    )
+    for result in record.cases:
+        for version, summary in result.behaviour_nn.items():
+            lines.append(
+                f"| {result.case_id} | {version} | {summary.reference_count} | {summary.generated_count} | {value(summary.reference_mean_nn)} | {value(summary.generated_mean_nn)} |"
+            )
+    lines.extend(["", "## Differences", ""])
     for result in record.cases:
         lines.extend([f"### {result.case_id}", ""])
         lines.extend(
@@ -351,6 +367,10 @@ def _render_report(record: EvaluationRecord) -> str:
         if result.scores is None:
             lines.extend(["No scores were produced.", ""])
             continue
+        if result.score_report is not None:
+            lines.extend(
+                [f"[All metrics and behaviour pair scores]({result.score_report})", ""]
+            )
         for name in LEVELS:
             score = getattr(result.scores, name)
             lines.append(f"#### {name.title()}")
@@ -389,13 +409,13 @@ def _save(
     target = _safe_segment(record.target)
     version = _safe_segment(record.target_version)
     output = request.results_root / target / version / record.id
-    output.mkdir(parents=True, exist_ok=False)
+    output.mkdir(parents=True, exist_ok=True)
     (output / "run.json").write_text(record.model_dump_json(indent=2), encoding="utf-8")
     (output / "report.md").write_text(_render_report(record), encoding="utf-8")
     cases_root = output / "cases"
     for result in record.cases:
         case_root = cases_root / _safe_segment(result.case_id)
-        case_root.mkdir(parents=True)
+        case_root.mkdir(parents=True, exist_ok=True)
         (case_root / "result.json").write_text(
             result.model_dump_json(indent=2), encoding="utf-8"
         )
@@ -417,7 +437,7 @@ def run_evaluation(
     *,
     target: WizardTarget,
     interaction: InteractionDriver,
-    similarity: Similarity,
+    similarity: Similarity | None = None,
     clock: Callable[[], datetime] | None = None,
     on_progress: Callable[[EvaluationProgress], None] | None = None,
 ) -> tuple[EvaluationRecord, Path]:
@@ -425,6 +445,13 @@ def run_evaluation(
     config = _load_config(request.config_path)
     now = (clock or (lambda: datetime.now(UTC)))()
     run_id = now.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
+    output = (
+        request.results_root
+        / _safe_segment(target.name)
+        / _safe_segment(request.target_version)
+        / run_id
+    )
+    output.mkdir(parents=True, exist_ok=False)
     results: list[CaseResult] = []
     generated: dict[str, Specification] = {}
     total = len(config.cases)
@@ -456,10 +483,42 @@ def run_evaluation(
                 raise ValueError(
                     f"Reference is outside Test Case {case.id}: {case.expected_output}"
                 )
-            reference = Specification.model_validate(_read_yaml(reference_path))
-            scores = compare_specifications(
-                candidate.specification, reference, similarity
-            )
+            score_report = None
+            behaviour_nn: dict[str, BehaviourNNSummary] = {}
+            if similarity is None:
+                case_root = output / "cases" / _safe_segment(case.id)
+                case_root.mkdir(parents=True, exist_ok=True)
+                generated_path = case_root / "generated-specification.yaml"
+                generated_path.write_text(
+                    yaml.safe_dump(
+                        candidate.specification.model_dump(mode="json"),
+                        sort_keys=False,
+                        allow_unicode=True,
+                    ),
+                    encoding="utf-8",
+                )
+                calculation = calculate_scores(
+                    generated_path, reference=reference_path, report_directory=case_root
+                )
+                scores = calculation.scores
+                behaviour_nn = {
+                    version.value: BehaviourNNSummary(
+                        reference_count=len(analysis.reference.ids),
+                        generated_count=len(analysis.generated.ids),
+                        reference_mean_nn=analysis.reference.mean_nn_similarity,
+                        generated_mean_nn=analysis.generated.mean_nn_similarity,
+                    )
+                    for version, analysis in calculation.behaviour_analysis.items()
+                    if analysis.generated is not None
+                }
+                score_report = (
+                    f"cases/{_safe_segment(case.id)}/generated-specification.scores.md"
+                )
+            else:
+                reference = Specification.model_validate(_read_yaml(reference_path))
+                scores = compare_specifications(
+                    candidate.specification, reference, similarity
+                )
             result = CaseResult(
                 case_id=case.id,
                 status=CaseStatus.SCORED
@@ -468,6 +527,8 @@ def run_evaluation(
                 completed=candidate.outcome == "done",
                 lifecycle_outcome=candidate.outcome,
                 scores=scores,
+                behaviour_nn=behaviour_nn,
+                score_report=score_report,
                 events=candidate.events,
                 raw_output=candidate.raw_output,
                 generated_specification=(

@@ -156,6 +156,15 @@ class SpecificationScores(BaseModel):
     tasks: LevelScore
 
 
+class BehaviourNNSummary(BaseModel):
+    """Experimental overlap scores for the two sets, with their sizes."""
+
+    reference_count: int = Field(ge=0)
+    generated_count: int = Field(ge=0)
+    reference_mean_nn: float | None = Field(default=None, ge=0.0, le=1.0)
+    generated_mean_nn: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
 class CaseResult(BaseModel):
     """The retained result for one configured Test Case."""
 
@@ -166,7 +175,9 @@ class CaseResult(BaseModel):
     failure: dict[str, JsonValue] | None = None
     error: str | None = None
     scores: SpecificationScores | None = None
+    behaviour_nn: dict[str, BehaviourNNSummary] = Field(default_factory=dict)
     generated_specification: str | None = None
+    score_report: str | None = None
     events: list[InteractionEvent] = Field(default_factory=list)
     raw_output: JsonValue | None = None
 
@@ -224,6 +235,7 @@ class VersionComparison(BaseModel):
 __all__ = [
     "AggregateLevel",
     "AggregateScores",
+    "BehaviourNNSummary",
     "Candidate",
     "CaseConfig",
     "CaseResult",

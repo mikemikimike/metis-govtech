@@ -801,6 +801,7 @@ source = { editable = "packages/testbed" }
 dependencies = [
     { name = "metis-core" },
     { name = "metis-wizard" },
+    { name = "openai" },
     { name = "pyyaml" },
     { name = "typer" },
 ]
@@ -809,6 +810,7 @@ dependencies = [
 requires-dist = [
     { name = "metis-core", editable = "packages/core" },
     { name = "metis-wizard", editable = "packages/wizard" },
+    { name = "openai", specifier = ">=1.40" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "typer", specifier = ">=0.9.0" },
 ]

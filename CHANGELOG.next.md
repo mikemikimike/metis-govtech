@@ -245,6 +245,15 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   Task levels, saves results by Wizard version, and compares saved versions (#436).
   Record completion separately from scores, accept the final ready Scenario review,
   and retain structured failures with missing requirements and diagnostic state.
+  Share embedding preparation between reference and generated Specifications, with
+  local caches beside each YAML file. Add separate `embed` and `score` commands;
+  scoring creates missing embeddings and reuses valid entries. Save score reports
+  under `results/` and keep embedding caches beside the Specification YAML. Report behaviour
+  mean nearest-neighbour similarity and pair details for behaviour text and
+  feature–behaviour–criteria context,
+  plus pair difference error when a reference is supplied.
+  Include experimental reference and generated mean NN scores with Behaviour counts
+  in the normal Wizard run summary and saved case results.
 
 ### metis-wizard
 

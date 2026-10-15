@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 from rich.progress import (
@@ -16,7 +16,9 @@ from rich.progress import (
 from rich.table import Table
 
 from metis.core.console import console
+from metis.testbed.calculation import main as score_folder
 from metis.testbed.contracts import EvaluationProgress, EvaluationRequest
+from metis.testbed.embeddings import main as embed_folder
 from metis.testbed.evaluation import (
     LEVELS,
     MetisWizardTarget,
@@ -25,9 +27,11 @@ from metis.testbed.evaluation import (
     detect_target_version,
     run_evaluation,
 )
-from metis.testbed.scoring import EmbeddingSimilarity
 from metis.wizard import InterviewerUnavailable
 from metis.wizard.adapters.llm.gateway import GatewayInterviewer
+
+if TYPE_CHECKING:
+    from metis.testbed.contracts import EvaluationRecord
 
 TESTBED_ROOT = Path(__file__).resolve().parents[3]
 REPOSITORY_ROOT = TESTBED_ROOT.parents[1]
@@ -35,10 +39,37 @@ DEFAULT_CONFIG = TESTBED_ROOT / "wizard/cases/config.yaml"
 DEFAULT_RESULTS = TESTBED_ROOT / "results"
 
 app = typer.Typer(help="Run and compare shared METIS evaluations.")
+app.command("embed")(embed_folder)
+app.command("score")(score_folder)
 
 
 def _score(value: float | None) -> str:
     return f"{value:.3f}" if value is not None else "—"
+
+
+def _print_behaviour_nn(record: EvaluationRecord) -> None:
+    table = Table(title="Behaviour overlap · mean NN similarity (experimental)")
+    for heading in ("Test Case", "Text", "Ref count", "Gen count", "Ref NN", "Gen NN"):
+        table.add_column(heading)
+    for result in record.cases:
+        for version, summary in result.behaviour_nn.items():
+            table.add_row(
+                result.case_id,
+                "Behaviour" if version == "behaviour" else "With context",
+                str(summary.reference_count),
+                str(summary.generated_count),
+                _score(summary.reference_mean_nn),
+                _score(summary.generated_mean_nn),
+            )
+        if not result.behaviour_nn:
+            table.add_row(result.case_id, "—", "—", "—", "—", "—")
+    console.print(table)
+    console.print(
+        "Lower NN means less overlap. Compare counts. This is not a coverage score or a pass/fail gate."
+    )
+    console.print(
+        "With context includes the feature, behaviour, and criteria. Fewer than two behaviours gives no NN score."
+    )
 
 
 @app.command()
@@ -92,7 +123,6 @@ def wizard(
             ),
             target=MetisWizardTarget(interviewer),
             interaction=OneShotInteraction(),
-            similarity=EmbeddingSimilarity(interviewer),
             on_progress=show_progress,
         )
     table = Table(title=f"Wizard evaluation · {record.target_version}")
@@ -125,6 +155,7 @@ def wizard(
         "",
     )
     console.print(table)
+    _print_behaviour_nn(record)
     for result in record.cases:
         if result.error:
             reason = (
