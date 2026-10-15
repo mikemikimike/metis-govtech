@@ -63,6 +63,7 @@ metis/
 │   ├── insights/
 │   │   └── src/metis/insights/
 │   └── testbed/
+│       ├── src/metis/testbed/
 │       └── wizard/
 │           ├── cases/         # Wizard reference cases and Specifications
 │           └── reviewer/      # Local reference case reviewer
@@ -70,7 +71,7 @@ metis/
 ├── apps/                       # Deployable application services
 │   ├── api/
 │   │   └── src/metis/api/
-│   ├── web/                    # TypeScript/React frontend (separate toolchain)
+│   └── web/                    # TypeScript/React frontend (separate toolchain)
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   └── src/
@@ -161,13 +162,18 @@ MUST depend on `metis-core`. MUST NOT depend on `metis-engine` or `metis-library
 
 | | |
 |---|---|
-| **Planned Runtime Import Path** | `from metis.testbed import ...` |
-| **Purpose** | Wizard reference cases now; evaluator calibration and controlled runs in a later iteration. |
+| **Import Path** | `from metis.testbed import ...` |
+| **Purpose** | Component evaluations for Wizard, Engine, and Insights; evaluator calibration; and controlled comparisons with other systems. |
 
-The current `packages/testbed/wizard/cases/` directory holds five human-reviewed mock use cases.
-Each case has Wizard input files, a reference Specification, and review notes. The
-Specification is the final output under review. See the [testbed README](../packages/testbed/wizard/README.md).
-When implemented, that runtime MUST depend on `metis-core` and `metis-engine`.
+The current testbed contains the Wizard evaluation cases in
+`packages/testbed/wizard/cases`. Each case separates product inputs, a reference
+Specification in `outputs/`, and a README with source links and review notes.
+`metis-testbed` is an installed workspace package; evaluation data remains in the
+repository. Orca inputs are local and Git-ignored. Other inputs are tracked. See the [Wizard guide](../packages/testbed/wizard/README.md) for the review process.
+
+A testbed runtime MAY depend on `metis-core`, `metis-engine`, `metis-wizard`, and
+`metis-insights`. Product packages MUST NOT depend on the testbed. Component
+adapters belong in the testbed so the same case data can support other systems.
 
 ---
 
@@ -268,7 +274,7 @@ Dependencies MUST flow downward only. The following DAG is normative:
 [ apps/web ] ──HTTP──▶ [ apps/api ] ───────────────────────┐
                             │                               │
                             ▼                               ▼
-                       [ packages/engine ] ◄── [ packages/testbed* ]   [ packages/wizard ]
+                       [ packages/engine ] ◄── [ packages/testbed ]   [ packages/wizard ]
                             │         │                               │
                             │         ▼                               │
                             │   [ packages/insights ]                 │
@@ -279,8 +285,6 @@ Dependencies MUST flow downward only. The following DAG is normative:
                             ▼
                      [ packages/core ]   (Base — zero local dependencies)
 ```
-
-`*` The testbed runtime is planned. The current testbed holds reference data only.
 
 > `apps/web` has no compile-time dependency on any Python package. Its only runtime dependency is the HTTP API surface exposed by `apps/api`.
 
