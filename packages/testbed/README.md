@@ -14,7 +14,4 @@ The Orca input documents stay local. Its `inputs/` folder keeps a tracked
 `.gitkeep`, and its `.gitignore` excludes the local documents. The other use
 cases include their inputs in the repository.
 
-[Issue #436](https://github.com/govtech-responsibleai/metis/issues/436) tracks
-the Wizard evaluation runtime and comparison metrics. The examples include
-persona and scenario metadata ahead of the shared model work in
-[issue #441](https://github.com/govtech-responsibleai/metis/issues/441).
+The examples include persona and scenario metadata for future testbed use.

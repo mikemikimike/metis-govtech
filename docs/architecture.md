@@ -60,8 +60,10 @@ metis/
 │   │   └── src/metis/engine/
 │   ├── wizard/
 │   │   └── src/metis/wizard/
-│   └── insights/
-│       └── src/metis/insights/
+│   ├── insights/
+│   │   └── src/metis/insights/
+│   └── testbed/
+│       └── evals/             # Wizard reference cases and Specifications
 │
 ├── apps/                       # Deployable application services
 │   ├── api/
@@ -70,8 +72,6 @@ metis/
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   └── src/
-│   └── testbed/
-│       └── src/metis/testbed/
 │
 └── infra/                      # Docker Compose, Kubernetes, deployment assets
 ```
@@ -159,10 +159,13 @@ MUST depend on `metis-core`. MUST NOT depend on `metis-engine` or `metis-library
 
 | | |
 |---|---|
-| **Import Path** | `from metis.testbed import ...` |
-| **Purpose** | Evaluator calibration and sandbox environment for running agents against controlled scenarios. |
+| **Planned Runtime Import Path** | `from metis.testbed import ...` |
+| **Purpose** | Wizard reference cases now; evaluator calibration and controlled runs in a later iteration. |
 
-MUST depend on `metis-core` and `metis-engine`.
+The current `packages/testbed/evals/` directory holds five human-reviewed mock use cases.
+Each case has Wizard input files, a reference Specification, and review notes. The
+Specification is the final output under review. See the [testbed README](../packages/testbed/README.md).
+When implemented, that runtime MUST depend on `metis-core` and `metis-engine`.
 
 ---
 
@@ -263,7 +266,7 @@ Dependencies MUST flow downward only. The following DAG is normative:
 [ apps/web ] ──HTTP──▶ [ apps/api ] ───────────────────────┐
                             │                               │
                             ▼                               ▼
-                       [ packages/engine ] ◄── [ apps/testbed ]   [ packages/wizard ]
+                       [ packages/engine ] ◄── [ packages/testbed* ]   [ packages/wizard ]
                             │         │                               │
                             │         ▼                               │
                             │   [ packages/insights ]                 │
@@ -274,6 +277,8 @@ Dependencies MUST flow downward only. The following DAG is normative:
                             ▼
                      [ packages/core ]   (Base — zero local dependencies)
 ```
+
+`*` The testbed runtime is planned. The current testbed holds reference data only.
 
 > `apps/web` has no compile-time dependency on any Python package. Its only runtime dependency is the HTTP API surface exposed by `apps/api`.
 

@@ -81,7 +81,6 @@ later iteration.
 ### Review
 
 Check each reference against its inputs, scenario descriptions, and review notes.
-The separate testbed runtime and automated checks are tracked in issue #436.
 
 ## Assert source conversion
 
