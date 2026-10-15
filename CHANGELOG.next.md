@@ -204,6 +204,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- Accept optional flat string metadata in model-proposed Persona and Scenario
+  drafts and preserve it in saved Specifications (#441).
+
 - **Opening documents.** Flat Interview start requests can carry files as `{name, text?}`. The
   wizard keeps the opening description and document context in client-held state, with supported
   TXT, Markdown, PDF text-layer, and DOCX extraction through its facade. Prompts receive readable
