@@ -65,6 +65,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- Preserve optional flat string metadata on Personas and Scenarios through
+  Specification serialization. Accept arbitrary keys and reject non-string
+  values, including nested objects and lists (#441).
+
 - Shared ProductProfile, Experiment, and Specification models. The Profile holds product
   requirements. The Experiment holds Personas, Scenarios, Tasks, and execution settings.
   The Specification combines both in one document (#395).

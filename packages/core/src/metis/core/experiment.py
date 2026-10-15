@@ -10,9 +10,13 @@ from metis.core.profile import NamedNode
 class Persona(NamedNode[str]):
     """A user type whose id can differ from its display name."""
 
+    metadata: dict[str, str] = Field(default_factory=dict)
+
 
 class Scenario(NamedNode[str], extra="forbid"):
     """The situation in which Tasks evaluate the target."""
+
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class Task(BaseModel, extra="forbid"):
