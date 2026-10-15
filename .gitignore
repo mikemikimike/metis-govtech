@@ -57,4 +57,4 @@ openspec/
 packages/wizard/docs/
 
 # Generated reviewer pages can contain local case inputs.
-/packages/testbed/.reviewer/
+/packages/testbed/wizard/.reviewer/

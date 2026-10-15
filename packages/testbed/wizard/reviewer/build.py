@@ -17,10 +17,10 @@ import yaml
 from metis.core.console import console
 
 HERE = Path(__file__).resolve().parent
-TESTBED = HERE.parent
-REPO = TESTBED.parents[1]
-EVALS = TESTBED / "evals"
-OUTPUT = TESTBED / ".reviewer"
+SUITE = HERE.parent
+REPO = SUITE.parents[2]
+CASES = SUITE / "cases"
+OUTPUT = SUITE / ".reviewer"
 
 
 def _file(root: Path, relative: str) -> dict[str, Any]:
@@ -52,11 +52,11 @@ def build() -> Path:
             )
         else:
             css = css.replace(f"url('fonts/{name}')", "local('Arial')")
-    config = yaml.safe_load((EVALS / "config.yaml").read_text())
+    config = yaml.safe_load((CASES / "config.yaml").read_text())
     cases = []
     for relative in config["cases"]:
-        root = (EVALS / relative).resolve()
-        if not root.is_relative_to(EVALS.resolve()) or root == EVALS.resolve():
+        root = (CASES / relative).resolve()
+        if not root.is_relative_to(CASES.resolve()) or root == CASES.resolve():
             raise ValueError(f"Case is outside the evaluation folder: {relative}")
         output = _file(root, "outputs/specification.yaml")
         spec = yaml.safe_load(output["text"])
@@ -64,7 +64,7 @@ def build() -> Path:
             {
                 "id": root.name,
                 "prompt": _file(root, "inputs/prompt.md"),
-                "documents_url": quote(f"../evals/{relative}/inputs/"),
+                "documents_url": quote(f"../cases/{relative}/inputs/"),
                 "has_documents": any(
                     item.is_file()
                     and item.name != "prompt.md"
@@ -109,7 +109,7 @@ def main() -> None:
     args = parser.parse_args()
     build()
     if args.serve:
-        handler = partial(SimpleHTTPRequestHandler, directory=str(TESTBED))
+        handler = partial(SimpleHTTPRequestHandler, directory=str(SUITE))
         with ThreadingHTTPServer(("127.0.0.1", args.port), handler) as server:
             console.print(f"Reviewer: http://127.0.0.1:{args.port}/.reviewer/")
             try:

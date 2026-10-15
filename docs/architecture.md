@@ -63,7 +63,9 @@ metis/
 │   ├── insights/
 │   │   └── src/metis/insights/
 │   └── testbed/
-│       └── evals/             # Wizard reference cases and Specifications
+│       └── wizard/
+│           ├── cases/         # Wizard reference cases and Specifications
+│           └── reviewer/      # Local reference case reviewer
 │
 ├── apps/                       # Deployable application services
 │   ├── api/
@@ -162,9 +164,9 @@ MUST depend on `metis-core`. MUST NOT depend on `metis-engine` or `metis-library
 | **Planned Runtime Import Path** | `from metis.testbed import ...` |
 | **Purpose** | Wizard reference cases now; evaluator calibration and controlled runs in a later iteration. |
 
-The current `packages/testbed/evals/` directory holds five human-reviewed mock use cases.
+The current `packages/testbed/wizard/cases/` directory holds five human-reviewed mock use cases.
 Each case has Wizard input files, a reference Specification, and review notes. The
-Specification is the final output under review. See the [testbed README](../packages/testbed/README.md).
+Specification is the final output under review. See the [testbed README](../packages/testbed/wizard/README.md).
 When implemented, that runtime MUST depend on `metis-core` and `metis-engine`.
 
 ---
