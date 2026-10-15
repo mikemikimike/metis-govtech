@@ -90,6 +90,21 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- **Migrated the Langfuse trace extractor to the v2 observations endpoint.** The nprd Langfuse
+  server moves to v4 `events_only` mode, which permanently 404s the v1 `GET
+  /api/public/traces` and `GET /api/public/observations` endpoints `fetch_by_session_id` used.
+  v4 has no standalone Trace entity — a trace's id/input/output/timestamp now come from its root
+  observation (the one with no `parent_observation_id`). Fetching uses a two-step
+  `observations_v_2.get_many` call per trace, not one call per session: a session-wide,
+  `sessionId`-filtered call finds which traces exist (defensive against Orca's agent-run spans
+  carrying a different session id — issue #435 — the root observation's session id is always
+  correct, so this step is reliable), then each trace is re-fetched in full with a `traceId`
+  filter, which never depends on any child observation's session label. This has the same shape
+  as the superseded v1 `trace.list` + `observations.get_many` pair, with the second call now
+  going through `observations_v_2.get_many` as well. A trace with zero or multiple root
+  observations falls back to the earliest `start_time` and logs a warning rather than crashing
+  the evaluation run. No dual-endpoint fallback — the v1 calls are removed outright (#432, #435).
+
 - Resolve each Task's selected Behaviours to all their Criterion Graders, with separate Criterion IDs and settings in execution and saved Trial records (#413).
 
 - Run, resume, evaluate, and report from `specification.yaml`. Execute explicit Tasks,

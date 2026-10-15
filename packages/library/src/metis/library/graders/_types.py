@@ -17,10 +17,12 @@ from typing import Any, NotRequired, TypedDict
 
 
 class ObservationSummary(TypedDict):
-    """Serialized Langfuse ObservationsView.
+    """Serialized Langfuse v2 observation (``observations_v_2.get_many``).
 
-    Mirrors Langfuse's observation shape directly — input/output are
-    untyped because the SDK returns arbitrary JSON per observation kind.
+    Mirrors the v2 observation shape directly — input/output are untyped
+    because the SDK returns arbitrary JSON per observation kind. A trace's
+    own id/input/output/timestamp come from its root observation (the one
+    with no parent), since Langfuse v4 has no standalone Trace entity.
     If a second trace backend is added, define a METIS-native span model
     in metis-core and map from each backend into it.
     """
