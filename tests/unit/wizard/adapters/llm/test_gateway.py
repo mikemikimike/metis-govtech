@@ -698,3 +698,47 @@ def test_changing_the_primer_file_changes_the_prompt(
     monkeypatch.setattr(prompts, "primer", lambda: "REPLACED PRIMER TEXT")
 
     assert "REPLACED PRIMER TEXT" in prompts.criteria(research_assistant()).system
+
+
+@pytest.mark.parametrize("path", ["personas", "scenarios"])
+@pytest.mark.parametrize(
+    "metadata", [None, {}, {"custom key": "Supplied context", "another": ""}]
+)
+def test_generated_metadata_reaches_saved_specification(path, metadata):
+    from metis.wizard.domain.applier import apply, sanitise
+    from tests.fixtures.wizard.specifications import research_assistant
+
+    specification = research_assistant()
+    context = interview_context()
+    context.opening_description = "Review a policy."
+    draft = {
+        "name": "Evidence example",
+        "description": "Uses the supplied policy context.",
+    }
+    if metadata is not None:
+        draft["metadata"] = metadata
+        context.opening_description += " Supplied metadata: " + json.dumps(metadata)
+    model, completions = interviewer(
+        [
+            json.dumps(
+                {
+                    "message": "Draft",
+                    "patches": [{"op": "add", "path": path, "value": draft}],
+                }
+            )
+        ]
+    )
+
+    result = getattr(model, f"draft_{path}")(specification, context=context)
+    applied = apply(specification, sanitise(result.patches))
+
+    assert not applied.rejected
+    restored = type(specification).model_validate_json(specification.model_dump_json())
+    saved = getattr(restored, path)[-1]
+    assert saved.metadata == (metadata or {})
+    assert saved.description == draft["description"]
+    assert len(completions.calls) == 1
+    messages = completions.calls[0]["messages"]
+    assert "Review a policy." in messages[0]["content"]
+    assert "`metadata`" in messages[1]["content"]
+    assert "No key is required." in messages[1]["content"]

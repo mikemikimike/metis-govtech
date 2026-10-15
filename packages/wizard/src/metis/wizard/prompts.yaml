@@ -362,10 +362,16 @@ model_calls:
     Propose 3–5 personas: behavioural archetypes describing *how someone interacts*, not who they
     are. Any persona must make sense dropped into any scenario.
 
-    Every persona must include exactly these two fields:
+    Every persona must include these fields:
     - `name`: a short display name, such as `Indecisive junior officer` or `Impatient executive`
     - `description`: one or two sentences describing how this archetype interacts, which the
       evaluation runner will use to simulate them
+
+    You may also include `metadata` with relevant context from the supplied product information,
+    Interview context, or supporting documents. Use a flat object with arbitrary keys and string
+    values. Keep the description separate. Preserve supplied custom keys and their string values.
+    Omit metadata or return {} when no relevant facts are supplied. Do not invent age, occupation,
+    personality, or other personal details to fill metadata. No key is required.
 
     Do not add `id`, `scope` or `behaviours`; the wizard derives the id from the name.
 
@@ -388,6 +394,13 @@ model_calls:
 
     Draft the whole set of scenarios in one go. A scenario is one simulated situation. It can
     exercise several behaviours at once, and one behaviour can be probed by several scenarios.
+
+    You may also include `metadata` with relevant context from the supplied product information,
+    Interview context, or supporting documents. Use a flat object with arbitrary keys and string
+    values. Keep the description separate. Preserve supplied custom keys and their string values.
+    Omit metadata or return {} when no relevant facts are supplied. An opening message or completion
+    context may be included only when supplied; do not invent values to fill example fields.
+    No key is required. Metadata provides context; it does not set Engine controls or Grader rules.
 
     Every behaviour with measured=true must be covered by at least one scenario. Select measured Behaviour IDs in each Task's behaviour_refs. Every selected Behaviour runs all its Criteria. Select one persona_ref
     per Task. Every Scenario needs at least one Task. Those, the
