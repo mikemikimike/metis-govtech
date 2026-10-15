@@ -168,8 +168,11 @@ MUST depend on `metis-core`. MUST NOT depend on `metis-engine` or `metis-library
 The current testbed contains the Wizard evaluation cases in
 `packages/testbed/wizard/cases`. Each case separates product inputs, a reference
 Specification in `outputs/`, and a README with source links and review notes.
-`metis-testbed` is an installed workspace package; evaluation data remains in the
-repository. Orca inputs are local and Git-ignored. Other inputs are tracked. See the [Wizard guide](../packages/testbed/wizard/README.md) for the review process.
+The reference cases and local reviewer do not require an installed testbed
+package. The evaluation runtime in PR #445 adds the installable
+`metis-testbed` package; evaluation data remains in the repository.
+Orca inputs are local and Git-ignored. Other inputs are tracked.
+See the [Wizard guide](../packages/testbed/wizard/README.md) for the review process.
 
 A testbed runtime MAY depend on `metis-core`, `metis-engine`, `metis-wizard`, and
 `metis-insights`. Product packages MUST NOT depend on the testbed. Component
