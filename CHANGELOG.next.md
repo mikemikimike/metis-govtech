@@ -239,6 +239,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   reviewer together under `packages/testbed/wizard/`. Orca product inputs and
   generated previews stay local; the other case inputs are tracked (#436).
 
+- Add a Wizard evaluation command that sends each case's `prompt.md` as the first
+  Interview message and uploads its supporting documents. It scores generated
+  Specifications at the Feature, Expected Behaviour, Criterion, Grader, and
+  Task levels, saves results by Wizard version, and compares saved versions (#436).
+
 ### metis-wizard
 
 #### Added
