@@ -20,7 +20,7 @@
 | Run | A grouping of repeated **trials** of the same **test case**. |
 | Experiment | A collection of **runs** used to evaluate one or more **targets** across a set of **test cases**. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |
-| Grading Scope | The part of a **session** that one **grader** result grades: the whole **session**, a single **trace**, or a single **observation**. See [Grading Scopes](#grading-scopes). It is identified by the **traces** the result covers. A **grader** chooses the grading scope of each result it returns; nothing fixes it in advance. Grading scope belongs to a result, not to a grader, and is distinct from the **baseline** and **feature-specific** scope qualifiers, which describe which **targets** a grader applies to. |
+| Grading Scope | The part of a **session** that one **grader** result grades: the whole **session**, a **subsession**, a single **trace**, or a single **observation**. See [Grading Scopes](#grading-scopes). It is identified by the **traces** the result covers. A **grader** chooses the grading scope of each result it returns; nothing fixes it in advance. Grading scope belongs to a result, not to a grader, and is distinct from the **baseline** and **feature-specific** scope qualifiers, which describe which **targets** a grader applies to. |
 | Trial Score | The value produced by applying a **grader** to a **trial** for a particular **criterion**. |
 | Grader Passing Threshold | A configurable rule applied to the **trial score** from the **grader** to mark it as pass or fail. |
 | Result | The pass rate of a set of **trial scores**. |
@@ -36,6 +36,7 @@ A **grader** result grades one of these parts of a **session**. They are listed 
 | Term | Definition |
 |------|------------|
 | Session | A collection of **traces** corresponding to exactly one **trial**, including references to where artefacts can be retrieved. METIS assumes a one-to-one correspondence between a session and a trial: the **target**'s conversation for a trial produces the traces that make up its session. |
+| Subsession | A group of **traces** that is a subset of one **session** and covers part of one **trial**. A subsession is a subset of steps from the full **session** of the **target**, evaluated as a local segment. |
 | Trace | The observable record of what occurred during a **trial**: a group of **observations** that contain the interactions, actions, tool calls, relevant state changes, and references to where artefacts can be retrieved. |
 | Observation | One recorded step of the **target**, such as a model call or a tool call, with its input, output, and timing. Each observation belongs to exactly one **trace** and can be nested under another observation in the same trace. |
 
