@@ -319,7 +319,15 @@ def _finish(
     driver = StepDriver(interviewer=interviewer, matcher=matcher)
     # Client-held state can validly arrive at any stage with existing Criteria that have not yet
     # been matched. End owns the complete best-effort path, so resolve them before it advances.
-    driver.match(working)
+    try:
+        driver.complete_target(working)
+        if driver.model_error is not None:
+            return _model_unavailable(original)
+        driver.match(working)
+    except InterviewerOutputError:
+        return _model_unavailable(original)
+    except Exception as exc:
+        return _internal_error(original, exc)
 
     for _ in range(_FINISH_GUARD):
         if working.step is InterviewStep.DONE:

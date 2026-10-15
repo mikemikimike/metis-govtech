@@ -293,9 +293,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Fix the type error when a new Interview creates its Specification. Preserve
   the initial Target details and Experiment defaults (#419).
 
+- Retry Criterion drafts that leave measured Behaviours without Criteria, using
+  the current Specification paths in the correction request (#444).
+
 - **Required product details.** Before behaviour review, the Interview shows a form for any
   missing product name or description. The user can supply these details and continue when the
-  model has not supplied them.
+  model has not supplied them. Best-effort completion fills missing Target fields
+  from the supplied evidence before it drafts the evaluation. Readiness validation
+  still reports any remaining gaps.
 
 #### Changed
 

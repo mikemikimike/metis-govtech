@@ -26,6 +26,16 @@ TRIALS_MIN = 1
 TRIALS_MAX = 20
 
 
+def missing_criteria_paths(specification: Specification) -> frozenset[str]:
+    """The writable Criteria collections for measured Behaviours with no Criteria."""
+    return frozenset(
+        f"features[{feature.id}].behaviours[{behaviour.id}].criteria"
+        for feature in specification.features
+        for behaviour in feature.behaviours
+        if behaviour.measured and not behaviour.criteria
+    )
+
+
 def scenario_readiness(specification: Specification) -> list[MissingData]:
     """Every reason the Scenario list is not yet runnable, in user-facing order.
 

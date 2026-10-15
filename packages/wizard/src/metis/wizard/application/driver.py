@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from metis.wizard.application import cascade, config, screens
 from metis.wizard.application.interviewer import Interviewer, InterviewerOutputError
+from metis.wizard.application.readiness import missing_criteria_paths
 from metis.wizard.contracts.conversation import (
     AnyRequest,
     AnyResponse,
@@ -245,6 +246,32 @@ class StepDriver:
             )
 
         raise RuntimeError(f"Nothing to compose at step {step}.")
+
+    def complete_target(self, state: DriverState) -> None:
+        """Fill required Target fields from evidence during best-effort completion."""
+        missing = frozenset(
+            f"target.{name}"
+            for name in ("name", "description")
+            if not getattr(state.specification.target, name)
+        )
+        if not missing:
+            return
+        self._try(
+            lambda: self.interviewer.chat(
+                state.specification,
+                "clarify",
+                "Complete these required Target fields from the opening description and "
+                "supporting documents: "
+                + ", ".join(sorted(missing))
+                + ". Use a short descriptive name if the evidence gives no product name. "
+                "Return SET patches for these fields only. Do not ask another question.",
+                None,
+                context=state.context,
+            ),
+            state,
+            allowed_paths=missing,
+            allowed_ops=frozenset({PatchOp.SET}),
+        )
 
     def _message(self, step: InterviewStep) -> str:
         return self._step_messages.get(step, _DEFAULT_MESSAGES[step])
@@ -913,7 +940,7 @@ class StepDriver:
         # Continue at behaviours is what generates criteria — which is why measured-but-empty
         # cannot exist, and why nothing is generated for behaviours nobody picked.
         if state.step is InterviewStep.CRITERIA:
-            allowed_paths = self._missing_measured_criteria_paths(state)
+            allowed_paths = missing_criteria_paths(state.specification)
         else:
             allowed_paths = frozenset()
         if allowed_paths:
@@ -929,25 +956,6 @@ class StepDriver:
             self.match(state)
 
     # ── applying model output ──────────────────────────────────────────────
-
-    @staticmethod
-    def _missing_measured_criteria_paths(state: DriverState) -> frozenset[str]:
-        """Return the exact Criteria collections that one draft can add to.
-
-        The model receives the complete Specification for context. This allowlist prevents it from
-        writing Criteria to an unmeasured Behaviour or replacing an existing Criteria set.
-        """
-        paths = set()
-        for behaviour in state.specification.measured_behaviours():
-            if behaviour.criteria:
-                continue
-            feature = state.specification.feature_of(behaviour.id)
-            if (
-                feature is None
-            ):  # a Behaviour from this Specification must belong to one Feature
-                continue
-            paths.add(f"features[{feature.id}].behaviours[{behaviour.id}].criteria")
-        return frozenset(paths)
 
     def _try(
         self,
@@ -1062,7 +1070,7 @@ class StepDriver:
                     self.interviewer.draft_criteria(
                         state.specification, context=state.context
                     ),
-                    allowed_paths=self._missing_measured_criteria_paths(state),
+                    allowed_paths=missing_criteria_paths(state.specification),
                     allowed_ops=frozenset({PatchOp.ADD}),
                 )
                 self.match(state)

@@ -40,8 +40,10 @@ from metis.wizard.application.interviewer import (
     InterviewerOutputError,
     InterviewerUnavailable,
 )
+from metis.wizard.application.readiness import missing_criteria_paths
 from metis.wizard.contracts.output import ClarifyResult, StepResult
 from metis.wizard.domain.applier import PatchValueError, validate_model_patches
+from metis.wizard.domain.patch import PatchOp
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -187,18 +189,27 @@ class GatewayInterviewer:
         prompt: prompts.ModelPrompt,
         specification: Specification,
         context: InterviewContext | None = None,
+        *,
+        required_additions: frozenset[str] = frozenset(),
     ) -> StepResult:
-        result, recovered = self._ask(
-            prompt,
-            StepResult,
-            validate=lambda candidate: validate_model_patches(
+        def validate(candidate: StepResult) -> None:
+            validate_model_patches(
                 specification,
                 candidate.patches,
-                allowed_fixture_names=set(
-                    context.document_names if context is not None else []
-                ),
-            ),
-        )
+                allowed_fixture_names=set(context.document_names if context else []),
+            )
+            missing = required_additions - {
+                patch.path for patch in candidate.patches if patch.op is PatchOp.ADD
+            }
+            if missing:
+                raise PatchValueError(
+                    "Return at least one ADD patch with a strict Criterion draft for each "
+                    "of these current Specification paths: "
+                    + ", ".join(sorted(missing))
+                    + ". Use IDs from the current Specification, not IDs in source documents."
+                )
+
+        result, recovered = self._ask(prompt, StepResult, validate=validate)
         # A recovered turn's intro tends to narrate the correction it just made — detail the
         # user should never see. Drop it and let the driver fall back to its neutral per-step
         # default; the patches, which are the real output, are kept either way.
@@ -243,7 +254,10 @@ class GatewayInterviewer:
         context: InterviewContext | None = None,
     ) -> StepResult:
         return self._step(
-            prompts.criteria(specification, context), specification, context
+            prompts.criteria(specification, context),
+            specification,
+            context,
+            required_additions=missing_criteria_paths(specification),
         )
 
     def draft_personas(

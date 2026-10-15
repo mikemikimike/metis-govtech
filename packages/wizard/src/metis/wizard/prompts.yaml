@@ -312,6 +312,11 @@ model_calls:
 
     Write acceptance criteria for every behaviour with measured=true that has none yet. Ignore
     behaviours with measured=false entirely — the user chose not to measure those.
+    Add each Criterion with its own `add` patch to
+    `features[<current feature id>].behaviours[<current behaviour id>].criteria`.
+    Its value is an object with `name`, `given`, `when`, and `then` text fields.
+    Use IDs from the current Specification above. Supporting documents can contain example
+    Specifications with other IDs; those IDs do not address the current document.
 
     Write the smallest sufficient set of distinct checks for each Behaviour's stated scope.
     Keep explicit deliverable instructions separate from content accuracy. For example, source

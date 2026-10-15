@@ -34,6 +34,7 @@ from metis.wizard.contracts import (
     PatchOp,
     Perspective,
     Specification,
+    StepResult,
     Target,
 )
 from metis.wizard.contracts.interview_state import HISTORY_LIMIT, InterviewState, Turn
@@ -575,3 +576,29 @@ def test_compile_specification_returns_both_yaml_strings_and_writes_nothing() ->
 def test_compile_specification_raises_on_a_specification_that_will_not_build() -> None:
     with pytest.raises(CompilationError):
         compile_specification(_empty_specification())
+
+
+def test_end_completes_missing_target_fields_from_evidence() -> None:
+    class TargetCompletionInterviewer(ScriptedInterviewer):
+        def chat(self, specification, step, text, target, context=None):
+            assert specification.target.description
+            return StepResult(
+                message="",
+                patches=[
+                    Patch(op=PatchOp.SET, path="target.name", value="Billing support"),
+                ],
+            )
+
+    specification = research_assistant()
+    specification.target.name = ""
+    result = _end(
+        InterviewState(
+            specification=specification,
+            context=interview_context(),
+            behaviours_confirmed=True,
+        ),
+        interviewer=TargetCompletionInterviewer(),
+    )
+    assert isinstance(result, InterviewSuccess)
+    assert result.outcome == "done"
+    assert result.state.specification.target.name == "Billing support"
