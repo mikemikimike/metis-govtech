@@ -185,6 +185,15 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Expand Task Behaviour selections for plan counts, Criterion score attribution, and missing-result explanations (#413).
 
+### metis-testbed
+
+#### Added
+
+- Add five mock Wizard reference cases for Orca, Enterprise AI Assistant, travel
+  planning, billing support, and incident triage. Include reference
+  Specifications, source notes, and sample fixtures. Track first-chat prompts
+  for four cases; keep Orca product inputs local (#436).
+
 ### metis-wizard
 
 #### Added
