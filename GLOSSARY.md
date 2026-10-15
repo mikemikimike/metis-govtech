@@ -22,6 +22,7 @@
 | Trace | The observable record of what occurred during a **trial**, including interactions, actions, tool calls, observations, relevant state changes, and references to where artefacts can be retrieved. |
 | Session | A collection of **traces** corresponding to exactly one **trial**, including references to where artefacts can be retrieved. METIS assumes a one-to-one correspondence between a session and a trial: the **target**'s conversation for a trial produces the traces that make up its session. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |
+| Grading Scope | The part of a **session** that one **grader** result grades: a single observation, a **trace**, a chain of retries, or the whole session. It is identified by the **traces** the result covers. A **grader** chooses the grading scope of each result it returns; nothing fixes it in advance. Grading scope belongs to a result, not to a grader, and is distinct from the **baseline** and **feature-specific** scope qualifiers, which describe which **targets** a grader applies to. |
 | Trial Score | The value produced by applying a **grader** to a **trial** for a particular **criterion**. |
 | Grader Passing Threshold | A configurable rule applied to the **trial score** from the **grader** to mark it as pass or fail. |
 | Result | The pass rate of a set of **trial scores**. |

@@ -39,6 +39,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 ### Docs
 
+#### Added
+
+- **Defined Grading Scope in `GLOSSARY.md`.** The term names the part of a session that
+  one grader result grades — an observation, a trace, a retry chain, or the whole
+  session. It belongs to a result, not to a grader, and is distinct from the Baseline
+  and Feature-specific scope qualifiers. No code changes (#439).
+
 #### Changed
 
 - Use Target for the evaluation subject in interface labels, prompts, code
