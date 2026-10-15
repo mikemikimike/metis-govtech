@@ -243,7 +243,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   Interview message and uploads its supporting documents. It scores generated
   Specifications at the Feature, Expected Behaviour, Criterion, Grader, and
   Task levels, saves results by Wizard version, and compares saved versions (#436).
-  Retain structured failures with missing requirements and diagnostic state.
+  Record completion separately from scores, accept the final ready Scenario review,
+  and retain structured failures with missing requirements and diagnostic state.
 
 ### metis-wizard
 

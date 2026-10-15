@@ -51,6 +51,7 @@ from metis.wizard import (
     handle_interview,
 )
 from metis.wizard.application.matching import EmbeddingMatcher
+from metis.wizard.contracts.conversation import AnyRequest, options_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -172,6 +173,26 @@ class OneShotInteraction:
             record("start", started)
             finished = target.end(started)
             record("end", finished)
+            # The evaluation policy accepts the generated Scenario review once. It does not
+            # invent clarification answers or bypass a disabled readiness gate.
+            if (
+                finished.outcome == "awaiting_response"
+                and finished.stage == "scenarios"
+                and finished.pending
+            ):
+                pending = TypeAdapter(AnyRequest).validate_python(finished.pending)
+                selected = [
+                    key
+                    for key, option in options_of(pending).items()
+                    if option.id.action == "continue" and option.enabled
+                ]
+                if len(selected) == 1:
+                    response: dict[str, JsonValue] = {
+                        "type": "choice",
+                        "selected": list(selected),
+                    }
+                    finished = target.respond(finished, response)
+                    record("accept_review", finished, response)
         except WizardTargetError as exc:
             exc.events = events
             raise
@@ -310,6 +331,12 @@ def _render_report(record: EvaluationRecord) -> str:
     )
     for result in record.cases:
         lines.extend([f"### {result.case_id}", ""])
+        lines.extend(
+            [
+                f"Interview completed: {result.completed}. Outcome: {result.lifecycle_outcome}.",
+                "",
+            ]
+        )
         if result.error:
             lines.extend([result.error, ""])
         if result.failure:
@@ -416,6 +443,7 @@ def run_evaluation(
     for index, relative in enumerate(config.cases):
         case_id = Path(relative).name
         report(case_id, index, "preparing inputs")
+        candidate: Candidate | None = None
         try:
             case, root = load_case(request.config_path.parent, relative)
             evidence = _evidence(case, root)
@@ -434,7 +462,10 @@ def run_evaluation(
             )
             result = CaseResult(
                 case_id=case.id,
-                status=CaseStatus.SCORED,
+                status=CaseStatus.SCORED
+                if candidate.outcome == "done"
+                else CaseStatus.INCOMPLETE,
+                completed=candidate.outcome == "done",
                 lifecycle_outcome=candidate.outcome,
                 scores=scores,
                 events=candidate.events,
@@ -471,6 +502,10 @@ def run_evaluation(
                 case_id=case_id,
                 status=CaseStatus.FAILED,
                 error=f"{type(exc).__name__}: {exc}",
+                lifecycle_outcome=candidate.outcome if candidate else None,
+                completed=candidate is not None and candidate.outcome == "done",
+                events=candidate.events if candidate else [],
+                raw_output=candidate.raw_output if candidate else None,
                 generated_specification=(
                     f"cases/{_safe_segment(case_id)}/generated-specification.yaml"
                     if case_id in generated

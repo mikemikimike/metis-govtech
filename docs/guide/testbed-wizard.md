@@ -7,7 +7,12 @@ its human-reviewed reference, and saves one immutable result.
 
 The initial interaction is one-shot. The testbed starts the Interview, leaves the
 first clarification request unanswered, and asks Wizard to finish. This checks the
-quality of the opening prompt and Wizard's best-effort completion path.
+quality of the opening prompt and Wizard's best-effort completion path. If Wizard
+returns a ready Scenario review, the testbed accepts its enabled Continue option
+once and records that response. It does not answer clarification questions or
+change the generated content. A remaining request is recorded as `incomplete`.
+Scores can be saved for an incomplete Interview; they do not mean it finished.
+The command exits with status 1 if any case fails or remains incomplete.
 
 Each Test Case uses `inputs/prompt.md` as the first chat message. The prompt can be
 plain product information. All other files in `inputs/` are uploaded as supporting
@@ -87,7 +92,8 @@ packages/testbed/results/
 
 `run.json` is the machine-readable aggregate. `report.md` shows the scores,
 alignments, missing items, and additional items. Each Test Case keeps its own result
-and generated Specification. Wizard failures retain their code,
+and generated Specification. Each result records `completed` and
+`lifecycle_outcome` separately from scores. Wizard failures retain their code,
 retryable flag, missing requirements, safe retry state, and available diagnostic
 state. The report includes these details. A failed completion can save a draft
 Specification for inspection; this does not certify that it is runnable.

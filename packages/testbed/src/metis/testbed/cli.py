@@ -100,13 +100,19 @@ def wizard(
     for name in LEVELS:
         table.add_column(name.title(), justify="right")
     table.add_column("Status")
+    table.add_column("Interview")
     for result in record.cases:
         values = (
             [_score(getattr(result.scores, name).similarity) for name in LEVELS]
             if result.scores is not None
             else ["—"] * len(LEVELS)
         )
-        table.add_row(result.case_id, *values, str(result.status))
+        table.add_row(
+            result.case_id,
+            *values,
+            str(result.status),
+            result.lifecycle_outcome or "not started",
+        )
     table.add_section()
     table.add_row(
         "Case average",
@@ -126,6 +132,8 @@ def wizard(
             )
             console.print(f"{result.case_id}: {reason}", markup=False)
     console.print(f"Saved: {output}")
+    if any(result.status.value != "scored" for result in record.cases):
+        raise typer.Exit(code=1)
 
 
 @app.command()

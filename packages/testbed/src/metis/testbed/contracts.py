@@ -22,6 +22,7 @@ class CaseStatus(StrEnum):
     """The outcome of one configured Test Case."""
 
     SCORED = "scored"
+    INCOMPLETE = "incomplete"
     INPUT_MISSING = "input_missing"
     FAILED = "failed"
 
@@ -161,6 +162,7 @@ class CaseResult(BaseModel):
     case_id: str
     status: CaseStatus
     lifecycle_outcome: str | None = None
+    completed: bool = False
     failure: dict[str, JsonValue] | None = None
     error: str | None = None
     scores: SpecificationScores | None = None

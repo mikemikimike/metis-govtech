@@ -321,7 +321,68 @@ def test_structured_failure_is_saved_with_diagnostic_specification(
     )
     for case in record.cases:
         assert case.failure == failure.model_dump(mode="json")
-        assert case.lifecycle_outcome == "failed"
+        assert not case.completed
         assert case.events[0].operation == "start"
         assert (output / case.generated_specification).is_file()
     assert "EB-1 needs coverage" in (output / "report.md").read_text()
+
+
+def test_incomplete_interview_keeps_scores_without_claiming_completion(
+    tmp_path: Path,
+    evaluation_config: Path,
+) -> None:
+    class IncompleteTarget(ReferenceTarget):
+        def end(self, state):
+            return state
+
+    record, _ = run_evaluation(
+        EvaluationRequest(
+            config_path=evaluation_config,
+            results_root=tmp_path,
+            target_version="incomplete",
+        ),
+        target=IncompleteTarget(),
+        interaction=OneShotInteraction(),
+        similarity=ExactSimilarity(),
+    )
+    assert all(
+        case.status is CaseStatus.INCOMPLETE
+        and not case.completed
+        and case.scores is not None
+        for case in record.cases
+    )
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_one_shot_accepts_only_ready_final_review(enabled: bool) -> None:
+    from metis.wizard.contracts import ChoiceRequest, Option, OptionId
+
+    class ReviewTarget(ReferenceTarget):
+        def end(self, state):
+            state.stage = "scenarios"
+            state.pending = ChoiceRequest(
+                prompt="Review",
+                options=[
+                    Option(
+                        id=OptionId(action="continue"),
+                        label="Continue",
+                        enabled=enabled,
+                    ),
+                ],
+            ).model_dump(mode="json")
+            return state
+
+        def respond(self, state, response):
+            assert response == {"type": "choice", "selected": ["continue"]}
+            state.outcome = "done"
+            state.stage = "done"
+            state.pending = None
+            return state
+
+    candidate = OneShotInteraction().run(
+        ReviewTarget(), WizardInput(case_id="billing-support", description="Billing")
+    )
+    assert candidate.outcome == ("done" if enabled else "awaiting_response")
+    assert [event.operation for event in candidate.events] == (
+        ["start", "end", "accept_review"] if enabled else ["start", "end"]
+    )
