@@ -42,9 +42,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 #### Added
 
 - **Defined Grading Scope in `GLOSSARY.md`.** The term names the part of a session that
-  one grader result grades — an observation, a trace, a retry chain, or the whole
-  session. It belongs to a result, not to a grader, and is distinct from the Baseline
-  and Feature-specific scope qualifiers. No code changes (#439).
+  one grader result grades — the whole session, a trace, or an observation. It belongs
+  to a result, not to a grader, and is distinct from the Baseline and Feature-specific
+  scope qualifiers. A new Grading Scopes table defines Session, Trace, and Observation;
+  Session and Trace move there from the main table, and Trace now states that its
+  record is a group of observations. No code changes (#439).
 
 #### Changed
 
