@@ -239,8 +239,8 @@ def _start(
     matcher: object | None,
 ) -> InterviewResult:
     """Begin a fresh interview with the user's description as its first input."""
-    specification = Specification(
-        target=Target(name="", description=request.description, users="")
+    specification = Specification.model_validate(
+        {"target": Target(name="", description=request.description, users="")}
     )
     working = _lift(
         InterviewState(

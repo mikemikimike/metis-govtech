@@ -219,6 +219,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Fixed
 
+- Fix the type error when a new Interview creates its Specification. Preserve
+  the initial Target details and Experiment defaults (#419).
+
 - **Required product details.** Before behaviour review, the Interview shows a form for any
   missing product name or description. The user can supply these details and continue when the
   model has not supplied them.
