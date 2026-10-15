@@ -1,16 +1,17 @@
 # Shared evaluations
 
 These mock use cases provide shared inputs and reference outputs for Wizard review. Each
-case has an input set and a reference `specification.yaml`. The reference is a
-candidate for human review. A schema check does not establish its quality.
+case has an input set and a reference `specification.yaml`. A human has reviewed
+the Test Cases in all five use cases. The reference Specifications and graders
+can receive further review. A schema check does not establish their quality.
 
-| Case | Input | Reference status |
+| Case | Input | Test Case status |
 | --- | --- | --- |
-| ORCA | Product summary from the Wizard fixture | Existing example; input coverage is incomplete |
-| Enterprise AI assistant | Prompt and five capability documents | Existing reference converted to the current task schema; graders pending |
-| LangGraph travel planner | System-level product brief | User-reviewed scope and persona; retained test cases and graders pending review |
-| Billing support | System-level product brief | One billing support feature; safety test cases retained and support criteria pending review |
-| Incident triage | System-level product brief | End-to-end triage criteria; human review pending |
+| ORCA | Local product summary | Human-validated |
+| Enterprise AI assistant | Prompt and five capability documents | Human-validated |
+| LangGraph travel planner | System-level product brief | Human-validated |
+| Billing support | System-level product brief | Human-validated |
+| Incident triage | System-level product brief | Human-validated |
 
 ## Files and boundaries
 
@@ -26,9 +27,9 @@ Only the prompt and supporting input documents are sent to Wizard. Keep referenc
 rubrics outside `inputs/`. A system comparison must use the same inputs and the
 same policy for answering Interview questions.
 
-The graders inside `specification.yaml` assess the described product. The
-[review rubric](review-rubric.md) assesses Wizard's specification. These are two
-separate evaluation tasks. An Assert judge setting is not a METIS grader class.
+The graders inside `specification.yaml` assess the described product. Wizard's
+generated Specification is reviewed against the reference. An Assert judge
+setting is not a METIS grader class.
 
 ## Use a case
 
@@ -38,7 +39,7 @@ separate evaluation tasks. An Assert judge setting is not a METIS grader class.
 3. Answer follow-up questions from the input material. Record missing information
    as unknown. Do not use the reference to supply answers.
 4. Save the generated `specification.yaml` outside the outputs directory.
-5. Review the result with `review-rubric.md`. Record evidence and unresolved items.
+5. Review the result against the reference. Record evidence and unresolved items.
 6. Have a human check each product grader and record the decision in the use case README.
 
 Different feature groupings and wording can be valid. Do not use YAML equality

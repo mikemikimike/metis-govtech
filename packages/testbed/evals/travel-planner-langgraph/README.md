@@ -76,8 +76,7 @@ A highly organised, detail-focused traveller who gives specific instructions and
 
 ### Pending
 
-- Review the Seoul Christmas and Europe July scenarios with the user.
-- Review both test cases with the shared detailed traveller persona. Both currently measure itinerary validity and accuracy. Budget scoring remains outside the selected scope.
+- The Seoul Christmas and Europe July Test Cases were reviewed with the user. Both use the shared detailed traveller persona and measure itinerary validity and accuracy. Budget scoring remains outside the selected scope.
 - Select and review graders for the three criteria.
 - Supply evidence for timing and place details that the fixed sample tools do not contain.
 
