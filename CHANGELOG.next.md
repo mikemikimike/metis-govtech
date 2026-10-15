@@ -254,6 +254,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   plus pair difference error when a reference is supplied.
   Include experimental reference and generated mean NN scores with Behaviour counts
   in the normal Wizard run summary and saved case results.
+  Document commands, metrics, and example CLI tables in the Wizard suite README.
 
 ### metis-wizard
 
