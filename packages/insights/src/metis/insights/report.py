@@ -16,6 +16,7 @@ import json
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from metis.core import execution_layout
 from metis.core.logging import get_logger
 from metis.insights._aggregation import aggregate_graders
 from metis.insights._models import Report
@@ -90,9 +91,9 @@ def format_terminal_summary(
 def save_report(
     results: EvaluationResults, experiment_dir: Path
 ) -> tuple[Path, Path] | None:
-    """Write the target evaluation report into `experiment_dir/reports/`.
+    """Write the target evaluation report into `experiment_dir/outputs/reports/`.
 
-    The report reads `inputs/specification.yaml` and `trials/*/record.json` from the
+    The report reads `inputs/specification.yaml` and `outputs/trials/*/record.json` from the
     experiment directory. `simulate` freezes the input document there. A run with no
     specification gets no report, and that is not an error.
 
@@ -120,7 +121,7 @@ def save_report(
 
     report_model = Report.model_validate(report)
 
-    reports_dir = experiment_dir / "reports"
+    reports_dir = experiment_dir / execution_layout.REPORTS
     reports_dir.mkdir(parents=True, exist_ok=True)
     json_path = reports_dir / "report.json"
     html_path = reports_dir / "report.html"

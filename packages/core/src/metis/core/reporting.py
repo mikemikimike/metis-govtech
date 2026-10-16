@@ -8,7 +8,7 @@ Pydantic models are their serializable projection:
   SessionResult ──► SessionReport (one per session)
 
 `metis engine evaluate` performs that conversion, wraps the result in
-EvaluationResults, and writes it to `<experiment>/reports/results.json`.
+EvaluationResults, and writes it to `<experiment>/outputs/reports/results.json`.
 `metis insights report` reads the file back and builds the target evaluation
 report from it. The models live in metis-core because it is the only package
 both sides may import.

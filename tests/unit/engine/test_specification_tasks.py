@@ -158,7 +158,9 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
                 "turns": 7,
             }
         )
-        path = tmp_path / "trials" / trial_folder_name(*item) / "record.json"
+        path = (
+            tmp_path / "outputs" / "trials" / trial_folder_name(*item) / "record.json"
+        )
         path.parent.mkdir(parents=True)
         record = TrialRecord(
             config=TrialConfig(

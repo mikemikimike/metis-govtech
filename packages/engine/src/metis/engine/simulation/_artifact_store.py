@@ -59,7 +59,7 @@ def quarantine_stale_artifacts(
     would be free to name attempt 2's files. The ``artifacts-`` prefix says
     which directory was superseded and sorts the folder next to it.
 
-    :param run_dir: The run folder (``trials/<scenario>-<persona>-<trial>/``).
+    :param run_dir: The run folder (``outputs/trials/<scenario>-<persona>-<trial>/``).
     :param now: Timestamp for the destination name. Defaults to the current
         UTC time; injected by tests for a deterministic name.
     :returns: The directory the artifacts were moved to, or ``None`` when
@@ -101,7 +101,7 @@ def _save_artifacts(record: TrialRecord, run_dir: Path, experiment_root: Path) -
     manifest dict.
 
     :param record: The completed run record.
-    :param run_dir: The run folder (``trials/<task>-<persona>-<trial>/``).
+    :param run_dir: The run folder (``outputs/trials/<task>-<persona>-<trial>/``).
     :param experiment_root: The experiment directory each artifact's ``path`` is
         relative to.
     :returns: The manifest dict (also written to ``run_dir/artifacts/run-manifest.json``).

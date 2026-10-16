@@ -40,7 +40,9 @@ class TestReportSchemaSync:
         fixture_path = (
             repo_root
             / "experiments"
+            / "execute"
             / "orca-eval-20260827-222704"
+            / "outputs"
             / "reports"
             / "report.json"
         )
@@ -55,7 +57,9 @@ class TestReportSchemaSync:
         fixture_path = (
             repo_root
             / "experiments"
+            / "execute"
             / "orca-eval-20260827-222704"
+            / "outputs"
             / "reports"
             / "report.json"
         )

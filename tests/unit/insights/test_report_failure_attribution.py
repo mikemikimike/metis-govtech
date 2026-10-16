@@ -13,7 +13,7 @@ from metis.insights._report import _load_trial_records, _turn_problems
 
 
 def _write_record(run_dir: Path, name: str, record: dict) -> None:
-    trial_dir = run_dir / "trials" / name
+    trial_dir = run_dir / "outputs" / "trials" / name
     trial_dir.mkdir(parents=True)
     (trial_dir / "record.json").write_text(json.dumps(record))
 

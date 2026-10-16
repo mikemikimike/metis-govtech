@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from metis.core import execution_layout
 from metis.core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ def load_report_sources(
     run_dir: Path,
 ) -> tuple[dict, dict[str, str], list[dict]] | None:
     """Read specification.yaml, the persona map, and recorded Trial outcomes."""
-    specification_path = run_dir / "inputs" / "specification.yaml"
+    specification_path = run_dir / execution_layout.SPECIFICATION
     if not specification_path.is_file():
         return None
     try:
@@ -53,14 +54,11 @@ def load_report_sources(
 
 
 def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
-    """Read persona attribution and the exact recorded outcome of each trial.
-
-    The persona lives on the simulation record, not on the trace, so it must come from
-    `trials/<name>/record.json`.
-    """
     persona_of: dict[str, str] = {}
     trials: list[dict] = []
-    for record_path in sorted(run_dir.glob("trials/*/record.json")):
+    for record_path in sorted(
+        (run_dir / execution_layout.TRIALS).glob("*/record.json")
+    ):
         try:
             record = json.loads(record_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
@@ -225,7 +223,9 @@ def _legacy_failure_details(
     if not separator or not trial_text.isdigit() or not scenario or not persona:
         return None, None
     log_path = (
-        run_dir / "logs" / f"simulate-{scenario}_{persona}-{int(trial_text):02d}.log"
+        run_dir
+        / execution_layout.LOGS
+        / f"simulate-{scenario}_{persona}-{int(trial_text):02d}.log"
     )
     try:
         log_text = log_path.read_text(encoding="utf-8")

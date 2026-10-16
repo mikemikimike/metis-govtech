@@ -21,6 +21,7 @@ import typer
 from dotenv import load_dotenv
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskID, TextColumn
 
+from metis.core import execution_layout
 from metis.core.console import console
 from metis.engine import __version__
 from metis.engine.logging import (
@@ -257,7 +258,7 @@ def _configure_process_logging(log_level: str, *, use_tui: bool = False) -> None
 def _trial_record_files(experiment_dir: Path) -> list[Path]:
     """Return trial records in the same order used by the old CLI."""
     return sorted(
-        experiment_dir.glob("trials/*/record.json"),
+        (experiment_dir / execution_layout.TRIALS).glob("*/record.json"),
         key=lambda path: path.stat().st_mtime,
     )
 
@@ -273,16 +274,10 @@ def _experiment_id(input_dir: Path) -> str | None:
 
 
 def _existing_outputs(input_dir: Path) -> list[Path]:
-    """Return every simulation output for the experiment named in ``input_dir``.
-
-    Globs ``experiments/`` for directories named ``<id>-<timestamp>``. Returns
-    an empty list when the id cannot be read or no output exists. It lists the
-    outputs; it never reduces the list to one.
-    """
     experiment_id = _experiment_id(input_dir)
     if experiment_id is None:
         return []
-    experiments_root = _find_project_root() / "experiments"
+    experiments_root = _find_project_root() / execution_layout.EXECUTIONS
     if not experiments_root.is_dir():
         return []
     pattern = re.compile(rf"^{re.escape(experiment_id)}-\d{{8}}-\d{{6}}$")
@@ -384,13 +379,21 @@ def _resolve_experiment_dir(experiment_dir: Path) -> Path:
             style="bold red",
         )
         raise EvaluationInputError("invalid experiment directory")
-    if not (resolved / "inputs").is_dir():
+    if not (resolved / execution_layout.INPUTS).is_dir():
         console.print(
             f"Error: '{resolved}' is not a simulation output directory "
             "(no 'inputs/' snapshot). Run 'metis engine simulate' first.",
             style="bold red",
         )
         raise EvaluationInputError("invalid experiment directory")
+    if (resolved / "trials").is_dir() or (resolved / "reports").is_dir():
+        console.print(
+            "Error: this execution uses an earlier folder layout. "
+            "Migrate it to outputs/trials/ and outputs/reports/ before use. "
+            "See MIGRATION.md.",
+            style="bold red",
+        )
+        raise EvaluationInputError("unsupported execution layout")
     return resolved
 
 
@@ -452,7 +455,7 @@ def _print_evaluation_summary(
         f"  {label} — {outcome.total_records} run(s), {outcome.failed_records} failed"
     )
     console.print(f"  Specification: {experiment_dir}")
-    console.print(f"  Log: {experiment_dir / 'logs' / 'evaluate.log'}")
+    console.print(f"  Log: {experiment_dir / execution_layout.LOGS / 'evaluate.log'}")
     if outcome.results_file is not None:
         # markup=False: Rich would drop a "[...]" segment of the path.
         console.print(f"  Results: {outcome.results_file}", markup=False)
@@ -481,7 +484,7 @@ def _classify_resume_trials(
         scenario, persona, trial_index = item
         record_path = (
             experiment_dir
-            / "trials"
+            / execution_layout.TRIALS
             / trial_folder_name(scenario, persona, trial_index)
             / "record.json"
         )
@@ -537,17 +540,19 @@ def _run_simulation(
     if resume:
         experiment_dir = target
         specification = Specification.load_file(
-            experiment_dir / "inputs" / "specification.yaml"
+            experiment_dir / execution_layout.SPECIFICATION
         )
-        fixtures_dir = experiment_dir / "inputs" / "fixtures"
+        fixtures_dir = experiment_dir / execution_layout.FIXTURES
     else:
         _validate_inputs(target)
         specification = Specification.load_file(target / "specification.yaml")
         suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
-        experiment_dir = project_root / "experiments" / f"{specification.id}-{suffix}"
+        experiment_dir = (
+            project_root / execution_layout.EXECUTIONS / f"{specification.id}-{suffix}"
+        )
         experiment_dir.mkdir(parents=True)
-        shutil.copytree(target, experiment_dir / "inputs")
-        fixtures_dir = experiment_dir / "inputs" / "fixtures"
+        shutil.copytree(target, experiment_dir / execution_layout.INPUTS)
+        fixtures_dir = experiment_dir / execution_layout.FIXTURES
 
     personas_by_id = {persona.id: persona for persona in specification.personas}
     trial_plan = expand_trial_plan(specification, personas_by_id)
@@ -580,7 +585,7 @@ def _run_simulation(
     console.print(f"  Specification: {experiment_dir}")
     console.print(f"  Input: {fixtures_dir.parent}\n")
 
-    resolved_log_dir = log_dir or (experiment_dir / "logs")
+    resolved_log_dir = log_dir or (experiment_dir / execution_layout.LOGS)
     resolved_log_dir.mkdir(parents=True, exist_ok=True)
 
     scenarios_state: list[SimulationScenarioState] = []
@@ -709,7 +714,7 @@ def _load_evaluation_specification(experiment_dir: Path) -> Specification:
     """Validate and load the frozen experiment snapshot."""
     from metis.engine.simulation.types import Specification
 
-    inputs_dir = experiment_dir / "inputs"
+    inputs_dir = experiment_dir / execution_layout.INPUTS
     if not inputs_dir.is_dir():
         console.print(
             f"Error: missing required file 'specification.yaml' in {inputs_dir}",
@@ -819,7 +824,7 @@ def _run_evaluation(
     load_dotenv()
     log_level = _resolve_log_level(verbose, quiet)
     _configure_process_logging(log_level)
-    evaluation_log = EvaluationLogger(experiment_dir / "logs")
+    evaluation_log = EvaluationLogger(experiment_dir / execution_layout.LOGS)
     evaluation_log.write(f"EVALUATION STARTED — {experiment_dir}")
 
     from metis.engine.evaluation import evaluate as evaluate_graders
@@ -992,7 +997,7 @@ def _run_evaluation(
 
     # An evaluation that scores nothing must not leave the previous evaluation's
     # results behind for `metis insights report` to pick up as current.
-    results_path = experiment_dir / "reports" / "results.json"
+    results_path = experiment_dir / execution_layout.RESULTS
     results_path.unlink(missing_ok=True)
     results_file: Path | None = None
     if eval_results:
@@ -1031,12 +1036,12 @@ def _run_evaluation_command(
             quiet=quiet,
         )
     except EvaluationInputError as exc:
-        EvaluationLogger(experiment_dir / "logs", reset=False).write(
+        EvaluationLogger(experiment_dir / execution_layout.LOGS, reset=False).write(
             f"EVALUATION FAILED — {exc}"
         )
         raise typer.Exit(code=1) from None
     except Exception as exc:
-        EvaluationLogger(experiment_dir / "logs", reset=False).write(
+        EvaluationLogger(experiment_dir / execution_layout.LOGS, reset=False).write(
             f"EVALUATION FAILED — {exc}"
         )
         console.print(f"Error: evaluation failed: {exc}", style="bold red")
@@ -1107,7 +1112,7 @@ def evaluate(
         "--experiment-dir",
         help=(
             "Output directory that simulate created, "
-            "e.g. experiments/my-eval-20260820-143000/"
+            "e.g. experiments/execute/my-eval-20260820-143000/"
         ),
     ),
     langfuse_timeout: int = typer.Option(

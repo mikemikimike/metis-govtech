@@ -27,6 +27,22 @@ survives past — the coordinated v1.0 release.
 
 ## Migrating to v1.0 (from v0.x)
 
+### Execution folders
+
+Engine creates `experiments/execute/<id>-YYYYMMDD-HHMMSS/`. Trial records and artifacts
+live under `outputs/trials/`. Engine results and Insights reports share `outputs/reports/`.
+Inputs and logs remain at the execution root. Keep `--input-dir` for new executions
+and `--experiment-dir` for evaluation and resume. Pass the full
+`outputs/reports/results.json` path to Insights.
+
+Create new executions from the original input folder when possible. To retain an
+existing execution, move its trial and report folders under `outputs/`. Update each
+`Artifact.path` in trial records from `trials/...` to `outputs/trials/...`, including
+artifacts embedded in conversation turns. Keep `inputs/...` paths unchanged. Update
+artifact manifest paths and trial log links to their new locations. Move the whole
+execution under `experiments/execute/` if desired. These changes are not automatic.
+The CLI rejects the earlier root-level trial and report layout.
+
 ### Shared specification (core, engine, wizard, API, and web)
 
 Use `metis.core.profile.ProductProfile` for Product context, Features, Behaviours,
@@ -57,6 +73,10 @@ Keep `schema_version: 2` on `next`. Use the complete example in
   Specification so later edits keep Task IDs. Exports put the YAML and `fixtures/` under
   `outputs/`. Pass that folder to Engine as `--input-dir`. Interview exports save the final
   state as `inputs/interview_state.json`; manual exports include an empty `inputs/` folder.
+- The default CLI design root is `experiments/design/YYYYMMDD-HHMMSS-interview/`.
+  Explicit `--out-dir` paths remain exact. Resume now requires `--out-dir <design-root>`.
+  Downloads use timestamped `interview` or `manual` ZIP names and contain one matching root
+  folder. Extract them into `experiments/design/`.
 - For an interrupted CLI Interview saved with the earlier layout, move `interview_state.json`
   into `inputs/` before calling `resume`. Move existing fixture files into `outputs/fixtures/`.
   Keep Task fixture references relative to that folder. Completed CLI exports retain the state;

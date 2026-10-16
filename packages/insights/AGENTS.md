@@ -5,8 +5,8 @@ See root [AGENTS.md](../../AGENTS.md) for monorepo-wide instructions.
 ## Package Purpose
 
 Report generation for evaluation outputs. `metis insights report --results-file <path>`
-reads the `reports/results.json` that `metis engine evaluate` writes and produces the
-terminal pass/fail/skip summary plus `reports/report.json` and `reports/report.html`.
+reads the `outputs/reports/results.json` that `metis engine evaluate` writes and produces the
+terminal pass/fail/skip summary plus `outputs/reports/report.json` and `outputs/reports/report.html`.
 
 ## Dependency Rule
 

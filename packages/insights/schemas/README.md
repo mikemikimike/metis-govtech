@@ -12,5 +12,5 @@ after changing the model and commit the result with the change. `make ci` runs
 The version-bump rules are the same as for the engine's schemas; see
 [`packages/engine/schemas/README.md`](../../engine/schemas/README.md#version-bump-rules).
 
-`EvaluationResults` (`reports/results.json`, defined in `metis.core.reporting`) is the
+`EvaluationResults` (`outputs/reports/results.json`, defined in `metis.core.reporting`) is the
 input to this package. It is code-produced and has no published schema file.
