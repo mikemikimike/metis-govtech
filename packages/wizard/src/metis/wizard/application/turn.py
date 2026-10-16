@@ -28,6 +28,7 @@ from metis.core.logging import get_logger
 from metis.wizard.application import cascade
 from metis.wizard.application.compile import (
     CompilationError,
+    SpecificationArchive,
     SpecificationFixture,
     build_specification_archive,
     compile_experiment,
@@ -505,7 +506,7 @@ def compile_specification(specification: Specification) -> CompileResult:
 def package_specification(
     source: Specification | InterviewState,
     fixtures: Iterable[SpecificationFixture],
-) -> bytes:
+) -> SpecificationArchive:
     """Compile a manual Specification or final Interview state into a portable export."""
     specification = (
         source.specification if isinstance(source, InterviewState) else source

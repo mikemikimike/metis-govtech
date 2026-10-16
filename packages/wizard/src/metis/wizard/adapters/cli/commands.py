@@ -10,6 +10,7 @@ is the same loop.
 from __future__ import annotations
 
 import inspect
+import shlex
 import sys
 import tempfile
 from pathlib import Path
@@ -221,6 +222,9 @@ def _write_outputs(state: InterviewState, out_dir: Path) -> None:
 
     typer.echo(f"\nWrote {specification_path}")
     typer.echo(f"Wrote {review_path}")
+    typer.echo(
+        f"Run with: metis engine run --input-dir {shlex.quote(str(out_dir / export_layout.OUTPUTS))}"
+    )
     typer.echo(f"\n{format_trials(specification.trial_count())} when you run this.")
 
 
@@ -278,10 +282,10 @@ def init(
     description: str = typer.Argument(
         ..., help="A raw description of the target or agent to evaluate."
     ),
-    out_dir: Path = typer.Option(
-        Path("evaluation"),
+    out_dir: Path | None = typer.Option(
+        None,
         "--out-dir",
-        help="The experiment root for inputs/ and outputs/.",
+        help="Experiment root. Default: experiments/design/YYYYMMDD-HHMMSS-interview/.",
     ),
     restart: bool = typer.Option(
         False,
@@ -293,6 +297,10 @@ def init(
     # Refuse before anything else — the filesystem check costs no model call and needs no
     # credentials, so an accidental re-run of `init` reports the collision rather than
     # overwriting an interview in progress. `--restart` is the one way past this.
+    if out_dir is None:
+        out_dir = Path("experiments/design") / export_layout.experiment_name(
+            "interview"
+        )
     state_path = _state_path(out_dir)
     if (out_dir / export_layout.SPECIFICATION).is_file() and not restart:
         typer.echo(
@@ -303,8 +311,8 @@ def init(
     if state_path.is_file() and not restart:
         typer.echo(
             f"Error: an interview is already in progress at {state_path}.\n\n"
-            f"  metis wizard resume            continue it\n"
-            f"  metis wizard init <description> --restart    discard it and start over",
+            f"  metis wizard resume --out-dir {shlex.quote(str(out_dir))}\n"
+            f"  metis wizard init <description> --out-dir {shlex.quote(str(out_dir))} --restart",
             err=True,
         )
         raise typer.Exit(1)
@@ -325,6 +333,9 @@ def init(
     known_capability_ids, capability_confidence = read_capability_evidence(
         out=console.print
     )
+    typer.echo(
+        f"Resume with: metis wizard resume --out-dir {shlex.quote(str(out_dir))}"
+    )
     state = _drive(
         InterviewStartRequest(
             description=description,
@@ -342,7 +353,7 @@ def init(
 @app.command()
 def resume(
     out_dir: Path = typer.Option(
-        Path("evaluation"),
+        ...,
         "--out-dir",
         help="The experiment root holding inputs/interview_state.json.",
     ),

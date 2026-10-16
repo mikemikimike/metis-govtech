@@ -119,8 +119,9 @@ def test_the_specification_package_passes_the_engine_input_gate(
         ],
     )
     archive = tmp_path / "specification.zip"
-    archive.write_bytes(archive_bytes)
+    archive.write_bytes(archive_bytes.content)
 
+    root = archive_bytes.filename.removesuffix(".zip")
     extracted = tmp_path / "extracted"
     with zipfile.ZipFile(archive) as specification:
         expected = {
@@ -132,8 +133,10 @@ def test_the_specification_package_passes_the_engine_input_gate(
         }
         if interview:
             expected.add("inputs/interview_state.json")
-        assert set(specification.namelist()) == expected
+        assert set(specification.namelist()) == {f"{root}/{name}" for name in expected}
         specification.extractall(extracted)
+
+    extracted = extracted / root
 
     from metis.engine.simulation.types import Specification as EngineSpecification
 

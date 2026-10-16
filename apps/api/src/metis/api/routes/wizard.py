@@ -354,9 +354,12 @@ def package(
             with suppress(OSError):
                 upload.file.close()
     return Response(
-        content=archive,
+        content=archive.content,
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="specification.zip"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{archive.filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
     )
 
 

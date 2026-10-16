@@ -225,7 +225,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
-- Wizard exports use `inputs/` and `outputs/`. Interview exports retain the final state used to compile the Specification. CLI recovery uses the completed Specification as its completion marker. (#453)
+- Wizard exports use timestamped design folders with `inputs/` and `outputs/`. The default name is `YYYYMMDD-HHMMSS-interview`, using local 24-hour time. Manual ZIP exports use the `-manual` suffix. ZIP filenames match their root folders. Interview exports retain the final state used to compile the Specification. CLI recovery uses the completed Specification as its completion marker (#453).
 
 - Use Target in Interview prompts, fields, patch paths, and validation codes (#429).
 

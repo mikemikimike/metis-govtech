@@ -266,7 +266,7 @@ Use either endpoint after `/turn` or `/end` returns `done`.
 | Endpoint | Input | Output | Use |
 |---|---|---|---|
 | `POST /compile` | `state.specification` as JSON | `specification.yaml` as a string and `specification` with assigned Task IDs | Store or display YAML yourself. |
-| `POST /package` | One JSON form field: `state` for Interviews or `specification` for manual exports; fixture file parts | `specification.zip` | Download a portable specification. |
+| `POST /package` | One JSON form field: `state` for Interviews or `specification` for manual exports; fixture file parts | `YYYYMMDD-HHMMSS-interview.zip` | Download a portable specification. |
 
 Compile directly from `interview.json`:
 
@@ -283,21 +283,24 @@ Package directly from `interview.json`:
 jq -c '.state' interview.json | \
   curl --fail-with-body http://localhost:8001/api/v1/wizard/package \
     -F 'state=<-' \
-    --output specification.zip
+    --remote-name --remote-header-name
 ```
 
 Add one `-F 'files=@<path>'` part for each original fixture referenced by the completed Specification.
-The ZIP contains `inputs/interview_state.json`, `outputs/specification.yaml`, and
+The response `Content-Disposition` header supplies the ZIP filename. The ZIP contains a
+`YYYYMMDD-HHMMSS-interview/` root folder with `inputs/interview_state.json`, `outputs/specification.yaml`, and
 `outputs/fixtures/`. The API compiles the Specification directly from the supplied state and
 saves that same state with its current JSON format. Send exactly one source field; requests
 with both `state` and `specification` are rejected.
 
 For a manual export, send the user-authored Specification in the `specification` form field.
-The ZIP contains an empty `inputs/` folder and the same `outputs/` layout.
+The manual ZIP uses `YYYYMMDD-HHMMSS-manual.zip` and a matching root folder. It contains an
+empty `inputs/` folder and the same `outputs/` layout.
 
 The API retains no uploaded bytes or experiment files. A successful package response contains
-a generated Specification and marks a completed export. Extract the archive into `evaluation/`
-and run `metis engine run --input-dir evaluation/outputs/`. Task fixture references stay relative
+a generated Specification and marks a completed export. Extract the archive into `experiments/design/`
+and use its dated folder as the Engine input. For example, run
+`metis engine run --input-dir experiments/design/20261016-223045-interview/outputs/`. Task fixture references stay relative
 to `outputs/fixtures/`. Wizard exports contain no Testbed embedding caches or score files.
 
 ## Handle errors and resume

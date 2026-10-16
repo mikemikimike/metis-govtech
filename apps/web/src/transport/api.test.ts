@@ -51,6 +51,15 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
           ? init?.body
           : JSON.parse(String(init.body)),
     });
+    if (String(input) === "/api/v1/wizard/package") {
+      return new Response("zip bytes", {
+        headers: {
+          "content-type": "application/zip",
+          "Content-Disposition":
+            'attachment; filename="20261016-223045-interview.zip"',
+        },
+      });
+    }
     return new Response(JSON.stringify(success), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -200,7 +209,11 @@ test("packages a synthesized manual Specification and its fixtures as multipart"
     received = init?.body as FormData;
     return new Response(new Blob(["zip bytes"], { type: "application/zip" }), {
       status: 200,
-      headers: { "content-type": "application/zip" },
+      headers: {
+        "content-type": "application/zip",
+        "Content-Disposition":
+          'attachment; filename="20261016-223045-manual.zip"',
+      },
     });
   };
 
@@ -234,7 +247,7 @@ test("packages a synthesized manual Specification and its fixtures as multipart"
     { name: policy.name, blob: policy },
   ]);
 
-  assert.equal(await archive.text(), "zip bytes");
+  assert.equal(await archive.blob.text(), "zip bytes");
   assert.equal(received?.get("specification"), JSON.stringify(specification));
   assert.equal((received?.get("files") as File).name, "policy.pdf");
 });

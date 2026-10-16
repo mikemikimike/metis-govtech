@@ -13,6 +13,8 @@ from metis.wizard import InterviewState, compile_specification
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.specifications import research_assistant
 
+pytestmark = pytest.mark.usefixtures("export_clock")
+
 
 def _specification() -> str:
     return research_assistant().model_dump_json()
@@ -29,15 +31,19 @@ def test_package_returns_a_portable_zip_with_specification_and_fixtures(
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/zip"
-    assert "specification.zip" in response.headers["content-disposition"]
+    assert response.headers["access-control-expose-headers"] == "Content-Disposition"
+    assert "20261016-223045-manual.zip" in response.headers["content-disposition"]
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         assert set(archive.namelist()) == {
-            "inputs/",
-            "outputs/specification.yaml",
-            "outputs/fixtures/",
-            "outputs/fixtures/policy.pdf",
+            "20261016-223045-manual/inputs/",
+            "20261016-223045-manual/outputs/specification.yaml",
+            "20261016-223045-manual/outputs/fixtures/",
+            "20261016-223045-manual/outputs/fixtures/policy.pdf",
         }
-        assert archive.read("outputs/fixtures/policy.pdf") == b"policy bytes"
+        assert (
+            archive.read("20261016-223045-manual/outputs/fixtures/policy.pdf")
+            == b"policy bytes"
+        )
 
 
 def test_package_includes_unreferenced_fixture_bytes_without_server_state(
@@ -60,9 +66,15 @@ def test_package_includes_unreferenced_fixture_bytes_without_server_state(
 
     assert first.status_code == second.status_code == 200
     with zipfile.ZipFile(io.BytesIO(first.content)) as archive:
-        assert archive.read("outputs/fixtures/notes.txt") == b"notes"
+        assert (
+            archive.read("20261016-223045-manual/outputs/fixtures/notes.txt")
+            == b"notes"
+        )
     with zipfile.ZipFile(io.BytesIO(second.content)) as archive:
-        assert "outputs/fixtures/notes.txt" not in archive.namelist()
+        assert (
+            "20261016-223045-manual/outputs/fixtures/notes.txt"
+            not in archive.namelist()
+        )
 
 
 def test_package_rejects_a_specification_with_a_missing_fixture(
@@ -187,25 +199,31 @@ def test_interview_export_preserves_the_state_used_to_compile(
         files=[("files", ("policy.pdf", b"policy bytes", "application/pdf"))],
     )
     assert response.status_code == 200
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="20261016-223045-interview.zip"'
+    )
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         assert set(archive.namelist()) == {
-            "inputs/",
-            "inputs/interview_state.json",
-            "outputs/specification.yaml",
-            "outputs/fixtures/",
-            "outputs/fixtures/policy.pdf",
+            "20261016-223045-interview/inputs/",
+            "20261016-223045-interview/inputs/interview_state.json",
+            "20261016-223045-interview/outputs/specification.yaml",
+            "20261016-223045-interview/outputs/fixtures/",
+            "20261016-223045-interview/outputs/fixtures/policy.pdf",
         }
         saved = InterviewState.model_validate_json(
-            archive.read("inputs/interview_state.json")
+            archive.read("20261016-223045-interview/inputs/interview_state.json")
         )
         assert saved == state
         compiled = compile_specification(saved.specification)
         assert yaml.safe_load(
-            archive.read("outputs/specification.yaml")
+            archive.read("20261016-223045-interview/outputs/specification.yaml")
         ) == compiled.specification.model_dump(mode="json")
         for task in compiled.specification.tasks:
             for name in task.fixtures:
-                assert archive.read(f"outputs/fixtures/{name}") == b"policy bytes"
+                assert (
+                    archive.read(f"20261016-223045-interview/outputs/fixtures/{name}")
+                    == b"policy bytes"
+                )
 
 
 @pytest.mark.parametrize(

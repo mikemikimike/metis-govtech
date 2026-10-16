@@ -14,6 +14,7 @@ from metis.wizard.application.compile.experiment import (
 )
 from metis.wizard.application.compile.review import render_review, write_review
 from metis.wizard.application.compile.specification import (
+    SpecificationArchive,
     SpecificationError,
     SpecificationFixture,
     build_specification_archive,
@@ -25,6 +26,7 @@ __all__ = [
     "DEFAULT_RUNNER_FACTORY_REF",
     "SCHEMA_VERSION",
     "SpecificationError",
+    "SpecificationArchive",
     "SpecificationFixture",
     "build_specification_archive",
     "CompilationError",

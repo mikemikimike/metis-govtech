@@ -1,6 +1,8 @@
 """Shared test configuration."""
 
+from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -21,3 +23,16 @@ REPO_ROOT = _find_repo_root()
 def repo_root() -> Path:
     """Path to the monorepo workspace root."""
     return REPO_ROOT
+
+
+@pytest.fixture
+def export_clock(monkeypatch):
+    from metis.wizard.application import export_layout
+
+    def set_time(value: datetime) -> None:
+        monkeypatch.setattr(
+            export_layout, "datetime", SimpleNamespace(now=lambda: value)
+        )
+
+    set_time(datetime(2026, 10, 16, 22, 30, 45))
+    return set_time

@@ -859,6 +859,9 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
         </section>
 
         <section className="flex flex-col gap-3 border-t border-border pt-6">
+          <p className="text-sm text-muted-foreground">
+            Extract the download into <code>experiments/design/</code>.
+          </p>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}

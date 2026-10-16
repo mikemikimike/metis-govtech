@@ -269,7 +269,11 @@ test("runs an offline document start, reload, review, end and package flow", asy
         new Blob(["zip bytes"], { type: "application/zip" }),
         {
           status: 200,
-          headers: { "content-type": "application/zip" },
+          headers: {
+            "content-type": "application/zip",
+            "Content-Disposition":
+              'attachment; filename="20261016-223045-interview.zip"',
+          },
         },
       );
     }
@@ -376,7 +380,7 @@ test("runs an offline document start, reload, review, end and package flow", asy
     { state: withFixture.state },
     fixturesForSpecification(withFixture),
   );
-  assert.equal(await archive.text(), "zip bytes");
+  assert.equal(await archive.blob.text(), "zip bytes");
   const downloads: string[] = [];
   downloadArchive(
     archive,
@@ -392,7 +396,7 @@ test("runs an offline document start, reload, review, end and package flow", asy
     } as unknown as Document,
     { createObjectURL: () => "blob:offline", revokeObjectURL: () => {} },
   );
-  assert.deepEqual(downloads, ["specification.zip"]);
+  assert.deepEqual(downloads, ["20261016-223045-interview.zip"]);
   assert.equal(withFixture.state.confirmed, true);
   assert.equal(withFixture.transcript.at(-1)?.kind, "interaction");
   await repository.delete("offline-flow");
@@ -451,7 +455,11 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
         new Blob(["zip bytes"], { type: "application/zip" }),
         {
           status: 200,
-          headers: { "content-type": "application/zip" },
+          headers: {
+            "content-type": "application/zip",
+            "Content-Disposition":
+              'attachment; filename="20261016-223045-manual.zip"',
+          },
         },
       );
     }
@@ -515,7 +523,7 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
     { state: withFixture.state },
     fixturesForSpecification(withFixture),
   );
-  assert.equal(await archive.text(), "zip bytes");
+  assert.equal(await archive.blob.text(), "zip bytes");
   const downloads: string[] = [];
   downloadArchive(
     archive,
@@ -531,7 +539,7 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
     } as unknown as Document,
     { createObjectURL: () => "blob:offline", revokeObjectURL: () => {} },
   );
-  assert.deepEqual(downloads, ["specification.zip"]);
+  assert.deepEqual(downloads, ["20261016-223045-manual.zip"]);
   assert.equal(withFixture.state.confirmed, true);
   assert.equal(withFixture.transcript.at(-1)?.kind, "interaction");
   await repository.delete("offline-plain-flow");

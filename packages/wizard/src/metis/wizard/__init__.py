@@ -19,6 +19,7 @@ from metis.wizard.application import (
 )
 from metis.wizard.application.compile import (
     CompilationError,
+    SpecificationArchive,
     SpecificationError,
     SpecificationFixture,
     compile_experiment,
@@ -145,6 +146,7 @@ __all__ = [
     "Specification",
     "Perspective",
     "PerspectiveDefinition",
+    "SpecificationArchive",
     "SpecificationFixture",
     "SpecificationError",
     "Status",
