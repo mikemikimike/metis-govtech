@@ -72,10 +72,9 @@ def test_the_gate_would_catch_an_unimportable_grader(tmp_path: Path) -> None:
     input_dir = _input_dir(tmp_path)
     experiment = input_dir / "specification.yaml"
     original = experiment.read_text()
-    # The graders' old home, deleted when they moved to metis-library. Deliberately dead —
-    # an experiment compiled before the move names this and must fail loudly. Sourced from
-    # the fixture so this cannot quietly become a no-op if the compiled graders change.
-    dead_fqn = CITATION_GRADER.replace("metis.library.", "metis.engine.")
+    # A grader that does not exist, in a module that does. Sourced from the fixture so this
+    # cannot quietly become a no-op if the compiled graders change.
+    dead_fqn = CITATION_GRADER + "Removed"
     assert CITATION_GRADER in original, (
         "the corrupted grader must actually be compiled in"
     )
@@ -132,9 +131,9 @@ def test_the_manual_specification_package_passes_the_engine_input_gate(
     }
     assert graders == {
         "supported-answer": [
-            "metis.library.graders.SynthesisFaithfulnessGrader",
-            "metis.library.graders.TurnBudgetGrader",
+            "tests.unit.engine.graders_for_tests.FixedScoreGrader",
+            "metis.library.graders.TraceBudgetGrader",
         ],
-        "short-recovery": ["metis.library.graders.TurnBudgetGrader"],
+        "short-recovery": ["metis.library.graders.TraceBudgetGrader"],
     }
     _validate_inputs(extracted)

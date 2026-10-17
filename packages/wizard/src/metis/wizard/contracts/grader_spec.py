@@ -2,8 +2,7 @@
 
 Design-time metadata only. The wizard never instantiates a grader and never runs one — which
 is also why the catalogue is built from class names and docstrings rather than from
-instances: many graders take constructor arguments, and instantiating one just to read its
-display name would be the wizard doing exactly what it says it never does.
+instances: a grader's parameters are its `args_model` fields, which are read from the class.
 """
 
 from __future__ import annotations
@@ -21,10 +20,10 @@ class GraderParam(BaseModel):
 
 
 class GraderSpec(BaseModel):
-    fqn: str  # "metis.library.graders.TurnBudgetGrader"
+    fqn: str  # "metis.library.graders.TraceBudgetGrader"
     name: str  # "Turn budget" — what the user sees
     description: str
-    # Constructor defaults seed the Criterion parameters for user review.
+    # args_model fields seed the Criterion parameters for user review.
     params: list[GraderParam] = Field(default_factory=list)
 
     @property

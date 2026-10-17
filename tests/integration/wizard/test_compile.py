@@ -100,9 +100,9 @@ def test_criterion_parameters_survive_compilation_and_reject_unknown_arguments()
 ):
     specification = research_assistant()
     criterion = specification.behaviour("EB-2").criteria[0]  # type: ignore[union-attr]
-    criterion.grader_args = {"max_turns": 4}
+    criterion.grader_args = {"max_traces": 4}
     compiled = Specification.model_validate(compile_experiment(specification, "test"))
-    assert compiled.criterion(criterion.id).grader_args == {"max_turns": 4}  # type: ignore[union-attr]
+    assert compiled.criterion(criterion.id).grader_args == {"max_traces": 4}  # type: ignore[union-attr]
     criterion.grader_args = {"turn_buget": 4}
     with pytest.raises(CompilationError, match=criterion.id):
         compile_experiment(specification, "test")

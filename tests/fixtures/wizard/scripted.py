@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 
 from metis.wizard.application import Turn
 from metis.wizard.application.config import clarify_turn_cap
-from metis.wizard.application.matching import GENERATED_JUDGE_FQN
 from metis.wizard.contracts import (
     ClarifyResult,
     Patch,
@@ -266,14 +265,21 @@ class ScriptedInterviewer:
         )
 
 
+TRACE_BUDGET = "metis.library.graders.TraceBudgetGrader"
+
+
 @dataclass
 class ScriptedMatcher:
-    """Give every generated Criterion one runnable offline grader."""
+    """Give every generated Criterion one runnable offline grader.
+
+    The interview flow tests need a criterion that compiles and that the engine's input gate
+    accepts, not a meaningful match. TraceBudgetGrader is the one grader the library ships.
+    """
 
     degraded: bool = False
 
     def match(self, _criterion: object) -> str:
-        return GENERATED_JUDGE_FQN
+        return TRACE_BUDGET
 
 
 @dataclass

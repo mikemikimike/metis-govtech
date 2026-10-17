@@ -25,7 +25,7 @@ features:
         given: a question answerable from the library
         when: the answer is returned
         then: every factual claim names the document it came from
-      grader_fqn: metis.library.graders.SynthesisFaithfulnessGrader
+      grader_fqn: tests.unit.engine.graders_for_tests.FixedScoreGrader
       grader_args: {}
     - id: AC-1-2
       name: Do not cite unrelated sources
@@ -33,7 +33,7 @@ features:
         given: a question the library cannot answer
         when: the answer is returned
         then: it says so rather than citing an unrelated document
-      grader_fqn: metis.library.graders.SynthesisFaithfulnessGrader
+      grader_fqn: tests.unit.engine.graders_for_tests.FixedScoreGrader
       grader_args: {}
   - id: EB-2
     name: Keep answers concise
@@ -46,7 +46,7 @@ features:
         given: a question with no length instruction
         when: the answer is returned
         then: it is under 500 words
-      grader_fqn: metis.library.graders.TurnBudgetGrader
+      grader_fqn: metis.library.graders.TraceBudgetGrader
       grader_args: {}
 - id: F-2
   name: Recovery
@@ -63,7 +63,7 @@ features:
         given: a document search that times out repeatedly
         when: the agent has retried three times
         then: it stops and reports what it attempted
-      grader_fqn: metis.library.graders.BoundedTroubleshootingGrader
+      grader_fqn: metis.library.graders.TraceBudgetGrader
       grader_args: {}
 personas:
 - id: cooperative-delegator

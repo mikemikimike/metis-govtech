@@ -28,7 +28,7 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Synthesis faithfulness: Checks that the answer uses its evidence."
               },
-              "grader_fqn": "metis.library.graders.SynthesisFaithfulnessGrader",
+              "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
               "grader_args": {}
             },
             {
@@ -39,7 +39,7 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
               },
-              "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+              "grader_fqn": "metis.library.graders.TraceBudgetGrader",
               "grader_args": {}
             }
           ]
@@ -58,7 +58,7 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Synthesis faithfulness: Checks that the answer uses its evidence."
               },
-              "grader_fqn": "metis.library.graders.SynthesisFaithfulnessGrader",
+              "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
               "grader_args": {}
             },
             {
@@ -69,7 +69,7 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
               },
-              "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+              "grader_fqn": "metis.library.graders.TraceBudgetGrader",
               "grader_args": {}
             }
           ]
@@ -88,7 +88,7 @@
                 "when": "Recover after a failed search.",
                 "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
               },
-              "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+              "grader_fqn": "metis.library.graders.TraceBudgetGrader",
               "grader_args": {}
             }
           ]

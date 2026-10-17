@@ -11,12 +11,14 @@ experiment rather than a stopped interview.
 
 from __future__ import annotations
 
-import inspect
 import math
 from dataclasses import dataclass, field
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, Protocol
 
+from pydantic import ValidationError
+
+from metis.library.grader import Grader, JudgeArgs
 from metis.wizard.application.matching.library_catalogue import library_catalogue
 
 if TYPE_CHECKING:
@@ -124,11 +126,29 @@ def default_grader_args(criterion: Criterion) -> dict[str, Any]:
 
 
 def validate_grader_args(fqn: str | None, args: Any) -> None:
+    """Check ``args`` against the grader's ``args_model``, as the engine will before a run.
+
+    A model-based grader's ``model`` is filled in with a placeholder when absent: the engine
+    resolves it at run time, so its absence here is not an error.
+    """
     if not fqn or not isinstance(args, dict):
         raise ValueError("Select a Grader and supply a JSON object.")
     try:
         module, name = fqn.rsplit(".", 1)
         cls = getattr(import_module(module), name)
-        inspect.signature(cls).bind(**args)
-    except (ImportError, AttributeError, TypeError) as exc:
+    except (ImportError, AttributeError, ValueError) as exc:
         raise ValueError(str(exc)) from exc
+    if not (isinstance(cls, type) and issubclass(cls, Grader)):
+        raise ValueError(f"{fqn} is not a metis.library.grader.Grader")
+    candidate = dict(args)
+    if issubclass(cls.args_model, JudgeArgs):
+        candidate.setdefault("model", "resolved-at-run-time")
+    try:
+        cls.args_model.model_validate(candidate)
+    except ValidationError as exc:
+        raise ValueError(
+            "; ".join(
+                f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+                for error in exc.errors()
+            )
+        ) from exc

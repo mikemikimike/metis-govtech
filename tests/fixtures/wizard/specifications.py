@@ -17,9 +17,9 @@ from metis.wizard.contracts import (
     Task,
 )
 
-TURN_BUDGET = "metis.library.graders.TurnBudgetGrader"
-CITATION_GRADER = "metis.library.graders.SynthesisFaithfulnessGrader"
-BOUNDED_TROUBLESHOOTING = "metis.library.graders.BoundedTroubleshootingGrader"
+TURN_BUDGET = "metis.library.graders.TraceBudgetGrader"
+CITATION_GRADER = "tests.unit.engine.graders_for_tests.FixedScoreGrader"
+BOUNDED_TROUBLESHOOTING = "metis.library.graders.TraceBudgetGrader"
 
 
 def orca_handover() -> Specification:
