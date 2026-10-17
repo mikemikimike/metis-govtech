@@ -242,25 +242,25 @@ class GraderRef(BaseModel):
     """A grader reference from specification.yaml.
 
     Accepts either:
-      - a plain string: "metis.library.graders.RoutingAccuracyGrader"
-      - a single-key mapping: {"metis.library.graders.TurnBudgetGrader": {"max_turns": 8}}
+      - a plain string: "metis.library.graders.TraceBudgetGrader"
+      - a single-key mapping: {"metis.library.graders.TraceBudgetGrader": {"max_traces": 8}}
     """
 
     criterion_id: str = ""
     fqn: str = Field(
         description=(
             "Fully-qualified import path of the grader class to run — a"
-            " MetisTurnGrader or MetisSessionGrader subclass, e.g."
-            " 'metis.library.graders.RoutingAccuracyGrader'. Resolved at"
+            " metis.library.grader.Grader subclass, e.g."
+            " 'metis.library.graders.TraceBudgetGrader'. Resolved at"
             " runtime via importlib."
         )
     )
     args: dict[str, Any] = Field(
         default_factory=dict,
         description=(
-            "Keyword arguments for the grader's constructor (invoked as"
-            " cls(**args)), mapping each parameter name to its value. Empty"
-            " when the grader takes no configuration."
+            "The grader's arguments, validated against its args_model before"
+            " the run (unknown keys are rejected). Empty when the grader's"
+            " defaults suffice."
         ),
     )
 

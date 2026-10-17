@@ -4,22 +4,14 @@ from __future__ import annotations
 
 import shlex
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
-from deepeval.test_case import LLMTestCase
-from deepeval.test_case.conversational_test_case import ConversationalTestCase, Turn
 from typer.testing import CliRunner
 
 from metis.core.reporting import EvaluationResults
+from metis.core.traces import GradingInput, Observation, Trace
 from metis.engine import cli
 from metis.engine.cli import EvaluationOutcome, app
-from metis.engine.evaluation.types import (
-    EvalResult,
-    GraderResult,
-    SessionResult,
-    TurnResult,
-)
 from metis.engine.simulation.types import (
     GraderRef,
     TrialConfig,
@@ -29,7 +21,7 @@ from metis.engine.simulation.types import (
 
 runner = CliRunner()
 
-MINIMAL_EXPERIMENT = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\ntarget:\n  name: Test target\n  users: Test users\n  description: Test target\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  behaviour_refs:\n  - EB-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
+MINIMAL_EXPERIMENT = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\ntarget:\n  name: Test target\n  users: Test users\n  description: Test target\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  behaviour_refs:\n  - EB-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: tests.unit.engine.graders_for_tests.FixedScoreGrader\n      grader_args: {}\n"
 
 
 def _write_snapshot(experiment_dir: Path, content: str = MINIMAL_EXPERIMENT) -> Path:
@@ -49,7 +41,14 @@ def _write_record(
         config=TrialConfig(
             persona="alice",
             scenario="task-1",
-            grader_refs=[GraderRef(fqn="example.graders.TestGrader", args={})],
+            task_id="TC-001",
+            grader_refs=[
+                GraderRef(
+                    criterion_id="AC-1-1",
+                    fqn="tests.unit.engine.graders_for_tests.FixedScoreGrader",
+                    args={},
+                )
+            ],
         ),
         outcome=TrialOutcome(
             stop_reason="goal_achieved",
@@ -64,50 +63,18 @@ def _write_record(
     return record_path
 
 
-def _grader_eval_result() -> EvalResult:
-    turn_graders = [
-        GraderResult(
-            name="Routing Accuracy",
-            score=0.9,
-            reason="Correct route",
-            success=True,
-            skipped=False,
-            evaluation_cost=0.012,
-            input_tokens=120,
-            output_tokens=30,
-        ),
-        GraderResult(
-            name="Turn Budget",
-            score=1.0,
-            reason="Within budget",
-            success=True,
-            skipped=False,
-        ),
-    ]
-    session_grader = GraderResult(
-        name="Session Efficiency",
-        score=0.7,
-        reason="Efficient session",
-        success=True,
-        skipped=False,
-    )
-    return EvalResult(
-        turn_results=[
-            TurnResult(
-                llm_test_case=LLMTestCase(
-                    input="hi", actual_output="ok", name="trace-1"
+def _session(session_id: str = "session-1", traces: int = 1) -> GradingInput:
+    return GradingInput(
+        traces=tuple(
+            Trace(
+                id=f"{session_id}-t{i}",
+                session_id=session_id,
+                observations=(
+                    Observation(id=f"o{i}", trace_id=f"{session_id}-t{i}", output="ok"),
                 ),
-                grader_results=turn_graders,
             )
-        ],
-        session_results=[
-            SessionResult(
-                conversational_test_case=ConversationalTestCase(
-                    turns=[Turn(role="user", content="hi")], name="session-1"
-                ),
-                grader_results=[session_grader],
-            )
-        ],
+            for i in range(traces)
+        )
     )
 
 
@@ -243,16 +210,17 @@ def test_evaluate_with_no_run_records_is_a_noop(tmp_path: Path) -> None:
     )
 
 
-def _patch_evaluation(monkeypatch, *, test_cases: list[object]) -> None:
+def _patch_evaluation(monkeypatch, *, traces: int = 1) -> list[dict[str, Any]]:
+    """Fake Langfuse: every session has ``traces`` traces. Returns the fetch calls made."""
+    calls: list[dict[str, Any]] = []
+
+    def fetch(session_id: str, _langfuse: object, **kwargs: Any) -> GradingInput:
+        calls.append({"session_id": session_id, **kwargs})
+        return _session(session_id, traces)
+
     monkeypatch.setattr("metis.engine.extractor.get_langfuse_client", lambda: object())
-    monkeypatch.setattr(
-        "metis.engine.extractor.fetch_by_session_id",
-        lambda *_args, **_kwargs: SimpleNamespace(test_cases=test_cases),
-    )
-    monkeypatch.setattr(
-        "metis.engine.evaluation.evaluate",
-        lambda *_args, **_kwargs: _grader_eval_result(),
-    )
+    monkeypatch.setattr("metis.engine.extractor.fetch_session", fetch)
+    return calls
 
 
 def test_evaluation_writes_results_file_and_prints_report_command(
@@ -260,7 +228,7 @@ def test_evaluation_writes_results_file_and_prints_report_command(
 ) -> None:
     output = _write_experiment_dir(tmp_path)
     _write_record(output)
-    _patch_evaluation(monkeypatch, test_cases=[object()])
+    _patch_evaluation(monkeypatch)
 
     first = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
     second = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
@@ -270,8 +238,15 @@ def test_evaluation_writes_results_file_and_prints_report_command(
     results_file = output.resolve() / "reports" / "results.json"
     results = EvaluationResults.load_file(results_file)
     assert results.run_id == "report"
-    assert len(results.turn_results) == 1
-    assert len(results.session_results) == 1
+    assert results.schema_version == 2
+    (record,) = results.records
+    assert (record.session_id, record.task_id, record.criterion_id) == (
+        "session-1",
+        "TC-001",
+        "AC-1-1",
+    )
+    assert record.grader_args == {"threshold": 0.5, "score": 1.0}
+    assert [(r.outcome, r.score) for r in record.results] == [("passed", 1.0)]
     # Engine no longer builds the report; insights does.
     assert not (output / "reports" / "report.json").exists()
     assert not (output / "reports" / "report.html").exists()
@@ -289,7 +264,7 @@ def test_report_command_is_shell_quoted_for_paths_with_spaces(
 ) -> None:
     output = _write_experiment_dir(tmp_path, name="test exp 20260101-010101")
     _write_record(output)
-    _patch_evaluation(monkeypatch, test_cases=[object()])
+    _patch_evaluation(monkeypatch)
 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
@@ -305,12 +280,12 @@ def test_evaluation_with_no_successful_records_writes_no_results(
 ) -> None:
     output = _write_experiment_dir(tmp_path)
     _write_record(output)
-    _patch_evaluation(monkeypatch, test_cases=[])
+    _patch_evaluation(monkeypatch, traces=0)
 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert result.exit_code == 0
-    assert "No evaluable test cases" in result.output
+    assert "No traces found in Langfuse" in result.output
     assert not (output / "reports" / "results.json").exists()
     assert "metisinsightsreport" not in _compact(result.output)
 
@@ -320,10 +295,10 @@ def test_reevaluation_with_no_successes_removes_stale_results(
 ) -> None:
     output = _write_experiment_dir(tmp_path)
     _write_record(output)
-    _patch_evaluation(monkeypatch, test_cases=[object()])
+    _patch_evaluation(monkeypatch)
     runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
     assert (output / "reports" / "results.json").exists()
-    _patch_evaluation(monkeypatch, test_cases=[])
+    _patch_evaluation(monkeypatch, traces=0)
 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
@@ -338,7 +313,7 @@ def test_report_command_keeps_square_brackets_in_paths(
 ) -> None:
     output = _write_experiment_dir(tmp_path, name="test [draft] 20260101-010101")
     _write_record(output)
-    _patch_evaluation(monkeypatch, test_cases=[object()])
+    _patch_evaluation(monkeypatch)
 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
@@ -378,19 +353,12 @@ def test_evaluation_progress_advances_for_success_and_soft_failure(
     monkeypatch.setattr(cli, "_create_evaluation_progress", FakeProgress)
     monkeypatch.setattr("metis.engine.extractor.get_langfuse_client", lambda: object())
 
-    def fetch(session_id: str, *_args: object, **_kwargs: object) -> object:
+    def fetch(session_id: str, *_args: object, **_kwargs: object) -> GradingInput:
         if session_id == "session-2":
             raise RuntimeError("trace unavailable")
-        return SimpleNamespace(test_cases=[object()])
+        return _session(session_id)
 
-    monkeypatch.setattr(
-        "metis.engine.extractor.fetch_by_session_id",
-        fetch,
-    )
-    monkeypatch.setattr(
-        "metis.engine.evaluation.evaluate",
-        lambda *_args, **_kwargs: _grader_eval_result(),
-    )
+    monkeypatch.setattr("metis.engine.extractor.fetch_session", fetch)
 
     outcome = cli._run_evaluation(
         output,
@@ -419,18 +387,15 @@ def test_evaluation_progress_advances_for_success_and_soft_failure(
     assert "alice x task-1 — EVALUATING" in evaluation_log
     assert "alice x task-1 — DONE" in evaluation_log
     assert "alice x task-1 — FAILED — trace unavailable" in evaluation_log
-    assert '"fqn": "example.graders.TestGrader"' in evaluation_log
-    assert '"grader": "Routing Accuracy"' in evaluation_log
-    assert '"score": 0.9' in evaluation_log
-    assert '"success": true' in evaluation_log
-    assert '"reason": "Correct route"' in evaluation_log
-    assert '"evaluation_cost": 0.012' in evaluation_log
-    assert '"input_tokens": 120' in evaluation_log
-    assert '"output_tokens": 30' in evaluation_log
-    assert '"scope": "session"' in evaluation_log
-    assert '"grader": "Session Efficiency"' in evaluation_log
-    assert '"grader": "Turn Budget"' in evaluation_log
-    assert '"skipped": false' in evaluation_log
+    assert (
+        '"fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader"'
+        in evaluation_log
+    )
+    assert '"criterion_id": "AC-1-1"' in evaluation_log
+    assert '"outcome": "passed"' in evaluation_log
+    assert '"score": 1.0' in evaluation_log
+    assert '"reason": "1 trace(s)"' in evaluation_log
+    assert "GRADER RESULTS — record=alice x task-1 count=1" in evaluation_log
 
     cli._update_evaluation_progress(
         None,
@@ -441,3 +406,203 @@ def test_evaluation_progress_advances_for_success_and_soft_failure(
         phase="extracting",
     )
     assert "Evaluation 1/2: alice x task-1 — extracting" in capsys.readouterr().out
+
+
+# ── grading through the new contract ────────────────────────────────────────
+
+GRADERS = "tests.unit.engine.graders_for_tests"
+
+
+def _spec_with(fqn: str, grader_args: str = "{}", *, defaults: str = "") -> str:
+    """MINIMAL_EXPERIMENT with its one criterion pointed at ``fqn``."""
+    spec = MINIMAL_EXPERIMENT.replace(
+        f"grader_fqn: {GRADERS}.FixedScoreGrader\n      grader_args: {{}}\n",
+        f"grader_fqn: {fqn}\n      grader_args: {grader_args}\n",
+    )
+    assert spec != MINIMAL_EXPERIMENT or fqn.endswith("FixedScoreGrader")
+    return defaults + spec
+
+
+def _write_judge_record(experiment_dir: Path, fqn: str) -> None:
+    record = TrialRecord(
+        config=TrialConfig(
+            task_id="TC-001",
+            persona="alice",
+            scenario="task-1",
+            grader_refs=[GraderRef(criterion_id="AC-1-1", fqn=fqn, args={})],
+        ),
+        outcome=TrialOutcome(
+            stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+        ),
+        target_session_id="session-1",
+    )
+    path = experiment_dir / "trials" / "run-1" / "record.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(record.model_dump_json())
+
+
+def test_a_failing_score_is_recorded_as_failed(monkeypatch, tmp_path: Path) -> None:
+    output = _write_experiment_dir(
+        tmp_path, content=_spec_with(f"{GRADERS}.FixedScoreGrader", "{score: 0.2}")
+    )
+    _write_record(output)
+    _patch_evaluation(monkeypatch)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    (record,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    assert [(r.outcome, r.score) for r in record.results] == [("failed", 0.2)]
+    assert record.grader_args == {"threshold": 0.5, "score": 0.2}
+
+
+def test_graders_use_the_snapshot_criteria_not_the_record_copy(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A record's grader_refs pick which criteria apply; their args come from the spec."""
+    output = _write_experiment_dir(
+        tmp_path, content=_spec_with(f"{GRADERS}.FixedScoreGrader", "{score: 0.9}")
+    )
+    _write_record(output)  # its GraderRef carries args={}
+    _patch_evaluation(monkeypatch)
+
+    runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    (record,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    assert record.results[0].score == 0.9
+
+
+def test_every_session_is_fetched_with_its_artifacts_and_timeout(
+    monkeypatch, tmp_path: Path
+) -> None:
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output, run_name="run-1", session_id="session-1")
+    _write_record(output, run_name="run-2", session_id="session-2")
+    calls = _patch_evaluation(monkeypatch)
+
+    runner.invoke(
+        app, ["evaluate", "--experiment-dir", str(output), "--langfuse-timeout", "7"]
+    )
+
+    assert sorted(c["session_id"] for c in calls) == ["session-1", "session-2"]
+    assert all(c["retry_timeout"] == 7 for c in calls)
+    assert all(c["experiment_root"] == output.resolve() for c in calls)
+    assert all(c["artifacts"] == [] for c in calls)
+    results = EvaluationResults.load_file(output / "reports" / "results.json")
+    assert len(results.records) == 2
+
+
+def test_code_graders_need_no_judge_credentials(monkeypatch, tmp_path: Path) -> None:
+    for name in ("JUDGE_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(cli, "load_dotenv", lambda: None)
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    _patch_evaluation(monkeypatch)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    assert (output / "reports" / "results.json").exists()
+
+
+def test_model_based_grader_without_credentials_fails_before_any_fetch(
+    monkeypatch, tmp_path: Path
+) -> None:
+    for name in ("JUDGE_API_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(cli, "load_dotenv", lambda: None)
+    fqn = f"{GRADERS}.EchoJudgeGrader"
+    output = _write_experiment_dir(tmp_path, content=_spec_with(fqn))
+    _write_judge_record(output, fqn)
+    calls = _patch_evaluation(monkeypatch)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 1
+    assert "AC-1-1" in result.output
+    assert (
+        "JUDGE_API_KEY" in _compact(result.output) or "JUDGE_API_KEY" in result.output
+    )
+    assert calls == []
+
+
+def test_judge_model_comes_from_the_spec_defaults(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("JUDGE_API_KEY", "test-key")
+    monkeypatch.setenv("JUDGE_MODEL", "from-env")
+    monkeypatch.setattr(cli, "load_dotenv", lambda: None)
+    fqn = f"{GRADERS}.EchoJudgeGrader"
+    output = _write_experiment_dir(
+        tmp_path,
+        content=_spec_with(fqn, defaults="defaults:\n  judge_model: from-spec\n"),
+    )
+    _write_judge_record(output, fqn)
+    _patch_evaluation(monkeypatch)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    (record,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    assert record.grader_args["model"] == "from-spec"
+    assert record.results[0].reason == "from-spec"
+
+
+def test_a_grader_that_raises_does_not_fail_the_record(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A grader bug is one errored result; the record still counts as evaluated."""
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    _patch_evaluation(monkeypatch)
+
+    async def explode(*_args: object) -> object:
+        raise RuntimeError("boom")
+
+    from tests.unit.engine.graders_for_tests import FixedScoreGrader
+
+    monkeypatch.setattr(FixedScoreGrader, "grade", explode)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    (record,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    assert [r.outcome for r in record.results] == ["errored"]
+    assert "boom" in record.results[0].reason
+    log = (output / "logs" / "evaluate.log").read_text()
+    assert '"outcome": "errored"' in log
+
+
+def test_record_criteria_missing_from_the_snapshot_are_reported(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A record graded against an edited snapshot must not silently lose criteria."""
+    output = _write_experiment_dir(tmp_path)
+    record = TrialRecord(
+        config=TrialConfig(
+            task_id="TC-001",
+            persona="alice",
+            scenario="task-1",
+            grader_refs=[
+                GraderRef(criterion_id="AC-1-1", fqn=f"{GRADERS}.FixedScoreGrader"),
+                GraderRef(criterion_id="AC-GONE", fqn=f"{GRADERS}.FixedScoreGrader"),
+            ],
+        ),
+        outcome=TrialOutcome(
+            stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+        ),
+        target_session_id="session-1",
+    )
+    path = output / "trials" / "run-1" / "record.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(record.model_dump_json())
+    _patch_evaluation(monkeypatch)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    assert "AC-GONE" in result.output
+    assert (
+        "UNKNOWN CRITERIA — AC-GONE" in (output / "logs" / "evaluate.log").read_text()
+    )
+    (graded,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    assert graded.criterion_id == "AC-1-1"
