@@ -317,3 +317,22 @@ def test_old_deepeval_grader_fqn_fails_loudly(
     old_fqn = ".".join(["metis", "library", "graders", "TurnBudgetGrader"])
     out = _error(tmp_path, capsys, _with_grader(old_fqn))
     assert "has no attribute 'TurnBudgetGrader'" in out
+
+
+def test_every_bad_criterion_is_reported_before_exiting(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    """One run names every criterion to fix, not only the first one."""
+    content = _with_grader(f"{GRADERS}.NotAGrader") + (
+        "    - id: AC-1-2\n"
+        "      name: Check 2\n"
+        "      description:\n"
+        "        given: a request\n"
+        "        when: the agent responds\n"
+        "        then: the requirement is met\n"
+        f"      grader_fqn: {GRADERS}.FixedScoreGrader\n"
+        "      grader_args: {scroe: 0.3}\n"
+    )
+    out = _error(tmp_path, capsys, content)
+    assert "Criterion 'AC-1-1'" in out
+    assert "Criterion 'AC-1-2' has invalid grader_args" in out

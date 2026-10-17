@@ -130,12 +130,15 @@ def _validate_inputs(input_dir: Path) -> None:
                 )
                 sys.exit(1)
 
-    for message in _grader_setup_errors(specification):
+    # Print every bad criterion before exiting, so one run lists everything to fix.
+    errors = _grader_setup_errors(specification)
+    for message in errors:
         # markup=False: pydantic messages contain "[...]"; soft_wrap: keep each error on one
         # line so it can be grepped from logs.
         console.print(
             f"Error: {message}", style="bold red", markup=False, soft_wrap=True
         )
+    if errors:
         sys.exit(1)
 
 
