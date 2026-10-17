@@ -5,9 +5,9 @@ Evaluation engine for METIS — simulation harness, trace extraction, and grader
 ## What it does
 
 1. **Simulate** — drives the target system through its selected runner with LLM-powered user personas
-2. **Extract** — fetches resulting Langfuse traces and builds DeepEval test cases
-3. **Evaluate** — runs 50+ graders (code-graded and LLM-judge) against the traces
-4. **Results** — writes grader results to `reports/results.json`; `metis insights report` builds the report from them
+2. **Extract** — fetches every Langfuse trace of each session
+3. **Evaluate** — runs each criterion's grader once per session
+4. **Results** — writes grader results to `reports/results.json` (holding one GraderRecord per grader per session; `metis insights report` reads it after #454)
 
 ## Setup
 
@@ -23,13 +23,17 @@ cp packages/engine/.env.example .env
 
 ## Running
 
+These commands use the `simple` example. The full `example-experiment/` does not run yet:
+only one of its Criteria names a grader, so the engine refuses it at validation (see its
+[README](example-experiment/README.md)).
+
 ```bash
 # Run end-to-end (Simulation TUI, then evaluation progress bar)
-metis engine run --input-dir packages/engine/example-experiment/
+metis engine run --input-dir packages/engine/example-experiment/simple/
 
 # Or run the phases separately, in this order. simulate prints the evaluate command.
 # The --experiment-dir value is the output directory that simulate created.
-metis engine simulate --input-dir packages/engine/example-experiment/
+metis engine simulate --input-dir packages/engine/example-experiment/simple/
 metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
 
 # Resume an interrupted simulation. simulate prints this exact command;
@@ -38,24 +42,24 @@ metis engine simulate --resume --experiment-dir experiments/orca-eval-20260820-1
 metis engine run --resume --experiment-dir experiments/orca-eval-20260820-143000/
 
 # With the browser runner selected and its credentials set:
-HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/
+HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/simple/
 
 # Verbosity controls log detail, not progress displays.
-metis engine simulate --input-dir packages/engine/example-experiment/ -v    # INFO
-metis engine simulate --input-dir packages/engine/example-experiment/ -vv   # DEBUG
-metis engine simulate --input-dir packages/engine/example-experiment/ --quiet  # ERROR only
+metis engine simulate --input-dir packages/engine/example-experiment/simple/ -v    # INFO
+metis engine simulate --input-dir packages/engine/example-experiment/simple/ -vv   # DEBUG
+metis engine simulate --input-dir packages/engine/example-experiment/simple/ --quiet  # ERROR only
 
 # Disable the Simulation TUI (force linear simulation output)
-metis engine simulate --input-dir packages/engine/example-experiment/ --no-tui
+metis engine simulate --input-dir packages/engine/example-experiment/simple/ --no-tui
 
 # Structured log files (JSON lines)
-metis engine simulate --input-dir packages/engine/example-experiment/ --log-format json
+metis engine simulate --input-dir packages/engine/example-experiment/simple/ --log-format json
 
 # Override log directory (default: co-located with results)
-metis engine simulate --input-dir packages/engine/example-experiment/ --log-dir /tmp/my-logs
+metis engine simulate --input-dir packages/engine/example-experiment/simple/ --log-dir /tmp/my-logs
 
 # Concurrent simulation (2 parallel browser contexts)
-metis engine simulate --input-dir packages/engine/example-experiment/ --concurrency 2
+metis engine simulate --input-dir packages/engine/example-experiment/simple/ --concurrency 2
 
 # Custom Langfuse timeout for evaluation (default: 90s)
 metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/ --langfuse-timeout 120
@@ -113,22 +117,10 @@ experiments/orca-eval-20260730-143022/
     └── report.html      # Visual report (written by metis insights report)
 ```
 
-## Available graders
-
-All graders are imported from `metis.library.graders` (e.g. `metis.library.graders.RoutingAccuracyGrader`).
-
-Each grader class carries a `tags` ClassVar for classification:
-
-| Tag dimension | Values |
-|---------------|--------|
-| Component | `orchestration`, `analysis`, `presentation`, `universal` |
-| Granularity | `per-turn`, `session-level` |
-| Grading | `code-graded`, `judge-graded` |
-
 ## Programmatic usage
 
 ```python
-from metis.engine import evaluate, fetch_by_session_id
+from metis.engine import build_criterion_grader, fetch_session, grade_session
 from metis.engine.extractor import get_langfuse_client
 ```
 

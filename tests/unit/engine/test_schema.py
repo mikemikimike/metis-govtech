@@ -70,15 +70,13 @@ class TestSchemaSync:
         data = _load_fixture(fixture_path)
         jsonschema.validate(instance=data, schema=schema)
 
-    def test_fixture_parses_with_pydantic(self, examples_dir: Path):
-        """Test fixture must parse successfully with the Pydantic model."""
-        pytest.importorskip(
-            "playwright",
-            reason="example-experiment uses OrcaPlaywrightRunnerFactory (requires playwright extra)",
-        )
-        fixture_path = examples_dir / "specification.yaml"
-        if not fixture_path.exists():
-            pytest.fail(f"Fixture not found: {fixture_path}")
+    def test_simple_fixture_parses_with_pydantic(self, examples_dir: Path):
+        """The runnable example must parse with the engine's model.
+
+        The full example is not runnable while most of its Criteria have no grader (#428);
+        tests/unit/engine/test_runner_ref.py pins exactly which ones.
+        """
+        fixture_path = examples_dir / "simple" / "specification.yaml"
         data = _load_fixture(fixture_path)
         obj = Specification.model_validate(data)
-        assert obj.id
+        assert obj.id == "orca-simple"

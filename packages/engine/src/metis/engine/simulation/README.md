@@ -58,7 +58,7 @@ Each turn the user agent emits a typed action list (`ChosenAction` — a union o
 | `USER_AGENT_MAX_TOKENS` | No | Max output tokens per turn (unset/empty → parameter omitted, provider default applies) |
 | `USER_AGENT_TEMPERATURE` | No | Sampling temperature (unset/empty → parameter omitted, provider default applies) |
 
-Runner-specific variables (e.g. `ORCA_URL`, `ORCA_API_URL`, `ORCA_API_KEY`) are documented in each runner's module docstring. Judge/evaluation variables (`JUDGE_MODEL`, `DEEPEVAL_*`) are documented in the [evaluation README](../evaluation/README.md).
+Runner-specific variables (e.g. `ORCA_URL`, `ORCA_API_URL`, `ORCA_API_KEY`) are documented in each runner's module docstring. Judge/evaluation variables (`JUDGE_API_KEY`, `JUDGE_BASE_URL`, `JUDGE_MODEL`) are documented in the [evaluation README](../evaluation/README.md).
 
 ## Running
 

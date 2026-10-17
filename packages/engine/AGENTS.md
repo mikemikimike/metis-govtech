@@ -50,7 +50,9 @@ See `schemas/README.md` for the full version bump rules table.
 
 ## Pyright Configuration
 
-The workspace disables `reportIncompatibleMethodOverride` for this package because DeepEval's `BaseMetric.__name__` returns `Literal['Base Metric']` and every subclass override triggers false positives.
+The workspace disables `reportIncompatibleMethodOverride`. It was added for DeepEval's
+`BaseMetric.__name__`; the redesign (#428) removed that cause and no override errors remain,
+so re-enabling it is a safe follow-up.
 
 ## Test Style
 

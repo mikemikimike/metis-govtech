@@ -47,7 +47,9 @@ It also prints the terminal pass/fail/skip table per Criterion.
   without a target specification opts out of the report.
 - **Unreadable results.** A missing file, malformed JSON, or a `results.json` written by
   a different version of metis-engine (`Unsupported schema_version …`) exits 1 and
-  writes nothing. Re-run `metis engine evaluate` to produce a current file.
+  writes nothing. Re-run `metis engine evaluate` to produce a current file. The current
+  `metis engine evaluate` writes a format using GraderRecord that this command does not
+  read yet (#454).
 
 The report's content — scoring, statuses, and failure evidence — is defined in the
 [report contract](report.md), and its JSON shape in the

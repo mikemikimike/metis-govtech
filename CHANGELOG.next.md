@@ -37,6 +37,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `next`'s Makefiles were kept unchanged: they already contained every target
   #343 adds, and #343's `--extra web` does not exist on `next`.
 
+- `pytest-asyncio` is a declared dev dependency; it was previously installed only through
+  `deepeval` (#428).
+
 ### Docs
 
 #### Added
@@ -69,10 +72,19 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   requirements. The Experiment holds Personas, Scenarios, Tasks, and execution settings.
   The Specification combines both in one document (#395).
 
-- `metis.core.reporting`: the serializable grader-result types (`TurnReport`,
-  `SessionReport`, `TurnGraderResult`, `SessionGraderResult`) and `EvaluationResults`,
-  the version-guarded `reports/results.json` file that `metis-engine` writes and
-  `metis-insights` reads (#417).
+- `metis.core.traces`: `Observation`, `Trace` and `GradingInput`, the read-only input of every
+  grader run. `Trace.root` finds the logical root observation by `isRootObservation`, falling
+  back to the parentless observation only when the flag is absent from the whole trace (#428).
+
+- `metis.core.grading`: `GraderResult`/`GradingOutput`, what a grader returns (a score per
+  grading scope, or skipped/errored), and `RecordedResult`, its outcome after the threshold
+  (#428).
+
+- `metis.core.reporting`: `EvaluationResults`, the version-guarded `reports/results.json`
+  holding one `GraderRecord` per grader per session that `metis-engine` writes (#417, #428).
+
+- `defaults.judge_model` in `specification.yaml`: the experiment's default judge model for
+  model-based graders. It is omitted from the document when unset (#428).
 
 #### Breaking
 
@@ -88,12 +100,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Breaking
 
-- Rename the `metis.library.metrics` subpackage to `metis.library.graders`, its two base
-  classes `MetisTurnMetric`/`MetisSessionMetric` to `MetisTurnGrader`/`MetisSessionGrader`,
-  and every `*Metric`-suffixed grader class (77 total, including the fallback judge
-  `CriterionGEvalMetric` → `CriterionGEvalGrader`) to its `*Grader` equivalent — e.g.
-  `TurnBudgetMetric` → `TurnBudgetGrader`. "Metric" never appears in `GLOSSARY.md`; the
-  glossary's term for this concept is **Grader** (#415).
+- Grader redesign without DeepEval. Graders subclass `metis.library.grader.Grader[Args]`,
+  declare their parameters as an `args_model` (`GraderArgs`, or `JudgeArgs` for model-based
+  graders), and implement `async grade(input, llm) -> GradingOutput` over the session's
+  Langfuse traces and artifacts only. Every previous grader, the `MetisTurnGrader`/
+  `MetisSessionGrader` bases, the GEval judge helpers and the `CriterionGEvalGrader` fallback
+  are removed, and `deepeval` is no longer a dependency. The catalogue ships one grader,
+  `TraceBudgetGrader` (`max_traces`), replacing `TurnBudgetGrader` (`max_turns`) (#415, #428).
 
 ### metis-engine
 
@@ -103,16 +116,19 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   server moves to v4 `events_only` mode, which permanently 404s the v1 `GET
   /api/public/traces` and `GET /api/public/observations` endpoints `fetch_by_session_id` used.
   v4 has no standalone Trace entity — a trace's id/input/output/timestamp now come from its root
-  observation (the one with no `parent_observation_id`). Fetching uses a two-step
+  observation, found by `isRootObservation`, falling back to the observation with no
+  `parent_observation_id` only when the flag is absent from the whole trace. Fetching uses a two-step
   `observations_v_2.get_many` call per trace, not one call per session: a session-wide,
   `sessionId`-filtered call finds which traces exist (defensive against Orca's agent-run spans
   carrying a different session id — issue #435 — the root observation's session id is always
   correct, so this step is reliable), then each trace is re-fetched in full with a `traceId`
   filter, which never depends on any child observation's session label. This has the same shape
   as the superseded v1 `trace.list` + `observations.get_many` pair, with the second call now
-  going through `observations_v_2.get_many` as well. A trace with zero or multiple root
-  observations falls back to the earliest `start_time` and logs a warning rather than crashing
-  the evaluation run. No dual-endpoint fallback — the v1 calls are removed outright (#432, #435).
+  going through `observations_v_2.get_many` as well. Every trace in the session is kept,
+  including traces whose root has no output; metadata that may have been truncated at 200
+  characters is fetched again with every key expanded. A trace with zero or multiple root
+  candidates falls back to the earliest `start_time` and logs a warning rather than crashing
+  the evaluation run. No dual-endpoint fallback — the v1 calls are removed outright (#432, #435, #428).
 
 - Resolve each Task's selected Behaviours to all their Criterion Graders, with separate Criterion IDs and settings in execution and saved Trial records (#413).
 
@@ -162,6 +178,24 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `generate_report`, `ReportResult`, and the `metis.engine.reporting` subpackage are
   removed, and `report.schema.json` moved to `metis-insights` (#417).
 
+- `metis engine evaluate` grades with the new contract. Each criterion's grader is built once
+  from the specification snapshot and validated before the run (`grader_args` against its
+  `args_model`, plus `check_setup`), then run once per session on every trace of the session.
+  A score at or above the criterion's `threshold` (default 0.5) passes; empty, raising or
+  mistyped grader output is recorded as errored, never failed. Judge credentials
+  (`JUDGE_API_KEY`/`JUDGE_BASE_URL`, falling back to `OPENAI_*`) are required only when a
+  criterion's grader is model-based; its model resolves from `grader_args.model`, then
+  `defaults.judge_model`, then `JUDGE_MODEL`, then `gemini-3.5-flash-lite`, and is recorded
+  in `grader_args`. `results.json` now holds one GraderRecord per grader per session
+  (schema_version is unchanged). `fetch_by_session_id`,
+  `FetchLangfuseResult`, `evaluate`, `EvalResult`, `RoutingSummary` and
+  `DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE` are removed; use `fetch_session`,
+  `build_criterion_grader` and `grade_session` (#428).
+
+- The bundled full example experiment names a grader on one Criterion (`AC-EXEC-3`) and leaves
+  the other 83 empty, so the engine refuses to run it until graders exist; the `simple`
+  example runs end to end with `TraceBudgetGrader` (#428).
+
 ### metis-insights
 
 #### Added
@@ -176,6 +210,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Use Target in report JSON, failure sources, and report labels (#429).
 
 - Expand Task Behaviour selections for plan counts, Criterion score attribution, and missing-result explanations (#413).
+
+- `metis insights report` still reads `results.json` version 2 and rejects files from the
+  current `metis engine evaluate` with "This results.json uses the new GraderRecord format
+  (grader redesign #428), which metis insights report cannot read yet. Rerun the report once
+  #454 is released."; its redesign is #454 (#428).
 
 ### metis-wizard
 
@@ -265,6 +304,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `tests/unit/wizard/`, integration tests under `tests/integration/wizard/`, and shared fixtures
   under `tests/fixtures/wizard/`, matching the documented repository convention. Test behaviour is
   unchanged.
+
+- The grader catalogue lists concrete `Grader` subclasses and their `args_model` fields
+  (omitting a model-based grader's `model`), and `grader_args` are validated against
+  `args_model`. The matcher's below-threshold fallback still names the removed
+  `CriterionGEvalGrader`, so a Criterion it cannot match does not compile: the CLI and the API's
+  `/compile` (HTTP 400) report "Criterion X: no grader matched and the fallback judge was removed
+  in the grader redesign (#428); choose a grader for this criterion." A `grader_fqn` that names
+  an abstract `Grader` is also a validation error (#428).
 
 #### Removed
 
