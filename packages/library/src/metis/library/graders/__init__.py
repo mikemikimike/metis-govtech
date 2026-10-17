@@ -177,6 +177,7 @@ from ._step_efficiency import StepEfficiencyGrader as StepEfficiencyGrader
 from ._synthesis_faithfulness import (
     SynthesisFaithfulnessGrader as SynthesisFaithfulnessGrader,
 )
+from ._trace_budget import TraceBudgetGrader as TraceBudgetGrader
 from ._turn_budget import TurnBudgetGrader as TurnBudgetGrader
 from ._turns_to_task_start import TurnsToTaskStartGrader as TurnsToTaskStartGrader
 from ._types import ConversationalTestCaseMetadata as ConversationalTestCaseMetadata
