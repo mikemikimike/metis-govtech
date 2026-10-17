@@ -26,7 +26,11 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from metis.core.reporting import EvaluationResults, SessionReport, TurnReport
+    from metis.insights._legacy_results import (
+        EvaluationResults,
+        SessionReport,
+        TurnReport,
+    )
 
 logger = get_logger(__name__)
 

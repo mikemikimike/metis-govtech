@@ -97,6 +97,27 @@
       "title": "CriterionDescription",
       "type": "object"
     },
+    "ExperimentDefaults": {
+      "additionalProperties": false,
+      "description": "Experiment-wide defaults that individual criteria can override.",
+      "properties": {
+        "judge_model": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Judge Model"
+        }
+      },
+      "title": "ExperimentDefaults",
+      "type": "object"
+    },
     "Feature": {
       "properties": {
         "id": {
@@ -297,6 +318,9 @@
       "default": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
       "title": "Runner Factory Ref",
       "type": "string"
+    },
+    "defaults": {
+      "$ref": "#/$defs/ExperimentDefaults"
     },
     "target": {
       "$ref": "#/$defs/Target"

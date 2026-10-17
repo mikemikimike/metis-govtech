@@ -10,8 +10,8 @@ import typer
 
 from metis.core.console import console
 from metis.core.logging import configure_logging
-from metis.core.reporting import EvaluationResults
 from metis.insights import __version__
+from metis.insights._legacy_results import EvaluationResults
 from metis.insights.report import format_terminal_summary, save_report
 
 app = typer.Typer(help="Build METIS reports from evaluation results.")

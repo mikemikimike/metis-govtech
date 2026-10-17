@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel, Field, SerializerFunctionWrapHandler, model_serializer
 
 from metis.core.profile import NamedNode
 
@@ -30,6 +32,15 @@ class Task(BaseModel, extra="forbid"):
     max_run_retries: int | None = Field(default=None, ge=0, strict=True)
 
 
+class ExperimentDefaults(BaseModel, extra="forbid"):
+    """Experiment-wide defaults that individual criteria can override."""
+
+    judge_model: str | None = Field(default=None, min_length=1)
+    """The judge model for every model-based grader whose criterion does not set
+    ``grader_args.model``. When unset, the engine falls back to ``JUDGE_MODEL`` and then to its
+    package default."""
+
+
 class Experiment(BaseModel):
     """The Test Cases and settings used to execute an evaluation."""
 
@@ -37,10 +48,19 @@ class Experiment(BaseModel):
     runner_factory_ref: str = (
         "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
     )
+    defaults: ExperimentDefaults = Field(default_factory=ExperimentDefaults)
     personas: list[Persona] = Field(default_factory=list)
     scenarios: list[Scenario] = Field(default_factory=list)
     tasks: list[Task] = Field(default_factory=list)
     fixture_content_descriptions: dict[str, str] = Field(default_factory=dict)
+
+    @model_serializer(mode="wrap")
+    def _omit_empty_defaults(self, handler: SerializerFunctionWrapHandler) -> Any:
+        """Leave ``defaults`` out until one is set, so existing specs serialise unchanged."""
+        data = handler(self)
+        if isinstance(data, dict) and not self.defaults.model_dump(exclude_none=True):
+            data.pop("defaults", None)
+        return data
 
     def persona(self, persona_id: str) -> Persona | None:
         return next((p for p in self.personas if p.id == persona_id), None)
