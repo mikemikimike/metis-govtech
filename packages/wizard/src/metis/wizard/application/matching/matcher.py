@@ -11,6 +11,7 @@ experiment rather than a stopped interview.
 
 from __future__ import annotations
 
+import inspect
 import math
 from dataclasses import dataclass, field
 from importlib import import_module
@@ -27,7 +28,13 @@ if TYPE_CHECKING:
 
 # One parameterised class that builds a judge from the criterion text. Not codegen: the
 # criterion travels as an argument, so there is no generated file to keep in sync.
+# The grader redesign (#428) removed this class and no replacement exists yet, so
+# `validate_grader_args` refuses it with a message that tells the user what to do.
 GENERATED_JUDGE_FQN = "metis.library.graders.default.CriterionGEvalGrader"
+GENERATED_JUDGE_REMOVED = (
+    "no grader matched and the fallback judge was removed in the grader redesign "
+    "(#428); choose a grader for this criterion."
+)
 
 DEFAULT_THRESHOLD = 0.62
 
@@ -133,6 +140,8 @@ def validate_grader_args(fqn: str | None, args: Any) -> None:
     """
     if not fqn or not isinstance(args, dict):
         raise ValueError("Select a Grader and supply a JSON object.")
+    if fqn == GENERATED_JUDGE_FQN:
+        raise ValueError(GENERATED_JUDGE_REMOVED)
     try:
         module, name = fqn.rsplit(".", 1)
         cls = getattr(import_module(module), name)
@@ -140,6 +149,10 @@ def validate_grader_args(fqn: str | None, args: Any) -> None:
         raise ValueError(str(exc)) from exc
     if not (isinstance(cls, type) and issubclass(cls, Grader)):
         raise ValueError(f"{fqn} is not a metis.library.grader.Grader")
+    # The same check as the engine's `resolve_grader_class`, repeated here because the
+    # wizard must not import the engine.
+    if inspect.isabstract(cls) or not hasattr(cls, "args_model"):
+        raise ValueError(f"{fqn} is an abstract base, not a concrete grader")
     candidate = dict(args)
     if issubclass(cls.args_model, JudgeArgs):
         candidate.setdefault("model", "resolved-at-run-time")
