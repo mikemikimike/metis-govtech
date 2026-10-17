@@ -60,6 +60,15 @@ class EvaluationResults(BaseModel, extra="ignore"):
                 f"Unsupported schema_version {v!r} (expected {_EVALUATION_RESULTS_VERSION}). "
                 "This results file was produced by a different version of metis-engine."
             )
+        # The old per-turn/per-session format has the same schema_version, so its keys are
+        # the only way to tell it apart. Without this check it would load as no records.
+        old_keys = sorted({"turn_results", "session_results"} & data.keys())
+        if old_keys:
+            raise ValueError(
+                f"This results file has {', '.join(old_keys)}, the format from before the "
+                "grader redesign (#428), which holds no GraderRecords; "
+                "re-run `metis engine evaluate` on the experiment directory."
+            )
         return data
 
     @classmethod

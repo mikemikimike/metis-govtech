@@ -68,6 +68,14 @@ class TestVersion:
         with pytest.raises(ValidationError, match="Unsupported schema_version 99"):
             EvaluationResults.model_validate({"schema_version": 99, "run_id": "r"})
 
+    @pytest.mark.parametrize("old_key", ["turn_results", "session_results"])
+    def test_the_old_turn_and_session_format_is_rejected(self, old_key: str) -> None:
+        """The old format has the same schema_version, so its keys are what tell it apart."""
+        with pytest.raises(ValidationError, match="re-run `metis engine evaluate`"):
+            EvaluationResults.model_validate(
+                {"schema_version": 2, "run_id": "r", old_key: []}
+            )
+
 
 class TestGraderRecord:
     def test_requires_at_least_one_result(self) -> None:
