@@ -390,8 +390,13 @@ async function call<T>(path: keyof ApiPaths, init?: RequestInit): Promise<T> {
 async function callBlob(
   path: keyof ApiPaths,
   init?: RequestInit,
-): Promise<Blob> {
-  return responseFor(path, init).then((response) => response.blob());
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await responseFor(path, init);
+  const filename = response.headers
+    .get("Content-Disposition")
+    ?.match(/^attachment; filename="([a-z0-9-]+\.zip)"$/)?.[1];
+  if (!filename) throw new Error("The export response has no valid filename.");
+  return { blob: await response.blob(), filename };
 }
 
 const JSON_POST: RequestInit = {
@@ -466,9 +471,13 @@ export const api = {
       body: form,
     });
   },
-  package: (specification: Specification, files: readonly PackageFile[]) => {
+  package: (
+    source: { state: InterviewState } | { specification: Specification },
+    files: readonly PackageFile[],
+  ) => {
     const form = new FormData();
-    form.append("specification", JSON.stringify(specification));
+    if ("state" in source) form.append("state", JSON.stringify(source.state));
+    else form.append("specification", JSON.stringify(source.specification));
     for (const file of files) form.append("files", file.blob, file.name);
     return callBlob("/api/v1/wizard/package", {
       method: "POST",

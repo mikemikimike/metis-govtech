@@ -21,7 +21,7 @@ _BASE: dict = {
 
 
 def _write_record(root: Path, folder: str, record: dict) -> None:
-    trial = root / "trials" / folder
+    trial = root / "outputs" / "trials" / folder
     trial.mkdir(parents=True)
     (trial / "record.json").write_text(json.dumps(record))
 

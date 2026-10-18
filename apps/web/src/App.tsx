@@ -517,7 +517,7 @@ export function App() {
   const packageAndDownload = useCallback(
     async (localRecord: LocalInterviewRecord) => {
       const archive = await api.package(
-        localRecord.state.specification,
+        { state: localRecord.state },
         fixturesForSpecification(localRecord),
       );
       downloadArchive(archive);

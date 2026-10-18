@@ -58,7 +58,7 @@ def _write_record(
         ),
         target_session_id=session_id,
     )
-    record_path = experiment_dir / "trials" / run_name / "record.json"
+    record_path = experiment_dir / "outputs" / "trials" / run_name / "record.json"
     record_path.parent.mkdir(parents=True, exist_ok=True)
     record_path.write_text(record.model_dump_json())
     return record_path
@@ -118,7 +118,7 @@ def _write_experiment_dir(
     content: str = MINIMAL_EXPERIMENT,
 ) -> Path:
     """Write a simulation output directory with its frozen input snapshot."""
-    experiment_dir = root / "experiments" / name
+    experiment_dir = root / "experiments" / "execute" / name
     experiment_dir.mkdir(parents=True)
     _write_snapshot(experiment_dir, content)
     return experiment_dir
@@ -204,7 +204,7 @@ def test_evaluate_rejects_a_directory_without_an_input_snapshot(tmp_path: Path) 
 def test_evaluate_fails_when_the_input_snapshot_has_no_specification_file(
     tmp_path: Path,
 ) -> None:
-    experiment_dir = tmp_path / "experiments" / "test-exp-20260101-010101"
+    experiment_dir = tmp_path / "experiments" / "execute" / "test-exp-20260101-010101"
     (experiment_dir / "inputs").mkdir(parents=True)
 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(experiment_dir)])
@@ -216,7 +216,7 @@ def test_evaluate_fails_when_the_input_snapshot_has_no_specification_file(
 
 def test_evaluate_fails_for_a_malformed_trial_record(tmp_path: Path) -> None:
     experiment_dir = _write_experiment_dir(tmp_path)
-    malformed_record = experiment_dir / "trials" / "run-1" / "record.json"
+    malformed_record = experiment_dir / "outputs" / "trials" / "run-1" / "record.json"
     malformed_record.parent.mkdir(parents=True)
     malformed_record.write_text("{}")
 
@@ -267,14 +267,14 @@ def test_evaluation_writes_results_file_and_prints_report_command(
 
     assert first.exit_code == 0
     assert second.exit_code == 0
-    results_file = output.resolve() / "reports" / "results.json"
+    results_file = output.resolve() / "outputs" / "reports" / "results.json"
     results = EvaluationResults.load_file(results_file)
     assert results.run_id == "report"
     assert len(results.turn_results) == 1
     assert len(results.session_results) == 1
     # Engine no longer builds the report; insights does.
-    assert not (output / "reports" / "report.json").exists()
-    assert not (output / "reports" / "report.html").exists()
+    assert not (output / "outputs" / "reports" / "report.json").exists()
+    assert not (output / "outputs" / "reports" / "report.html").exists()
     command = shlex.join(
         ["metis", "insights", "report", "--results-file", str(results_file)]
     )
@@ -294,7 +294,7 @@ def test_report_command_is_shell_quoted_for_paths_with_spaces(
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert result.exit_code == 0
-    results_file = output.resolve() / "reports" / "results.json"
+    results_file = output.resolve() / "outputs" / "reports" / "results.json"
     quoted = shlex.join(["--results-file", str(results_file)])
     assert "'" in quoted
     assert _compact(quoted) in _compact(result.output)
@@ -311,7 +311,7 @@ def test_evaluation_with_no_successful_records_writes_no_results(
 
     assert result.exit_code == 0
     assert "No evaluable test cases" in result.output
-    assert not (output / "reports" / "results.json").exists()
+    assert not (output / "outputs" / "reports" / "results.json").exists()
     assert "metisinsightsreport" not in _compact(result.output)
 
 
@@ -322,7 +322,7 @@ def test_reevaluation_with_no_successes_removes_stale_results(
     _write_record(output)
     _patch_evaluation(monkeypatch, test_cases=[object()])
     runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
-    assert (output / "reports" / "results.json").exists()
+    assert (output / "outputs" / "reports" / "results.json").exists()
     _patch_evaluation(monkeypatch, test_cases=[])
 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
@@ -330,7 +330,7 @@ def test_reevaluation_with_no_successes_removes_stale_results(
     assert result.exit_code == 0
     # A results file from an earlier evaluation must not outlive one that scored
     # nothing, or `metis insights report` would re-stamp stale scores as current.
-    assert not (output / "reports" / "results.json").exists()
+    assert not (output / "outputs" / "reports" / "results.json").exists()
 
 
 def test_report_command_keeps_square_brackets_in_paths(
@@ -343,7 +343,7 @@ def test_report_command_keeps_square_brackets_in_paths(
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert result.exit_code == 0
-    results_file = output.resolve() / "reports" / "results.json"
+    results_file = output.resolve() / "outputs" / "reports" / "results.json"
     command = shlex.join(
         ["metis", "insights", "report", "--results-file", str(results_file)]
     )

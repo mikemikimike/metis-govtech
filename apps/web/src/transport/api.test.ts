@@ -51,6 +51,15 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
           ? init?.body
           : JSON.parse(String(init.body)),
     });
+    if (String(input) === "/api/v1/wizard/package") {
+      return new Response("zip bytes", {
+        headers: {
+          "content-type": "application/zip",
+          "Content-Disposition":
+            'attachment; filename="20261016-223045-interview.zip"',
+        },
+      });
+    }
     return new Response(JSON.stringify(success), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -69,7 +78,7 @@ test("uses the stateless wizard routes and JSON request shapes", async () => {
   await api.compile(state.specification);
   await api.graders();
   await api.config();
-  await api.package(state.specification, []);
+  await api.package({ state }, []);
 
   assert.deepEqual(
     calls.map((call) => call.path),
@@ -200,7 +209,11 @@ test("packages a synthesized manual Specification and its fixtures as multipart"
     received = init?.body as FormData;
     return new Response(new Blob(["zip bytes"], { type: "application/zip" }), {
       status: 200,
-      headers: { "content-type": "application/zip" },
+      headers: {
+        "content-type": "application/zip",
+        "Content-Disposition":
+          'attachment; filename="20261016-223045-manual.zip"',
+      },
     });
   };
 
@@ -230,11 +243,11 @@ test("packages a synthesized manual Specification and its fixtures as multipart"
   const policy = new File(["policy"], "policy.pdf", {
     type: "application/pdf",
   });
-  const archive = await api.package(specification, [
+  const archive = await api.package({ specification }, [
     { name: policy.name, blob: policy },
   ]);
 
-  assert.equal(await archive.text(), "zip bytes");
+  assert.equal(await archive.blob.text(), "zip bytes");
   assert.equal(received?.get("specification"), JSON.stringify(specification));
   assert.equal((received?.get("files") as File).name, "policy.pdf");
 });
@@ -252,7 +265,7 @@ test("package failures preserve the API error shape", async () => {
     );
 
   await assert.rejects(
-    api.package(state.specification, []),
+    api.package({ state }, []),
     (cause: unknown) =>
       cause instanceof TransportError &&
       cause.status === 400 &&

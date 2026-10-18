@@ -33,7 +33,7 @@ class TestInferArtifactType:
 
 class TestSaveArtifacts:
     def test_writes_manifest(self, tmp_path: Path) -> None:
-        run_dir = tmp_path / "trials" / "s1-p1-1"
+        run_dir = tmp_path / "outputs" / "trials" / "s1-p1-1"
         run_dir.mkdir(parents=True)
         record = TrialRecord(
             config=TrialConfig(persona="p1", scenario="s1", grader_refs=[]),
@@ -45,7 +45,7 @@ class TestSaveArtifacts:
             artifacts=[
                 Artifact(
                     name="report.pdf",
-                    path="trials/s1-p1-1/artifacts/report.pdf",
+                    path="outputs/trials/s1-p1-1/artifacts/report.pdf",
                     at_turn=2,
                     state="received",
                 ),
@@ -70,7 +70,7 @@ class TestSaveArtifacts:
         by_name = {a["filename"]: a for a in manifest["artifacts"]}
         assert by_name["report.pdf"]["source"] == "target"
         assert by_name["report.pdf"]["path"] == str(
-            tmp_path / "trials/s1-p1-1/artifacts/report.pdf"
+            tmp_path / "outputs/trials/s1-p1-1/artifacts/report.pdf"
         )
         assert by_name["input.csv"]["source"] == "fixture"
         assert by_name["report.pdf"]["state"] == "received"

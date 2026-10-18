@@ -20,11 +20,17 @@ from pathlib import Path
 import pytest
 import yaml
 
-from metis.wizard import Specification, SpecificationFixture, package_specification
+from metis.wizard import (
+    InterviewState,
+    Specification,
+    SpecificationFixture,
+    package_specification,
+)
 from metis.wizard.application.compile import (
     write_experiment,
     write_review,
 )
+from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.specifications import CITATION_GRADER, research_assistant
 
 EXPERIMENT_ID = "research-assistant"
@@ -87,7 +93,9 @@ def test_the_gate_would_catch_an_unimportable_grader(tmp_path: Path) -> None:
     assert exit_info.value.code == 1
 
 
-def test_the_manual_specification_package_passes_the_engine_input_gate(
+@pytest.mark.parametrize("interview", [False, True])
+def test_the_specification_package_passes_the_engine_input_gate(
+    interview: bool,
     tmp_path: Path,
     repo_root: Path,
 ) -> None:
@@ -98,29 +106,41 @@ def test_the_manual_specification_package_passes_the_engine_input_gate(
     specification = Specification.model_validate(
         json.loads(specification_path.read_text())
     )
+    source = (
+        InterviewState(specification=specification, context=interview_context())
+        if interview
+        else specification
+    )
     archive_bytes = package_specification(
-        specification,
+        source,
         [
             SpecificationFixture("policy.pdf", io.BytesIO(b"policy")),
             SpecificationFixture("notes.txt", io.BytesIO(b"notes")),
         ],
     )
     archive = tmp_path / "specification.zip"
-    archive.write_bytes(archive_bytes)
+    archive.write_bytes(archive_bytes.content)
 
+    root = archive_bytes.filename.removesuffix(".zip")
     extracted = tmp_path / "extracted"
     with zipfile.ZipFile(archive) as specification:
-        assert set(specification.namelist()) == {
-            "specification.yaml",
-            "fixtures/",
-            "fixtures/notes.txt",
-            "fixtures/policy.pdf",
+        expected = {
+            "inputs/",
+            "outputs/specification.yaml",
+            "outputs/fixtures/",
+            "outputs/fixtures/notes.txt",
+            "outputs/fixtures/policy.pdf",
         }
+        if interview:
+            expected.add("inputs/interview_state.json")
+        assert set(specification.namelist()) == {f"{root}/{name}" for name in expected}
         specification.extractall(extracted)
+
+    extracted = extracted / root
 
     from metis.engine.simulation.types import Specification as EngineSpecification
 
-    experiment = yaml.safe_load((extracted / "specification.yaml").read_text())
+    experiment = yaml.safe_load((extracted / "outputs/specification.yaml").read_text())
     assert [task["id"] for task in experiment["tasks"]] == [
         "TC-001",
         "TC-002",
@@ -137,4 +157,4 @@ def test_the_manual_specification_package_passes_the_engine_input_gate(
         ],
         "short-recovery": ["metis.library.graders.TurnBudgetGrader"],
     }
-    _validate_inputs(extracted)
+    _validate_inputs(extracted / "outputs")

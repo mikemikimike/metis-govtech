@@ -103,17 +103,17 @@ To run the phases separately, use `simulate` first. It prints the exact `evaluat
 
 ```bash
 metis engine simulate --input-dir packages/engine/example-experiment/
-metis engine evaluate --experiment-dir experiments/orca-eval-20260820-143000/
+metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/
 ```
 
-`experiments/orca-eval-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
+`experiments/execute/orca-eval-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
 
 If simulation stops before all runs finish, continue the output directory that you name. `simulate` prints this exact command, so you never retype a timestamp:
 
 ```bash
-metis engine simulate --resume --experiment-dir experiments/orca-eval-20260820-143000/
+metis engine simulate --resume --experiment-dir experiments/execute/orca-eval-20260820-143000/
 # or run the remaining simulation and then evaluate everything:
-metis engine run --resume --experiment-dir experiments/orca-eval-20260820-143000/
+metis engine run --resume --experiment-dir experiments/execute/orca-eval-20260820-143000/
 ```
 
 Resume reads the experiment and the fixtures from the frozen `inputs/` snapshot in the named directory, not from the source directory. It retries only missing, invalid, or `system_error` records, and appends to the experiment-level simulation log. Extra run folders are ignored. A valid record is complete even if an artifact file is missing. Passing `--resume` with `--input-dir` is an error: the message lists the outputs that exist for the experiment `id` and names the correct flag.
@@ -137,25 +137,33 @@ The combined `run` command closes the Simulation TUI before it starts the evalua
 1. **Simulate** — the user agent interacts with Orca through the selected runner
 2. **Extract** — traces are fetched from Langfuse
 3. **Evaluate** — graders score the extracted traces
-4. **Results** — grader results are written to `reports/results.json`; build the report with [`metis insights report`](insights.md)
+4. **Results** — grader results are written to `outputs/reports/results.json`; build the report with [`metis insights report`](insights.md)
 
 ### Where Results Land
 
-Each run produces output in `experiments/<id>-<timestamp>/`. The `reports/` directory is created by `evaluate` or `run`, which write `results.json`; `metis insights report` adds `report.json` and `report.html`. Simulation-only runs stop after `runs/` and `logs/`:
+Each execution produces output in `experiments/execute/<id>-<timestamp>/`. The `outputs/reports/` directory is created by `evaluate` or `run`, which write `results.json`; `metis insights report` adds `report.json` and `report.html`. Simulation-only runs stop after `outputs/trials/` and `logs/`:
 
-```
-experiments/orca-eval-20260730-143022/
-├── inputs/              # Snapshot of experiment inputs
-├── runs/                # Per-run conversation records
-├── logs/
-│   ├── simulate.log                                  # Orchestration timeline
-│   ├── evaluate.log                                  # Complete evaluation timeline
-│   ├── simulate-TC-001_cooperative-delegator-01.log  # Per-run detail
-│   └── ...
-└── reports/             # created by evaluate or run
-    ├── results.json     # Grader results (written by evaluate or run)
-    ├── report.json      # Machine-readable report (written by metis insights report)
-    └── report.html      # Visual report (written by metis insights report)
+```text
+experiments/execute/orca-eval-20260730-143022/
+├── inputs/
+│   ├── specification.yaml
+│   └── fixtures/
+├── outputs/
+│   ├── trials/
+│   │   └── TC-001-cooperative-delegator-1/
+│   │       ├── record.json
+│   │       ├── simulate.log       # Link to the trial log
+│   │       └── artifacts/
+│   │           ├── run-manifest.json
+│   │           └── ...
+│   └── reports/
+│       ├── results.json           # Engine evaluation
+│       ├── report.json            # Insights
+│       └── report.html            # Insights
+└── logs/
+    ├── simulate.log
+    ├── simulate-TC-001_cooperative-delegator-01.log
+    └── evaluate.log
 ```
 
 The structure of `report.json` is defined by a [JSON Schema](../../packages/insights/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
@@ -382,7 +390,7 @@ metis engine run --input-dir <source path> [simulation and evaluation options]
 metis engine run --resume --experiment-dir <output path> [simulation and evaluation options]
 ```
 
-`simulate` writes run records only. It prints the exact command needed to evaluate the output directory it created. `evaluate` scores the output directory that you name, uses its frozen input snapshot, and overwrites `logs/evaluate.log` and `reports/results.json`, then prints the `metis insights report` command that builds the report. `run` performs both phases.
+`simulate` writes run records only. It prints the exact command needed to evaluate the output directory it created. `evaluate` scores the output directory that you name, uses its frozen input snapshot, and overwrites `logs/evaluate.log` and `outputs/reports/results.json`, then prints the `metis insights report` command that builds the report. `run` performs both phases.
 
 ### Simulation options
 
@@ -406,7 +414,7 @@ The flags below are optional and apply to both modes:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--experiment-dir` | (required) | One output directory that `simulate` created, for example `experiments/orca-eval-20260820-143000/`. It must hold an `inputs/` snapshot |
+| `--experiment-dir` | (required) | One output directory that `simulate` created, for example `experiments/execute/orca-eval-20260820-143000/`. It must hold an `inputs/` snapshot |
 | `--langfuse-timeout` | `90` | Seconds to wait for Langfuse traces to appear |
 | `-v` / `-vv` | WARNING | Increase evaluation logging verbosity |
 | `--quiet` | `false` | Suppress all output below ERROR |
@@ -1220,7 +1228,7 @@ If your target does not instrument with Langfuse, you can still use METIS for si
 metis engine simulate --input-dir my-experiment/
 ```
 
-This produces run records with full conversation transcripts in `experiments/<id>-<timestamp>/runs/`. You get:
+This produces run records with full conversation transcripts in `experiments/execute/<id>-<timestamp>/outputs/trials/`. You get:
 - Complete user-agent ↔ target conversation logs
 - Outcome data (stop reason, turn count, duration)
 - Collected artifacts

@@ -61,7 +61,8 @@ def test_resume_reports_the_pending_request_stage(
     from metis.wizard.bootstrap import create_cli_app
 
     state = _state_pending_at(InterviewStep.CRITERIA)
-    (tmp_path / "interview_state.json").write_text(
+    (tmp_path / "inputs").mkdir(exist_ok=True)
+    (tmp_path / "inputs/interview_state.json").write_text(
         state.model_dump_json(), encoding="utf-8"
     )
     monkeypatch.setattr(cli, "_load_env", list)
@@ -268,9 +269,10 @@ def test_both_commands_fail_before_any_call_without_credentials(
 
     app = create_cli_app()
 
-    (tmp_path / "interview_state.json").write_text(
-        "{}"
-    )  # so resume gets past its file check
+    (tmp_path / "inputs").mkdir(exist_ok=True)
+    (tmp_path / "inputs/interview_state.json").write_text(
+        _state_pending_at(InterviewStep.CRITERIA).model_dump_json()
+    )
     # `init` refuses outright when an interview already exists — its own guard, checked before
     # credentials — so `--restart` is needed to reach the credential check this test is about.
     invocations = {
@@ -304,7 +306,8 @@ def test_init_refuses_when_a_interview_already_exists(tmp_path) -> None:
     from metis.wizard.bootstrap import create_cli_app
 
     original = '{"do not": "overwrite me"}'
-    (tmp_path / "interview_state.json").write_text(original)
+    (tmp_path / "inputs").mkdir(exist_ok=True)
+    (tmp_path / "inputs/interview_state.json").write_text(original)
 
     result = CliRunner().invoke(
         create_cli_app(),
@@ -313,12 +316,12 @@ def test_init_refuses_when_a_interview_already_exists(tmp_path) -> None:
 
     assert result.exit_code == 1
     assert "already in progress" in result.output
-    assert str(tmp_path / "interview_state.json") in result.output
+    assert str(tmp_path / "inputs/interview_state.json") in result.output
     # both ways forward are named
     assert "resume" in result.output
     assert "--restart" in result.output
     # and the existing interview is untouched
-    assert (tmp_path / "interview_state.json").read_text() == original
+    assert (tmp_path / "inputs/interview_state.json").read_text() == original
 
 
 # ── reading .env ───────────────────────────────────────────────────────────
@@ -335,3 +338,33 @@ def test_a_real_environment_variable_wins_over_a_dotenv_file(
     import os
 
     assert os.environ[BASE_URL_VAR] == "https://exported.example"
+
+
+def test_export_can_resume_after_a_failed_specification_write(
+    monkeypatch, tmp_path
+) -> None:
+    from pathlib import Path
+
+    from typer.testing import CliRunner
+
+    from metis.wizard.bootstrap import create_cli_app
+
+    state = InterviewState(
+        specification=research_assistant(), context=interview_context(), confirmed=True
+    )
+    replace = Path.replace
+
+    def fail_publish(self, target):
+        raise OSError("write failed")
+
+    monkeypatch.setattr(Path, "replace", fail_publish)
+    with pytest.raises(OSError, match="write failed"):
+        cli._write_outputs(state, tmp_path)
+    assert not (tmp_path / "outputs/specification.yaml").exists()
+    assert cli._load(tmp_path) == state
+    monkeypatch.setattr(Path, "replace", replace)
+    result = CliRunner().invoke(
+        create_cli_app(), ["resume", "--out-dir", str(tmp_path)]
+    )
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "outputs/specification.yaml").is_file()

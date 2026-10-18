@@ -8,8 +8,8 @@ The METIS Engine runs that specification.
 | Interface | Best for | Who saves Interview state? | Finished output |
 |---|---|---|---|
 | [CLI](wizard/cli.md) | A person working in a terminal | The CLI saves a local JSON file | Files in an output directory |
-| [Web](wizard/web.md) | A person who wants a guided browser flow | The browser saves data in IndexedDB | `specification.zip` download |
-| [API](wizard/api.md) | A service or custom client | Your client saves the returned JSON state | YAML strings or `specification.zip` |
+| [Web](wizard/web.md) | A person who wants a guided browser flow | The browser saves data in IndexedDB | `YYYYMMDD-HHMMSS-interview.zip` download |
+| [API](wizard/api.md) | A service or custom client | Your client saves the returned JSON state | YAML strings or `YYYYMMDD-HHMMSS-interview.zip` |
 
 - The CLI runs the Wizard logic on your computer. It does not need the API server.
 - The web client uses the Wizard API.
@@ -77,12 +77,13 @@ This context is separate from the Specification.
 
 ## Run the evaluation
 
-The CLI writes the files to `evaluation/` by default. From the web client or the API, extract
-`specification.zip` into a directory, such as `evaluation/`. Then run the specification with the
+The CLI writes files to `experiments/design/YYYYMMDD-HHMMSS-interview/` by default. The timestamp uses the machine's local date and 24-hour time, including seconds.
+Extract browser or API downloads into `experiments/design/`.
+Each ZIP contains its dated experiment folder. For an Interview created on 2026-10-16 at 22:30:45, run the specification with the
 Engine:
 
 ```bash
-metis engine run --input-dir evaluation/
+metis engine run --input-dir experiments/design/20261016-223045-interview/outputs/
 ```
 
 See the [Engine guide](engine.md) for the evaluation run and the [Report guide](report.md) for the
