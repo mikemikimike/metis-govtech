@@ -55,3 +55,6 @@ openspec/
 
 # Wizard internal docs
 packages/wizard/docs/
+
+# Generated reviewer pages can contain local case inputs.
+/packages/testbed/wizard/.reviewer/

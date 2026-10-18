@@ -1,14 +1,14 @@
-const DOWNLOAD_NAME = "specification.zip";
+import type { api } from "./transport/api";
 
 export function downloadArchive(
-  archive: Blob,
+  archive: Awaited<ReturnType<typeof api.package>>,
   ownerDocument: Pick<Document, "createElement"> = document,
   urlApi: Pick<typeof URL, "createObjectURL" | "revokeObjectURL"> = URL,
 ): void {
-  const url = urlApi.createObjectURL(archive);
+  const url = urlApi.createObjectURL(archive.blob);
   const anchor = ownerDocument.createElement("a");
   anchor.href = url;
-  anchor.download = DOWNLOAD_NAME;
+  anchor.download = archive.filename;
   anchor.click();
   anchor.remove();
   urlApi.revokeObjectURL(url);

@@ -112,6 +112,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Execution folders use `experiments/execute/<id>-<timestamp>/`, with trial records
+  and artifacts in `outputs/trials/` and results in `outputs/reports/results.json`.
+  Input snapshots and logs keep their names. Evaluation and resume use the execution
+  root. Core owns the shared execution paths (#453).
+
 - **Migrated the Langfuse trace extractor to the v2 observations endpoint.** The nprd Langfuse
   server moves to v4 `events_only` mode, which permanently 404s the v1 `GET
   /api/public/traces` and `GET /api/public/observations` endpoints `fetch_by_session_id` used.
@@ -207,6 +212,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Reports read trial records from `outputs/trials/` and write `report.json` and
+  `report.html` beside `outputs/reports/results.json` (#453).
+
 - Use Target in report JSON, failure sources, and report labels (#429).
 
 - Expand Task Behaviour selections for plan counts, Criterion score attribution, and missing-result explanations (#413).
@@ -215,6 +223,17 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   current `metis engine evaluate` with "This results.json uses the new GraderRecord format
   (grader redesign #428), which metis insights report cannot read yet. Rerun the report once
   #454 is released."; its redesign is #454 (#428).
+
+### metis-testbed
+
+#### Added
+
+- Add five reference cases for Orca, Enterprise AI Assistant, travel planning,
+  billing support, and incident triage. Each case includes a reference
+  Specification, source notes, and available fixtures. Add an offline reviewer
+  with a Behaviour–Test Case matrix and YAML view. Keep the guide, cases, and
+  reviewer together under `packages/testbed/wizard/`. Orca product inputs and
+  generated previews stay local; the other case inputs are tracked (#436).
 
 ### metis-wizard
 
@@ -266,6 +285,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   model has not supplied them.
 
 #### Changed
+
+- Wizard exports use timestamped design folders with `inputs/` and `outputs/`. The default name is `YYYYMMDD-HHMMSS-interview`, using local 24-hour time. Manual ZIP exports use the `-manual` suffix. ZIP filenames match their root folders. Interview exports retain the final state used to compile the Specification. CLI recovery uses the completed Specification as its completion marker (#453).
 
 - Use Target in Interview prompts, fields, patch paths, and validation codes (#429).
 
@@ -378,6 +399,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Package exports accept either final Interview state or a manual Specification. ZIP files use the shared export layout and expose the Wizard-owned filename in `Content-Disposition`; manual exports include an empty `inputs/` folder (#453).
+
 - Return `specification.yaml` and the Specification with assigned Task IDs from compile.
   Package one specification and its fixtures (#395).
 
@@ -420,6 +443,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   field that needs a change, shows what to change, and moves the focus to the first one.
 
 #### Changed
+
+- Interview downloads send the final state for compilation and export. Interview and manual downloads use dated archive names and the shared `inputs/` and `outputs/` layout. The browser shows where to extract them (#453).
 
 - Use Target in authoring views and upgrade saved Interviews while preserving
   user text, pending forms, and file bytes (#429).

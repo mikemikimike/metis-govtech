@@ -22,7 +22,9 @@ def _write_source(tmp_path: Path) -> Path:
 
 
 def _write_record_marker(experiment_dir: Path) -> Path:
-    record_path = experiment_dir / "trials" / "task-1-alice-1" / "record.json"
+    record_path = (
+        experiment_dir / "outputs" / "trials" / "task-1-alice-1" / "record.json"
+    )
     record_path.parent.mkdir(parents=True, exist_ok=True)
     record_path.write_text("{}")
     return experiment_dir
@@ -100,7 +102,9 @@ def test_run_resume_evaluates_the_resumed_directory(
 
     def fake_evaluation(path: Path, **_kwargs: object) -> EvaluationOutcome:
         evaluation_paths.append(path)
-        return EvaluationOutcome(1, 1, 0, experiment_dir / "reports" / "results.json")
+        return EvaluationOutcome(
+            1, 1, 0, experiment_dir / "outputs" / "reports" / "results.json"
+        )
 
     monkeypatch.setattr(cli, "_run_simulation", fake_simulation)
     monkeypatch.setattr(cli, "_run_evaluation", fake_evaluation)

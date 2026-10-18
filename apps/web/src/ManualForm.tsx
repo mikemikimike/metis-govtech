@@ -334,13 +334,15 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
       );
       const archive = await api.package(
         {
-          ...submitted,
-          tasks: assigned.map((task) => ({
-            ...task,
-            fixtures: task.fixtures ?? [],
-            behaviour_refs: task.behaviour_refs ?? [],
-            num_trials: task.num_trials ?? 3,
-          })),
+          specification: {
+            ...submitted,
+            tasks: assigned.map((task) => ({
+              ...task,
+              fixtures: task.fixtures ?? [],
+              behaviour_refs: task.behaviour_refs ?? [],
+              num_trials: task.num_trials ?? 3,
+            })),
+          },
         },
         usedFiles,
       );
@@ -857,6 +859,9 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
         </section>
 
         <section className="flex flex-col gap-3 border-t border-border pt-6">
+          <p className="text-sm text-muted-foreground">
+            Extract the download into <code>experiments/design/</code>.
+          </p>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}

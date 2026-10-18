@@ -52,6 +52,7 @@ METIS is an extensible agentic evaluation suite for assessing AI safety, alignme
 | [**metis-engine**](packages/engine/) | Evaluation runtime; ingests traces and executes metrics |
 | [**metis-wizard**](packages/wizard/) | Interactive evaluation config generator |
 | [**metis-insights**](packages/insights/) | Report generation from evaluation results |
+| [**metis-testbed**](packages/testbed/) | Human-reviewed Wizard evaluation cases and reference Specifications |
 
 For the full specification see [docs/architecture.md](docs/architecture.md).
 
@@ -127,7 +128,9 @@ metis/
 │   ├── core/               # metis-core
 │   ├── library/            # metis-library
 │   ├── engine/             # metis-engine
-│   └── wizard/             # metis-wizard
+│   ├── wizard/             # metis-wizard
+│   ├── insights/           # metis-insights
+│   └── testbed/            # metis-testbed
 ├── apps/
 │   ├── api/                # REST backend
 │   └── web/                # React frontend

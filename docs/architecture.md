@@ -60,18 +60,21 @@ metis/
 │   │   └── src/metis/engine/
 │   ├── wizard/
 │   │   └── src/metis/wizard/
-│   └── insights/
-│       └── src/metis/insights/
+│   ├── insights/
+│   │   └── src/metis/insights/
+│   └── testbed/
+│       ├── src/metis/testbed/
+│       └── wizard/
+│           ├── cases/         # Wizard reference cases and Specifications
+│           └── reviewer/      # Local reference case reviewer
 │
 ├── apps/                       # Deployable application services
 │   ├── api/
 │   │   └── src/metis/api/
-│   ├── web/                    # TypeScript/React frontend (separate toolchain)
+│   └── web/                    # TypeScript/React frontend (separate toolchain)
 │   │   ├── package.json
 │   │   ├── tsconfig.json
 │   │   └── src/
-│   └── testbed/
-│       └── src/metis/testbed/
 │
 └── infra/                      # Docker Compose, Kubernetes, deployment assets
 ```
@@ -160,9 +163,20 @@ MUST depend on `metis-core`. MUST NOT depend on `metis-engine` or `metis-library
 | | |
 |---|---|
 | **Import Path** | `from metis.testbed import ...` |
-| **Purpose** | Evaluator calibration and sandbox environment for running agents against controlled scenarios. |
+| **Purpose** | Component evaluations for Wizard, Engine, and Insights; evaluator calibration; and controlled comparisons with other systems. |
 
-MUST depend on `metis-core` and `metis-engine`.
+The current testbed contains the Wizard evaluation cases in
+`packages/testbed/wizard/cases`. Each case separates product inputs, a reference
+Specification in `outputs/`, and a README with source links and review notes.
+The reference cases and local reviewer do not require an installed testbed
+package. The evaluation runtime in PR #445 adds the installable
+`metis-testbed` package; evaluation data remains in the repository.
+Orca inputs are local and Git-ignored. Other inputs are tracked.
+See the [Wizard guide](../packages/testbed/wizard/README.md) for the review process.
+
+A testbed runtime MAY depend on `metis-core`, `metis-engine`, `metis-wizard`, and
+`metis-insights`. Product packages MUST NOT depend on the testbed. Component
+adapters belong in the testbed so the same case data can support other systems.
 
 ---
 
@@ -177,8 +191,30 @@ MAY depend on all `packages/*` members. For the wizard it depends on the `metis.
 Interview interface only (`apps/api -> metis.wizard`): the router calls `handle_interview`,
 `compile_specification`, and the in-memory specification packager and maps typed results onto HTTP
 responses. No stage, Specification, prompt, matching, fixture validation, or compilation rule lives in
-the API. The package route accepts a Specification JSON part and request-scoped fixture bytes and returns
-one `specification.zip`; it retains no uploaded files.
+the API. The package route accepts one JSON source part: `state` for an Interview or
+`specification` for a manual export. It accepts request-scoped fixture bytes and returns one
+dated ZIP archive; it retains no uploaded files. Wizard owns the archive filename
+and dated root folder. The API sends the filename in `Content-Disposition`, and the
+browser uses it for the download.
+
+Wizard exports share `inputs/` and `outputs/` at the design root. The CLI defaults to
+`experiments/design/YYYY-MM-DD-interview/`. An explicit `--out-dir` selects the exact root.
+Resume requires that path. ZIP exports contain a dated `interview` or `manual` root
+folder for extraction into `experiments/design/`. Interview exports MUST
+compile from the same final state saved as `inputs/interview_state.json`. Manual exports MUST
+include an empty `inputs/` folder. The Specification and fixtures belong under `outputs/`;
+the existing CLI review belongs at `outputs/review.md`. Engine reads the `outputs/` folder.
+The CLI publishes `outputs/specification.yaml` last as its completion marker and retains
+recovery state until export succeeds. Wizard MUST NOT create Testbed embedding caches or scores.
+
+Engine creates `experiments/execute/<specification-id>-YYYYMMDD-HHMMSS/`. It copies
+`--input-dir` into `inputs/`, writes trial records and artifacts under `outputs/trials/`,
+and writes evaluation results to `outputs/reports/results.json`. Insights reads the
+same execution root and writes `report.json` and `report.html` beside the results.
+`--experiment-dir` identifies the execution root for evaluation and resume.
+`metis.core.execution_layout` owns the paths shared by Engine and Insights.
+Logs remain under `logs/`, with the existing simulation log override. Artifact paths
+in trial records remain relative to the execution root.
 
 `GET /api/v1/wizard/config` returns the wizard-owned ordered ARC capability categories with the
 opening copy and perspective definitions. `POST /api/v1/wizard/interview/start` accepts the
@@ -241,7 +277,7 @@ Dependencies MUST flow downward only. The following DAG is normative:
 [ apps/web ] ──HTTP──▶ [ apps/api ] ───────────────────────┐
                             │                               │
                             ▼                               ▼
-                       [ packages/engine ] ◄── [ apps/testbed ]   [ packages/wizard ]
+                       [ packages/engine ] ◄── [ packages/testbed ]   [ packages/wizard ]
                             │         │                               │
                             │         ▼                               │
                             │   [ packages/insights ]                 │

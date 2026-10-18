@@ -67,13 +67,13 @@ def _results(*, success: bool = True) -> EvaluationResults:
 
 def _write_experiment(root: Path, *, with_specification: bool = True) -> Path:
     """Write an evaluated experiment directory; return its results.json path."""
-    experiment_dir = root / "experiments" / "test-exp-20260101-010101"
+    experiment_dir = root / "experiments" / "execute" / "test-exp-20260101-010101"
     if with_specification:
         (experiment_dir / "inputs").mkdir(parents=True)
         (experiment_dir / "inputs" / "specification.yaml").write_text(
             SPECIFICATION, encoding="utf-8"
         )
-    results_file = experiment_dir / "reports" / "results.json"
+    results_file = experiment_dir / "outputs" / "reports" / "results.json"
     _results().save(results_file)
     return results_file
 
@@ -128,12 +128,12 @@ def test_missing_specification_is_not_an_error(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "TOTAL" in result.output
     assert "notwritten" in _compact(result.output)
-    expected = results_file.parent.parent / "inputs" / "specification.yaml"
+    expected = results_file.parent.parent.parent / "inputs" / "specification.yaml"
     assert _compact(str(expected)) in _compact(result.output)
     assert not (results_file.parent / "report.json").exists()
 
 
-def test_moved_results_file_names_where_it_looked(tmp_path: Path) -> None:
+def test_report_requires_results_inside_execution_outputs(tmp_path: Path) -> None:
     original = _write_experiment(tmp_path)
     moved = tmp_path / "elsewhere" / "results.json"
     moved.parent.mkdir()
@@ -141,11 +141,9 @@ def test_moved_results_file_names_where_it_looked(tmp_path: Path) -> None:
 
     result = runner.invoke(app, ["report", "--results-file", str(moved)])
 
-    assert result.exit_code == 0, result.output
-    assert _compact(str(tmp_path / "inputs" / "specification.yaml")) in _compact(
-        result.output
-    )
-    assert not (tmp_path / "reports" / "report.json").exists()
+    assert result.exit_code == 1, result.output
+    assert "outputs/reports/" in result.output
+    assert not (tmp_path / "outputs" / "reports" / "report.json").exists()
 
 
 def test_missing_results_file_exits_one(tmp_path: Path) -> None:

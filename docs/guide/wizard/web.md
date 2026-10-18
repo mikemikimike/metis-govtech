@@ -77,7 +77,7 @@ Document facts:
 1. Answer each Interview screen.
 2. Review the final Personas, Scenarios, and Test Cases.
 3. Select **Continue** on the final review screen to complete the Interview.
-4. Select **Download specification** to download `specification.zip`.
+4. Select **Download specification** to download `YYYYMMDD-HHMMSS-interview.zip`.
 
 To finish early, select **Skip interview and download specification**. The Wizard checks whether
 the specification is ready. It can ask for more information or a document review before it
@@ -86,9 +86,22 @@ completes the Interview.
 The archive contains:
 
 ```text
-specification.zip
-├── specification.yaml
-└── fixtures/
+YYYYMMDD-HHMMSS-interview/
+├── inputs/
+│   └── interview_state.json
+└── outputs/
+    ├── specification.yaml
+    └── fixtures/
+```
+
+The API compiles the Specification from the same final Interview state that it saves in the
+archive. This state keeps document names, extracted text, and limited recent history. The full
+display transcript stays in browser storage.
+
+Extract the archive into `experiments/design/`. For an Interview exported on 2026-10-16 at 22:30:45, run:
+
+```bash
+metis engine run --input-dir experiments/design/20261016-223045-interview/outputs/
 ```
 
 The browser sends only the original fixture files that the current Tasks use. The API builds
@@ -120,7 +133,8 @@ Editor rules:
   clears those selections. Select a replacement before you download.
 - Each Scenario needs at least one test case.
 
-The archive contains a complete `specification.yaml` and the selected fixtures.
+The manual export uses `YYYYMMDD-HHMMSS-manual.zip` and a matching root folder. It contains an empty `inputs/` folder, `outputs/specification.yaml`, and the
+selected files under `outputs/fixtures/`. It contains no Interview state.
 
 ## Browser storage and current limits
 

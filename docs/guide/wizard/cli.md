@@ -67,8 +67,9 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 4. Answer the clarification questions.
 5. Review the Features, Behaviours, Criteria, Personas, Scenarios, and Test Cases that the Wizard drafts.
 
-The CLI saves state to `evaluation/interview_state.json` after each accepted turn. Use another
-directory with `--out-dir`:
+The CLI saves state after each accepted turn in
+`experiments/design/YYYYMMDD-HHMMSS-interview/inputs/interview_state.json`. The date and time are local to the
+machine when `init` starts. Use `--out-dir` to select an exact experiment root:
 
 ```bash
 metis wizard init "<description>" --out-dir my-eval
@@ -76,27 +77,37 @@ metis wizard init "<description>" --out-dir my-eval
 
 ## Resume or restart
 
+Resume requires `--out-dir`, including when the Interview continues on another day. The CLI
+prints the complete resume command when an Interview starts.
+
 | To | Command |
 |---|---|
-| Resume the latest saved state | `metis wizard resume` (add `--out-dir my-eval` for another directory) |
-| Discard the Interview in progress and start again | `metis wizard init "<description>" --restart` |
+| Resume a saved Interview | `metis wizard resume --out-dir my-eval` |
+| Discard the Interview in progress and start again | `metis wizard init "<description>" --out-dir my-eval --restart` |
 
 Without `--restart`, `init` does not overwrite an Interview in progress. It directs you to
 `resume`.
 
 ## Output files
 
-When the Interview is complete, the CLI writes these files and removes `interview_state.json`:
+When the Interview is complete, the CLI retains its final state and writes this layout:
 
 | File | Contents |
 |---|---|
-| `specification.yaml` | Target, Features, Behaviours, Criteria and Grader settings, Personas, Scenarios, and Tasks |
-| `review.md` | A human-readable review of the specification |
+| `outputs/specification.yaml` | Target, Features, Behaviours, Criteria and Grader settings, Personas, Scenarios, and Tasks |
+| `outputs/review.md` | A human-readable review of the specification |
+| `inputs/interview_state.json` | The final state used to compile the Specification |
+| `outputs/fixtures/` | Fixture files referenced by Tasks |
 
-The CLI also shows the total trial count. Run the result with:
+The CLI publishes `outputs/specification.yaml` after the other export files are saved.
+Its presence marks a completed export. `resume` reports completion even though the final state
+is retained. Use `--restart` to start again in the same directory. If export fails before the
+Specification is published, `resume` can retry from the saved final state.
+
+The CLI also shows the total trial count. For an Interview started on 2026-10-16 at 22:30:45, run the result with:
 
 ```bash
-metis engine run --input-dir evaluation/
+metis engine run --input-dir experiments/design/20261016-223045-interview/outputs/
 ```
 
 See the [Engine guide](../engine.md) for the next steps.

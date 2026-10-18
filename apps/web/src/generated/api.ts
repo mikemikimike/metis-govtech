@@ -256,9 +256,11 @@ export interface components {
         /** Body_package_api_v1_wizard_package_post */
         Body_package_api_v1_wizard_package_post: {
             /** Specification */
-            specification: string;
+            specification?: string | null;
             /** Files */
             files?: string[] | null;
+            /** State */
+            state?: string | null;
         };
         /**
          * CapabilityCategory
@@ -1339,7 +1341,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_package_api_v1_wizard_package_post"];
             };

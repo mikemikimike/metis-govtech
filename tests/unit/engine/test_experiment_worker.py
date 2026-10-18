@@ -193,7 +193,7 @@ class TestWorkerWithMockFactory:
 
         # Verify the expected run_dir path was constructed
         expected_folder = trial_folder_name(simple_scenario, simple_persona, 1)
-        expected_run_dir = tmp_path / "trials" / expected_folder
+        expected_run_dir = tmp_path / "outputs" / "trials" / expected_folder
         assert expected_run_dir.exists()
 
 
@@ -906,7 +906,12 @@ class TestAttemptScopedArtifacts:
         )
 
         assert records[0].attempt_number == 2
-        run_dir = tmp_path / "trials" / trial_folder_name(scenario, simple_persona, 1)
+        run_dir = (
+            tmp_path
+            / "outputs"
+            / "trials"
+            / trial_folder_name(scenario, simple_persona, 1)
+        )
         artifacts = run_dir / "artifacts"
         # The surviving attempt's file, under its own name.
         assert (artifacts / "report.pdf").read_text() == "attempt 2"
@@ -999,7 +1004,12 @@ class TestAttemptScopedArtifacts:
         assert second[0].attempt_number == 1  # per-process, not a lifetime total
         assert second[0].prior_failures == []
 
-        run_dir = tmp_path / "trials" / trial_folder_name(scenario, simple_persona, 1)
+        run_dir = (
+            tmp_path
+            / "outputs"
+            / "trials"
+            / trial_folder_name(scenario, simple_persona, 1)
+        )
         assert (run_dir / "artifacts" / "report.pdf").read_text() == "second process"
         superseded = list(run_dir.glob("artifacts-superseded-*"))
         assert len(superseded) == 1
@@ -1078,7 +1088,7 @@ async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -
         "TC-001",
         "TC-002",
     ]
-    assert len(list((tmp_path / "trials").glob("*/record.json"))) == 2
+    assert len(list((tmp_path / "outputs" / "trials").glob("*/record.json"))) == 2
 
 
 @pytest.mark.asyncio

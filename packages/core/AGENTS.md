@@ -22,5 +22,6 @@ Core data models and abstractions for the METIS suite. Zero workspace dependenci
   `isRootObservation = true` filter.
 - `grading.py`: `GraderResult`/`GradingOutput` (what a grader returns: a score, never a
   pass/fail) and `RecordedResult` (the outcome after the orchestrator applies the threshold).
-- `reporting.py`: `EvaluationResults` (`results.json`), one `GraderRecord` per grader per
-  session.
+- `reporting.py`: `EvaluationResults` (`outputs/reports/results.json`), one `GraderRecord`
+  per grader per session. It is version-guarded like `TrialRecord` and has no published
+  schema file.

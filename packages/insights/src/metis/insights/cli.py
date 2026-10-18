@@ -8,6 +8,7 @@ from pathlib import Path
 
 import typer
 
+from metis.core import execution_layout
 from metis.core.console import console
 from metis.core.logging import configure_logging
 from metis.insights import __version__
@@ -41,7 +42,7 @@ def report(
         "--results-file",
         help=(
             "results.json that `metis engine evaluate` wrote, "
-            "e.g. experiments/my-eval-20260820-143000/reports/results.json"
+            "e.g. experiments/execute/my-eval-20260820-143000/outputs/reports/results.json"
         ),
     ),
 ) -> None:
@@ -50,6 +51,7 @@ def report(
     path = results_file.resolve()
     try:
         results = EvaluationResults.load_file(path)
+        experiment_dir = execution_layout.experiment_root_from_results(path)
     except (OSError, ValueError) as exc:
         # markup=False: pydantic errors contain "[type=...]", which Rich would drop.
         console.print(
@@ -68,9 +70,6 @@ def report(
         )
     )
 
-    # results.json lives in <experiment>/reports/; the report reads the experiment's
-    # frozen inputs and trial records and is written back into the same directory.
-    experiment_dir = path.parent.parent
     try:
         paths = save_report(results, experiment_dir)
     except Exception as exc:
@@ -82,7 +81,7 @@ def report(
         raise typer.Exit(code=1) from exc
 
     if paths is None:
-        specification = experiment_dir / "inputs" / "specification.yaml"
+        specification = experiment_dir / execution_layout.SPECIFICATION
         console.print(
             f"  Report:       not written (no readable {specification})", markup=False
         )

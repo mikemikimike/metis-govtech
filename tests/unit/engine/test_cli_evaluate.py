@@ -57,7 +57,7 @@ def _write_record(
         ),
         target_session_id=session_id,
     )
-    record_path = experiment_dir / "trials" / run_name / "record.json"
+    record_path = experiment_dir / "outputs" / "trials" / run_name / "record.json"
     record_path.parent.mkdir(parents=True, exist_ok=True)
     record_path.write_text(record.model_dump_json())
     return record_path
@@ -85,7 +85,7 @@ def _write_experiment_dir(
     content: str = MINIMAL_EXPERIMENT,
 ) -> Path:
     """Write a simulation output directory with its frozen input snapshot."""
-    experiment_dir = root / "experiments" / name
+    experiment_dir = root / "experiments" / "execute" / name
     experiment_dir.mkdir(parents=True)
     _write_snapshot(experiment_dir, content)
     return experiment_dir
@@ -171,7 +171,7 @@ def test_evaluate_rejects_a_directory_without_an_input_snapshot(tmp_path: Path) 
 def test_evaluate_fails_when_the_input_snapshot_has_no_specification_file(
     tmp_path: Path,
 ) -> None:
-    experiment_dir = tmp_path / "experiments" / "test-exp-20260101-010101"
+    experiment_dir = tmp_path / "experiments" / "execute" / "test-exp-20260101-010101"
     (experiment_dir / "inputs").mkdir(parents=True)
 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(experiment_dir)])
@@ -183,7 +183,7 @@ def test_evaluate_fails_when_the_input_snapshot_has_no_specification_file(
 
 def test_evaluate_fails_for_a_malformed_trial_record(tmp_path: Path) -> None:
     experiment_dir = _write_experiment_dir(tmp_path)
-    malformed_record = experiment_dir / "trials" / "run-1" / "record.json"
+    malformed_record = experiment_dir / "outputs" / "trials" / "run-1" / "record.json"
     malformed_record.parent.mkdir(parents=True)
     malformed_record.write_text("{}")
 
@@ -235,7 +235,7 @@ def test_evaluation_writes_results_file_and_prints_report_command(
 
     assert first.exit_code == 0
     assert second.exit_code == 0
-    results_file = output.resolve() / "reports" / "results.json"
+    results_file = output.resolve() / "outputs" / "reports" / "results.json"
     results = EvaluationResults.load_file(results_file)
     assert results.run_id == "report"
     assert results.schema_version == 2
@@ -248,8 +248,8 @@ def test_evaluation_writes_results_file_and_prints_report_command(
     assert record.grader_args == {"threshold": 0.5, "score": 1.0}
     assert [(r.outcome, r.score) for r in record.results] == [("passed", 1.0)]
     # Engine no longer builds the report; insights does.
-    assert not (output / "reports" / "report.json").exists()
-    assert not (output / "reports" / "report.html").exists()
+    assert not (output / "outputs" / "reports" / "report.json").exists()
+    assert not (output / "outputs" / "reports" / "report.html").exists()
     command = shlex.join(
         ["metis", "insights", "report", "--results-file", str(results_file)]
     )
@@ -269,7 +269,7 @@ def test_report_command_is_shell_quoted_for_paths_with_spaces(
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert result.exit_code == 0
-    results_file = output.resolve() / "reports" / "results.json"
+    results_file = output.resolve() / "outputs" / "reports" / "results.json"
     quoted = shlex.join(["--results-file", str(results_file)])
     assert "'" in quoted
     assert _compact(quoted) in _compact(result.output)
@@ -286,7 +286,7 @@ def test_evaluation_with_no_successful_records_writes_no_results(
 
     assert result.exit_code == 0
     assert "No traces found in Langfuse" in result.output
-    assert not (output / "reports" / "results.json").exists()
+    assert not (output / "outputs" / "reports" / "results.json").exists()
     assert "metisinsightsreport" not in _compact(result.output)
 
 
@@ -297,7 +297,7 @@ def test_reevaluation_with_no_successes_removes_stale_results(
     _write_record(output)
     _patch_evaluation(monkeypatch)
     runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
-    assert (output / "reports" / "results.json").exists()
+    assert (output / "outputs" / "reports" / "results.json").exists()
     _patch_evaluation(monkeypatch, traces=0)
 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
@@ -305,7 +305,7 @@ def test_reevaluation_with_no_successes_removes_stale_results(
     assert result.exit_code == 0
     # A results file from an earlier evaluation must not outlive one that scored
     # nothing, or `metis insights report` would re-stamp stale scores as current.
-    assert not (output / "reports" / "results.json").exists()
+    assert not (output / "outputs" / "reports" / "results.json").exists()
 
 
 def test_report_command_keeps_square_brackets_in_paths(
@@ -318,7 +318,7 @@ def test_report_command_keeps_square_brackets_in_paths(
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert result.exit_code == 0
-    results_file = output.resolve() / "reports" / "results.json"
+    results_file = output.resolve() / "outputs" / "reports" / "results.json"
     command = shlex.join(
         ["metis", "insights", "report", "--results-file", str(results_file)]
     )
@@ -436,7 +436,7 @@ def _write_judge_record(experiment_dir: Path, fqn: str) -> None:
         ),
         target_session_id="session-1",
     )
-    path = experiment_dir / "trials" / "run-1" / "record.json"
+    path = experiment_dir / "outputs" / "trials" / "run-1" / "record.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(record.model_dump_json())
 
@@ -451,7 +451,9 @@ def test_a_failing_score_is_recorded_as_failed(monkeypatch, tmp_path: Path) -> N
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert result.exit_code == 0, result.output
-    (record,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    (record,) = EvaluationResults.load_file(
+        output / "outputs" / "reports" / "results.json"
+    ).records
     assert [(r.outcome, r.score) for r in record.results] == [("failed", 0.2)]
     assert record.grader_args == {"threshold": 0.5, "score": 0.2}
 
@@ -468,7 +470,9 @@ def test_graders_use_the_snapshot_criteria_not_the_record_copy(
 
     runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
-    (record,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    (record,) = EvaluationResults.load_file(
+        output / "outputs" / "reports" / "results.json"
+    ).records
     assert record.results[0].score == 0.9
 
 
@@ -488,7 +492,9 @@ def test_every_session_is_fetched_with_its_artifacts_and_timeout(
     assert all(c["retry_timeout"] == 7 for c in calls)
     assert all(c["experiment_root"] == output.resolve() for c in calls)
     assert all(c["artifacts"] == [] for c in calls)
-    results = EvaluationResults.load_file(output / "reports" / "results.json")
+    results = EvaluationResults.load_file(
+        output / "outputs" / "reports" / "results.json"
+    )
     assert len(results.records) == 2
 
 
@@ -503,7 +509,7 @@ def test_code_graders_need_no_judge_credentials(monkeypatch, tmp_path: Path) -> 
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert result.exit_code == 0, result.output
-    assert (output / "reports" / "results.json").exists()
+    assert (output / "outputs" / "reports" / "results.json").exists()
 
 
 def test_model_based_grader_without_credentials_fails_before_any_fetch(
@@ -542,7 +548,9 @@ def test_judge_model_comes_from_the_spec_defaults(monkeypatch, tmp_path: Path) -
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert result.exit_code == 0, result.output
-    (record,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    (record,) = EvaluationResults.load_file(
+        output / "outputs" / "reports" / "results.json"
+    ).records
     assert record.grader_args["model"] == "from-spec"
     assert record.results[0].reason == "from-spec"
 
@@ -565,7 +573,9 @@ def test_a_grader_that_raises_does_not_fail_the_record(
     result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
 
     assert result.exit_code == 0, result.output
-    (record,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    (record,) = EvaluationResults.load_file(
+        output / "outputs" / "reports" / "results.json"
+    ).records
     assert [r.outcome for r in record.results] == ["errored"]
     assert "boom" in record.results[0].reason
     log = (output / "logs" / "evaluate.log").read_text()
@@ -592,7 +602,7 @@ def test_record_criteria_missing_from_the_snapshot_are_reported(
         ),
         target_session_id="session-1",
     )
-    path = output / "trials" / "run-1" / "record.json"
+    path = output / "outputs" / "trials" / "run-1" / "record.json"
     path.parent.mkdir(parents=True)
     path.write_text(record.model_dump_json())
     _patch_evaluation(monkeypatch)
@@ -604,5 +614,7 @@ def test_record_criteria_missing_from_the_snapshot_are_reported(
     assert (
         "UNKNOWN CRITERIA — AC-GONE" in (output / "logs" / "evaluate.log").read_text()
     )
-    (graded,) = EvaluationResults.load_file(output / "reports" / "results.json").records
+    (graded,) = EvaluationResults.load_file(
+        output / "outputs" / "reports" / "results.json"
+    ).records
     assert graded.criterion_id == "AC-1-1"

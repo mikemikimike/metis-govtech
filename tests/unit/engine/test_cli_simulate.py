@@ -34,7 +34,9 @@ def _write_output(output_dir: Path, experiment_yaml: str = MINIMAL_EXPERIMENT) -
 
 
 def _write_record_marker(experiment_dir: Path) -> Path:
-    record_path = experiment_dir / "trials" / "TC-001-alice-1" / "record.json"
+    record_path = (
+        experiment_dir / "outputs" / "trials" / "TC-001-alice-1" / "record.json"
+    )
     record_path.parent.mkdir(parents=True, exist_ok=True)
     record_path.write_text("{}")
     return experiment_dir
@@ -49,7 +51,7 @@ def _write_record(
             stop_reason=stop_reason, total_turns=1, duration_seconds=1.0
         ),
     )
-    path = experiment_dir / "trials" / folder / "record.json"
+    path = experiment_dir / "outputs" / "trials" / folder / "record.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(record.model_dump_json())
 
@@ -96,7 +98,8 @@ def test_resume_runs_only_missing_or_system_error_records(
     monkeypatch, tmp_path: Path
 ) -> None:
     output_dir = _write_output(
-        tmp_path / "experiments" / "test-exp-20260101-010101", TWO_TRIAL_EXPERIMENT
+        tmp_path / "experiments" / "execute" / "test-exp-20260101-010101",
+        TWO_TRIAL_EXPERIMENT,
     )
     (output_dir / "inputs" / "fixtures" / "fixture.txt").write_text("frozen")
     _write_record(output_dir, "TC-001-alice-1", "goal_achieved")
@@ -126,7 +129,8 @@ def test_resume_passes_append_true_to_setup_engine_logging(
     monkeypatch, tmp_path: Path
 ) -> None:
     output_dir = _write_output(
-        tmp_path / "experiments" / "test-exp-20260101-010101", TWO_TRIAL_EXPERIMENT
+        tmp_path / "experiments" / "execute" / "test-exp-20260101-010101",
+        TWO_TRIAL_EXPERIMENT,
     )
     (output_dir / "inputs" / "fixtures" / "fixture.txt").write_text("frozen")
     _write_record(output_dir, "TC-001-alice-1", "goal_achieved")
@@ -153,7 +157,9 @@ def test_resume_passes_append_true_to_setup_engine_logging(
 
 
 def test_resume_all_complete_is_noop(monkeypatch, tmp_path: Path) -> None:
-    output_dir = _write_output(tmp_path / "experiments" / "test-exp-20260101-010101")
+    output_dir = _write_output(
+        tmp_path / "experiments" / "execute" / "test-exp-20260101-010101"
+    )
     (output_dir / "inputs" / "fixtures" / "fixture.txt").write_text("frozen")
     _write_record(output_dir, "TC-001-alice-1")
     monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
@@ -168,7 +174,7 @@ def test_resume_all_complete_is_noop(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_resume_directory_without_inputs_snapshot_exits_one(tmp_path: Path) -> None:
-    output_dir = tmp_path / "experiments" / "test-exp-20260101-010101"
+    output_dir = tmp_path / "experiments" / "execute" / "test-exp-20260101-010101"
     output_dir.mkdir(parents=True)
 
     result = runner.invoke(
@@ -185,8 +191,8 @@ def test_resume_with_input_dir_lists_outputs_and_chooses_none(
 ) -> None:
     input_dir = _write_source(tmp_path)
     root = tmp_path / "project"
-    older = _write_output(root / "experiments" / "test-exp-20260101-010101")
-    newer = _write_output(root / "experiments" / "test-exp-20260102-020202")
+    older = _write_output(root / "experiments" / "execute" / "test-exp-20260101-010101")
+    newer = _write_output(root / "experiments" / "execute" / "test-exp-20260102-020202")
     monkeypatch.setattr(cli, "_find_project_root", lambda: root)
 
     result = runner.invoke(app, ["simulate", "--resume", "--input-dir", str(input_dir)])

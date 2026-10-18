@@ -10,6 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from pydantic import BaseModel, ConfigDict
+
+from metis.wizard.application import export_layout
 from metis.wizard.application.fixtures import (
     FixtureCandidate,
     FixtureError,
@@ -24,6 +27,15 @@ from .experiment import to_yaml
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from typing import BinaryIO
+
+
+class SpecificationArchive(BaseModel):
+    """A portable export and its download filename."""
+
+    model_config = ConfigDict(frozen=True)
+
+    content: bytes
+    filename: str
 
 
 class SpecificationError(ValueError):
@@ -54,7 +66,7 @@ def write_specification(
     fixture_dir: Path,
     target: Path,
 ) -> Path:
-    """Write specification.yaml and fixtures at the root of a ZIP archive."""
+    """Write the shared export layout into a ZIP archive."""
 
     fixture_root = Path(fixture_dir)
     destination = Path(target)
@@ -74,7 +86,9 @@ def write_specification(
                             stack.enter_context(path.open("rb")),
                         )
                     )
-            destination.write_bytes(build_specification_archive(document, fixtures))
+            destination.write_bytes(
+                build_specification_archive(document, fixtures).content
+            )
     except OSError as exc:
         raise SpecificationError(f"Could not create specification.zip: {exc}") from exc
     return destination
@@ -83,7 +97,9 @@ def write_specification(
 def build_specification_archive(
     document: dict[str, Any],
     fixtures: Iterable[SpecificationFixture],
-) -> bytes:
+    *,
+    interview_state_json: str | None = None,
+) -> SpecificationArchive:
     """Build a complete specification ZIP from request-scoped fixture streams.
 
     The caller owns the input streams. This function validates every filename before it reads any
@@ -111,18 +127,28 @@ def build_specification_archive(
         joined = ", ".join(missing)
         raise SpecificationError(f"Missing fixture file(s): {joined}.")
 
+    root = export_layout.experiment_name(
+        "interview" if interview_state_json is not None else "manual"
+    )
     output = io.BytesIO()
     try:
         with zipfile.ZipFile(
             output, mode="w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
         ) as archive:
-            archive.writestr("specification.yaml", to_yaml(document))
-            archive.writestr("fixtures/", b"")
+            archive.writestr(f"{root}/{export_layout.INPUTS}/", b"")
+            if interview_state_json is not None:
+                archive.writestr(
+                    f"{root}/{export_layout.INTERVIEW_STATE}", interview_state_json
+                )
+            archive.writestr(f"{root}/{export_layout.SPECIFICATION}", to_yaml(document))
+            archive.writestr(f"{root}/{export_layout.FIXTURES}/", b"")
             for name in sorted(normalized):
-                archive.writestr(f"fixtures/{name}", normalized[name])
+                archive.writestr(
+                    f"{root}/{export_layout.FIXTURES / name}", normalized[name]
+                )
     except (OSError, zipfile.BadZipFile) as exc:
         raise SpecificationError(f"Could not create specification.zip: {exc}") from exc
-    return output.getvalue()
+    return SpecificationArchive(content=output.getvalue(), filename=f"{root}.zip")
 
 
 def _bounded_fixture_list(

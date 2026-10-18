@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 import structlog
 
+from metis.core import execution_layout
 from metis.core.console import console
 from metis.core.logging import get_logger
 
@@ -295,7 +296,7 @@ async def _worker(
             )
 
             folder_name = trial_folder_name(scenario, persona, trial_index)
-            run_dir = experiment_root / "trials" / folder_name
+            run_dir = experiment_root / execution_layout.TRIALS / folder_name
             run_dir.mkdir(parents=True, exist_ok=True)
 
             # Bind run context for structured logging

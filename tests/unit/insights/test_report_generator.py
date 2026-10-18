@@ -40,8 +40,8 @@ def test_save_report_writes_utf8(
 
     assert paths is not None
     html_path, json_path = paths
-    assert html_path == tmp_path / "reports" / "report.html"
-    assert json_path == tmp_path / "reports" / "report.json"
+    assert html_path == tmp_path / "outputs" / "reports" / "report.html"
+    assert json_path == tmp_path / "outputs" / "reports" / "report.json"
     assert encodings_used == ["utf-8", "utf-8"]
 
     html_text = html_path.read_text(encoding="utf-8")
