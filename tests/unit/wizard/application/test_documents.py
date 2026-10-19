@@ -181,3 +181,20 @@ def test_extraction_rejects_a_batch_with_an_unreadable_file() -> None:
 
     assert caught.value.filename == "second.txt"
     assert caught.value.code is DocumentExtractionErrorCode.MALFORMED_FILE
+
+
+def test_large_supporting_documents_keep_all_text() -> None:
+    from metis.wizard import InterviewStartRequest
+    from metis.wizard.contracts.interview_state import CapabilityConfidence
+
+    texts = [("deep-dive.md", "a" * 307_000), ("support.yaml", "b" * 117_000)]
+    extracted = extract_documents(
+        [_fixture(name, text.encode()) for name, text in texts]
+    )
+    request = InterviewStartRequest(
+        description="Evaluate the product",
+        known_capability_ids=[],
+        capability_confidence=CapabilityConfidence.LOW,
+        documents=[item.model_dump() for item in extracted.documents],
+    )
+    assert [(item.name, item.text) for item in request.documents] == texts

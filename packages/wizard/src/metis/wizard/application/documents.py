@@ -90,7 +90,7 @@ def extract_documents(
         if extension not in EXTRACTION_DOCUMENT_EXTENSIONS:
             raise DocumentExtractionError(
                 DocumentExtractionErrorCode.UNSUPPORTED_FILE_TYPE,
-                "Interview text is supported only for TXT, Markdown, PDF, and DOCX files.",
+                "Interview text is supported only for TXT, Markdown, YAML, JSON, CSV, PDF, and DOCX files.",
                 filename=name,
             )
         identity = name.casefold()
@@ -107,7 +107,7 @@ def extract_documents(
     total_bytes = 0
     for name, extension, stream in streams:
         data, total_bytes = _read_upload(stream, total_bytes, name)
-        if extension in {"txt", "md"}:
+        if extension in {"txt", "md", "yaml", "yml", "json", "csv"}:
             text = _extract_text_file(data, name)
         elif extension == "pdf":
             text = _extract_pdf(data, name)

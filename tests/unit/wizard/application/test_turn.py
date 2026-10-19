@@ -17,7 +17,10 @@ from metis.wizard import (
     handle_interview,
 )
 from metis.wizard.application.driver import DriverState
-from metis.wizard.application.interviewer import InterviewerOutputError
+from metis.wizard.application.interviewer import (
+    InterviewContextBudgetError,
+    InterviewerOutputError,
+)
 from metis.wizard.application.screens import behaviours_screen, scenarios_screen
 from metis.wizard.application.turn import _reconcile_locks
 from metis.wizard.contracts import (
@@ -34,6 +37,7 @@ from metis.wizard.contracts import (
     PatchOp,
     Perspective,
     Specification,
+    StepResult,
     Target,
 )
 from metis.wizard.contracts.interview_state import HISTORY_LIMIT, InterviewState, Turn
@@ -268,25 +272,42 @@ def test_a_behaviour_measurement_change_stays_pending_before_continue() -> None:
     assert not result.state.specification.behaviour("EB-1").measured  # type: ignore[union-attr]
 
 
-class ClarifyUnavailable(ScriptedInterviewer):
-    def clarify(self, specification, history, context=None):
-        raise InterviewerOutputError("three attempts, all failed")
+@pytest.mark.parametrize(
+    "error, code, retryable",
+    [
+        (
+            InterviewerOutputError("three attempts, all failed"),
+            InterviewErrorCode.MODEL_UNAVAILABLE,
+            True,
+        ),
+        (
+            InterviewContextBudgetError("Request exceeds context budget"),
+            InterviewErrorCode.CONTEXT_BUDGET_EXCEEDED,
+            False,
+        ),
+    ],
+)
+def test_model_failure_preserves_state_and_diagnostics(error, code, retryable) -> None:
+    class FailingInterviewer(ScriptedInterviewer):
+        def clarify(self, specification, history, context=None):
+            raise error
 
-
-def test_model_failure_is_retryable_with_the_state_intact() -> None:
     opening = _start()
     assert isinstance(opening, InterviewSuccess)
 
     result = _turn(
         opening.state,
         ChatResponse(text="a policy tool"),
-        interviewer=ClarifyUnavailable(),
+        interviewer=FailingInterviewer(),
     )
 
     assert isinstance(result, InterviewFailure)
-    assert result.code is InterviewErrorCode.MODEL_UNAVAILABLE
-    assert result.retryable
+    assert result.code is code
+    assert result.retryable is retryable
     assert result.state == opening.state
+
+    assert result.diagnostic_state is not None
+    assert str(error) in (result.diagnostic_message or result.message)
 
 
 def test_end_finishes_a_completable_interview() -> None:
@@ -575,3 +596,29 @@ def test_compile_specification_returns_both_yaml_strings_and_writes_nothing() ->
 def test_compile_specification_raises_on_a_specification_that_will_not_build() -> None:
     with pytest.raises(CompilationError):
         compile_specification(_empty_specification())
+
+
+def test_end_completes_missing_target_fields_from_evidence() -> None:
+    class TargetCompletionInterviewer(ScriptedInterviewer):
+        def chat(self, specification, step, text, target, context=None):
+            assert specification.target.description
+            return StepResult(
+                message="",
+                patches=[
+                    Patch(op=PatchOp.SET, path="target.name", value="Billing support"),
+                ],
+            )
+
+    specification = research_assistant()
+    specification.target.name = ""
+    result = _end(
+        InterviewState(
+            specification=specification,
+            context=interview_context(),
+            behaviours_confirmed=True,
+        ),
+        interviewer=TargetCompletionInterviewer(),
+    )
+    assert isinstance(result, InterviewSuccess)
+    assert result.outcome == "done"
+    assert result.state.specification.target.name == "Billing support"

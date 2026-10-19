@@ -33,10 +33,14 @@ def test_wizard_config_returns_package_owned_working_status(
     )
     assert body["document_limits"]["max_documents"] == 20
     assert body["document_limits"]["max_extraction_file_bytes"] == 10_000_000
-    assert body["document_limits"]["max_text_characters_total"] == 80_000
+    assert body["document_limits"]["max_text_characters_total"] == 1_000_000
     assert body["document_limits"]["extraction_extensions"] == [
+        "csv",
         "docx",
+        "json",
         "md",
         "pdf",
         "txt",
+        "yaml",
+        "yml",
     ]

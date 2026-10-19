@@ -742,3 +742,79 @@ def test_generated_metadata_reaches_saved_specification(path, metadata):
     assert "Review a policy." in messages[0]["content"]
     assert "`metadata`" in messages[1]["content"]
     assert "No key is required." in messages[1]["content"]
+
+
+@pytest.mark.parametrize(
+    "context_tokens, replies, calls",
+    [
+        (5000, ["{}"], 0),
+        (30000, ["x" * 30000], 1),
+    ],
+)
+def test_context_budget_covers_schema_output_and_retries(
+    context_tokens, replies, calls
+) -> None:
+    from metis.wizard.application.interviewer import InterviewContextBudgetError
+
+    gateway, completions = interviewer(replies)
+    gateway.context_tokens = context_tokens
+    gateway.output_tokens = 1000
+    with pytest.raises(InterviewContextBudgetError, match="No input was truncated"):
+        gateway._ask(simple_prompt(), ClarifyResult)
+    assert len(completions.calls) == calls
+
+
+@pytest.mark.parametrize(
+    "first_patches",
+    [
+        [],
+        [
+            {
+                "op": "add",
+                "path": "features[source-feature].behaviours[source-behaviour].criteria",
+                "value": {
+                    "name": "Accuracy",
+                    "given": "Evidence",
+                    "when": "Answering",
+                    "then": "Use evidence",
+                },
+            }
+        ],
+    ],
+)
+def test_criteria_generation_retries_until_measured_gaps_are_filled(
+    first_patches,
+) -> None:
+    from tests.fixtures.wizard.specifications import research_assistant
+
+    specification = research_assistant()
+    behaviour = specification.measured_behaviours()[0]
+    behaviour.criteria = []
+    feature = specification.feature_of(behaviour.id)
+    path = f"features[{feature.id}].behaviours[{behaviour.id}].criteria"
+    good = {
+        "message": "",
+        "patches": [
+            {
+                "op": "add",
+                "path": path,
+                "value": {
+                    "name": "Accuracy",
+                    "given": "Evidence",
+                    "when": "Answering",
+                    "then": "Use evidence",
+                },
+            }
+        ],
+    }
+    gateway, completions = interviewer(
+        [
+            json.dumps({"message": "", "patches": first_patches}),
+            json.dumps(good),
+        ]
+    )
+    result = gateway.draft_criteria(specification)
+    assert len(completions.calls) == 2
+    assert result.patches[0].path == path
+    assert path in completions.calls[1]["messages"][-1]["content"]
+    assert behaviour.criteria == []

@@ -239,6 +239,23 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   reviewer together under `packages/testbed/wizard/`. Orca product inputs and
   generated previews stay local; the other case inputs are tracked (#436).
 
+- Add a Wizard evaluation command that sends each case's `prompt.md` as the first
+  Interview message and uploads its supporting documents. It scores generated
+  Specifications at the Feature, Expected Behaviour, Criterion, Grader, and
+  Task levels, saves results by Wizard version, and compares saved versions (#436).
+  Record completion separately from scores, accept the final ready Scenario review,
+  and retain structured failures with missing requirements and diagnostic state.
+  Share embedding preparation between reference and generated Specifications, with
+  local caches beside each YAML file. Add separate `embed` and `score` commands;
+  scoring creates missing embeddings and reuses valid entries. Save score reports
+  under `results/` and keep embedding caches beside the Specification YAML. Report behaviour
+  mean nearest-neighbour similarity and pair details for behaviour text and
+  feature–behaviour–criteria context,
+  plus pair difference error when a reference is supplied.
+  Include experimental reference and generated mean NN scores with Behaviour counts
+  in the normal Wizard run summary and saved case results.
+  Document commands, metrics, and example CLI tables in the Wizard suite README.
+
 ### metis-wizard
 
 #### Added
@@ -246,6 +263,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Accept optional flat string metadata in model-proposed Persona and Scenario
   drafts and preserve it in saved Specifications. Guide generation to use supplied
   facts and omit unspecified metadata (#441).
+- Support large supporting documents with shared limits of 500,000 characters per
+  file and 1,000,000 total. Read YAML, JSON, and CSV text. Check the configured
+  model context budget before each request without truncating input.
 
 - **Opening documents.** Flat Interview start requests can carry files as `{name, text?}`. The
   wizard keeps the opening description and document context in client-held state, with supported
@@ -288,9 +308,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Fix the type error when a new Interview creates its Specification. Preserve
   the initial Target details and Experiment defaults (#419).
 
+- Retry Criterion drafts that leave measured Behaviours without Criteria, using
+  the current Specification paths in the correction request (#444).
+
 - **Required product details.** Before behaviour review, the Interview shows a form for any
   missing product name or description. The user can supply these details and continue when the
-  model has not supplied them.
+  model has not supplied them. Best-effort completion fills missing Target fields
+  from the supplied evidence before it drafts the evaluation. Readiness validation
+  still reports any remaining gaps.
 
 #### Changed
 

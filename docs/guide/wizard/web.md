@@ -66,7 +66,7 @@ does not save the state.
 Document facts:
 
 - The browser shows the accepted file types and size limits.
-- The API extracts text from UTF-8 TXT, Markdown, PDF text layers, and DOCX files.
+- The API extracts text from UTF-8 TXT, Markdown, YAML, JSON, CSV, PDF text layers, and DOCX files.
 - The API does not run OCR. Scanned PDFs give no text.
 - The Wizard can suggest an opening document as a Test Case fixture. Review each suggestion under
   **Files sent to your target**.

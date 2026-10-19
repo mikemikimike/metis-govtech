@@ -89,6 +89,7 @@ class InterviewErrorCode(StrEnum):
     RESPONSE_TYPE_MISMATCH = "response_type_mismatch"
     RESPONSE_NOT_OFFERED = "response_not_offered"
     MODEL_UNAVAILABLE = "model_unavailable"
+    CONTEXT_BUDGET_EXCEEDED = "context_budget_exceeded"
     COMPLETION_FAILED = "completion_failed"
     INTERNAL_ERROR = "internal_error"
 
@@ -140,6 +141,8 @@ class InterviewFailure(BaseModel):
     retryable: bool
     state: InterviewState | None = None
     missing: list[MissingData] = Field(default_factory=list)
+    diagnostic_state: InterviewState | None = None
+    diagnostic_message: str | None = None
 
 
 InterviewResult: TypeAlias = Annotated[

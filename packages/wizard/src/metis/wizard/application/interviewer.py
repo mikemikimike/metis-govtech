@@ -25,6 +25,10 @@ class InterviewerOutputError(RuntimeError):
     """An interviewer could not return a valid structured result after its retries."""
 
 
+class InterviewContextBudgetError(InterviewerOutputError):
+    """The full request does not fit the configured model context budget."""
+
+
 class Interviewer(Protocol):
     """The model, from the driver's point of view."""
 

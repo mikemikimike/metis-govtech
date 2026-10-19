@@ -14,6 +14,7 @@ dependencies = [
     "metis-wizard",
     "metis-insights",
     "metis-api",
+    "metis-testbed",
 ]
 
 [project.scripts]
@@ -33,13 +34,14 @@ metis-library = { workspace = true }
 metis-wizard = { workspace = true }
 metis-insights = { workspace = true }
 metis-api = { workspace = true }
+metis-testbed = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "packages/*",
     "apps/*",
 ]
-exclude = ["apps/web", "packages/testbed"]
+exclude = ["apps/web"]
 
 [tool.pyright]
 venvPath = "."

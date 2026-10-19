@@ -718,12 +718,12 @@ export interface components {
             max_extraction_request_bytes: number;
             /**
              * Max Text Characters Per Document
-             * @default 40000
+             * @default 500000
              */
             max_text_characters_per_document: number;
             /**
              * Max Text Characters Total
-             * @default 80000
+             * @default 1000000
              */
             max_text_characters_total: number;
             /**
@@ -784,7 +784,7 @@ export interface components {
          * @description Stable failure codes exposed by the in-process and HTTP interfaces.
          * @enum {string}
          */
-        InterviewErrorCode: "no_pending_request" | "request_id_mismatch" | "response_type_mismatch" | "response_not_offered" | "model_unavailable" | "completion_failed" | "internal_error";
+        InterviewErrorCode: "no_pending_request" | "request_id_mismatch" | "response_type_mismatch" | "response_not_offered" | "model_unavailable" | "context_budget_exceeded" | "completion_failed" | "internal_error";
         /**
          * InterviewFailure
          * @description A typed failure with unchanged state when a safe retry state exists.
@@ -803,6 +803,9 @@ export interface components {
             state?: components["schemas"]["InterviewState"] | null;
             /** Missing */
             missing?: components["schemas"]["MissingData"][];
+            diagnostic_state?: components["schemas"]["InterviewState"] | null;
+            /** Diagnostic Message */
+            diagnostic_message?: string | null;
         };
         /**
          * InterviewStartRequest

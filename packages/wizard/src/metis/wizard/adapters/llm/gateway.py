@@ -27,6 +27,7 @@ text never leaves the gateway — a code guarantee, not a prompt instruction.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -37,11 +38,14 @@ from pydantic import BaseModel, ValidationError
 
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import (
+    InterviewContextBudgetError,
     InterviewerOutputError,
     InterviewerUnavailable,
 )
+from metis.wizard.application.readiness import missing_criteria_paths
 from metis.wizard.contracts.output import ClarifyResult, StepResult
 from metis.wizard.domain.applier import PatchValueError, validate_model_patches
+from metis.wizard.domain.patch import PatchOp
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -87,11 +91,23 @@ class GatewayInterviewer:
     """Structured-output calls against the gateway."""
 
     model: str = field(default_factory=lambda: os.environ.get(MODEL_VAR, DEFAULT_MODEL))
+    context_tokens: int = field(
+        default_factory=lambda: int(
+            os.environ.get("INTERVIEW_CONTEXT_TOKENS", "128000")
+        )
+    )
+    output_tokens: int = field(
+        default_factory=lambda: int(os.environ.get("INTERVIEW_OUTPUT_TOKENS", "16384"))
+    )
     _client: Any = None
     interview_id: str | None = None
 
     def __post_init__(self) -> None:
         check_credentials()
+        if not 0 < self.output_tokens < self.context_tokens:
+            raise ValueError(
+                "INTERVIEW_OUTPUT_TOKENS must be positive and below INTERVIEW_CONTEXT_TOKENS."
+            )
         if self._client is None:
             # The drop-in traces every call; unconfigured it is a quiet no-op. The OpenAI client
             # does not connect on construction, so this stays offline until a call is made.
@@ -136,19 +152,39 @@ class GatewayInterviewer:
         ]
         last_error: Exception | None = None
 
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema.__name__,
+                "schema": schema.model_json_schema(),
+                "strict": True,
+            },
+        }
         for attempt in range(ATTEMPTS):
+            # One token per UTF-8 byte is a conservative bound for byte-based model
+            # tokenizers. Include schema, retry history, framing, and reserved output.
+            input_bound = (
+                len(
+                    json.dumps(
+                        {"messages": messages, "response_format": response_format},
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+                )
+                + 4096
+            )
+            if input_bound + self.output_tokens > self.context_tokens:
+                raise InterviewContextBudgetError(
+                    f"Request for {self.model} needs a conservative budget of "
+                    f"{input_bound + self.output_tokens:,} tokens; configured context is "
+                    f"{self.context_tokens:,}. No input was truncated. Set INTERVIEW_CONTEXT_TOKENS "
+                    "to the provider's supported limit or reduce the documents."
+                )
             try:
                 response = self._client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    response_format={
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": schema.__name__,
-                            "schema": schema.model_json_schema(),
-                            "strict": True,
-                        },
-                    },
+                    response_format=response_format,
+                    max_completion_tokens=self.output_tokens,
                 )
             except APIError as exc:
                 raise InterviewerOutputError(
@@ -187,18 +223,27 @@ class GatewayInterviewer:
         prompt: prompts.ModelPrompt,
         specification: Specification,
         context: InterviewContext | None = None,
+        *,
+        required_additions: frozenset[str] = frozenset(),
     ) -> StepResult:
-        result, recovered = self._ask(
-            prompt,
-            StepResult,
-            validate=lambda candidate: validate_model_patches(
+        def validate(candidate: StepResult) -> None:
+            validate_model_patches(
                 specification,
                 candidate.patches,
-                allowed_fixture_names=set(
-                    context.document_names if context is not None else []
-                ),
-            ),
-        )
+                allowed_fixture_names=set(context.document_names if context else []),
+            )
+            missing = required_additions - {
+                patch.path for patch in candidate.patches if patch.op is PatchOp.ADD
+            }
+            if missing:
+                raise PatchValueError(
+                    "Return at least one ADD patch with a strict Criterion draft for each "
+                    "of these current Specification paths: "
+                    + ", ".join(sorted(missing))
+                    + ". Use IDs from the current Specification, not IDs in source documents."
+                )
+
+        result, recovered = self._ask(prompt, StepResult, validate=validate)
         # A recovered turn's intro tends to narrate the correction it just made — detail the
         # user should never see. Drop it and let the driver fall back to its neutral per-step
         # default; the patches, which are the real output, are kept either way.
@@ -243,7 +288,10 @@ class GatewayInterviewer:
         context: InterviewContext | None = None,
     ) -> StepResult:
         return self._step(
-            prompts.criteria(specification, context), specification, context
+            prompts.criteria(specification, context),
+            specification,
+            context,
+            required_additions=missing_criteria_paths(specification),
         )
 
     def draft_personas(

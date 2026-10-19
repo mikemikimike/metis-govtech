@@ -58,3 +58,9 @@ packages/wizard/docs/
 
 # Generated reviewer pages can contain local case inputs.
 /packages/testbed/wizard/.reviewer/
+
+# Generated testbed evaluation results.
+/packages/testbed/results/
+
+# Generated embeddings are local caches.
+/packages/testbed/**/*.embeddings.json

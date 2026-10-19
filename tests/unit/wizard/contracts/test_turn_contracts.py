@@ -103,8 +103,8 @@ def test_start_requires_explicit_capability_evidence(confidence: str) -> None:
         [{"name": "../policy.pdf"}],
         [{"name": "Policy.pdf"}, {"name": "policy.PDF"}],
         [{"name": f"file-{i}.txt"} for i in range(21)],
-        [{"name": "policy.txt", "text": "x" * 40_001}],
-        [{"name": f"policy-{i}.txt", "text": "x" * 30_000} for i in range(3)],
+        [{"name": "policy.txt", "text": "x" * 500_001}],
+        [{"name": f"policy-{i}.txt", "text": "x" * 400_000} for i in range(3)],
     ],
 )
 def test_start_rejects_unsafe_or_oversized_document_context(

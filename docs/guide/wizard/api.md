@@ -67,7 +67,7 @@ curl --fail-with-body http://localhost:8001/api/v1/wizard/documents/extract \
 ```
 
 The response contains a `documents` list with canonical file names and extracted text. The route
-supports UTF-8 TXT, Markdown, PDF text layers, and DOCX files. It does not run OCR. Add the returned
+supports UTF-8 TXT, Markdown, YAML, JSON, CSV, PDF text layers, and DOCX files. It does not run OCR. Add the returned
 list to the start request. The opening document list cannot change after start.
 
 Keep each original file. If a Scenario uses it, send the original bytes to `/package`.

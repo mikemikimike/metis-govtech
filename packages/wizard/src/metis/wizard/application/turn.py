@@ -36,6 +36,7 @@ from metis.wizard.application.compile import (
 )
 from metis.wizard.application.driver import DriverState, StepDriver
 from metis.wizard.application.interviewer import (
+    InterviewContextBudgetError,
     InterviewerOutputError,
     InterviewerUnavailable,
 )
@@ -209,8 +210,8 @@ def handle_interview(
         _apply_response(working, driver, request.response)
         if driver.model_error is not None:
             raise driver.model_error
-    except InterviewerOutputError:
-        return _model_unavailable(state)
+    except InterviewerOutputError as exc:
+        return _model_unavailable(state, exc, working)
     except Exception as exc:
         return _internal_error(state, exc)
 
@@ -225,8 +226,8 @@ def handle_interview(
             working.pending = driver.compose(working)
         if driver.model_error is not None:
             raise driver.model_error
-    except InterviewerOutputError:
-        return _model_unavailable(state)
+    except InterviewerOutputError as exc:
+        return _model_unavailable(state, exc, working)
     except Exception as exc:
         return _internal_error(state, exc)
 
@@ -265,8 +266,8 @@ def _start(
         working.pending = driver.compose(working)
         if driver.model_error is not None:
             raise driver.model_error
-    except InterviewerOutputError:
-        return _model_unavailable(None)
+    except InterviewerOutputError as exc:
+        return _model_unavailable(None, exc, working)
     except Exception as exc:
         return _internal_error(None, exc)
     _record_assistant(working)
@@ -319,7 +320,15 @@ def _finish(
     driver = StepDriver(interviewer=interviewer, matcher=matcher)
     # Client-held state can validly arrive at any stage with existing Criteria that have not yet
     # been matched. End owns the complete best-effort path, so resolve them before it advances.
-    driver.match(working)
+    try:
+        driver.complete_target(working)
+        if driver.model_error is not None:
+            return _model_unavailable(original, driver.model_error, working)
+        driver.match(working)
+    except InterviewerOutputError as exc:
+        return _model_unavailable(original, exc, working)
+    except Exception as exc:
+        return _internal_error(original, exc)
 
     for _ in range(_FINISH_GUARD):
         if working.step is InterviewStep.DONE:
@@ -329,12 +338,12 @@ def _finish(
             continue
         try:
             screen = driver.compose(working)
-        except InterviewerOutputError:
-            return _model_unavailable(original)
+        except InterviewerOutputError as exc:
+            return _model_unavailable(original, exc, working)
         except Exception as exc:
             return _internal_error(original, exc)
         if driver.model_error is not None:
-            return _model_unavailable(original)
+            return _model_unavailable(original, driver.model_error, working)
         offered = options_of(screen)
         advance = [
             key
@@ -346,12 +355,12 @@ def _finish(
         working.pending = None
         try:
             driver.handle(working, screen, ChoiceResponse(selected=advance[:1]))
-        except InterviewerOutputError:
-            return _model_unavailable(original)
+        except InterviewerOutputError as exc:
+            return _model_unavailable(original, exc, working)
         except Exception as exc:
             return _internal_error(original, exc)
         if driver.model_error is not None:
-            return _model_unavailable(original)
+            return _model_unavailable(original, driver.model_error, working)
 
     working.pending = None
     gaps = _completion_gaps(working.specification)
@@ -362,12 +371,12 @@ def _finish(
             working.step = InterviewStep.SCENARIOS
             try:
                 working.pending = driver.compose(working)
-            except InterviewerOutputError:
-                return _model_unavailable(original)
+            except InterviewerOutputError as exc:
+                return _model_unavailable(original, exc, working)
             except Exception as exc:
                 return _internal_error(original, exc)
             if driver.model_error is not None:
-                return _model_unavailable(original)
+                return _model_unavailable(original, driver.model_error, working)
             _record_assistant(working)
             return _awaiting(working)
         working.confirmed = True
@@ -378,6 +387,7 @@ def _finish(
         retryable=False,
         state=original,
         missing=gaps,
+        diagnostic_state=_to_client(working),
     )
 
 
@@ -612,10 +622,22 @@ def _not_offered(state: InterviewState) -> InterviewFailure:
     )
 
 
-def _model_unavailable(state: InterviewState | None) -> InterviewFailure:
+def _model_unavailable(
+    state: InterviewState | None, error: InterviewerOutputError, working: DriverState
+) -> InterviewFailure:
+    if isinstance(error, InterviewContextBudgetError):
+        return InterviewFailure(
+            code=InterviewErrorCode.CONTEXT_BUDGET_EXCEEDED,
+            diagnostic_state=_to_client(working),
+            message=str(error),
+            retryable=False,
+            state=state,
+        )
     return InterviewFailure(
         code=InterviewErrorCode.MODEL_UNAVAILABLE,
-        message="The model could not be reached; nothing was changed.",
+        message="The model could not return a usable result; nothing was changed.",
+        diagnostic_message=str(error),
+        diagnostic_state=_to_client(working),
         retryable=True,
         state=state,
     )
