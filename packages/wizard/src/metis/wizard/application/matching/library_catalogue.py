@@ -12,10 +12,11 @@ walking submodules — walking the submodules would skip every `_`-prefixed file
 almost nothing. The emitted FQN is the flat canonical path, `metis.library.graders.<Class>`,
 which is what the engine resolves by ``import_module`` + ``getattr``.
 
-Design-time metadata only. The wizard never instantiates a grader and never runs one — which
-is why specs are built from class names and docstrings rather than from instances. Many
-graders take constructor arguments, so building one just to read its display name would be
-the wizard doing exactly what it says it never does.
+Design-time metadata only. The wizard never instantiates a grader and never runs one: a
+grader's parameters are the fields of its `args_model`, a Pydantic model the class declares, so
+they are read from the class without calling anything. A model-based grader's `model` field is
+left out, because the engine resolves it at run time from the specification's
+`defaults.judge_model` or the environment.
 """
 
 from __future__ import annotations
@@ -24,7 +25,9 @@ import inspect
 import re
 from functools import lru_cache
 from importlib import import_module
+from typing import Any
 
+from metis.library.grader import Grader, JudgeArgs
 from metis.wizard.contracts.grader_spec import GraderParam, GraderSpec
 
 # The one string that says where the graders live.
@@ -45,42 +48,38 @@ def _summary(cls: type) -> str:
     return doc.split("\n\n")[0].replace("\n", " ").strip()
 
 
-def _params(cls: type) -> list[GraderParam]:
-    """Read the constructor signature without calling it."""
-    try:
-        signature = inspect.signature(cls.__init__)
-    except (TypeError, ValueError):
-        return []
+def _type_name(annotation: object) -> str:
+    return getattr(annotation, "__name__", None) or str(annotation)
 
+
+def _params(cls: type[Grader[Any]]) -> list[GraderParam]:
+    """The grader's ``args_model`` fields, read from the class without building anything."""
     params = []
-    for name, parameter in list(signature.parameters.items())[1:]:  # skip self
-        if name in {"args", "kwargs"}:
-            continue
-        empty = inspect.Parameter.empty
+    for name, info in cls.args_model.model_fields.items():
+        if name == "model" and issubclass(cls.args_model, JudgeArgs):
+            continue  # resolved by the engine, never chosen per criterion in the wizard
+        required = info.is_required()
         params.append(
             GraderParam(
                 name=name,
-                type=(
-                    getattr(parameter.annotation, "__name__", str(parameter.annotation))
-                    if parameter.annotation is not empty
-                    else "unknown"
-                ),
-                default=None if parameter.default is empty else parameter.default,
-                required=parameter.default is empty,
+                type=_type_name(info.annotation),
+                default=None
+                if required
+                else info.get_default(call_default_factory=True),
+                required=required,
             )
         )
     return params
 
 
 def _is_grader(obj: object) -> bool:
-    if not inspect.isclass(obj):
-        return False
-    if not obj.__name__.endswith("Grader"):
-        return False
-    if obj.__name__.startswith(("Base", "Sync")):  # abstract bases, not choices
-        return False
-    # Defined inside the library, not something the package happens to import from elsewhere.
-    return obj.__module__.startswith(GRADERS_PACKAGE)
+    """A concrete Grader defined inside the library, not something it happens to import."""
+    return (
+        inspect.isclass(obj)
+        and issubclass(obj, Grader)
+        and not inspect.isabstract(obj)
+        and obj.__module__.startswith(GRADERS_PACKAGE)
+    )
 
 
 @lru_cache(maxsize=1)

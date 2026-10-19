@@ -1,7 +1,7 @@
-"""EvaluationResults: the engine-to-insights handoff file and its version guard.
+"""EvaluationResults: the results.json file `metis engine evaluate` writes.
 
-Same guard pattern as TrialRecord (tests/unit/engine/test_schema_v2.py): an explicit
-schema_version we cannot read fails loudly on load; a missing key takes the default.
+Same version guard as TrialRecord: an explicit schema_version we cannot read fails loudly on
+load; a missing key takes the default.
 """
 
 from __future__ import annotations
@@ -11,89 +11,92 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from metis.core.grading import RecordedResult
 from metis.core.reporting import (
     _EVALUATION_RESULTS_VERSION,
     EvaluationResults,
-    SessionGraderResult,
-    SessionReport,
-    TurnGraderResult,
-    TurnReport,
+    GraderRecord,
 )
 
 
-def _results(reason: str = "ok") -> EvaluationResults:
+def _record(**overrides: object) -> GraderRecord:
+    fields: dict[str, object] = {
+        "session_id": "s-1",
+        "scenario_id": "direct-question",
+        "task_id": "TC-001",
+        "trial_index": 1,
+        "criterion_id": "AC-UNI-22",
+        "grader_fqn": "metis.library.graders.TraceBudgetGrader",
+        "grader_args": {"threshold": 0.5, "max_traces": 4},
+        "results": [
+            RecordedResult(outcome="passed", score=1.0, reason="routed → analyst")
+        ],
+    }
+    fields.update(overrides)
+    return GraderRecord.model_validate(fields)
+
+
+def _results() -> EvaluationResults:
     return EvaluationResults(
         run_id="report",
-        turn_results=[
-            TurnReport(
-                trace_id="t-1",
-                session_id="s-1",
-                scenario_id="task-1",
-                turn_index=0,
-                total_turns=1,
-                input="hi",
-                output="hello",
-                routed_to="direct",
-                graders=[
-                    TurnGraderResult(
-                        criterion_id="AC-1",
-                        name="Turn Budget",
-                        score=1.0,
-                        reason=reason,
-                        success=True,
-                        skipped=False,
-                        cost=0.01,
-                    )
+        records=[
+            _record(),
+            _record(
+                criterion_id="AC-2",
+                results=[
+                    RecordedResult(outcome="skipped", reason="no output"),
+                    RecordedResult(outcome="errored", reason="judge reply unparseable"),
                 ],
-            )
+            ),
         ],
-        session_results=[
-            SessionReport(
-                session_id="s-1",
-                graders=[
-                    SessionGraderResult(
-                        name="Session Efficiency",
-                        score=0.7,
-                        reason="fine",
-                        success=True,
-                        skipped=False,
-                    )
-                ],
-            )
-        ],
-        routing={"total_traces": 1},
-        timings={"turn_graders_seconds": 1.2},
+        timings={"graders_seconds": 1.2},
         latency_seconds=1.2,
     )
 
 
-class TestEvaluationResultsVersion:
-    def test_current_version_loads(self) -> None:
-        loaded = EvaluationResults.model_validate(
-            {"schema_version": _EVALUATION_RESULTS_VERSION, "run_id": "r"}
-        )
-        assert loaded.schema_version == 2
-        assert loaded.turn_results == []
+class TestVersion:
+    def test_current_version_is_2(self) -> None:
+        assert _EVALUATION_RESULTS_VERSION == 2
+        loaded = EvaluationResults.model_validate({"schema_version": 2, "run_id": "r"})
+        assert loaded.records == []
         assert loaded.latency_seconds is None
 
     def test_missing_version_takes_the_default(self) -> None:
-        loaded = EvaluationResults.model_validate({"run_id": "r"})
-        assert loaded.schema_version == _EVALUATION_RESULTS_VERSION
+        assert EvaluationResults.model_validate({"run_id": "r"}).schema_version == 2
 
-    def test_wrong_version_rejected(self) -> None:
+    def test_unsupported_version_is_rejected(self) -> None:
         with pytest.raises(ValidationError, match="Unsupported schema_version 99"):
             EvaluationResults.model_validate({"schema_version": 99, "run_id": "r"})
 
+    @pytest.mark.parametrize("old_key", ["turn_results", "session_results"])
+    def test_the_old_turn_and_session_format_is_rejected(self, old_key: str) -> None:
+        """The old format has the same schema_version, so its keys are what tell it apart."""
+        with pytest.raises(ValidationError, match="re-run `metis engine evaluate`"):
+            EvaluationResults.model_validate(
+                {"schema_version": 2, "run_id": "r", old_key: []}
+            )
 
-class TestEvaluationResultsFile:
+
+class TestGraderRecord:
+    def test_requires_at_least_one_result(self) -> None:
+        with pytest.raises(ValidationError, match="results"):
+            _record(results=[])
+
+    def test_keeps_resolved_grader_args(self) -> None:
+        record = _record(grader_args={"threshold": 0.8, "model": "gpt-4o"})
+        assert record.grader_args["model"] == "gpt-4o"
+
+
+class TestFile:
     def test_round_trips_through_a_file_as_utf8(self, tmp_path: Path) -> None:
-        original = _results(reason="routed → analyst")
+        original = _results()
         path = tmp_path / "reports" / "results.json"
 
         original.save(path)
 
-        assert path.read_bytes().decode("utf-8").endswith("\n")
-        assert "→" in path.read_text(encoding="utf-8")
+        text = path.read_bytes().decode("utf-8")
+        assert text.endswith("\n")
+        assert "→" in text
         assert EvaluationResults.load_file(path) == original
 
     def test_malformed_json_raises_validation_error(self, tmp_path: Path) -> None:

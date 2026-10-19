@@ -50,9 +50,15 @@ See `schemas/README.md` for the full version bump rules table.
 
 ## Pyright Configuration
 
-The workspace disables `reportIncompatibleMethodOverride` for this package because DeepEval's `BaseMetric.__name__` returns `Literal['Base Metric']` and every subclass override triggers false positives.
+The workspace disables `reportIncompatibleMethodOverride`. It was added for DeepEval's
+`BaseMetric.__name__`; the redesign (#428) removed that cause and no override errors remain,
+so re-enabling it is a safe follow-up.
 
 ## Test Style
 
-- Unit tests do not touch the network. Build `LLMTestCase` / `ConversationalTestCase` objects directly and assert on the metadata written by the extractor.
-- To test extractor metadata injection, call `fetch_by_session_id` with a mocked Langfuse client, or test the pure helpers in isolation. Do not hit the live Langfuse API.
+- Unit tests do not touch the network. Build `Trace` / `GradingInput` objects directly for
+  grader and orchestrator tests.
+- To test the Langfuse fetch, call `fetch_session` with a fake client whose `get_many` answers
+  by filter column (see `tests/unit/engine/test_extractor_fetch.py`), so a fetch that reuses the
+  session-filtered rows as a trace's observations (issue #435) fails. Do not hit the live
+  Langfuse API.

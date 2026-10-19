@@ -17,7 +17,11 @@ Core data models and abstractions for the METIS suite. Zero workspace dependenci
 - `metis.core.specification` combines a Profile and an Experiment. Its document
   adapter keeps YAML and API JSON flat.
   Keep draft construction separate from complete execution validation.
-- `metis.core.reporting` owns the serializable grader-result types and
-  `EvaluationResults`, the `outputs/reports/results.json` file that `metis-engine` writes and
-  `metis-insights` reads. It is version-guarded like `TrialRecord` and has no published
+- `traces.py`: `Observation`, `Trace` and `GradingInput`, the read-only input of every grader
+  run. Frozen, tuple collections. `Trace.root` is METIS's port of Langfuse's
+  `isRootObservation = true` filter.
+- `grading.py`: `GraderResult`/`GradingOutput` (what a grader returns: a score, never a
+  pass/fail) and `RecordedResult` (the outcome after the orchestrator applies the threshold).
+- `reporting.py`: `EvaluationResults` (`outputs/reports/results.json`), one `GraderRecord`
+  per grader per session. It is version-guarded like `TrialRecord` and has no published
   schema file.

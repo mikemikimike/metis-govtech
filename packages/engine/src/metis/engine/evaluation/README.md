@@ -1,63 +1,53 @@
-# Evaluation Orchestrator
+# Evaluation
 
-Runs configured graders against Langfuse traces extracted from a completed simulation. Produces structured results consumed by the report generator.
+Runs each criterion's grader on every session it applies to and records the results as
+`results.json`. The CLI loop that drives this is `_evaluate_records` in
+`../cli.py`; this package holds the pieces it uses.
 
-## Architecture
+## Flow
 
 ```
-evaluate(fetch_result, grader_refs)
-  ├── _resolve_graders()         — import grader classes by FQN, instantiate with args
-  ├── _evaluate_turn_graders()   — per-turn graders against LLMTestCase objects
-  └── _evaluate_session_graders() — session graders against ConversationalTestCase objects
+specification.yaml criteria ──▶ build_criterion_grader (once per criterion)
+                                   resolve FQN → Grader subclass
+                                   resolve judge model (JudgeArgs only)
+                                   validate grader_args against args_model
+trial record ──▶ fetch_session ──▶ GradingInput (every trace + artifacts)
+                                   │
+                 grade_session ◀───┘  every grader once, concurrently
+                    grader.grade(input, llm) → GradingOutput (scores per grading scope)
+                    record_results: passed iff score ≥ threshold; [] or raise → errored
+                 ──▶ one GraderRecord per grader per session ──▶ EvaluationResults
 ```
 
-The orchestrator splits graders automatically by type:
+## Judge settings (`judge.py`)
 
-| Grader base class | Test case type | Granularity |
-|-------------------|---------------|-------------|
-| `BaseMetric` | `LLMTestCase` (one per trace/turn) | Per-turn |
-| `BaseConversationalMetric` | `ConversationalTestCase` (one per session) | Session-level |
+| Setting | Where it comes from |
+|---|---|
+| Judge model | `grader_args.model` → `defaults.judge_model` in the spec → `JUDGE_MODEL` → `gemini-3.5-flash-lite`. Written into the args before validation, so every record names its model. |
+| Gateway | `JUDGE_API_KEY` / `JUDGE_BASE_URL`, falling back to `OPENAI_API_KEY` / `OPENAI_BASE_URL`. Required only if some criterion's grader extends `JudgeArgs`. |
+| Concurrency cap | One shared `AsyncOpenAI` client, at most 50 connections, every grader LLM call from every grader run queues for one. |
+| Timeout | 300 s per request once sent; no timeout on waiting for a connection (`pool=None`), so queued calls are never recorded as errored. |
 
-Both types can be listed together in `specification.yaml` — no annotation needed.
+Retries are the OpenAI SDK's own (`max_retries=2`). There is no per-grader-run timeout.
 
-### Concurrency
+## Outcomes
 
-Graders within a turn (or session) run concurrently via `asyncio.gather`, gated by an `asyncio.Semaphore` (default: 50). Sync graders (`async_mode=False`) are offloaded to a thread via `asyncio.to_thread` so they don't block the event loop.
+A grader returns a score; it never decides pass or fail.
 
-Each grader is `deepcopy`'d before execution so concurrent runs don't share mutable state.
-
-## Environment variables
-
-| Variable | Required | Default | Purpose |
-|----------|----------|---------|---------|
-| `OPENAI_API_KEY` | Yes | — | API key shared by the LLM judge and user agent |
-| `OPENAI_BASE_URL` | No | _(OpenAI default)_ | Endpoint override for judge calls (e.g. for a compatible proxy) |
-| `JUDGE_MODEL` | No | `gpt-5.6-luna` | Model name for GEval-based judge graders |
-| `DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE` | No | `300` | Per-grader timeout in seconds |
-
-The judge model is configured in `metis.library.graders._judge` and shared by all GEval-based graders.
-
-## Input
-
-The orchestrator takes a `FetchLangfuseResult` (from the extractor) and a list of `GraderRef` objects resolved from all Criteria under each Task's selected Behaviours in `specification.yaml`. Graders are resolved by FQN at runtime via `importlib.import_module`.
-
-## Output
-
-Returns an `EvalResult` containing:
-
-- **`turn_results`** — per-turn grader scores, reasons, costs, and token counts
-- **`session_results`** — session-level grader scores
-- **`routing_summary`** — aggregate trace/session/routing statistics
-- **`durations`** — wall-clock time for turn and session grader phases
-
-Multiple `EvalResult` objects can be merged via `EvalResult.merge()` for aggregate reporting.
+| Grader returns | Recorded as |
+|---|---|
+| `scored`, `score >= threshold` | `passed` |
+| `scored`, `score < threshold` | `failed` |
+| `skipped` | `skipped` (nothing to judge; never a pass) |
+| `errored` | `errored` (could not judge; never a fail) |
+| no results, wrong type, or raises | one `errored` result for the grader run |
 
 ## Structure
 
 ```
 evaluation/
-├── orchestrator.py  — evaluate(), grader resolution, concurrent grader execution
-└── types.py         — EvalResult, TurnResult, SessionResult, GraderResult, EvalDurations
+├── judge.py         — judge-model resolution, JudgeGateway, build_llm_settings
+└── orchestrator.py  — build_criterion_grader, grade_session, record_results
 ```
 
-The extractor (trace fetching from Langfuse) lives in `../extractor/`.
+The Langfuse fetch lives in `../extractor/`; the grader contract in `metis.library.grader`.

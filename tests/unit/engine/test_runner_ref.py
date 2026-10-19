@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -62,7 +63,7 @@ class TestRunnerRefField:
                                         "when": "the agent responds",
                                         "then": "the requirement is met",
                                     },
-                                    "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                    "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
                                     "grader_args": {},
                                 }
                             ],
@@ -235,7 +236,7 @@ class TestRunnerRefValidation:
                                         "when": "the agent responds",
                                         "then": "the requirement is met",
                                     },
-                                    "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                    "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
                                     "grader_args": {},
                                 }
                             ],
@@ -278,21 +279,65 @@ class TestRunnerRefValidation:
 
 
 class TestExampleExperiment:
-    """Verify the shipped example experiment continues to load."""
+    """Verify the shipped example experiment's state after the grader redesign (#428).
 
-    def test_example_experiment_loads(self) -> None:
-        example_path = (
-            Path(__file__).resolve().parents[3]
-            / "packages"
-            / "engine"
-            / "example-experiment"
-            / "specification.yaml"
-        )
-        if not example_path.exists():
-            pytest.skip("example-experiment not found at expected path")
-        exp = Specification.load_file(example_path)
-        assert exp.id == "orca-eval"
+    Only AC-EXEC-3 has a grader (the demo TraceBudgetGrader); every other Criterion's
+    ``grader_fqn`` is left empty until graders are written for it. The document still parses,
+    and the engine refuses to run it, naming exactly those Criteria. When a grader is added
+    for a Criterion, this test fails and its expected set shrinks.
+    """
+
+    EXAMPLE = (
+        Path(__file__).resolve().parents[3]
+        / "packages"
+        / "engine"
+        / "example-experiment"
+        / "specification.yaml"
+    )
+
+    def _document(self) -> dict[str, Any]:
+        import yaml
+
+        return yaml.safe_load(self.EXAMPLE.read_text(encoding="utf-8"))
+
+    def test_example_experiment_parses_as_a_document(self) -> None:
+        from metis.core.specification import Specification as Document
+
+        document = Document.model_validate(self._document())
+        assert document.experiment.id == "orca-eval"
         assert (
-            exp.runner_factory_ref
+            document.experiment.runner_factory_ref
             == "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
         )
+
+    def test_only_the_demo_criterion_has_a_grader(self) -> None:
+        from metis.core.specification import Specification as Document
+
+        document = Document.model_validate(self._document())
+        graded = {
+            c.id: (c.grader_fqn, c.grader_args)
+            for b in document.behaviours()
+            for c in b.criteria
+            if c.grader_fqn
+        }
+        assert graded == {
+            "AC-EXEC-3": ("metis.library.graders.TraceBudgetGrader", {"max_traces": 4})
+        }
+
+    def test_the_engine_refuses_it_naming_every_criterion_without_a_grader(
+        self,
+    ) -> None:
+        from metis.core.specification import Specification as Document
+
+        ungraded = {
+            c.id
+            for b in Document.model_validate(self._document()).behaviours()
+            for c in b.criteria
+            if not c.grader_fqn
+        }
+        assert len(ungraded) == 83
+        with pytest.raises(ValidationError) as exc_info:
+            Specification.load_file(self.EXAMPLE)
+        message = str(exc_info.value)
+        assert all(f"Criterion {cid} needs a Grader." in message for cid in ungraded)
+        assert "AC-EXEC-3 needs a Grader" not in message

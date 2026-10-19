@@ -50,7 +50,7 @@ def _base_experiment(**overrides: object) -> dict:
                                     "when": "the agent responds",
                                     "then": "the requirement is met",
                                 },
-                                "grader_fqn": "metis.library.graders.TurnBudgetGrader",
+                                "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
                                 "grader_args": {},
                             }
                         ],

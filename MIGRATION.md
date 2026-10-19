@@ -128,10 +128,12 @@ Check these points when you convert a file:
   `response_wait_ms`, and `max_run_retries`. Their defaults are `20`, `15`,
   `300000`, and the runner's retry default. Set `max_run_retries: 0` to disable
   run retries. Move explicit Scenario values to each corresponding Task.
-  A Grader argument such as `TurnBudgetGrader` `max_turns` sets the passing
+  A Grader argument such as `TraceBudgetGrader` `max_traces` sets the passing
   budget only. The Task's `max_turns` controls execution.
 - **Grader formats.** The old `metric_refs` item had three formats. Each becomes
-  one Criterion:
+  one Criterion. Most old Graders have no replacement yet; see
+  [Graders redesigned without DeepEval](#graders-redesigned-without-deepeval-428) for
+  the current names and arguments:
 
   | Old `metric_refs` item | Criterion fields |
   |---|---|
@@ -177,16 +179,16 @@ features:
         measured: true
         criteria:
           - id: AC-EXEC-3
-            name: Turn budget
+            name: Trace budget
             description:
               given: an evaluation interaction
               when: the interaction is evaluated
-              then: the session completed within the allowed turn budget
-            grader_fqn: metis.library.graders.TurnBudgetGrader
+              then: the session completed within the allowed trace budget
+            grader_fqn: metis.library.graders.TraceBudgetGrader
             grader_args:
-              max_turns: 4
-  # AC-ORCA-2 already exists under Orchestration Behaviour EB-ORCA-2. It now has
-  # grader_fqn: metis.library.graders.DirectHandleRecognitionGrader.
+              max_traces: 4
+  # AC-ORCA-2 already exists under Orchestration Behaviour EB-ORCA-2. Its old
+  # Grader has no replacement yet, so its grader_fqn stays empty until one exists.
 
 scenarios:
   - id: direct-question
@@ -209,7 +211,9 @@ tasks:
 ```
 
 The full converted file is
-`packages/engine/example-experiment/specification.yaml`.
+`packages/engine/example-experiment/specification.yaml`. Only `AC-EXEC-3` in it names a
+Grader, so the engine refuses to run it until the other Criteria get one. The
+`packages/engine/example-experiment/simple/` example runs end to end.
 
 
 ### metis-wizard
@@ -230,6 +234,18 @@ history can also contain paths with `tasks[...]`.
 
 The wizard compiles `specification.yaml` with `schema_version: 2`. Reports change too; see
 [Schema versions are now `2`](#schema-versions-are-now-2).
+
+#### No fallback judge for unmatched Criteria
+
+The matcher still gives a Criterion that matches no catalogue Grader the fallback
+`metis.library.graders.default.CriterionGEvalGrader`. That class was removed in the
+grader redesign (#428), and no replacement exists yet. Compiling such a Specification
+fails, in the CLI and with HTTP 400 from `/compile`, with
+`Criterion X: no grader matched and the fallback judge was removed in the grader
+redesign (#428); choose a grader for this criterion.`
+
+**What to change:** set `grader_fqn` and `grader_args` on each Criterion that the
+message names. A `grader_fqn` that names an abstract `Grader` is also rejected.
 
 #### `runs` renamed to `trials`
 
@@ -328,6 +344,30 @@ executable, or the `apps/api/Dockerfile` built from the repository root.
   `grader_fqn:`/`grader_args:`. Old files are not migrated — update them by hand or
   recompile.
 
+#### Grader contract types and the new `results.json` record shape
+
+The grader redesign (#428) adds the types every grader reads and returns, and changes what
+`metis.core.reporting.EvaluationResults` holds.
+
+**Python API**
+
+- New `metis.core.traces`: `Observation`, `Trace` (with `Trace.root`), and `GradingInput`,
+  the read-only input of every grader run.
+- New `metis.core.grading`: `GraderResult` and `GradingOutput` (what a grader returns), and
+  `RecordedResult` (a result's outcome after the Criterion's `threshold`).
+- `EvaluationResults` now holds `records: list[GraderRecord]`, one per grader per session.
+  `turn_results`, `session_results`, and `routing` are removed.
+- `TurnReport`, `SessionReport`, `TurnGraderResult`, and `SessionGraderResult` are removed
+  from `metis.core.reporting`.
+- New `Experiment.defaults.judge_model` (`ExperimentDefaults`); see
+  [metis-engine](#graders-redesigned-without-deepeval-428-1).
+
+**On disk**
+
+- `reports/results.json` keeps `schema_version: 2` but holds one `GraderRecord` per
+  grader per session. `EvaluationResults` rejects a file that has `turn_results` or
+  `session_results` keys. Old files are not migrated — re-run `metis engine evaluate`.
+
 ### metis-library
 
 #### `metrics` subpackage renamed to `graders`
@@ -338,11 +378,37 @@ a trial against a criterion is **Grader**.
 **Python API**
 
 - Import path `metis.library.metrics` → `metis.library.graders`
-- Base classes `MetisTurnMetric`/`MetisSessionMetric` → `MetisTurnGrader`/`MetisSessionGrader`
-- Every `*Metric`-suffixed class → its `*Grader` equivalent, e.g.
-  `metis.library.metrics.TurnBudgetMetric` → `metis.library.graders.TurnBudgetGrader`. The
-  fallback judge `metis.library.metrics.default.CriterionGEvalMetric` →
-  `metis.library.graders.default.CriterionGEvalGrader`.
+- The `*Metric` classes, their `MetisTurnMetric`/`MetisSessionMetric` bases, and the
+  fallback judge `metis.library.metrics.default.CriterionGEvalMetric` have no `*Grader`
+  equivalent: the grader redesign removed them. See the next section.
+
+#### Graders redesigned without DeepEval (#428)
+
+Graders no longer use DeepEval, and `deepeval` is no longer a dependency. A grader now
+subclasses `metis.library.grader.Grader[Args]`, declares its parameters as an `args_model`
+(`GraderArgs`, or `JudgeArgs` for a model-based grader), and implements
+`async grade(input, llm) -> GradingOutput` over the session's Langfuse traces and artifacts.
+
+**Python API**
+
+- Every previous grader is removed, with its `MetisTurnGrader`/`MetisSessionGrader` base and
+  the GEval judge helpers. Every old Grader FQN in a specification now fails validation.
+- The fallback judge `metis.library.graders.default.CriterionGEvalGrader` is removed. No
+  replacement exists yet.
+- The catalogue has one grader. `metis.library.graders.TurnBudgetGrader` →
+  `metis.library.graders.TraceBudgetGrader`.
+
+**On disk**
+
+- In each Criterion, replace `grader_fqn: metis.library.graders.TurnBudgetGrader` with
+  `grader_fqn: metis.library.graders.TraceBudgetGrader`, and `max_turns` with `max_traces`
+  in its `grader_args`. The grader counts every trace in the session. One trace is usually
+  one persona message and the target's reply.
+- Every grader accepts `threshold` (default `0.5`, from `0` to `1`). A scored result passes
+  when its score is at least the threshold. Unknown `grader_args` keys are an error.
+- For each other Criterion, leave `grader_fqn` empty until a replacement grader exists. The
+  engine refuses to run a specification with an empty `grader_fqn` (`Criterion X needs a
+  Grader.`).
 
 ### metis-engine
 
@@ -397,10 +463,9 @@ rename and the glossary.
 
 - `MetricRef` → `GraderRef`; `Scenario.metric_refs`/`TrialConfig.metric_refs` → `grader_refs`
 - `MetricPassRate` → `GraderPassRate`; `UnmappedMetric` → `UnmappedGrader`
-- `MetricResult` → `GraderResult`; `SessionMetricResult`/`TurnMetricResult` →
-  `SessionGraderResult`/`TurnGraderResult`
-- `EvalDurations.turn_metrics_seconds`/`session_metrics_seconds` →
-  `turn_graders_seconds`/`session_graders_seconds`
+- `MetricResult`, `SessionMetricResult`, `TurnMetricResult`, and `EvalDurations` have no
+  `Grader` equivalent: the grader redesign removed them. See
+  [Graders redesigned without DeepEval](#graders-redesigned-without-deepeval-428-1).
 
 **Report JSON**
 
@@ -427,13 +492,48 @@ Scripts that read `report.json` after `evaluate` must run that command first.
 **Python API**
 
 - `metis.engine.generate_report` and `metis.engine.ReportResult` are removed. Evaluate,
-  then call `metis.insights.save_report(results, experiment_dir)` with an
-  `metis.core.reporting.EvaluationResults`, or run the CLI command above.
+  then run the CLI command above.
 - `metis.engine.reporting` is removed. `Report`, `build_report`, and
-  `load_report_sources` are now in `metis.insights`. `TurnReport`, `SessionReport`,
-  `TurnGraderResult`, and `SessionGraderResult` are now in `metis.core.reporting`.
+  `load_report_sources` are now in `metis.insights`.
 - `report.schema.json` moved from `packages/engine/schemas/` to
   `packages/insights/schemas/`. Its content and version (`Report v2`) are unchanged.
+
+#### Graders redesigned without DeepEval (#428)
+
+`metis engine evaluate` builds each Criterion's grader once from the specification snapshot
+and validates it before the run: `grader_args` against the grader's `args_model`, then the
+grader's `check_setup`. It then runs each grader once per session, on every trace of the
+session. An empty, raising, or wrongly typed grader output is recorded as errored, never as
+failed.
+
+**Python API**
+
+- `fetch_by_session_id` and `FetchLangfuseResult` → `fetch_session`, which returns a
+  `metis.core.traces.GradingInput`.
+- `evaluate` and `EvalResult` → `build_criterion_grader` and `grade_session`, which return
+  `metis.core.reporting.GraderRecord` objects.
+- `RoutingSummary` is removed.
+
+**Configuration**
+
+- New `defaults.judge_model` in `specification.yaml`. A model-based grader's judge model
+  resolves from `grader_args.model`, then `defaults.judge_model`, then the `JUDGE_MODEL`
+  environment variable, then `gemini-3.5-flash-lite`. The resolved model is recorded in each
+  record's `grader_args`.
+- The judge gateway reads `JUDGE_API_KEY` and `JUDGE_BASE_URL`, falling back to
+  `OPENAI_API_KEY` and `OPENAI_BASE_URL`. It is required only when a Criterion's grader is
+  model-based.
+- `DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE` and the other `DEEPEVAL_*` variables are
+  no longer read. Remove them from `.env`.
+
+**On disk**
+
+- `reports/results.json` holds one `GraderRecord` per grader per session, with
+  `schema_version` still `2`. `metis insights report` rejects this file until its redesign
+  (#454) lands.
+- An experiment directory from before the redesign cannot be evaluated again. Its frozen
+  `inputs/specification.yaml` names deleted graders, so `metis engine evaluate` stops at
+  validation. Update the source `specification.yaml` and run `metis engine simulate` again.
 
 ### metis-api
 

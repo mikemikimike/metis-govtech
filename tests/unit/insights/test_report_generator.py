@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from metis.core.reporting import EvaluationResults
+from metis.insights._legacy_results import EvaluationResults
 from metis.insights.report import save_report
 
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import json
 import subprocess
 import sys
 import zipfile
@@ -25,8 +24,6 @@ from metis.engine.simulation.types import (
     TrialRecord,
     UserAgentOutput,
 )
-from metis.insights._models import Report
-from metis.insights.cli import app as insights_app
 from metis.wizard.application.compile.specification import (
     SpecificationFixture,
     build_specification_archive,
@@ -142,7 +139,7 @@ def _exercise(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str) -> N
 
     monkeypatch.setattr(cli, "_find_project_root", lambda: tmp_path)
     monkeypatch.setattr(experiment, "UserAgent", ScriptedUser)
-    _patch_evaluation(monkeypatch, test_cases=[object()])
+    _patch_evaluation(monkeypatch, traces=1)
     runner = CliRunner()
     simulation = runner.invoke(
         cli.app, ["simulate", "--input-dir", str(input_dir), "--no-tui"]
@@ -209,20 +206,10 @@ def _exercise(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str) -> N
     reports = moved / "outputs" / "reports"
     results_file = reports / "results.json"
     results = EvaluationResults.load_file(results_file)
-    assert len(results.turn_results) == 2
-    assert len(results.session_results) == 2
-    report = runner.invoke(
-        insights_app, ["report", "--results-file", str(results_file)]
-    )
-    assert report.exit_code == 0, report.output
-    report_data = Report.model_validate(
-        json.loads((reports / "report.json").read_text())
-    )
-    assert report_data.target == "Test target"
-    assert report_data.trials.attempted == 2
-    assert report_data.trials.successful == 2
-    assert len(report_data.trials.items) == 2
-    assert "<html" in (reports / "report.html").read_text().lower()
+    # Grader redesign (#428): evaluate writes GraderRecords, which `metis insights report`
+    # cannot read yet (#454) — see MIGRATION.md. This checks results.json directly instead
+    # of running the report command through it.
+    assert len(results.records) == 2
     assert "RESULTS WRITTEN" in (moved / "logs" / "evaluate.log").read_text()
     for record_path in trials.glob("*/record.json"):
         record = TrialRecord.model_validate_json(record_path.read_text())

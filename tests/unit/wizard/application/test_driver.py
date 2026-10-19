@@ -972,7 +972,7 @@ class RecordingMatcher:
 
     def match(self, criterion) -> str:
         self.matched.append(criterion.id)
-        return "metis.library.graders.routing.RoutingAccuracyGrader"
+        return "metis.library.graders.TraceBudgetGrader"
 
 
 def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
@@ -995,7 +995,7 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
     assert matcher.matched == ["AC-1-1"]  # only the reworded criterion
     assert (
         specification.behaviour("EB-1").criteria[0].grader_fqn  # type: ignore[union-attr]
-        == "metis.library.graders.routing.RoutingAccuracyGrader"
+        == "metis.library.graders.TraceBudgetGrader"
     )
 
 
@@ -1281,6 +1281,6 @@ def test_criterion_parameter_form_changes_the_selected_requirement() -> None:
     )
     assert state.pending is not None
     driver.handle(
-        state, state.pending, FormResponse(values={"grader_args": '{"max_turns":4}'})
+        state, state.pending, FormResponse(values={"grader_args": '{"max_traces":4}'})
     )
-    assert criterion.grader_args == {"max_turns": 4}
+    assert criterion.grader_args == {"max_traces": 4}

@@ -1,15 +1,5 @@
-"""Trace extraction and test case construction."""
+"""Fetching a session's Langfuse traces for grading."""
 
-from metis.engine.extractor.langfuse import (
-    FetchLangfuseResult,
-    fetch_by_session_id,
-    get_langfuse_client,
-)
-from metis.engine.extractor.types import RoutingSummary
+from metis.engine.extractor.langfuse import fetch_session, get_langfuse_client
 
-__all__ = [
-    "FetchLangfuseResult",
-    "RoutingSummary",
-    "fetch_by_session_id",
-    "get_langfuse_client",
-]
+__all__ = ["fetch_session", "get_langfuse_client"]

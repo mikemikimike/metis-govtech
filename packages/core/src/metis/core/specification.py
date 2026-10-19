@@ -20,7 +20,13 @@ if TYPE_CHECKING:
     from pydantic.json_schema import JsonSchemaValue
     from pydantic_core import CoreSchema
 
-from metis.core.experiment import Experiment, Persona, Scenario, Task
+from metis.core.experiment import (
+    Experiment,
+    ExperimentDefaults,
+    Persona,
+    Scenario,
+    Task,
+)
 from metis.core.profile import Behaviour, Criterion, Feature, Target, TargetProfile
 
 _SPECIFICATION_VERSION = 2
@@ -34,6 +40,7 @@ class SpecificationDocument(BaseModel):
     runner_factory_ref: str = (
         "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
     )
+    defaults: ExperimentDefaults = Field(default_factory=ExperimentDefaults)
     target: Target
     features: list[Feature] = Field(default_factory=list)
     personas: list[Persona] = Field(default_factory=list)
@@ -78,6 +85,7 @@ class Specification(BaseModel):
             "experiment": Experiment(
                 id=document.id,
                 runner_factory_ref=document.runner_factory_ref,
+                defaults=document.defaults,
                 personas=document.personas,
                 scenarios=document.scenarios,
                 tasks=document.tasks,
@@ -92,7 +100,7 @@ class Specification(BaseModel):
             **self.profile.model_dump(),
             **self.experiment.model_dump(),
         )
-        return document.model_dump(
+        dumped = document.model_dump(
             mode=info.mode,
             by_alias=info.by_alias,
             include=info.include,
@@ -100,6 +108,9 @@ class Specification(BaseModel):
             exclude_none=info.exclude_none,
             exclude_defaults=info.exclude_defaults,
         )
+        if not self.experiment.defaults.model_dump(exclude_none=True):
+            dumped.pop("defaults", None)
+        return dumped
 
     @classmethod
     def __get_pydantic_json_schema__(

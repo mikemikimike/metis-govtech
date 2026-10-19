@@ -12,12 +12,12 @@ import {
 } from "./manual.ts";
 
 const synthesisScorer = {
-  fqn: "metis.library.graders.SynthesisFaithfulnessGrader",
+  fqn: "tests.unit.engine.graders_for_tests.FixedScoreGrader",
   name: "Synthesis faithfulness",
   description: "Checks that the answer uses its evidence.",
 };
 const budgetScorer = {
-  fqn: "metis.library.graders.TurnBudgetGrader",
+  fqn: "metis.library.graders.TraceBudgetGrader",
   name: "Turn budget",
   description: "Checks that the conversation stays within its turn budget.",
 };
@@ -185,8 +185,8 @@ test("the same Persona and Scenario can have separate test cases and scorer sett
   first.id = "TC-first";
   second.id = "TC-second";
   second.persona_ref = first.persona_ref;
-  first.grader_args_text = { [budgetScorer.fqn]: '{"max_turns":4}' };
-  second.grader_args_text = { [budgetScorer.fqn]: '{"max_turns":10}' };
+  first.grader_args_text = { [budgetScorer.fqn]: '{"max_traces":4}' };
+  second.grader_args_text = { [budgetScorer.fqn]: '{"max_traces":10}' };
   const specification = synthesizeManualSpecification(experiment);
   assert.deepEqual(
     specification.tasks.slice(0, 2).map((t) => t.id),
@@ -200,13 +200,13 @@ test("the same Persona and Scenario can have separate test cases and scorer sett
   assert.deepEqual(
     specification.features[0].behaviours[0].criteria[1].grader_args,
     {
-      max_turns: 4,
+      max_traces: 4,
     },
   );
   assert.deepEqual(
     specification.features[0].behaviours[1].criteria[1].grader_args,
     {
-      max_turns: 10,
+      max_traces: 10,
     },
   );
   assert.notDeepEqual(

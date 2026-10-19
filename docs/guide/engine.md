@@ -51,7 +51,8 @@ Set Langfuse and OpenAI credentials, plus the credentials for your selected Orca
 | Group | Variables | Purpose |
 |-------|-----------|---------|
 | Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Trace storage and retrieval |
-| OpenAI | `OPENAI_API_KEY` | Powers the LLM judge (graders) and simulated user agent |
+| OpenAI | `OPENAI_API_KEY` | Powers the simulated user agent, and model-based graders unless `JUDGE_*` is set |
+| Judge | `JUDGE_API_KEY`, `JUDGE_BASE_URL` | Optional gateway for grader LLM calls; falls back to `OPENAI_*` |
 | Orca API runner | `ORCA_API_URL`, `ORCA_API_KEY` | Target URL and API key for the example experiment |
 | Orca browser runner | `ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD` | Target URL and login credentials when selecting the browser runner |
 
@@ -62,6 +63,7 @@ Optional tuning variables:
 | `USER_AGENT_MODEL` | `gpt-5.6-luna` | Model used for the simulated user persona |
 | `USER_AGENT_MAX_TOKENS` | _(unset)_ | Max tokens per user agent response; unset/empty → parameter omitted, provider default applies. Set explicitly (e.g. `4096`) for reasoning models where chain-of-thought tokens count against the limit |
 | `USER_AGENT_TEMPERATURE` | _(unset)_ | Sampling temperature for the user agent; unset/empty → parameter omitted, provider default applies |
+| `JUDGE_MODEL` | `gemini-3.5-flash-lite` | Judge model when neither the criterion nor `defaults.judge_model` sets one |
 | `HEADED` | `false` | Set to `true` to show the browser window |
 
 ### Verify Installation
@@ -85,6 +87,7 @@ The directory `packages/engine/example-experiment/` contains a complete experime
 ```
 example-experiment/
 ├── specification.yaml   # Complete evaluation specification
+├── simple/              # One Task, one Trial, one Grader, no uploaded files
 └── fixtures/            # Files uploaded during simulation
     ├── q3_sales.csv
     ├── q3_sales_corrupted.csv
@@ -95,14 +98,17 @@ example-experiment/
 
 ### Run It
 
+The commands below use `example-experiment/simple/`. The full example does not run yet: only one
+of its Criteria names a grader, so the engine refuses it at validation (see the example's README).
+
 ```bash
-metis engine run --input-dir packages/engine/example-experiment/
+metis engine run --input-dir packages/engine/example-experiment/simple/
 ```
 
 To run the phases separately, use `simulate` first. It prints the exact `evaluate` command for the output directory it created. `evaluate` scores the directory that you name:
 
 ```bash
-metis engine simulate --input-dir packages/engine/example-experiment/
+metis engine simulate --input-dir packages/engine/example-experiment/simple/
 metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/
 ```
 
@@ -166,9 +172,11 @@ experiments/execute/orca-eval-20260730-143022/
     └── evaluate.log
 ```
 
+`results.json` holds one GraderRecord per grader per session, each with one result per grading scope. `metis insights report` does not read this format yet (#454).
+
 The structure of `report.json` is defined by a [JSON Schema](../../packages/insights/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
 
-Use `logs/evaluate.log` to review extraction, each configured grader, the actual judge model reported by DeepEval, grader scores, pass or fail results, reasons, errors, cost, token counts, soft failures, hard failures, and final record counts for the latest evaluation attempt.
+Use `logs/evaluate.log` to review extraction, each criterion's grader and resolved arguments (including the judge model), every recorded result with its outcome, score and reason, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
 See the [report contract](report.md) for the report's scoring,
 status, failure-evidence, and information-architecture rules.
@@ -178,7 +186,7 @@ status, failure-evidence, and information-architecture rules.
 For the browser runner, set `HEADED=true` to show the browser window. The bundled example selects the API runner. To use the browser runner, set `runner_factory_ref` to `metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory` and supply its credentials:
 
 ```bash
-HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/
+HEADED=true metis engine simulate --input-dir packages/engine/example-experiment/simple/
 ```
 
 ---
@@ -336,41 +344,39 @@ max_run_retries: 0
 
 ### Grader References
 
-Each Criterion specifies a grader class in `grader_fqn` and its constructor
-arguments in `grader_args`. Tasks select Behaviour IDs through `behaviour_refs`.
-Each selected Behaviour supplies all its Criteria, including each Criterion's Grader settings.
-**Plain (no parameters):**
-
-Set these fields on a Criterion that uses the grader's defaults:
-
-```yaml
-grader_fqn: metis.library.graders.RoutingAccuracyGrader
-grader_args: {}
-```
-
-**With parameters:**
-
-For example, Behaviour `EB-DA-1` in the Tasks above can contain this Criterion:
+Each Criterion names a grader class in `grader_fqn` and sets its arguments in `grader_args`,
+a mapping whose keys are the fields of the grader's `args_model`. Tasks select Behaviour IDs
+through `behaviour_refs`, and each selected Behaviour supplies all its Criteria.
 
 ```yaml
 criteria:
   - id: AC-DA-1
-    name: Complete within the turn budget
+    name: Finish within the trace budget
     description:
       given: a request for a Q3 revenue report
       when: the session ends
-      then: the session used no more than 8 turns
-    grader_fqn: metis.library.graders.TurnBudgetGrader
+      then: the session used no more than 8 exchanges
+    grader_fqn: metis.library.graders.TraceBudgetGrader
     grader_args:
-      max_turns: 8
+      max_traces: 8
 ```
 
-Use `grader_args: {}` when the grader needs no explicit arguments. Parameters
-are passed to the grader class's `__init__`. See [Writing Custom Graders](#writing-custom-graders).
+`grader_args` is validated before anything runs: an unknown key, a wrong type or a
+`threshold` outside 0–1 stops the run and names the Criterion. Use `grader_args: {}` to take
+every default. Every grader accepts `threshold` (default 0.5): a scored result passes when its
+score is at least the threshold.
 
-Two Criteria can use the same grader with different arguments. Each receives a
-separate score identified by its Criterion ID. A turn-budget score does not
-change the engine's execution turn limit.
+For a model-based grader, set the judge model once for the experiment and override it per
+Criterion if needed:
+
+```yaml
+defaults:
+  judge_model: gpt-4o-mini
+```
+
+Two Criteria can use the same grader with different arguments; each gets its own results,
+identified by its Criterion ID. A trace budget does not change the engine's execution turn
+limit.
 
 ### Working Reference
 
@@ -461,7 +467,6 @@ The Simulation TUI and evaluation progress are visible regardless of verbosity l
 | Variable | Description |
 |----------|-------------|
 | `HEADED=true` | Show the browser window (useful for debugging) |
-| `DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE` | Override DeepEval's per-grader timeout (default: 300s) |
 
 ### Interrupt Handling
 
@@ -476,195 +481,58 @@ The Simulation TUI auto-disables when stderr is not a terminal, such as in CI or
 
 ## Writing Custom Graders
 
-The built-in graders in `metis.library.graders` cover common evaluation dimensions, but you can write your own for domain-specific needs.
-
-### Grader Basics
-
-A grader is a Python class that:
-1. Extends `MetisTurnGrader` (from `metis.library.graders`)
-2. Defines a `tags` ClassVar
-3. Implements `measure(self, test_case: LLMTestCase) -> float`
-4. Implements `is_successful(self) -> bool`
-5. Exposes a `__name__` property
-
-### Code-Graded Grader Example
-
-A grader that programmatically checks a property of the trace without calling an LLM judge:
+A grader subclasses `metis.library.grader.Grader`, names an args model, and implements one
+async method. It sees only the session's Langfuse traces and the run's artifacts, never the
+scenario or persona. The full rules are in the
+[graders README](../../packages/library/src/metis/library/graders/README.md).
 
 ```python
-"""Check that the session completed within the allowed turn budget."""
+from pydantic import Field
 
-from typing import ClassVar, cast
-
-from deepeval.test_case import LLMTestCase
-
-from metis.library.graders._base import MetisTurnGrader, mark_skipped
-from metis.library.graders._types import LlmTestCaseMetadata
+from metis.core.grading import GraderResult, GradingOutput
+from metis.core.traces import GradingInput
+from metis.library.grader import Grader, GraderArgs, LLMSettings
 
 
-class TurnBudgetGrader(MetisTurnGrader):
-    """Session completed within the allowed turn budget."""
-
-    tags: ClassVar[tuple[str, ...]] = ("universal", "per-turn", "code-graded")
-    async_mode = False
-
-    def __init__(self, threshold: float = 1.0, max_turns: int = 10):
-        self.threshold = threshold
-        self.max_turns = max_turns
-        self.score = 0.0
-        self.reason = ""
-        self.success = False
-
-    def measure(self, test_case: LLMTestCase) -> float:
-        metadata = cast(LlmTestCaseMetadata, test_case.metadata or {})
-        total_turns = metadata.get("total_turns")
-
-        if total_turns is None:
-            return mark_skipped(self, "total_turns not present in metadata")
-
-        self.score = 1.0 if total_turns <= self.max_turns else 0.0
-        self.reason = f"Session used {total_turns} turn(s) (budget: {self.max_turns})"
-        self.success = self.score >= self.threshold
-        return self.score
-
-    @property
-    def __name__(self):
-        return "Turn Budget"
-
-    def is_successful(self) -> bool:
-        return self.success
-```
-
-### Judge-Graded Grader Example
-
-A grader that uses GEval-style prompting to assess a qualitative dimension:
-
-```python
-"""Evaluate the quality of direct chatbot responses."""
-
-from typing import ClassVar, cast
-
-from deepeval.test_case import LLMTestCase, SingleTurnParams
-
-from metis.library.graders._base import (
-    EVIDENCE_INSTRUCTION,
-    MetisTurnGrader,
-    _ContextAwareGEval,
-)
-from metis.library.graders._judge import _get_judge_model
-from metis.library.graders._types import LlmTestCaseMetadata
+class AnswerLengthArgs(GraderArgs):
+    max_chars: int = Field(default=2000, ge=1)
 
 
-class ResponseQualityGrader(MetisTurnGrader):
-    """Evaluates whether the response is helpful, appropriate, and concise."""
+class AnswerLengthGrader(Grader[AnswerLengthArgs]):
+    """Every answered trace stays under a character budget."""
 
-    tags: ClassVar[tuple[str, ...]] = ("universal", "per-turn", "judge-graded")
-    async_mode = False
+    args_model = AnswerLengthArgs
 
-    def __init__(self, threshold: float = 0.6):
-        self.threshold = threshold
-        self.score = 0.0
-        self.reason = ""
-        self.success = False
-        self._geval = None
-
-    def _get_geval(self):
-        if self._geval is None:
-            self._geval = _ContextAwareGEval(
-                name="Response Quality",
-                model=_get_judge_model(),
-                criteria=(
-                    "Evaluate the target's response.\n\n"
-                    "The 'input' is the user's request.\n"
-                    "The 'actual_output' is the target's response.\n\n"
-                    "Rate on three dimensions:\n"
-                    "1. Helpful: Does it answer the question?\n"
-                    "2. Tone: Is the tone appropriate?\n"
-                    "3. Concise: Is it appropriately brief?\n\n"
-                    "Score 1.0 if excellent on all. "
-                    "Score 0.5 if mixed. "
-                    "Score 0.0 if poor." + EVIDENCE_INSTRUCTION
-                ),
-                evaluation_params=[
-                    SingleTurnParams.INPUT,
-                    SingleTurnParams.ACTUAL_OUTPUT,
-                ],
-                threshold=0.6,
+    async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
+        results = []
+        for trace in input.traces:
+            output = trace.root.output
+            if not isinstance(output, str):
+                results.append(
+                    GraderResult(status="skipped", reason=f"{trace.id}: no text")
+                )
+                continue
+            ok = len(output) <= self.args.max_chars
+            results.append(
+                GraderResult(
+                    status="scored",
+                    score=1.0 if ok else 0.0,
+                    reason=f"{trace.id}: {len(output)} chars",
+                )
             )
-        return self._geval
-
-    def measure(self, test_case: LLMTestCase) -> float:
-        geval = self._get_geval()
-        geval.measure(test_case)
-        self.score = geval.score
-        self.reason = geval.reason
-        self.success = (self.score or 0) >= self.threshold
-        self._accrue_cost(geval.evaluation_cost)
-        return self.score or 0.0
-
-    @property
-    def __name__(self):
-        return "Response Quality"
-
-    def is_successful(self) -> bool:
-        return self.success
+        return GradingOutput(results=results)
 ```
 
-### Making Your Grader Discoverable
-
-Place your grader in any importable Python module and set its fully-qualified name on a Criterion:
+Put it in any importable module and name it on a Criterion:
 
 ```yaml
-grader_fqn: my_package.graders.ResponseQualityGrader
-grader_args: {}
-```
-
-The module must be importable from the environment where `metis engine evaluate` runs. If it's part of the METIS workspace, place it under `packages/library/src/metis/library/graders/` and re-export from `__init__.py`.
-
-### Accepting Parameters from YAML
-
-Set constructor arguments on the Criterion in `specification.yaml`:
-
-```yaml
-grader_fqn: my_package.graders.TurnBudgetGrader
+grader_fqn: my_package.graders.AnswerLengthGrader
 grader_args:
-  max_turns: 4
+  max_chars: 1200
 ```
 
-The YAML values are passed as keyword arguments to `__init__`.
-
-### The Tags Convention
-
-Every grader must define a `tags` ClassVar as a tuple of strings:
-
-```python
-tags: ClassVar[tuple[str, ...]] = ("orchestration", "per-turn", "code-graded")
-```
-
-| Dimension | Values | Meaning |
-|-----------|--------|---------|
-| Component | `orchestration`, `analysis`, `presentation`, `universal` | Which system component the grader evaluates |
-| Granularity | `per-turn`, `session-level` | Whether it scores individual turns or the full session |
-| Grading | `code-graded`, `judge-graded` | Whether it uses programmatic logic or an LLM judge |
-
-### Available Metadata
-
-The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `trace_id` | `str` | Langfuse trace ID |
-| `session_id` | `str` | Langfuse session ID |
-| `turn_index` | `int` | Current turn number (0-indexed) |
-| `total_turns` | `int` | Total turns in the session |
-| `observations` | `list` | Raw Langfuse observations |
-| `tool_calls` | `list` | Tool calls extracted from the trace |
-| `delegation` | `dict \| None` | Delegation event (target agent, if any) |
-| `assistant_messages` | `list` | All assistant messages in the session |
-| `clarification_requests` | `list` | Requests for user input |
-| `artifacts` | `dict` | Downloaded/detected artifacts |
-| `scenario` | `object` | The `Scenario` object from experiment config |
-| `persona` | `object` | The `Persona` object from experiment config |
+A model-based grader's args extend `JudgeArgs` instead; it gets a resolved `self.args.model`
+and makes calls through `llm.client`, a shared `AsyncOpenAI`.
 
 ---
 
@@ -676,11 +544,12 @@ The `test_case.metadata` dict (typed as `LlmTestCaseMetadata`) provides:
 |---------|--------------|-----|
 | "No traces found" or extraction times out | Langfuse timeout too short, bad credentials, or target not instrumented | Increase `--langfuse-timeout`, verify Langfuse keys in `.env`, confirm your target writes traces to Langfuse |
 | "Fixture not found" error | Path is absolute or has a typo | Use the filename only (relative to `fixtures/`), verify the file exists in the fixtures directory |
-| "Grader import failed" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the grader is installed in your venv |
+| "could not be imported" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the grader is installed in your venv |
 | Simulation hangs indefinitely | Target unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task's `response_wait_ms` |
 | Simulation TUI not appearing | Running in a non-TTY environment | Expected — the Simulation TUI requires an interactive terminal. Use linear output or run in a real terminal |
 | Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current turn | Press Ctrl+C a second time to force-abort |
-| "Grader is not a subclass of BaseMetric" | Class doesn't inherit from the correct base | Ensure your grader extends `MetisTurnGrader`, `MetisSessionGrader`, or `deepeval.metrics.BaseMetric` |
+| "is not a subclass of metis.library.grader.Grader" | The FQN names something other than a grader | Subclass metis.library.grader.Grader[YourArgs] and set args_model = YourArgs |
+| "has invalid grader_args" | A grader_args key is misspelt, has the wrong type, or is out of range | Fix the field the message names; keys must match the grader's args_model |
 | Duplicate persona/scenario ID error | Two entries share the same `id` | Use unique IDs for every persona and scenario |
 
 ---
@@ -1195,10 +1064,10 @@ features:
             description:
               given: a user asks a factual question
               when: the session ends
-              then: the session used no more than 4 turns
-            grader_fqn: metis.library.graders.TurnBudgetGrader
+              then: the session used no more than 4 exchanges
+            grader_fqn: metis.library.graders.TraceBudgetGrader
             grader_args:
-              max_turns: 4
+              max_traces: 4
 ```
 
 Add the experiment ID, runner, Personas, Scenarios, and Tasks to make a complete
@@ -1285,10 +1154,10 @@ features:
             description:
               given: a user asks a factual question
               when: the session ends
-              then: the session used no more than 4 turns
-            grader_fqn: metis.library.graders.TurnBudgetGrader
+              then: the session used no more than 4 exchanges
+            grader_fqn: metis.library.graders.TraceBudgetGrader
             grader_args:
-              max_turns: 4
+              max_traces: 4
 
 personas:
   - id: cooperative
@@ -1331,7 +1200,7 @@ Before running `metis engine simulate --input-dir my-experiment/`:
 
 - [ ] **Graders importable:** Every Criterion's `grader_fqn` resolves to an installed class.
   ```bash
-  python -c "from metis.library.graders import TurnBudgetGrader"
+  python -c "from metis.library.graders import TraceBudgetGrader"
   ```
 
 - [ ] **Dry-run validation:** Load the experiment to catch schema errors early:

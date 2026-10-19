@@ -16,14 +16,14 @@ features:
     measured: true
     criteria:
     - id: AC-UNI-22
-      name: Short turn budget
+      name: Short trace budget
       description:
         given: a request that Orca can answer directly
         when: the session ends
-        then: it used no more than 4 turns
-      grader_fqn: metis.library.graders.TurnBudgetGrader
+        then: it used no more than 4 traces (persona–target exchanges)
+      grader_fqn: metis.library.graders.TraceBudgetGrader
       grader_args:
-        max_turns: 4
+        max_traces: 4
 
 personas:
 - id: cooperative-delegator

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from metis.core.reporting import (
+from metis.insights._legacy_results import (
     SessionGraderResult,
     SessionReport,
     TurnGraderResult,

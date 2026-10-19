@@ -551,7 +551,7 @@ export interface components {
          * Experiment
          * @description The Test Cases and settings used to execute an evaluation.
          */
-        Experiment: {
+        "Experiment-Input": {
             /**
              * Id
              * @default
@@ -562,6 +562,7 @@ export interface components {
              * @default metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
              */
             runner_factory_ref: string;
+            defaults?: components["schemas"]["ExperimentDefaults"];
             /** Personas */
             personas?: components["schemas"]["Persona"][];
             /** Scenarios */
@@ -572,6 +573,15 @@ export interface components {
             fixture_content_descriptions?: {
                 [key: string]: string;
             };
+        };
+        "Experiment-Output": unknown;
+        /**
+         * ExperimentDefaults
+         * @description Experiment-wide defaults that individual criteria can override.
+         */
+        ExperimentDefaults: {
+            /** Judge Model */
+            judge_model?: string | null;
         };
         /**
          * ExtractedDocument
@@ -1092,6 +1102,7 @@ export interface components {
              * @default metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
              */
             runner_factory_ref: string;
+            defaults?: components["schemas"]["ExperimentDefaults"];
             target: components["schemas"]["Target"];
             /** Features */
             features?: components["schemas"]["Feature"][];

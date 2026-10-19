@@ -12,8 +12,12 @@ terminal pass/fail/skip summary plus `outputs/reports/report.json` and `outputs/
 
 Depends on `metis-core` only. Never import `metis.engine`, `metis.library`, or
 `metis.wizard`; `tests/unit/insights/test_dependency_boundary.py` fails if source here
-does. Shared input types (`EvaluationResults`, `TurnReport`, `SessionReport`) live in
-`metis.core.reporting` because both engine and insights need them.
+does. Insights still reads `results.json` version 2, through a private copy of the old
+models in `_legacy_results.py`. The engine now writes a new format
+(`metis.core.reporting`), so `metis insights report` exits with the message "This
+results.json uses the new GraderRecord format (grader redesign #428), which metis insights
+report cannot read yet. Rerun the report once #454 is released." until its redesign
+(#454) moves it onto the new types.
 
 ## Layout
 

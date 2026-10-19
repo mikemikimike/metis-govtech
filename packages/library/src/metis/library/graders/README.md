@@ -1,56 +1,48 @@
 # Graders
 
-All graders live in `metis.library.graders` and are imported by their class name:
+A grader judges one session of the target. It sees only what the target left behind (the
+session's Langfuse traces and the artifacts the run produced, as a `GradingInput`), returns a
+score for each grading scope it chooses, and never decides pass or fail. The engine applies the
+criterion's `threshold` (`score >= threshold` passes).
+
+The contract lives in `metis.library.grader`; this package holds the graders built on it.
+
+## Writing one
 
 ```python
-from metis.library.graders import RoutingAccuracyGrader
+class TraceBudgetArgs(GraderArgs):
+    max_traces: int = Field(default=10, ge=1, strict=True)
+
+
+class TraceBudgetGrader(Grader[TraceBudgetArgs]):
+    args_model = TraceBudgetArgs  # must name the same class as the type argument
+
+    async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput: ...
 ```
 
-On each Criterion in `specification.yaml`, use the package-level FQN and arguments:
+Then export it from `__init__.py`. A criterion uses it as:
 
 ```yaml
-grader_fqn: metis.library.graders.TurnBudgetGrader
+grader_fqn: metis.library.graders.TraceBudgetGrader
 grader_args:
-  max_turns: 8
+  max_traces: 4
 ```
 
-## Classification via tags
+## Rules
 
-Each grader class carries a `tags: ClassVar[tuple[str, ...]]` for multi-dimensional classification. File layout is a developer ergonomics concern only — it carries no semantic weight.
-
-| Dimension | Values |
-|-----------|--------|
-| Component | `orchestration`, `analysis`, `presentation`, `universal` |
-| Granularity | `per-turn`, `session-level` |
-| Grading | `code-graded`, `judge-graded` |
-
-Example:
-
-```python
-class RoutingAccuracyGrader(MetisTurnGrader):
-    tags: ClassVar[tuple[str, ...]] = ("orchestration", "per-turn", "judge-graded")
-```
-
-## Evaluation routing
-
-The engine routes graders automatically by type:
-
-- **Session graders** (`BaseConversationalMetric` subclasses, tagged `"session-level"`) run against the full multi-turn `ConversationalTestCase` for each session.
-- **Per-turn graders** (tagged `"per-turn"`) run against each individual `LLMTestCase`.
-
-Both can be listed together in `specification.yaml` — no annotation needed.
-
-## File layout
-
-One file per grader, named `_<snake_case>.py`. Shared infrastructure lives in:
-
-- `_base.py` — `MetisTurnGrader`, `mark_skipped`, `_ContextAwareGEval`, `_ContextAwareConversationalGEval`, helpers
-- `_types.py` — `LlmTestCaseMetadata`, `OrcaChatMetadata`, `ClarificationRequest`
-- `_judge.py` — `_get_judge_model()`
-- `_constants.py` — `SYSTEM_PROMPT_SUMMARY`, `TOOL_MANIFEST`
-
-Maintenance rule: **new grader = new file**. No judgment call about which file to put it in.
-
-## Skip behaviour
-
-All graders use the same skip convention: `score=1.0`, `skipped=True`, `success=True`. Skipped graders are excluded from pass-rate aggregation in the report.
+- **Args.** Every key under `grader_args` is a field of `args_model`. Unknown keys are
+  rejected before the run. A model-based grader's args extend `JudgeArgs`, whose `model` the
+  engine fills in.
+- **Scope.** Return one result per thing you judge: per trace, per session, or per retry chain.
+  A per-trace grader should judge trace `i` against `input.traces[: i + 1]` only, so it
+  cannot see what came after.
+- **Nothing to judge** → one `GraderResult(status="skipped", reason=...)`. Never `[]`, never a
+  pass.
+- **Could not judge** (an LLM call failed after retries, or the reply was unparseable) →
+  `status="errored"` for that part, then carry on. Never a score of 0.
+- **No state.** One instance grades every session of its criterion concurrently. Keep nothing
+  on `self` except `self.args`, and treat `input` as read-only.
+- **LLM calls** go through `llm.client` (a shared `AsyncOpenAI`). Never read env vars or build
+  your own client.
+- **No harness metadata.** A grader never sees the scenario, persona or stop reason. Pass a
+  reference value through args instead.

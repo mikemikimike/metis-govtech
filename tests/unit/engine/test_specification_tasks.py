@@ -1,13 +1,15 @@
-"""Task and Criterion identity across planning, evaluation, resume and reporting."""
+"""Task and Criterion identity across planning, evaluation and resume."""
 
+import asyncio
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
-from deepeval.test_case import LLMTestCase
 from pydantic import ValidationError
 
+from metis.core.traces import GradingInput, Observation, Trace
 from metis.engine.cli import _classify_resume_trials
-from metis.engine.evaluation.orchestrator import _resolve_graders, _run_grader
+from metis.engine.evaluation import SessionFacts, build_criterion_grader, grade_session
 from metis.engine.simulation.experiment import expand_trial_plan, trial_folder_name
 from metis.engine.simulation.types import (
     Specification,
@@ -15,8 +17,7 @@ from metis.engine.simulation.types import (
     TrialOutcome,
     TrialRecord,
 )
-from metis.insights._models import Report
-from metis.insights._report import build_report
+from metis.library.grader import LLMSettings
 
 
 def specification() -> Specification:
@@ -50,8 +51,8 @@ def specification() -> Specification:
                                         "when": "the session ends",
                                         "then": "at most 4 turns",
                                     },
-                                    "grader_fqn": "metis.library.graders.TurnBudgetGrader",
-                                    "grader_args": {"max_turns": 4},
+                                    "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
+                                    "grader_args": {"score": 0.2},
                                 }
                             ],
                         }
@@ -81,7 +82,7 @@ def specification() -> Specification:
         }
     ).model_dump()
     short = data["features"][0]["behaviours"][0]["criteria"][0]
-    long = {**short, "id": "AC-LONG", "grader_args": {"max_turns": 10}}
+    long = {**short, "id": "AC-LONG", "grader_args": {"score": 0.9}}
     data["features"][0]["behaviours"][0]["criteria"].append(long)
     data["features"][0]["behaviours"][0]["criteria"].append({**short, "id": "AC-TWIN"})
     first = data["tasks"][0]
@@ -96,14 +97,27 @@ def specification() -> Specification:
     return Specification.model_validate(data)
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("result_scope", ["turn", "session"])
-async def test_task_scores_keep_criterion_configuration_and_trial_identity(
-    tmp_path: Path,
-    result_scope: str,
-) -> None:
-    import asyncio
+def _session(session_id: str) -> GradingInput:
+    trace_id = f"{session_id}-t0"
+    return GradingInput(
+        traces=(
+            Trace(
+                id=trace_id,
+                session_id=session_id,
+                observations=(Observation(id="o", trace_id=trace_id, output="ok"),),
+            ),
+        )
+    )
 
+
+def test_task_records_keep_criterion_configuration_and_trial_identity(
+    tmp_path: Path,
+) -> None:
+    """Each criterion keeps its own args, and every record names its task and trial.
+
+    AC-UNI-22 and AC-TWIN share a grader and args but are separate criteria; AC-LONG shares the
+    grader with different args. Two criteria on one grader must never share a result.
+    """
     experiment = specification()
     plan = expand_trial_plan(experiment, {p.id: p for p in experiment.personas})
     assert [
@@ -111,52 +125,29 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
     ] == [["AC-UNI-22", "AC-LONG", "AC-TWIN"], ["AC-OTHER"]]
     names = [trial_folder_name(*item) for item in plan]
     assert len(set(names)) == 2
-    rows = []
-    outcomes = []
+
+    records = []
     for item in plan:
         scenario, persona, index = item
-        case = LLMTestCase(
-            input="A question", actual_output="An answer", metadata={"total_turns": 7}
+        graders = [
+            build_criterion_grader(ref, default_judge_model=None, env={})
+            for ref in scenario.grader_refs
+        ]
+        facts = SessionFacts(
+            session_id=f"session-{scenario.task_id}",
+            scenario_id=scenario.id,
+            task_id=scenario.task_id,
+            trial_index=index,
         )
-        scores = []
-        for grader, ref in zip(
-            _resolve_graders(scenario.grader_refs), scenario.grader_refs, strict=True
-        ):
-            result = await _run_grader(grader, case, asyncio.Semaphore(1))
-            assert result.grader_args == ref.args
-            assert result.criterion_id == ref.criterion_id
-            scores.append(
-                {
-                    "name": result.name,
-                    "criterion_id": result.criterion_id,
-                    "grader_fqn": result.grader_fqn,
-                    "grader_args": result.grader_args,
-                    "task_id": scenario.task_id,
-                    "trial_index": index,
-                    "success": result.success,
-                    "skipped": result.skipped,
-                }
+        records.extend(
+            asyncio.run(
+                grade_session(
+                    graders,
+                    _session(facts.session_id),
+                    LLMSettings(client=MagicMock()),
+                    facts,
+                )
             )
-        rows.append(
-            {
-                "session_id": scenario.task_id,
-                "scenario_id": scenario.id,
-                "graders": scores,
-            }
-        )
-        outcomes.append(
-            {
-                "id": scenario.task_id,
-                "task_id": scenario.task_id,
-                "trial_index": index,
-                "session": scenario.task_id,
-                "persona": persona.id,
-                "scenario": scenario.id,
-                "stopReason": "goal_achieved",
-                "message": "goal_achieved",
-                "failureSource": "outcome",
-                "turns": 7,
-            }
         )
         path = (
             tmp_path / "outputs" / "trials" / trial_folder_name(*item) / "record.json"
@@ -175,24 +166,25 @@ async def test_task_scores_keep_criterion_configuration_and_trial_identity(
             ),
         )
         path.write_text(record.model_dump_json())
+
     assert _classify_resume_trials(tmp_path, plan)[0] == []
-    report = build_report(
-        experiment.model_dump(),
-        rows if result_scope == "turn" else [],
-        session_graders=rows if result_scope == "session" else [],
-        trial_outcomes=outcomes,
-    )
-    assert report["criteria"]["AC-UNI-22"]["rate"] == 0
-    assert report["criteria"]["AC-LONG"]["rate"] == 100
-    assert report["criteria"]["AC-TWIN"]["rate"] == 0
-    assert report["criteria"]["AC-TWIN"]["evidence"][0]["task_id"] == "TC-001"
-    assert [r["task_id"] for r in report["resultTable"]["rows"]] == ["TC-001", "TC-002"]
-    assert [task["gradersAsked"] for task in report["plan"]["tasks"]] == [3, 1]
-    assert [task["gradersScored"] for task in report["plan"]["tasks"]] == [3, 1]
-    saved = Report.model_validate(report).model_dump()
-    assert saved["criteria"]["AC-LONG"]["evidence"][0]["grader_args"] == {
-        "max_turns": 10
-    }
+    by_criterion = {r.criterion_id: r for r in records}
+    assert [r.criterion_id for r in records] == [
+        "AC-UNI-22",
+        "AC-LONG",
+        "AC-TWIN",
+        "AC-OTHER",
+    ]
+    assert by_criterion["AC-UNI-22"].results[0].outcome == "failed"
+    assert by_criterion["AC-LONG"].results[0].outcome == "passed"
+    assert by_criterion["AC-TWIN"].results[0].outcome == "failed"
+    assert by_criterion["AC-LONG"].grader_args == {"threshold": 0.5, "score": 0.9}
+    assert [(r.task_id, r.trial_index) for r in records] == [
+        ("TC-001", 1),
+        ("TC-001", 1),
+        ("TC-001", 1),
+        ("TC-002", 1),
+    ]
 
 
 @pytest.mark.parametrize(

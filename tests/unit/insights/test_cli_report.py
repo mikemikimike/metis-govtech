@@ -8,7 +8,11 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from metis.core.reporting import EvaluationResults, TurnGraderResult, TurnReport
+from metis.insights._legacy_results import (
+    EvaluationResults,
+    TurnGraderResult,
+    TurnReport,
+)
 from metis.insights._models import Report
 from metis.insights.cli import app
 
@@ -178,3 +182,19 @@ def test_root_cli_exposes_insights_report() -> None:
 
     assert result.exit_code == 0, result.output
     assert "--results-file" in result.output
+
+
+def test_new_grader_record_format_is_rejected_with_a_clear_message(
+    tmp_path: Path,
+) -> None:
+    """Grader redesign (#428): insights cannot read GraderRecord files until #454."""
+    results_file = tmp_path / "reports" / "results.json"
+    results_file.parent.mkdir(parents=True)
+    results_file.write_text(
+        '{"schema_version": 2, "run_id": "r", "records": []}', encoding="utf-8"
+    )
+
+    result = runner.invoke(app, ["report", "--results-file", str(results_file)])
+
+    assert result.exit_code == 1
+    assert "GraderRecord" in result.output

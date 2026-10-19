@@ -7,6 +7,12 @@ files, and Grader selections assume Orca's specific multi-agent architecture
 (orchestrator → data-analyst / slide-maker subagents). Evaluating a
 different system will require writing your own specification from scratch.
 
+> **Graders are being rewritten (#428).** The METIS grader library was rebuilt without
+> DeepEval, and so far it ships one grader, `TraceBudgetGrader`. In the full
+> `specification.yaml`, only Criterion `AC-EXEC-3` names it; every other Criterion has an
+> empty `grader_fqn` and the engine refuses to run the file until those are filled in. Use
+> the [simple specification](simple/specification.yaml) to try the pipeline end to end.
+
 The full `specification.yaml` defines 18 Tasks and 54 Trials for Orca. Each Task
 selects one Scenario, one Persona, fixtures, and Criteria. Each Criterion owns
 its Grader and parameters.
@@ -30,9 +36,10 @@ example-experiment/
 ## Quick check
 
 The [simple specification](simple/specification.yaml) runs one direct question through
-Orca's API. It uses one Persona, one Scenario, one Task, and one Trial. Its Grader
-checks whether the conversation finishes within four turns. The Task shows the
-optional execution settings, including the separate turn limit and retry count.
+Orca's API. It uses one Persona, one Scenario, one Task, and one Trial. Its Grader,
+`TraceBudgetGrader`, checks that the session used at most four traces (persona–target
+exchanges). The Task shows the optional execution settings, including the separate turn
+limit and retry count.
 
 From the repository root, with the same credentials as the full example:
 
@@ -58,7 +65,7 @@ uv run metis engine simulate --input-dir packages/engine/example-experiment/
 uv run metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/
 ```
 
-`run` writes `outputs/reports/results.json` under the new `experiments/execute/orca-eval-<timestamp>/` directory and prints the `metis insights report` command that builds `outputs/reports/report.json` and `outputs/reports/report.html`.
+`run` writes `outputs/reports/results.json` (holding one GraderRecord per grader per session) under the new `experiments/execute/orca-eval-<timestamp>/` directory and prints a `metis insights report` command. That command cannot read this format yet (#454).
 
 Simulation uses the live TUI in a terminal. Use `--no-tui` to turn it off. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file in the named output.
 
@@ -75,12 +82,12 @@ Simulation uses the live TUI in a terminal. Use `--no-tui` to turn it off. Evalu
 | conflicting-sources | Contradiction flagging, gap acknowledgement |
 | evolving-brief | Context retention across agent switches, full Slide Maker suite |
 
-## Metrics not yet in the library
+## Graders not yet in the library
 
-The following framework metrics have no implementation yet and are omitted:
-
-- Universal: prompt-injection resistance. It has no metric ID yet; `M-UNI-12` is Turn Budget.
-- Data Analyst: `M-DA-21` (ML rigour), `M-DA-24` (uploaded-data injection), `M-DA-25` (egress & filesystem containment).
+Every Criterion except `AC-EXEC-3` is waiting for a grader written against
+`metis.library.grader.Grader` (#428). The framework items below never had one:
+prompt-injection resistance (no metric ID), `M-DA-21` (ML rigour), `M-DA-24`
+(uploaded-data injection), `M-DA-25` (egress & filesystem containment).
 
 ## Persona × Scenario matrix
 
