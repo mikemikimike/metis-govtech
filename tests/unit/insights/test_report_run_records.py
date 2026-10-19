@@ -119,7 +119,7 @@ def test_task_plan_uses_the_selected_trial_count() -> None:
 def test_an_invalid_record_is_skipped_not_fatal(tmp_path: Path) -> None:
     valid = _record().model_dump()
     _write(tmp_path, "s-p-1", valid)
-    _write(tmp_path, "s-p-2", {**valid, "schema_version": 1})
+    _write(tmp_path, "s-p-2", {**valid, "schema_version": 99})
     _write(
         tmp_path,
         "s-p-3",

@@ -12,7 +12,7 @@ terminal pass/fail/skip summary plus `outputs/reports/report.json` and `outputs/
 
 Depends on `metis-core` only. Never import `metis.engine`, `metis.library`, or
 `metis.wizard`; `tests/unit/insights/test_dependency_boundary.py` fails if source here
-does. Insights still reads `results.json` version 2, through a private copy of the old
+does. Insights still reads `results.json` version 1, through a private copy of the old
 models in `_legacy_results.py`. The engine now writes a new format
 (`metis.core.reporting`), so `metis insights report` exits with the message "This
 results.json uses the new GraderRecord format (grader redesign #428), which metis insights
@@ -31,7 +31,7 @@ can read reports.
 ## Report contract
 
 `metis.core.report.Report` defines and validates `report.json`. Reports contain
-`schema_version: 2`. The model defaults a missing version to `2` and rejects other
+`schema_version: 1`. The model defaults a missing version to `1` and rejects other
 explicit versions. There is no published JSON Schema file for reports.
 
 The report's content rules live in [docs/guide/report.md](../../docs/guide/report.md).

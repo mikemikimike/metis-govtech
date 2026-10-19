@@ -1091,10 +1091,10 @@ export interface components {
         Specification: {
             /**
              * Schema Version
-             * @default 2
+             * @default 1
              * @constant
              */
-            schema_version: 2;
+            schema_version: 1;
             /**
              * Id
              * @default

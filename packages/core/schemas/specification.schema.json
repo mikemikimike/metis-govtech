@@ -318,8 +318,8 @@
   "description": "The flat YAML and API representation of a Specification.",
   "properties": {
     "schema_version": {
-      "const": 2,
-      "default": 2,
+      "const": 1,
+      "default": 1,
       "title": "Schema Version",
       "type": "integer"
     },
@@ -381,6 +381,6 @@
     "runner_factory_ref",
     "target"
   ],
-  "title": "Specification v2",
+  "title": "Specification v1",
   "type": "object"
 }

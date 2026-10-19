@@ -30,7 +30,7 @@ from metis.core.experiment import (
 )
 from metis.core.profile import Behaviour, Criterion, Feature, Target, TargetProfile
 
-_SPECIFICATION_VERSION = 2
+_SPECIFICATION_VERSION = 1
 
 
 def _require_document_header(schema: dict[str, Any]) -> None:
@@ -47,7 +47,7 @@ class SpecificationDocument(BaseModel):
 
     model_config = ConfigDict(json_schema_extra=_require_document_header)
 
-    schema_version: Literal[2] = _SPECIFICATION_VERSION
+    schema_version: Literal[1] = _SPECIFICATION_VERSION
     id: str = ""
     runner_factory_ref: str = (
         "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
@@ -78,7 +78,7 @@ class SpecificationDocument(BaseModel):
 class Specification(BaseModel):
     """A Profile and an Experiment, authored by hand or through the Interview."""
 
-    schema_version: Literal[2] = _SPECIFICATION_VERSION
+    schema_version: Literal[1] = _SPECIFICATION_VERSION
     profile: TargetProfile
     experiment: Experiment
 

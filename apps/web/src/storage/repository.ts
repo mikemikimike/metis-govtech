@@ -72,7 +72,7 @@ function validState(value: unknown): value is InterviewState {
   return (
     !!state.specification &&
     typeof state.specification === "object" &&
-    state.specification.schema_version === 2 &&
+    state.specification.schema_version === 1 &&
     storedObject(state.specification.target) &&
     typeof state.specification.target.name === "string" &&
     typeof state.specification.target.description === "string" &&

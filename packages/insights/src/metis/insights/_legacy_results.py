@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, model_validator
 if TYPE_CHECKING:
     from pathlib import Path
 
-_EVALUATION_RESULTS_VERSION = 2
+_EVALUATION_RESULTS_VERSION = 1
 
 
 class SessionGraderResult(BaseModel):
@@ -77,7 +77,7 @@ class TurnReport(BaseModel):
 class EvaluationResults(BaseModel, extra="ignore"):
     """Every grader result from one evaluation of an experiment directory."""
 
-    schema_version: Literal[2] = _EVALUATION_RESULTS_VERSION
+    schema_version: Literal[1] = _EVALUATION_RESULTS_VERSION
     run_id: str
     turn_results: list[TurnReport] = Field(default_factory=list)
     session_results: list[SessionReport] = Field(default_factory=list)

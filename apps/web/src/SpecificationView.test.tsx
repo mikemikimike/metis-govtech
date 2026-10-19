@@ -10,7 +10,7 @@ function specification(
   target: Partial<Specification["target"]> = {},
 ): Specification {
   return {
-    schema_version: 2,
+    schema_version: 1,
     id: "test",
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",

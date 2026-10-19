@@ -71,7 +71,7 @@ def test_specification_combines_profile_and_experiment() -> None:
     assert len(experiment.tasks) == 1
     document = specification.model_dump(mode="json")
     assert document == {
-        "schema_version": 2,
+        "schema_version": 1,
         **profile.model_dump(mode="json"),
         **experiment.model_dump(mode="json"),
     }

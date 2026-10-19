@@ -19,7 +19,7 @@ class TestRunnerRefField:
 
     def _minimal_experiment(self, **overrides) -> dict:
         base = {
-            "schema_version": 2,
+            "schema_version": 1,
             "id": "test-exp",
             "runner_factory_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
             "personas": [{"id": "p1", "description": "persona", "name": "p1"}],
@@ -192,7 +192,7 @@ class TestRunnerRefValidation:
 
     def _minimal_experiment(self, **overrides) -> dict:
         base = {
-            "schema_version": 2,
+            "schema_version": 1,
             "id": "test-exp",
             "runner_factory_ref": "tests.unit.engine.test_runner_ref.StubRunnerFactory",
             "personas": [{"id": "p1", "description": "persona", "name": "p1"}],

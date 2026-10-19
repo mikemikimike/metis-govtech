@@ -4,10 +4,6 @@
 evaluation report. It is the step after `metis engine evaluate` (or `run`), which scores
 the traces and writes `outputs/reports/results.json` but builds no report.
 
-The current CLI accepts the legacy `turn_results` and `session_results` format only.
-The engine now writes a `records` list. The CLI rejects that format until
-[#454](https://github.com/govtech-responsibleai/metis/issues/454) is complete.
-
 ## Usage
 
 ```bash

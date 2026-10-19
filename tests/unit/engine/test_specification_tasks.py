@@ -19,7 +19,7 @@ from metis.library.grader import LLMSettings
 def specification() -> Specification:
     data = Specification.model_validate(
         {
-            "schema_version": 2,
+            "schema_version": 1,
             "id": "task-identity",
             "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
             "target": {

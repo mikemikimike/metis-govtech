@@ -8,15 +8,15 @@ evidence. It does not make release decisions or set target priorities.
 ## File contract and current input support
 
 The core [Report model](../../packages/core/src/metis/core/report.py) defines `report.json`.
-The report writer validates data through this model. Saved reports contain `"schema_version": 2`.
-The model defaults a missing version to `2` and rejects other explicit values.
-The version remains `2` during the `next` pre-release phase.
+The report writer validates data through this model. Saved reports contain `"schema_version": 1`.
+The model defaults a missing version to `1` and rejects other explicit values.
+The version remains `1` during the `next` pre-release phase.
 
 The current Insights CLI reads legacy evaluation results with `turn_results` and
 `session_results`. These private input models are in `metis.insights._legacy_results`.
 The engine now writes `metis.core.reporting.EvaluationResults` with a `records` list.
 The CLI rejects that format until [#454](https://github.com/govtech-responsibleai/metis/issues/454)
-is complete. Both input formats use version `2` under the pre-release policy.
+is complete. Both input formats use version `1` under the pre-release policy.
 
 ## Reader and purpose
 

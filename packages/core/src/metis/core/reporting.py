@@ -7,7 +7,6 @@ per-trace grader over a 10-trace session contributes 10 results, a session grade
 report should show each result count beside its rate.
 
 The models live in metis-core as the shared evaluation output contract.
-The engine writes them. Insights support is pending #454; its CLI currently rejects this format.
 EvaluationResults is code-produced, like TrialRecord, so it has no published JSON Schema file.
 Its version constant is ``_EVALUATION_RESULTS_VERSION``.
 """
@@ -23,7 +22,7 @@ from metis.core.grading import RecordedResult
 if TYPE_CHECKING:
     from pathlib import Path
 
-_EVALUATION_RESULTS_VERSION = 2
+_EVALUATION_RESULTS_VERSION = 1
 
 
 class GraderRecord(BaseModel):
@@ -43,7 +42,7 @@ class GraderRecord(BaseModel):
 class EvaluationResults(BaseModel, extra="ignore"):
     """Every grader record from one evaluation of an experiment directory."""
 
-    schema_version: Literal[2] = _EVALUATION_RESULTS_VERSION
+    schema_version: Literal[1] = _EVALUATION_RESULTS_VERSION
     run_id: str
     records: list[GraderRecord] = Field(default_factory=list)
     timings: dict[str, Any] = Field(default_factory=dict)

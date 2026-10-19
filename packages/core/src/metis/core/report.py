@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-_REPORT_VERSION = 2
+_REPORT_VERSION = 1
 
 
 class Timings(BaseModel, extra="allow"):
@@ -228,7 +228,7 @@ class Report(BaseModel):
     This is the contract downstream consumers depend on.
     """
 
-    schema_version: Literal[2] = _REPORT_VERSION
+    schema_version: Literal[1] = _REPORT_VERSION
     target: str
     run: str
     date: str

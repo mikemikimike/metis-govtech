@@ -82,8 +82,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   The engine refuses a file without them (#465).
 
 - `metis.core.report` holds `Report`, the `report.json` contract, so that any package can
-  read reports. Reports write `schema_version: 2`; the model defaults a missing version
-  to `2` and rejects other explicit versions. The published `report.schema.json` file
+  read reports. Reports write `schema_version: 1`; the model defaults a missing version
+  to `1` and rejects other explicit versions. The published `report.schema.json` file
   is removed; report validation uses the core `Report` model. All future shared file
   contracts belong in core. `make ci` checks published schema ownership, registration,
   and generated content (#465).
@@ -174,9 +174,6 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Import `TrialRecord`, `TrialConfig`, `TrialOutcome`, `TrialFailure` and `GraderRef` from
   `metis.core.trials`; `metis.engine.simulation.types` no longer defines them (#423).
 
-- Set `schema_version` to `2` for `specification.yaml`, run records, and reports. v1 bumps
-  each schema once to mark the break from v0, and later `next` changes keep version `2` (#392).
-
 - Rename every `Run`-as-individual-execution symbol in `packages/engine/` to `Trial`
   (`RunConfig` → `TrialConfig`, `RunRecord` → `TrialRecord`, `RunOutcome` →
   `TrialOutcome`, `RunFailure` → `TrialFailure`, `RunMeta` → `TrialMeta`,
@@ -263,7 +260,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Expand Task Behaviour selections for plan counts, Criterion score attribution, and missing-result explanations (#413).
 
-- `metis insights report` still reads `results.json` version 2 and rejects files from the
+- `metis insights report` still reads `results.json` version 1 and rejects files from the
   current `metis engine evaluate` with "This results.json uses the new GraderRecord format
   (grader redesign #428), which metis insights report cannot read yet. Rerun the report once
   #454 is released."; its redesign is #454 (#428).
@@ -417,7 +414,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Rename the wizard `Task` and `TaskDraft` models to `Feature` and `FeatureDraft`. Specifications use
   `features`, patch paths use `features[...]`, and new feature IDs use `F-`. Specification schema
-  version 2, prompts, API types, browser forms, and reports use the glossary term (#392).
+  version 1, prompts, API types, browser forms, and reports use the glossary term (#392).
 
 - **Interview state is client-held and file-free.** The server-owned session file, its format
   version, and the `/api/interviews` routes are gone. A caller holds the returned state and sends it

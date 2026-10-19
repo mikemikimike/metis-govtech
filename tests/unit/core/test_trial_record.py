@@ -29,7 +29,7 @@ class TestTrialRecordExtension:
     def test_new_fields_default_backward_compatible(self) -> None:
         record = TrialRecord.model_validate(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "config": {
                     "persona": "p",
                     "scenario": "s",
@@ -50,7 +50,7 @@ class TestTrialRecordExtension:
         nested per-turn diagnostics. It must keep loading, minus that key."""
         record = TrialRecord.model_validate(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "config": {"persona": "p", "scenario": "s"},
                 "outcome": {
                     "stop_reason": "max_turns",
@@ -85,10 +85,10 @@ class TestTrialRecordExtension:
         assert len(record.prior_failures) == 1
         assert record.attempt_number == 2
 
-    def test_schema_version_is_2(self) -> None:
+    def test_schema_version_is_1(self) -> None:
         record = TrialRecord.model_validate(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "config": {"persona": "p", "scenario": "s"},
                 "outcome": {
                     "stop_reason": "max_turns",
@@ -97,7 +97,7 @@ class TestTrialRecordExtension:
                 },
             }
         )
-        assert record.schema_version == 2
+        assert record.schema_version == 1
 
 
 def test_trial_record_file_name() -> None:

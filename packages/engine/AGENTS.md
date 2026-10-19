@@ -26,7 +26,7 @@ Commit the updated schema file alongside the model change.
 
 **v0.x policy:** v0.x releases use `schema_version: 1` for every schema and may break schemas freely — consumers pin to exact package versions.
 
-**`next` (v1 pre-release) policy:** Every schema is at `schema_version: 2`, which marks the break from v0. Breaking changes on `next` do not bump it again; record them in `MIGRATION.md` instead.
+**`next` (v1 pre-release) policy:** Every schema stays at `schema_version: 1`. Breaking changes on `next` do not bump it; record them in `MIGRATION.md` instead.
 
 **v1.x policy (planned):** Starting with the 1.0 release, proper schema versioning will be enforced. Breaking changes will bump `schema_version`, and migration paths will be documented. The bump checklist below applies from 1.0 onward.
 
@@ -48,7 +48,7 @@ A breaking change to a nested model bumps the version of the root model that con
 4. Update `example-experiment/specification.yaml` if affected
 5. Note the schema version change in the commit message
 
-See `packages/core/schemas/README.md` for the full version bump rules table.
+See `packages/core/schemas/README.md` for the version policy.
 
 ## Pyright Configuration
 

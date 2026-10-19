@@ -205,7 +205,7 @@ my-experiment/
 ### Top-Level Fields
 
 ```yaml
-schema_version: 2
+schema_version: 1
 
 id: my-evaluation
 runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
@@ -217,7 +217,7 @@ target:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `schema_version` | Yes | Always `2` (current version) |
+| `schema_version` | Yes | Always `1` (current version) |
 | `id` | Yes | Identifier used in the output directory name |
 | `runner_factory_ref` | Yes | Importable RunnerFactory class |
 | `target` | Yes | Target name, users, description, and optional detail |
@@ -841,7 +841,7 @@ Add `runner_factory_ref` at the top level of your experiment configuration. This
 excerpt selects the REST runner and defines one Test Case:
 
 ```yaml
-schema_version: 2
+schema_version: 1
 id: my-api-eval
 runner_factory_ref: my_package.runners.RestRunnerFactory
 
@@ -947,7 +947,7 @@ coverage when it loads the document. From a specification in
 ```
 
 ```yaml
-schema_version: 2
+schema_version: 1
 id: <string>              # Experiment identifier
 runner_factory_ref: <string>  # Importable RunnerFactory class
 target:
@@ -996,7 +996,7 @@ tasks:
 
 #### Field Descriptions
 
-**`schema_version`** — the specification schema version. The current version is `2`. The engine requires this field and rejects an unsupported version.
+**`schema_version`** — the specification schema version. The current version is `1`. The engine requires this field and rejects an unsupported version.
 
 **`target`** — top-level metadata:
 
@@ -1132,7 +1132,7 @@ Use this template and checklist when creating an experiment from scratch for a n
 Save this as `my-experiment/specification.yaml`. Set `runner_factory_ref` to your installed factory.
 
 ```yaml
-schema_version: 2
+schema_version: 1
 id: my-target-eval
 runner_factory_ref: my_package.runners.MyRunnerFactory
 

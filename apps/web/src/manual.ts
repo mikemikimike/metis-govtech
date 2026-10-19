@@ -142,7 +142,7 @@ export function synthesizeManualSpecification(
   });
 
   return {
-    schema_version: 2,
+    schema_version: 1,
     id: experiment.id.trim(),
     runner_factory_ref:
       "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
