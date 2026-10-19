@@ -987,6 +987,10 @@ export interface components {
             name: string;
             /** Description */
             description: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: string;
+            };
         };
         /**
          * Perspective
@@ -1016,6 +1020,10 @@ export interface components {
             name: string;
             /** Description */
             description: string;
+            /** Metadata */
+            metadata?: {
+                [key: string]: string;
+            };
         };
         /**
          * ScenarioCard

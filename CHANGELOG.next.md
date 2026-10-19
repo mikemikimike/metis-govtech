@@ -68,6 +68,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- Preserve optional flat string metadata on Personas and Scenarios through
+  Specification serialization. Accept arbitrary keys and reject non-string
+  values, including nested objects and lists (#441).
+
 - Shared ProductProfile, Experiment, and Specification models. The Profile holds product
   requirements. The Experiment holds Personas, Scenarios, Tasks, and execution settings.
   The Specification combines both in one document (#395).
@@ -238,6 +242,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-wizard
 
 #### Added
+
+- Accept optional flat string metadata in model-proposed Persona and Scenario
+  drafts and preserve it in saved Specifications. Guide generation to use supplied
+  facts and omit unspecified metadata (#441).
 
 - **Opening documents.** Flat Interview start requests can carry files as `{name, text?}`. The
   wizard keeps the opening description and document context in client-held state, with supported
@@ -420,6 +428,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-web
 
 #### Added
+
+- **Manual metadata.** Personas and Scenarios have optional Additional context
+  key/value fields. Export preserves the text values and checks for blank or
+  duplicate keys (#441).
 
 - **Opening documents.** A plus button in the composer opens a compact document tray. Original files
   stay in local Interview storage, and only files assigned to Scenarios enter the package.

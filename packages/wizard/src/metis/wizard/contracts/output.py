@@ -40,6 +40,7 @@ class CriterionDraft(_StrictDraft):
 class PersonaDraft(_StrictDraft):
     name: str
     description: str
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class TaskDraft(_StrictDraft):
@@ -58,6 +59,7 @@ class ScenarioTaskDraft(_StrictDraft):
 class ScenarioDraft(_StrictDraft):
     name: str
     description: str
+    metadata: dict[str, str] = Field(default_factory=dict)
     tasks: list[ScenarioTaskDraft] = Field(default_factory=list)
 
 
@@ -106,11 +108,13 @@ def _legacy_value(path: str, value: Any) -> Any:
         return PersonaDraft(
             name=value["name"],
             description=value["description"],
+            metadata=value.get("metadata", {}),
         )
     if field == "scenarios":
         return ScenarioDraft(
             name=value["name"],
             description=value["description"],
+            metadata=value.get("metadata", {}),
             tasks=value.get("tasks", []),
         )
     if field == "tasks":
@@ -159,6 +163,9 @@ class StepResultPatch(BaseModel):
             # addressed container, while leaving incomplete or legacy shapes for strict
             # Pydantic validation to reject.
             field = _container(str(value.get("path", "")))
+            if field in {"personas", "scenarios"}:
+                draft_type = PersonaDraft if field == "personas" else ScenarioDraft
+                return {**value, "value": draft_type.model_validate(value["value"])}
             required = {
                 "features": {"name", "description", "behaviours"},
                 "behaviours": {"name", "description"},

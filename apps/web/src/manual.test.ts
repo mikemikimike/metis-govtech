@@ -235,3 +235,43 @@ test("manual task execution settings survive specification construction", () => 
   assert.equal(task.response_wait_ms, 45000);
   assert.equal(task.max_run_retries, 0);
 });
+
+test("manual metadata preserves text and requires unique nonblank keys", () => {
+  const experiment: ManualExperiment = structuredClone(synthesis);
+  for (const kind of ["personas", "scenarios"] as const) {
+    const item = experiment[kind][0];
+    item.metadata = [
+      { key: "custom context", value: "  exact text  " },
+      { key: "count", value: "001" },
+      { key: "optional", value: "" },
+    ];
+    assert.deepEqual(
+      synthesizeManualSpecification(experiment)[kind][0].metadata,
+      {
+        "custom context": "  exact text  ",
+        count: "001",
+        optional: "",
+      },
+    );
+    const prefix = kind === "personas" ? "persona" : "scenario";
+    item.metadata.push({ key: "count", value: "2" }, { key: " ", value: "x" });
+    assert.deepEqual(
+      manualFieldErrors(experiment, []).filter((error) =>
+        error.field.startsWith(`${prefix}.0.metadata`),
+      ),
+      [
+        { field: `${prefix}.0.metadata.3.key`, message: "Use a unique key." },
+        { field: `${prefix}.0.metadata.4.key`, message: "Enter a key." },
+      ],
+    );
+    assert.throws(
+      () => synthesizeManualSpecification(experiment),
+      /unique key/,
+    );
+    item.metadata = [];
+    assert.equal(
+      synthesizeManualSpecification(experiment)[kind][0].metadata,
+      undefined,
+    );
+  }
+});

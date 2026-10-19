@@ -162,6 +162,13 @@
         "description": {
           "title": "Description",
           "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Metadata",
+          "type": "object"
         }
       },
       "required": [
@@ -187,6 +194,13 @@
         "description": {
           "title": "Description",
           "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Metadata",
+          "type": "object"
         }
       },
       "required": [
