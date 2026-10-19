@@ -79,6 +79,10 @@ class Observation(BaseModel):
     added observation types before, and a ``Literal`` would reject every observation of a type
     METIS does not know yet."""
     name: str | None = None
+    level: str | None = None
+    """Langfuse's severity: ``"DEBUG"``, ``"DEFAULT"``, ``"WARNING"`` or ``"ERROR"``."""
+    status_message: str | None = None
+    """Langfuse's ``statusMessage``, usually the error text when ``level`` is ``"ERROR"``."""
     start_time: datetime | None = None
     end_time: datetime | None = None
     input: Any = None
@@ -154,14 +158,21 @@ class Trace(BaseModel, frozen=True):
         parentless span, so the fallback applies only when the flag is absent from the whole
         trace, not when it is merely false.
 
-        Zero or several candidates under either rule (an ingestion gap, or a retry that
-        re-emitted a root) resolve to the earliest ``start_time``, with a missing time counted
-        as earliest, and a warning logged. This does not raise, so one malformed trace cannot
-        crash an evaluation run.
+        Several flagged candidates narrow to the one with no ``parent_observation_id``, because
+        a flagged observation with a parent is not the top of its trace. Some applications flag
+        a sub-agent's own top span as a root as well as the turn's span.
+
+        Zero or several candidates that this does not resolve (an ingestion gap, or a retry
+        that re-emitted a root) fall back to the earliest ``start_time``, with a missing time
+        counted as earliest, and a warning logged. This does not raise, so one malformed trace
+        cannot crash an evaluation run.
         """
         observations = self.observations
         if any(o.is_root_observation is not None for o in observations):
             candidates = [o for o in observations if o.is_root_observation]
+            parentless = [o for o in candidates if o.parent_observation_id is None]
+            if len(candidates) > 1 and len(parentless) == 1:
+                return parentless[0]
         else:
             candidates = [o for o in observations if o.parent_observation_id is None]
 

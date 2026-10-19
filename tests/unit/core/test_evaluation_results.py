@@ -26,7 +26,7 @@ def _record(**overrides: object) -> GraderRecord:
         "task_id": "TC-001",
         "trial_index": 1,
         "criterion_id": "AC-UNI-22",
-        "grader_fqn": "metis.library.graders.TraceBudgetGrader",
+        "grader_fqn": "metis.library.graders.demo.DemoTraceBudgetGrader",
         "grader_args": {"threshold": 0.5, "max_traces": 4},
         "results": [
             RecordedResult(outcome="passed", score=1.0, reason="routed → analyst")

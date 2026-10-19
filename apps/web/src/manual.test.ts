@@ -17,7 +17,7 @@ const synthesisScorer = {
   description: "Checks that the answer uses its evidence.",
 };
 const budgetScorer = {
-  fqn: "metis.library.graders.TraceBudgetGrader",
+  fqn: "metis.library.graders.demo.DemoTraceBudgetGrader",
   name: "Turn budget",
   description: "Checks that the conversation stays within its turn budget.",
 };

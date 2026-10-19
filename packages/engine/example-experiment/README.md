@@ -8,7 +8,7 @@ files, and Grader selections assume Orca's specific multi-agent architecture
 different system will require writing your own specification from scratch.
 
 > **Graders are being rewritten (#428).** The METIS grader library was rebuilt without
-> DeepEval, and so far it ships one grader, `TraceBudgetGrader`. In the full
+> DeepEval, and so far its only grader is a demo, `DemoTraceBudgetGrader`. In the full
 > `specification.yaml`, only Criterion `AC-EXEC-3` names it; every other Criterion has an
 > empty `grader_fqn` and the engine refuses to run the file until those are filled in. Use
 > the [simple specification](simple/specification.yaml) to try the pipeline end to end.
@@ -37,7 +37,7 @@ example-experiment/
 
 The [simple specification](simple/specification.yaml) runs one direct question through
 Orca's API. It uses one Persona, one Scenario, one Task, and one Trial. Its Grader,
-`TraceBudgetGrader`, checks that the session used at most four traces (persona–target
+`DemoTraceBudgetGrader`, checks that the session used at most four traces (persona–target
 exchanges). The Task shows the optional execution settings, including the separate turn
 limit and retry count.
 

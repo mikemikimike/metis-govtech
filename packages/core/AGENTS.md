@@ -32,6 +32,10 @@ Private runtime models and API models stay in their owning packages. See the
 - `traces.py`: `Observation`, `Trace` and `GradingInput`, the read-only input of every grader
   run. Frozen, tuple collections. `Trace.root` is METIS's port of Langfuse's
   `isRootObservation = true` filter.
+- `trace_processing.py`: the shared trace processor. Views (`Turn`, `ToolCall`), readers (the
+  only code that reads `input`/`output`/`metadata`), `Problem` (data METIS could not read, never
+  a target failure) and `TargetError` (evidence about the target). Graders and `metis-insights`
+  read traces through it; it names no application (no Orca names).
 - `grading.py`: `GraderResult`/`GradingOutput` (what a grader returns: a score, never a
   pass/fail) and `RecordedResult` (the outcome after the orchestrator applies the threshold).
 - `reporting.py`: `EvaluationResults` (`outputs/reports/results.json`), one `GraderRecord`

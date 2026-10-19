@@ -356,7 +356,7 @@ criteria:
       given: a request for a Q3 revenue report
       when: the session ends
       then: the session used no more than 8 exchanges
-    grader_fqn: metis.library.graders.TraceBudgetGrader
+    grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
     grader_args:
       max_traces: 8
 ```
@@ -486,10 +486,17 @@ async method. It sees only the session's Langfuse traces and the run's artifacts
 scenario or persona. The full rules are in the
 [graders README](../../packages/library/src/metis/library/graders/README.md).
 
+The engine fetches the session and refuses traces it can't support, such as those recorded
+before the Langfuse server's v4 upgrade (#469). A grader then reads the session through
+`metis.core.trace_processing`, never through an observation's raw `input` or `output`: the
+processor knows which payload shapes it can read and returns a `Problem` when it can't, which a
+grader skips rather than scores. Working examples are in `metis.library.graders.demo`.
+
 ```python
 from pydantic import Field
 
 from metis.core.grading import GraderResult, GradingOutput
+from metis.core.trace_processing import Problem, turns
 from metis.core.traces import GradingInput
 from metis.library.grader import Grader, GraderArgs, LLMSettings
 
@@ -499,28 +506,33 @@ class AnswerLengthArgs(GraderArgs):
 
 
 class AnswerLengthGrader(Grader[AnswerLengthArgs]):
-    """Every answered trace stays under a character budget."""
+    """Every answered turn stays under a character budget."""
 
     args_model = AnswerLengthArgs
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
         results = []
-        for trace in input.traces:
-            output = trace.root.output
-            if not isinstance(output, str):
+        for turn in turns(input):
+            if isinstance(turn.reply, Problem):
                 results.append(
-                    GraderResult(status="skipped", reason=f"{trace.id}: no text")
+                    GraderResult(
+                        status="skipped",
+                        reason=f"turn {turn.index + 1}: {turn.reply.detail}",
+                    )
                 )
                 continue
-            ok = len(output) <= self.args.max_chars
+            ok = len(turn.reply) <= self.args.max_chars
             results.append(
                 GraderResult(
                     status="scored",
                     score=1.0 if ok else 0.0,
-                    reason=f"{trace.id}: {len(output)} chars",
+                    reason=f"turn {turn.index + 1}: {len(turn.reply)} chars",
                 )
             )
-        return GradingOutput(results=results)
+        return GradingOutput(
+            results=results
+            or [GraderResult(status="skipped", reason="The session has no turns.")]
+        )
 ```
 
 Put it in any importable module and name it on a Criterion:
@@ -1065,7 +1077,7 @@ features:
               given: a user asks a factual question
               when: the session ends
               then: the session used no more than 4 exchanges
-            grader_fqn: metis.library.graders.TraceBudgetGrader
+            grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
             grader_args:
               max_traces: 4
 ```
@@ -1157,7 +1169,7 @@ features:
               given: a user asks a factual question
               when: the session ends
               then: the session used no more than 4 exchanges
-            grader_fqn: metis.library.graders.TraceBudgetGrader
+            grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
             grader_args:
               max_traces: 4
 
@@ -1202,7 +1214,7 @@ Before running `metis engine simulate --input-dir my-experiment/`:
 
 - [ ] **Graders importable:** Every Criterion's `grader_fqn` resolves to an installed class.
   ```bash
-  python -c "from metis.library.graders import TraceBudgetGrader"
+  python -c "from metis.library.graders.demo import DemoTraceBudgetGrader"
   ```
 
 - [ ] **Dry-run validation:** Load the experiment to catch schema errors early:

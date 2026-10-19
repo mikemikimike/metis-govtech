@@ -265,7 +265,7 @@ class ScriptedInterviewer:
         )
 
 
-TRACE_BUDGET = "metis.library.graders.TraceBudgetGrader"
+TRACE_BUDGET = "metis.library.graders.demo.DemoTraceBudgetGrader"
 
 
 @dataclass
@@ -273,7 +273,7 @@ class ScriptedMatcher:
     """Give every generated Criterion one runnable offline grader.
 
     The interview flow tests need a criterion that compiles and that the engine's input gate
-    accepts, not a meaningful match. TraceBudgetGrader is the one grader the library ships.
+    accepts, not a meaningful match. DemoTraceBudgetGrader is the only grader written so far, a demo.
     """
 
     degraded: bool = False

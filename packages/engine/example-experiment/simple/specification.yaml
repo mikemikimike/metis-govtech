@@ -21,7 +21,7 @@ features:
         given: a request that Orca can answer directly
         when: the session ends
         then: it used no more than 4 traces (persona–target exchanges)
-      grader_fqn: metis.library.graders.TraceBudgetGrader
+      grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
       grader_args:
         max_traces: 4
 
