@@ -2,12 +2,13 @@
 
 The published JSON Schemas for the files that METIS packages share. Each file is generated from a
 Pydantic model in `metis-core`, so that any package can read the file it describes.
+All future shared file contracts belong in core. Published `*.schema.json` files belong
+in this directory. Private runtime models and API request and response models stay in
+their owning packages.
 
 - `specification.schema.json` describes `specification.yaml`. The wizard writes this file, and
   the engine runs it. Schema-aware editors and YAML validators use the schema for autocomplete
   and inline validation.
-- `report.schema.json` describes `outputs/reports/report.json`. `metis insights report` writes
-  this file. Downstream readers validate report files against the schema.
 
 The JSON files here are **auto-generated**. Do not edit them directly; they will be overwritten.
 
@@ -16,7 +17,6 @@ The JSON files here are **auto-generated**. Do not edit them directly; they will
 | Schema file | Pydantic model | Version constant | Source file |
 |---|---|---|---|
 | `specification.schema.json` | `SpecificationDocument` | `_SPECIFICATION_VERSION` | `src/metis/core/specification.py` |
-| `report.schema.json` | `Report` | `_REPORT_VERSION` | `src/metis/core/report.py` |
 
 The specification schema requires `schema_version`, `id`, and `runner_factory_ref`. In memory, these keys have
 defaults, so an incomplete Interview draft still loads. `Specification.model_dump()` always writes
@@ -30,36 +30,69 @@ settings, and the runner when it loads the file (`Specification.execution_errors
 `TrialRecord` (`metis.core.trials`) is code-produced and has no standalone schema file. Its version constant is
 `_TRIAL_RECORD_VERSION` in `packages/engine/src/metis/engine/simulation/types.py`.
 
-`EvaluationResults` (`outputs/reports/results.json`, defined in `metis.core.reporting`) is the
-input to the report. It is code-produced and has no published schema file.
+`EvaluationResults` (`outputs/reports/results.json`, defined in `metis.core.reporting`) is
+the current engine output. It has a `records` list and no published schema file.
+The current Insights CLI reads private legacy models in `metis.insights._legacy_results`,
+with `turn_results` and `session_results`. It rejects the current engine format until
+[#454](https://github.com/govtech-responsibleai/metis/issues/454) is complete.
+
+`Report` in `metis.core.report` defines `outputs/reports/report.json` and has no
+published schema file. The report writer validates data through this model.
+Saved reports contain `"schema_version": 2`. `Report` defaults a missing version to `2`.
+Its `Literal[2]` field rejects other explicit values, including `null`.
+
+## How to add a shared schema
+
+Shared file contracts need a core Pydantic model. Publish a JSON Schema when an
+editor or external consumer needs to validate data without importing METIS.
+For a published schema, follow these steps.
+
+1. Define the shared file model in `packages/core/src/metis/core/`.
+2. Add a `schema_version` field and a version constant. Define how missing and unsupported
+   versions are handled. Follow the `next` exception below while it applies.
+3. Register the model, filename, version, and alias setting in `_MODELS` in
+   `packages/core/scripts/generate_schema.py`.
+4. Run `make -C packages/core generate-schema`. Commit the generated file in this directory.
+5. Test the file writer and reader. Update this guide and the file contract documentation.
+6. Run `make -C packages/core check-schema` and the relevant tests.
 
 ## How to modify a schema
 
 1. Edit the model. For the specification, edit Profile fields in `src/metis/core/profile.py`,
    Experiment fields in `src/metis/core/experiment.py`, or the flat document in
-   `src/metis/core/specification.py`. For the report, edit `src/metis/core/report.py`
-2. Determine whether the change is breaking (see [Version bump rules](#version-bump-rules) below); if so, increment the `_*_VERSION` constant and update the `Literal[N]` annotation on the `schema_version` field to match
+   `src/metis/core/specification.py`.
+2. Check the [Version bump rules](#version-bump-rules), including the `next` exception.
+   After graduation, a breaking change requires an increment to the `_*_VERSION` constant
+   and the matching `Literal[N]` annotation on `schema_version`.
 3. Run `make -C packages/core generate-schema` to regenerate the schema files
 4. Update `packages/engine/example-experiment/specification.yaml` if the specification model changed
 5. Commit the updated schema file alongside the model change; note any version bump in the commit message
 
 ## Automated checks
 
-`make -C packages/core check-schema` runs in CI (`make ci`) and fails if a committed schema
-doesn't match what Pydantic generates (a stale schema file — a forgotten `make generate-schema`).
+`make -C packages/core check-schema` runs in CI (`make ci`). It uses the same model
+registry as generation. It fails for missing or stale schemas, unregistered schemas in
+core, and published schemas outside core. It checks tracked and non-ignored untracked
+`*.schema.json` files through Git. Ignored dependencies and caches are excluded.
 These tests run in `make test`:
 
 - `tests/unit/core/test_specification_schema.py` fails if the specification schema is stale, if
   the example specification doesn't validate against it, or if a written draft doesn't validate
   against it.
-- `tests/unit/core/test_report_schema.py` fails if the report schema is stale. When a sample
-  `report.json` is available, it also checks that the sample validates and parses.
+- `tests/unit/insights/test_cli_report.py` checks that a real CLI run writes version `2`,
+  validates the output, and rejects unsupported report versions. It needs no sample file.
+- `tests/unit/core/test_schema_check.py` checks schema ownership and registration.
 - `tests/unit/engine/test_specification_execution.py` checks that the runnable example
   (`packages/engine/example-experiment/simple/specification.yaml`) loads for execution.
 
 These checks catch forgotten regeneration runs and broken examples, but **not** forgotten version bumps — if you make a breaking change and don't increment the `_*_VERSION` constant, the tests won't notice.
 
 ## Version bump rules
+
+During the `next` pre-release phase, schema versions stay at `2`. Record breaking changes
+in `MIGRATION.md` and `CHANGELOG.next.md`. Do not increment the schema version for each
+change. See [the version policy](../../../docs/version-maintenance.md).
+The rules below apply after graduation.
 
 A change requires a version bump if data valid under version N would **fail `model_validate()` under the new model**. This covers **data compatibility** only — whether old files can be loaded. **Code compatibility** is handled by the type checker (`make check`) and tests.
 
@@ -85,7 +118,10 @@ Versions are integers (1, 2, 3, ...), not semver. A single integer means: "if th
 
 ### Do we reject v1 data once we're on v2?
 
-**Yes, by default.** The `_check_version` validator rejects any version that doesn't match the current constant. The failure is loud and early rather than a silent misparse deep in processing.
+**Yes, for explicit unsupported versions.** `Report` uses its `Literal[2]` field for
+this check. A missing report version defaults to `2`. Other contracts, including
+`EvaluationResults` and `TrialRecord`, also use `_check_version` validators. The
+specification draft model supplies defaults; execution validation requires a version.
 
 If you need old data to remain loadable after a bump, explicitly opt in via one of three strategies:
 
@@ -119,7 +155,7 @@ AnySpecification = Annotated[
 ]
 ```
 
-Without one of these, old files simply won't load — that's the correct default.
+These strategies are needed to load files with an explicit unsupported version.
 
 ### Who is responsible for updating files after a bump?
 

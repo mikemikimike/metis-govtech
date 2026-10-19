@@ -82,8 +82,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   The engine refuses a file without them (#465).
 
 - `metis.core.report` holds `Report`, the `report.json` contract, so that any package can
-  read reports. `packages/core/schemas/report.schema.json` is generated from it. `make ci`
-  checks that both core schemas are current (#465).
+  read reports. Reports write `schema_version: 2`; the model defaults a missing version
+  to `2` and rejects other explicit versions. The published `report.schema.json` file
+  is removed; report validation uses the core `Report` model. All future shared file
+  contracts belong in core. `make ci` checks published schema ownership, registration,
+  and generated content (#465).
 
 - `metis.core.traces`: `Observation`, `Trace` and `GradingInput`, the read-only input of every
   grader run. `Trace.root` finds the logical root observation by `isRootObservation`, falling
@@ -171,7 +174,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Import `TrialRecord`, `TrialConfig`, `TrialOutcome`, `TrialFailure` and `GraderRef` from
   `metis.core.trials`; `metis.engine.simulation.types` no longer defines them (#423).
 
-- Set `schema_version` to `2` for `specification.yaml`, run records, and the report schema. v1 bumps
+- Set `schema_version` to `2` for `specification.yaml`, run records, and reports. v1 bumps
   each schema once to mark the break from v0, and later `next` changes keep version `2` (#392).
 
 - Rename every `Run`-as-individual-execution symbol in `packages/engine/` to `Trial`
@@ -202,7 +205,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `metis insights report --results-file <path>` command instead of building the report.
   They no longer print the pass/fail/skip table or write `report.json`/`report.html`.
   `generate_report`, `ReportResult`, and the `metis.engine.reporting` subpackage are
-  removed, and `report.schema.json` moved to `metis-core` (#417).
+  removed (#417).
 
 - `metis engine evaluate` grades with the new contract. Each criterion's grader is built once
   from the specification snapshot and validated before the run (`grader_args` against its

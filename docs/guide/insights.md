@@ -4,6 +4,10 @@
 evaluation report. It is the step after `metis engine evaluate` (or `run`), which scores
 the traces and writes `outputs/reports/results.json` but builds no report.
 
+The current CLI accepts the legacy `turn_results` and `session_results` format only.
+The engine now writes a `records` list. The CLI rejects that format until
+[#454](https://github.com/govtech-responsibleai/metis/issues/454) is complete.
+
 ## Usage
 
 ```bash
@@ -55,4 +59,4 @@ It also prints the terminal pass/fail/skip table per Criterion.
 
 The report's content — scoring, statuses, and failure evidence — is defined in the
 [report contract](report.md), and its JSON shape in the
-[report JSON Schema](../../packages/core/schemas/report.schema.json).
+core [Report model](../../packages/core/src/metis/core/report.py).

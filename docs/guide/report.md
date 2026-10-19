@@ -5,6 +5,19 @@ report. The
 report is an investigation dashboard for a target owner. It presents evaluation
 evidence. It does not make release decisions or set target priorities.
 
+## File contract and current input support
+
+The core [Report model](../../packages/core/src/metis/core/report.py) defines `report.json`.
+The report writer validates data through this model. Saved reports contain `"schema_version": 2`.
+The model defaults a missing version to `2` and rejects other explicit values.
+The version remains `2` during the `next` pre-release phase.
+
+The current Insights CLI reads legacy evaluation results with `turn_results` and
+`session_results`. These private input models are in `metis.insights._legacy_results`.
+The engine now writes `metis.core.reporting.EvaluationResults` with a `records` list.
+The CLI rejects that format until [#454](https://github.com/govtech-responsibleai/metis/issues/454)
+is complete. Both input formats use version `2` under the pre-release policy.
+
 ## Reader and purpose
 
 - The primary reader is the target owner.
@@ -68,7 +81,7 @@ The criterion name is part of the profile contract; the report uses the exact me
 name as the metric title. If a result is missing, it uses the metric class name as
 a fallback. Scores retain Task, Trial, Criterion, Grader FQN, and arguments.
 IDs join Features, Behaviours, Criteria, Personas, Scenarios, Tasks, and
-metric results. The [report JSON Schema](../../packages/core/schemas/report.schema.json)
+metric results. The core [Report model](../../packages/core/src/metis/core/report.py)
 defines these fields.
 
 These rules are report inputs. The report must not replace an aggregator-supplied rate
@@ -120,8 +133,8 @@ or aggregation method.
 
 ## Implementation boundary
 
-The report contract belongs in the report generator and its tests. A one-off generated
-report file is not a source of truth.
+The shared report file contract belongs in `metis-core`. Report generation and its
+content rules belong in `metis-insights`. A generated report file is not a source of truth.
 
 The report must accept future aggregator-owned fields without changing this interface
 contract. The aggregator can take full ownership of rates, thresholds, counts, statuses,

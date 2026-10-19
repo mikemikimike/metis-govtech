@@ -417,7 +417,7 @@ subclasses `metis.library.grader.Grader[Args]`, declares its parameters as an `a
 #### Schema versions are now `2`
 
 v1 marks its break from v0 with one schema version bump. `specification.yaml`, run records
-(`record.json`), and the report schema (`Report v2`) now use version `2`. Set
+(`record.json`), and reports now use `schema_version: 2`. Set
 `schema_version: 2` in each `specification.yaml`. The engine refuses run records from v0;
 run the simulation again to create new records.
 
@@ -500,8 +500,11 @@ Scripts that read `report.json` after `evaluate` must run that command first.
 - `metis.engine.reporting` is removed. `build_report` and `load_report_sources` are now
   in `metis.insights`. `Report` is now in `metis.core.report`, and `metis.insights`
   re-exports it.
-- `report.schema.json` moved from `packages/engine/schemas/` to
-  `packages/core/schemas/`. Its content and version (`Report v2`) are unchanged.
+- The published `report.schema.json` file is removed. Use
+  `metis.core.report.Report.model_validate()` to validate report data in Python.
+  Reports write `"schema_version": 2`. The core model defaults
+  a missing version to `2` and rejects other explicit values. The version stays `2`
+  under the `next` pre-release policy.
 
 #### Graders redesigned without DeepEval (#428)
 

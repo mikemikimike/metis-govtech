@@ -6,7 +6,8 @@ grader per session. A record holds one ``RecordedResult`` per grading scope the 
 per-trace grader over a 10-trace session contributes 10 results, a session grader 1, so a
 report should show each result count beside its rate.
 
-The models live in metis-core because the engine writes them and the report reads them.
+The models live in metis-core as the shared evaluation output contract.
+The engine writes them. Insights support is pending #454; its CLI currently rejects this format.
 EvaluationResults is code-produced, like TrialRecord, so it has no published JSON Schema file.
 Its version constant is ``_EVALUATION_RESULTS_VERSION``.
 """

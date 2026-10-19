@@ -5,7 +5,7 @@ See root [AGENTS.md](../../AGENTS.md) for monorepo-wide instructions.
 ## Package Purpose
 
 Report generation for evaluation outputs. `metis insights report --results-file <path>`
-reads the `outputs/reports/results.json` that `metis engine evaluate` writes and produces the
+reads legacy `outputs/reports/results.json` files and produces the
 terminal pass/fail/skip summary plus `outputs/reports/report.json` and `outputs/reports/report.html`.
 
 ## Dependency Rule
@@ -28,13 +28,10 @@ can read reports.
 - `_report.py` — `build_report`, `load_report_sources` (the behaviour/criterion rollup)
 - `_aggregation.py`, `_report_page.py`, `_report_styles.py` — summary counts and HTML
 
-## Schema Sync
+## Report contract
 
-`metis.core.report` is the source of truth for `packages/core/schemas/report.schema.json`.
-After changing it:
-
-```bash
-make -C packages/core generate-schema
-```
+`metis.core.report.Report` defines and validates `report.json`. Reports contain
+`schema_version: 2`. The model defaults a missing version to `2` and rejects other
+explicit versions. There is no published JSON Schema file for reports.
 
 The report's content rules live in [docs/guide/report.md](../../docs/guide/report.md).

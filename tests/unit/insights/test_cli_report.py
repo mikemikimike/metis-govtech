@@ -6,6 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from metis.core.report import Report
@@ -86,7 +88,16 @@ def test_report_writes_report_files_beside_results(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     reports_dir = results_file.parent
     report = json.loads((reports_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["schema_version"] == 2
     assert Report.model_validate(report).target == "Test target"
+    without_version = {
+        key: value for key, value in report.items() if key != "schema_version"
+    }
+    assert Report.model_validate(without_version).schema_version == 2
+    for unsupported_version in (1, 3, None):
+        invalid = {**report, "schema_version": unsupported_version}
+        with pytest.raises(ValidationError, match="schema_version"):
+            Report.model_validate(invalid)
     assert report["criteria"]["AC-1-1"]["rate"] == 100
     assert (reports_dir / "report.html").read_text(encoding="utf-8")
     assert "AC-1-1" in result.output

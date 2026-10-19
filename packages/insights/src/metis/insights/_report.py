@@ -111,15 +111,8 @@ def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
                 # independent of what the run was doing, which is not obvious
                 # for ConsecutiveFailureEscalation. Issue #346.
                 #
-                # The flag only, deliberately. `attempt` already says how many
-                # attempts were spent, and the per-attempt detail (failure type,
-                # turn reached, message) stays in the run's `record.json`, which
-                # is not a published schema. report.schema.json is audited by
-                # downstream consumers, so every field in it is a contract to
-                # keep — not somewhere to mirror data nothing renders.
                 "attempt": record.attempt_number,
-                # record.json no longer holds the conversation (#461); #462 reads it
-                # from the trial's Langfuse session.
+                # #462 reads the conversation from the trial Langfuse session.
                 "conversation": [],
             }
         )

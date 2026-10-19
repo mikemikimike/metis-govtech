@@ -6,6 +6,15 @@ See root [AGENTS.md](../../AGENTS.md) for monorepo-wide instructions.
 
 Core data models and abstractions for the METIS suite. Zero workspace dependencies — only Pydantic v2 + stdlib.
 
+## Shared schemas
+
+Core owns all new shared file contracts. Published
+`*.schema.json` files belong in `packages/core/schemas/` and must be generated from
+core models. Register new schemas in `scripts/generate_schema.py`. Run
+`make -C packages/core generate-schema` and `make -C packages/core check-schema`.
+Private runtime models and API models stay in their owning packages. See the
+[schema guide](schemas/README.md).
+
 ## Package-Specific Notes
 
 - Dependencies: Pydantic v2, structlog, Rich (plus stdlib). Zero workspace dependencies.
