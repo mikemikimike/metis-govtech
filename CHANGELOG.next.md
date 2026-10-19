@@ -79,11 +79,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Publish one JSON schema for `specification.yaml` at
   `packages/core/schemas/specification.schema.json`. It requires `schema_version`, `id`, and
   `runner_factory_ref`, which every saved file carries. In-memory drafts still default them.
-  The engine refuses a file without them (#TBD).
+  The engine refuses a file without them (#465).
 
 - `metis.core.report` holds `Report`, the `report.json` contract, so that any package can
   read reports. `packages/core/schemas/report.schema.json` is generated from it. `make ci`
-  checks that both core schemas are current (#TBD).
+  checks that both core schemas are current (#465).
 
 - `metis.core.traces`: `Observation`, `Trace` and `GradingInput`, the read-only input of every
   grader run. `Trace.root` finds the logical root observation by `isRootObservation`, falling
