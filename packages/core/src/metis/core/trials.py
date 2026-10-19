@@ -21,6 +21,7 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
 from metis.core.artifacts import Artifact
+from metis.core.profile import CriterionDescription
 
 _TRIAL_RECORD_VERSION = 1
 
@@ -48,6 +49,13 @@ class GraderRef(BaseModel):
             "The grader's arguments, validated against its args_model before"
             " the run (unknown keys are rejected). Empty when the grader's"
             " defaults suffice."
+        ),
+    )
+    description: CriterionDescription | None = Field(
+        default=None,
+        description=(
+            "The criterion description. A grader that takes its instructions"
+            " from the criterion receives it as grader_args.criterion."
         ),
     )
 

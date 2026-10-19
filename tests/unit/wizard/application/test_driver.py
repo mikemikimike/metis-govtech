@@ -1287,7 +1287,7 @@ def test_criterion_parameter_form_changes_the_selected_requirement() -> None:
 
 
 def test_fallback_parameter_edits_validate_before_replacing_settings() -> None:
-    from metis.library.criterion_judge import CRITERION_JUDGE_FQN
+    from metis.wizard.application.matching import CRITERION_JUDGE_FQN
     from metis.wizard.contracts import FormResponse
 
     specification = research_assistant()

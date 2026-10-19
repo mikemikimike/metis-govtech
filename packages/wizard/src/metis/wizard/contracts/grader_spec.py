@@ -25,6 +25,9 @@ class GraderSpec(BaseModel):
     description: str
     # args_model fields seed the Criterion parameters for user review.
     params: list[GraderParam] = Field(default_factory=list)
+    # The grader takes its instructions from the criterion description, so it fits any
+    # criterion and is never a similarity match.
+    uses_criterion_description: bool = False
 
     @property
     def match_text(self) -> str:
@@ -38,3 +41,4 @@ class GraderSummary(BaseModel):
     fqn: str
     name: str
     description: str
+    uses_criterion_description: bool = False

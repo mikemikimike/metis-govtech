@@ -124,8 +124,8 @@ def test_edited_yaml_description_reaches_the_judge_and_result_record(
         build_criterion_grader,
         grade_session,
     )
-    from metis.library.criterion_judge import CRITERION_JUDGE_FQN
-    from metis.library.grader import LLMSettings
+    from metis.library.grader import DEFAULT_MAX_INPUT_TOKENS, LLMSettings
+    from metis.wizard.application.matching import CRITERION_JUDGE_FQN
     from tests.fixtures.criterion_judge import judge_client, recorded_session
 
     specification = research_assistant()
@@ -177,6 +177,7 @@ def test_edited_yaml_description_reaches_the_judge_and_result_record(
         "criterion": str(loaded.criterion(criterion.id).description),
         "model": model or "default-judge",
         "threshold": threshold,
+        "max_input_tokens": DEFAULT_MAX_INPUT_TOKENS,
     }
     assert record.results[0].outcome == outcome
     assert loaded.criterion(criterion.id).grader_args == criterion.grader_args
@@ -195,7 +196,7 @@ def test_engine_preflight_reports_invalid_fallback_configuration(
     tmp_path: Path, capsys, fault, message
 ) -> None:
     from metis.engine.cli import _validate_inputs
-    from metis.library.criterion_judge import CRITERION_JUDGE_FQN
+    from metis.wizard.application.matching import CRITERION_JUDGE_FQN
 
     specification = research_assistant()
     criterion = specification.features[0].behaviours[0].criteria[0]

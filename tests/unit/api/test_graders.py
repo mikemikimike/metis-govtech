@@ -12,7 +12,10 @@ def test_grader_catalogue_is_sorted_and_has_only_display_fields(
     rows = response.json()
     assert rows == sorted(rows, key=lambda row: row["fqn"])
     assert rows
-    assert all(set(row) == {"fqn", "name", "description"} for row in rows)
+    assert all(
+        set(row) == {"fqn", "name", "description", "uses_criterion_description"}
+        for row in rows
+    )
 
 
 def test_grader_catalogue_failure_uses_service_error_shape(

@@ -93,6 +93,7 @@ def grader_catalogue() -> list[GraderSummary]:
             fqn=spec.fqn,
             name=spec.name,
             description=spec.description,
+            uses_criterion_description=spec.uses_criterion_description,
         )
         for spec in _library_catalogue()
     ]

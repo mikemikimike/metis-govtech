@@ -15,11 +15,13 @@ const synthesisScorer = {
   fqn: "tests.unit.engine.graders_for_tests.FixedScoreGrader",
   name: "Synthesis faithfulness",
   description: "Checks that the answer uses its evidence.",
+  uses_criterion_description: false,
 };
 const budgetScorer = {
   fqn: "metis.library.graders.TraceBudgetGrader",
   name: "Turn budget",
   description: "Checks that the conversation stays within its turn budget.",
+  uses_criterion_description: false,
 };
 const synthesis = {
   id: " manual-research ",
@@ -282,13 +284,13 @@ test("manual scorers can run without an interview criterion", async () => {
     fqn: "metis.library.graders.CriterionJudgeGrader",
     name: "Criterion judge",
     description: "Assess an interview criterion.",
-    params: [],
+    uses_criterion_description: true,
   };
   const budget = {
     fqn: "metis.library.graders.TraceBudgetGrader",
     name: "Trace budget",
     description: "Check the trace count.",
-    params: [],
+    uses_criterion_description: false,
   };
   assert.deepEqual(manualScorers([fallback, budget]), [budget]);
 });

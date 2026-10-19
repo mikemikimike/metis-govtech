@@ -19,7 +19,13 @@ from metis.engine.evaluation.orchestrator import (
     record_results,
     resolve_grader_class,
 )
-from metis.library.grader import Grader, GraderArgs, JudgeArgs, LLMSettings
+from metis.library.grader import (
+    DEFAULT_MAX_INPUT_TOKENS,
+    Grader,
+    GraderArgs,
+    JudgeArgs,
+    LLMSettings,
+)
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
@@ -272,7 +278,11 @@ class TestGradeSession:
         (record,) = _run(
             _build(EchoJudgeGrader, env={"JUDGE_MODEL": "env-model"}), llm=llm
         )
-        assert record.grader_args == {"threshold": 0.5, "model": "env-model"}
+        assert record.grader_args == {
+            "threshold": 0.5,
+            "model": "env-model",
+            "max_input_tokens": DEFAULT_MAX_INPUT_TOKENS,
+        }
 
     def test_judge_grader_uses_the_shared_client_with_its_resolved_model(self) -> None:
         llm = _llm()

@@ -336,8 +336,6 @@ export function keepReferencedFixtures(
 }
 
 export function manualScorers(graders: GraderSpec[]): GraderSpec[] {
-  // The manual form has no field for the criterion instructions this judge needs.
-  return graders.filter(
-    (grader) => grader.fqn !== "metis.library.graders.CriterionJudgeGrader",
-  );
+  // The manual form has no criterion description to give these graders their instructions.
+  return graders.filter((grader) => !grader.uses_criterion_description);
 }

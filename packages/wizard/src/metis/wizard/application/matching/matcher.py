@@ -19,17 +19,16 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import ValidationError
 
-from metis.library.criterion_judge import (
-    CRITERION_JUDGE_FQN,
-    prepare_criterion_judge_args,
-)
-from metis.library.grader import Grader, JudgeArgs
+from metis.library.grader import Grader, JudgeArgs, criterion_args
 from metis.wizard.application.matching.library_catalogue import library_catalogue
 
 if TYPE_CHECKING:
     from metis.core.profile import CriterionDescription
     from metis.wizard.contracts.grader_spec import GraderSpec
     from metis.wizard.domain.specification import Criterion, Specification
+
+# The grader the matcher selects when no specific grader fits a criterion.
+CRITERION_JUDGE_FQN = "metis.library.graders.CriterionJudgeGrader"
 
 # TODO: Validate this threshold with the evals testbed once more graders are available.
 DEFAULT_THRESHOLD = 0.62
@@ -47,7 +46,7 @@ def cosine(a: list[float], b: list[float]) -> float:
 
 @dataclass
 class EmbeddingMatcher:
-    """Best cosine match above a threshold, or the generated judge."""
+    """Best cosine match above a threshold, or the criterion judge."""
 
     embedder: Embedder
     specs: list[GraderSpec] = field(default_factory=library_catalogue)
@@ -56,7 +55,7 @@ class EmbeddingMatcher:
     _catalogue_vectors: list[list[float]] | None = None
 
     def __post_init__(self) -> None:
-        self.specs = [spec for spec in self.specs if spec.fqn != CRITERION_JUDGE_FQN]
+        self.specs = [s for s in self.specs if not s.uses_criterion_description]
 
     def _vectors(self) -> list[list[float]] | None:
         """Embed the catalogue once. It cannot change within a run."""
@@ -152,11 +151,7 @@ def validate_grader_args(
     # wizard must not import the engine.
     if inspect.isabstract(cls) or not hasattr(cls, "args_model"):
         raise ValueError(f"{fqn} is an abstract base, not a concrete grader")
-    candidate = dict(args)
-    if fqn == CRITERION_JUDGE_FQN:
-        if description is None:
-            raise ValueError("The criterion description is required.")
-        candidate = prepare_criterion_judge_args(description, candidate)
+    candidate = criterion_args(cls.args_model, args, description)
     if issubclass(cls.args_model, JudgeArgs):
         candidate.setdefault("model", "resolved-at-run-time")
     try:

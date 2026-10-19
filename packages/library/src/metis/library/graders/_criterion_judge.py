@@ -3,24 +3,25 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Annotated, Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from metis.core.grading import GraderResult, GradingOutput
-from metis.library.grader import Grader, JudgeArgs
+from metis.library.grader import (
+    CriterionArgs,
+    Grader,
+    NonEmptyText,
+    input_budget_error,
+)
 
 if TYPE_CHECKING:
     from metis.core.traces import GradingInput
     from metis.library.grader import LLMSettings
 
-NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
-
-class CriterionJudgeArgs(JudgeArgs):
+class CriterionJudgeArgs(CriterionArgs):
     """Resolved settings and instructions for one criterion."""
-
-    criterion: NonEmptyText
 
 
 class _CriterionResponse(BaseModel):
@@ -76,7 +77,7 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
                 }
                 for trace in input.traces
             ]
-            response = await llm.client.chat.completions.create(
+            request: dict[str, Any] = dict(
                 model=self.args.model,
                 messages=[
                     {
@@ -107,6 +108,9 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
                     },
                 },
             )
+            if over_budget := input_budget_error(self.args, request):
+                return GradingOutput(results=[over_budget])
+            response = await llm.client.chat.completions.create(**request)
             choice = response.choices[0]
             if choice.finish_reason != "stop" or choice.message.refusal:
                 raise ValueError("The judge did not return a complete assessment.")

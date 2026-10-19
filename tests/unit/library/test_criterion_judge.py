@@ -147,3 +147,32 @@ def test_incomplete_or_refused_assessment_is_an_error(finish_reason, refusal) ->
             return await grader.grade(recorded_session(), LLMSettings(client))
 
     assert asyncio.run(run()).results[0].status == "errored"
+
+
+@pytest.mark.parametrize(
+    ("max_input_tokens", "status"), [(100_000, "scored"), (5_000, "errored")]
+)
+def test_a_request_above_the_input_limit_errors_without_a_model_call(
+    max_input_tokens, status
+) -> None:
+    requests = []
+    client = judge_client('{"status":"scored","score":1,"reason":"Yes."}', requests)
+    grader = CriterionJudgeGrader(
+        CriterionJudgeArgs(
+            model="test-judge",
+            criterion="Name a source.",
+            max_input_tokens=max_input_tokens,
+        )
+    )
+
+    async def run():
+        async with client:
+            return await grader.grade(recorded_session(), LLMSettings(client))
+
+    [result] = asyncio.run(run()).results
+    assert result.status == status
+    if status == "errored":
+        assert requests == []
+        assert "the limit is 5,000" in result.reason
+    else:
+        assert len(requests) == 1

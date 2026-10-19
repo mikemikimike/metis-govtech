@@ -14,10 +14,6 @@ from metis.core import Artifact
 from metis.core.experiment import Task
 from metis.core.specification import Specification as CoreSpecification
 from metis.core.trials import GraderRef
-from metis.library.criterion_judge import (
-    CRITERION_JUDGE_FQN,
-    prepare_criterion_judge_args,
-)
 
 # ---------------------------------------------------------------------------
 # User Agent Output — self-describing action union
@@ -303,15 +299,6 @@ class Specification(CoreSpecification):
         errors = self.execution_errors()
         if errors:
             raise ValueError(" ".join(errors))
-        for behaviour in self.behaviours():
-            for criterion in behaviour.criteria:
-                if criterion.grader_fqn == CRITERION_JUDGE_FQN:
-                    try:
-                        prepare_criterion_judge_args(
-                            criterion.description, criterion.grader_args
-                        )
-                    except ValueError as exc:
-                        raise ValueError(f"Criterion {criterion.id}: {exc}") from exc
         from .runner_resolver import resolve_runner_factory
 
         try:
@@ -336,13 +323,8 @@ class Specification(CoreSpecification):
                     GraderRef(
                         criterion_id=criterion.id,
                         fqn=criterion.grader_fqn,
-                        args=(
-                            prepare_criterion_judge_args(
-                                criterion.description, criterion.grader_args
-                            )
-                            if criterion.grader_fqn == CRITERION_JUDGE_FQN
-                            else criterion.grader_args
-                        ),
+                        args=criterion.grader_args,
+                        description=criterion.description,
                     )
                 )
         return Scenario(

@@ -118,9 +118,16 @@ def build_criterion_grader(
         cls = resolve_grader_class(ref.fqn)
     except GraderSetupError as exc:
         raise GraderSetupError(f"Criterion '{ref.criterion_id}': {exc}") from exc
-    raw = resolve_grader_args(
-        cls.args_model, ref.args, default_judge_model=default_judge_model, env=env
-    )
+    try:
+        raw = resolve_grader_args(
+            cls.args_model,
+            ref.args,
+            default_judge_model=default_judge_model,
+            env=env,
+            description=ref.description,
+        )
+    except ValueError as exc:
+        raise GraderSetupError(f"Criterion '{ref.criterion_id}': {exc}") from exc
     try:
         args = cls.args_model.model_validate(raw)
     except ValidationError as exc:

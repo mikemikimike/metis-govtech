@@ -29,7 +29,16 @@ Do not add `criterion` under `grader_args`. The engine rejects a second instruct
 
 You can set `grader_args.model` to select a judge model for this criterion. If you omit it,
 the engine uses `defaults.judge_model`, then `JUDGE_MODEL`, then its package default.
-The result record contains the resolved model, threshold, and criterion instructions.
+The result record contains the resolved model, threshold, input limit, and criterion
+instructions.
+
+The judge estimates the size of each request before it calls the model. The estimate is one
+token for each UTF-8 byte of the request, plus 4,096. When the estimate is more than the
+limit, the judge records an errored result and does not call the model. The default limit is
+128,000. Set `grader_args.max_input_tokens` for one criterion, or `JUDGE_MAX_INPUT_TOKENS` for
+the run. A value in `grader_args` wins. An invalid value logs a warning and uses the default.
+The estimate is conservative, so a model with a large context window can accept a request
+that is above the default.
 
 An experiment copies its specification into `inputs/specification.yaml`. Evaluation reads
 that copy. To evaluate an existing experiment with new instructions, edit the description

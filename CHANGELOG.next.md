@@ -123,6 +123,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   threshold settings survive description edits. The judge supports recorded trace input and
   output; it does not read artifact files. No taxonomy fields are required (#299).
 
+- `CriterionArgs` marks a model-based grader that takes its instructions from the criterion
+  description. `criterion_args` adds the description as `criterion` and rejects a
+  `criterion` key in the settings or a blank clause (#299).
+
+- `JudgeArgs.max_input_tokens` limits the estimated size of one judge request, with a default
+  of 128,000. `input_budget_error` returns an errored result for a larger request, so the
+  grader makes no model call. An invalid limit logs a warning and uses the default (#299).
+
 #### Breaking
 
 - Grader redesign without DeepEval. Graders subclass `metis.library.grader.Grader[Args]`,
@@ -136,6 +144,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-engine
 
 #### Changed
+
+- `CriterionArgs` graders get `criterion` from the criterion description at run time. The
+  engine carries the description on `metis.core.trials.GraderRef.description`, an optional
+  field, and reports a `criterion` key
+  under `grader_args` as a pre-run setup error. `JUDGE_MAX_INPUT_TOKENS` sets the run default
+  for `max_input_tokens` when a criterion does not set it (#299).
 
 - Execution folders use `experiments/execute/<id>-<timestamp>/`, with trial records
   and artifacts in `outputs/trials/` and results in `outputs/reports/results.json`.
@@ -305,6 +319,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- The matcher selects `CriterionJudgeGrader` when no specific grader is similar enough, when
+  the catalogue has no specific grader, or when the embedding provider fails. A rematch keeps
+  the Criterion's settings when the selected grader does not change. Validation uses the
+  current description. `GraderSummary.uses_criterion_description` marks graders that take
+  their instructions from the description. The catalogue hides `criterion` and
+  `max_input_tokens` from Criterion parameters (#299).
+
 - Accept optional flat string metadata in model-proposed Persona and Scenario
   drafts and preserve it in saved Specifications. Guide generation to use supplied
   facts and omit unspecified metadata (#441).
@@ -402,11 +423,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - The grader catalogue lists concrete `Grader` subclasses and their `args_model` fields
   (omitting a model-based grader's `model`), and `grader_args` are validated against
-  `args_model`. The matcher's below-threshold fallback still names the removed
-  `CriterionGEvalGrader`, so a Criterion it cannot match does not compile: the CLI and the API's
-  `/compile` (HTTP 400) report "Criterion X: no grader matched and the fallback judge was removed
-  in the grader redesign (#428); choose a grader for this criterion." A `grader_fqn` that names
-  an abstract `Grader` is also a validation error (#428).
+  `args_model`. A `grader_fqn` that names an abstract `Grader` is a validation error (#428).
 
 #### Removed
 
@@ -494,6 +511,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-web
 
 #### Added
+
+- The manual form omits graders that take their instructions from a criterion description,
+  because the form has no criterion description (#299).
 
 - **Manual metadata.** Personas and Scenarios have optional Additional context
   key/value fields. Export preserves the text values and checks for blank or
