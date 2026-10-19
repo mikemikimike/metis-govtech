@@ -10,6 +10,7 @@ import pytest
 
 from metis.core.grading import GraderResult, GradingOutput
 from metis.core.traces import GradingInput, Observation, Trace
+from metis.core.trials import GraderRef
 from metis.engine.evaluation.orchestrator import (
     GraderSetupError,
     SessionFacts,
@@ -18,7 +19,6 @@ from metis.engine.evaluation.orchestrator import (
     record_results,
     resolve_grader_class,
 )
-from metis.engine.simulation.types import GraderRef
 from metis.library.grader import Grader, GraderArgs, JudgeArgs, LLMSettings
 
 if TYPE_CHECKING:

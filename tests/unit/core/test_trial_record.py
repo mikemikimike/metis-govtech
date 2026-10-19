@@ -1,9 +1,13 @@
-"""Tests for diagnostics models added to simulation types."""
+"""TrialRecord, the model of each trial's record.json, and the models it nests."""
 
-from metis.engine.simulation.types import (
-    TrialFailure,
-    TrialRecord,
-)
+from metis.core.trials import TrialFailure, TrialRecord
+
+
+def test_trial_record_lives_in_core_only() -> None:
+    import metis.engine.simulation.types as engine_types
+
+    for name in ("TrialRecord", "TrialConfig", "TrialOutcome", "TrialFailure"):
+        assert not hasattr(engine_types, name), name
 
 
 class TestTrialFailure:
@@ -94,3 +98,24 @@ class TestTrialRecordExtension:
             }
         )
         assert record.schema_version == 2
+
+
+def test_trial_record_file_name() -> None:
+    from metis.core import execution_layout
+
+    assert execution_layout.TRIAL_RECORD == "record.json"
+
+
+def test_outcome_cause_defaults_to_none() -> None:
+    record = TrialRecord.model_validate(
+        {
+            "config": {"persona": "p", "scenario": "s"},
+            "outcome": {
+                "stop_reason": "max_turns",
+                "total_turns": 1,
+                "duration_seconds": 1.0,
+            },
+        }
+    )
+    assert record.outcome.failure_source is None
+    assert record.outcome.failure_message is None

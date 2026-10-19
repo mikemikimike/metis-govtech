@@ -17,21 +17,13 @@ import structlog
 from metis.core import execution_layout
 from metis.core.console import console
 from metis.core.logging import get_logger
+from metis.core.trials import TrialConfig, TrialFailure, TrialOutcome, TrialRecord
 
 from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
 from ._fixture_artifacts import build_fixture_artifacts
 from .artifact_summarizer import resolve_fixture_descriptions
 from .exceptions import TrialRecoverableError
 from .orchestrator import Orchestrator
-from .types import (
-    Persona,
-    Scenario,
-    Specification,
-    TrialConfig,
-    TrialFailure,
-    TrialOutcome,
-    TrialRecord,
-)
 from .user_agent.agent import UserAgent
 
 if TYPE_CHECKING:
@@ -41,6 +33,7 @@ if TYPE_CHECKING:
     from metis.engine.tui import SimulationState, TUIContext
 
     from .runner import RunnerFactory
+    from .types import Persona, Scenario, Specification
 
 
 class TrialPlanItem(NamedTuple):
@@ -587,7 +580,9 @@ async def _worker(
 
             # Save trial record to disk
             _save_trial_record(record, run_dir)
-            logger.info("[experiment] Saved record: %s", run_dir / "record.json")
+            logger.info(
+                "[experiment] Saved record: %s", run_dir / execution_layout.TRIAL_RECORD
+            )
 
             if not tui_ctx:
                 async with console_lock:
@@ -633,7 +628,7 @@ def _distribute_trials(
 
 def _save_trial_record(record: TrialRecord, run_dir: Path) -> None:
     """Save a trial record as record.json inside the trial folder."""
-    filepath = run_dir / "record.json"
+    filepath = run_dir / execution_layout.TRIAL_RECORD
     filepath.write_text(json.dumps(record.model_dump(), indent=2), encoding="utf-8")
 
 

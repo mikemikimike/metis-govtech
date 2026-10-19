@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 from metis.engine.simulation.exceptions import ConsecutiveFailureEscalation
 from metis.engine.simulation.experiment import (
     TrialPlanItem,
@@ -22,9 +23,6 @@ from metis.engine.simulation.types import (
     Persona,
     Scenario,
     Specification,
-    TrialConfig,
-    TrialOutcome,
-    TrialRecord,
 )
 
 
@@ -739,14 +737,9 @@ async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
 
     import metis.engine.simulation.experiment as exp_mod
     from metis.core import Artifact
+    from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
     from metis.engine.simulation.experiment import _worker
-    from metis.engine.simulation.types import (
-        Persona,
-        Scenario,
-        TrialConfig,
-        TrialOutcome,
-        TrialRecord,
-    )
+    from metis.engine.simulation.types import Persona, Scenario
 
     fixtures_dir = tmp_path / "fixtures"
     fixtures_dir.mkdir()

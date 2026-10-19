@@ -8,14 +8,10 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from metis.core.trials import TrialConfig
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.runner_resolver import resolve_runner_factory
-from metis.engine.simulation.types import (
-    ChosenAction,
-    Observation,
-    Specification,
-    TrialConfig,
-)
+from metis.engine.simulation.types import ChosenAction, Observation, Specification
 
 
 class TestRunnerRefField:

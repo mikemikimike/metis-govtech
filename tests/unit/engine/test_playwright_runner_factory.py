@@ -128,8 +128,8 @@ class TestPlaywrightRunnerFactoryLifecycle:
 async def test_run_response_wait_is_applied_without_changing_shared_config(
     tmp_path: Path,
 ) -> None:
+    from metis.core.trials import TrialConfig
     from metis.engine.simulation.runners.orca_playwright import OrcaPlaywrightRunner
-    from metis.engine.simulation.types import TrialConfig
 
     shared = _make_config()
     runner = OrcaPlaywrightRunner(

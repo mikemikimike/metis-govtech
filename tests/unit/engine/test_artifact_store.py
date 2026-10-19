@@ -6,12 +6,8 @@ import json
 from pathlib import Path
 
 from metis.core import Artifact
+from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 from metis.engine.simulation._artifact_store import _save_artifacts, infer_artifact_type
-from metis.engine.simulation.types import (
-    TrialConfig,
-    TrialOutcome,
-    TrialRecord,
-)
 
 
 class TestInferArtifactType:

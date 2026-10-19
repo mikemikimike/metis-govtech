@@ -13,6 +13,8 @@ INPUTS = PurePosixPath("inputs")
 SPECIFICATION = INPUTS / "specification.yaml"
 FIXTURES = INPUTS / "fixtures"
 TRIALS = PurePosixPath("outputs/trials")
+TRIAL_RECORD = "record.json"
+"""File name of a trial's ``TrialRecord``, inside its folder under ``TRIALS``."""
 REPORTS = PurePosixPath("outputs/reports")
 RESULTS = REPORTS / "results.json"
 LOGS = PurePosixPath("logs")

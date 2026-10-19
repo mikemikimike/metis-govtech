@@ -11,6 +11,7 @@ import time
 from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
+from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 
 from ._contract import (
     merge_withheld,
@@ -34,10 +35,7 @@ from .types import (
     ChosenAction,
     Observation,
     Scenario,
-    TrialConfig,
     TrialMeta,
-    TrialOutcome,
-    TrialRecord,
     UserAgentInput,
 )
 

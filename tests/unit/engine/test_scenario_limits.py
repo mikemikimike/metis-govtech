@@ -1,6 +1,7 @@
 """Tests for scenario-level simulation limit fields."""
 
-from metis.engine.simulation.types import Scenario, TrialConfig
+from metis.core.trials import TrialConfig
+from metis.engine.simulation.types import Scenario
 
 
 class TestScenarioLimits:

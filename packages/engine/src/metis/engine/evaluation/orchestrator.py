@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from metis.core.traces import GradingInput
-    from metis.engine.simulation.types import GraderRef
+    from metis.core.trials import GraderRef
     from metis.library.grader import LLMSettings
 
 logger = get_logger(__name__)

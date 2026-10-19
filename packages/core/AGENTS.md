@@ -25,3 +25,7 @@ Core data models and abstractions for the METIS suite. Zero workspace dependenci
 - `reporting.py`: `EvaluationResults` (`outputs/reports/results.json`), one `GraderRecord`
   per grader per session. It is version-guarded like `TrialRecord` and has no published
   schema file.
+- `trials.py`: `TrialRecord` (`outputs/trials/<trial>/record.json`) and the models it nests
+  (`TrialConfig`, `TrialOutcome`, `TrialFailure`, `GraderRef`). The engine writes and resumes
+  from it; the report reads it. Version-guarded by `_TRIAL_RECORD_VERSION`, no published
+  schema file.

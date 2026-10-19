@@ -14,16 +14,11 @@ from typer.testing import CliRunner
 
 from metis.core import Artifact, resolve_artifact_path
 from metis.core.reporting import EvaluationResults
+from metis.core.trials import TrialConfig, TrialRecord
 from metis.engine import cli
 from metis.engine.simulation import experiment
 from metis.engine.simulation.runner import Runner
-from metis.engine.simulation.types import (
-    ChosenAction,
-    Observation,
-    TrialConfig,
-    TrialRecord,
-    UserAgentOutput,
-)
+from metis.engine.simulation.types import ChosenAction, Observation, UserAgentOutput
 from metis.wizard.application.compile.specification import (
     SpecificationFixture,
     build_specification_archive,
