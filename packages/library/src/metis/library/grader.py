@@ -99,29 +99,29 @@ class JudgeArgs(GraderArgs):
         return parsed
 
 
-class CriterionArgs(JudgeArgs):
-    """Base of a judge that takes its instructions from the criterion description.
+class CriterionJudgeArgs(JudgeArgs):
+    """Settings of a judge that takes its instructions from the criterion description.
 
     The engine and the wizard set ``criterion`` from the current description with
-    ``criterion_args``, so an edit to the description applies on the next run. A specification
-    never sets it under ``grader_args``.
+    ``criterion_judge_args``, so an edit to the description applies on the next run. A
+    specification never sets it under ``grader_args``.
     """
 
     criterion: NonEmptyText
 
 
-def criterion_args(
+def criterion_judge_args(
     args_model: type[GraderArgs],
     settings: Mapping[str, Any],
     description: CriterionDescription | None,
 ) -> dict[str, Any]:
-    """Copy ``settings`` and, for a ``CriterionArgs`` model, add the description as ``criterion``.
+    """Copy ``settings`` and, for a ``CriterionJudgeArgs`` model, add the description as ``criterion``.
 
     Raises ``ValueError`` when the settings already name ``criterion`` or the description has a
     blank clause.
     """
     resolved = dict(settings)
-    if not issubclass(args_model, CriterionArgs):
+    if not issubclass(args_model, CriterionJudgeArgs):
         return resolved
     if "criterion" in resolved:
         raise ValueError(

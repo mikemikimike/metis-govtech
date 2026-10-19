@@ -123,8 +123,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   threshold settings survive description edits. The judge supports recorded trace input and
   output; it does not read artifact files. No taxonomy fields are required (#299).
 
-- `CriterionArgs` marks a model-based grader that takes its instructions from the criterion
-  description. `criterion_args` adds the description as `criterion` and rejects a
+- `CriterionJudgeArgs` marks a model-based grader that takes its instructions from the criterion
+  description. `criterion_judge_args` adds the description as `criterion` and rejects a
   `criterion` key in the settings or a blank clause (#299).
 
 - `JudgeArgs.max_input_tokens` limits the estimated size of one judge request, with a default
@@ -145,7 +145,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
-- `CriterionArgs` graders get `criterion` from the criterion description at run time. The
+- `CriterionJudgeArgs` graders get `criterion` from the criterion description at run time. The
   engine carries the description on `metis.core.trials.GraderRef.description`, an optional
   field, and reports a `criterion` key
   under `grader_args` as a pre-run setup error. `JUDGE_MAX_INPUT_TOKENS` sets the run default

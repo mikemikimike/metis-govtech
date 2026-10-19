@@ -12,7 +12,7 @@ run, in this order:
 and written into the args before they are validated, so ``self.args.model`` is always a ``str``
 inside ``grade()`` and every ``GraderRecord`` names the model that produced its results.
 ``max_input_tokens`` resolves the same way from ``grader_args.max_input_tokens``, then
-``JUDGE_MAX_INPUT_TOKENS``, then the ``JudgeArgs`` default. A ``CriterionArgs`` grader also gets
+``JUDGE_MAX_INPUT_TOKENS``, then the ``JudgeArgs`` default. A ``CriterionJudgeArgs`` grader also gets
 ``criterion`` from the criterion description.
 
 The gateway is not a grader argument: it is the same for every judge in a run, and it stays in
@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from openai import AsyncOpenAI
 
-from metis.library.grader import JudgeArgs, LLMSettings, criterion_args
+from metis.library.grader import JudgeArgs, LLMSettings, criterion_judge_args
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -63,10 +63,10 @@ def resolve_grader_args(
     ``model`` on the criterion always wins, even an empty string, which validation then
     reports, rather than being silently replaced.
 
-    Raises ``ValueError`` from ``criterion_args`` when a ``CriterionArgs`` grader's settings
+    Raises ``ValueError`` from ``criterion_judge_args`` when a ``CriterionJudgeArgs`` grader's settings
     or description are invalid.
     """
-    resolved = criterion_args(args_model, grader_args, description)
+    resolved = criterion_judge_args(args_model, grader_args, description)
     if issubclass(args_model, JudgeArgs):
         if "model" not in resolved:
             resolved["model"] = (

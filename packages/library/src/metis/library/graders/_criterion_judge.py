@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from metis.core.grading import GraderResult, GradingOutput
 from metis.library.grader import (
-    CriterionArgs,
+    CriterionJudgeArgs,
     Grader,
     NonEmptyText,
     input_budget_error,
@@ -18,10 +18,6 @@ from metis.library.grader import (
 if TYPE_CHECKING:
     from metis.core.traces import GradingInput
     from metis.library.grader import LLMSettings
-
-
-class CriterionJudgeArgs(CriterionArgs):
-    """Resolved settings and instructions for one criterion."""
 
 
 class _CriterionResponse(BaseModel):

@@ -25,7 +25,7 @@ trial record ──▶ fetch_session ──▶ GradingInput (every trace + artif
 |---|---|
 | Judge model | `grader_args.model` → `defaults.judge_model` in the spec → `JUDGE_MODEL` → `gemini-3.5-flash-lite`. Written into the args before validation, so every record names its model. |
 | Input limit | `grader_args.max_input_tokens` → `JUDGE_MAX_INPUT_TOKENS` → 128,000. A grader checks it with `input_budget_error` before each model call. An invalid value logs a warning and uses the default. |
-| Criterion instructions | A `CriterionArgs` grader gets `criterion` from the criterion description, carried on `GraderRef.description`. A `criterion` key under `grader_args` is a setup error. |
+| Criterion instructions | A `CriterionJudgeArgs` grader gets `criterion` from the criterion description, carried on `GraderRef.description`. A `criterion` key under `grader_args` is a setup error. |
 | Gateway | `JUDGE_API_KEY` / `JUDGE_BASE_URL`, falling back to `OPENAI_API_KEY` / `OPENAI_BASE_URL`. Required only if some criterion's grader extends `JudgeArgs`. |
 | Concurrency cap | One shared `AsyncOpenAI` client, at most 50 connections, every grader LLM call from every grader run queues for one. |
 | Timeout | 300 s per request once sent; no timeout on waiting for a connection (`pool=None`), so queued calls are never recorded as errored. |

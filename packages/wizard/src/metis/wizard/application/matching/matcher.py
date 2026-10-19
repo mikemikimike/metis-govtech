@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import ValidationError
 
-from metis.library.grader import Grader, JudgeArgs, criterion_args
+from metis.library.grader import Grader, JudgeArgs, criterion_judge_args
 from metis.wizard.application.matching.library_catalogue import library_catalogue
 
 if TYPE_CHECKING:
@@ -151,7 +151,7 @@ def validate_grader_args(
     # wizard must not import the engine.
     if inspect.isabstract(cls) or not hasattr(cls, "args_model"):
         raise ValueError(f"{fqn} is an abstract base, not a concrete grader")
-    candidate = criterion_args(cls.args_model, args, description)
+    candidate = criterion_judge_args(cls.args_model, args, description)
     if issubclass(cls.args_model, JudgeArgs):
         candidate.setdefault("model", "resolved-at-run-time")
     try:

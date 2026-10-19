@@ -17,7 +17,7 @@ grader's parameters are the fields of its `args_model`, a Pydantic model the cla
 they are read from the class without calling anything. A model-based grader's `model` field is
 left out, because the engine resolves it at run time from the specification's
 `defaults.judge_model` or the environment. Its `max_input_tokens` is left out for the same
-reason, and a `CriterionArgs` grader's `criterion` is left out because the engine fills it
+reason, and a `CriterionJudgeArgs` grader's `criterion` is left out because the engine fills it
 from the criterion description.
 """
 
@@ -29,7 +29,7 @@ from functools import lru_cache
 from importlib import import_module
 from typing import Any
 
-from metis.library.grader import CriterionArgs, Grader, JudgeArgs
+from metis.library.grader import CriterionJudgeArgs, Grader, JudgeArgs
 from metis.wizard.contracts.grader_spec import GraderParam, GraderSpec
 
 # The one string that says where the graders live.
@@ -62,7 +62,7 @@ def _params(cls: type[Grader[Any]]) -> list[GraderParam]:
             cls.args_model, JudgeArgs
         ):
             continue  # resolved by the engine, never chosen per criterion in the wizard
-        if name == "criterion" and issubclass(cls.args_model, CriterionArgs):
+        if name == "criterion" and issubclass(cls.args_model, CriterionJudgeArgs):
             continue  # filled from the criterion description
         required = info.is_required()
         params.append(
@@ -110,7 +110,9 @@ def library_catalogue() -> list[GraderSpec]:
                 name=_human_name(name),
                 description=_summary(obj),
                 params=_params(obj),
-                uses_criterion_description=issubclass(obj.args_model, CriterionArgs),
+                uses_criterion_description=issubclass(
+                    obj.args_model, CriterionJudgeArgs
+                ),
             )
         )
 

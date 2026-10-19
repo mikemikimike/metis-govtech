@@ -8,9 +8,8 @@ from pydantic import ValidationError
 
 from metis.core.artifacts import Artifact
 from metis.core.traces import GradingInput
-from metis.library.grader import LLMSettings
+from metis.library.grader import CriterionJudgeArgs, LLMSettings
 from metis.library.graders import CriterionJudgeGrader
-from metis.library.graders._criterion_judge import CriterionJudgeArgs
 from tests.fixtures.criterion_judge import judge_client, recorded_session
 
 
