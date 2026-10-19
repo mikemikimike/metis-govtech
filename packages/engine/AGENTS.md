@@ -36,7 +36,7 @@ When modifying `Specification` or `TrialRecord`, check whether the change is **b
 
 A breaking change to a nested model bumps the version of the root model that contains it:
 - Shared Profile nodes, `Scenario`, `Task`, and `Criterion` → bump `Specification`
-- `TrialConfig`, `TrialOutcome`, `Artifact`, `ConversationTurn` → bump `TrialRecord`
+- `TrialConfig`, `TrialOutcome`, `TrialFailure`, `Artifact` → bump `TrialRecord`
 
 ### Bump Checklist (applies from v1.0)
 

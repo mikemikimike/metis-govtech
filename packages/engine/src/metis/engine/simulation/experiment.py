@@ -477,7 +477,6 @@ async def _worker(
                                     total_turns=0,
                                     duration_seconds=(time.time() - run_start),
                                 ),
-                                conversation=[],
                                 artifacts=[],
                                 attempt_number=attempt,
                                 max_allowed_attempts=max_attempts,
@@ -535,7 +534,6 @@ async def _worker(
                                     total_turns=0,
                                     duration_seconds=(time.time() - run_start),
                                 ),
-                                conversation=[],
                                 artifacts=[],
                             )
                         )
@@ -591,19 +589,13 @@ async def _worker(
             _save_trial_record(record, run_dir)
             logger.info("[experiment] Saved record: %s", run_dir / "record.json")
 
-            # Build per-turn timing breakdown
-            timing_parts: list[str] = []
-            for t in record.conversation:
-                timing_parts.append(f"t{t.turn_number}={t.duration_ms / 1000:.0f}s")
-            timing_str = f" [{', '.join(timing_parts)}]" if timing_parts else ""
-
             if not tui_ctx:
                 async with console_lock:
                     console.print(
                         f"  [w{worker_id}] {scenario.id} × {persona.id} — "
                         f"{record.outcome.stop_reason}, "
                         f"{record.outcome.total_turns} turns, "
-                        f"{record.outcome.duration_seconds:.0f}s{timing_str}"
+                        f"{record.outcome.duration_seconds:.0f}s"
                     )
 
             logger.info(

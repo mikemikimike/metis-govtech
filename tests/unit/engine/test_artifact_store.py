@@ -41,7 +41,6 @@ class TestSaveArtifacts:
             outcome=TrialOutcome(
                 stop_reason="goal_achieved", total_turns=3, duration_seconds=10.0
             ),
-            conversation=[],
             artifacts=[
                 Artifact(
                     name="report.pdf",

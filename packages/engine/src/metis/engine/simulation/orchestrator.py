@@ -1,14 +1,13 @@
 """Orchestrator — drives the turn loop, runner-agnostic.
 
 Extracted from the former harness/_environment.py. The Orchestrator manages
-stopping conditions, UserAgent interaction, conversation recording, and
+stopping conditions, UserAgent interaction, turn counting, and
 TrialRecord assembly without knowing anything about the transport layer.
 """
 
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from metis.core.logging import get_logger
@@ -33,14 +32,12 @@ from .types import (
     ActionResult,
     Artifact,
     ChosenAction,
-    ConversationTurn,
     Observation,
     Scenario,
     TrialConfig,
     TrialMeta,
     TrialOutcome,
     TrialRecord,
-    TurnDiagnostics,
     UserAgentInput,
 )
 
@@ -151,7 +148,7 @@ class Orchestrator:
 
         # In-progress state mirrored here so a caller can still build a
         # record if execute() raises. execute() overwrites these on entry.
-        self._conversation: list[ConversationTurn] = []
+        self._turns_completed: int = 0
         self._artifacts_collected: list[Artifact] = []
         self._start_time: float = time.time()
         self._target_session_id: str | None = None
@@ -160,15 +157,15 @@ class Orchestrator:
         """Execute the full simulation trial."""
         trial_config = self._trial_config
         start_time = time.time()
-        conversation: list[ConversationTurn] = []
         artifacts_collected: list[Artifact] = []
         turn_count = 0
         target_session_id: str | None = None
 
         # Mirror onto instance attributes so partial_record() can read them
-        # if this coroutine raises before returning a record. The lists are
-        # shared by reference, so later .append()s are visible via self.
-        self._conversation = conversation
+        # if this coroutine raises before returning a record. The list is
+        # shared by reference, so later .append()s are visible via self; the
+        # turn counter lives on self because an int cannot be shared that way.
+        self._turns_completed = 0
         self._artifacts_collected = artifacts_collected
         self._start_time = start_time
         self._target_session_id = None
@@ -193,7 +190,6 @@ class Orchestrator:
             logger.info("[sim] STOP: system_error (opening LLM call failed: %s)", exc)
             return self._build_record(
                 "system_error",
-                conversation,
                 artifacts_collected,
                 start_time,
                 None,
@@ -217,7 +213,6 @@ class Orchestrator:
                     logger.info("[turn %d] STOP: shutdown requested", turn_count)
                     return self._build_record(
                         "interrupted",
-                        conversation,
                         artifacts_collected,
                         start_time,
                         target_session_id,
@@ -256,7 +251,6 @@ class Orchestrator:
                     )
                     return self._build_record(
                         "max_turns",
-                        conversation,
                         artifacts_collected,
                         start_time,
                         target_session_id,
@@ -272,7 +266,6 @@ class Orchestrator:
                     )
                     return self._build_record(
                         "timeout",
-                        conversation,
                         artifacts_collected,
                         start_time,
                         target_session_id,
@@ -286,7 +279,6 @@ class Orchestrator:
                     )
                     return self._build_record(
                         "user_abandoned",
-                        conversation,
                         artifacts_collected,
                         start_time,
                         target_session_id,
@@ -300,7 +292,6 @@ class Orchestrator:
                     )
                     return self._build_record(
                         "goal_achieved",
-                        conversation,
                         artifacts_collected,
                         start_time,
                         target_session_id,
@@ -337,7 +328,6 @@ class Orchestrator:
                     )
                     return self._build_record(
                         "target_exhausted",
-                        conversation,
                         artifacts_collected,
                         start_time,
                         target_session_id or await self._runner.get_session_id(),
@@ -388,36 +378,23 @@ class Orchestrator:
 
                 turn_duration_ms = int((time.time() - turn_start) * 1000)
 
-                # Record the conversation turn
-                diagnostics: TurnDiagnostics | None = None
                 if observation.discarded_message is not None:
-                    diagnostics = TurnDiagnostics(
-                        discarded_message=observation.discarded_message
-                    )
+                    # Logged in full: the log is the only record of a message
+                    # the transport did not deliver.
                     logger.info(
                         "[turn %d]   Message not delivered by transport: %r",
                         turn_count,
-                        observation.discarded_message[:80],
+                        observation.discarded_message,
                     )
                 # Stamp the turn onto each artifact and enrich downloads with a
-                # digest + descriptions before the turn is recorded, so both
-                # target_response and artifacts_collected carry enriched data.
+                # digest + descriptions before they are tracked, so both
+                # artifacts_collected and the observation the user agent
+                # receives carry enriched data.
                 await self._enrich_observation_artifacts(
                     observation, turn_count, current_message
                 )
 
-                turn = ConversationTurn(
-                    turn_number=turn_count,
-                    user_message=current_message,
-                    target_response=observation.model_dump(
-                        exclude={"discarded_message"}
-                    ),
-                    duration_ms=turn_duration_ms,
-                    timestamp=datetime.now(tz=UTC).isoformat(),
-                    user_ui_actions=[a.model_dump() for a in current_actions],
-                    diagnostics=diagnostics,
-                )
-                conversation.append(turn)
+                self._turns_completed += 1
 
                 # Track artifacts (already stamped with at_turn above)
                 artifacts_collected.extend(observation.artifacts)
@@ -482,7 +459,6 @@ class Orchestrator:
                     )
                     return self._build_record(
                         "max_turns",
-                        conversation,
                         artifacts_collected,
                         start_time,
                         target_session_id,
@@ -498,7 +474,6 @@ class Orchestrator:
                     )
                     return self._build_record(
                         "timeout",
-                        conversation,
                         artifacts_collected,
                         start_time,
                         target_session_id,
@@ -545,7 +520,6 @@ class Orchestrator:
                     )
                     return self._build_record(
                         "system_error",
-                        conversation,
                         artifacts_collected,
                         start_time,
                         target_session_id,
@@ -630,7 +604,6 @@ class Orchestrator:
     def _build_record(
         self,
         stop_reason: str,
-        conversation: list[ConversationTurn],
         artifacts_collected: list[Artifact],
         start_time: float,
         target_session_id: str | None,
@@ -642,10 +615,9 @@ class Orchestrator:
             target_session_id=target_session_id,
             outcome=TrialOutcome(
                 stop_reason=stop_reason,
-                total_turns=len(conversation),
+                total_turns=self._turns_completed,
                 duration_seconds=round(duration_seconds, 1),
             ),
-            conversation=conversation,
             artifacts=list(
                 {
                     a.id: a for a in (*self._fixture_artifacts, *artifacts_collected)
@@ -657,13 +629,12 @@ class Orchestrator:
         """Build a TrialRecord from whatever progress this trial has made.
 
         Used by the experiment worker when execute() raises unexpectedly, so
-        completed turns are preserved instead of discarded. total_turns is
-        the number of turns recorded so far; duration is measured from the
+        the progress made is preserved instead of discarded. total_turns is
+        the number of turns completed so far; duration is measured from the
         trial's start.
         """
         return self._build_record(
             stop_reason,
-            self._conversation,
             self._artifacts_collected,
             self._start_time,
             self._target_session_id,

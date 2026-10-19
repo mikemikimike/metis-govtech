@@ -48,7 +48,7 @@ A change requires a version bump if data valid under version N would **fail `mod
 
 A breaking change to a nested model bumps the version of the root model that contains it:
 - Shared Profile nodes, `Criterion`, `Persona`, `Scenario`, and `Task` → bump `Specification`
-- `TrialConfig`, `TrialOutcome`, `Artifact`, `ConversationTurn` → bump `TrialRecord`
+- `TrialConfig`, `TrialOutcome`, `TrialFailure`, `Artifact` → bump `TrialRecord`
 
 The common trap is giving a breaking field a default to avoid a bump. That's fine for genuinely optional fields, but if the field is semantically required and you're using a default as a workaround, you're hiding a real schema change. Use a bump and a migration instead.
 

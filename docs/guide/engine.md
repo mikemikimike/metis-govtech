@@ -1084,7 +1084,7 @@ The `evaluate` command requires that your target writes traces to [Langfuse](htt
 
 | Phase | Langfuse needed? | What happens without it |
 |-------|-----------------|------------------------|
-| `simulate` | No | Simulation runs normally — the engine drives your target and records conversations |
+| `simulate` | No | Simulation runs normally — the engine drives your target and writes trial records and logs |
 | `evaluate` | **Yes** | Extraction fails — no traces to score. Graders receive empty inputs. |
 | `run` (combined) | **Yes** (for eval) | Simulation succeeds, evaluation fails at the extraction step |
 
@@ -1097,12 +1097,14 @@ If your target does not instrument with Langfuse, you can still use METIS for si
 metis engine simulate --input-dir my-experiment/
 ```
 
-This produces run records with full conversation transcripts in `experiments/execute/<id>-<timestamp>/outputs/trials/`. You get:
-- Complete user-agent ↔ target conversation logs
+This produces trial records in `experiments/execute/<id>-<timestamp>/outputs/trials/`. You get:
 - Outcome data (stop reason, turn count, duration)
 - Collected artifacts
+- The trial's `logs/`, which record each turn's message and response as plain text
 
 You lose:
+- A structured conversation transcript (METIS reads the conversation from Langfuse; trial records
+  do not hold a copy)
 - Grader scoring (requires traces)
 - The structured HTML/JSON report
 - Per-turn internal reasoning visible in traces
