@@ -93,4 +93,4 @@ results.
 
 When no specific grader matches, the Interview uses the criterion description as the fallback
 judge's instructions. Edit that description in the exported YAML before the next run.
-See [Edit the criterion fallback judge](criterion-judge.md) for settings and evidence limits.
+See [Edit the criterion fallback judge](library/criterionjudge.md) for settings and evidence limits.
