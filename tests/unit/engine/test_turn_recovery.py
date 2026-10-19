@@ -14,6 +14,7 @@ from metis.engine.simulation.types import (
     Observation,
     Scenario,
     TrialConfig,
+    UserAgentInput,
     UserAgentOutput,
 )
 
@@ -169,9 +170,9 @@ class TestUndeliveredObservation:
         obs = _undelivered_observation([], "gone", delivered=False)
         assert obs.delivered is False
 
-    def test_delivered_false_survives_into_the_persisted_run_record(self) -> None:
-        # Review Focus: unlike discarded_message, delivered is NOT excluded
-        # from the dump that lands in ConversationTurn.target_response.
+    def test_delivered_false_survives_serialisation(self) -> None:
+        # Review Focus: delivered must survive a dump of the Observation
+        # passed to the user agent.
         from metis.engine.simulation.orchestrator import _undelivered_observation
 
         dumped = _undelivered_observation([], "gone", delivered=False).model_dump()
@@ -283,6 +284,7 @@ class _GivingUpAgent:
 
     def __init__(self, replies: int = 1) -> None:
         self._remaining = replies
+        self.payloads: list[UserAgentInput] = []
 
     async def generate_opening(self) -> UserAgentOutput:
         return UserAgentOutput(
@@ -291,7 +293,8 @@ class _GivingUpAgent:
             actions=[ButtonClickAction(slot_id="b0")],
         )
 
-    async def generate_response(self, _payload: object) -> UserAgentOutput:
+    async def generate_response(self, payload: UserAgentInput) -> UserAgentOutput:
+        self.payloads.append(payload)
         self._remaining -= 1
         if self._remaining <= 0:
             return UserAgentOutput(message="bye", decision="giving_up")
@@ -350,15 +353,55 @@ class TestI4DeliveryMultiplicity:
         from metis.engine.simulation.exceptions import TransientDOMError
 
         runner = _ScriptedRunner([TransientDOMError("locator missing")])
-        orch = _orchestrator(runner, _GivingUpAgent(replies=1), tmp_path)
+        agent = _GivingUpAgent(replies=1)
+        orch = _orchestrator(runner, agent, tmp_path)
 
         record = await orch.execute()
 
-        response = record.conversation[0].target_response
-        assert [r["action_index"] for r in response["action_results"]] == [0]
-        assert response["action_results"][0]["succeeded"] is False
-        assert response["action_results"][0]["detail"]
-        assert response["response_notices"]
+        response = agent.payloads[0].observation
+        assert [r.action_index for r in response.action_results] == [0]
+        assert response.action_results[0].succeeded is False
+        assert response.action_results[0].detail
+        assert response.response_notices
+        assert record.outcome.total_turns == 1
+
+    @pytest.mark.asyncio
+    async def test_total_turns_counts_only_completed_exchanges(self, tmp_path) -> None:
+        # Two exchanges, then giving_up is seen at the top of turn 3,
+        # where turn_count is already 3. An empty script makes the runner
+        # answer each turn with a conforming observation.
+        runner = _ScriptedRunner([])
+        orch = _orchestrator(runner, _GivingUpAgent(replies=2), tmp_path)
+
+        record = await orch.execute()
+
+        assert record.outcome.stop_reason == "user_abandoned"
+        assert record.outcome.total_turns == 2
+
+    @pytest.mark.asyncio
+    async def test_a_discarded_message_is_logged_in_full(
+        self, tmp_path, capsys
+    ) -> None:
+        # The log is the only copy of a message the transport did not deliver,
+        # so it must not be truncated.
+        discarded = "x" * 200 + "-END"
+        runner = _ScriptedRunner(
+            [
+                Observation(
+                    text="ok",
+                    discarded_message=discarded,
+                    action_results=[ActionResult(action_index=0, succeeded=True)],
+                )
+            ]
+        )
+        orch = _orchestrator(runner, _GivingUpAgent(replies=1), tmp_path)
+
+        await orch.execute()
+
+        # capsys, not caplog: core's logger is structlog, which writes to its own
+        # stream rather than through stdlib logging handlers.
+        logged = capsys.readouterr()
+        assert discarded in logged.out + logged.err
 
 
 class TestEscalation:

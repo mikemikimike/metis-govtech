@@ -27,7 +27,7 @@ one action slot per field — ``kind`` is Orca's field type verbatim and
 ``options`` show the option *labels* — and answered with ``formAnswers`` on
 the next submit, typed per field, with labels mapped back to option values.
 A form answer travels instead of the prose message, which is handed back as
-``Observation.discarded_message`` for the run record.
+``Observation.discarded_message`` so the orchestrator can log it.
 
 The scenario's fixtures are offered as one ``file_upload`` slot each (id =
 fixture name) until attached; a chosen one is uploaded to Orca's file

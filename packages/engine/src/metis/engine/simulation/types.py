@@ -452,23 +452,6 @@ class TrialOutcome(BaseModel, extra="ignore"):
     duration_seconds: float
 
 
-class ActionRetry(BaseModel, extra="ignore"):
-    action: str
-    attempt: int
-    strategy_used: str
-    error: str
-    duration_ms: int
-
-
-class TurnDiagnostics(BaseModel, extra="ignore"):
-    retry_count: int = 0
-    failure_type: str | None = None
-    submission_phase: Literal["pre", "post", "n/a"] = "n/a"
-    action_retries: list[ActionRetry] = Field(default_factory=list)
-    duration_ms: int = 0
-    discarded_message: str | None = None
-
-
 class TrialFailure(BaseModel, extra="ignore"):
     attempt_number: int
     failure_type: str
@@ -478,23 +461,12 @@ class TrialFailure(BaseModel, extra="ignore"):
     duration_ms: int
 
 
-class ConversationTurn(BaseModel, extra="ignore"):
-    turn_number: int
-    user_message: str
-    target_response: dict[str, Any] = {}
-    duration_ms: int = 0
-    timestamp: str = ""
-    user_ui_actions: list[dict[str, Any]] = []
-    diagnostics: TurnDiagnostics | None = None
-
-
 class TrialRecord(BaseModel, extra="ignore"):
     """A complete simulation run record loaded from a JSON result file."""
 
     schema_version: Literal[2] = _TRIAL_RECORD_VERSION
     config: TrialConfig
     outcome: TrialOutcome
-    conversation: list[ConversationTurn] = []
     artifacts: list[Artifact] = []
     target_session_id: str | None = None
     # attempt_number is telemetry: which attempt produced this record.

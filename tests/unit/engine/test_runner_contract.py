@@ -11,6 +11,7 @@ from metis.engine.simulation.types import (
     ButtonClickAction,
     ChosenAction,
     Observation,
+    UserAgentInput,
 )
 
 
@@ -326,6 +327,7 @@ class _UploadingAgent:
 
     def __init__(self, filename: str) -> None:
         self._filename = filename
+        self.payloads: list[UserAgentInput] = []
 
     async def generate_opening(self):
         from metis.engine.simulation.types import UploadFileAction, UserAgentOutput
@@ -336,9 +338,10 @@ class _UploadingAgent:
             actions=[UploadFileAction(slot_id="s0", filename=self._filename)],
         )
 
-    async def generate_response(self, _payload: object):
+    async def generate_response(self, payload: UserAgentInput):
         from metis.engine.simulation.types import UserAgentOutput
 
+        self.payloads.append(payload)
         return UserAgentOutput(message="bye", decision="giving_up")
 
 
@@ -379,17 +382,16 @@ class TestUploadsAreWithheldByTheCaller:
         from tests.unit.engine.test_turn_recovery import _ScriptedRunner
 
         runner = _ScriptedRunner([Observation(text="ok")])
-        orch = _withholding_orchestrator(
-            runner, _UploadingAgent("evil.exe"), tmp_path, declared=[]
-        )
+        agent = _UploadingAgent("evil.exe")
+        orch = _withholding_orchestrator(runner, agent, tmp_path, declared=[])
 
-        record = await orch.execute()
+        await orch.execute()
 
         assert runner.sent == [("hello", 0)]
-        row = record.conversation[0].target_response["action_results"][0]
-        assert row["withheld"] is True
-        assert "evil.exe" in row["detail"]
-        assert "is not a fixture for this scenario" in row["detail"]
+        row = agent.payloads[0].observation.action_results[0]
+        assert row.withheld is True
+        assert "evil.exe" in row.detail
+        assert "is not a fixture for this scenario" in row.detail
 
     @pytest.mark.asyncio
     async def test_a_declared_fixture_missing_from_disk_is_withheld(
@@ -400,16 +402,15 @@ class TestUploadsAreWithheldByTheCaller:
         # Declared in the run config but never written to the fixtures dir, so
         # build_fixture_artifacts skips it and it is not staged.
         runner = _ScriptedRunner([Observation(text="ok")])
-        orch = _withholding_orchestrator(
-            runner, _UploadingAgent("gone.csv"), tmp_path, declared=["gone.csv"]
-        )
+        agent = _UploadingAgent("gone.csv")
+        orch = _withholding_orchestrator(runner, agent, tmp_path, declared=["gone.csv"])
 
-        record = await orch.execute()
+        await orch.execute()
 
         assert runner.sent == [("hello", 0)]
-        row = record.conversation[0].target_response["action_results"][0]
-        assert row["withheld"] is True
-        assert "was not found under the fixtures directory" in row["detail"]
+        row = agent.payloads[0].observation.action_results[0]
+        assert row.withheld is True
+        assert "was not found under the fixtures directory" in row.detail
 
     @pytest.mark.asyncio
     async def test_a_directory_named_like_a_fixture_is_withheld(self, tmp_path) -> None:
@@ -419,15 +420,16 @@ class TestUploadsAreWithheldByTheCaller:
         (tmp_path / "fixtures" / "report.pdf").mkdir()
 
         runner = _ScriptedRunner([Observation(text="ok")])
+        agent = _UploadingAgent("report.pdf")
         orch = _withholding_orchestrator(
-            runner, _UploadingAgent("report.pdf"), tmp_path, declared=["report.pdf"]
+            runner, agent, tmp_path, declared=["report.pdf"]
         )
 
-        record = await orch.execute()
+        await orch.execute()
 
         assert runner.sent == [("hello", 0)]
-        row = record.conversation[0].target_response["action_results"][0]
-        assert row["withheld"] is True
+        row = agent.payloads[0].observation.action_results[0]
+        assert row.withheld is True
 
     @pytest.mark.asyncio
     async def test_a_staged_fixture_is_forwarded_and_not_withheld(
@@ -446,16 +448,17 @@ class TestUploadsAreWithheldByTheCaller:
                 )
             ]
         )
+        agent = _UploadingAgent("sales.csv")
         orch = _withholding_orchestrator(
-            runner, _UploadingAgent("sales.csv"), tmp_path, declared=["sales.csv"]
+            runner, agent, tmp_path, declared=["sales.csv"]
         )
 
-        record = await orch.execute()
+        await orch.execute()
 
         assert runner.sent == [("hello", 1)]
-        row = record.conversation[0].target_response["action_results"][0]
-        assert row["succeeded"] is True
-        assert row["withheld"] is False
+        row = agent.payloads[0].observation.action_results[0]
+        assert row.succeeded is True
+        assert row.withheld is False
 
 
 class TestTheLegacyChannelIsGone:

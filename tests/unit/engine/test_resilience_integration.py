@@ -25,12 +25,6 @@ from metis.engine.simulation.runners.orca_playwright._retry import (
     action_retry,
     track_submission,
 )
-from metis.engine.simulation.types import (
-    ActionRetry,
-    ConversationTurn,
-    TrialRecord,
-    TurnDiagnostics,
-)
 
 
 class TestFullImportGraph:
@@ -118,63 +112,6 @@ class TestExceptionCatchPatterns:
             ResponseTimeoutError,
         ]:
             assert issubclass(exc_class, SimulationError)
-
-
-class TestDiagnosticsWiring:
-    """Verify diagnostics models integrate with TrialRecord correctly."""
-
-    def test_full_trial_record_with_diagnostics(self) -> None:
-        turn = ConversationTurn(
-            turn_number=1,
-            user_message="hello",
-            target_response={"text": "hi"},
-            duration_ms=2000,
-            timestamp="2026-01-01T00:00:00Z",
-            diagnostics=TurnDiagnostics(
-                retry_count=1,
-                failure_type="transient_dom",
-                submission_phase="pre",
-                action_retries=[
-                    ActionRetry(
-                        action="send_message",
-                        attempt=1,
-                        strategy_used="CSSStrategy",
-                        error="timeout",
-                        duration_ms=1000,
-                    )
-                ],
-                duration_ms=3000,
-            ),
-        )
-
-        record = TrialRecord.model_validate(
-            {
-                "schema_version": 2,
-                "config": {"persona": "p", "scenario": "s"},
-                "outcome": {
-                    "stop_reason": "max_turns",
-                    "total_turns": 1,
-                    "duration_seconds": 3.0,
-                },
-                "conversation": [turn.model_dump()],
-                "attempt_number": 2,
-                "max_allowed_attempts": 3,
-                "prior_failures": [
-                    {
-                        "attempt_number": 1,
-                        "failure_type": "auth_loss",
-                        "turn_reached": 5,
-                        "error_message": "redirected",
-                        "duration_ms": 20000,
-                    }
-                ],
-            }
-        )
-
-        assert record.conversation[0].diagnostics is not None
-        assert record.conversation[0].diagnostics.retry_count == 1
-        assert len(record.prior_failures) == 1
-        assert record.attempt_number == 2
 
 
 class TestRetryConfigIntegration:

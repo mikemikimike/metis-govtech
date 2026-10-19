@@ -205,6 +205,20 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   the other 83 empty, so the engine refuses to run it until graders exist; the `simple`
   example runs end to end with `TraceBudgetGrader` (#428).
 
+- `TrialRecord.conversation` is removed, along with the `ConversationTurn`, `TurnDiagnostics`
+  and `ActionRetry` models, so `record.json` no longer holds a copy of the transcript. The
+  conversation is read from the Langfuse session named by `target_session_id`.
+  `TrialOutcome.total_turns` still counts completed exchanges. A `record.json` that still has a
+  `conversation` key loads, with the key ignored (`schema_version` is unchanged). Per-turn detail
+  that only METIS sees and Langfuse does not (the persona's UI actions, withheld or undelivered
+  action rows, and `Observation.discarded_message`) is now only in the trial's `logs/`. The
+  per-turn timing breakdown is dropped from the console summary printed after each trial, and
+  `discarded_message` is now logged in full rather than cut to 80 characters. Until #462 lands,
+  `metis insights report` shows no turns in the trial-trace view for new trials, failure messages
+  fall back to outcome-level detail, and a failed trial that was blamed on the target because of
+  per-turn error notices is now blamed on the evaluation runner unless its outcome names a
+  source (#461).
+
 ### metis-insights
 
 #### Added

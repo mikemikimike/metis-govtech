@@ -82,8 +82,6 @@ async def test_partial_record_preserves_completed_turns(tmp_path: Path) -> None:
 
     assert record.outcome.stop_reason == "system_error"
     assert record.outcome.total_turns == 1  # turn 1 completed, turn 2 crashed
-    assert len(record.conversation) == 1
-    assert record.conversation[0].user_message == "hello"
     assert record.target_session_id == "sess-fake-1"
     assert runner.teardown_called is True  # finally: teardown still ran
 
@@ -108,4 +106,3 @@ def test_partial_record_callable_without_run(tmp_path: Path) -> None:
 
     assert record.outcome.stop_reason == "system_error"
     assert record.outcome.total_turns == 0
-    assert record.conversation == []

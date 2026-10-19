@@ -146,7 +146,7 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
     assert calls == []  # fixtures skip summarize
 
     # Record dedups: registry appears in both _fixture_artifacts and collected.
-    record = orch._build_record("goal_achieved", [], list(obs.artifacts), 0.0, None)
+    record = orch._build_record("goal_achieved", list(obs.artifacts), 0.0, None)
     ids = [a.id for a in record.artifacts]
     assert ids.count(registry.id) == 1
     assert record.artifacts[0].content_description == "Q3 sales, 200 rows."
@@ -242,7 +242,7 @@ async def test_fixture_external_id_survives_the_registry_swap(
     assert registry.external_id == "orca-file-77"
 
     # The field has to reach the record, which is the whole point of stamping it.
-    record = orch._build_record("goal_achieved", [], list(obs.artifacts), 0.0, None)
+    record = orch._build_record("goal_achieved", list(obs.artifacts), 0.0, None)
     assert [a.external_id for a in record.artifacts] == ["orca-file-77"]
 
 

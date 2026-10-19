@@ -113,7 +113,6 @@ def _make_canned_record(scenario: Scenario, persona: Persona) -> TrialRecord:
             total_turns=1,
             duration_seconds=0.1,
         ),
-        conversation=[],
         artifacts=[],
     )
 
@@ -227,7 +226,6 @@ def _partial_record(
             total_turns=turns,
             duration_seconds=1.0,
         ),
-        conversation=[],
         artifacts=[],
     )
 
@@ -368,7 +366,6 @@ class TestWorkerUnexpectedCrash:
         assert len(records) == 1
         assert records[0].outcome.stop_reason == "system_error"
         assert records[0].outcome.total_turns == 0
-        assert records[0].conversation == []
 
     @pytest.mark.asyncio
     async def test_crash_is_logged_with_traceback(
