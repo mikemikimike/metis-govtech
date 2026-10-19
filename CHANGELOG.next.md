@@ -120,11 +120,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Criterion fallback judge for interview criteria with no specific grader match. The judge
   uses the current criterion description, returns a binary session score, and records skipped
   or errored assessments separately. YAML description edits apply on the next run. Model and
-  threshold settings survive description edits. The judge supports recorded trace input and
-  output; it does not read artifact files. No taxonomy fields are required (#299).
+  threshold settings survive description edits. The judge reads recorded trace input and
+  output. It does not read artifact files. No taxonomy fields are required (#299).
 
-- `CriterionJudgeArgs` marks a model-based grader that takes its instructions from the criterion
-  description. `criterion_judge_args` adds the description as `criterion` and rejects a
+- `CriterionJudgeArgs` marks a model-based grader that takes its instructions from the
+  criterion description. `criterion_judge_args` adds the description as `criterion` and rejects a
   `criterion` key in the settings or a blank clause (#299).
 
 - `JudgeArgs.max_input_tokens` limits the estimated size of one judge request, with a default
@@ -146,10 +146,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 #### Changed
 
 - `CriterionJudgeArgs` graders get `criterion` from the criterion description at run time. The
-  engine carries the description on `metis.core.trials.GraderRef.description`, an optional
-  field, and reports a `criterion` key
-  under `grader_args` as a pre-run setup error. `JUDGE_MAX_INPUT_TOKENS` sets the run default
-  for `max_input_tokens` when a criterion does not set it (#299).
+  engine carries the description on the optional `metis.core.trials.GraderRef.description`
+  field. A `criterion` key under `grader_args` is a pre-run setup error.
+  `JUDGE_MAX_INPUT_TOKENS` sets the run default for `max_input_tokens` when a criterion does not
+  set it (#299).
 
 - Execution folders use `experiments/execute/<id>-<timestamp>/`, with trial records
   and artifacts in `outputs/trials/` and results in `outputs/reports/results.json`.

@@ -64,7 +64,7 @@ Optional tuning variables:
 | `USER_AGENT_MAX_TOKENS` | _(unset)_ | Max tokens per user agent response; unset/empty → parameter omitted, provider default applies. Set explicitly (e.g. `4096`) for reasoning models where chain-of-thought tokens count against the limit |
 | `USER_AGENT_TEMPERATURE` | _(unset)_ | Sampling temperature for the user agent; unset/empty → parameter omitted, provider default applies |
 | `JUDGE_MODEL` | `gemini-3.5-flash-lite` | Judge model when neither the criterion nor `defaults.judge_model` sets one |
-| `JUDGE_MAX_INPUT_TOKENS` | `128000` | Largest estimated judge request when the criterion does not set `grader_args.max_input_tokens`. A larger request is recorded as errored with no model call. An invalid value logs a warning and uses the default |
+| `JUDGE_MAX_INPUT_TOKENS` | `128000` | Largest estimated judge request when the criterion does not set `grader_args.max_input_tokens`. The grader records a larger request as errored and makes no model call. An invalid value logs a warning and uses the default |
 | `HEADED` | `false` | Set to `true` to show the browser window |
 
 ### Verify Installation
@@ -485,7 +485,7 @@ The Simulation TUI auto-disables when stderr is not a terminal, such as in CI or
 A grader subclasses `metis.library.grader.Grader`, names an args model, and implements one
 async method. It sees only the session's Langfuse traces and the run's artifacts, never the
 scenario or persona. The full rules are in the
-[grader guide](library/graders.md).
+[graders README](../../packages/library/src/metis/library/graders/README.md).
 
 ```python
 from pydantic import Field

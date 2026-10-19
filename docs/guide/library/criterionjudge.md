@@ -1,11 +1,16 @@
 # Edit the criterion fallback judge
 
-The guided Interview selects `metis.library.graders.CriterionJudgeGrader` when no specific
-scorer matches a criterion. It also uses this judge when the embedding provider fails.
-The manual form does not offer this judge because that form has no criterion description field.
+The guided Interview selects `metis.library.graders.CriterionJudgeGrader` for a criterion when
+no specific grader matches it. The Interview also selects this judge when the embedding provider
+fails. The judge uses the criterion description as its instructions. The manual form does not
+offer this judge, because the form has no criterion description field.
+
+## Edit the instructions
+
+To change what the judge checks, edit the criterion description:
 
 1. Export the Interview specification.
-2. Find the criterion under `features[].behaviours[].criteria[]` in `specification.yaml`.
+2. In `specification.yaml`, find the criterion under `features[].behaviours[].criteria[]`.
 3. Edit its `description.given`, `description.when`, and `description.then` clauses.
 4. Save the file before you start the next simulation.
 
@@ -23,76 +28,73 @@ grader_args:
   threshold: 0.5
 ```
 
-Each description clause must contain text. The engine joins the clauses as
-`Given ..., when ..., then ... .` and supplies that text to the judge at run time.
-Do not add `criterion` under `grader_args`. The engine rejects a second instruction source.
+Each description clause must contain text. At run time, the engine joins the clauses as
+`Given ..., when ..., then ... .` and gives that text to the judge as `grader_args.criterion`.
+Do not set `criterion` under `grader_args` yourself. The engine reports it as a setup error
+before the run starts.
 
-You can set `grader_args.model` to select a judge model for this criterion. If you omit it,
-the engine uses `defaults.judge_model`, then `JUDGE_MODEL`, then its package default.
-The result record contains the resolved model, threshold, input limit, and criterion
-instructions.
+An experiment copies its specification into `inputs/specification.yaml`, and evaluation reads
+that copy. To evaluate an existing experiment with new instructions, edit the description in
+that copy, then run evaluation again. To compare the old and new assessments, keep a copy of
+the previous result file first.
 
-The judge estimates the size of each request before it calls the model. The estimate is one
-token for each UTF-8 byte of the request, plus 4,096. When the estimate is more than the
-limit, the judge records an errored result and does not call the model. The default limit is
-128,000. Set `grader_args.max_input_tokens` for one criterion, or `JUDGE_MAX_INPUT_TOKENS` for
-the run. A value in `grader_args` wins. An invalid value logs a warning and uses the default.
-The estimate is conservative, so a model with a large context window can accept a request
-that is above the default.
+## Settings
 
-An experiment copies its specification into `inputs/specification.yaml`. Evaluation reads
-that copy. To evaluate an existing experiment with new instructions, edit the description
-in that copy before you run evaluation again. Keep the previous result file if you need
-to compare the assessments.
+| Setting | Default | Description |
+|---|---|---|
+| `threshold` | `0.5` | A score passes when it is at least this value. Keep `0.5` for the binary score. A threshold of `0` also passes a score of `0`. |
+| `model` | See the next paragraph. | The judge model for this criterion. |
+| `max_input_tokens` | `128000` | The largest estimated request that the judge sends. |
 
-The judge returns one result for the whole session. A score of `1` means that the recorded
-evidence satisfies the criterion. A score of `0` means that it does not. The engine marks
-a score as passed when it is at least the threshold. Keep the default threshold of `0.5`
-for this binary score rule. A threshold of `0` also passes a score of `0`.
+If you omit `model`, the engine uses `defaults.judge_model`, then `JUDGE_MODEL`, then its
+package default. If you omit `max_input_tokens`, the engine uses `JUDGE_MAX_INPUT_TOKENS`, then
+`128000`. If the value from either source is not a positive integer, the engine logs a warning
+and uses `128000`. The result record contains the resolved model, threshold, input limit, and
+criterion instructions.
 
-The judge receives observation IDs, parent IDs, types, names, inputs, and outputs, grouped
-by trace. It does not receive trace metadata or timing fields. It does not read artifact files.
-A file path or a recorded claim about a file cannot establish the file's contents.
-Use a specific grader when the criterion requires evidence outside the supported trace fields.
+Before each model call, the judge estimates the size of the request as one token for each
+UTF-8 byte, plus 4,096. If the estimate is more than `max_input_tokens`, the judge records an
+errored result and does not call the model. The reason gives the estimate and the limit. The
+estimate is conservative, so a model with a large context window can accept a request that is
+above the default. To judge such a session, raise the limit.
 
-A session with no recorded input or output is skipped without a model call. The model can
-also skip a criterion when the session has no applicable evidence. Provider failures and
-invalid replies produce errored results. Skipped and errored results do not count as failures.
+## Results
 
-## Test the fallback judge
+The judge returns one result for the whole session:
 
-Run these offline checks from the repository root:
+- A score of `1` means that the recorded evidence satisfies the criterion.
+- A score of `0` means that the recorded evidence does not satisfy the criterion.
+- A skipped result means that the session has no applicable evidence. A session with no recorded
+  input or output is skipped without a model call.
+- An errored result means that the request was above the input limit, that the provider failed,
+  or that the reply was not valid.
 
-```bash
-uv run pytest tests/unit/library/test_criterion_judge.py tests/unit/wizard/application/test_matcher.py tests/integration/wizard/test_matching.py -q
-uv run pytest tests/integration/wizard/test_compile.py -k 'edited_yaml_description or invalid_fallback' -q
-uv run pytest tests/unit/wizard/application/test_driver.py -k fallback_parameter -q
-npm --prefix apps/web test
-```
+Skipped and errored results do not count as failures.
 
-The judge tests use the real OpenAI client with an in-memory HTTP transport and a dummy key.
-They make no provider requests. The YAML test writes the exported specification, edits only
-its description, loads it through the engine, and checks the request and result record.
+## Evidence that the judge reads
 
-Run `make ci` for the complete repository checks. If the unrelated user-agent tests need an
-OpenAI key to construct their offline client, use `OPENAI_API_KEY=test-only make ci`.
-Do not use that dummy key for a provider check.
+The judge receives these fields of each observation, grouped by trace: the ID, the parent ID,
+the type, the name, the input, and the output. It does not receive trace metadata or timing
+fields. It does not read artifact files, so a file path or a recorded claim about a file does
+not show what the file contains. If the criterion needs other evidence, select a specific
+grader.
 
-For a provider check, configure `JUDGE_API_KEY`, `JUDGE_BASE_URL`, and `JUDGE_MODEL` for your
-supported gateway. Use a completed experiment with available traces. Edit its
-`inputs/specification.yaml` description, then run:
+## Check the judge with a provider
 
-```bash
-uv run metis engine evaluate --experiment-dir path/to/completed-experiment
-```
+The offline tests do not call a provider. To confirm that your gateway accepts the judge
+request, use a completed experiment with available traces:
 
-Check `outputs/reports/results.json`. Find the criterion's record. Confirm that
-`grader_args.criterion` contains the edited description and that `grader_args.model` is correct.
-Check the result's reason and outcome against the recorded evidence. This check confirms
-provider compatibility. It does not establish grading accuracy.
+1. Set `JUDGE_API_KEY`, `JUDGE_BASE_URL`, and `JUDGE_MODEL` for your gateway.
+2. Edit the criterion description in the experiment's `inputs/specification.yaml`.
+3. Run the evaluation:
 
-For code review, check the shared argument preparation function, the engine's reference
-construction, and the wizard's validation calls. Each must use the current description.
-Check that unknown settings fail before execution and that invalid form edits preserve the
-prior settings. Review the fixed response validation and the evidence sent to the model.
-The fallback must stay outside similarity matching and the manual form's scorer choices.
+   ```bash
+   uv run metis engine evaluate --experiment-dir path/to/completed-experiment
+   ```
+
+4. In `outputs/reports/results.json`, find the record for the criterion.
+5. Confirm that `grader_args.criterion` contains the edited description and that
+   `grader_args.model` names the model that you set.
+6. Compare the reason and the outcome of the result with the recorded evidence.
+
+This check shows that the provider accepts the request. It does not measure grading accuracy.
