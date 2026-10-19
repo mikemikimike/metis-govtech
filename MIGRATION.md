@@ -497,11 +497,10 @@ Scripts that read `report.json` after `evaluate` must run that command first.
 - `metis.engine.generate_report` and `metis.engine.ReportResult` are removed. Evaluate,
   then run the CLI command above.
 - `metis.engine.reporting` is removed. `build_report` and `load_report_sources` are now
-  in `metis.insights`. `Report` is now in `metis.core.report`, and `metis.insights`
-  re-exports it.
+  in `metis.insights`, together with `Report`.
 - The published `report.schema.json` file is removed. Use
-  `metis.core.report.Report.model_validate()` to validate report data in Python.
-  Reports write `"schema_version": 1`. The core model defaults
+  `metis.insights.Report.model_validate()` to validate report data in Python.
+  Reports write `"schema_version": 1`. The model defaults
   a missing version to `1` and rejects other explicit values. The version stays `1`
   under the `next` pre-release policy.
 

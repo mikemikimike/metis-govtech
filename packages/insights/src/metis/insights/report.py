@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 from metis.core import execution_layout
 from metis.core.logging import get_logger
-from metis.core.report import Report
 from metis.insights._aggregation import aggregate_graders
+from metis.insights._models import Report
 from metis.insights._report import build_report, load_report_sources
 from metis.insights._report_page import render_report_page
 

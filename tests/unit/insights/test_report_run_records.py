@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from structlog.testing import capture_logs
 
 from metis.core.trials import TrialConfig, TrialFailure, TrialOutcome, TrialRecord
-from metis.core.report import Trial
+from metis.insights._models import Trial
 from metis.insights._report import _load_trial_records
 
 if TYPE_CHECKING:

@@ -8,8 +8,7 @@ New shared file models belong in core. Publish a JSON Schema only when an editor
 external consumer needs one. Store published schemas here. Private runtime and API
 models stay in their owning packages.
 
-`Report` and `EvaluationResults` are core Pydantic models. They have no published
-JSON Schema files.
+`EvaluationResults` is a core Pydantic model with no published JSON Schema file.
 
 ## Update a schema
 

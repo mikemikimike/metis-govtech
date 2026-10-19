@@ -1,7 +1,7 @@
 """Pydantic models for the target evaluation report (report.json).
 
 `metis insights report` validates report data through these models before writing
-report.json. Readers can use Report.model_validate() to check report data.
+report.json. Only metis-insights reads them, so they stay private to this package.
 """
 
 from __future__ import annotations

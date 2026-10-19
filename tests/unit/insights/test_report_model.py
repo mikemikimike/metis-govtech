@@ -159,7 +159,7 @@ class TestReportModel:
         return json.loads(report_path.read_text())
 
     def test_validates_real_report(self, sample_report: dict):
-        from metis.core.report import Report
+        from metis.insights._models import Report
 
         report = Report.model_validate(sample_report)
         assert report.target == "Orca"
@@ -169,7 +169,7 @@ class TestReportModel:
         assert isinstance(report.criteria, dict)
 
     def test_round_trips_to_dict(self, sample_report: dict):
-        from metis.core.report import Report
+        from metis.insights._models import Report
 
         report = Report.model_validate(sample_report)
         dumped = report.model_dump()

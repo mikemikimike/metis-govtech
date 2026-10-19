@@ -7,7 +7,7 @@ evidence. It does not make release decisions or set target priorities.
 
 ## File contract and current input support
 
-The core [Report model](../../packages/core/src/metis/core/report.py) defines `report.json`.
+The insights [Report model](../../packages/insights/src/metis/insights/_models.py) defines `report.json`.
 The report writer validates data through this model. Saved reports contain `"schema_version": 1`.
 The model defaults a missing version to `1` and rejects other explicit values.
 The version remains `1` during the `next` pre-release phase.
@@ -81,7 +81,7 @@ The criterion name is part of the profile contract; the report uses the exact me
 name as the metric title. If a result is missing, it uses the metric class name as
 a fallback. Scores retain Task, Trial, Criterion, Grader FQN, and arguments.
 IDs join Features, Behaviours, Criteria, Personas, Scenarios, Tasks, and
-metric results. The core [Report model](../../packages/core/src/metis/core/report.py)
+metric results. The insights [Report model](../../packages/insights/src/metis/insights/_models.py)
 defines these fields.
 
 These rules are report inputs. The report must not replace an aggregator-supplied rate
@@ -133,8 +133,8 @@ or aggregation method.
 
 ## Implementation boundary
 
-The shared report file contract belongs in `metis-core`. Report generation and its
-content rules belong in `metis-insights`. A generated report file is not a source of truth.
+The report file contract, report generation, and its content rules belong in
+`metis-insights`. A generated report file is not a source of truth.
 
 The report must accept future aggregator-owned fields without changing this interface
 contract. The aggregator can take full ownership of rates, thresholds, counts, statuses,

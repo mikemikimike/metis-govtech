@@ -81,12 +81,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `runner_factory_ref`, which every saved file carries. In-memory drafts still default them.
   The engine refuses a file without them (#465).
 
-- `metis.core.report` holds `Report`, the `report.json` contract, so that any package can
-  read reports. Reports write `schema_version: 1`; the model defaults a missing version
-  to `1` and rejects other explicit versions. The published `report.schema.json` file
-  is removed; report validation uses the core `Report` model. All future shared file
-  contracts belong in core. `make ci` checks published schema ownership, registration,
-  and generated content (#465).
+- All future shared file contracts belong in core. `make ci` checks published schema
+  ownership, registration, and generated content (#465).
 
 - `metis.core.traces`: `Observation`, `Trace` and `GradingInput`, the read-only input of every
   grader run. `Trace.root` finds the logical root observation by `isRootObservation`, falling
@@ -264,6 +260,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   current `metis engine evaluate` with "This results.json uses the new GraderRecord format
   (grader redesign #428), which metis insights report cannot read yet. Rerun the report once
   #454 is released."; its redesign is #454 (#428).
+
+- Reports write `schema_version: 1`. `metis.insights.Report` defaults a missing version to
+  `1` and rejects other explicit versions. The published `report.schema.json` file is
+  removed; report validation uses the `Report` model (#465).
 
 ### metis-testbed
 

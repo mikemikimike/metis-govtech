@@ -2,7 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from metis.core.report import Report
+from metis.insights._models import Report
 from metis.insights._report import build_report, load_report_sources
 from metis.insights.report import format_terminal_summary, save_report
 

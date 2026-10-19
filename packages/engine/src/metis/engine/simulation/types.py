@@ -15,7 +15,6 @@ from metis.core.experiment import Task
 from metis.core.specification import Specification as CoreSpecification
 from metis.core.trials import GraderRef
 
-
 # ---------------------------------------------------------------------------
 # User Agent Output — self-describing action union
 #

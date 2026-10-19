@@ -174,7 +174,7 @@ experiments/execute/orca-eval-20260730-143022/
 
 `results.json` holds one GraderRecord per grader per session, each with one result per grading scope. `metis insights report` does not read this format yet (#454).
 
-The core [Report model](../../packages/core/src/metis/core/report.py) defines `report.json`. Python readers can validate report data with `Report.model_validate()`.
+The insights [Report model](../../packages/insights/src/metis/insights/_models.py) defines `report.json`. Python readers can validate report data with `Report.model_validate()`.
 
 Use `logs/evaluate.log` to review extraction, each criterion's grader and resolved arguments (including the judge model), every recorded result with its outcome, score and reason, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
