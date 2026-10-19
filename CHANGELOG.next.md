@@ -115,6 +115,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 ### metis-library
 
+#### Added
+
+- Criterion fallback judge for interview criteria with no specific grader match. The judge
+  uses the current criterion description, returns a binary session score, and records skipped
+  or errored assessments separately. YAML description edits apply on the next run. Model and
+  threshold settings survive description edits. The judge supports recorded trace input and
+  output; it does not read artifact files. No taxonomy fields are required (#299).
+
 #### Breaking
 
 - Grader redesign without DeepEval. Graders subclass `metis.library.grader.Grader[Args]`,

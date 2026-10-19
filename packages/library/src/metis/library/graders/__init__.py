@@ -9,4 +9,5 @@ package exports, only ever offers real graders. One file per grader is a layout 
 semantic weight.
 """
 
+from ._criterion_judge import CriterionJudgeGrader as CriterionJudgeGrader
 from ._trace_budget import TraceBudgetGrader as TraceBudgetGrader

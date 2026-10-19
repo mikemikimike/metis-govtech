@@ -27,6 +27,7 @@ from functools import lru_cache
 from importlib import import_module
 from typing import Any
 
+from metis.library.criterion_judge import CRITERION_JUDGE_FQN
 from metis.library.grader import Grader, JudgeArgs
 from metis.wizard.contracts.grader_spec import GraderParam, GraderSpec
 
@@ -58,6 +59,11 @@ def _params(cls: type[Grader[Any]]) -> list[GraderParam]:
     for name, info in cls.args_model.model_fields.items():
         if name == "model" and issubclass(cls.args_model, JudgeArgs):
             continue  # resolved by the engine, never chosen per criterion in the wizard
+        if (
+            name == "criterion"
+            and f"{GRADERS_PACKAGE}.{cls.__name__}" == CRITERION_JUDGE_FQN
+        ):
+            continue
         required = info.is_required()
         params.append(
             GraderParam(

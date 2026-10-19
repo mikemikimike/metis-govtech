@@ -275,3 +275,20 @@ test("manual metadata preserves text and requires unique nonblank keys", () => {
     );
   }
 });
+
+test("manual scorers can run without an interview criterion", async () => {
+  const { manualScorers } = await import("./manual.ts");
+  const fallback = {
+    fqn: "metis.library.graders.CriterionJudgeGrader",
+    name: "Criterion judge",
+    description: "Assess an interview criterion.",
+    params: [],
+  };
+  const budget = {
+    fqn: "metis.library.graders.TraceBudgetGrader",
+    name: "Trace budget",
+    description: "Check the trace count.",
+    params: [],
+  };
+  assert.deepEqual(manualScorers([fallback, budget]), [budget]);
+});

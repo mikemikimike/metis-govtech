@@ -10,8 +10,8 @@ from metis.wizard.application.matching.library_catalogue import (
     library_catalogue,
 )
 from metis.wizard.application.matching.matcher import (
+    CRITERION_JUDGE_FQN,
     DEFAULT_THRESHOLD,
-    GENERATED_JUDGE_FQN,
     Embedder,
     EmbeddingMatcher,
     cosine,
@@ -21,7 +21,7 @@ from metis.wizard.application.matching.matcher import (
 
 __all__ = [
     "DEFAULT_THRESHOLD",
-    "GENERATED_JUDGE_FQN",
+    "CRITERION_JUDGE_FQN",
     "GRADERS_PACKAGE",
     "Embedder",
     "EmbeddingMatcher",

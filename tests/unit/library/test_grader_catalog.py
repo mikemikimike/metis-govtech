@@ -14,7 +14,7 @@ import pytest
 import metis.library.graders as catalog
 from metis.library.grader import Grader
 
-EXPECTED = {"TraceBudgetGrader"}
+EXPECTED = {"TraceBudgetGrader", "CriterionJudgeGrader"}
 
 
 def _exported_classes() -> dict[str, type]:

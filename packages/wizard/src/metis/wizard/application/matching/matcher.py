@@ -19,23 +19,19 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import ValidationError
 
+from metis.library.criterion_judge import (
+    CRITERION_JUDGE_FQN,
+    prepare_criterion_judge_args,
+)
 from metis.library.grader import Grader, JudgeArgs
 from metis.wizard.application.matching.library_catalogue import library_catalogue
 
 if TYPE_CHECKING:
+    from metis.core.profile import CriterionDescription
     from metis.wizard.contracts.grader_spec import GraderSpec
     from metis.wizard.domain.specification import Criterion, Specification
 
-# One parameterised class that builds a judge from the criterion text. Not codegen: the
-# criterion travels as an argument, so there is no generated file to keep in sync.
-# The grader redesign (#428) removed this class and no replacement exists yet, so
-# `validate_grader_args` refuses it with a message that tells the user what to do.
-GENERATED_JUDGE_FQN = "metis.library.graders.default.CriterionGEvalGrader"
-GENERATED_JUDGE_REMOVED = (
-    "no grader matched and the fallback judge was removed in the grader redesign "
-    "(#428); choose a grader for this criterion."
-)
-
+# TODO: Validate this threshold with the evals testbed once more graders are available.
 DEFAULT_THRESHOLD = 0.62
 
 
@@ -59,6 +55,9 @@ class EmbeddingMatcher:
     degraded: bool = False  # the provider failed at least once this run
     _catalogue_vectors: list[list[float]] | None = None
 
+    def __post_init__(self) -> None:
+        self.specs = [spec for spec in self.specs if spec.fqn != CRITERION_JUDGE_FQN]
+
     def _vectors(self) -> list[list[float]] | None:
         """Embed the catalogue once. It cannot change within a run."""
         if self._catalogue_vectors is None:
@@ -74,24 +73,26 @@ class EmbeddingMatcher:
         interview that stops because an embedding endpoint is down is not something the user
         can act on.
         """
+        if not self.specs:
+            return CRITERION_JUDGE_FQN
         try:
             vectors = self._vectors()
             if not vectors:
-                return GENERATED_JUDGE_FQN
+                return CRITERION_JUDGE_FQN
             [query] = self.embedder.embed([str(criterion.description)])
         except Exception:
             self.degraded = True
-            return GENERATED_JUDGE_FQN
+            return CRITERION_JUDGE_FQN
 
         scored = [
             (cosine(query, vector), spec)
             for vector, spec in zip(vectors, self.specs, strict=False)
         ]
         if not scored:
-            return GENERATED_JUDGE_FQN
+            return CRITERION_JUDGE_FQN
 
         score, best = max(scored, key=lambda pair: pair[0])
-        return best.fqn if score >= self.threshold else GENERATED_JUDGE_FQN
+        return best.fqn if score >= self.threshold else CRITERION_JUDGE_FQN
 
 
 def match_specification(specification: Specification, matcher: EmbeddingMatcher) -> int:
@@ -120,19 +121,19 @@ def rematch(criterion: Criterion, matcher: EmbeddingMatcher) -> str:
     """
     previous = criterion.grader_fqn
     criterion.grader_fqn = matcher.match(criterion)
-    if previous != criterion.grader_fqn or criterion.grader_fqn == GENERATED_JUDGE_FQN:
+    if previous != criterion.grader_fqn:
         criterion.grader_args = default_grader_args(criterion)
     return criterion.grader_fqn
 
 
 def default_grader_args(criterion: Criterion) -> dict[str, Any]:
-    if criterion.grader_fqn == GENERATED_JUDGE_FQN:
-        return {"criterion": str(criterion.description), "name": criterion.name}
     spec = next((s for s in library_catalogue() if s.fqn == criterion.grader_fqn), None)
     return {p.name: p.default for p in spec.params if not p.required} if spec else {}
 
 
-def validate_grader_args(fqn: str | None, args: Any) -> None:
+def validate_grader_args(
+    fqn: str | None, args: Any, *, description: CriterionDescription | None = None
+) -> None:
     """Check ``args`` against the grader's ``args_model``, as the engine will before a run.
 
     A model-based grader's ``model`` is filled in with a placeholder when absent: the engine
@@ -140,8 +141,6 @@ def validate_grader_args(fqn: str | None, args: Any) -> None:
     """
     if not fqn or not isinstance(args, dict):
         raise ValueError("Select a Grader and supply a JSON object.")
-    if fqn == GENERATED_JUDGE_FQN:
-        raise ValueError(GENERATED_JUDGE_REMOVED)
     try:
         module, name = fqn.rsplit(".", 1)
         cls = getattr(import_module(module), name)
@@ -154,6 +153,10 @@ def validate_grader_args(fqn: str | None, args: Any) -> None:
     if inspect.isabstract(cls) or not hasattr(cls, "args_model"):
         raise ValueError(f"{fqn} is an abstract base, not a concrete grader")
     candidate = dict(args)
+    if fqn == CRITERION_JUDGE_FQN:
+        if description is None:
+            raise ValueError("The criterion description is required.")
+        candidate = prepare_criterion_judge_args(description, candidate)
     if issubclass(cls.args_model, JudgeArgs):
         candidate.setdefault("model", "resolved-at-run-time")
     try:

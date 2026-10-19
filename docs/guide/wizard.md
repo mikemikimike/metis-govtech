@@ -88,3 +88,9 @@ metis engine run --input-dir experiments/design/20261016-223045-interview/output
 
 See the [Engine guide](engine.md) for the evaluation run and the [Report guide](report.md) for the
 results.
+
+## Edit fallback grading instructions
+
+When no specific grader matches, the Interview uses the criterion description as the fallback
+judge's instructions. Edit that description in the exported YAML before the next run.
+See [Edit the criterion fallback judge](criterion-judge.md) for settings and evidence limits.

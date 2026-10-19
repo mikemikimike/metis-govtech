@@ -1284,3 +1284,35 @@ def test_criterion_parameter_form_changes_the_selected_requirement() -> None:
         state, state.pending, FormResponse(values={"grader_args": '{"max_traces":4}'})
     )
     assert criterion.grader_args == {"max_traces": 4}
+
+
+def test_fallback_parameter_edits_validate_before_replacing_settings() -> None:
+    from metis.library.criterion_judge import CRITERION_JUDGE_FQN
+    from metis.wizard.contracts import FormResponse
+
+    specification = research_assistant()
+    criterion = specification.features[0].behaviours[0].criteria[0]
+    criterion.grader_fqn = CRITERION_JUDGE_FQN
+    criterion.grader_args = {"threshold": 0.8, "model": "chosen-judge"}
+    state = driver_state(specification=specification, step=InterviewStep.CRITERIA)
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    screen = driver.compose(state)
+    driver.handle(
+        state, screen, ChoiceResponse(selected=[f"parameters:{criterion.id}"])
+    )
+    assert state.pending is not None
+    driver.handle(
+        state,
+        state.pending,
+        FormResponse(values={"grader_args": '{"criterion":"override"}'}),
+    )
+    assert criterion.grader_args == {"threshold": 0.8, "model": "chosen-judge"}
+    assert state.pending is not None
+    driver.handle(
+        state,
+        state.pending,
+        FormResponse(
+            values={"grader_args": '{"threshold":0.6,"model":"chosen-judge"}'}
+        ),
+    )
+    assert criterion.grader_args == {"threshold": 0.6, "model": "chosen-judge"}

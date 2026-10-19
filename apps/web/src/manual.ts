@@ -334,3 +334,10 @@ export function keepReferencedFixtures(
   const referenced = new Set(referencedFixtureNames(tasks));
   return fixtures.filter((fixture) => referenced.has(fixture.name));
 }
+
+export function manualScorers(graders: GraderSpec[]): GraderSpec[] {
+  // The manual form has no field for the criterion instructions this judge needs.
+  return graders.filter(
+    (grader) => grader.fqn !== "metis.library.graders.CriterionJudgeGrader",
+  );
+}
