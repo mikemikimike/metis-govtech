@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from metis.core.trials import TrialConfig
 from metis.engine.simulation.runner import Runner, RunnerFactory
-from metis.engine.simulation.types import ChosenAction, Observation, TrialConfig
+from metis.engine.simulation.types import ChosenAction, Observation
 
 
 class FakeRunner(Runner):

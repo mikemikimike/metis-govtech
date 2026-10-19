@@ -433,6 +433,8 @@ no stored object).
 
 - `RunConfig` → `TrialConfig`, `RunOutcome` → `TrialOutcome`, `RunFailure` →
   `TrialFailure`, `RunRecord` → `TrialRecord`, `RunMeta` → `TrialMeta`
+- `TrialConfig`, `TrialOutcome`, `TrialFailure`, `TrialRecord` and `GraderRef` are imported
+  from `metis.core.trials`, not `metis.engine.simulation.types`
 - `RunRecoverableError` → `TrialRecoverableError`
 - `RunRetryConfig` → `TrialRetryConfig` (and the Playwright runner's own `RetryConfig`
   fields `run_max_retries`/`run_retry_delay_seconds` → `trial_max_retries`/

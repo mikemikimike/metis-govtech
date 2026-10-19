@@ -10,14 +10,9 @@ from typer.testing import CliRunner
 
 from metis.core.reporting import EvaluationResults
 from metis.core.traces import GradingInput, Observation, Trace
+from metis.core.trials import GraderRef, TrialConfig, TrialOutcome, TrialRecord
 from metis.engine import cli
 from metis.engine.cli import EvaluationOutcome, app
-from metis.engine.simulation.types import (
-    GraderRef,
-    TrialConfig,
-    TrialOutcome,
-    TrialRecord,
-)
 
 runner = CliRunner()
 

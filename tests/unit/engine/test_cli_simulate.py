@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 from metis.engine import cli
 from metis.engine.cli import app
 from metis.engine.simulation import experiment as experiment_module
-from metis.engine.simulation.types import TrialConfig, TrialOutcome, TrialRecord
 
 runner = CliRunner()
 

@@ -42,8 +42,9 @@ if TYPE_CHECKING:
     import types as _types
 
     from metis.core.reporting import GraderRecord
+    from metis.core.trials import TrialRecord
     from metis.engine.simulation.experiment import TrialPlanItem
-    from metis.engine.simulation.types import Specification, TrialRecord
+    from metis.engine.simulation.types import Specification
 
 app = typer.Typer(help="Run METIS evaluations against traces.")
 
@@ -246,7 +247,9 @@ def _configure_process_logging(log_level: str, *, use_tui: bool = False) -> None
 def _trial_record_files(experiment_dir: Path) -> list[Path]:
     """Return trial records in the same order used by the old CLI."""
     return sorted(
-        (experiment_dir / execution_layout.TRIALS).glob("*/record.json"),
+        (experiment_dir / execution_layout.TRIALS).glob(
+            f"*/{execution_layout.TRIAL_RECORD}"
+        ),
         key=lambda path: path.stat().st_mtime,
     )
 
@@ -463,8 +466,8 @@ def _classify_resume_trials(
     trial_plan: list[TrialPlanItem],
 ) -> tuple[list[TrialPlanItem], dict[tuple[str, str, int], TrialRecord]]:
     """Return redo items and valid existing records keyed by plan identity."""
+    from metis.core.trials import TrialRecord
     from metis.engine.simulation.experiment import trial_folder_name
-    from metis.engine.simulation.types import TrialRecord
 
     redo: list[TrialPlanItem] = []
     completed: dict[tuple[str, str, int], TrialRecord] = {}
@@ -474,7 +477,7 @@ def _classify_resume_trials(
             experiment_dir
             / execution_layout.TRIALS
             / trial_folder_name(scenario, persona, trial_index)
-            / "record.json"
+            / execution_layout.TRIAL_RECORD
         )
         try:
             record = TrialRecord.load_file(record_path)
@@ -797,7 +800,7 @@ def _run_evaluation(
 
     import asyncio
 
-    from metis.engine.simulation.types import TrialRecord
+    from metis.core.trials import TrialRecord
 
     specification = _load_evaluation_specification(experiment_dir)
     files = _trial_record_files(experiment_dir)

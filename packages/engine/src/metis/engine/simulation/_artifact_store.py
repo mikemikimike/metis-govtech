@@ -12,7 +12,7 @@ from metis.core.logging import get_logger
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from .types import TrialRecord
+    from metis.core.trials import TrialRecord
 
 _TYPE_MAP = {
     "pdf": "report",

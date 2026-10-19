@@ -6,16 +6,18 @@ Persona and Scenario scores keep the existing pass-rate rules.
 
 from __future__ import annotations
 
-import json
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from metis.core import execution_layout
 from metis.core.logging import get_logger
+from metis.core.trials import TrialRecord
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from metis.core.trials import TrialConfig
 
 logger = get_logger(__name__)
 
@@ -57,38 +59,27 @@ def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
     persona_of: dict[str, str] = {}
     trials: list[dict] = []
     for record_path in sorted(
-        (run_dir / execution_layout.TRIALS).glob("*/record.json")
+        (run_dir / execution_layout.TRIALS).glob(f"*/{execution_layout.TRIAL_RECORD}")
     ):
         try:
-            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record = TrialRecord.load_file(record_path)
         except (OSError, ValueError) as exc:
-            logger.debug("record_unreadable", path=str(record_path), error=str(exc))
+            # ValidationError is a ValueError. A record the model rejects is dropped from
+            # the report, so say so where it can be seen.
+            logger.warning("record_unreadable", path=str(record_path), error=str(exc))
             continue
-        config = record.get("config") or {}
-        outcome = record.get("outcome") or {}
-        session = record.get("target_session_id")
-        persona = config.get("persona")
-        if session and persona:
-            persona_of[session] = persona
+        config = record.config
+        outcome = record.outcome
+        session = record.target_session_id
+        if session:
+            persona_of[session] = config.persona
 
-        stop_reason = str(outcome.get("stop_reason") or "unknown")
-        conversation = record.get("conversation") or []
-        target_errors = [
-            problem for turn in conversation for problem in _turn_problems(turn)
-        ]
-        failure_source = _failure_source(
-            outcome.get("failure_source") or record.get("failure_source")
-        )
+        stop_reason = outcome.stop_reason or "unknown"
+        failure_source = _failure_source(outcome.failure_source)
         message = stop_reason if stop_reason == "goal_achieved" else None
-        message = outcome.get("failure_message") or message
-        message = message or outcome.get("message") or outcome.get("error")
-        message = message or record.get("error")
-        if not message and target_errors:
-            message = target_errors[-1]
+        message = outcome.failure_message or message
         if stop_reason == "goal_achieved":
             failure_source = "outcome"
-        elif not failure_source and target_errors:
-            failure_source = "target"
 
         if stop_reason == "system_error" and (not failure_source or not message):
             legacy_source, legacy_message = _legacy_failure_details(
@@ -98,25 +89,23 @@ def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
             message = message or legacy_message
 
         if not failure_source:
-            if stop_reason == "goal_achieved":
-                failure_source = "outcome"
-            elif stop_reason == "user_abandoned":
+            if stop_reason == "user_abandoned":
                 failure_source = "userAgent"
             else:
                 failure_source = "evaluationRunner"
         trials.append(
             {
                 "id": record_path.parent.name,
-                "task_id": config.get("task_id", ""),
-                "trial_index": config.get("trial_index", 1),
+                "task_id": config.task_id,
+                "trial_index": config.trial_index,
                 "session": session or "",
-                "persona": persona or "",
-                "scenario": config.get("scenario") or "",
+                "persona": config.persona,
+                "scenario": config.scenario,
                 "stopReason": stop_reason,
-                "message": str(message or stop_reason),
+                "message": message or stop_reason,
                 "failureSource": failure_source,
-                "turns": int(outcome.get("total_turns") or 0),
-                "duration": outcome.get("duration_seconds"),
+                "turns": outcome.total_turns,
+                "duration": outcome.duration_seconds,
                 # A retried run is a run whose comparability is worth a second
                 # look: a retry is a free do-over only if the failure was
                 # independent of what the run was doing, which is not obvious
@@ -128,66 +117,13 @@ def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
                 # is not a published schema. report.schema.json is audited by
                 # downstream consumers, so every field in it is a contract to
                 # keep — not somewhere to mirror data nothing renders.
-                "attempt": int(record.get("attempt_number") or 1),
-                "conversation": [
-                    {
-                        "turn": int(turn.get("turn_number") or index + 1),
-                        "user": str(turn.get("user_message") or ""),
-                        "target": str(
-                            (turn.get("target_response") or {}).get("text") or ""
-                        ),
-                        "errors": _turn_problems(turn),
-                    }
-                    for index, turn in enumerate(conversation)
-                ],
+                "attempt": record.attempt_number,
+                # record.json no longer holds the conversation (#461); #462 reads it
+                # from the trial's Langfuse session.
+                "conversation": [],
             }
         )
     return persona_of, trials
-
-
-def _row_index(row: dict) -> int:
-    """``action_index`` if it survived the round trip as an int, else ``0``.
-
-    Coerced rather than trusted for the same reason :func:`_turn_problems`
-    sorts at all: no validator ran on this record, so a missing key or a string
-    must order somewhere rather than raise mid-report.
-    """
-    value = row.get("action_index")
-    return value if isinstance(value, int) else 0
-
-
-def _turn_problems(turn: dict) -> list[str]:
-    """Problem strings from one recorded turn that count against the target.
-
-    Notices first, then the ``detail`` of each failed action row in
-    ``action_index`` order. Three things here look like defensive noise and
-    are not, because this read path never rebuilds the Pydantic model — a
-    record from an older engine, a hand-built fixture or a third-party runner
-    arrives with no validator having run on it:
-
-    - the **sort**, because ``target_errors[-1]`` becomes the report's
-      headline message and I1's ordering guarantee binds only the write path;
-    - the **detail fallback**, because I2's non-empty-detail rule binds only
-      the write path too, and dropping a row with an empty detail would empty
-      ``target_errors`` and flip ``failureSource`` to ``evaluationRunner`` —
-      blaming METIS for the target's own failure;
-    - the **withheld exclusion**, which keeps the opposite misattribution out:
-      an action METIS itself rejected before dispatch never reached the
-      target, so the target cannot be blamed for it.
-    """
-    response = turn.get("target_response") or {}
-    results = sorted(response.get("action_results") or [], key=_row_index)
-    return [
-        *(str(notice) for notice in response.get("response_notices") or []),
-        *(
-            str(
-                row.get("detail")
-                or f"action {row.get('action_index')} failed with no detail recorded"
-            )
-            for row in results
-            if not row.get("succeeded") and not row.get("withheld")
-        ),
-    ]
 
 
 def _failure_source(value: object) -> str | None:
@@ -209,7 +145,7 @@ def _failure_source(value: object) -> str | None:
 
 
 def _legacy_failure_details(
-    run_dir: Path, record_path: Path, config: Mapping[str, Any]
+    run_dir: Path, record_path: Path, config: TrialConfig
 ) -> tuple[str | None, str | None]:
     """Read an explicit error source from old simulation logs when available.
 
@@ -218,8 +154,8 @@ def _legacy_failure_details(
     lets old reports use that fact without guessing from the error text.
     """
     _, separator, trial_text = record_path.parent.name.rpartition("-")
-    scenario = str(config.get("scenario") or "")
-    persona = str(config.get("persona") or "")
+    scenario = config.scenario
+    persona = config.persona
     if not separator or not trial_text.isdigit() or not scenario or not persona:
         return None, None
     log_path = (

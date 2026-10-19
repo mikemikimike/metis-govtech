@@ -40,7 +40,7 @@ A breaking change to a nested model bumps the version of the root model that con
 
 ### Bump Checklist (applies from v1.0)
 
-1. Increment the relevant `_*_VERSION` constant in `simulation/types.py`
+1. Increment the relevant `_*_VERSION` constant: `_SPECIFICATION_VERSION` in `simulation/types.py`, `_TRIAL_RECORD_VERSION` in `packages/core/src/metis/core/trials.py`
 2. Update the `Literal[N]` annotation on the model field to match
 3. Run `make -C packages/engine generate-schema` if the bumped model has a generated schema
 4. Update `example-experiment/specification.yaml` if affected

@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from .types import ChosenAction, Observation, TrialConfig
+    from metis.core.trials import TrialConfig
+
+    from .types import ChosenAction, Observation
 
 
 class Runner(ABC):

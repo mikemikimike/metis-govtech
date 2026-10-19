@@ -20,7 +20,6 @@ from ...types import (
     FormElement,
     FormFillAction,
     Observation,
-    TrialConfig,
     UIState,
     UploadFileAction,
 )
@@ -35,6 +34,8 @@ from ._ui_capture import (
 
 if TYPE_CHECKING:
     from playwright.async_api import Page
+
+    from metis.core.trials import TrialConfig
 
     from ._config import OrcaPlaywrightRunnerConfig
 

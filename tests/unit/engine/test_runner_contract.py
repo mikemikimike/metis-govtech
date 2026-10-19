@@ -348,8 +348,9 @@ class _UploadingAgent:
 def _withholding_orchestrator(runner, agent, tmp_path, declared: list[str]):
     from pathlib import Path
 
+    from metis.core.trials import TrialConfig
     from metis.engine.simulation.orchestrator import Orchestrator
-    from metis.engine.simulation.types import Scenario, TrialConfig
+    from metis.engine.simulation.types import Scenario
 
     fixtures_dir = Path(tmp_path) / "fixtures"
     fixtures_dir.mkdir(exist_ok=True)

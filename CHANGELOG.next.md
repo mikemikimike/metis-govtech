@@ -87,6 +87,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - `metis.core.reporting`: `EvaluationResults`, the version-guarded `reports/results.json`
   holding one `GraderRecord` per grader per session that `metis-engine` writes (#417, #428).
 
+- `metis.core.trials`: `TrialRecord`, the version-guarded `outputs/trials/<trial>/record.json`,
+  with `TrialConfig`, `TrialOutcome`, `TrialFailure` and `GraderRef`, moved from `metis-engine`
+  so `metis-insights` can read records through the same model. `TrialOutcome` has optional
+  `failure_source` and `failure_message`, naming the cause of a failed trial (#423).
+
 - `defaults.judge_model` in `specification.yaml`: the experiment's default judge model for
   model-based graders. It is omitted from the document when unset (#428).
 
@@ -153,6 +158,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   the Specification in `specification.yaml`.
 
 #### Breaking
+
+- Import `TrialRecord`, `TrialConfig`, `TrialOutcome`, `TrialFailure` and `GraderRef` from
+  `metis.core.trials`; `metis.engine.simulation.types` no longer defines them (#423).
 
 - Set `schema_version` to `2` for `specification.yaml`, run records, and the report schema. v1 bumps
   each schema once to mark the break from v0, and later `next` changes keep version `2` (#392).
@@ -229,6 +237,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `report.schema.json`, and `make ci` checks that schema (#417).
 
 #### Changed
+
+- `metis insights report` reads `record.json` through `metis.core.trials.TrialRecord`. A record
+  the model rejects is skipped with a warning. The trial's cause comes from
+  `outcome.failure_source`/`failure_message`, then `stop_reason` and the trial's logs. The report
+  no longer reads top-level `failure_source` or `error`, or `outcome.message`/`outcome.error`,
+  which no engine writes, nor `conversation`, which #461 removed, so the trial-trace view stays
+  empty until #462 (#423).
 
 - Reports read trial records from `outputs/trials/` and write `report.json` and
   `report.html` beside `outputs/reports/results.json` (#453).

@@ -72,6 +72,7 @@ import httpx
 
 from metis.core.console import console
 from metis.core.logging import get_logger
+from metis.core.trials import TrialConfig
 
 from ...exceptions import (
     AuthLossError,
@@ -91,7 +92,6 @@ from ...types import (
     ChosenAction,
     FormFillAction,
     Observation,
-    TrialConfig,
     UploadFileAction,
 )
 from .._http import (

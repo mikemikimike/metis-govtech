@@ -10,7 +10,7 @@ The JSON files here are **auto-generated**. Do not edit them directly; they will
 |---|---|---|---|
 | `specification.schema.json` | `Specification` | `_SPECIFICATION_VERSION` | `src/metis/engine/simulation/types.py` |
 
-`TrialRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. Its version constant is `_TRIAL_RECORD_VERSION`.
+`TrialRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. It lives in `packages/core/src/metis/core/trials.py`, with its version constant `_TRIAL_RECORD_VERSION`.
 
 `report.schema.json` is published by `metis-insights`; see
 [`packages/insights/schemas/README.md`](../../insights/schemas/README.md).
