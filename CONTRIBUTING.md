@@ -179,6 +179,17 @@ Avoid generic messages like "fix bug" or "update code".
 - **Static version fields:** Each package declares `version = "X.Y.Z"` in its `pyproject.toml` (no dynamic derivation)
 - **Package source layout:** `packages/<name>/src/metis/<name>/`
 
+### Shared file schemas
+
+New shared file contracts MUST be defined in `metis-core`. All published `*.schema.json`
+files MUST be generated from core models and stored in `packages/core/schemas/`.
+Private runtime models and API request and response models stay in their owning packages.
+
+Register each new published schema in `packages/core/scripts/generate_schema.py`.
+Run `make -C packages/core generate-schema` and commit the generated file.
+`make ci` checks schema ownership, registration, and generated content. See the
+[schema guide](packages/core/schemas/README.md) for version and validation rules.
+
 ## Testing
 
 ```bash

@@ -76,6 +76,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   requirements. The Experiment holds Personas, Scenarios, Tasks, and execution settings.
   The Specification combines both in one document (#395).
 
+- Publish one JSON schema for `specification.yaml` at
+  `packages/core/schemas/specification.schema.json`. It requires `schema_version`, `id`, and
+  `runner_factory_ref`, which every saved file carries. In-memory drafts still default them.
+  The engine refuses a file without them (#465).
+
+- All future shared file contracts belong in core. `make ci` checks published schema
+  ownership, registration, and generated content (#465).
+
 - `metis.core.traces`: `Observation`, `Trace` and `GradingInput`, the read-only input of every
   grader run. `Trace.root` finds the logical root observation by `isRootObservation`, falling
   back to the parentless observation only when the flag is absent from the whole trace (#428).
@@ -162,9 +170,6 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Import `TrialRecord`, `TrialConfig`, `TrialOutcome`, `TrialFailure` and `GraderRef` from
   `metis.core.trials`; `metis.engine.simulation.types` no longer defines them (#423).
 
-- Set `schema_version` to `2` for `specification.yaml`, run records, and the report schema. v1 bumps
-  each schema once to mark the break from v0, and later `next` changes keep version `2` (#392).
-
 - Rename every `Run`-as-individual-execution symbol in `packages/engine/` to `Trial`
   (`RunConfig` → `TrialConfig`, `RunRecord` → `TrialRecord`, `RunOutcome` →
   `TrialOutcome`, `RunFailure` → `TrialFailure`, `RunMeta` → `TrialMeta`,
@@ -193,7 +198,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `metis insights report --results-file <path>` command instead of building the report.
   They no longer print the pass/fail/skip table or write `report.json`/`report.html`.
   `generate_report`, `ReportResult`, and the `metis.engine.reporting` subpackage are
-  removed, and `report.schema.json` moved to `metis-insights` (#417).
+  removed (#417).
 
 - `metis engine evaluate` grades with the new contract. Each criterion's grader is built once
   from the specification snapshot and validated before the run (`grader_args` against its
@@ -233,8 +238,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - New package. `metis insights report --results-file <path>` reads an evaluation's
   `results.json`, prints the pass/fail/skip summary, and writes `report.json` and
-  `report.html` into the same experiment's `reports/` directory. It owns `Report` and
-  `report.schema.json`, and `make ci` checks that schema (#417).
+  `report.html` into the same experiment's `reports/` directory (#417).
 
 #### Changed
 
@@ -252,10 +256,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Expand Task Behaviour selections for plan counts, Criterion score attribution, and missing-result explanations (#413).
 
-- `metis insights report` still reads `results.json` version 2 and rejects files from the
+- `metis insights report` still reads `results.json` version 1 and rejects files from the
   current `metis engine evaluate` with "This results.json uses the new GraderRecord format
   (grader redesign #428), which metis insights report cannot read yet. Rerun the report once
   #454 is released."; its redesign is #454 (#428).
+
+- Reports write `schema_version: 1`. `metis.insights.Report` defaults a missing version to
+  `1` and rejects other explicit versions. The published `report.schema.json` file is
+  removed; report validation uses the `Report` model (#465).
 
 ### metis-testbed
 
@@ -313,10 +321,6 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   of model responses, with specific guidance for Clarify and Behaviours. Labels and questions are
   package configuration. The web client asks for the perspective; the CLI always uses End user.
 
-- **JSON schema for Specification drafts.** `packages/wizard/schemas/specification.schema.json` is generated
-  from the `Specification` model and CI-guarded by `make check-schema`, giving schema-aware
-  editors autocomplete and validation for hand-authored drafts. The Specification carries a
-  `schema_version` field (defaulted to `2`; an unreadable version is refused, not misread).
 - **A stateless Interview lifecycle interface.** `handle_interview` accepts a start, turn, or end
   request against client-held state and returns the next state with a derived stage, or a typed
   failure with a stable error code and the caller's state unchanged. `compile_specification` turns a
@@ -410,7 +414,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Rename the wizard `Task` and `TaskDraft` models to `Feature` and `FeatureDraft`. Specifications use
   `features`, patch paths use `features[...]`, and new feature IDs use `F-`. Specification schema
-  version 2, prompts, API types, browser forms, and reports use the glossary term (#392).
+  version 1, prompts, API types, browser forms, and reports use the glossary term (#392).
 
 - **Interview state is client-held and file-free.** The server-owned session file, its format
   version, and the `/api/interviews` routes are gone. A caller holds the returned state and sends it

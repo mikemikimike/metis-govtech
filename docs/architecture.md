@@ -98,6 +98,10 @@ metis/
 
 MUST NOT depend on any other workspace member.
 
+New shared file contracts MUST be defined in `metis-core`. All published `*.schema.json`
+files MUST be generated from core models and stored in `packages/core/schemas/`.
+Private runtime models and API request and response models stay in their owning packages.
+
 ---
 
 ### 5.2. `metis-library`
@@ -211,6 +215,8 @@ Engine creates `experiments/execute/<specification-id>-YYYYMMDD-HHMMSS/`. It cop
 `--input-dir` into `inputs/`, writes trial records and artifacts under `outputs/trials/`,
 and writes evaluation results to `outputs/reports/results.json`. Insights reads the
 same execution root and writes `report.json` and `report.html` beside the results.
+The current Insights CLI accepts the legacy `turn_results` and `session_results`
+format. It rejects the engine's current `records` format until #454 is complete.
 `--experiment-dir` identifies the execution root for evaluation and resume.
 `metis.core.execution_layout` owns the paths shared by Engine and Insights.
 Logs remain under `logs/`, with the existing simulation log override. Artifact paths
@@ -294,6 +300,7 @@ Dependencies MUST flow downward only. The following DAG is normative:
 **Invariant Rules:**
 
 1. `metis-core` MUST NOT depend on any other workspace member.
+
 2. `metis-library` MUST depend only on `metis-core`.
 3. `metis-wizard` MUST NOT depend on `metis-engine` or `metis-insights`.
 4. `metis-insights` MUST NOT depend on `metis-engine`, `metis-library`, or `metis-wizard`.
@@ -354,7 +361,7 @@ A root `Makefile` MUST provide the following targets as the public development a
 | `check` | Composition: `lint` + `format-check` + `typecheck`. |
 | `check-web` | Run non-mutating `apps/web` formatter, type checker, tests, and API drift checks. |
 | `build-web` | Run the production `apps/web` build. This target writes the normal Vite output. |
-| `ci` | Composition: `check` + `check-web` + `build-web` + `test` + engine, wizard, and insights schema checks. MUST mirror what CI pipelines execute. |
+| `ci` | Composition: `check` + `check-web` + `build-web` + `test` + core schema checks. MUST mirror what CI pipelines execute. |
 | `clean` | Remove all generated/cached files across the monorepo. |
 
 **Rules:**

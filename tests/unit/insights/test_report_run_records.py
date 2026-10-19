@@ -77,10 +77,6 @@ def test_a_retried_trial_reports_its_attempt(tmp_path: Path) -> None:
     _, trials = _load_trial_records(tmp_path)
 
     assert trials[0]["attempt"] == 2
-    # The per-attempt detail is deliberately NOT mirrored into the report: it
-    # stays in record.json, which is not a published schema, while every field
-    # of report.schema.json is a contract downstream consumers audit. A record
-    # carrying prior_failures must still load and must not leak them here.
     assert "priorFailures" not in trials[0]
 
 
@@ -123,7 +119,7 @@ def test_task_plan_uses_the_selected_trial_count() -> None:
 def test_an_invalid_record_is_skipped_not_fatal(tmp_path: Path) -> None:
     valid = _record().model_dump()
     _write(tmp_path, "s-p-1", valid)
-    _write(tmp_path, "s-p-2", {**valid, "schema_version": 1})
+    _write(tmp_path, "s-p-2", {**valid, "schema_version": 99})
     _write(
         tmp_path,
         "s-p-3",

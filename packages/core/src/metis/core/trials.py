@@ -22,7 +22,7 @@ from pydantic_core import core_schema as cs
 
 from metis.core.artifacts import Artifact
 
-_TRIAL_RECORD_VERSION = 2
+_TRIAL_RECORD_VERSION = 1
 
 
 class GraderRef(BaseModel):
@@ -141,7 +141,7 @@ class TrialFailure(BaseModel, extra="ignore"):
 class TrialRecord(BaseModel, extra="ignore"):
     """A complete simulation run record loaded from a JSON result file."""
 
-    schema_version: Literal[2] = _TRIAL_RECORD_VERSION
+    schema_version: Literal[1] = _TRIAL_RECORD_VERSION
     config: TrialConfig
     outcome: TrialOutcome
     artifacts: list[Artifact] = []

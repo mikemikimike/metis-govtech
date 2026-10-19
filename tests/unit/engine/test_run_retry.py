@@ -24,7 +24,7 @@ class TestRunRetryBehavior:
     def test_run_record_tracks_multiple_attempts(self) -> None:
         record = TrialRecord.model_validate(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "config": {"persona": "p", "scenario": "s"},
                 "outcome": {
                     "stop_reason": "system_error",

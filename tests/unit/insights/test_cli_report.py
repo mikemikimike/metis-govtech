@@ -6,6 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
 from typer.testing import CliRunner
 
 from metis.insights._legacy_results import (
@@ -18,7 +20,7 @@ from metis.insights.cli import app
 
 runner = CliRunner()
 
-SPECIFICATION = "schema_version: 2\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\ntarget:\n  name: Test target\n  users: Test users\n  description: Test target\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  behaviour_refs:\n  - EB-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
+SPECIFICATION = "schema_version: 1\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\ntarget:\n  name: Test target\n  users: Test users\n  description: Test target\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  behaviour_refs:\n  - EB-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: metis.library.graders.TurnBudgetGrader\n      grader_args: {}\n"
 
 
 def _compact(value: str) -> str:
@@ -86,7 +88,16 @@ def test_report_writes_report_files_beside_results(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     reports_dir = results_file.parent
     report = json.loads((reports_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["schema_version"] == 1
     assert Report.model_validate(report).target == "Test target"
+    without_version = {
+        key: value for key, value in report.items() if key != "schema_version"
+    }
+    assert Report.model_validate(without_version).schema_version == 1
+    for unsupported_version in (2, None):
+        invalid = {**report, "schema_version": unsupported_version}
+        with pytest.raises(ValidationError, match="schema_version"):
+            Report.model_validate(invalid)
     assert report["criteria"]["AC-1-1"]["rate"] == 100
     assert (reports_dir / "report.html").read_text(encoding="utf-8")
     assert "AC-1-1" in result.output
@@ -172,7 +183,7 @@ def test_wrong_schema_version_exits_one_with_the_reason(tmp_path: Path) -> None:
     result = runner.invoke(app, ["report", "--results-file", str(path)])
 
     assert result.exit_code == 1
-    assert "Unsupportedschema_version99(expected2)" in _compact(result.output)
+    assert "Unsupportedschema_version99(expected1)" in _compact(result.output)
 
 
 def test_root_cli_exposes_insights_report() -> None:
@@ -191,7 +202,7 @@ def test_new_grader_record_format_is_rejected_with_a_clear_message(
     results_file = tmp_path / "reports" / "results.json"
     results_file.parent.mkdir(parents=True)
     results_file.write_text(
-        '{"schema_version": 2, "run_id": "r", "records": []}', encoding="utf-8"
+        '{"schema_version": 1, "run_id": "r", "records": []}', encoding="utf-8"
     )
 
     result = runner.invoke(app, ["report", "--results-file", str(results_file)])

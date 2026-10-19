@@ -12,7 +12,7 @@ from metis.core.specification import Specification
 
 def _document(**extra: Any) -> dict[str, Any]:
     return {
-        "schema_version": 2,
+        "schema_version": 1,
         "id": "exp",
         "target": {"name": "T", "users": "U", "description": "D"},
         **extra,

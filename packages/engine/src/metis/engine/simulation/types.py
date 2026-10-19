@@ -1,23 +1,19 @@
 """Pydantic models for simulation types.
 
-Covers the simulation's inputs (personas, experiments) and the runner's action and observation types. Trial records live in ``metis.core.trials``.
-These are the source of truth for the JSON Schemas in schemas/. After any
-change here, run `make generate-schema` and commit the updated schema files.
+Covers simulation inputs and runner action and observation types.
+Trial records live in ``metis.core.trials``. The specification schema is
+published by metis-core. See ``packages/core/schemas/README.md``.
 """
 
 from pathlib import Path
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
 from metis.core import Artifact
 from metis.core.experiment import Task
 from metis.core.specification import Specification as CoreSpecification
-from metis.core.specification import SpecificationDocument
 from metis.core.trials import GraderRef
-
-_SPECIFICATION_VERSION = 2
-
 
 # ---------------------------------------------------------------------------
 # User Agent Output — self-describing action union
@@ -279,19 +275,24 @@ class Scenario(BaseModel):
         return self
 
 
-class ExecutionDocument(SpecificationDocument):
-    """Required metadata for an executable specification document."""
-
-    schema_version: Literal[2]
-    id: str
-    runner_factory_ref: str
-
-
 class Specification(CoreSpecification):
     """A complete Specification validated for engine execution."""
 
-    _document_model = ExecutionDocument
-    schema_version: Literal[2]
+    @model_validator(mode="before")
+    @classmethod
+    def _require_header(cls, data: Any) -> Any:
+        # drafts take defaults for these keys; a file the engine runs must state them.
+        if isinstance(data, dict) and not {"profile", "experiment"} & data.keys():
+            missing = [
+                key
+                for key in ("schema_version", "id", "runner_factory_ref")
+                if key not in data
+            ]
+            if missing:
+                raise ValueError(
+                    f"The specification needs these keys: {', '.join(missing)}."
+                )
+        return data
 
     @model_validator(mode="after")
     def _check_execution(self) -> Self:

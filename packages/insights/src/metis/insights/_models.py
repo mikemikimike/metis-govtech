@@ -1,20 +1,16 @@
 """Pydantic models for the target evaluation report (report.json).
 
-These models define the contract for the JSON report that downstream
-consumers (web frontend, insights, external integrations) depend on.
-They are the source of truth for schemas/report.schema.json.
-
-After any change here, run `make generate-schema` and commit the
-updated schema files.
+`metis insights report` validates report data through these models before writing
+report.json. Only metis-insights reads them, so they stay private to this package.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-_REPORT_VERSION = 2
+_REPORT_VERSION = 1
 
 
 class Timings(BaseModel, extra="allow"):
@@ -232,6 +228,7 @@ class Report(BaseModel):
     This is the contract downstream consumers depend on.
     """
 
+    schema_version: Literal[1] = _REPORT_VERSION
     target: str
     run: str
     date: str

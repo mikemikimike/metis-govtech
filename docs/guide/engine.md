@@ -174,7 +174,7 @@ experiments/execute/orca-eval-20260730-143022/
 
 `results.json` holds one GraderRecord per grader per session, each with one result per grading scope. `metis insights report` does not read this format yet (#454).
 
-The structure of `report.json` is defined by a [JSON Schema](../../packages/insights/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
+The insights [Report model](../../packages/insights/src/metis/insights/_models.py) defines `report.json`. Python readers can validate report data with `Report.model_validate()`.
 
 Use `logs/evaluate.log` to review extraction, each criterion's grader and resolved arguments (including the judge model), every recorded result with its outcome, score and reason, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
@@ -205,7 +205,7 @@ my-experiment/
 ### Top-Level Fields
 
 ```yaml
-schema_version: 2
+schema_version: 1
 
 id: my-evaluation
 runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
@@ -217,7 +217,7 @@ target:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `schema_version` | Yes | Always `2` (current version) |
+| `schema_version` | Yes | Always `1` (current version) |
 | `id` | Yes | Identifier used in the output directory name |
 | `runner_factory_ref` | Yes | Importable RunnerFactory class |
 | `target` | Yes | Target name, users, description, and optional detail |
@@ -841,7 +841,7 @@ Add `runner_factory_ref` at the top level of your experiment configuration. This
 excerpt selects the REST runner and defines one Test Case:
 
 ```yaml
-schema_version: 2
+schema_version: 1
 id: my-api-eval
 runner_factory_ref: my_package.runners.RestRunnerFactory
 
@@ -937,17 +937,17 @@ the grader configuration used for each Criterion.
 
 #### Schema Reference
 
-The [JSON Schema](../../packages/engine/schemas/specification.schema.json) provides
+The [JSON Schema](../../packages/core/schemas/specification.schema.json) provides
 editor completion and shape validation. The engine also checks references and
 coverage when it loads the document. From a specification in
 `packages/engine/example-experiment/`, use this editor directive:
 
 ```yaml
-# yaml-language-server: $schema=../schemas/specification.schema.json
+# yaml-language-server: $schema=../../core/schemas/specification.schema.json
 ```
 
 ```yaml
-schema_version: 2
+schema_version: 1
 id: <string>              # Experiment identifier
 runner_factory_ref: <string>  # Importable RunnerFactory class
 target:
@@ -996,7 +996,7 @@ tasks:
 
 #### Field Descriptions
 
-**`schema_version`** — the specification schema version. The current version is `2`. The engine requires this field and rejects an unsupported version.
+**`schema_version`** — the specification schema version. The current version is `1`. The engine requires this field and rejects an unsupported version.
 
 **`target`** — top-level metadata:
 
@@ -1132,7 +1132,7 @@ Use this template and checklist when creating an experiment from scratch for a n
 Save this as `my-experiment/specification.yaml`. Set `runner_factory_ref` to your installed factory.
 
 ```yaml
-schema_version: 2
+schema_version: 1
 id: my-target-eval
 runner_factory_ref: my_package.runners.MyRunnerFactory
 

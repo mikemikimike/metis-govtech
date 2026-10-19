@@ -4,7 +4,7 @@ import type { Specification } from "./transport/api.ts";
 import { specificationHasCriteria } from "./graders.ts";
 
 const specification: Specification = {
-  schema_version: 2,
+  schema_version: 1,
   id: "test",
   runner_factory_ref:
     "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",

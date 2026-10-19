@@ -6,6 +6,15 @@ See root [AGENTS.md](../../AGENTS.md) for monorepo-wide instructions.
 
 Core data models and abstractions for the METIS suite. Zero workspace dependencies — only Pydantic v2 + stdlib.
 
+## Shared schemas
+
+Core owns all new shared file contracts. Published
+`*.schema.json` files belong in `packages/core/schemas/` and must be generated from
+core models. Register new schemas in `scripts/generate_schema.py`. Run
+`make -C packages/core generate-schema` and `make -C packages/core check-schema`.
+Private runtime models and API models stay in their owning packages. See the
+[schema guide](schemas/README.md).
+
 ## Package-Specific Notes
 
 - Dependencies: Pydantic v2, structlog, Rich (plus stdlib). Zero workspace dependencies.
@@ -17,6 +26,9 @@ Core data models and abstractions for the METIS suite. Zero workspace dependenci
 - `metis.core.specification` combines a Profile and an Experiment. Its document
   adapter keeps YAML and API JSON flat.
   Keep draft construction separate from complete execution validation.
+  `SpecificationDocument` is the source of `schemas/specification.schema.json`, the one
+  published schema for `specification.yaml`. After changing it or a model it contains, run
+  `make -C packages/core generate-schema` and commit the result.
 - `traces.py`: `Observation`, `Trace` and `GradingInput`, the read-only input of every grader
   run. Frozen, tuple collections. `Trace.root` is METIS's port of Langfuse's
   `isRootObservation = true` filter.

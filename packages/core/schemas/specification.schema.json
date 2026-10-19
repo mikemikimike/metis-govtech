@@ -315,18 +315,21 @@
       "type": "object"
     }
   },
-  "description": "Required metadata for an executable specification document.",
+  "description": "The flat YAML and API representation of a Specification.",
   "properties": {
     "schema_version": {
-      "const": 2,
+      "const": 1,
+      "default": 1,
       "title": "Schema Version",
       "type": "integer"
     },
     "id": {
+      "default": "",
       "title": "Id",
       "type": "string"
     },
     "runner_factory_ref": {
+      "default": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
       "title": "Runner Factory Ref",
       "type": "string"
     },
@@ -378,6 +381,6 @@
     "runner_factory_ref",
     "target"
   ],
-  "title": "Specification v2",
+  "title": "Specification v1",
   "type": "object"
 }

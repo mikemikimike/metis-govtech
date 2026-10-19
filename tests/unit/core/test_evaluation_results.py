@@ -55,14 +55,14 @@ def _results() -> EvaluationResults:
 
 
 class TestVersion:
-    def test_current_version_is_2(self) -> None:
-        assert _EVALUATION_RESULTS_VERSION == 2
-        loaded = EvaluationResults.model_validate({"schema_version": 2, "run_id": "r"})
+    def test_current_version_is_1(self) -> None:
+        assert _EVALUATION_RESULTS_VERSION == 1
+        loaded = EvaluationResults.model_validate({"schema_version": 1, "run_id": "r"})
         assert loaded.records == []
         assert loaded.latency_seconds is None
 
     def test_missing_version_takes_the_default(self) -> None:
-        assert EvaluationResults.model_validate({"run_id": "r"}).schema_version == 2
+        assert EvaluationResults.model_validate({"run_id": "r"}).schema_version == 1
 
     def test_unsupported_version_is_rejected(self) -> None:
         with pytest.raises(ValidationError, match="Unsupported schema_version 99"):
@@ -73,7 +73,7 @@ class TestVersion:
         """The old format has the same schema_version, so its keys are what tell it apart."""
         with pytest.raises(ValidationError, match="re-run `metis engine evaluate`"):
             EvaluationResults.model_validate(
-                {"schema_version": 2, "run_id": "r", old_key: []}
+                {"schema_version": 1, "run_id": "r", old_key: []}
             )
 
 
@@ -107,7 +107,7 @@ class TestFile:
 
     def test_wrong_version_in_a_file_is_rejected(self, tmp_path: Path) -> None:
         path = tmp_path / "results.json"
-        path.write_text('{"schema_version": 1, "run_id": "r"}', encoding="utf-8")
+        path.write_text('{"schema_version": 99, "run_id": "r"}', encoding="utf-8")
         with pytest.raises(ValidationError, match="different version of metis-engine"):
             EvaluationResults.load_file(path)
 

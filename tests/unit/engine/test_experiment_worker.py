@@ -464,7 +464,7 @@ class TestFixtureContentDescriptions:
     def test_experiment_accepts_fixture_content_descriptions(self) -> None:
         exp = Specification.model_validate(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "fixture_content_descriptions": {"q3.csv": "Q3 sales, 200 rows."},
                 "id": "e",
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
@@ -520,7 +520,7 @@ class TestFixtureContentDescriptions:
     def test_experiment_defaults_fixture_content_descriptions_to_empty(self) -> None:
         exp = Specification.model_validate(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "id": "e",
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
                 "personas": [{"id": "p", "description": "d", "name": "p"}],
@@ -630,7 +630,7 @@ class TestFixtureContentDescriptions:
     ) -> None:
         exp = Specification.model_validate(
             {
-                "schema_version": 2,
+                "schema_version": 1,
                 "id": "e",
                 "runner_factory_ref": "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
                 "personas": [

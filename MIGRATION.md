@@ -51,10 +51,12 @@ and Criteria. Use `metis.core.experiment.Experiment` for the execution plan.
 The wizard persistence model is `metis.wizard.domain.specification.Specification`.
 
 Merge the old `profile.yaml` and `experiment.yaml` into `specification.yaml`.
-Keep `schema_version: 2` on `next`. Use the complete example in
+Keep `schema_version: 1` on `next`. Use the complete example in
 `packages/engine/example-experiment/specification.yaml` as the reference.
 
 - Keep `id` and `runner_factory_ref`. Use `product.description` for the description.
+- Point editor schema directives at `packages/core/schemas/specification.schema.json`.
+  The engine and wizard copies of the schema are removed.
 - Keep the Product → Feature → Behaviour → Criterion hierarchy and `measured` state.
 - Put each Grader FQN and argument map on its Criterion as `grader_fqn` and
   `grader_args`. Use separate Criteria for different requirements or settings.
@@ -96,7 +98,7 @@ concept is now `Feature`. The current Task is an explicit Test Case.
 Replace each `tasks[].criterion_refs` list with `tasks[].behaviour_refs`.
 Find the parent Behaviour for each selected Criterion. Keep each Behaviour ID once.
 Review the result because a selected Behaviour runs all its Criteria.
-Keep `schema_version: 2` and start a new run with the converted document.
+Keep `schema_version: 1` and start a new run with the converted document.
 Recreate saved Interviews whose Tasks use Criterion references. The browser keeps
 these records in storage and shows that they cannot be read. It does not convert
 pending controls or delete fixture data.
@@ -224,16 +226,16 @@ The Profile groups product functions under `features`. Update Python imports fro
 to `Feature` and from `TaskDraft` to `FeatureDraft`. Use `profile.features`,
 `profile.feature(id)`, and `profile.feature_of(behaviour_id)`.
 
-For each saved `profile.yaml`, rename the top-level `tasks` key to `features` and set
-`schema_version` to `2`. Existing IDs can stay unchanged. New feature IDs use `F-`.
+For each saved `profile.yaml`, rename the top-level `tasks` key to `features` and keep
+`schema_version` at `1`. Existing IDs can stay unchanged. New feature IDs use `F-`.
 Update patch paths from `tasks[...]` to `features[...]`.
 
-Saved browser Interviews that use profile schema version 1 cannot resume. Start a new
+Saved browser Interviews that use the `tasks` key cannot resume. Start a new
 Interview. Keep a backup of any saved state before conversion; its pending patches and
 history can also contain paths with `tasks[...]`.
 
-The wizard compiles `specification.yaml` with `schema_version: 2`. Reports change too; see
-[Schema versions are now `2`](#schema-versions-are-now-2).
+The wizard compiles `specification.yaml` with `schema_version: 1`. Reports change too; see
+[Schema versions stay at `1`](#schema-versions-stay-at-1).
 
 #### No fallback judge for unmatched Criteria
 
@@ -364,7 +366,7 @@ The grader redesign (#428) adds the types every grader reads and returns, and ch
 
 **On disk**
 
-- `reports/results.json` keeps `schema_version: 2` but holds one `GraderRecord` per
+- `reports/results.json` keeps `schema_version: 1` but holds one `GraderRecord` per
   grader per session. `EvaluationResults` rejects a file that has `turn_results` or
   `session_results` keys. Old files are not migrated — re-run `metis engine evaluate`.
 
@@ -412,12 +414,11 @@ subclasses `metis.library.grader.Grader[Args]`, declares its parameters as an `a
 
 ### metis-engine
 
-#### Schema versions are now `2`
+#### Schema versions stay at `1`
 
-v1 marks its break from v0 with one schema version bump. `specification.yaml`, run records
-(`record.json`), and the report schema (`Report v2`) now use version `2`. Set
-`schema_version: 2` in each `specification.yaml`. The engine refuses run records from v0;
-run the simulation again to create new records.
+`specification.yaml`, run records (`record.json`), and reports keep `schema_version: 1`.
+The version does not mark the break from v0, so check each file against this guide.
+Run records from v0 do not load; run the simulation again to create new records.
 
 Report JSON now uses `features` at the root, in `resultTable`, and in trial outcome
 items. Update report consumers and regenerate reports.
@@ -495,10 +496,13 @@ Scripts that read `report.json` after `evaluate` must run that command first.
 
 - `metis.engine.generate_report` and `metis.engine.ReportResult` are removed. Evaluate,
   then run the CLI command above.
-- `metis.engine.reporting` is removed. `Report`, `build_report`, and
-  `load_report_sources` are now in `metis.insights`.
-- `report.schema.json` moved from `packages/engine/schemas/` to
-  `packages/insights/schemas/`. Its content and version (`Report v2`) are unchanged.
+- `metis.engine.reporting` is removed. `build_report` and `load_report_sources` are now
+  in `metis.insights`, together with `Report`.
+- The published `report.schema.json` file is removed. Use
+  `metis.insights.Report.model_validate()` to validate report data in Python.
+  Reports write `"schema_version": 1`. The model defaults
+  a missing version to `1` and rejects other explicit values. The version stays `1`
+  under the `next` pre-release policy.
 
 #### Graders redesigned without DeepEval (#428)
 
@@ -531,7 +535,7 @@ failed.
 **On disk**
 
 - `reports/results.json` holds one `GraderRecord` per grader per session, with
-  `schema_version` still `2`. `metis insights report` rejects this file until its redesign
+  `schema_version` still `1`. `metis insights report` rejects this file until its redesign
   (#454) lands.
 - An experiment directory from before the redesign cannot be evaluated again. Its frozen
   `inputs/specification.yaml` names deleted graders, so `metis engine evaluate` stops at
@@ -585,4 +589,4 @@ authentication, and evaluation execution remain deferred.
   specification key and form paths, and preserves user text and file bytes.
   Other clients must update their saved state before sending it to the API.
 
-Specification schema version remains `2` under the `next` pre-release policy.
+Specification schema version remains `1` under the `next` pre-release policy.

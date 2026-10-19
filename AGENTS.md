@@ -77,6 +77,16 @@ Key invariants:
 - `wizard` and `engine` depend on `core` + `library` but NOT on each other
 - `insights` depends only on `core`
 
+## Shared schema ownership
+
+New shared file contracts MUST be defined in `metis-core`. All published `*.schema.json`
+files MUST be generated from core models and stored in `packages/core/schemas/`.
+Private runtime models and API request and response models stay in their owning packages.
+
+Register each published schema in `packages/core/scripts/generate_schema.py`. Run
+`make -C packages/core generate-schema` and `make -C packages/core check-schema`.
+See [the schema guide](packages/core/schemas/README.md).
+
 ## Architecture
 
 - **metis-core:** Domain schemas (Trace, Span, Score, etc.), abstract interfaces (BaseTraceIngester), plugin discovery via entry points.

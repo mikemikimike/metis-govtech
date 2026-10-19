@@ -189,8 +189,8 @@ def test_the_compile_result_keeps_its_file_named_aliases() -> None:
     from tests.fixtures.wizard.specifications import research_assistant
 
     result = CompileResult(
-        specification_yaml="schema_version: 2\n", specification=research_assistant()
+        specification_yaml="schema_version: 1\n", specification=research_assistant()
     )
     assert (
-        result.model_dump(by_alias=True)["specification.yaml"] == "schema_version: 2\n"
+        result.model_dump(by_alias=True)["specification.yaml"] == "schema_version: 1\n"
     )
