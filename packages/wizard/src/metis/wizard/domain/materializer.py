@@ -145,6 +145,7 @@ def add_persona(
         id=_persona_id(issued_ids, draft.name, manual=origin is PatchOrigin.WIZARD),
         name=draft.name,
         description=draft.description,
+        metadata=draft.metadata,
     )
     _record(issued_ids, user_typed, persona.id, origin)
     specification.personas.append(persona)
@@ -164,6 +165,7 @@ def add_scenario(
         id=_next_numeric(issued_ids, "S"),
         name=draft.name,
         description=draft.description,
+        metadata=draft.metadata,
     )
     # Build every Task before changing the Specification, so invalid drafts are atomic.
     tasks = [

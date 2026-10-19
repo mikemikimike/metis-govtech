@@ -362,10 +362,21 @@ model_calls:
     Propose 3–5 personas: behavioural archetypes describing *how someone interacts*, not who they
     are. Any persona must make sense dropped into any scenario.
 
-    Every persona must include exactly these two fields:
+    Every persona must include these fields:
     - `name`: a short display name, such as `Indecisive junior officer` or `Impatient executive`
     - `description`: one or two sentences describing how this archetype interacts, which the
       evaluation runner will use to simulate them
+
+    Include `metadata` for relevant facts explicitly supplied by the user or source documents,
+    including facts written in ordinary prose. Extract the stated role and communication style
+    into the matching Persona when present. Keep these facts together on the Persona that
+    represents that user. Do not assign them to an unrelated generated archetype.
+    Use a flat object with arbitrary keys and string values. Keep the description separate.
+    Preserve supplied custom keys and their string values. Choose clear keys for prose facts.
+    No key is required. Omit metadata or return {} when no relevant facts are supplied.
+    Each value must be traceable to the supplied input. Do not use model-generated descriptions,
+    evaluation goals, test-design reasoning, or inferred traits as metadata evidence. Do not add
+    evaluation-focus summaries or invent age, occupation, personality, or other personal details.
 
     Do not add `id`, `scope` or `behaviours`; the wizard derives the id from the name.
 
@@ -388,6 +399,17 @@ model_calls:
 
     Draft the whole set of scenarios in one go. A scenario is one simulated situation. It can
     exercise several behaviours at once, and one behaviour can be probed by several scenarios.
+
+    Include `metadata` for relevant facts explicitly supplied by the user or source documents,
+    including facts written in ordinary prose. Capture a supplied opening request and completion
+    context on the matching Scenario when present. Preserve their meaning; do not add conditions.
+    Use a flat object with arbitrary keys and string values. Keep the description separate.
+    Preserve supplied custom keys and their string values. Choose clear keys for prose facts.
+    No key is required. Omit metadata or return {} when no relevant facts are supplied.
+    Each value must be traceable to the supplied input. Do not use model-generated descriptions,
+    evaluation goals, test-design reasoning, or inferred conditions as metadata evidence. Do not
+    add evaluation-focus summaries. Keep Persona facts on Personas. Metadata provides context;
+    it does not set Engine controls or Grader rules.
 
     Every behaviour with measured=true must be covered by at least one scenario. Select measured Behaviour IDs in each Task's behaviour_refs. Every selected Behaviour runs all its Criteria. Select one persona_ref
     per Task. Every Scenario needs at least one Task. Those, the
