@@ -55,6 +55,8 @@ Keep `schema_version: 2` on `next`. Use the complete example in
 `packages/engine/example-experiment/specification.yaml` as the reference.
 
 - Keep `id` and `runner_factory_ref`. Use `product.description` for the description.
+- Point editor schema directives at `packages/core/schemas/specification.schema.json`.
+  The engine and wizard copies of the schema are removed.
 - Keep the Product → Feature → Behaviour → Criterion hierarchy and `measured` state.
 - Put each Grader FQN and argument map on its Criterion as `grader_fqn` and
   `grader_args`. Use separate Criteria for different requirements or settings.
@@ -495,10 +497,11 @@ Scripts that read `report.json` after `evaluate` must run that command first.
 
 - `metis.engine.generate_report` and `metis.engine.ReportResult` are removed. Evaluate,
   then run the CLI command above.
-- `metis.engine.reporting` is removed. `Report`, `build_report`, and
-  `load_report_sources` are now in `metis.insights`.
+- `metis.engine.reporting` is removed. `build_report` and `load_report_sources` are now
+  in `metis.insights`. `Report` is now in `metis.core.report`, and `metis.insights`
+  re-exports it.
 - `report.schema.json` moved from `packages/engine/schemas/` to
-  `packages/insights/schemas/`. Its content and version (`Report v2`) are unchanged.
+  `packages/core/schemas/`. Its content and version (`Report v2`) are unchanged.
 
 #### Graders redesigned without DeepEval (#428)
 

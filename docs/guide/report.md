@@ -68,7 +68,7 @@ The criterion name is part of the profile contract; the report uses the exact me
 name as the metric title. If a result is missing, it uses the metric class name as
 a fallback. Scores retain Task, Trial, Criterion, Grader FQN, and arguments.
 IDs join Features, Behaviours, Criteria, Personas, Scenarios, Tasks, and
-metric results. The [report JSON Schema](../../packages/insights/schemas/report.schema.json)
+metric results. The [report JSON Schema](../../packages/core/schemas/report.schema.json)
 defines these fields.
 
 These rules are report inputs. The report must not replace an aggregator-supplied rate

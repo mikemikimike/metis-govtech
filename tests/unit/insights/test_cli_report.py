@@ -8,12 +8,12 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from metis.core.report import Report
 from metis.insights._legacy_results import (
     EvaluationResults,
     TurnGraderResult,
     TurnReport,
 )
-from metis.insights._models import Report
 from metis.insights.cli import app
 
 runner = CliRunner()

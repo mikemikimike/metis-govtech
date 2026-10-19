@@ -12,13 +12,15 @@ Evaluation runtime — simulation harness, trace extraction, and grader executio
 
 ## Schema Sync
 
-Pydantic models in `src/metis/engine/simulation/types.py` are the source of truth for JSON Schemas in `schemas/`. After modifying any model, run:
+`metis-core` publishes the one `specification.yaml` schema, from `SpecificationDocument` in
+`packages/core/src/metis/core/specification.py`. The engine has no schema files of its own. After
+you change a shared model, run:
 
 ```bash
-make -C packages/engine generate-schema
+make -C packages/core generate-schema
 ```
 
-Commit the updated schema files alongside the model change.
+Commit the updated schema file alongside the model change.
 
 ## Schema Versioning
 
@@ -40,13 +42,13 @@ A breaking change to a nested model bumps the version of the root model that con
 
 ### Bump Checklist (applies from v1.0)
 
-1. Increment the relevant `_*_VERSION` constant: `_SPECIFICATION_VERSION` in `simulation/types.py`, `_TRIAL_RECORD_VERSION` in `packages/core/src/metis/core/trials.py`
+1. Increment `_SPECIFICATION_VERSION` in `metis.core.specification` or `_TRIAL_RECORD_VERSION` in `metis.core.trials`
 2. Update the `Literal[N]` annotation on the model field to match
-3. Run `make -C packages/engine generate-schema` if the bumped model has a generated schema
+3. Run `make -C packages/core generate-schema` if `Specification` changed
 4. Update `example-experiment/specification.yaml` if affected
 5. Note the schema version change in the commit message
 
-See `schemas/README.md` for the full version bump rules table.
+See `packages/core/schemas/README.md` for the full version bump rules table.
 
 ## Pyright Configuration
 

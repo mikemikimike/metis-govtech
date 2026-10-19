@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from metis.insights._models import _REPORT_VERSION, Report
+from metis.core.report import _REPORT_VERSION, Report
+from metis.core.specification import _SPECIFICATION_VERSION, Specification
 
 SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schemas"
 
 _MODELS = [
+    (Specification, "specification.schema.json", _SPECIFICATION_VERSION, False),
     (Report, "report.schema.json", _REPORT_VERSION, True),
 ]
 

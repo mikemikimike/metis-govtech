@@ -76,6 +76,15 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   requirements. The Experiment holds Personas, Scenarios, Tasks, and execution settings.
   The Specification combines both in one document (#395).
 
+- Publish one JSON schema for `specification.yaml` at
+  `packages/core/schemas/specification.schema.json`. It requires `schema_version`, `id`, and
+  `runner_factory_ref`, which every saved file carries. In-memory drafts still default them.
+  The engine refuses a file without them (#TBD).
+
+- `metis.core.report` holds `Report`, the `report.json` contract, so that any package can
+  read reports. `packages/core/schemas/report.schema.json` is generated from it. `make ci`
+  checks that both core schemas are current (#TBD).
+
 - `metis.core.traces`: `Observation`, `Trace` and `GradingInput`, the read-only input of every
   grader run. `Trace.root` finds the logical root observation by `isRootObservation`, falling
   back to the parentless observation only when the flag is absent from the whole trace (#428).
@@ -193,7 +202,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `metis insights report --results-file <path>` command instead of building the report.
   They no longer print the pass/fail/skip table or write `report.json`/`report.html`.
   `generate_report`, `ReportResult`, and the `metis.engine.reporting` subpackage are
-  removed, and `report.schema.json` moved to `metis-insights` (#417).
+  removed, and `report.schema.json` moved to `metis-core` (#417).
 
 - `metis engine evaluate` grades with the new contract. Each criterion's grader is built once
   from the specification snapshot and validated before the run (`grader_args` against its
@@ -233,8 +242,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - New package. `metis insights report --results-file <path>` reads an evaluation's
   `results.json`, prints the pass/fail/skip summary, and writes `report.json` and
-  `report.html` into the same experiment's `reports/` directory. It owns `Report` and
-  `report.schema.json`, and `make ci` checks that schema (#417).
+  `report.html` into the same experiment's `reports/` directory (#417).
 
 #### Changed
 
@@ -313,10 +321,6 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   of model responses, with specific guidance for Clarify and Behaviours. Labels and questions are
   package configuration. The web client asks for the perspective; the CLI always uses End user.
 
-- **JSON schema for Specification drafts.** `packages/wizard/schemas/specification.schema.json` is generated
-  from the `Specification` model and CI-guarded by `make check-schema`, giving schema-aware
-  editors autocomplete and validation for hand-authored drafts. The Specification carries a
-  `schema_version` field (defaulted to `2`; an unreadable version is refused, not misread).
 - **A stateless Interview lifecycle interface.** `handle_interview` accepts a start, turn, or end
   request against client-held state and returns the next state with a derived stage, or a typed
   failure with a stable error code and the caller's state unchanged. `compile_specification` turns a

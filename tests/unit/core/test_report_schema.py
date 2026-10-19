@@ -1,4 +1,4 @@
-"""Schema sync tests for report.json — same pattern as test_schema.py."""
+"""Schema sync tests for report.json — same pattern as test_specification_schema.py."""
 
 import json
 from pathlib import Path
@@ -6,17 +6,12 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from metis.insights._models import _REPORT_VERSION, Report
+from metis.core.report import _REPORT_VERSION, Report
 
 
 @pytest.fixture
-def insights_pkg(repo_root: Path) -> Path:
-    return repo_root / "packages" / "insights"
-
-
-@pytest.fixture
-def schema_dir(insights_pkg: Path) -> Path:
-    return insights_pkg / "schemas"
+def schema_dir(repo_root: Path) -> Path:
+    return repo_root / "packages" / "core" / "schemas"
 
 
 class TestReportSchemaSync:

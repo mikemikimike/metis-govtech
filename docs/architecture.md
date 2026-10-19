@@ -354,7 +354,7 @@ A root `Makefile` MUST provide the following targets as the public development a
 | `check` | Composition: `lint` + `format-check` + `typecheck`. |
 | `check-web` | Run non-mutating `apps/web` formatter, type checker, tests, and API drift checks. |
 | `build-web` | Run the production `apps/web` build. This target writes the normal Vite output. |
-| `ci` | Composition: `check` + `check-web` + `build-web` + `test` + engine, wizard, and insights schema checks. MUST mirror what CI pipelines execute. |
+| `ci` | Composition: `check` + `check-web` + `build-web` + `test` + core schema checks. MUST mirror what CI pipelines execute. |
 | `clean` | Remove all generated/cached files across the monorepo. |
 
 **Rules:**

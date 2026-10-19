@@ -18,21 +18,23 @@ models in `_legacy_results.py`. The engine now writes a new format
 results.json uses the new GraderRecord format (grader redesign #428), which metis insights
 report cannot read yet. Rerun the report once #454 is released." until its redesign
 (#454) moves it onto the new types.
+`Report`, the `report.json` contract, lives in `metis.core.report` so that other packages
+can read reports.
 
 ## Layout
 
 - `cli.py` — the Typer app (`metis insights …`)
 - `report.py` — `format_terminal_summary`, `save_report`
 - `_report.py` — `build_report`, `load_report_sources` (the behaviour/criterion rollup)
-- `_models.py` — `Report`, the `report.json` contract
 - `_aggregation.py`, `_report_page.py`, `_report_styles.py` — summary counts and HTML
 
 ## Schema Sync
 
-`_models.py` is the source of truth for `schemas/report.schema.json`. After changing it:
+`metis.core.report` is the source of truth for `packages/core/schemas/report.schema.json`.
+After changing it:
 
 ```bash
-make -C packages/insights generate-schema
+make -C packages/core generate-schema
 ```
 
 The report's content rules live in [docs/guide/report.md](../../docs/guide/report.md).

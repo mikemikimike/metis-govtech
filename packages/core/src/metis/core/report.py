@@ -1,11 +1,11 @@
 """Pydantic models for the target evaluation report (report.json).
 
-These models define the contract for the JSON report that downstream
-consumers (web frontend, insights, external integrations) depend on.
-They are the source of truth for schemas/report.schema.json.
+`metis insights report` writes this file. These models are the contract for every
+reader of it: the wizard, the web client, the CLI, and external integrations.
+They are the source of truth for packages/core/schemas/report.schema.json.
 
-After any change here, run `make generate-schema` and commit the
-updated schema files.
+After any change here, run `make -C packages/core generate-schema` and commit the
+updated schema file.
 """
 
 from __future__ import annotations

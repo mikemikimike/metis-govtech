@@ -17,6 +17,9 @@ Core data models and abstractions for the METIS suite. Zero workspace dependenci
 - `metis.core.specification` combines a Profile and an Experiment. Its document
   adapter keeps YAML and API JSON flat.
   Keep draft construction separate from complete execution validation.
+  `SpecificationDocument` is the source of `schemas/specification.schema.json`, the one
+  published schema for `specification.yaml`. After changing it or a model it contains, run
+  `make -C packages/core generate-schema` and commit the result.
 - `traces.py`: `Observation`, `Trace` and `GradingInput`, the read-only input of every grader
   run. Frozen, tuple collections. `Trace.root` is METIS's port of Langfuse's
   `isRootObservation = true` filter.

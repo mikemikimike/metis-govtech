@@ -174,7 +174,7 @@ experiments/execute/orca-eval-20260730-143022/
 
 `results.json` holds one GraderRecord per grader per session, each with one result per grading scope. `metis insights report` does not read this format yet (#454).
 
-The structure of `report.json` is defined by a [JSON Schema](../../packages/insights/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
+The structure of `report.json` is defined by a [JSON Schema](../../packages/core/schemas/report.schema.json). Downstream consumers can validate report files against this schema programmatically using any JSON Schema validator.
 
 Use `logs/evaluate.log` to review extraction, each criterion's grader and resolved arguments (including the judge model), every recorded result with its outcome, score and reason, soft failures, hard failures, and final record counts for the latest evaluation attempt.
 
@@ -937,13 +937,13 @@ the grader configuration used for each Criterion.
 
 #### Schema Reference
 
-The [JSON Schema](../../packages/engine/schemas/specification.schema.json) provides
+The [JSON Schema](../../packages/core/schemas/specification.schema.json) provides
 editor completion and shape validation. The engine also checks references and
 coverage when it loads the document. From a specification in
 `packages/engine/example-experiment/`, use this editor directive:
 
 ```yaml
-# yaml-language-server: $schema=../schemas/specification.schema.json
+# yaml-language-server: $schema=../../core/schemas/specification.schema.json
 ```
 
 ```yaml

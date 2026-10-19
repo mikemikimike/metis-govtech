@@ -7,16 +7,16 @@ import jsonschema
 import pytest
 import yaml
 
-import metis.wizard
+import metis.core
 from metis.core.experiment import Experiment
 from metis.core.profile import TargetProfile
 from metis.wizard.contracts import Specification
 from tests.fixtures.wizard.specifications import research_assistant
 
-# The schema ships beside the wizard package (packages/wizard/schemas), not inside its source, so
+# The schema ships beside the core package (packages/core/schemas), not inside its source, so
 # anchor to the installed package rather than to this test file's location.
 SCHEMA_PATH = (
-    Path(metis.wizard.__file__).resolve().parents[3]
+    Path(metis.core.__file__).resolve().parents[3]
     / "schemas"
     / "specification.schema.json"
 )

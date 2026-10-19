@@ -23,8 +23,6 @@ from metis.core.specification import (
     collect_specification_ids as collect_specification_ids,
 )
 
-_SPECIFICATION_VERSION = 2
-
 
 class Specification(CoreSpecification):
     @classmethod

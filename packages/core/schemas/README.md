@@ -1,6 +1,13 @@
 # schemas/
 
-JSON Schema files generated from the Pydantic models in `src/metis/engine/simulation/types.py`. They describe the structure of files that users author by hand — primarily `specification.yaml` — and are used by IDE tooling (schema-aware editors, YAML validators) to provide autocomplete and inline validation.
+The published JSON Schemas for the files that METIS packages share. Each file is generated from a
+Pydantic model in `metis-core`, so that any package can read the file it describes.
+
+- `specification.schema.json` describes `specification.yaml`. The wizard writes this file, and
+  the engine runs it. Schema-aware editors and YAML validators use the schema for autocomplete
+  and inline validation.
+- `report.schema.json` describes `outputs/reports/report.json`. `metis insights report` writes
+  this file. Downstream readers validate report files against the schema.
 
 The JSON files here are **auto-generated**. Do not edit them directly; they will be overwritten.
 
@@ -8,30 +15,49 @@ The JSON files here are **auto-generated**. Do not edit them directly; they will
 
 | Schema file | Pydantic model | Version constant | Source file |
 |---|---|---|---|
-| `specification.schema.json` | `Specification` | `_SPECIFICATION_VERSION` | `src/metis/engine/simulation/types.py` |
+| `specification.schema.json` | `SpecificationDocument` | `_SPECIFICATION_VERSION` | `src/metis/core/specification.py` |
+| `report.schema.json` | `Report` | `_REPORT_VERSION` | `src/metis/core/report.py` |
 
-`TrialRecord` is code-produced (written at runtime by the simulation harness) and does not have a standalone schema file. It lives in `packages/core/src/metis/core/trials.py`, with its version constant `_TRIAL_RECORD_VERSION`.
+The specification schema requires `schema_version`, `id`, and `runner_factory_ref`. In memory, these keys have
+defaults, so an incomplete Interview draft still loads. `Specification.model_dump()` always writes
+the three keys, so every file that the wizard saves conforms to the schema. The engine also refuses
+a file without them.
 
-`report.schema.json` is published by `metis-insights`; see
-[`packages/insights/schemas/README.md`](../../insights/schemas/README.md).
+The specification schema describes the document shape only. The engine also checks references, IDs, Grader
+settings, and the runner when it loads the file (`Specification.execution_errors()` and
+`metis.engine.simulation.types.Specification`).
+
+`TrialRecord` (`metis.core.trials`) is code-produced and has no standalone schema file. Its version constant is
+`_TRIAL_RECORD_VERSION` in `packages/engine/src/metis/engine/simulation/types.py`.
+
+`EvaluationResults` (`outputs/reports/results.json`, defined in `metis.core.reporting`) is the
+input to the report. It is code-produced and has no published schema file.
 
 ## How to modify a schema
 
-1. Edit Profile fields in `packages/core/src/metis/core/profile.py` execution inputs in `packages/core/src/metis/core/experiment.py`, or their flat document in `packages/core/src/metis/core/specification.py`, engine execution validation in `src/metis/engine/simulation/types.py`
-2. Determine whether the change is breaking (see [Version bump rules](#version-bump-rules) below); if so, increment the `_*_VERSION` constant and update the `Literal[N]` annotation on the model field to match
-3. Run `make generate-schema` to regenerate the schema file
-4. Update `example-experiment/specification.yaml` if the `Specification` model changed
+1. Edit the model. For the specification, edit Profile fields in `src/metis/core/profile.py`,
+   Experiment fields in `src/metis/core/experiment.py`, or the flat document in
+   `src/metis/core/specification.py`. For the report, edit `src/metis/core/report.py`
+2. Determine whether the change is breaking (see [Version bump rules](#version-bump-rules) below); if so, increment the `_*_VERSION` constant and update the `Literal[N]` annotation on the `schema_version` field to match
+3. Run `make -C packages/core generate-schema` to regenerate the schema files
+4. Update `packages/engine/example-experiment/specification.yaml` if the specification model changed
 5. Commit the updated schema file alongside the model change; note any version bump in the commit message
 
 ## Automated checks
 
-`schema_test.py` runs in CI and fails if:
+`make -C packages/core check-schema` runs in CI (`make ci`) and fails if a committed schema
+doesn't match what Pydantic generates (a stale schema file — a forgotten `make generate-schema`).
+These tests run in `make test`:
 
-- The committed schema doesn't match what Pydantic generates (stale schema file — forgotten `make generate-schema`)
-- The example fixture doesn't validate against the committed schema
-- The example fixture doesn't parse with the Pydantic model
+- `tests/unit/core/test_specification_schema.py` fails if the specification schema is stale, if
+  the example specification doesn't validate against it, or if a written draft doesn't validate
+  against it.
+- `tests/unit/core/test_report_schema.py` fails if the report schema is stale. When a sample
+  `report.json` is available, it also checks that the sample validates and parses.
+- `tests/unit/engine/test_specification_execution.py` checks that the runnable example
+  (`packages/engine/example-experiment/simple/specification.yaml`) loads for execution.
 
-This catches forgotten regeneration runs and broken examples, but **not** forgotten version bumps — if you make a breaking change and don't increment `_*_VERSION`, the test won't notice.
+These checks catch forgotten regeneration runs and broken examples, but **not** forgotten version bumps — if you make a breaking change and don't increment the `_*_VERSION` constant, the tests won't notice.
 
 ## Version bump rules
 
@@ -49,6 +75,7 @@ A change requires a version bump if data valid under version N would **fail `mod
 A breaking change to a nested model bumps the version of the root model that contains it:
 - Shared Profile nodes, `Criterion`, `Persona`, `Scenario`, and `Task` → bump `Specification`
 - `TrialConfig`, `TrialOutcome`, `TrialFailure`, `Artifact` → bump `TrialRecord`
+- Report nodes such as `Trial`, `Criterion`, and `ResultTable` → bump `Report`
 
 The common trap is giving a breaking field a default to avoid a bump. That's fine for genuinely optional fields, but if the field is semantically required and you're using a default as a workaround, you're hiding a real schema change. Use a bump and a migration instead.
 

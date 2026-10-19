@@ -135,10 +135,10 @@ Build a report from saved results with `metis.insights.save_report` or `metis in
 
 ## Schema management
 
-Pydantic models in `src/metis/engine/simulation/types.py` are the source of truth. After modifying models:
+`metis-core` publishes the `specification.yaml` schema. After you change the shared models, run:
 
 ```bash
-make -C packages/engine generate-schema
+make -C packages/core generate-schema
 ```
 
-See [`schemas/README.md`](schemas/README.md) for versioning rules.
+See [`packages/core/schemas/README.md`](../core/schemas/README.md) for versioning rules.

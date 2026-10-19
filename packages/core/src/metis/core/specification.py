@@ -5,10 +5,11 @@ YAML and API JSON use one flat document. The domain objects retain their own fie
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     GetJsonSchemaHandler,
     SerializationInfo,
@@ -32,8 +33,19 @@ from metis.core.profile import Behaviour, Criterion, Feature, Target, TargetProf
 _SPECIFICATION_VERSION = 2
 
 
+def _require_document_header(schema: dict[str, Any]) -> None:
+    # drafts load without these keys, but every written document carries them, so the
+    # published schema requires them for hand-authored files.
+    header = ["schema_version", "id", "runner_factory_ref"]
+    schema["required"] = [*header, *schema.get("required", [])]
+
+
+# the source of packages/core/schemas/specification.schema.json; run
+# `make -C packages/core generate-schema` after a change.
 class SpecificationDocument(BaseModel):
     """The flat YAML and API representation of a Specification."""
+
+    model_config = ConfigDict(json_schema_extra=_require_document_header)
 
     schema_version: Literal[2] = _SPECIFICATION_VERSION
     id: str = ""
@@ -69,14 +81,13 @@ class Specification(BaseModel):
     schema_version: Literal[2] = _SPECIFICATION_VERSION
     profile: TargetProfile
     experiment: Experiment
-    _document_model: ClassVar[type[SpecificationDocument]] = SpecificationDocument
 
     @model_validator(mode="before")
     @classmethod
     def _read_document(cls, data: Any) -> Any:
         if not isinstance(data, dict) or "profile" in data or "experiment" in data:
             return data
-        document = cls._document_model.model_validate(data)
+        document = SpecificationDocument.model_validate(data)
         return {
             "schema_version": document.schema_version,
             "profile": TargetProfile(
@@ -95,7 +106,7 @@ class Specification(BaseModel):
 
     @model_serializer
     def _write_document(self, info: SerializationInfo) -> dict[str, Any]:
-        document = self._document_model(
+        document = SpecificationDocument(
             schema_version=self.schema_version,
             **self.profile.model_dump(),
             **self.experiment.model_dump(),
@@ -117,7 +128,7 @@ class Specification(BaseModel):
         cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler
     ) -> JsonSchemaValue:
         """Describe the flat document at every API and file boundary."""
-        schema = handler(cls._document_model.__pydantic_core_schema__)
+        schema = handler(SpecificationDocument.__pydantic_core_schema__)
         schema = handler.resolve_ref_schema(schema).copy()
         schema["title"] = cls.__name__
         return schema

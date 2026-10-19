@@ -1,8 +1,11 @@
-"""Tests for experiment schema contract (runner_factory_ref required)."""
+"""Tests for the executable specification contract."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from metis.engine.simulation.types import Specification
@@ -63,7 +66,7 @@ def _base_experiment(**overrides: object) -> dict:
     return base
 
 
-class TestSpecificationSchema:
+class TestSpecificationExecution:
     def test_loads(self) -> None:
         exp = Specification.model_validate(_base_experiment())
         assert exp.schema_version == 2
@@ -72,10 +75,11 @@ class TestSpecificationSchema:
         with pytest.raises(ValidationError, match="Unsupported schema_version"):
             Specification.model_validate(_base_experiment(schema_version=99))
 
-    def test_runner_factory_ref_required(self) -> None:
+    @pytest.mark.parametrize("key", ["schema_version", "id", "runner_factory_ref"])
+    def test_header_key_required(self, key: str) -> None:
         data = _base_experiment()
-        del data["runner_factory_ref"]
-        with pytest.raises(ValidationError):
+        del data[key]
+        with pytest.raises(ValidationError, match=f"needs these keys: {key}"):
             Specification.model_validate(data)
 
     def test_runner_factory_ref_empty_rejected(self) -> None:
@@ -94,3 +98,15 @@ class TestSpecificationSchema:
             exp.runner_factory_ref
             == "tests.unit.engine.test_runner_ref.StubRunnerFactory"
         )
+
+    def test_simple_example_loads(self, repo_root: Path) -> None:
+        """The runnable example must load for execution.
+
+        The full example is not runnable while most of its Criteria have no grader (#428);
+        tests/unit/engine/test_runner_ref.py pins exactly which ones.
+        """
+        path = (
+            repo_root / "packages/engine/example-experiment/simple/specification.yaml"
+        )
+        specification = Specification.model_validate(yaml.safe_load(path.read_text()))
+        assert specification.id == "orca-simple"
