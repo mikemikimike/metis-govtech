@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from metis.engine.logging import LogRouter, OrchestrationLogger
     from metis.engine.tui import SimulationState, TUIContext
 
-    from .runner import RunnerFactory
+    from .factory import RunnerFactory
     from .types import Persona, Scenario, Specification
 
 
