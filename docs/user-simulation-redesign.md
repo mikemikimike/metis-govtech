@@ -310,8 +310,8 @@ the user agent's LLM call failing (decided at review).
 - **Removing Orca's model advice from the prompt: adopt.** That knowledge belongs to the
   target or scenario, not to the generic user agent. The advice also isn't reliably obeyed
   today.
-- **Inlining full file content every turn: not adopted.** Its resend cost is unbounded and
-  still unresolved.
+- **Inlining file content: not adopted.** Its resend cost grows with every turn and every
+  file. The user agent sees each file's facts only (decided at review).
 - **The promise list and the ⟦ ⟧ natural-language action: part of `gen_2`.** Both depend
   on the runner agent (cards 1 and 7), and the promise list was never exercised in `V5`.
 
@@ -346,9 +346,12 @@ is, including its Orca model advice and its LLM file descriptions.
    `SP/p4/files.py` `compute_facts`. Author descriptions still take precedence.
    Binary files degrade to type and size, as both systems already do. Whether to keep an
    LLM summary for free text such as `.md` or `.py`, where code facts say little, is open.
-2. **Full content.** The spike's practice of inlining up to 32 KB of every held file's
-   content every turn is **not** adopted as is. `SR/reconciliation.md` records that it
-   grows without bound. A cap or age-out rule is needed first.
+2. **Facts only, no content.** The spike inlined up to 32 KB of every held file's content
+   and resent it every turn, which `SR/reconciliation.md` records as growing without
+   bound. `gen_2` shows each file as one facts line and never inlines its content, so the
+   prompt stays small however many files a trial collects. A persona that would read a
+   file in detail, such as the perfectionist in TC-004, works from its facts instead
+   (decided at review, over capping or aging content out).
 3. **No model advice.** `gen_2`'s prompt carries no target knowledge. If a fast model is
    wanted for an experiment, it should be stated in the scenario or persona text in the
    specification (which #442's metadata would also carry), not in the generic prompt.
@@ -405,9 +408,10 @@ LLM's were not. The spike's live rerun of TC-004 #1 after the fix
 - **Package.** `metis-engine`, as `gen_2`'s own user agent and file-facts code, beside the
   generic runners. `simulation/user_agent/prompts.py` and
   `simulation/artifact_summarizer.py` are not changed.
-- **Depends on.** Card 1's `gen_2`. #442, which adds persona and scenario metadata to
-  today's prompt, should also reach `gen_2`'s prompt. A decision on a cap or age-out for
-  inlined content. The promise list waits for card 7.
+- **Depends on.** Card 1's `gen_2`. The promise list waits for card 7.
+- **#442.** Persona and scenario metadata reach both generations' prompts through one
+  shared function, added by whichever of #442 and `gen_2`'s user agent lands first, so
+  the same persona is presented identically to both (decided at review).
 
 ---
 
@@ -849,9 +853,11 @@ A1–A11 (`SP/plan.md`, section 3), as the first worked example. 23 lines (**che
 card 1, item 5).
 
 **Stage 2 note.** The model and schema in `metis-core`, registered in
-`packages/core/scripts/generate_schema.py`. Loading and use in `metis-engine`. The
-user guide (`docs/guide/engine.md`, "Adapting to Your Target") gains a "write a profile"
-path beside "write a runner".
+`packages/core/scripts/generate_schema.py`. Loading and use in `metis-engine`. Until stage
+4 has bound a second app, writing a profile is documented only in a developer README beside
+the code (`simulation/gen_2/README.md`), stating that it has been tested on Orca's API
+only. After that, the user guide (`docs/guide/engine.md`, "Adapting to Your Target")
+gains a "write a profile" path beside "write a runner" (decided at review).
 
 ## 9. Rereading the whole specification every round
 
@@ -963,6 +969,11 @@ package (**checked**, by grepping `packages/` and `apps/`).
 
 **Evidence used.** `V5` `turns[].gestures` (**checked**): 12 turns, 3 doing more than one
 thing, all TC-004 turn 2.
+
+**Known limit.** Keeping METIS's numbering also keeps #427's mismatch: evaluation compares
+`at_turn` with a trace's position in the session, which is a different count, so a file
+can attach to the wrong turn. `gen_2` is no worse than `gen_1` here. #427 is fixed once,
+for both, outside #460 (decided at review).
 
 **Checks not run.** Alignment of turns with Langfuse traces, which needs #469.
 
