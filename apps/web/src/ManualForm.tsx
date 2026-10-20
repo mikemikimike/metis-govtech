@@ -20,6 +20,7 @@ import {
   emptyManualTestCase,
   keepReferencedFixtures,
   manualFieldErrors,
+  manualScorers,
   replaceTaskReference,
   synthesizeManualSpecification,
   type ManualExperiment,
@@ -223,7 +224,7 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
     setCatalogueError(null);
     void api.graders().then(
       (rows) => {
-        if (live) setGraders(rows);
+        if (live) setGraders(manualScorers(rows));
       },
       (cause) => {
         if (!live) return;

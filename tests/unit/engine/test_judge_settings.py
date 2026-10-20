@@ -1,4 +1,4 @@
-"""Judge model resolution (all four steps) and the shared, capped judge client."""
+"""Judge model and input limit resolution, and the shared, capped judge client."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from metis.engine.evaluation.judge import (
     build_llm_settings,
     resolve_grader_args,
 )
-from metis.library.grader import GraderArgs, JudgeArgs
+from metis.library.grader import DEFAULT_MAX_INPUT_TOKENS, GraderArgs, JudgeArgs
 
 
 class CodeArgs(GraderArgs):
@@ -85,6 +85,23 @@ class TestModelResolution:
     def test_resolved_args_validate(self) -> None:
         args = ModelArgs.model_validate(_resolve({}, default="m"))
         assert args.model == "m"
+
+
+@pytest.mark.parametrize(
+    ("grader_args", "env", "expected"),
+    [
+        ({"max_input_tokens": 5_000}, {"JUDGE_MAX_INPUT_TOKENS": "9000"}, 5_000),
+        ({}, {"JUDGE_MAX_INPUT_TOKENS": "9000"}, 9_000),
+        ({}, {}, DEFAULT_MAX_INPUT_TOKENS),
+        ({}, {"JUDGE_MAX_INPUT_TOKENS": "lots"}, DEFAULT_MAX_INPUT_TOKENS),
+        ({"max_input_tokens": 0}, {}, DEFAULT_MAX_INPUT_TOKENS),
+    ],
+)
+def test_input_limit_resolves_from_criterion_then_env_then_default(
+    grader_args, env, expected
+) -> None:
+    args = ModelArgs.model_validate(_resolve(grader_args, default="m", env=env))
+    assert args.max_input_tokens == expected
 
 
 class TestGateway:

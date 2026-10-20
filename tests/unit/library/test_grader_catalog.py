@@ -1,10 +1,4 @@
-"""What metis.library.graders exports after the grader redesign (#428).
-
-Every DeepEval-based grader was deleted with no compatibility aliases, so the catalogue is
-exactly the graders written against metis.library.grader.Grader. The only grader written so
-far is a demo and lives in metis.library.graders.demo (#431), which is not re-exported, so the
-catalogue is empty until real graders land (#470).
-"""
+"""The grader catalogue exports concrete production graders."""
 
 from __future__ import annotations
 
@@ -16,7 +10,7 @@ import pytest
 import metis.library.graders as catalog
 from metis.library.grader import Grader
 
-EXPECTED: set[str] = set()
+EXPECTED = {"CriterionJudgeGrader"}
 
 
 def _exported_classes() -> dict[str, type]:

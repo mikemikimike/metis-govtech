@@ -31,6 +31,30 @@ grader_args:
   max_traces: 4
 ```
 
+## Judge output instructions
+
+Shared output instructions live in [`metis.library.judgment`](../judgment.py).
+Edit `OUTPUT_INSTRUCTIONS[JudgmentShape.BINARY]` there to change the binary prompt for all
+judges that use it. This configuration map uses the judgment shape enum as its key.
+Keep the instructions consistent with the `BinaryJudgment` response model in the same module.
+
+Select the judgment shape once, then use its instructions and response model:
+
+```python
+from metis.library.judgment import OUTPUT_INSTRUCTIONS, JudgmentShape
+
+shape = JudgmentShape.BINARY
+prompt = assessment_prompt + "\n\nOutput instructions:\n" + OUTPUT_INSTRUCTIONS[shape]
+response_schema = shape.response_model.model_json_schema()
+result = shape.response_model.model_validate_json(response_text)
+```
+
+Only binary output is supported. To add another judgment shape, follow the same pattern in
+`judgment.py`: add a `JudgmentShape` enum member, its text in `OUTPUT_INSTRUCTIONS`, and a
+response model with matching validation. Add the model to `JudgmentShape.response_model`,
+then select the new enum member in your grader. The prompt construction code above stays
+the same.
+
 ## Reading traces
 
 Read a session through `metis.core.trace_processing`, never through an observation's `input`,

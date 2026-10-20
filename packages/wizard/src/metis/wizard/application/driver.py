@@ -447,7 +447,9 @@ class StepDriver:
 
             try:
                 args = json.loads(values.get("grader_args", "{}"))
-                validate_grader_args(criterion.grader_fqn, args)
+                validate_grader_args(
+                    criterion.grader_fqn, args, description=criterion.description
+                )
             except (ValueError, TypeError) as exc:
                 return self._refuse_field_edit(f"Invalid Grader parameters: {exc}")
             criterion.grader_args = args

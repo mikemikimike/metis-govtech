@@ -8,7 +8,7 @@ lives outside this package so that the wizard's catalogue, which lists every cla
 package exports, only ever offers real graders. One file per grader is a layout choice with no
 semantic weight.
 
-It exports no graders yet. The example graders are in ``metis.library.graders.demo``, which is
-deliberately not re-exported here, so the wizard has nothing to offer until real graders land
-(#470).
+The example graders are in ``metis.library.graders.demo`` and are not re-exported here.
 """
+
+from ._criterion_judge import CriterionJudgeGrader as CriterionJudgeGrader

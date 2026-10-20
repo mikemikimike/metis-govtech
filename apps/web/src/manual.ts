@@ -334,3 +334,8 @@ export function keepReferencedFixtures(
   const referenced = new Set(referencedFixtureNames(tasks));
   return fixtures.filter((fixture) => referenced.has(fixture.name));
 }
+
+export function manualScorers(graders: GraderSpec[]): GraderSpec[] {
+  // The manual form has no criterion description to give these graders their instructions.
+  return graders.filter((grader) => !grader.uses_criterion_description);
+}

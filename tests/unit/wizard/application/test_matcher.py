@@ -3,35 +3,34 @@
 import pytest
 
 from metis.wizard.application.compile import CompilationError, compile_experiment
-from metis.wizard.application.matching import GENERATED_JUDGE_FQN
+from metis.wizard.application.matching import CRITERION_JUDGE_FQN
 from metis.wizard.application.matching.matcher import validate_grader_args
 from tests.fixtures.wizard.specifications import research_assistant
 
 
-def test_the_fallback_judge_names_the_redesign_and_asks_for_a_grader() -> None:
-    with pytest.raises(ValueError) as caught:
-        validate_grader_args(GENERATED_JUDGE_FQN, {"criterion": "x", "name": "x"})
-
-    message = str(caught.value)
-    assert "no grader matched" in message
-    assert "#428" in message
-    assert "choose a grader for this criterion" in message
-
-
-def test_compile_reports_the_fallback_judge_by_criterion() -> None:
+@pytest.mark.parametrize(
+    "args", [{"criterion": "override"}, {"unknown": 1}, {"threshold": 2}]
+)
+def test_compile_reports_invalid_fallback_settings_by_criterion(args) -> None:
     specification = research_assistant()
-    criterion = next(
-        criterion
-        for behaviour in specification.measured_behaviours()
-        for criterion in behaviour.criteria
-    )
-    criterion.grader_fqn = GENERATED_JUDGE_FQN
-    criterion.grader_args = {"criterion": "x", "name": "x"}
-
-    with pytest.raises(CompilationError) as caught:
+    criterion = specification.features[0].behaviours[0].criteria[0]
+    criterion.grader_fqn = CRITERION_JUDGE_FQN
+    criterion.grader_args = args
+    with pytest.raises(CompilationError, match=criterion.id):
         compile_experiment(specification, "fallback")
 
-    assert f"Criterion {criterion.id}: no grader matched" in str(caught.value)
+
+def test_fallback_validation_uses_the_description_without_storing_instructions() -> (
+    None
+):
+    specification = research_assistant()
+    criterion = specification.features[0].behaviours[0].criteria[0]
+    criterion.grader_fqn = CRITERION_JUDGE_FQN
+    criterion.grader_args = {"threshold": 0.75}
+    validate_grader_args(
+        criterion.grader_fqn, criterion.grader_args, description=criterion.description
+    )
+    assert criterion.grader_args == {"threshold": 0.75}
 
 
 def test_the_abstract_grader_base_is_a_value_error() -> None:

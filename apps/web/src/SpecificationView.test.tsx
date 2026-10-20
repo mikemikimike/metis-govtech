@@ -232,6 +232,7 @@ test("hides grader identifiers and shows only the human summary when enabled", (
               fqn: "metis.graders.answer_quality",
               name: "Answer quality grader",
               description: "Checks supported answers.",
+              uses_criterion_description: false,
             },
           ],
         ])

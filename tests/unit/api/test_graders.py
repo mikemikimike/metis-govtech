@@ -3,12 +3,14 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
-def test_grader_catalogue_is_empty_until_real_graders_land(client: TestClient) -> None:
-    """The only grader so far is a demo, which the wizard never offers (#470)."""
+def test_grader_catalogue_lists_the_criterion_judge(client: TestClient) -> None:
     response = client.get("/api/v1/graders")
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert [row["fqn"] for row in response.json()] == [
+        "metis.library.graders.CriterionJudgeGrader"
+    ]
+    assert response.json()[0]["uses_criterion_description"] is True
 
 
 def test_grader_catalogue_is_sorted_and_has_only_display_fields(
@@ -20,7 +22,10 @@ def test_grader_catalogue_is_sorted_and_has_only_display_fields(
     rows = response.json()
     assert rows == sorted(rows, key=lambda row: row["fqn"])
     assert rows
-    assert all(set(row) == {"fqn", "name", "description"} for row in rows)
+    assert all(
+        set(row) == {"fqn", "name", "description", "uses_criterion_description"}
+        for row in rows
+    )
 
 
 def test_grader_catalogue_failure_uses_service_error_shape(

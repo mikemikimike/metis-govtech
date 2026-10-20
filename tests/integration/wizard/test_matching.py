@@ -8,7 +8,7 @@ because the alternative is an interview that stops for a reason the user cannot 
 import pytest
 
 from metis.wizard.application.matching import (
-    GENERATED_JUDGE_FQN,
+    CRITERION_JUDGE_FQN,
     EmbeddingMatcher,
     library_catalogue,
     match_specification,
@@ -59,17 +59,17 @@ def a_criterion(then: str, **kw) -> Criterion:
 # ── the catalogue ──────────────────────────────────────────────────────────
 
 
-def test_the_catalogue_is_empty_until_real_graders_land() -> None:
-    """The only grader so far is a demo, which the wizard never offers (#470)."""
+def test_the_catalogue_lists_the_criterion_judge() -> None:
     library_catalogue.cache_clear()
-    assert library_catalogue() == []
+    assert [spec.fqn for spec in library_catalogue()] == [CRITERION_JUDGE_FQN]
 
 
 def test_the_catalogue_reads_an_exported_grader(a_catalogued_grader: type) -> None:
     specs = library_catalogue()
 
     assert [spec.fqn for spec in specs] == [
-        "metis.library.graders.DemoTraceBudgetGrader"
+        CRITERION_JUDGE_FQN,
+        "metis.library.graders.DemoTraceBudgetGrader",
     ]
     assert all(spec.fqn and spec.name and spec.description for spec in specs)
 
@@ -109,7 +109,11 @@ def test_the_catalogue_never_instantiates_a_grader(
 
 
 def test_catalogue_params_come_from_args_model(a_catalogued_grader: type) -> None:
-    (spec,) = library_catalogue()
+    spec = next(
+        spec
+        for spec in library_catalogue()
+        if spec.fqn == "metis.library.graders.DemoTraceBudgetGrader"
+    )
     assert [(p.name, p.type, p.default, p.required) for p in spec.params] == [
         ("threshold", "float", 0.5, False),
         ("max_traces", "int", 10, False),
@@ -145,7 +149,7 @@ def test_no_match_falls_through_to_the_generated_judge() -> None:
         threshold=0.5,
     )
 
-    assert matcher.match(a_criterion("the tone is friendly")) == GENERATED_JUDGE_FQN
+    assert matcher.match(a_criterion("the tone is friendly")) == CRITERION_JUDGE_FQN
 
 
 def test_the_threshold_is_what_decides() -> None:
@@ -157,7 +161,7 @@ def test_the_threshold_is_what_decides() -> None:
     strict = EmbeddingMatcher(embedder=embedder, specs=[CITATION], threshold=0.99)
 
     assert lenient.match(criterion) == CITATION.fqn
-    assert strict.match(criterion) == GENERATED_JUDGE_FQN
+    assert strict.match(criterion) == CRITERION_JUDGE_FQN
 
 
 def test_catalogue_embeddings_are_computed_once() -> None:
@@ -181,7 +185,7 @@ def test_an_unavailable_provider_degrades_rather_than_blocking() -> None:
         embedder=FakeEmbedder([], fails=True), specs=[CITATION], threshold=0.5
     )
 
-    assert matcher.match(a_criterion("anything at all")) == GENERATED_JUDGE_FQN
+    assert matcher.match(a_criterion("anything at all")) == CRITERION_JUDGE_FQN
     assert matcher.degraded
 
 
@@ -241,3 +245,49 @@ def test_arguments_are_left_at_their_defaults() -> None:
     matcher.match(criterion)
 
     assert criterion.grader_args == {}
+
+
+def test_fallback_is_discoverable_with_only_configurable_parameters() -> None:
+    fallback = next(
+        spec for spec in library_catalogue() if spec.fqn == CRITERION_JUDGE_FQN
+    )
+    assert [param.name for param in fallback.params] == ["threshold"]
+    matcher = EmbeddingMatcher(FakeEmbedder(["source"]), specs=[fallback, CITATION])
+    assert matcher.match(a_criterion("it cites the source")) == CITATION.fqn
+
+
+@pytest.mark.parametrize("with_fallback", [False, True])
+def test_no_specific_candidates_selects_fallback_without_embedding(
+    with_fallback,
+) -> None:
+    specs = (
+        [s for s in library_catalogue() if s.fqn == CRITERION_JUDGE_FQN]
+        if with_fallback
+        else []
+    )
+    embedder = FakeEmbedder([], fails=True)
+    matcher = EmbeddingMatcher(embedder, specs=specs)
+    assert matcher.match(a_criterion("it names the source")) == CRITERION_JUDGE_FQN
+    assert embedder.calls == 0
+
+
+def test_description_edits_preserve_fallback_settings_and_new_grader_gets_defaults(
+    a_catalogued_grader: type,
+) -> None:
+    from metis.wizard.application.matching import rematch
+
+    criterion = a_criterion(
+        "it names a source",
+        grader_fqn=CRITERION_JUDGE_FQN,
+        grader_args={"model": "chosen-judge", "threshold": 0.8},
+    )
+    criterion.description.then = "it names two sources"
+    rematch(criterion, EmbeddingMatcher(FakeEmbedder([]), specs=[]))
+    assert criterion.grader_args == {"model": "chosen-judge", "threshold": 0.8}
+    criterion.description.then = "it stays within the turn budget"
+    turns = TURNS.model_copy(
+        update={"fqn": "metis.library.graders.DemoTraceBudgetGrader"}
+    )
+    rematch(criterion, EmbeddingMatcher(FakeEmbedder(["turn"]), specs=[turns]))
+    assert criterion.grader_fqn == turns.fqn
+    assert criterion.grader_args == {"threshold": 0.5, "max_traces": 10}

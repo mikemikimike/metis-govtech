@@ -675,6 +675,11 @@ export interface components {
             name: string;
             /** Description */
             description: string;
+            /**
+             * Uses Criterion Description
+             * @default false
+             */
+            uses_criterion_description: boolean;
         };
         /**
          * InterviewConfig

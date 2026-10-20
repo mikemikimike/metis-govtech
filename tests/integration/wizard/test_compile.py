@@ -106,3 +106,119 @@ def test_criterion_parameters_survive_compilation_and_reject_unknown_arguments()
     criterion.grader_args = {"turn_buget": 4}
     with pytest.raises(CompilationError, match=criterion.id):
         compile_experiment(specification, "test")
+
+
+@pytest.mark.parametrize(
+    ("model", "threshold", "outcome"),
+    [(None, 0.5, "failed"), ("chosen-judge", 0.0, "passed")],
+)
+def test_edited_yaml_description_reaches_the_judge_and_result_record(
+    tmp_path: Path, model, threshold, outcome
+) -> None:
+    import asyncio
+    import json
+
+    from metis.engine.cli import _validate_inputs
+    from metis.engine.evaluation import (
+        SessionFacts,
+        build_criterion_grader,
+        grade_session,
+    )
+    from metis.library.grader import DEFAULT_MAX_INPUT_TOKENS, LLMSettings
+    from metis.wizard.application.matching import CRITERION_JUDGE_FQN
+    from tests.fixtures.criterion_judge import judge_client, recorded_session
+
+    specification = research_assistant()
+    criterion = specification.features[0].behaviours[0].criteria[0]
+    criterion.grader_fqn = CRITERION_JUDGE_FQN
+    criterion.grader_args = {"threshold": threshold}
+    if model:
+        criterion.grader_args["model"] = model
+    specification.experiment.defaults.judge_model = "default-judge"
+    path = tmp_path / "specification.yaml"
+    write_experiment(specification, "fallback", path)
+    document = yaml.safe_load(path.read_text())
+    stored = document["features"][0]["behaviours"][0]["criteria"][0]
+    assert "criterion" not in stored["grader_args"]
+    stored["description"]["then"] = "it cites TWO independent sources"
+    path.write_text(yaml.safe_dump(document))
+    for task in specification.tasks:
+        for fixture in task.fixtures:
+            fixture_path = tmp_path / "fixtures" / fixture
+            fixture_path.parent.mkdir(parents=True, exist_ok=True)
+            fixture_path.touch()
+    _validate_inputs(tmp_path)
+    loaded = Specification.load_file(path)
+    task = loaded.resolved_tasks()[0]
+    ref = next(ref for ref in task.grader_refs if ref.criterion_id == criterion.id)
+    built = build_criterion_grader(
+        ref, default_judge_model=loaded.experiment.defaults.judge_model, env={}
+    )
+    requests = []
+    client = judge_client(
+        json.dumps(
+            {"status": "scored", "score": 0, "reason": "Only one source is recorded."}
+        ),
+        requests,
+    )
+
+    async def run():
+        async with client:
+            return await grade_session(
+                [built],
+                recorded_session(),
+                LLMSettings(client),
+                SessionFacts("session-1", task.id, task.task_id, 1),
+            )
+
+    [record] = asyncio.run(run())
+    assert "TWO independent sources" in requests[0]["messages"][0]["content"]
+    assert record.grader_args == {
+        "criterion": str(loaded.criterion(criterion.id).description),
+        "model": model or "default-judge",
+        "threshold": threshold,
+        "max_input_tokens": DEFAULT_MAX_INPUT_TOKENS,
+    }
+    assert record.results[0].outcome == outcome
+    assert loaded.criterion(criterion.id).grader_args == criterion.grader_args
+
+
+@pytest.mark.parametrize(
+    ("fault", "message"),
+    [
+        ("override", "description"),
+        ("blank", "then"),
+        ("unknown", "unknown"),
+        ("threshold", "threshold"),
+    ],
+)
+def test_engine_preflight_reports_invalid_fallback_configuration(
+    tmp_path: Path, capsys, fault, message
+) -> None:
+    from metis.engine.cli import _validate_inputs
+    from metis.wizard.application.matching import CRITERION_JUDGE_FQN
+
+    specification = research_assistant()
+    criterion = specification.features[0].behaviours[0].criteria[0]
+    criterion.grader_fqn = CRITERION_JUDGE_FQN
+    criterion.grader_args = {}
+    specification.id = "fallback-test"
+    if fault == "override":
+        criterion.grader_args["criterion"] = "second instruction source"
+    elif fault == "blank":
+        criterion.description.then = " "
+    elif fault == "unknown":
+        criterion.grader_args["unknown"] = 1
+    else:
+        criterion.grader_args["threshold"] = 2
+    for task in specification.tasks:
+        task.fixtures = []
+    (tmp_path / "specification.yaml").write_text(
+        yaml.safe_dump(specification.model_dump(mode="json"))
+    )
+    with pytest.raises(SystemExit) as caught:
+        _validate_inputs(tmp_path)
+    assert caught.value.code == 1
+    output = capsys.readouterr().out
+    assert criterion.id in output
+    assert message in output

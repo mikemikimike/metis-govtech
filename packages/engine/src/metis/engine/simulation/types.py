@@ -324,6 +324,7 @@ class Specification(CoreSpecification):
                         criterion_id=criterion.id,
                         fqn=criterion.grader_fqn,
                         args=criterion.grader_args,
+                        description=criterion.description,
                     )
                 )
         return Scenario(

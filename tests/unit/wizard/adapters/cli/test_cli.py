@@ -12,7 +12,7 @@ from metis.wizard.adapters.cli import commands as cli
 from metis.wizard.adapters.llm.gateway import API_KEY_VAR, BASE_URL_VAR
 from metis.wizard.application import config
 from metis.wizard.application.compile import compile_experiment
-from metis.wizard.application.matching import GENERATED_JUDGE_FQN, EmbeddingMatcher
+from metis.wizard.application.matching import CRITERION_JUDGE_FQN, EmbeddingMatcher
 from metis.wizard.contracts import ChoiceRequest, InterviewState, Option, OptionId
 from metis.wizard.domain.permissions import InterviewStep
 from tests.fixtures.wizard.context import interview_context
@@ -249,7 +249,7 @@ def test_every_criterion_ends_up_measured_by_something() -> None:
         for criterion in behaviour.criteria:
             assert criterion.grader_fqn
             assert (
-                criterion.grader_fqn == GENERATED_JUDGE_FQN
+                criterion.grader_fqn == CRITERION_JUDGE_FQN
                 or "Grader" in criterion.grader_fqn
             )
 

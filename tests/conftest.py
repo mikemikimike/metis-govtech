@@ -40,11 +40,7 @@ def export_clock(monkeypatch):
 
 @pytest.fixture
 def a_catalogued_grader(monkeypatch: pytest.MonkeyPatch):
-    """Expose the demo grader on metis.library.graders for one test.
-
-    The real catalogue is empty until real graders land (#470), but these tests are about how
-    the catalogue reads a grader, not which graders exist, so they need one to read.
-    """
+    """Expose the demo grader to test catalogue discovery and parameter reading."""
     import metis.library.graders as graders
     from metis.library.graders.demo import DemoTraceBudgetGrader
 

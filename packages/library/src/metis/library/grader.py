@@ -16,6 +16,7 @@ They are kept apart so that the catalogue package exports concrete graders only.
 from __future__ import annotations
 
 import abc
+import json
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -28,12 +29,18 @@ from typing import (
     get_origin,
 )
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+
+from metis.core.grading import GraderResult
+from metis.core.logging import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from openai import AsyncOpenAI
 
     from metis.core.grading import GradingOutput
+    from metis.core.profile import CriterionDescription
     from metis.core.specification import Specification
     from metis.core.traces import GradingInput
 
@@ -53,13 +60,101 @@ class GraderArgs(BaseModel):
     ``0.0``/``1.0`` scores of a binary grader, so only graders with graded scores need it set."""
 
 
+logger = get_logger(__name__)
+
+NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+DEFAULT_MAX_INPUT_TOKENS = 128_000
+
+
 class JudgeArgs(GraderArgs):
     """Base of a model-based grader's args model."""
 
-    model: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    model: NonEmptyText
     """The judge model. The engine resolves it before validation (``grader_args.model``, then
     ``defaults.judge_model``, then ``JUDGE_MODEL``, then the package default), so it is always
     set inside ``grade()`` and recorded with every result."""
+
+    max_input_tokens: int = DEFAULT_MAX_INPUT_TOKENS
+    """The largest estimated request that one judge call may send. The engine resolves it
+    before validation (``grader_args.max_input_tokens``, then ``JUDGE_MAX_INPUT_TOKENS``, then
+    this default). Check it with ``input_budget_error`` before each model call."""
+
+    @field_validator("max_input_tokens", mode="before")
+    @classmethod
+    def _positive_or_default(cls, value: object) -> int:
+        # A bad limit must not block a run that would otherwise succeed, so it falls back
+        # to the default with a warning.
+        try:
+            parsed = int(value) if isinstance(value, int | str) else 0
+        except ValueError:
+            parsed = 0
+        if isinstance(value, bool) or parsed < 1:
+            logger.warning(
+                "invalid_max_input_tokens",
+                value=value,
+                default=DEFAULT_MAX_INPUT_TOKENS,
+            )
+            return DEFAULT_MAX_INPUT_TOKENS
+        return parsed
+
+
+class CriterionJudgeArgs(JudgeArgs):
+    """Settings of a judge that takes its instructions from the criterion description.
+
+    The engine and the wizard set ``criterion`` from the current description with
+    ``criterion_judge_args``, so an edit to the description applies on the next run. A
+    specification never sets it under ``grader_args``.
+    """
+
+    criterion: NonEmptyText
+
+
+def criterion_judge_args(
+    args_model: type[GraderArgs],
+    settings: Mapping[str, Any],
+    description: CriterionDescription | None,
+) -> dict[str, Any]:
+    """Copy ``settings`` and, for a ``CriterionJudgeArgs`` model, add the description as ``criterion``.
+
+    Raises ``ValueError`` when the settings already name ``criterion`` or the description has a
+    blank clause.
+    """
+    resolved = dict(settings)
+    if not issubclass(args_model, CriterionJudgeArgs):
+        return resolved
+    if "criterion" in resolved:
+        raise ValueError(
+            "Edit the criterion description instead of grader_args.criterion."
+        )
+    if description is None:
+        raise ValueError("The criterion description is required.")
+    for clause in ("given", "when", "then"):
+        if not getattr(description, clause).strip():
+            raise ValueError(f"Criterion description.{clause} must not be blank.")
+    resolved["criterion"] = str(description)
+    return resolved
+
+
+def input_budget_error(
+    args: JudgeArgs, request: Mapping[str, Any]
+) -> GraderResult | None:
+    """An errored result when ``request`` is above ``args.max_input_tokens``, else ``None``.
+
+    ``request`` is the keyword arguments for one chat completion call. One token per UTF-8
+    byte is a conservative bound for byte-based tokenizers; 4,096 covers message framing.
+    """
+    estimate = len(json.dumps(request, ensure_ascii=False).encode("utf-8")) + 4096
+    if estimate <= args.max_input_tokens:
+        return None
+    # TODO: Name the settings that judge a part of the session when they are designed.
+    return GraderResult(
+        status="errored",
+        reason=(
+            f"The judge request needs about {estimate:,} estimated tokens; the limit is "
+            f"{args.max_input_tokens:,}. Raise the limit or judge a smaller part of the session."
+        ),
+    )
 
 
 ArgsT = TypeVar("ArgsT", bound=GraderArgs)
@@ -124,6 +219,8 @@ class Grader(abc.ABC, Generic[ArgsT]):
     @abc.abstractmethod
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
         """Grades the session, returning one result per grading scope.
+
+        A model-based grader calls ``input_budget_error`` before each model call.
 
         Return one skipped result, never an empty list, when there is nothing to judge. When a
         grader LLM call fails or its reply can't be parsed for one part of the session, record

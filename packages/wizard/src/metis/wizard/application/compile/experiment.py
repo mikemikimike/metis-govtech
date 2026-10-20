@@ -35,7 +35,11 @@ def compile_experiment(
     for behaviour in document.behaviours():
         for criterion in behaviour.criteria:
             try:
-                validate_grader_args(criterion.grader_fqn, criterion.grader_args)
+                validate_grader_args(
+                    criterion.grader_fqn,
+                    criterion.grader_args,
+                    description=criterion.description,
+                )
             except (ValueError, TypeError) as exc:
                 errors.append(f"Criterion {criterion.id}: {exc}")
     if errors:

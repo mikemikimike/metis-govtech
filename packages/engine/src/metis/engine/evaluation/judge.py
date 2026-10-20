@@ -11,6 +11,9 @@ run, in this order:
 
 and written into the args before they are validated, so ``self.args.model`` is always a ``str``
 inside ``grade()`` and every ``GraderRecord`` names the model that produced its results.
+``max_input_tokens`` resolves the same way from ``grader_args.max_input_tokens``, then
+``JUDGE_MAX_INPUT_TOKENS``, then the ``JudgeArgs`` default. A ``CriterionJudgeArgs`` grader also gets
+``criterion`` from the criterion description.
 
 The gateway is not a grader argument: it is the same for every judge in a run, and it stays in
 the environment (``JUDGE_API_KEY`` / ``JUDGE_BASE_URL``, falling back to ``OPENAI_API_KEY`` /
@@ -29,11 +32,12 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from openai import AsyncOpenAI
 
-from metis.library.grader import JudgeArgs, LLMSettings
+from metis.library.grader import JudgeArgs, LLMSettings, criterion_judge_args
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from metis.core.profile import CriterionDescription
     from metis.library.grader import GraderArgs
 
 DEFAULT_JUDGE_MODEL = "gemini-3.5-flash-lite"
@@ -50,6 +54,7 @@ def resolve_grader_args(
     *,
     default_judge_model: str | None,
     env: Mapping[str, str],
+    description: CriterionDescription | None = None,
 ) -> dict[str, Any]:
     """The criterion's ``grader_args`` with the judge model filled in, ready to validate.
 
@@ -57,12 +62,18 @@ def resolve_grader_args(
     returned unchanged, so a stray ``model`` key there is still rejected as unknown. An explicit
     ``model`` on the criterion always wins, even an empty string, which validation then
     reports, rather than being silently replaced.
+
+    Raises ``ValueError`` from ``criterion_judge_args`` when a ``CriterionJudgeArgs`` grader's settings
+    or description are invalid.
     """
-    resolved = dict(grader_args)
-    if issubclass(args_model, JudgeArgs) and "model" not in resolved:
-        resolved["model"] = (
-            default_judge_model or env.get("JUDGE_MODEL") or DEFAULT_JUDGE_MODEL
-        )
+    resolved = criterion_judge_args(args_model, grader_args, description)
+    if issubclass(args_model, JudgeArgs):
+        if "model" not in resolved:
+            resolved["model"] = (
+                default_judge_model or env.get("JUDGE_MODEL") or DEFAULT_JUDGE_MODEL
+            )
+        if "max_input_tokens" not in resolved and "JUDGE_MAX_INPUT_TOKENS" in env:
+            resolved["max_input_tokens"] = env["JUDGE_MAX_INPUT_TOKENS"]
     return resolved
 
 
