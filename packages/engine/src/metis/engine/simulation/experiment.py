@@ -23,8 +23,7 @@ from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
 from ._fixture_artifacts import build_fixture_artifacts
 from .exceptions import TrialRecoverableError
 from .gen_1.artifact_summarizer import resolve_fixture_descriptions
-from .gen_1.orchestrator import Orchestrator
-from .gen_1.user_agent.agent import UserAgent
+from .trial import create_trial
 
 if TYPE_CHECKING:
     import threading
@@ -33,6 +32,7 @@ if TYPE_CHECKING:
     from metis.engine.tui import SimulationState, TUIContext
 
     from .factory import RunnerFactory
+    from .trial import Trial
     from .types import Persona, Scenario, Specification
 
 
@@ -381,7 +381,7 @@ async def _worker(
                 runner = await runner_factory.create(
                     run_dir, fixtures_dir, experiment_root
                 )
-                orchestrator: Orchestrator | None = None  # reset each attempt
+                trial: Trial | None = None  # reset each attempt
 
                 # Descriptions were resolved once per experiment before fan-out;
                 # this only mints a fresh Artifact per attempt (clean at_turn/id)
@@ -405,12 +405,12 @@ async def _worker(
                     fixtures=scenario.fixtures,
                 )
                 try:
-                    agent = UserAgent(persona=persona, scenario=scenario)
-                    orchestrator = Orchestrator(
+                    trial = create_trial(
+                        runner_factory,
                         runner=runner,
-                        agent=agent,
-                        trial_config=trial_config,
+                        persona=persona,
                         scenario=scenario,
+                        trial_config=trial_config,
                         run_dir=run_dir,
                         fixtures_dir=fixtures_dir,
                         experiment_root=experiment_root,
@@ -420,15 +420,15 @@ async def _worker(
                         tui_ctx=tui_ctx,
                         shutdown_event=shutdown_event,
                     )
-                    record = await orchestrator.execute()
+                    record = await trial.execute()
                     record.attempt_number = attempt
                     record.max_allowed_attempts = max_attempts
                     record.prior_failures = prior_failures
                     break
                 except TrialRecoverableError as exc:
                     partial = (
-                        orchestrator.partial_record("system_error")
-                        if orchestrator is not None
+                        trial.partial_record("system_error")
+                        if trial is not None
                         else None
                     )
                     turn_reached = (
@@ -484,8 +484,8 @@ async def _worker(
                     # swallowed), preserve any turns the orchestrator
                     # completed, and retry within the configured budget.
                     partial = (
-                        orchestrator.partial_record("system_error")
-                        if orchestrator is not None
+                        trial.partial_record("system_error")
+                        if trial is not None
                         else None
                     )
                     turn_reached = (
