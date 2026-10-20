@@ -3,8 +3,16 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
+def test_grader_catalogue_is_empty_until_real_graders_land(client: TestClient) -> None:
+    """The only grader so far is a demo, which the wizard never offers (#470)."""
+    response = client.get("/api/v1/graders")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_grader_catalogue_is_sorted_and_has_only_display_fields(
-    client: TestClient,
+    client: TestClient, a_catalogued_grader: type
 ) -> None:
     response = client.get("/api/v1/graders")
 

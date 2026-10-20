@@ -130,7 +130,7 @@ Check these points when you convert a file:
   `response_wait_ms`, and `max_run_retries`. Their defaults are `20`, `15`,
   `300000`, and the runner's retry default. Set `max_run_retries: 0` to disable
   run retries. Move explicit Scenario values to each corresponding Task.
-  A Grader argument such as `TraceBudgetGrader` `max_traces` sets the passing
+  A Grader argument such as `DemoTraceBudgetGrader` `max_traces` sets the passing
   budget only. The Task's `max_turns` controls execution.
 - **Grader formats.** The old `metric_refs` item had three formats. Each becomes
   one Criterion. Most old Graders have no replacement yet; see
@@ -186,7 +186,7 @@ features:
               given: an evaluation interaction
               when: the interaction is evaluated
               then: the session completed within the allowed trace budget
-            grader_fqn: metis.library.graders.TraceBudgetGrader
+            grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
             grader_args:
               max_traces: 4
   # AC-ORCA-2 already exists under Orchestration Behaviour EB-ORCA-2. Its old
@@ -397,13 +397,13 @@ subclasses `metis.library.grader.Grader[Args]`, declares its parameters as an `a
   the GEval judge helpers. Every old Grader FQN in a specification now fails validation.
 - The fallback judge `metis.library.graders.default.CriterionGEvalGrader` is removed. No
   replacement exists yet.
-- The catalogue has one grader. `metis.library.graders.TurnBudgetGrader` →
-  `metis.library.graders.TraceBudgetGrader`.
+- The only grader is a demo. `metis.library.graders.TurnBudgetGrader` →
+  `metis.library.graders.demo.DemoTraceBudgetGrader` (#431).
 
 **On disk**
 
 - In each Criterion, replace `grader_fqn: metis.library.graders.TurnBudgetGrader` with
-  `grader_fqn: metis.library.graders.TraceBudgetGrader`, and `max_turns` with `max_traces`
+  `grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader`, and `max_turns` with `max_traces`
   in its `grader_args`. The grader counts every trace in the session. One trace is usually
   one persona message and the target's reply.
 - Every grader accepts `threshold` (default `0.5`, from `0` to `1`). A scored result passes
@@ -411,6 +411,24 @@ subclasses `metis.library.grader.Grader[Args]`, declares its parameters as an `a
 - For each other Criterion, leave `grader_fqn` empty until a replacement grader exists. The
   engine refuses to run a specification with an empty `grader_fqn` (`Criterion X needs a
   Grader.`).
+
+#### Demo graders and the trace processor (#431)
+
+Graders read a session through `metis.core.trace_processing` instead of an observation's raw
+`input`/`output`/`metadata`. The only grader so far is an example and lives with three others
+in `metis.library.graders.demo`, which the wizard does not offer.
+
+**Python API**
+
+- `metis.library.graders` exports no graders. Import the demos from
+  `metis.library.graders.demo`: `DemoTraceBudgetGrader`, `DemoRequiredToolGrader`,
+  `DemoAnswerHelpfulnessGrader`, `DemoTaskCompletionGrader`.
+- `metis.library.DemoMetric` is removed. Nothing replaces it.
+
+**On disk**
+
+- Replace `grader_fqn: metis.library.graders.TraceBudgetGrader` with
+  `grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader`. Its arguments are unchanged.
 
 ### metis-engine
 

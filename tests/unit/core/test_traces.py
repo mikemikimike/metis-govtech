@@ -223,3 +223,19 @@ class TestGradingInput:
         grading_input = GradingInput(traces=())
         with pytest.raises(ValidationError):
             grading_input.traces = ()  # type: ignore[misc]
+
+
+class TestLevelAndRootTieBreak:
+    def test_level_and_status_message_are_read(self) -> None:
+        obs = Observation.model_validate(
+            _row(level="ERROR", statusMessage="tool timed out")
+        )
+        assert obs.level == "ERROR"
+        assert obs.status_message == "tool timed out"
+
+    def test_a_flagged_root_with_a_parent_loses_to_a_parentless_one(self) -> None:
+        """A sub-agent's top span flagged as root (as Orca does) is not the trace's
+        root, even when it starts first."""
+        sub = _obs("sub", parent="top", is_root=True, start=_t(0))
+        top = _obs("top", parent=None, is_root=True, start=_t(1))
+        assert _trace(sub, top).root.id == "top"

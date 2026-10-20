@@ -41,7 +41,7 @@ CITATION = GraderSpec(
     description="Whether claims are supported by the source they cite.",
 )
 TURNS = GraderSpec(
-    fqn="metis.library.graders.TraceBudgetGrader",
+    fqn="metis.library.graders.demo.DemoTraceBudgetGrader",
     name="Turn budget",
     description="Interview completed within the allowed turn budget.",
 )
@@ -59,12 +59,19 @@ def a_criterion(then: str, **kw) -> Criterion:
 # ── the catalogue ──────────────────────────────────────────────────────────
 
 
-def test_the_catalogue_reads_real_graders() -> None:
+def test_the_catalogue_is_empty_until_real_graders_land() -> None:
+    """The only grader so far is a demo, which the wizard never offers (#470)."""
+    library_catalogue.cache_clear()
+    assert library_catalogue() == []
+
+
+def test_the_catalogue_reads_an_exported_grader(a_catalogued_grader: type) -> None:
     specs = library_catalogue()
 
-    assert specs
+    assert [spec.fqn for spec in specs] == [
+        "metis.library.graders.DemoTraceBudgetGrader"
+    ]
     assert all(spec.fqn and spec.name and spec.description for spec in specs)
-    assert any("TraceBudgetGrader" in spec.fqn for spec in specs)
 
 
 def test_the_catalogue_covers_every_exported_grader() -> None:
@@ -88,24 +95,21 @@ def test_the_catalogue_covers_every_exported_grader() -> None:
 
 
 def test_the_catalogue_never_instantiates_a_grader(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, a_catalogued_grader: type
 ) -> None:
     """Parameters come from args_model; reading them must not build a grader."""
-    from metis.library.graders import TraceBudgetGrader
 
     def explode(*_a, **_kw):
         raise AssertionError("the catalogue instantiated a grader")
 
-    monkeypatch.setattr(TraceBudgetGrader, "__init__", explode)
+    monkeypatch.setattr(a_catalogued_grader, "__init__", explode)
 
     library_catalogue.cache_clear()
     assert library_catalogue()
-    library_catalogue.cache_clear()
 
 
-def test_catalogue_params_come_from_args_model() -> None:
-    library_catalogue.cache_clear()
-    (spec,) = [s for s in library_catalogue() if s.fqn.endswith(".TraceBudgetGrader")]
+def test_catalogue_params_come_from_args_model(a_catalogued_grader: type) -> None:
+    (spec,) = library_catalogue()
     assert [(p.name, p.type, p.default, p.required) for p in spec.params] == [
         ("threshold", "float", 0.5, False),
         ("max_traces", "int", 10, False),

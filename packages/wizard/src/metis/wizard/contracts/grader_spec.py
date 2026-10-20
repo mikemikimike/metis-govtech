@@ -20,7 +20,7 @@ class GraderParam(BaseModel):
 
 
 class GraderSpec(BaseModel):
-    fqn: str  # "metis.library.graders.TraceBudgetGrader"
+    fqn: str  # "metis.library.graders.demo.DemoTraceBudgetGrader"
     name: str  # "Turn budget" — what the user sees
     description: str
     # args_model fields seed the Criterion parameters for user review.

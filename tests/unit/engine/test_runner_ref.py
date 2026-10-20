@@ -277,7 +277,7 @@ class TestRunnerRefValidation:
 class TestExampleExperiment:
     """Verify the shipped example experiment's state after the grader redesign (#428).
 
-    Only AC-EXEC-3 has a grader (the demo TraceBudgetGrader); every other Criterion's
+    Only AC-EXEC-3 has a grader (the demo DemoTraceBudgetGrader); every other Criterion's
     ``grader_fqn`` is left empty until graders are written for it. The document still parses,
     and the engine refuses to run it, naming exactly those Criteria. When a grader is added
     for a Criterion, this test fails and its expected set shrinks.
@@ -317,7 +317,10 @@ class TestExampleExperiment:
             if c.grader_fqn
         }
         assert graded == {
-            "AC-EXEC-3": ("metis.library.graders.TraceBudgetGrader", {"max_traces": 4})
+            "AC-EXEC-3": (
+                "metis.library.graders.demo.DemoTraceBudgetGrader",
+                {"max_traces": 4},
+            )
         }
 
     def test_the_engine_refuses_it_naming_every_criterion_without_a_grader(
