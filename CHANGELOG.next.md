@@ -68,6 +68,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- `metis.core.trace_processing`: the shared trace processor for graders and the report. It
+  gives turn and tool-call views of a session; readers for plain text, OpenAI-style and
+  OpenTelemetry GenAI messages, and tool arguments and results; `select_all`, `select_final` and
+  `select_where`; `render_transcript`; and `find_artifacts`. Data it cannot read comes back as a
+  `Problem`, kept apart from the target's own errors. That includes text holding a Langfuse
+  media reference (`@@@langfuseMedia:…@@@`), since METIS does not fetch the media. `Observation` gains `level` and
+  `status_message`, and `Trace.root` prefers a flagged root with no parent (#431).
+
 - Preserve optional flat string metadata on Personas and Scenarios through
   Specification serialization. Accept arbitrary keys and reject non-string
   values, including nested objects and lists (#441).
@@ -142,6 +150,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `MetisSessionGrader` bases, the GEval judge helpers and the `CriterionGEvalGrader` fallback
   are removed, and `deepeval` is no longer a dependency. The catalogue ships one grader,
   `TraceBudgetGrader` (`max_traces`), replacing `TurnBudgetGrader` (`max_turns`) (#415, #428).
+
+- `TraceBudgetGrader` is now `metis.library.graders.demo.DemoTraceBudgetGrader`, beside three
+  new demo graders (`DemoRequiredToolGrader`, `DemoAnswerHelpfulnessGrader`,
+  `DemoTaskCompletionGrader`) that show how to read traces through
+  `metis.core.trace_processing`. The demos are not re-exported from `metis.library.graders`,
+  which exports no graders until real ones arrive. The placeholder `DemoMetric` is removed
+  (#431).
 
 ### metis-engine
 
@@ -382,6 +397,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   still reports any remaining gaps.
 
 #### Changed
+
+- The wizard offers no graders until real ones are added to `metis.library.graders`: the
+  interview cannot produce a runnable experiment, and the manual form's grader picker is empty
+  (#470).
 
 - Wizard exports use timestamped design folders with `inputs/` and `outputs/`. The default name is `YYYYMMDD-HHMMSS-interview`, using local 24-hour time. Manual ZIP exports use the `-manual` suffix. ZIP filenames match their root folders. Interview exports retain the final state used to compile the Specification. CLI recovery uses the completed Specification as its completion marker (#453).
 

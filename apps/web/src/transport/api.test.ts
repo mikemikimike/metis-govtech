@@ -232,7 +232,7 @@ test("packages a synthesized manual Specification and its fixtures as multipart"
         fixtures: ["policy.pdf"],
         scorers: [
           {
-            fqn: "metis.library.graders.TraceBudgetGrader",
+            fqn: "metis.library.graders.demo.DemoTraceBudgetGrader",
             name: "Turn budget",
             description: "Checks the turn budget.",
             uses_criterion_description: false,

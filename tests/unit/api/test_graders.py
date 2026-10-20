@@ -3,8 +3,18 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
+def test_grader_catalogue_lists_the_criterion_judge(client: TestClient) -> None:
+    response = client.get("/api/v1/graders")
+
+    assert response.status_code == 200
+    assert [row["fqn"] for row in response.json()] == [
+        "metis.library.graders.CriterionJudgeGrader"
+    ]
+    assert response.json()[0]["uses_criterion_description"] is True
+
+
 def test_grader_catalogue_is_sorted_and_has_only_display_fields(
-    client: TestClient,
+    client: TestClient, a_catalogued_grader: type
 ) -> None:
     response = client.get("/api/v1/graders")
 

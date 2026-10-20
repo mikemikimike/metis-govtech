@@ -7,7 +7,8 @@ Every class exported here is a concrete ``metis.library.grader.Grader``. The con
 lives outside this package so that the wizard's catalogue, which lists every class this
 package exports, only ever offers real graders. One file per grader is a layout choice with no
 semantic weight.
+
+The example graders are in ``metis.library.graders.demo`` and are not re-exported here.
 """
 
 from ._criterion_judge import CriterionJudgeGrader as CriterionJudgeGrader
-from ._trace_budget import TraceBudgetGrader as TraceBudgetGrader

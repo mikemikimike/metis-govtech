@@ -30,8 +30,8 @@ class GraderRef(BaseModel):
     """A grader reference from specification.yaml.
 
     Accepts either:
-      - a plain string: "metis.library.graders.TraceBudgetGrader"
-      - a single-key mapping: {"metis.library.graders.TraceBudgetGrader": {"max_traces": 8}}
+      - a plain string: "metis.library.graders.demo.DemoTraceBudgetGrader"
+      - a single-key mapping: {"metis.library.graders.demo.DemoTraceBudgetGrader": {"max_traces": 8}}
     """
 
     criterion_id: str = ""
@@ -39,7 +39,7 @@ class GraderRef(BaseModel):
         description=(
             "Fully-qualified import path of the grader class to run — a"
             " metis.library.grader.Grader subclass, e.g."
-            " 'metis.library.graders.TraceBudgetGrader'. Resolved at"
+            " 'metis.library.graders.demo.DemoTraceBudgetGrader'. Resolved at"
             " runtime via importlib."
         )
     )

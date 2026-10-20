@@ -41,7 +41,7 @@ CITATION = GraderSpec(
     description="Whether claims are supported by the source they cite.",
 )
 TURNS = GraderSpec(
-    fqn="metis.library.graders.TraceBudgetGrader",
+    fqn="metis.library.graders.demo.DemoTraceBudgetGrader",
     name="Turn budget",
     description="Interview completed within the allowed turn budget.",
 )
@@ -59,12 +59,19 @@ def a_criterion(then: str, **kw) -> Criterion:
 # ── the catalogue ──────────────────────────────────────────────────────────
 
 
-def test_the_catalogue_reads_real_graders() -> None:
+def test_the_catalogue_lists_the_criterion_judge() -> None:
+    library_catalogue.cache_clear()
+    assert [spec.fqn for spec in library_catalogue()] == [CRITERION_JUDGE_FQN]
+
+
+def test_the_catalogue_reads_an_exported_grader(a_catalogued_grader: type) -> None:
     specs = library_catalogue()
 
-    assert specs
+    assert [spec.fqn for spec in specs] == [
+        CRITERION_JUDGE_FQN,
+        "metis.library.graders.DemoTraceBudgetGrader",
+    ]
     assert all(spec.fqn and spec.name and spec.description for spec in specs)
-    assert any("TraceBudgetGrader" in spec.fqn for spec in specs)
 
 
 def test_the_catalogue_covers_every_exported_grader() -> None:
@@ -88,24 +95,25 @@ def test_the_catalogue_covers_every_exported_grader() -> None:
 
 
 def test_the_catalogue_never_instantiates_a_grader(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, a_catalogued_grader: type
 ) -> None:
     """Parameters come from args_model; reading them must not build a grader."""
-    from metis.library.graders import TraceBudgetGrader
 
     def explode(*_a, **_kw):
         raise AssertionError("the catalogue instantiated a grader")
 
-    monkeypatch.setattr(TraceBudgetGrader, "__init__", explode)
+    monkeypatch.setattr(a_catalogued_grader, "__init__", explode)
 
     library_catalogue.cache_clear()
     assert library_catalogue()
-    library_catalogue.cache_clear()
 
 
-def test_catalogue_params_come_from_args_model() -> None:
-    library_catalogue.cache_clear()
-    (spec,) = [s for s in library_catalogue() if s.fqn.endswith(".TraceBudgetGrader")]
+def test_catalogue_params_come_from_args_model(a_catalogued_grader: type) -> None:
+    spec = next(
+        spec
+        for spec in library_catalogue()
+        if spec.fqn == "metis.library.graders.DemoTraceBudgetGrader"
+    )
     assert [(p.name, p.type, p.default, p.required) for p in spec.params] == [
         ("threshold", "float", 0.5, False),
         ("max_traces", "int", 10, False),
@@ -263,9 +271,9 @@ def test_no_specific_candidates_selects_fallback_without_embedding(
     assert embedder.calls == 0
 
 
-def test_description_edits_preserve_fallback_settings_and_new_grader_gets_defaults() -> (
-    None
-):
+def test_description_edits_preserve_fallback_settings_and_new_grader_gets_defaults(
+    a_catalogued_grader: type,
+) -> None:
     from metis.wizard.application.matching import rematch
 
     criterion = a_criterion(
@@ -277,6 +285,9 @@ def test_description_edits_preserve_fallback_settings_and_new_grader_gets_defaul
     rematch(criterion, EmbeddingMatcher(FakeEmbedder([]), specs=[]))
     assert criterion.grader_args == {"model": "chosen-judge", "threshold": 0.8}
     criterion.description.then = "it stays within the turn budget"
-    rematch(criterion, EmbeddingMatcher(FakeEmbedder(["turn"]), specs=[TURNS]))
-    assert criterion.grader_fqn == TURNS.fqn
+    turns = TURNS.model_copy(
+        update={"fqn": "metis.library.graders.DemoTraceBudgetGrader"}
+    )
+    rematch(criterion, EmbeddingMatcher(FakeEmbedder(["turn"]), specs=[turns]))
+    assert criterion.grader_fqn == turns.fqn
     assert criterion.grader_args == {"threshold": 0.5, "max_traces": 10}

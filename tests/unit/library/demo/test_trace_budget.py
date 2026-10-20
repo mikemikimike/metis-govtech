@@ -1,4 +1,4 @@
-"""TraceBudgetGrader: the demo grader for the new Grader contract."""
+"""DemoTraceBudgetGrader: the simplest demo grader (#431)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,7 @@ from pydantic import ValidationError
 
 from metis.core.traces import GradingInput, Observation, Trace
 from metis.library.grader import Grader, LLMSettings
-from metis.library.graders import TraceBudgetGrader
-from metis.library.graders._trace_budget import TraceBudgetArgs
+from metis.library.graders.demo import DemoTraceBudgetArgs, DemoTraceBudgetGrader
 
 
 def _trace(index: int, *, output: object = "an answer") -> Trace:
@@ -29,7 +28,7 @@ def _session(count: int) -> GradingInput:
     return GradingInput(traces=tuple(_trace(i) for i in range(count)))
 
 
-def _grade(grader: TraceBudgetGrader, grading_input: GradingInput):
+def _grade(grader: DemoTraceBudgetGrader, grading_input: GradingInput):
     client = MagicMock()
     out = asyncio.run(grader.grade(grading_input, LLMSettings(client=client)))
     client.assert_not_called()  # code-based: never touches the LLM client
@@ -37,13 +36,13 @@ def _grade(grader: TraceBudgetGrader, grading_input: GradingInput):
     return out
 
 
-def _grader(**args: object) -> TraceBudgetGrader:
-    return TraceBudgetGrader(TraceBudgetArgs.model_validate(args))
+def _grader(**args: object) -> DemoTraceBudgetGrader:
+    return DemoTraceBudgetGrader(DemoTraceBudgetArgs.model_validate(args))
 
 
 class TestArgs:
     def test_defaults(self) -> None:
-        assert TraceBudgetArgs.model_validate({}).model_dump() == {
+        assert DemoTraceBudgetArgs.model_validate({}).model_dump() == {
             "threshold": 0.5,
             "max_traces": 10,
         }
@@ -51,23 +50,23 @@ class TestArgs:
     @pytest.mark.parametrize("bad", [0, -1, "many"])
     def test_rejects_a_non_positive_or_non_integer_budget(self, bad: object) -> None:
         with pytest.raises(ValidationError, match="max_traces"):
-            TraceBudgetArgs.model_validate({"max_traces": bad})
+            DemoTraceBudgetArgs.model_validate({"max_traces": bad})
 
     @pytest.mark.parametrize(
         "raw", ["max_traces: yes", "max_traces: '4'", "max_traces: 4.5"]
     )
     def test_budget_must_be_a_yaml_integer(self, raw: str) -> None:
         with pytest.raises(ValidationError, match="max_traces"):
-            TraceBudgetArgs.model_validate(yaml.safe_load(raw))
+            DemoTraceBudgetArgs.model_validate(yaml.safe_load(raw))
 
     def test_rejects_the_old_turn_budget_arg_name(self) -> None:
         """Specs written for TurnBudgetGrader fail validation loudly, not silently."""
         with pytest.raises(ValidationError, match="max_turns"):
-            TraceBudgetArgs.model_validate({"max_turns": 4})
+            DemoTraceBudgetArgs.model_validate({"max_turns": 4})
 
     def test_is_a_grader_with_matching_args_model(self) -> None:
-        assert issubclass(TraceBudgetGrader, Grader)
-        assert TraceBudgetGrader.args_model is TraceBudgetArgs
+        assert issubclass(DemoTraceBudgetGrader, Grader)
+        assert DemoTraceBudgetGrader.args_model is DemoTraceBudgetArgs
 
 
 class TestGrade:

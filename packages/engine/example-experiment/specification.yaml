@@ -898,7 +898,7 @@ features:
         given: an evaluation interaction
         when: the interaction is evaluated
         then: Session completed within the allowed trace budget.
-      grader_fqn: metis.library.graders.TraceBudgetGrader
+      grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
       grader_args:
         max_traces: 4
     - id: AC-EXEC-4

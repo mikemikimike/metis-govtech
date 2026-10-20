@@ -216,7 +216,7 @@ def test_an_unmatched_specification_loses_the_users_graders() -> None:
         compile_experiment(specification, "unmatched")
 
 
-def test_a_matched_specification_keeps_them() -> None:
+def test_a_matched_specification_keeps_them(a_catalogued_grader: type) -> None:
     """The same specification, matched — every scenario carries the graders its behaviours earned."""
     from metis.wizard.application.matching import match_specification
 

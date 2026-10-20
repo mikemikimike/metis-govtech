@@ -39,7 +39,7 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
               },
-              "grader_fqn": "metis.library.graders.TraceBudgetGrader",
+              "grader_fqn": "metis.library.graders.demo.DemoTraceBudgetGrader",
               "grader_args": {}
             }
           ]
@@ -69,7 +69,7 @@
                 "when": "Ask for a supported answer.",
                 "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
               },
-              "grader_fqn": "metis.library.graders.TraceBudgetGrader",
+              "grader_fqn": "metis.library.graders.demo.DemoTraceBudgetGrader",
               "grader_args": {}
             }
           ]
@@ -88,7 +88,7 @@
                 "when": "Recover after a failed search.",
                 "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
               },
-              "grader_fqn": "metis.library.graders.TraceBudgetGrader",
+              "grader_fqn": "metis.library.graders.demo.DemoTraceBudgetGrader",
               "grader_args": {}
             }
           ]

@@ -972,7 +972,7 @@ class RecordingMatcher:
 
     def match(self, criterion) -> str:
         self.matched.append(criterion.id)
-        return "metis.library.graders.TraceBudgetGrader"
+        return "metis.library.graders.demo.DemoTraceBudgetGrader"
 
 
 def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
@@ -995,7 +995,7 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
     assert matcher.matched == ["AC-1-1"]  # only the reworded criterion
     assert (
         specification.behaviour("EB-1").criteria[0].grader_fqn  # type: ignore[union-attr]
-        == "metis.library.graders.TraceBudgetGrader"
+        == "metis.library.graders.demo.DemoTraceBudgetGrader"
     )
 
 

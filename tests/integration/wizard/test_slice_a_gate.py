@@ -152,8 +152,8 @@ def test_the_specification_package_passes_the_engine_input_gate(
     assert graders == {
         "supported-answer": [
             "tests.unit.engine.graders_for_tests.FixedScoreGrader",
-            "metis.library.graders.TraceBudgetGrader",
+            "metis.library.graders.demo.DemoTraceBudgetGrader",
         ],
-        "short-recovery": ["metis.library.graders.TraceBudgetGrader"],
+        "short-recovery": ["metis.library.graders.demo.DemoTraceBudgetGrader"],
     }
     _validate_inputs(extracted / "outputs")

@@ -18,7 +18,7 @@ const synthesisScorer = {
   uses_criterion_description: false,
 };
 const budgetScorer = {
-  fqn: "metis.library.graders.TraceBudgetGrader",
+  fqn: "metis.library.graders.demo.DemoTraceBudgetGrader",
   name: "Turn budget",
   description: "Checks that the conversation stays within its turn budget.",
   uses_criterion_description: false,
