@@ -44,6 +44,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- Add the grader taxonomy vocabulary and authoring method. Define supported values as
+  capabilities that a grader accepts and implements. Record that taxonomy groups can
+  overlap and constrain each other, and that grader authors own the validity of
+  declared combinations. Use the Criterion Judge as the complete public example.
+
 - **Defined Grading Scope in `GLOSSARY.md`.** The term names the part of a session that
   one grader result grades — the whole session, a trace, or an observation. It belongs
   to a result, not to a grader, and is distinct from the Baseline and Feature-specific
@@ -129,9 +134,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   uses the current criterion description, returns a binary session score, and records skipped
   or errored assessments separately. YAML description edits apply on the next run. Model and
   threshold settings survive description edits. The judge reads recorded trace input and
-  output. It does not read artifact files. `JudgmentShape.BINARY` selects shared output
-  instructions and response validation in `metis.library.judgment`. No taxonomy fields are
-  required (#299).
+  output. It does not read artifact files. `JudgmentForm.BINARY` selects its shared taxonomy
+  definition with output instructions and response validation in `metis.library.judgment`
+  (#299).
 
 - `CriterionJudgeArgs` marks a model-based grader that takes its instructions from the
   criterion description. `criterion_judge_args` adds the description as `criterion` and rejects a
@@ -140,6 +145,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - `JudgeArgs.max_input_tokens` limits the estimated size of one judge request, with a default
   of 128,000. `input_budget_error` returns an errored result for a larger request, so the
   grader makes no model call. An invalid limit logs a warning and uses the default (#299).
+
+- Define the grader taxonomy in code with string enums for evaluation subdimensions,
+  grader scopes, grader types, reference types, judgment forms, and aggregation.
+  `GraderTaxonomy` declares one subdimension or an explicit `None` for a catch-all
+  grader. The other five groups each contain one or more supported values. A taxonomy
+  definition holds shared metadata and behavior for one taxonomy value. The Criterion
+  Judge is the complete example with no subdimension mapping and one fixed value in
+  each other group. Record the current integration limits.
 
 #### Breaking
 

@@ -1,11 +1,12 @@
-"""Shared judgment shapes, output instructions, and response validation for judges."""
+"""Shared definitions for judgment forms."""
 
-from enum import StrEnum
+from dataclasses import dataclass
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from metis.library.grader import NonEmptyText
+from metis.library.taxonomy import JudgmentForm
 
 
 class BinaryJudgment(BaseModel):
@@ -26,21 +27,22 @@ class BinaryJudgment(BaseModel):
         return self
 
 
-class JudgmentShape(StrEnum):
-    """Select matching output instructions and response validation for a judge."""
+@dataclass(frozen=True)
+class JudgmentFormDefinition:
+    """Shared instructions and validation for one judgment form."""
 
-    BINARY = "binary"
-
-    @property
-    def response_model(self) -> type[BinaryJudgment]:
-        return {JudgmentShape.BINARY: BinaryJudgment}[self]
+    output_instructions: str
+    response_model: type[BaseModel]
 
 
-OUTPUT_INSTRUCTIONS: dict[JudgmentShape, str] = {
-    JudgmentShape.BINARY: (
-        "Return status scored and score 1 if the evidence satisfies the criterion, "
-        "or score 0 if it does not. Return status skipped and score null if "
-        "there is no applicable evidence. Give a non-empty reason grounded in "
-        "the observations."
+JUDGMENT_FORM_DEFINITIONS: dict[JudgmentForm, JudgmentFormDefinition] = {
+    JudgmentForm.BINARY: JudgmentFormDefinition(
+        output_instructions=(
+            "Return status scored and score 1 if the evidence satisfies the criterion, "
+            "or score 0 if it does not. Return status skipped and score null if "
+            "there is no applicable evidence. Give a non-empty reason grounded in "
+            "the observations."
+        ),
+        response_model=BinaryJudgment,
     ),
 }

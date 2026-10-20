@@ -12,6 +12,14 @@ from pydantic import ValidationError
 from metis.core.traces import GradingInput, Observation, Trace
 from metis.library.grader import Grader, LLMSettings
 from metis.library.graders.demo import DemoTraceBudgetArgs, DemoTraceBudgetGrader
+from metis.library.taxonomy import (
+    Aggregation,
+    EvaluationSubdimension,
+    GraderScope,
+    GraderType,
+    JudgmentForm,
+    ReferenceType,
+)
 
 
 def _trace(index: int, *, output: object = "an answer") -> Trace:
@@ -67,6 +75,16 @@ class TestArgs:
     def test_is_a_grader_with_matching_args_model(self) -> None:
         assert issubclass(DemoTraceBudgetGrader, Grader)
         assert DemoTraceBudgetGrader.args_model is DemoTraceBudgetArgs
+
+    def test_declares_one_supported_value_for_each_taxonomy_field(self) -> None:
+        assert DemoTraceBudgetGrader.taxonomy.model_dump() == {
+            "subdimension": EvaluationSubdimension.TASK_CONSTRAINT_ADHERENCE,
+            "scopes": (GraderScope.COMPLETE_TRAJECTORY_EPISODE,),
+            "grader_types": (GraderType.DETERMINISTIC,),
+            "reference_types": (ReferenceType.POLICY_RULE,),
+            "judgment_forms": (JudgmentForm.BINARY,),
+            "aggregations": (Aggregation.NONE_SINGLE_SCORE,),
+        }
 
 
 class TestGrade:
