@@ -8,13 +8,13 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-import metis.engine.simulation.runners.orca_api._artifacts as _artifacts_mod
-from metis.engine.simulation.runners.orca_api import (
+import metis.engine.simulation.gen_1.runners.orca_api._artifacts as _artifacts_mod
+from metis.engine.simulation.gen_1.runners.orca_api import (
     OrcaApiRunner,
     OrcaApiRunnerConfig,
     OrcaApiRunnerFactory,
 )
-from metis.engine.simulation.runners.orca_api._fixtures import content_type_for
+from metis.engine.simulation.gen_1.runners.orca_api._fixtures import content_type_for
 from metis.engine.simulation.types import (
     ButtonClickAction,
     FormFillAction,
@@ -170,8 +170,10 @@ class TestBuildSubmitBody:
 async def test_collect_artifacts_emits_relative_path_and_skips_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import metis.engine.simulation.runners.orca_api._artifacts as _artifacts_mod
-    from metis.engine.simulation.runners.orca_api._artifacts import collect_artifacts
+    import metis.engine.simulation.gen_1.runners.orca_api._artifacts as _artifacts_mod
+    from metis.engine.simulation.gen_1.runners.orca_api._artifacts import (
+        collect_artifacts,
+    )
 
     async def _fake_download(
         client: object, url: str, dest: object, **kwargs: object
@@ -264,7 +266,7 @@ async def test_submitted_fixture_artifact_carries_the_file_id(
 
 def test_cached_file_id_is_a_lookup_not_an_upload(tmp_path) -> None:
     """Runs after a successful submit, so it must neither upload nor raise."""
-    from metis.engine.simulation.runners.orca_api._fixtures import FixtureRejected
+    from metis.engine.simulation.gen_1.runners.orca_api._fixtures import FixtureRejected
 
     runner, _ = _make_runner(tmp_path)
     library = runner._fixture_library

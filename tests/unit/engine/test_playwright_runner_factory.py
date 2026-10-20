@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("playwright")
 
-from metis.engine.simulation.runners.orca_playwright._config import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._config import (
     AuthConfig,
     OrcaPlaywrightRunnerConfig,
 )
@@ -25,7 +25,7 @@ def _make_config(*, headed: bool = False) -> OrcaPlaywrightRunnerConfig:
 
 class TestPlaywrightRunnerFactoryInit:
     def test_init_with_explicit_config(self) -> None:
-        from metis.engine.simulation.runners.orca_playwright._factory import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._factory import (
             OrcaPlaywrightRunnerFactory,
         )
 
@@ -43,7 +43,7 @@ class TestPlaywrightRunnerFactoryInit:
         monkeypatch.setenv("ORCA_PASSWORD", "env_pass")
         monkeypatch.setenv("HEADED", "true")
 
-        from metis.engine.simulation.runners.orca_playwright._factory import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._factory import (
             OrcaPlaywrightRunnerFactory,
         )
 
@@ -53,7 +53,7 @@ class TestPlaywrightRunnerFactoryInit:
         assert factory._headed is True
 
     def test_retry_defaults_from_config(self) -> None:
-        from metis.engine.simulation.runners.orca_playwright._factory import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._factory import (
             OrcaPlaywrightRunnerFactory,
         )
 
@@ -66,7 +66,7 @@ class TestPlaywrightRunnerFactoryInit:
 class TestPlaywrightRunnerFactoryLifecycle:
     @pytest.mark.asyncio
     async def test_start_launches_browser_headed(self) -> None:
-        from metis.engine.simulation.runners.orca_playwright._factory import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._factory import (
             OrcaPlaywrightRunnerFactory,
         )
 
@@ -78,7 +78,7 @@ class TestPlaywrightRunnerFactoryLifecycle:
         mock_playwright_fn.start = AsyncMock(return_value=mock_pw)
 
         with patch(
-            "metis.engine.simulation.runners.orca_playwright._factory.async_playwright",
+            "metis.engine.simulation.gen_1.runners.orca_playwright._factory.async_playwright",
             return_value=mock_playwright_fn,
         ):
             factory = OrcaPlaywrightRunnerFactory(config=_make_config(headed=True))
@@ -88,8 +88,10 @@ class TestPlaywrightRunnerFactoryLifecycle:
 
     @pytest.mark.asyncio
     async def test_create_returns_playwright_runner(self, tmp_path: Path) -> None:
-        from metis.engine.simulation.runners.orca_playwright import OrcaPlaywrightRunner
-        from metis.engine.simulation.runners.orca_playwright._factory import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright import (
+            OrcaPlaywrightRunner,
+        )
+        from metis.engine.simulation.gen_1.runners.orca_playwright._factory import (
             OrcaPlaywrightRunnerFactory,
         )
 
@@ -111,7 +113,7 @@ class TestPlaywrightRunnerFactoryLifecycle:
 
     @pytest.mark.asyncio
     async def test_close_shuts_down_browser_and_playwright(self) -> None:
-        from metis.engine.simulation.runners.orca_playwright._factory import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._factory import (
             OrcaPlaywrightRunnerFactory,
         )
 
@@ -129,7 +131,9 @@ async def test_run_response_wait_is_applied_without_changing_shared_config(
     tmp_path: Path,
 ) -> None:
     from metis.core.trials import TrialConfig
-    from metis.engine.simulation.runners.orca_playwright import OrcaPlaywrightRunner
+    from metis.engine.simulation.gen_1.runners.orca_playwright import (
+        OrcaPlaywrightRunner,
+    )
 
     shared = _make_config()
     runner = OrcaPlaywrightRunner(
@@ -140,7 +144,8 @@ async def test_run_response_wait_is_applied_without_changing_shared_config(
         experiment_root=tmp_path,
     )
     with patch(
-        "metis.engine.simulation.runners.orca_playwright.login", new_callable=AsyncMock
+        "metis.engine.simulation.gen_1.runners.orca_playwright.login",
+        new_callable=AsyncMock,
     ) as login:
         await runner.setup(
             TrialConfig(persona="p", scenario="s", response_wait_ms=45000)

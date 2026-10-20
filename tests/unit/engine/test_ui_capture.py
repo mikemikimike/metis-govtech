@@ -8,8 +8,8 @@ import pytest
 
 pytest.importorskip("playwright")
 
-from metis.engine.simulation.runners.orca_playwright._config import RetryConfig
-from metis.engine.simulation.runners.orca_playwright._ui_capture import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._config import RetryConfig
+from metis.engine.simulation.gen_1.runners.orca_playwright._ui_capture import (
     capture_artifacts_panel,
     capture_ui_state,
 )

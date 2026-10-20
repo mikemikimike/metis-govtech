@@ -4,15 +4,15 @@ import pytest
 
 pytest.importorskip("playwright")
 
-from metis.engine.simulation.runners.orca_playwright._element_resolver import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._element_resolver import (
     resolve_element,
 )
-from metis.engine.simulation.runners.orca_playwright._page_actions import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._page_actions import (
     auto_fill_and_submit,
     send_message,
     upload_file,
 )
-from metis.engine.simulation.runners.orca_playwright._retry import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._retry import (
     action_retry,
     track_submission,
 )

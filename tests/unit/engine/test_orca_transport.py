@@ -8,8 +8,8 @@ import httpx
 import pytest
 
 from metis.engine.simulation.exceptions import TargetUnavailableError
-from metis.engine.simulation.runners._http import SubmitRateLimiter
-from metis.engine.simulation.runners.orca_api._transport import v1_request
+from metis.engine.simulation.gen_1.runners._http import SubmitRateLimiter
+from metis.engine.simulation.gen_1.runners.orca_api._transport import v1_request
 
 
 async def _no_sleep(_seconds: float) -> None:

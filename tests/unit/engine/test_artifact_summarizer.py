@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from metis.core import Artifact
-from metis.engine.simulation import artifact_summarizer as summ
-from metis.engine.simulation.artifact_summarizer import (
+from metis.engine.simulation.gen_1 import artifact_summarizer as summ
+from metis.engine.simulation.gen_1.artifact_summarizer import (
     _SUMMARIZER_SYSTEM,
     summarize_artifact,
 )
@@ -150,11 +150,13 @@ async def test_summarize_fixtures_skips_described_and_fills_gaps(
         artifact.state_description = f"delivered at turn {turn_number}"
 
     monkeypatch.setattr(
-        "metis.engine.simulation.artifact_summarizer.summarize_artifact",
+        "metis.engine.simulation.gen_1.artifact_summarizer.summarize_artifact",
         fake_summarize,
     )
 
-    from metis.engine.simulation.artifact_summarizer import summarize_fixture_artifacts
+    from metis.engine.simulation.gen_1.artifact_summarizer import (
+        summarize_fixture_artifacts,
+    )
 
     await summarize_fixture_artifacts([described, gap], tmp_path)
 
@@ -181,11 +183,11 @@ async def test_resolve_fixture_descriptions_summarizes_each_unique_once(
         artifact.state_description = f"delivered at turn {turn_number}"
 
     monkeypatch.setattr(
-        "metis.engine.simulation.artifact_summarizer.summarize_artifact",
+        "metis.engine.simulation.gen_1.artifact_summarizer.summarize_artifact",
         fake_summarize,
     )
 
-    from metis.engine.simulation.artifact_summarizer import (
+    from metis.engine.simulation.gen_1.artifact_summarizer import (
         resolve_fixture_descriptions,
     )
 
@@ -214,11 +216,11 @@ async def test_resolve_fixture_descriptions_omits_missing_files(
         raise AssertionError("no summarization for a missing file")
 
     monkeypatch.setattr(
-        "metis.engine.simulation.artifact_summarizer.summarize_artifact",
+        "metis.engine.simulation.gen_1.artifact_summarizer.summarize_artifact",
         _boom,
     )
 
-    from metis.engine.simulation.artifact_summarizer import (
+    from metis.engine.simulation.gen_1.artifact_summarizer import (
         resolve_fixture_descriptions,
     )
 

@@ -8,13 +8,12 @@ from pydantic import BaseModel
 
 from metis.core.logging import get_logger
 
+from ...types import Persona, Scenario
 from ..types import (
     ActionResult,
     ActionSlot,
     Artifact,
     Observation,
-    Persona,
-    Scenario,
     UserAgentInput,
     UserAgentOutput,
 )

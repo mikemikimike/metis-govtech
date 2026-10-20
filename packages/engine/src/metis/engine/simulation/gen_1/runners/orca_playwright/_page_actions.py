@@ -11,7 +11,7 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from metis.core.logging import get_logger
 
-from ...exceptions import ResponseTimeoutError
+from ....exceptions import ResponseTimeoutError
 from ...types import UIState
 from ._auth import dismiss_modals
 from ._config import OrcaPlaywrightRunnerConfig

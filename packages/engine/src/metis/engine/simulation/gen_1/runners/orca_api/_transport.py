@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from ...exceptions import AuthLossError, TargetUnavailableError
+from ....exceptions import AuthLossError, TargetUnavailableError
 from .._http import send_with_backoff
 
 if TYPE_CHECKING:

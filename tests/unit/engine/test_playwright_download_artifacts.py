@@ -11,8 +11,8 @@ import pytest
 pytest.importorskip("playwright")
 
 from metis.core import Artifact
-from metis.engine.simulation.runners.orca_playwright import OrcaPlaywrightRunner
-from metis.engine.simulation.runners.orca_playwright._config import (
+from metis.engine.simulation.gen_1.runners.orca_playwright import OrcaPlaywrightRunner
+from metis.engine.simulation.gen_1.runners.orca_playwright._config import (
     AuthConfig,
     OrcaPlaywrightRunnerConfig,
 )

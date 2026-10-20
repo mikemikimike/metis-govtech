@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 import pytest
 
-from metis.engine.simulation.runners.orca_api import (
+from metis.engine.simulation.gen_1.runners.orca_api import (
     OrcaApiRunner,
     OrcaApiRunnerConfig,
 )

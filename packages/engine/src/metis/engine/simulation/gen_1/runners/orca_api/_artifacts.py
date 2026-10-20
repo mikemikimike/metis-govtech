@@ -22,7 +22,7 @@ import httpx
 from metis.core import Artifact
 from metis.core.logging import get_logger
 
-from ...exceptions import AuthLossError
+from ....exceptions import AuthLossError
 from .._http import download_to
 
 if TYPE_CHECKING:

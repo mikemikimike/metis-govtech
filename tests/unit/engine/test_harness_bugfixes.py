@@ -139,7 +139,7 @@ class TestM3_ResponseDetectionScope:
         import inspect
 
         pytest.importorskip("playwright")
-        from metis.engine.simulation.runners.orca_playwright._page_actions import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._page_actions import (
             send_message,
         )
 
@@ -152,7 +152,7 @@ class TestM3_ResponseDetectionScope:
         import inspect
 
         pytest.importorskip("playwright")
-        from metis.engine.simulation.runners.orca_playwright._page_actions import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._page_actions import (
             send_message,
         )
 
@@ -169,7 +169,7 @@ class TestS1_SendMessagePattern:
         import inspect
 
         pytest.importorskip("playwright")
-        from metis.engine.simulation.runners.orca_playwright._page_actions import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._page_actions import (
             send_message,
         )
 

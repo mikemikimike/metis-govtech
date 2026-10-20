@@ -18,19 +18,19 @@ import pytest
 import structlog
 from rich.console import Console
 
-import metis.engine.simulation.runners.orca_api as orca_api
+import metis.engine.simulation.gen_1.runners.orca_api as orca_api
 from metis.engine.simulation.exceptions import (
     AuthLossError,
     SimulationError,
     TargetSessionEnded,
     TargetSessionLostError,
 )
-from metis.engine.simulation.runners.orca_api import (
+from metis.engine.simulation.gen_1.runners.orca_api import (
     OrcaApiRunner,
     OrcaApiRunnerConfig,
     OrcaApiRunnerFactory,
 )
-from metis.engine.simulation.runners.orca_api._config import (
+from metis.engine.simulation.gen_1.runners.orca_api._config import (
     ENV_PLATFORM_AI_KEY,
     PLATFORM_AI_KEY_HEADER,
 )

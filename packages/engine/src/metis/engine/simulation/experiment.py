@@ -21,10 +21,10 @@ from metis.core.trials import TrialConfig, TrialFailure, TrialOutcome, TrialReco
 
 from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
 from ._fixture_artifacts import build_fixture_artifacts
-from .artifact_summarizer import resolve_fixture_descriptions
 from .exceptions import TrialRecoverableError
-from .orchestrator import Orchestrator
-from .user_agent.agent import UserAgent
+from .gen_1.artifact_summarizer import resolve_fixture_descriptions
+from .gen_1.orchestrator import Orchestrator
+from .gen_1.user_agent.agent import UserAgent
 
 if TYPE_CHECKING:
     import threading

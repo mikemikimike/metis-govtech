@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
-from metis.engine.simulation.runners._http import (
+from metis.engine.simulation.gen_1.runners._http import (
     PollTimeout,
     SubmitRateLimiter,
     download_to,
