@@ -79,6 +79,7 @@ Simulation uses the live TUI in a terminal. Evaluation uses a normal progress ba
 ```
 simulation/
 ├── factory.py         — RunnerFactory protocol
+├── trial.py           — "Run one trial" seam; picks the generation from the factory
 ├── runner_resolver.py — Resolves runner_factory_ref FQN to a class
 ├── experiment.py      — Experiment orchestrator (worker distribution, asyncio.gather)
 ├── types.py           — Pydantic models (Specification, Scenario, Persona)
@@ -87,6 +88,7 @@ simulation/
 ├── _artifact_store.py — Artifact capture and storage
 ├── runner.py, runners/ — old import paths; re-export from gen_1
 └── gen_1/             — today's simulator: typed actions on offered slots
+    ├── trial.py           — Builds today's UserAgent and Orchestrator for one attempt
     ├── runner.py          — Runner ABC
     ├── types.py           — Actions, slots, Observation, user agent input/output
     ├── orchestrator.py    — Single-run orchestration (turn loop, retries)
