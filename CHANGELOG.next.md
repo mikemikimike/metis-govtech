@@ -121,7 +121,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   uses the current criterion description, returns a binary session score, and records skipped
   or errored assessments separately. YAML description edits apply on the next run. Model and
   threshold settings survive description edits. The judge reads recorded trace input and
-  output. It does not read artifact files. No taxonomy fields are required (#299).
+  output. It does not read artifact files. `JudgmentShape.BINARY` selects shared output
+  instructions and response validation in `metis.library.judgment`. No taxonomy fields are
+  required (#299).
 
 - `CriterionJudgeArgs` marks a model-based grader that takes its instructions from the
   criterion description. `criterion_judge_args` adds the description as `criterion` and rejects a
