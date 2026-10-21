@@ -23,9 +23,14 @@ if TYPE_CHECKING:
 
 
 def _unreadable(path: Path, exc: ValueError | OSError) -> Problem:
-    """A short reason. For a pydantic error the useful text is in ``errors()``, not ``str``."""
+    """A short reason naming the file only: the report is shared, so no local path goes in it.
+
+    For a pydantic error the useful text is in ``errors()``, not ``str``.
+    """
     if isinstance(exc, ValidationError):
-        reason = exc.errors()[0]["msg"]
+        error = exc.errors()[0]
+        where = ".".join(str(part) for part in error["loc"])
+        reason = f"{where}: {error['msg']}" if where else error["msg"]
     else:
         reason = str(exc) or type(exc).__name__
     return Problem(kind="unsupported", detail=f"cannot read {path.name}: {reason}")
@@ -41,7 +46,7 @@ def read_turns(experiment_dir: Path, session_id: str) -> tuple[Turn, ...] | Prob
     try:
         saved = SessionTraces.load_file(path)
     except FileNotFoundError:
-        return Problem(kind="missing", detail=f"no saved traces at {path}")
+        return Problem(kind="missing", detail=f"no saved traces ({path.name})")
     except (OSError, ValueError) as exc:
         return _unreadable(path, exc)
     if saved.session_id != session_id:

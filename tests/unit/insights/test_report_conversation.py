@@ -106,3 +106,28 @@ def test_unreadable_payload_is_shown_not_blanked() -> None:
 )
 def test_turn_count_note(saved: int, recorded: int | None, note: str | None) -> None:
     assert turn_count_note(saved, recorded) == note
+
+
+def test_missing_file_problem_names_the_file_not_the_local_path(
+    tmp_path: Path,
+) -> None:
+    result = read_turns(tmp_path, SESSION_ID)
+
+    assert isinstance(result, Problem)
+    assert execution_layout.trace_file_name(SESSION_ID) in result.detail
+    assert str(tmp_path) not in result.detail
+
+
+def test_unreadable_row_problem_says_which_field(tmp_path: Path) -> None:
+    path = _save_orca(tmp_path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    del data["traces"][0]["observations"][0]["id"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    result = read_turns(tmp_path, SESSION_ID)
+
+    assert isinstance(result, Problem)
+    assert result.kind == "unsupported"
+    assert "id" in result.detail
+    assert "Field required" in result.detail
+    assert str(tmp_path) not in result.detail

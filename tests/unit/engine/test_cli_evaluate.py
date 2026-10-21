@@ -736,3 +736,27 @@ def test_failed_trace_write_warns_and_still_grades(monkeypatch, tmp_path: Path) 
     assert result.exit_code == 0, result.output
     assert (output / "outputs" / "reports" / "results.json").exists()
     assert "TRACES NOT SAVED" in (output / "logs" / "evaluate.log").read_text()
+
+
+def test_unserialisable_payload_does_not_fail_the_record(
+    monkeypatch, tmp_path: Path
+) -> None:
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    bad = Observation.model_validate(
+        {"id": "o1", "traceId": "t1", "output": "lone surrogate \ud800 here"}
+    )
+    session = GradingInput(traces=(Trace.from_observations("t1", "session-1", [bad]),))
+    monkeypatch.setattr("metis.engine.extractor.get_langfuse_client", lambda: object())
+    monkeypatch.setattr(
+        "metis.engine.extractor.fetch_session", lambda *args, **kwargs: session
+    )
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    (graded,) = EvaluationResults.load_file(
+        output / "outputs" / "reports" / "results.json"
+    ).records
+    assert graded.criterion_id == "AC-1-1"
+    assert "TRACES NOT SAVED" in (output / "logs" / "evaluate.log").read_text()

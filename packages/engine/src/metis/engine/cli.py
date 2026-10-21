@@ -796,7 +796,8 @@ def _save_session_traces(
 ) -> None:
     """Save one session's traces for `metis insights report`; a failed write only warns.
 
-    The file is display data, so grading must never depend on it.
+    The file is display data, so grading must never depend on it. A payload JSON cannot
+    encode (a lone surrogate, say) raises ``ValueError``, so that is caught as well as ``OSError``.
     """
     from metis.core import SessionTraces
 
@@ -807,7 +808,7 @@ def _save_session_traces(
     )
     try:
         SessionTraces.from_traces(session_id, traces).save(path)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         console.print(
             f"  WARNING: traces for session {session_id} were not saved: {exc}",
             style="yellow",
