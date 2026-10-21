@@ -6,7 +6,7 @@ root observation. ``Observation`` is one row of Observations API v2, ``Trace`` i
 builds from those rows, and ``GradingInput`` is the whole session plus the artifacts the run
 produced.
 
-These live in ``metis-core`` because the engine, the trace cache and ``metis-insights`` all read
+These live in ``metis-core`` because the engine, the saved traces and ``metis-insights`` all read
 them, and ``insights`` may depend only on ``core``. Holding Langfuse's SDK type instead would make
 ``core`` depend on ``langfuse``.
 
@@ -22,9 +22,9 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 from metis.core.artifacts import Artifact
@@ -32,6 +32,7 @@ from metis.core.logging import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -57,7 +58,8 @@ class Observation(BaseModel):
     """One Langfuse observation, as returned by Observations API v2.
 
     Holds the subset of Observations API v2 fields that graders read, under the same names.
-    Fields METIS does not use are dropped on validation. A raw API row validates directly: its
+    Fields METIS does not use are not fields here, but the whole row is kept in ``raw`` so it
+    can be saved without loss. A raw API row validates directly: its
     camelCase keys (``traceId``) map onto the snake_case fields, and every field except the two
     ids may be missing. A field is ``None`` both when it is empty and when its field group was
     not requested, so the fetch requests every group these fields come from.
@@ -91,6 +93,20 @@ class Observation(BaseModel):
     """Parsed the same way as ``input``."""
     metadata: Any = None
     """Fetched with ``expandMetadata``, so never truncated."""
+    raw: dict[str, Any] = Field(default_factory=dict, exclude=True, repr=False)
+    """The row this observation was validated from, untouched: every key the API sent, the
+    original input/output strings and the original timestamp strings. It exists so the
+    observation can be saved without loss (``SessionTraces``), never for grading: graders read
+    payloads only through ``metis.core.trace_processing``. It is left out of ``model_dump`` and
+    ``repr`` so no log line or judge prompt picks up a second copy of every payload. An
+    observation built from keyword arguments holds those arguments here, not a Langfuse row."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _keep_row(cls, data: object) -> object:
+        if isinstance(data, dict) and "raw" not in data:
+            return {**data, "raw": data}
+        return data
 
     @field_validator("input", "output", mode="before")
     @classmethod
@@ -198,3 +214,87 @@ class GradingInput(BaseModel, frozen=True):
     """Every artifact the run produced, with ``path`` already resolved to a local file path.
     ``()`` when the run produced none. Not tied to individual traces (see issue #428, "Open
     questions and known gaps")."""
+
+
+_SESSION_TRACES_VERSION = 1
+_SESSION_TRACES_SOURCE = "langfuse-observations-v2"
+
+
+class SavedTrace(BaseModel, frozen=True):
+    """One trace as saved: its id and the Langfuse rows of its observations."""
+
+    id: str
+    observations: tuple[dict[str, Any], ...]
+
+
+class SessionTraces(BaseModel, frozen=True):
+    """A session's traces as `metis engine evaluate` saved them, for `metis insights report`.
+
+    Holds the rows Langfuse returned (``Observation.raw``), not a dump of the typed models, so
+    nothing that was fetched is lost and no payload is written twice. Loading validates each row
+    through ``Observation`` again, which refills ``raw``, so a load followed by a save writes the
+    same file. Artifacts are not saved: their paths are local to the machine that ran evaluate.
+    """
+
+    schema_version: Literal[1] = _SESSION_TRACES_VERSION
+    source: Literal["langfuse-observations-v2"] = _SESSION_TRACES_SOURCE
+    """The API the rows come from. Rows of another API shape would validate as observations with
+    nothing in them, so the file names its source to be recognised instead of misread."""
+    session_id: str
+    traces: tuple[SavedTrace, ...]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _check_supported(cls, data: object) -> object:
+        """Reject an explicit version or source we cannot read; a missing key takes the default."""
+        if not isinstance(data, dict):
+            return data
+        version = data.get("schema_version")
+        if version is not None and version != _SESSION_TRACES_VERSION:
+            raise ValueError(
+                f"Unsupported schema_version {version!r} (expected {_SESSION_TRACES_VERSION}). "
+                "This file was saved by a different version of metis-engine."
+            )
+        source = data.get("source")
+        if source is not None and source != _SESSION_TRACES_SOURCE:
+            raise ValueError(
+                f"Unsupported source {source!r} (expected {_SESSION_TRACES_SOURCE!r}). "
+                "These rows come from a Langfuse API this version of METIS does not read."
+            )
+        return data
+
+    @classmethod
+    def from_traces(cls, session_id: str, traces: Iterable[Trace]) -> Self:
+        """The traces as saved rows, in the order given."""
+        return cls(
+            session_id=session_id,
+            traces=tuple(
+                SavedTrace(
+                    id=trace.id,
+                    observations=tuple(
+                        observation.raw for observation in trace.observations
+                    ),
+                )
+                for trace in traces
+            ),
+        )
+
+    def to_traces(self) -> tuple[Trace, ...]:
+        """The saved rows built back into ``Trace``s, in the order saved."""
+        return tuple(
+            Trace.from_observations(
+                saved.id,
+                self.session_id,
+                [Observation.model_validate(row) for row in saved.observations],
+            )
+            for saved in self.traces
+        )
+
+    @classmethod
+    def load_file(cls, path: Path) -> Self:
+        return cls.model_validate_json(path.read_text(encoding="utf-8"))
+
+    def save(self, path: Path) -> None:
+        """Write the file as UTF-8 JSON, creating the parent directory."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(self.model_dump_json(indent=1) + "\n", encoding="utf-8")

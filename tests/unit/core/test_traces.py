@@ -121,6 +121,27 @@ class TestObservationValidation:
             obs.output = "changed"  # type: ignore[misc]
 
 
+class TestObservationRaw:
+    """``raw`` keeps the row exactly as the API sent it, so a saved trace loses nothing."""
+
+    def test_raw_keeps_fields_observation_does_not_model(self) -> None:
+        obs = Observation.model_validate(_row(someNewField=7))
+        assert obs.raw["someNewField"] == 7
+
+    def test_raw_keeps_unparsed_io_and_original_timestamps(self) -> None:
+        obs = Observation.model_validate(
+            _row(input='{"a": 1}', startTime="2026-01-01T00:00:00.000Z")
+        )
+        assert obs.input == {"a": 1}
+        assert obs.raw["input"] == '{"a": 1}'
+        assert obs.raw["startTime"] == "2026-01-01T00:00:00.000Z"
+
+    def test_raw_is_not_dumped_or_shown(self) -> None:
+        obs = Observation.model_validate(_row())
+        assert "raw" not in obs.model_dump()
+        assert "raw" not in repr(obs)
+
+
 class TestTraceObservations:
     def test_empty_trace_is_rejected(self) -> None:
         with pytest.raises(ValidationError):
