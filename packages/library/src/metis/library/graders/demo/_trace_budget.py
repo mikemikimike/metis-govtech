@@ -11,12 +11,12 @@ from metis.core.trace_processing import Problem, select_all, turns
 from metis.library.grader import Grader, GraderArgs
 from metis.library.taxonomy import (
     Aggregation,
-    EvaluationSubdimension,
-    GraderScope,
     GraderTaxonomy,
     GraderType,
     JudgmentForm,
+    Measure,
     ReferenceType,
+    Scope,
 )
 
 if TYPE_CHECKING:
@@ -46,8 +46,8 @@ class DemoTraceBudgetGrader(Grader[DemoTraceBudgetArgs]):
 
     args_model = DemoTraceBudgetArgs
     taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
-        subdimension=EvaluationSubdimension.TASK_CONSTRAINT_ADHERENCE,
-        scopes=(GraderScope.COMPLETE_TRAJECTORY_EPISODE,),
+        measure=Measure.TASK_CONSTRAINT_ADHERENCE,
+        scopes=(Scope.COMPLETE_TRAJECTORY_EPISODE,),
         grader_types=(GraderType.DETERMINISTIC,),
         reference_types=(ReferenceType.POLICY_RULE,),
         judgment_forms=(JudgmentForm.BINARY,),

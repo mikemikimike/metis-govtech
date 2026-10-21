@@ -13,18 +13,18 @@ from metis.library.graders import CriterionJudgeGrader
 from metis.library.judgment import JUDGMENT_FORM_DEFINITIONS, BinaryJudgment
 from metis.library.taxonomy import (
     Aggregation,
-    GraderScope,
     GraderType,
     JudgmentForm,
     ReferenceType,
+    Scope,
 )
 from tests.fixtures.criterion_judge import judge_client, recorded_session
 
 
 def test_uses_the_shared_binary_judgment_definition() -> None:
     assert CriterionJudgeGrader.taxonomy.model_dump() == {
-        "subdimension": None,
-        "scopes": (GraderScope.COMPLETE_TRAJECTORY_EPISODE,),
+        "measure": None,
+        "scopes": (Scope.COMPLETE_TRAJECTORY_EPISODE,),
         "grader_types": (GraderType.LLM,),
         "reference_types": (ReferenceType.RUBRIC_BASED,),
         "judgment_forms": (JudgmentForm.BINARY,),

@@ -14,11 +14,11 @@ from metis.library.grader import (
 from metis.library.judgment import JUDGMENT_FORM_DEFINITIONS
 from metis.library.taxonomy import (
     Aggregation,
-    GraderScope,
     GraderTaxonomy,
     GraderType,
     JudgmentForm,
     ReferenceType,
+    Scope,
 )
 
 if TYPE_CHECKING:
@@ -31,8 +31,8 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
 
     args_model = CriterionJudgeArgs
     taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
-        subdimension=None,
-        scopes=(GraderScope.COMPLETE_TRAJECTORY_EPISODE,),
+        measure=None,
+        scopes=(Scope.COMPLETE_TRAJECTORY_EPISODE,),
         grader_types=(GraderType.LLM,),
         reference_types=(ReferenceType.RUBRIC_BASED,),
         judgment_forms=(JudgmentForm.BINARY,),

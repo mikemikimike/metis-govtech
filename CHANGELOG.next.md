@@ -146,12 +146,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   of 128,000. `input_budget_error` returns an errored result for a larger request, so the
   grader makes no model call. An invalid limit logs a warning and uses the default (#299).
 
-- Define the grader taxonomy in code with string enums for evaluation subdimensions,
-  grader scopes, grader types, reference types, judgment forms, and aggregation.
-  `GraderTaxonomy` declares one subdimension or an explicit `None` for a catch-all
+- Define the grader taxonomy in code with string enums for measures,
+  scopes, grader types, reference types, judgment forms, and aggregation.
+  `GraderTaxonomy` declares one measure or an explicit `None` for a catch-all
   grader. The other five groups each contain one or more supported values. A taxonomy
   definition holds shared metadata and behavior for one taxonomy value. The Criterion
-  Judge is the complete example with no subdimension mapping and one fixed value in
+  Judge is the complete example with no measure mapping and one fixed value in
   each other group. Record the current integration limits.
 
 #### Breaking

@@ -33,7 +33,7 @@ def test_taxonomy_values_validate_and_round_trip_as_json(enum_type) -> None:
 @pytest.fixture
 def declaration() -> dict[str, object]:
     return {
-        "subdimension": None,
+        "measure": None,
         "scopes": ["complete_trajectory_episode"],
         "grader_types": ["llm"],
         "reference_types": ["rubric_based"],
@@ -42,43 +42,39 @@ def declaration() -> dict[str, object]:
     }
 
 
-@pytest.mark.parametrize(
-    "subdimension", [None, taxonomy.EvaluationSubdimension.TASK_CONSTRAINT_ADHERENCE]
-)
-def test_subdimension_round_trips_as_a_nullable_scalar(
-    declaration, subdimension
-) -> None:
-    declaration["subdimension"] = subdimension
+@pytest.mark.parametrize("measure", [None, taxonomy.Measure.TASK_CONSTRAINT_ADHERENCE])
+def test_measure_round_trips_as_a_nullable_scalar(declaration, measure) -> None:
+    declaration["measure"] = measure
     support = taxonomy.GraderTaxonomy.model_validate(declaration)
-    assert support.subdimension is subdimension
+    assert support.measure is measure
     encoded = support.model_dump_json()
-    assert json.loads(encoded)["subdimension"] == subdimension
+    assert json.loads(encoded)["measure"] == measure
     assert taxonomy.GraderTaxonomy.model_validate_json(encoded) == support
 
 
-def test_subdimension_requires_an_explicit_value(declaration) -> None:
-    del declaration["subdimension"]
-    with pytest.raises(ValidationError, match="(?s)subdimension.*Field required"):
+def test_measure_requires_an_explicit_value(declaration) -> None:
+    del declaration["measure"]
+    with pytest.raises(ValidationError, match="(?s)measure.*Field required"):
         taxonomy.GraderTaxonomy.model_validate(declaration)
 
 
 @pytest.mark.parametrize(
-    "subdimensions",
+    "measures",
     [
         ["task_constraint_adherence"],
         ["task_constraint_adherence", "communication_clarity"],
     ],
 )
-def test_subdimension_rejects_collections(declaration, subdimensions) -> None:
-    declaration["subdimension"] = subdimensions
-    with pytest.raises(ValidationError, match="subdimension"):
+def test_measure_rejects_collections(declaration, measures) -> None:
+    declaration["measure"] = measures
+    with pytest.raises(ValidationError, match="measure"):
         taxonomy.GraderTaxonomy.model_validate(declaration)
 
 
 @pytest.mark.parametrize(
     ("field", "enum_type"),
     [
-        ("scopes", taxonomy.GraderScope),
+        ("scopes", taxonomy.Scope),
         ("grader_types", taxonomy.GraderType),
         ("reference_types", taxonomy.ReferenceType),
         ("judgment_forms", taxonomy.JudgmentForm),

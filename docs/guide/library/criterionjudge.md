@@ -8,20 +8,20 @@ offer this judge, because the form has no criterion description field.
 ## Taxonomy declaration
 
 The Criterion Judge is the public example of a complete grader taxonomy declaration.
-It is a catch-all judge with `subdimension=None`. It has no category mapping.
+It is a catch-all judge with `measure=None`. It has no category mapping.
 The other five groups have one fixed value:
 
 | Group | Supported value |
 |---|---|
-| Evaluation subdimension | `None` |
-| Grader scope | `COMPLETE_TRAJECTORY_EPISODE` |
+| Measure | `None` |
+| Scope | `COMPLETE_TRAJECTORY_EPISODE` |
 | Grader type | `LLM` |
 | Reference type | `RUBRIC_BASED` |
 | Judgment form | `BINARY` |
 | Aggregation | `NONE_SINGLE_SCORE` |
 
 The criterion description defines the check for each assessment. The judge does not
-map that text to a subdimension. `None` does not declare support for every category.
+map that text to a measure. `None` does not declare support for every category.
 The evidence limits below apply to every assessment.
 
 Taxonomy groups can overlap and constrain each other. A taxonomy declaration does not

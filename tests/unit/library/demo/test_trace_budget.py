@@ -14,11 +14,11 @@ from metis.library.grader import Grader, LLMSettings
 from metis.library.graders.demo import DemoTraceBudgetArgs, DemoTraceBudgetGrader
 from metis.library.taxonomy import (
     Aggregation,
-    EvaluationSubdimension,
-    GraderScope,
     GraderType,
     JudgmentForm,
+    Measure,
     ReferenceType,
+    Scope,
 )
 
 
@@ -78,8 +78,8 @@ class TestArgs:
 
     def test_declares_one_supported_value_for_each_taxonomy_field(self) -> None:
         assert DemoTraceBudgetGrader.taxonomy.model_dump() == {
-            "subdimension": EvaluationSubdimension.TASK_CONSTRAINT_ADHERENCE,
-            "scopes": (GraderScope.COMPLETE_TRAJECTORY_EPISODE,),
+            "measure": Measure.TASK_CONSTRAINT_ADHERENCE,
+            "scopes": (Scope.COMPLETE_TRAJECTORY_EPISODE,),
             "grader_types": (GraderType.DETERMINISTIC,),
             "reference_types": (ReferenceType.POLICY_RULE,),
             "judgment_forms": (JudgmentForm.BINARY,),

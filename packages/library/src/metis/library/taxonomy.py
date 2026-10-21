@@ -1,5 +1,25 @@
 """Values and grader support declarations for the grader taxonomy.
 
+The conceptual hierarchy for one judgment is:
+
+    Measure
+        Choose one subdimension, such as Task and Output Quality.
+        Choose one attribute within it, such as factual_accuracy.
+    Scope
+        Choose one subdimension, such as Interaction.
+        Choose one attribute within it, such as complete_trajectory_episode.
+    Mechanism
+        For each subdimension, choose one attribute:
+            Grader type, such as llm.
+            Reference type, such as rubric_based.
+            Judgment form, such as binary.
+            Aggregation, such as none_single_score.
+
+Measure and Scope are flat enums of attributes. Group comments name their
+subdimensions. The mechanism subdimensions have separate enums.
+GraderTaxonomy declares the values a grader supports. A configured judgment
+selects supported values. A catch-all judge has no fixed Measure and uses None.
+
 Update these enums directly when the taxonomy changes. Group comments mark V1
 exclusions until the next group heading or enum class. Do not implement V1 graders
 for excluded entries. Other entries are catalogue entries. Their presence does not
@@ -21,8 +41,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
     "Aggregation",
-    "EvaluationSubdimension",
-    "GraderScope",
+    "Measure",
+    "Scope",
     "GraderType",
     "GraderTaxonomy",
     "JudgmentForm",
@@ -30,8 +50,8 @@ __all__ = [
 ]
 
 
-class EvaluationSubdimension(StrEnum):
-    """Individual evaluation subdimensions assessed by graders."""
+class Measure(StrEnum):
+    """Properties assessed by graders."""
 
     # Task and Output Quality
     TASK_SUCCESS = "task_success"
@@ -162,7 +182,7 @@ class EvaluationSubdimension(StrEnum):
     ACOUSTIC_QUALITY = "acoustic_quality"  # Requires an available audio artifact.
 
 
-class GraderScope(StrEnum):
+class Scope(StrEnum):
     """Evidence units that can each receive one grader result."""
 
     # Atomic
@@ -268,7 +288,7 @@ class Aggregation(StrEnum):
 class GraderTaxonomy(BaseModel):
     """Taxonomy values that one grader supports.
 
-    A grader has one subdimension, or None when it is a catch-all judge.
+    A grader has one measure, or None when it is a catch-all judge.
     Each other field lists one or more supported values. A one-value field is fixed
     for that grader. A field with several values can
     become a form choice when the grader's args model has the matching setting.
@@ -279,8 +299,8 @@ class GraderTaxonomy(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    subdimension: EvaluationSubdimension | None
-    scopes: tuple[GraderScope, ...] = Field(min_length=1)
+    measure: Measure | None
+    scopes: tuple[Scope, ...] = Field(min_length=1)
     grader_types: tuple[GraderType, ...] = Field(min_length=1)
     reference_types: tuple[ReferenceType, ...] = Field(min_length=1)
     judgment_forms: tuple[JudgmentForm, ...] = Field(min_length=1)

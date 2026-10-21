@@ -1,14 +1,18 @@
 # Grader taxonomy and authoring guide
 
 The grader taxonomy gives grader authors one vocabulary for describing a grader.
-It covers six groups:
+It has three top-level groups:
 
-- evaluation subdimension;
-- grader scope;
-- grader type;
-- reference type;
-- judgment form;
-- aggregation.
+| Group | Meaning | Selection for one judgment |
+|---|---|---|
+| Measure | The property to assess. | Choose one subdimension, then one attribute within it. |
+| Scope | The evidence unit to assess. | Choose one subdimension, then one attribute within it. |
+| Mechanism | The method used for the assessment. | Choose one attribute from each subdimension. |
+
+The Mechanism subdimensions are grader type, reference type, judgment form, and
+aggregation. Measure and Scope subdimensions appear as group comments in their
+enums. The capability declaration stores supported attributes as flat enum values.
+A catch-all judge has no Measure mapping and declares `measure=None`.
 
 The taxonomy is a capability declaration. A supported value means that the grader
 accepts that value and implements the behavior that it names. The declaration does
@@ -37,13 +41,13 @@ LLM judge from making an incorrect assessment.
 
 ## Taxonomy contract
 
-`GraderTaxonomy` contains one required subdimension field and five nonempty tuples.
-A specialized grader declares one subdimension. A catch-all grader explicitly sets
-`subdimension=None` because it has no category mapping:
+`GraderTaxonomy` contains one required measure field and five nonempty tuples.
+A specialized grader declares one measure. A catch-all grader explicitly sets
+`measure=None` because it has no category mapping:
 
 | Field | Meaning |
 |---|---|
-| `subdimension` | One evaluation property, or `None` for a catch-all grader with no category mapping. |
+| `measure` | One evaluation property, or `None` for a catch-all grader with no category mapping. |
 | `scopes` | Evidence units that the grader can assess. |
 | `grader_types` | Procedures that the grader implements. |
 | `reference_types` | Reference categories that the grader can use. |
@@ -54,7 +58,7 @@ A tuple with one value records a fixed capability. A tuple with several values r
 several implemented capabilities. The declaration itself does not select a value for
 one grading request.
 
-A taxonomy value is a named enum member, such as `GraderScope.TURN` or
+A taxonomy value is a named enum member, such as `Scope.TURN` or
 `JudgmentForm.BINARY`. A taxonomy definition can hold shared behavior for one value.
 This behavior can include evidence preparation, prompt text, response validation, or
 aggregation logic.
@@ -65,13 +69,13 @@ definition owns the output instructions and the `BinaryJudgment` response model.
 ## Criterion Judge example
 
 `CriterionJudgeGrader` is the public example of a complete taxonomy declaration.
-It is a catch-all judge with no subdimension mapping. The other five groups each
+It is a catch-all judge with no measure mapping. The other five groups each
 have one fixed value:
 
 | Group | Declared value | Reason |
 |---|---|---|
-| Evaluation subdimension | `None` | The catch-all judge has no category mapping. |
-| Grader scope | `COMPLETE_TRAJECTORY_EPISODE` | It assesses all supplied traces and returns one result. |
+| Measure | `None` | The catch-all judge has no category mapping. |
+| Scope | `COMPLETE_TRAJECTORY_EPISODE` | It assesses all supplied traces and returns one result. |
 | Grader type | `LLM` | It uses the configured language model. |
 | Reference type | `RUBRIC_BASED` | The criterion description supplies the assessment rule. |
 | Judgment form | `BINARY` | A scored result is `1` or `0`. |
@@ -81,8 +85,8 @@ The declaration has this shape:
 
 ```python
 taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
-    subdimension=None,
-    scopes=(GraderScope.COMPLETE_TRAJECTORY_EPISODE,),
+    measure=None,
+    scopes=(Scope.COMPLETE_TRAJECTORY_EPISODE,),
     grader_types=(GraderType.LLM,),
     reference_types=(ReferenceType.RUBRIC_BASED,),
     judgment_forms=(JudgmentForm.BINARY,),
@@ -91,7 +95,7 @@ taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
 ```
 
 The criterion text defines the check for each assessment. `None` means that the judge
-has no subdimension mapping. It does not declare support for every subdimension.
+has no measure mapping. It does not declare support for every measure.
 The judge can assess only the evidence that it receives.
 
 The judge resolves its binary output instructions and response validation from the
@@ -110,7 +114,7 @@ A grader with several supported values can use a typed argument to select one va
 The argument model or `check_setup()` must reject unsupported combinations. The
 taxonomy records support. The argument model records a selection for one criterion.
 
-The current Criterion Judge has no subdimension mapping and fixed values in
+The current Criterion Judge has no measure mapping and fixed values in
 the other five groups. Its arguments contain its criterion text, model, input limit,
 and passing threshold. The criterion text defines the check. The args model has no
 taxonomy selection fields.
@@ -143,7 +147,7 @@ Only the Criterion Judge is documented as the complete public example in this wo
 Other graders do not gain taxonomy support through this example.
 
 Only the binary judgment definition has shared runtime behavior. Scope, grader type,
-reference type, subdimension, and aggregation values are descriptive declarations.
+reference type, measure, and aggregation values are descriptive declarations.
 Their shared definition registries and runtime routing are not implemented.
 
 The current result model has no structured scope-item or evidence-source identifier.
