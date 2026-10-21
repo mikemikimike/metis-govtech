@@ -9,7 +9,7 @@ from typing import Any
 from typer.testing import CliRunner
 
 from metis.core.reporting import EvaluationResults
-from metis.core.traces import GradingInput, Observation, Trace
+from metis.core.traces import GradingInput, Observation, SessionTraces, Trace
 from metis.core.trials import GraderRef, TrialConfig, TrialOutcome, TrialRecord
 from metis.engine import cli
 from metis.engine.cli import EvaluationOutcome, app
@@ -675,3 +675,64 @@ def test_record_criteria_missing_from_the_snapshot_are_reported(
         output / "outputs" / "reports" / "results.json"
     ).records
     assert graded.criterion_id == "AC-1-1"
+
+
+def test_evaluate_saves_each_sessions_traces(monkeypatch, tmp_path: Path) -> None:
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    _patch_evaluation(monkeypatch, traces=2)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    saved = SessionTraces.load_file(output / "outputs" / "traces" / "session-1.json")
+    assert saved.session_id == "session-1"
+    assert [trace.id for trace in saved.to_traces()] == [
+        "session-1-t0",
+        "session-1-t1",
+    ]
+
+
+def test_evaluate_clears_traces_from_an_earlier_run(
+    monkeypatch, tmp_path: Path
+) -> None:
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    stale = output / "outputs" / "traces" / "stale-session.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("{}")
+    _patch_evaluation(monkeypatch)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    assert not stale.exists()
+    assert (output / "outputs" / "traces" / "session-1.json").exists()
+
+
+def test_session_without_traces_gets_no_file(monkeypatch, tmp_path: Path) -> None:
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    _patch_evaluation(monkeypatch, traces=0)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    assert not list((output / "outputs" / "traces").glob("*.json"))
+
+
+def test_failed_trace_write_warns_and_still_grades(monkeypatch, tmp_path: Path) -> None:
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output)
+    _patch_evaluation(monkeypatch)
+
+    def refuse(self: SessionTraces, path: Path) -> None:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(SessionTraces, "save", refuse)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    assert (output / "outputs" / "reports" / "results.json").exists()
+    assert "TRACES NOT SAVED" in (output / "logs" / "evaluate.log").read_text()
