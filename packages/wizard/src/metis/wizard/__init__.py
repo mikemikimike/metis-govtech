@@ -94,6 +94,9 @@ def grader_catalogue() -> list[GraderSummary]:
             name=spec.name,
             description=spec.description,
             uses_criterion_description=spec.uses_criterion_description,
+            default_args={
+                param.name: param.default for param in spec.params if not param.required
+            },
         )
         for spec in _library_catalogue()
     ]

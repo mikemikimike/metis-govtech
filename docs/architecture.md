@@ -215,8 +215,8 @@ Engine creates `experiments/execute/<specification-id>-YYYYMMDD-HHMMSS/`. It cop
 `--input-dir` into `inputs/`, writes trial records and artifacts under `outputs/trials/`,
 and writes evaluation results to `outputs/reports/results.json`. Insights reads the
 same execution root and writes `report.json` and `report.html` beside the results.
-The current Insights CLI accepts the legacy `turn_results` and `session_results`
-format. It rejects the engine's current `records` format until #454 is complete.
+Insights accepts recorded results and the legacy `turn_results` and `session_results`
+format. It uses recorded Criterion IDs and arguments without creating graders.
 `--experiment-dir` identifies the execution root for evaluation and resume.
 `metis.core.execution_layout` owns the paths shared by Engine and Insights.
 Logs remain under `logs/`, with the existing simulation log override. Artifact paths
@@ -266,6 +266,32 @@ Each Task selects one Scenario, one Persona, fixtures, a Trial count, and measur
 Every selected Behaviour supplies all its Criteria to grading.
 Each Criterion owns its Grader FQN and parameters. Scores retain Task, Trial,
 and Criterion identity plus the Grader configuration.
+
+A Criterion MUST store its description as one non-empty text value. The description
+MUST state one assessable requirement and retain any condition needed to interpret it.
+Its name and ID remain separate fields. Draft Criteria MAY have no selected Grader.
+Execution requires a Grader reference and valid arguments.
+
+Criterion review MUST show the description by default and offer expandable Grader
+details with exact settings. Users MUST be able to edit descriptions and settings
+without raw JSON. A Wizard edit MUST update the complete Criterion consistently.
+The matcher uses the complete description, then the Wizard configures the selected
+Grader and description together. A failed configuration MUST preserve the previous Criterion.
+Direct human edits require normal field and argument validation. Semantic differences
+between manually edited fields MUST NOT trigger automatic changes or block export.
+The criterion judge MUST receive the complete description as its assessment instructions.
+
+Engine MUST create one grader instance per active Criterion from the specification
+snapshot and reuse it across sessions. Trial references select Criterion IDs.
+The snapshot supplies grader configuration. Recorded results MUST retain result order,
+Criterion identity, configured grader paths, and validated arguments with resolved defaults.
+Insights MUST use those recorded values without creating grader instances.
+
+This contract supersedes the three-clause review requirement in
+[issue #353](https://github.com/govtech-responsibleai/metis/issues/353).
+Criterion quality evaluations in [issue #407](https://github.com/govtech-responsibleai/metis/issues/407)
+MUST assess the complete description and selected Grader configuration. Historical
+design records describe their original scope. This section defines the current contract.
 
 The normal local run uses two processes: `PORT=8001 uv run metis-api` and
 `npm --prefix apps/web run dev`.

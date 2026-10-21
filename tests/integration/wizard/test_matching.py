@@ -51,7 +51,13 @@ def a_criterion(then: str, **kw) -> Criterion:
     return Criterion(
         id="AC-1-1",
         name="Criterion",
-        description={"given": "a question", "when": "it answers", "then": then},
+        description="Given "
+        + "a question"
+        + ", when "
+        + "it answers"
+        + ", then "
+        + str(then)
+        + ".",
         **kw,
     )
 
@@ -226,7 +232,7 @@ def test_rematching_a_criterion_is_silent_and_free() -> None:
         embedder=FakeEmbedder(["turn"]), specs=[TURNS], threshold=0.5
     )
 
-    criterion.description.then = "it stays within the turn budget"
+    criterion.description = "it stays within the turn budget"
     new_fqn = matcher.match(criterion)
 
     assert new_fqn == TURNS.fqn
@@ -281,10 +287,10 @@ def test_description_edits_preserve_fallback_settings_and_new_grader_gets_defaul
         grader_fqn=CRITERION_JUDGE_FQN,
         grader_args={"model": "chosen-judge", "threshold": 0.8},
     )
-    criterion.description.then = "it names two sources"
+    criterion.description = "it names two sources"
     rematch(criterion, EmbeddingMatcher(FakeEmbedder([]), specs=[]))
     assert criterion.grader_args == {"model": "chosen-judge", "threshold": 0.8}
-    criterion.description.then = "it stays within the turn budget"
+    criterion.description = "it stays within the turn budget"
     turns = TURNS.model_copy(
         update={"fqn": "metis.library.graders.DemoTraceBudgetGrader"}
     )

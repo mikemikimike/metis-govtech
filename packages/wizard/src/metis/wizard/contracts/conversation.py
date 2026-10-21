@@ -67,12 +67,18 @@ class Option(BaseModel):
 
 
 class FormField(BaseModel):
-    """Only ever text — form input is used exactly as the user wrote it."""
+    """A typed control whose submitted value is transported as text."""
 
     id: str
     label: str
     placeholder: str = ""
-    multiline: bool = True  # a hint, not an instruction
+    multiline: bool = True
+    input_type: Literal["string", "integer", "number", "boolean"] = "string"
+    value: str = ""
+    required: bool = False
+    choices: list[str] = Field(default_factory=list)
+    help: str = ""
+    group: str | None = None
 
 
 # ── what a card is made of ─────────────────────────────────────────────────
@@ -84,6 +90,7 @@ class CardComponentType(StrEnum):
     NUMBER = "number"
     UPLOAD = "upload"
     DIVIDER = "divider"
+    DISCLOSURE = "disclosure"
 
 
 class CardComponent(BaseModel):
@@ -101,6 +108,11 @@ class CardComponent(BaseModel):
 class CardText(CardComponent):
     type: Literal[CardComponentType.TEXT] = CardComponentType.TEXT
     text: str
+
+
+class CardDisclosure(CardComponent):
+    type: Literal[CardComponentType.DISCLOSURE] = CardComponentType.DISCLOSURE
+    items: list[CardText] = Field(default_factory=list)
 
 
 class CardOptionGroup(CardComponent):
@@ -132,11 +144,7 @@ class CardUploadField(CardComponent):
 
 
 class CardDivider(CardComponent):
-    """A hairline rule between the component groups above and below it. Shape, not domain: the
-    package drops one between repeated groups — the two acceptance criteria on a behaviour card,
-    which are otherwise two runs of Given/When/Then with nothing to separate them — and the door
-    draws a rule without ever learning what the groups are. It carries nothing: a divider has no
-    label and no value, it is purely the gap made visible."""
+    """Separate adjacent groups in a card."""
 
     type: Literal[CardComponentType.DIVIDER] = CardComponentType.DIVIDER
 
@@ -145,7 +153,12 @@ CardFieldValue: TypeAlias = StrictInt | list[StrictStr]
 
 
 AnyCardComponent: TypeAlias = Annotated[
-    CardText | CardOptionGroup | CardNumberField | CardUploadField | CardDivider,
+    CardText
+    | CardOptionGroup
+    | CardNumberField
+    | CardUploadField
+    | CardDivider
+    | CardDisclosure,
     Field(discriminator="type"),
 ]
 

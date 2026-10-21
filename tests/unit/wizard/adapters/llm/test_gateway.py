@@ -774,9 +774,7 @@ def test_context_budget_covers_schema_output_and_retries(
                 "path": "features[source-feature].behaviours[source-behaviour].criteria",
                 "value": {
                     "name": "Accuracy",
-                    "given": "Evidence",
-                    "when": "Answering",
-                    "then": "Use evidence",
+                    "description": "Given Evidence, when Answering, then Use evidence.",
                 },
             }
         ],
@@ -800,9 +798,7 @@ def test_criteria_generation_retries_until_measured_gaps_are_filled(
                 "path": path,
                 "value": {
                     "name": "Accuracy",
-                    "given": "Evidence",
-                    "when": "Answering",
-                    "then": "Use evidence",
+                    "description": "Given Evidence, when Answering, then Use evidence.",
                 },
             }
         ],

@@ -12,11 +12,14 @@ The report writer validates data through this model. Saved reports contain `"sch
 The model defaults a missing version to `1` and rejects other explicit values.
 The version remains `1` during the `next` pre-release phase.
 
-The current Insights CLI reads legacy evaluation results with `turn_results` and
-`session_results`. These private input models are in `metis.insights._legacy_results`.
-The engine now writes `metis.core.reporting.EvaluationResults` with a `records` list.
-The CLI rejects that format until [#454](https://github.com/govtech-responsibleai/metis/issues/454)
-is complete. Both input formats use version `1` under the pre-release policy.
+The Insights CLI reads `metis.core.reporting.EvaluationResults` with a `records` list.
+It also reads legacy evaluation files with `turn_results` and `session_results`.
+Both input formats use version `1`. Insights validates records with the core model.
+It uses Criterion IDs to match results. Each evidence item keeps the recorded grader
+path, validated arguments, score, reason, Task, Trial, Scenario, and session.
+Expand an evidence item's recorded grader settings to see the values used for that run.
+Insights does not create graders. New records contain no trace or turn identity.
+The report leaves those evidence fields empty and counts only recorded turns.
 
 ## Reader and purpose
 
@@ -53,10 +56,10 @@ fallback contract:
 
 1. Use a value supplied by the aggregator when it exists.
 2. Calculate a missing rate as `pass / (pass + fail)`.
-3. Exclude skipped results from the rate denominator.
+3. Exclude skipped results and grader errors from the rate denominator.
 4. Use a 70% pass threshold when the aggregator supplies no threshold.
 5. Treat exactly 70% as Pass.
-6. Show the numeric rate, Pass or Fail status, threshold, and pass/fail/skip counts.
+6. Show the numeric rate, Pass or Fail status, threshold, and pass/fail/skip/error counts.
 
 The visible states are:
 

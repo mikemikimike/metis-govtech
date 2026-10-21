@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from ._report_styles import REPORT_CSS
 
@@ -57,6 +58,8 @@ REPORT_BODY = """\
     </div>
   </section>
 
+  <section id="unmapped-results" class="outcomes" aria-labelledby="unmapped-title" hidden></section>
+
   <section class="outcomes" aria-labelledby="outcome-title">
     <div class="section-head"><h2 id="outcome-title">Eval errors</h2><p class="section-count" id="outcome-count"></p></div>
     <div id="outcome-bar" class="outcome-bar"></div>
@@ -72,10 +75,10 @@ REPORT_BODY = """\
 REPORT_SCRIPT = r"""
 const V=__METIS_REPORT__;
 const B=V.behaviours||{}, C=V.criteria||{}, TH=V.threshold??70;
-const LABELS={pass:"Pass",fail:"Fail",notEvaluated:"Not evaluated",dataError:"Data error",skip:"Skipped"};
+const LABELS={pass:"Pass",fail:"Fail",notEvaluated:"Not evaluated",dataError:"Data error",skip:"Skipped",error:"Grader error"};
 const esc=value=>String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const clip=(value,max)=>String(value??"").length>max?String(value).slice(0,max-1)+"…":String(value??"");
-const statusOf=item=>item?.status||(item?.blank?.cause==="no class"?"dataError":"notEvaluated");
+const statusOf=item=>item?.status||(item?.error?"error":item?.blank?.cause==="no class"?"dataError":"notEvaluated");
 const rateText=rate=>rate==null?"—":rate+"%";
 const allFeatures=V.features||[];
 let selected=null,failOnly=false,query="",resultFilters={persona:null,scenario:null},openResultFilter="";
@@ -139,7 +142,7 @@ function leafMatches(feature,behaviour,cid){
  const criterion=C[cid]||{};
  if(failOnly&&statusOf(criterion)!=="fail")return false;
  if(!query)return true;
- return [feature.name,feature.id,behaviour.label,behaviour.statement,cid,criterion.grader,criterion.given,criterion.when,criterion.then].join(" ").toLowerCase().includes(query);
+ return [feature.name,feature.id,behaviour.label,behaviour.statement,cid,criterion.grader,criterion.description].join(" ").toLowerCase().includes(query);
 }
 
 function renderTree(){
@@ -198,8 +201,8 @@ function renderTree(){
 
 const statPill=st=>`<span class="status-pill ${st}"><i></i>${esc(LABELS[st])}</span>`;
 const resultRail=c=>{const st=statusOf(c);return `<div class="leaf-score"><div><strong class="${st}">${rateText(c.rate)}</strong>${statPill(st)}</div><div class="score-rail"><i style="width:${c.rate??0}%" class="${st}"></i><b style="left:${TH}%"></b></div><div class="threshold-line">Pass threshold <b>${TH}%</b></div></div>`};
-const resultCounts=items=>({pass:items.filter(item=>item.status==="pass").length,fail:items.filter(item=>item.status==="fail").length,skip:items.filter(item=>item.status==="skip").length});
-const evidenceCounts=items=>{const counts=resultCounts(items);return `<div class="evidence-counts" aria-label="Evaluator result counts"><div class="pass"><strong>${counts.pass}</strong><span>Pass</span></div><div class="fail"><strong>${counts.fail}</strong><span>Fail</span></div><div class="skip"><strong>${counts.skip}</strong><span>Skip</span></div></div>`};
+const resultCounts=items=>({pass:items.filter(item=>item.status==="pass").length,fail:items.filter(item=>item.status==="fail").length,skip:items.filter(item=>item.status==="skip").length,error:items.filter(item=>item.status==="error").length});
+const evidenceCounts=items=>{const counts=resultCounts(items);return `<div class="evidence-counts" aria-label="Evaluator result counts"><div class="pass"><strong>${counts.pass}</strong><span>Pass</span></div><div class="fail"><strong>${counts.fail}</strong><span>Fail</span></div><div class="skip"><strong>${counts.skip}</strong><span>Skip</span></div><div class="error"><strong>${counts.error}</strong><span>Grader error</span></div></div>`};
 function filterOptions(c,key){
  const values=[...new Set((c.evidence||[]).map(item=>item[key]).filter(Boolean))];
  return values.map(value=>{const items=c.evidence.filter(item=>item[key]===value),counts=resultCounts(items),evaluated=counts.pass+counts.fail;return {value,fail:counts.fail,evaluated,skip:counts.skip,rate:evaluated?counts.fail/evaluated:0}})
@@ -216,9 +219,16 @@ function filteredEvidence(c){return (c.evidence||[]).filter(item=>filterIncludes
 function evidenceList(c,evidence){
  if(!(c.evidence||[]).length)return `<div class="blank-note">${esc(c.blank?.note||"No grader result was recorded.")}</div>`;
  if(!evidence.length)return '<div class="blank-note filter-empty">No results match these filters.<button type="button" data-clear-result-filters>Clear filters</button></div>';
- return `<div class="evidence-list">${evidence.map(item=>`<article class="evidence-item ${esc(item.status)}"><div class="evidence-head"><span class="evidence-status">${esc(LABELS[item.status]||item.status)}</span><span>${esc(item.persona||"No persona")} · ${esc(item.scenario||"No scenario")}</span></div><p>${esc(item.message||"No message recorded")}</p><div class="evidence-meta"><span>${esc(item.session||item.trace||"No trial ID")}</span><span>${esc(item.turn)}</span><span>${esc(item.trace)}</span></div></article>`).join("")}</div>`;
+ return `<div class="evidence-list">${evidence.map(item=>`<article class="evidence-item ${esc(item.status)}"><div class="evidence-head"><span class="evidence-status">${esc(LABELS[item.status]||item.status)}</span><span>${esc(item.persona||"No persona")} · ${esc(item.scenario||"No scenario")}</span></div><p>${esc(item.message||"No message recorded")}</p><div class="evidence-meta"><span>${esc(item.session||item.trace||"No trial ID")}</span><span>${esc(item.turn)}</span><span>${esc(item.trace)}</span><span>Criterion ${esc(item.criterion_id)}</span><span>Task ${esc(item.task_id)} · Trial ${esc(item.trial_index)}</span></div><details><summary>Recorded grader settings</summary><p>${esc(item.grader_fqn)}</p><pre>${esc(JSON.stringify(item.grader_args||{},null,2))}</pre></details></article>`).join("")}</div>`;
 }
 function individualResults(c){const allEvidence=c.evidence||[];if(!allEvidence.length)return `<section class="individual-results"><h4>Individual results</h4>${evidenceList(c,[])}</section>`;const evidence=filteredEvidence(c);return `<section class="individual-results"><h4>Individual results</h4><div class="result-filters">${resultFilter(c,"persona","Persona")}${resultFilter(c,"scenario","Scenario")}</div>${evidenceCounts(evidence)}${evidenceList(c,evidence)}</section>`}
+function unmappedResults(groups){
+ if(!groups.length)return "";
+ return `<h2 id="unmapped-title">Results without a matching criterion</h2><p>These results could not be matched to a Task and Criterion in the specification. They are excluded from the target pass rate.</p>${groups.map(group=>`<section class="individual-results"><h3>${esc(group.grader)}</h3><p>${esc(group.why)}</p>${evidenceCounts(group.evidence||[])}${evidenceList(group,group.evidence||[])}</section>`).join("")}`;
+}
+const unmappedPanel=document.getElementById("unmapped-results");
+unmappedPanel.innerHTML=unmappedResults(V.unmapped||[]);
+unmappedPanel.hidden=!(V.unmapped||[]).length;
 function bindResultFilters(c,panel){
  panel.querySelectorAll("[data-result-filter]").forEach(button=>button.onclick=event=>{event.stopPropagation();const key=button.dataset.resultFilter,allValues=filterOptions(c,key).map(option=>option.value),current=resultFilters[key]===null?allValues:resultFilters[key],next=new Set(current),value=button.dataset.filterValue;next.has(value)?next.delete(value):next.add(value);resultFilters={...resultFilters,[key]:next.size===allValues.length?null:[...next]};openResultFilter=key;renderSelection()});
  panel.querySelectorAll("[data-filter-action]").forEach(button=>button.onclick=event=>{event.stopPropagation();const key=button.dataset.filterKey;resultFilters={...resultFilters,[key]:button.dataset.filterAction==="all"?null:[]};openResultFilter=key;renderSelection()});
@@ -230,7 +240,7 @@ function renderSelection(){
  if(!selected){panel.innerHTML=`<div class="empty-selection"><div class="path-visual"><i></i><i></i><i></i><i></i></div><h3>Select a criterion or grader</h3><p>Feature → Behaviour → Criterion → Grader</p></div>`;return}
  const c=C[selected.id],graderName=c.grader||(c.fqn||"").split(".").pop()||"No grader";
  panel.innerHTML=`<div class="selected-title"><h3>${esc(selected.id)}</h3></div>${resultRail(c)}
-  <div class="gwt"><div><b>Given</b><span>${esc(c.given)}</span></div><div><b>When</b><span>${esc(c.when)}</span></div><div><b>Then</b><span>${esc(c.then)}</span></div></div>
+  <p class="assessment-description">${esc(c.description)}</p>
   <div class="grader-field"><span>Grader</span><strong>${esc(graderName)}</strong></div>
   ${individualResults(c)}`;
  bindResultFilters(c,panel);
@@ -248,7 +258,7 @@ const tableCaseByKey=new Map();
 const activeTrialByCase=new Map();
 for(const trial of tableData.rows||[]){const key=trial.task_id;let testCase=tableCaseByKey.get(key);if(!testCase){testCase={id:`case-${tableCases.length+1}`,taskId:trial.task_id,persona:trial.persona||"",scenario:trial.scenario||"",trials:[]};tableCaseByKey.set(key,testCase);tableCases.push(testCase)}testCase.trials.push(trial)}
 const trialSquares=(testCase,stateOf,labelOf)=>`<span class="trial-statuses">${testCase.trials.map((trial,index)=>{const state=stateOf(trial);return `<i class="trial-mark ${state}" title="Trial ${trial.trial_index||index+1}: ${esc(labelOf(trial,state))}" aria-label="Trial ${index+1}: ${esc(labelOf(trial,state))}"></i>`}).join("")}</span>`;
-const graderCell=(testCase,column)=>{const results=testCase.trials.map(trial=>(trial.results||{})[column.criterion]).filter(result=>result?.evaluated),passed=results.filter(result=>result.status==="pass").length,evaluated=results.length,notEvaluated=testCase.trials.length-evaluated;if(!evaluated)return '<span class="table-score notEvaluated" aria-label="Not evaluated">—</span>';const rate=Math.round(100*passed/evaluated),state=rate>=TH?"pass":"fail",detail=`${passed} of ${evaluated} evaluated trials passed${notEvaluated?` · ${notEvaluated} not evaluated`:""}`;return `<span class="table-score ${state}" title="${esc(detail)}" aria-label="${esc(LABELS[state])}, ${rate}%. ${esc(detail)}">${rate}%</span>`};
+const graderCell=(testCase,column)=>{const results=testCase.trials.map(trial=>(trial.results||{})[column.criterion]).filter(result=>result?.evaluated),passed=results.filter(result=>result.status==="pass").length,evaluated=results.length,notEvaluated=testCase.trials.length-evaluated;if(!evaluated){const errors=testCase.trials.reduce((n,trial)=>n+((trial.results||{})[column.criterion]?.error||0),0),skips=testCase.trials.reduce((n,trial)=>n+((trial.results||{})[column.criterion]?.skip||0),0);return `<span class="table-score ${errors?"error":"notEvaluated"}" aria-label="${errors?"Grader error":skips?"Skipped":"Not evaluated"}" title="${errors} grader errors · ${skips} skipped">${errors?"Error":skips?"Skipped":"—"}</span>`;}const rate=Math.round(100*passed/evaluated),state=rate>=TH?"pass":"fail",detail=`${passed} of ${evaluated} evaluated trials passed${notEvaluated?` · ${notEvaluated} not evaluated`:""}`;return `<span class="table-score ${state}" title="${esc(detail)}" aria-label="${esc(LABELS[state])}, ${rate}%. ${esc(detail)}">${rate}%</span>`};
 const outcomeCell=testCase=>trialSquares(testCase,trial=>trial.category||"abandoned",(trial,state)=>outcomeLabel[state]||state);
 const trialTrace=(row,index)=>{const turns=row.conversation||[],category=row.category||"abandoned";return `<section class="trial-trace"><div class="trial-trace-head"><div><strong>Trial ${index+1}</strong><span>${esc(row.id)}</span>${row.attempt>1?'<span class="trial-retried">retried · attempt '+row.attempt+'</span>':""}</div><span class="outcome-state ${category}"><i></i>${esc(outcomeLabel[category]||category)}</span><span>${turns.length} turn${turns.length===1?"":"s"}</span></div>${turns.length?turns.map(turn=>`<article class="conversation-turn"><span class="turn-number">Turn ${turn.turn}</span><div><b>User agent</b><p>${esc(turn.user||"No user message recorded")}</p></div><div><b>Target</b><p>${esc(turn.target||"No target response recorded")}</p>${(turn.errors||[]).map(error=>`<p class="turn-error">${esc(error)}</p>`).join("")}</div></article>`).join(""):'<div class="conversation-empty">No conversation was recorded for this trial.</div>'}</section>`};
 const testCaseTraces=testCase=>{const active=Math.min(activeTrialByCase.get(testCase.id)??0,testCase.trials.length-1),trial=testCase.trials[active];return `<div class="test-case-detail"><div class="trial-tabs" role="tablist" aria-label="Trials">${testCase.trials.map((item,index)=>{const category=item.category||"abandoned",selected=index===active;return `<button type="button" role="tab" id="${testCase.id}-trial-${index}-tab" aria-controls="${testCase.id}-trial-panel" aria-selected="${selected}" data-trial-tab data-test-case="${testCase.id}" data-trial-index="${index}"><i class="${category}"></i>Trial ${index+1}</button>`}).join("")}</div><div id="${testCase.id}-trial-panel" role="tabpanel" aria-labelledby="${testCase.id}-trial-${active}-tab">${trialTrace(trial,active)}</div></div>`};
@@ -296,7 +306,9 @@ let redrawTimer;addEventListener("resize",()=>{clearTimeout(redrawTimer);redrawT
 """
 
 
-def render_report_page(report: dict, *, title: str = "Target evaluation") -> str:
+def render_report_page(
+    report: dict[str, Any], *, title: str = "Target evaluation"
+) -> str:
     """Build one offline HTML document from a report dictionary."""
     data = json.dumps(report, separators=(",", ":"), default=str).replace("</", "<\\/")
     script = REPORT_SCRIPT.replace(DATA_TOKEN, data)

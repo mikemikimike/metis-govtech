@@ -23,7 +23,6 @@ from metis.library.grader import Grader, JudgeArgs, criterion_judge_args
 from metis.wizard.application.matching.library_catalogue import library_catalogue
 
 if TYPE_CHECKING:
-    from metis.core.profile import CriterionDescription
     from metis.wizard.contracts.grader_spec import GraderSpec
     from metis.wizard.domain.specification import Criterion, Specification
 
@@ -126,12 +125,23 @@ def rematch(criterion: Criterion, matcher: EmbeddingMatcher) -> str:
 
 
 def default_grader_args(criterion: Criterion) -> dict[str, Any]:
-    spec = next((s for s in library_catalogue() if s.fqn == criterion.grader_fqn), None)
-    return {p.name: p.default for p in spec.params if not p.required} if spec else {}
+    if not criterion.grader_fqn:
+        return {}
+    module, name = criterion.grader_fqn.rsplit(".", 1)
+    try:
+        model = getattr(import_module(module), name).args_model
+    except (ImportError, AttributeError):
+        return {}
+    return {
+        name: info.get_default(call_default_factory=True)
+        for name, info in model.model_fields.items()
+        if not info.is_required()
+        and not (name in {"model", "max_input_tokens"} and issubclass(model, JudgeArgs))
+    }
 
 
 def validate_grader_args(
-    fqn: str | None, args: Any, *, description: CriterionDescription | None = None
+    fqn: str | None, args: Any, *, description: str | None = None
 ) -> None:
     """Check ``args`` against the grader's ``args_model``, as the engine will before a run.
 

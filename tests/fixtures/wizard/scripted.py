@@ -36,6 +36,15 @@ class ScriptedInterviewer:
     clarify_questions: int = 2
     calls: list[str] = field(default_factory=list)
 
+    def configure_criterion(
+        self, criterion, previous, specification, request, context=None
+    ):
+        from metis.wizard.contracts.output import CriterionConfiguration
+
+        return CriterionConfiguration(
+            description=criterion.description, grader_args=criterion.grader_args
+        )
+
     def clarify(
         self,
         specification: Specification,
@@ -156,10 +165,14 @@ class ScriptedInterviewer:
                     op=PatchOp.ADD,
                     path=f"features[{feature.id}].behaviours[{behaviour.id}].criteria",
                     value={
-                        "given": "a question it can answer",
-                        "when": "the answer comes back",
-                        "then": f"it satisfies: {behaviour.description.lower()}",
                         "name": "Expected outcome",
+                        "description": "Given "
+                        + "a question it can answer"
+                        + ", when "
+                        + "the answer comes back"
+                        + ", then "
+                        + str(f"it satisfies: {behaviour.description.lower()}")
+                        + ".",
                     },
                 )
             )
@@ -256,9 +269,7 @@ class ScriptedInterviewer:
                     path=f"features[{feature.id}].behaviours[{behaviour_id}].criteria",
                     value={
                         "name": "Consistent follow-up",
-                        "given": "a follow-up on the same topic",
-                        "when": "the agent answers again",
-                        "then": "it stays consistent with its first answer",
+                        "description": "Given a follow-up on the same topic, when the agent answers again, then it stays consistent with its first answer.",
                     },
                 )
             ],

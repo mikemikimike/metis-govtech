@@ -29,13 +29,17 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 from dataclasses import dataclass, field
+from importlib import import_module
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from langfuse import get_client, observe
 from openai import APIError
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
+from metis.core.profile import CriterionText
+from metis.library.grader import CriterionJudgeArgs, GraderArgs, JudgeArgs
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import (
     InterviewContextBudgetError,
@@ -43,7 +47,11 @@ from metis.wizard.application.interviewer import (
     InterviewerUnavailable,
 )
 from metis.wizard.application.readiness import missing_criteria_paths
-from metis.wizard.contracts.output import ClarifyResult, StepResult
+from metis.wizard.contracts.output import (
+    ClarifyResult,
+    CriterionConfiguration,
+    StepResult,
+)
 from metis.wizard.domain.applier import PatchValueError, validate_model_patches
 from metis.wizard.domain.patch import PatchOp
 
@@ -51,7 +59,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from metis.wizard.contracts.interview_state import InterviewContext, Turn
-    from metis.wizard.domain.specification import Specification
+    from metis.wizard.domain.specification import Criterion, Specification
 
 BASE_URL_VAR = "OPENAI_BASE_URL"
 API_KEY_VAR = "OPENAI_API_KEY"
@@ -252,6 +260,107 @@ class GatewayInterviewer:
         return result
 
     # ── the interview ──────────────────────────────────────────────────────
+
+    def configure_criterion(
+        self,
+        criterion: Criterion,
+        previous: Criterion | None,
+        specification: Specification,
+        request: str,
+        context: InterviewContext | None = None,
+    ) -> CriterionConfiguration:
+        from metis.wizard.application.matching.matcher import validate_grader_args
+
+        module, name = (criterion.grader_fqn or "").rsplit(".", 1)
+        grader = getattr(import_module(module), name)
+        fields: dict[str, Any] = {
+            name: (field.annotation, deepcopy(field))
+            for name, field in grader.args_model.model_fields.items()
+            if not (
+                name == "criterion"
+                and issubclass(grader.args_model, CriterionJudgeArgs)
+            )
+            and not (name == "model" and issubclass(grader.args_model, JudgeArgs))
+        }
+        args_type = create_model("AssessmentSettings", __base__=GraderArgs, **fields)
+        result_type = create_model(
+            "AssessmentConfiguration",
+            __config__=ConfigDict(extra="forbid"),
+            description=(
+                CriterionText,
+                Field(
+                    description="The final assessment rule shown to the user. State what the agent or its output must satisfy. Do not include configuration instructions, grader names, or output format instructions."
+                ),
+            ),
+            grader_args=(
+                args_type,
+                Field(
+                    description="Exact settings for the selected grader to assess the requirement."
+                ),
+            ),
+        )
+
+        def validate(result: BaseModel) -> None:
+            data = result.model_dump(mode="json")
+            try:
+                validate_grader_args(
+                    criterion.grader_fqn,
+                    data["grader_args"],
+                    description=data["description"],
+                )
+            except ValueError as exc:
+                raise PatchValueError(str(exc)) from exc
+
+        prompt = prompts.ModelPrompt(
+            name="configure_criterion",
+            system=(
+                "You author the final assessment rule and its grader settings. "
+                "The description is a direct statement about the assessed agent or output, "
+                "never a plan or instructions to configure a grader. Do not put grader names, "
+                "schema keys, or response-format instructions in the description. "
+                "For example: The session uses at most 3 traces. Or: The session stays within "
+                "its trace budget. A judge example is: The deck contains exactly 10 slides. "
+                "Preserve the user's full requirement, including exact values and conditions. "
+                "Do not change the assessed property. Return a clear non-empty description and "
+                "the exact grader settings needed to assess it. One Criterion assesses one property. "
+                "The description is the default user summary. Include numerical detail when useful. "
+                "If the grader uses criterion instructions, the description must contain the complete "
+                "assessment rule, including exact numerical requirements. The engine supplies those "
+                "instructions from the description. Preserve unrelated current settings during edits."
+            ),
+            user=json.dumps(
+                {
+                    "request": request,
+                    "proposed_criterion": criterion.model_dump(mode="json"),
+                    "previous_criterion": previous.model_dump(mode="json")
+                    if previous
+                    else None,
+                    "specification": specification.model_dump(mode="json"),
+                    "context": context.model_dump(mode="json") if context else None,
+                    "grader": grader.__doc__,
+                    "uses_criterion_description": issubclass(
+                        grader.args_model, CriterionJudgeArgs
+                    ),
+                    "settings_schema": args_type.model_json_schema(),
+                }
+            ),
+        )
+        result, _ = self._ask(prompt, result_type, validate=validate)
+        configured = CriterionConfiguration.model_validate(
+            result.model_dump(mode="json")
+        )
+        if (
+            previous
+            and "model" in previous.grader_args
+            and issubclass(grader.args_model, JudgeArgs)
+        ):
+            configured.grader_args["model"] = previous.grader_args["model"]
+        validate_grader_args(
+            criterion.grader_fqn,
+            configured.grader_args,
+            description=configured.description,
+        )
+        return configured
 
     def clarify(
         self,

@@ -52,9 +52,7 @@ def behaviour_texts(
                     parts.extend(
                         [
                             criterion.name,
-                            f"Given: {criterion.description.given}",
-                            f"When: {criterion.description.when}",
-                            f"Then: {criterion.description.then}",
+                            criterion.description,
                         ]
                     )
                 text = "\n".join(parts)

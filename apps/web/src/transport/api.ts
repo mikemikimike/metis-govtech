@@ -68,8 +68,14 @@ export type CardUploadField = RequiredFields<
   "value"
 >;
 export type CardDivider = Schema["CardDivider"];
+export type CardDisclosure = RequiredFields<Schema["CardDisclosure"], "items">;
 export type CardComponent =
-  CardText | CardOptionGroup | CardNumberField | CardUploadField | CardDivider;
+  | CardText
+  | CardOptionGroup
+  | CardNumberField
+  | CardUploadField
+  | CardDivider
+  | CardDisclosure;
 export type Card = Omit<Schema["BehaviourCard"], "components" | "options"> & {
   components: CardComponent[];
   options: Option[];
@@ -175,6 +181,8 @@ type GeneratedCardComponent = Present<
   Schema["BehaviourCard"]["components"]
 >[number];
 function normalizeComponent(component: GeneratedCardComponent): CardComponent {
+  if (component.type === "disclosure")
+    return { ...component, items: component.items ?? [] };
   if (component.type === "options")
     return { ...component, options: component.options ?? [] };
   if (component.type === "upload")

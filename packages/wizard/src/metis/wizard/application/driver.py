@@ -10,7 +10,6 @@ model is called at five points only — clarify, and the four drafting steps.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -50,7 +49,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from metis.wizard.contracts.interview_state import Turn
-    from metis.wizard.domain.specification import Behaviour
+    from metis.wizard.domain.specification import Behaviour, Specification
 
 
 class DriverState(InterviewState):
@@ -319,7 +318,6 @@ class StepDriver:
         # the edit to that behaviour's own criteria — so "Chat about these criteria" cannot
         # reach across and rewrite a different card's.
         target = request.target
-        before_texts = self._criterion_texts(state)
         try:
             result = self.interviewer.chat(
                 state.specification,
@@ -335,8 +333,7 @@ class StepDriver:
             return self._refuse_chat()
         if target is not None:
             result = self._confine_to_behaviour(result, target)
-        self._run(state, result)
-        self._rematch_reworded(state, before_texts)
+        self._run(state, result, request=text)
 
     def _refuse_chat(self) -> None:
         """Change nothing and say so, when a chat could not be answered by the model."""
@@ -377,36 +374,46 @@ class StepDriver:
                 )
         return result.model_copy(update={"patches": kept})
 
-    @staticmethod
-    def _criterion_texts(state: DriverState) -> dict[str, str]:
-        """Every criterion's wording, keyed by id — the input the matcher reads."""
-        return {
-            criterion.id: str(criterion.description)
-            for behaviour in state.specification.behaviours()
-            for criterion in behaviour.criteria
-        }
-
-    def _rematch_reworded(
-        self, state: DriverState, before_texts: dict[str, str]
+    def _configure_changes(
+        self, state: DriverState, before: Specification, request: str = ""
     ) -> None:
-        """Re-resolve the grader for any criterion whose wording just changed.
+        from metis.wizard.application.matching.matcher import (
+            default_grader_args,
+            rematch,
+            validate_grader_args,
+        )
 
-        This is the other half of the "you may not write grader_fqn" rule: the model reweds
-        the criterion instead, and the matcher — not the model — chooses the grader that new
-        wording points at. Without this, `match_specification` would skip a criterion that already
-        has a grader, so a reword would leave the old grader in place. Silent by design: the
-        matcher only ever overwrites its own earlier choice.
-
-        A criterion the chat *added* is absent from `before_texts`, so it counts as changed
-        and is matched here too — the chat path has no other pass that would resolve it."""
         if self.matcher is None:
             return
-        from metis.wizard.application.matching import rematch
-
         for behaviour in state.specification.behaviours():
             for criterion in behaviour.criteria:
-                if str(criterion.description) != before_texts.get(criterion.id, ""):
-                    rematch(criterion, self.matcher)  # type: ignore[arg-type]
+                previous = before.criterion(criterion.id)
+                if previous and (previous.description, previous.name) == (
+                    criterion.description,
+                    criterion.name,
+                ):
+                    continue
+                rematch(criterion, self.matcher)  # type: ignore[arg-type]
+                criterion.grader_args = default_grader_args(criterion)
+                configured = self.interviewer.configure_criterion(
+                    criterion,
+                    previous,
+                    state.specification,
+                    request,
+                    context=state.context,
+                )
+                try:
+                    validate_grader_args(
+                        criterion.grader_fqn,
+                        configured.grader_args,
+                        description=configured.description,
+                    )
+                except ValueError as exc:
+                    raise InterviewerOutputError(
+                        f"Invalid assessment settings: {exc}"
+                    ) from exc
+                criterion.description = configured.description
+                criterion.grader_args = configured.grader_args
 
     def _handle_form(
         self, state: DriverState, request: FormRequest, response: AnyResponse
@@ -437,22 +444,31 @@ class StepDriver:
                 )
                 return
 
-        if request.target and any(
-            field.id == "grader_args" for field in request.fields
-        ):
-            criterion = specification.criterion(request.target)
-            if criterion is None:
-                return self._refuse_form_target()
+        if request.target and specification.criterion(request.target):
+            from metis.wizard.application.criterion_forms import settings_values
             from metis.wizard.application.matching.matcher import validate_grader_args
+            from metis.wizard.domain.specification import Criterion
 
+            criterion = specification.criterion(request.target)
+            assert criterion is not None
             try:
-                args = json.loads(values.get("grader_args", "{}"))
+                args = settings_values(request.fields, values, criterion.grader_args)
+                candidate = Criterion.model_validate(
+                    {
+                        **criterion.model_dump(),
+                        "name": values.get("name", criterion.name),
+                        "description": values.get("description", criterion.description),
+                        "grader_args": args,
+                    }
+                )
                 validate_grader_args(
-                    criterion.grader_fqn, args, description=criterion.description
+                    candidate.grader_fqn, args, description=candidate.description
                 )
             except (ValueError, TypeError) as exc:
-                return self._refuse_field_edit(f"Invalid Grader parameters: {exc}")
-            criterion.grader_args = args
+                return self._refuse_field_edit(f"Invalid assessment settings: {exc}")
+            criterion.name = candidate.name
+            criterion.description = candidate.description
+            criterion.grader_args = candidate.grader_args
             return
 
         # A target keeps a manual child attached to the parent that offered the action. The
@@ -517,26 +533,22 @@ class StepDriver:
     def _add_typed_criterion(
         self, state: DriverState, behaviour_id: str, values: dict[str, Any]
     ) -> None:
-        """Turn a submitted Given/When/Then form into one criterion under one behaviour.
-
-        The clauses are used verbatim and stamped FORM, so a regeneration must keep them
-        byte-identical. Refused with no mutation if the behaviour cannot be resolved — the same
-        guard the form was raised behind, re-checked here because the id survived a round trip
-        and the behaviour could in principle have gone away between raising and submitting.
-        """
+        """Add one directly authored assessment under its selected Behaviour."""
         behaviour = self._targeted_behaviour(state, behaviour_id)
         if behaviour is None:
             return self._refuse_unresolved_target()
 
+        try:
+            draft = CriterionDraft(
+                name=values.get("name", "Criterion"),
+                description=values.get("description", ""),
+            )
+        except ValueError as exc:
+            return self._refuse_field_edit(str(exc))
         materializer.add_criterion(
             state.specification,
             behaviour,
-            CriterionDraft(
-                name=values.get("name", "Criterion"),
-                given=values.get("given", ""),
-                when=values.get("when", ""),
-                then=values.get("then", ""),
-            ),
+            draft,
             PatchOrigin.WIZARD,
             issued_ids=state.issued_ids,
             user_typed=state.user_typed,
@@ -570,14 +582,29 @@ class StepDriver:
             criterion = state.specification.criterion(cid or "")
             if criterion is None:
                 return
+            from metis.wizard.application.criterion_forms import settings_fields
+
+            try:
+                fields = settings_fields(criterion)
+            except ValueError as exc:
+                return self._refuse_field_edit(str(exc))
             state.pending = FormRequest(
-                prompt=f"Set parameters for {criterion.name}. Enter a JSON object. Current values: {json.dumps(criterion.grader_args)}",
+                prompt="Edit the assessment and its settings. Keep their meanings consistent.",
                 fields=[
                     FormField(
-                        id="grader_args",
-                        label="Grader parameters",
-                        placeholder=json.dumps(criterion.grader_args),
-                    )
+                        id="description",
+                        label="Assessment",
+                        value=criterion.description,
+                        required=True,
+                    ),
+                    FormField(
+                        id="name",
+                        label="Name",
+                        value=criterion.name,
+                        multiline=False,
+                        group="Grader settings",
+                    ),
+                    *fields,
                 ],
                 target=criterion.id,
             )
@@ -789,13 +816,7 @@ class StepDriver:
         state.pending = chat
 
     def _open_criterion_form(self, state: DriverState, target: str | None) -> None:
-        """Raise a Given/When/Then form that becomes one criterion under one behaviour.
-
-        Three fields rather than one ambiguous description: manual entry is one structured
-        criterion, and `_handle_form` uses each clause verbatim. Refused with no mutation when
-        the behaviour cannot be resolved, so a stale or malformed target cannot land a criterion
-        on the wrong behaviour.
-        """
+        """Open one assessment text field under its selected Behaviour."""
         if self._targeted_behaviour(state, target) is None:
             return self._refuse_unresolved_target()
         form = FormRequest(
@@ -803,9 +824,9 @@ class StepDriver:
             target=target,
             fields=[
                 FormField(id="name", label="Name", multiline=False),
-                FormField(id="given", label="Given", multiline=False),
-                FormField(id="when", label="When", multiline=False),
-                FormField(id="then", label="Then", multiline=False),
+                FormField(
+                    id="description", label="Assessment", multiline=True, required=True
+                ),
             ],
         )
         screens.stamp_step(form, state.step)
@@ -872,7 +893,7 @@ class StepDriver:
             self.model_error = exc
             return self._refuse_suggestion()
 
-        before_ids = {c.id for c in behaviour.criteria}
+        before = state.specification.model_copy(deep=True)
         patches = sanitise(result.patches)
         if not self._is_one_criterion_add(patches, behaviour.id):
             return self._refuse_suggestion()
@@ -891,7 +912,7 @@ class StepDriver:
             return self._refuse_suggestion()
 
         # Match only what was just added — the criterion whose id is new to this behaviour.
-        self._match_new(behaviour, before_ids)
+        self._configure_changes(state, before)
 
     @staticmethod
     def _is_one_criterion_add(patches: list[Patch], behaviour_id: str) -> bool:
@@ -1000,6 +1021,7 @@ class StepDriver:
         state: DriverState,
         result: StepResult,
         *,
+        request: str = "",
         allowed_paths: frozenset[str] | None = None,
         allowed_ops: frozenset[PatchOp] | None = None,
     ) -> None:
@@ -1046,6 +1068,8 @@ class StepDriver:
                     blocking=False,
                 )
             )
+
+        self._configure_changes(state, before, request)
 
         # Ask about anything derived from what just changed, before the next screen.
         self.pending_questions += cascade.questions_for(before, outcome.applied)

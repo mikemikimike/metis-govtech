@@ -2,7 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from metis.engine.evaluation import build_criterion_grader, grade_session
+from metis.engine.evaluation import build_grader, grade_session
 from metis.engine.extractor import fetch_session, get_langfuse_client
 
 try:
@@ -12,7 +12,7 @@ except PackageNotFoundError:
 
 __all__ = [
     "__version__",
-    "build_criterion_grader",
+    "build_grader",
     "fetch_session",
     "get_langfuse_client",
     "grade_session",

@@ -56,6 +56,13 @@ The web client gets the opening text, Perspectives, capability catalogue, and do
 the API. It keeps the returned Interview state and sends the whole state with each answer. The API
 does not save the state.
 
+## Review Criteria
+
+Read each Criterion description in the evaluation review. Expand the grader details to
+inspect the grader and its settings. Ask the Wizard to revise the whole Criterion, or
+edit the description and typed settings yourself. Keep directly edited fields consistent.
+See [Review and edit Criteria](../wizard.md#review-and-edit-criteria).
+
 ## Add documents
 
 1. Select the plus button in the opening message.
@@ -135,6 +142,12 @@ Editor rules:
 
 The manual export uses `YYYYMMDD-HHMMSS-manual.zip` and a matching root folder. It contains an empty `inputs/` folder, `outputs/specification.yaml`, and the
 selected files under `outputs/fixtures/`. It contains no Interview state.
+
+## Saved Interviews with an older Criterion format
+
+Saved Interviews with Given/When/Then Criterion objects cannot continue. Start a new
+Interview. The browser keeps the older record and its files. It does not convert or
+delete that record. See [Convert Criterion descriptions](../../../MIGRATION.md#convert-criterion-descriptions).
 
 ## Browser storage and current limits
 

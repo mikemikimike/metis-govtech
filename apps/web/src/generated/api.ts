@@ -237,7 +237,7 @@ export interface components {
             /** Selected */
             selected?: boolean | null;
             /** Components */
-            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"])[];
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDisclosure"])[];
             /** Options */
             options?: components["schemas"]["Option"][];
             /** Note */
@@ -311,13 +311,21 @@ export interface components {
          * @enum {string}
          */
         CapabilityId: "planning_goal_management" | "agent_delegation" | "tool_use" | "multimodal_understanding_generation" | "official_communication" | "business_transactions" | "internet_search_access" | "computer_use" | "other_programmatic_interfaces" | "code_execution" | "file_data_management" | "system_management";
+        /** CardDisclosure */
+        CardDisclosure: {
+            /** Label */
+            label?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "disclosure";
+            /** Items */
+            items?: components["schemas"]["CardText"][];
+        };
         /**
          * CardDivider
-         * @description A hairline rule between the component groups above and below it. Shape, not domain: the
-         *     package drops one between repeated groups — the two acceptance criteria on a behaviour card,
-         *     which are otherwise two runs of Given/When/Then with nothing to separate them — and the door
-         *     draws a rule without ever learning what the groups are. It carries nothing: a divider has no
-         *     label and no value, it is purely the gap made visible.
+         * @description Separate adjacent groups in a card.
          */
         CardDivider: {
             /** Label */
@@ -496,22 +504,14 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            description: components["schemas"]["CriterionDescription"];
+            /** Description */
+            description: string;
             /** Grader Fqn */
             grader_fqn?: string | null;
             /** Grader Args */
             grader_args?: {
                 [key: string]: unknown;
             };
-        };
-        /** CriterionDescription */
-        CriterionDescription: {
-            /** Given */
-            given: string;
-            /** When */
-            when: string;
-            /** Then */
-            then: string;
         };
         /**
          * DocumentExtractionErrorCode
@@ -606,7 +606,7 @@ export interface components {
         };
         /**
          * FormField
-         * @description Only ever text — form input is used exactly as the user wrote it.
+         * @description A typed control whose submitted value is transported as text.
          */
         FormField: {
             /** Id */
@@ -623,6 +623,31 @@ export interface components {
              * @default true
              */
             multiline: boolean;
+            /**
+             * Input Type
+             * @default string
+             * @enum {string}
+             */
+            input_type: "string" | "integer" | "number" | "boolean";
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /** Choices */
+            choices?: string[];
+            /**
+             * Help
+             * @default
+             */
+            help: string;
+            /** Group */
+            group?: string | null;
         };
         /** FormRequest */
         FormRequest: {
@@ -680,6 +705,10 @@ export interface components {
              * @default false
              */
             uses_criterion_description: boolean;
+            /** Default Args */
+            default_args?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * InterviewConfig
@@ -1052,7 +1081,7 @@ export interface components {
             /** Selected */
             selected?: null;
             /** Components */
-            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"])[];
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDisclosure"])[];
             /** Options */
             options?: components["schemas"]["Option"][];
             /** Note */

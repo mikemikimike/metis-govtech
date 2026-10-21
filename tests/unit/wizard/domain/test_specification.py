@@ -29,7 +29,7 @@ def test_round_trips_through_json_unchanged() -> None:
 
     assert parsed == original
     # spot-check the structured criterion description and references
-    assert parsed.behaviour("EB-3").criteria[0].description.then.startswith("it stops")  # type: ignore[union-attr]
+    assert parsed.behaviour("EB-3").criteria[0].description.find("it stops") >= 0  # type: ignore[union-attr]
     assert parsed.task("TC-001").behaviour_refs == ["EB-1"]  # type: ignore[union-attr]
 
 

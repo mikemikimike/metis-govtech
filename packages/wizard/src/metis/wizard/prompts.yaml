@@ -101,7 +101,7 @@ system:
     topics, and requested format. Under accurate communication, separate criteria can check
     source facts, material qualifications, and unsupported factual claims. Source faithfulness
     is a criterion within that broader expectation; do not automatically promote each specific
-    check to a Behaviour. Use Given / When / Then to make each condition independently testable.
+    check to a Behaviour. Use one plain-language description to make each condition independently testable.
 
     The epic, user story, and acceptance criterion analogy is a guide to the three levels of
     scope. Behaviours express success expectations; do not force them into a list of user actions.
@@ -148,7 +148,7 @@ system:
       - a criterion's `grader_fqn` — a separate matcher chooses it from the criterion's own
         wording. You can see which grader each criterion is bound to, but you cannot set it. If
         the user wants a different grader, do not touch `grader_fqn`; instead reword that
-        criterion's `given` / `when` / `then` so the wording points at the grader they mean, and
+        criterion's complete `description` so the wording points at the grader they mean, and
         the matcher re-maps it. Say what you reworded, not that you changed the grader.
 
     Do not return suggestion options. If you are unsure, explain the alternatives in `message`.
@@ -314,7 +314,7 @@ model_calls:
     behaviours with measured=false entirely — the user chose not to measure those.
     Add each Criterion with its own `add` patch to
     `features[<current feature id>].behaviours[<current behaviour id>].criteria`.
-    Its value is an object with `name`, `given`, `when`, and `then` text fields.
+    Its value is an object with `name` and `description` text fields.
     Use IDs from the current Specification above. Supporting documents can contain example
     Specifications with other IDs; those IDs do not address the current document.
 
@@ -343,16 +343,12 @@ model_calls:
     reporting period, example value, named person, exact file name or requested presentation
     content.
 
-    Use given / when / then. `given` describes a reusable condition or category of input; `when`
-    describes the target action being evaluated; and `then` describes one observable expected
-    result. Write only the condition in `given`, only the action in `when`, and only the result
-    in `then`; do not put a complete Given/When/Then sentence inside one field. When appropriate,
-    cover both the normal path and an important boundary, constraint or failure path.
-
-    For a presentation target, prefer "Given supported source data, when the target creates a
-    presentation, then the slides preserve the material facts in the source." Avoid "Given
-    quarterly financial data, when the target creates a sales deck, then the slides show the
-    correct Q3 revenue trends."
+    Write one non-empty plain-language description. Keep any necessary condition in the sentence,
+    for example, "After a tool call fails, the agent reports the failure." Include enough detail
+    to identify the assessed property. Exact parameter values may appear when useful. A general
+    criterion judge receives the full description as its instructions, so include the complete
+    rule and any required numerical limits for that judge. Keep slide count and concision separate.
+    The wizard configures the selected grader from this requirement in a separate step.
 
     Do not set grader_fqn — that is resolved separately.
 
@@ -476,7 +472,7 @@ model_calls:
 
     Return a single add patch to `features[…].behaviours[$behaviour_id].criteria` and nothing else:
     no edits to any other behaviour, no second criterion, no changes elsewhere in the document.
-    Give / when / then. The criterion must test one quality only and be concrete enough that someone
+    Use one non-empty `description` with a short `name`. The criterion must test one quality only and be concrete enough that someone
     reading a trace or generated output could say whether it held. Make it suitable for evaluation
     by one grader. Do not include an id or set grader_fqn — both are assigned separately.
 

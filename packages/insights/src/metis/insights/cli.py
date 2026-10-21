@@ -12,7 +12,7 @@ from metis.core import execution_layout
 from metis.core.console import console
 from metis.core.logging import configure_logging
 from metis.insights import __version__
-from metis.insights._legacy_results import EvaluationResults
+from metis.insights._results import load_results
 from metis.insights.report import format_terminal_summary, save_report
 
 app = typer.Typer(help="Build METIS reports from evaluation results.")
@@ -50,7 +50,7 @@ def report(
     configure_logging()
     path = results_file.resolve()
     try:
-        results = EvaluationResults.load_file(path)
+        results = load_results(path)
         experiment_dir = execution_layout.experiment_root_from_results(path)
     except (OSError, ValueError) as exc:
         # markup=False: pydantic errors contain "[type=...]", which Rich would drop.

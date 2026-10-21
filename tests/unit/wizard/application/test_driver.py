@@ -265,36 +265,24 @@ def test_criteria_cards_carry_no_grader_annotation() -> None:
     )
 
 
-def test_a_criterion_is_three_labelled_rows_with_dividers_between() -> None:
-    """Each acceptance criterion is drawn as Given/When/Then labelled rows, and a divider
-    separates one criterion from the next so a multi-criterion behaviour does not read as one
-    undifferentiated block. The divider sits *between* criteria only — never leading or trailing.
-
-    EB-1 in the fixture is a ticked behaviour with two criteria, so its card is the case that
-    needs the boundary; EB-2 is unticked and draws a note instead of criteria.
-    """
+def test_criteria_show_description_and_expandable_settings() -> None:
     request = _compose_at(InterviewStep.CRITERIA)
     card = next(card for card in request.cards if card.id == "EB-1")
-
     kinds = [(c.type.value, getattr(c, "label", None)) for c in card.components]
     assert kinds == [
         ("text", None),
-        ("text", "Name"),
-        ("text", "Given"),
-        ("text", "When"),
-        ("text", "Then"),
-        ("text", "Grader"),
-        ("text", "Parameters"),
+        ("text", None),
+        ("disclosure", "Grader details"),
         ("options", None),
         ("divider", None),
-        ("text", "Name"),
-        ("text", "Given"),
-        ("text", "When"),
-        ("text", "Then"),
-        ("text", "Grader"),
-        ("text", "Parameters"),
+        ("text", None),
+        ("disclosure", "Grader details"),
         ("options", None),
     ]
+    assert (
+        card.components[1].text == research_assistant().criterion("AC-1-1").description
+    )
+    assert any(item.label == "Grader" for item in card.components[2].items)
 
 
 def test_the_terminal_step_carries_no_header() -> None:
@@ -812,12 +800,12 @@ def test_going_back_regenerates_nothing_that_already_exists() -> None:
     interviewer = ScriptedInterviewer()
     driver = StepDriver(interviewer=interviewer)
     state = driver_state(specification=specification, step=InterviewStep.BEHAVIOURS)
-    before = specification.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
+    before = specification.behaviour("EB-1").criteria[0].description  # type: ignore[union-attr]
 
     driver._advance(state)  # the Continue that generates
 
     assert "draft_criteria" not in interviewer.calls  # nothing was missing
-    assert specification.behaviour("EB-1").criteria[0].description.then == before  # type: ignore[union-attr]
+    assert specification.behaviour("EB-1").criteria[0].description == before  # type: ignore[union-attr]
 
 
 def test_unticking_then_continuing_generates_only_the_gap() -> None:
@@ -846,9 +834,7 @@ def test_criteria_drafting_cannot_write_outside_the_measured_gaps() -> None:
                     path="features[F-1].behaviours[EB-2].criteria",
                     value={
                         "name": "Unselected addition",
-                        "given": "an answer",
-                        "when": "it returns",
-                        "then": "it stays short",
+                        "description": "Given an answer, when it returns, then it stays short.",
                     },
                 )
             )
@@ -942,7 +928,7 @@ def test_ticking_costs_no_model_call() -> None:
 
 # ── a reworded criterion re-maps its grader, silently ───────────────────────
 
-_AC1 = "features[F-1].behaviours[EB-1].criteria[AC-1-1].description.then"
+_AC1 = "features[F-1].behaviours[EB-1].criteria[AC-1-1].description"
 
 
 @dataclass
@@ -1001,8 +987,8 @@ def test_rewording_a_criterion_in_chat_rematches_only_it() -> None:
 
 # ── a scoped criteria chat stays on its own behaviour ────────────────────────
 
-_EB1_THEN = "features[F-1].behaviours[EB-1].criteria[AC-1-1].description.then"
-_EB2_THEN = "features[F-1].behaviours[EB-2].criteria[AC-2-1].description.then"
+_EB1_THEN = "features[F-1].behaviours[EB-1].criteria[AC-1-1].description"
+_EB2_THEN = "features[F-1].behaviours[EB-2].criteria[AC-2-1].description"
 
 
 def _criterion_action(driver, state, action, label):
@@ -1057,7 +1043,7 @@ def test_a_scoped_criteria_chat_edits_only_its_own_behaviour() -> None:
         issued_ids=collect_specification_ids(specification),
     )
 
-    before_eb2 = specification.behaviour("EB-2").criteria[0].description.then  # type: ignore[union-attr]
+    before_eb2 = specification.behaviour("EB-2").criteria[0].description  # type: ignore[union-attr]
     screen, chat_option = _criterion_action(
         driver, state, "chat", "Chat about these criteria"
     )
@@ -1074,10 +1060,10 @@ def test_a_scoped_criteria_chat_edits_only_its_own_behaviour() -> None:
     # EB-1's own criterion changed and was rematched; EB-2 was left exactly as it was.
     assert matcher.matched == ["AC-1-1"]
     assert (
-        specification.behaviour("EB-1").criteria[0].description.then  # type: ignore[union-attr]
+        specification.behaviour("EB-1").criteria[0].description  # type: ignore[union-attr]
         == "it names the routing decision"
     )
-    assert specification.behaviour("EB-2").criteria[0].description.then == before_eb2  # type: ignore[union-attr]
+    assert specification.behaviour("EB-2").criteria[0].description == before_eb2  # type: ignore[union-attr]
     assert any(w.source is WarningSource.RUNTIME for w in driver.pending_warnings)
 
 
@@ -1146,9 +1132,7 @@ class SuggestsElsewhere(ScriptedInterviewer):
                     value={
                         "id": "AC-2-9",
                         "name": "Wrong target",
-                        "given": "g",
-                        "when": "w",
-                        "then": "t",
+                        "description": "Given g, when w, then t.",
                     },
                 )
             ],
@@ -1187,7 +1171,7 @@ def _type_one(driver, state, values):
     form = state.pending
     assert isinstance(form, FormRequest)
     assert form.target == "EB-1"
-    assert [f.id for f in form.fields] == ["name", "given", "when", "then"]
+    assert [f.id for f in form.fields] == ["name", "description"]
     driver.handle(state, form, FormResponse(values=values))
 
 
@@ -1209,9 +1193,7 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
         state,
         {
             "name": "Long report outcome",
-            "given": "a long report",
-            "when": "it is asked to summarise",
-            "then": "it keeps every citation",
+            "description": "Given a long report, when it is asked to summarise, then it keeps every citation.",
         },
     )
     _type_one(
@@ -1219,18 +1201,16 @@ def test_writing_two_criteria_by_hand_produces_two_distinct_ones() -> None:
         state,
         {
             "name": "Consistent follow-up",
-            "given": "a follow-up",
-            "when": "it answers again",
-            "then": "it stays consistent",
+            "description": "Given a follow-up, when it answers again, then it stays consistent.",
         },
     )
 
     eb1 = specification.behaviour("EB-1")
     assert [c.id for c in eb1.criteria] == ["AC-1-1", "AC-1-2", "AC-1-3", "AC-1-4"]  # type: ignore[union-attr]
     fresh = eb1.criteria[-2:]  # type: ignore[union-attr]
-    assert [c.description.given for c in fresh] == [
-        "a long report",
-        "a follow-up",
+    assert [c.description for c in fresh] == [
+        "Given a long report, when it is asked to summarise, then it keeps every citation.",
+        "Given a follow-up, when it answers again, then it stays consistent.",
     ]  # verbatim, in order
     assert {c.id for c in fresh} <= state.user_typed
     assert matcher.matched == ["AC-1-3", "AC-1-4"]  # each new one matched, once
@@ -1281,9 +1261,17 @@ def test_criterion_parameter_form_changes_the_selected_requirement() -> None:
     )
     assert state.pending is not None
     driver.handle(
-        state, state.pending, FormResponse(values={"grader_args": '{"max_traces":4}'})
+        state,
+        state.pending,
+        FormResponse(
+            values={
+                "description": "The agent stays within the trace budget.",
+                "args.max_traces": "4",
+            }
+        ),
     )
-    assert criterion.grader_args == {"max_traces": 4}
+    assert criterion.grader_args["max_traces"] == 4
+    assert criterion.description == "The agent stays within the trace budget."
 
 
 def test_fallback_parameter_edits_validate_before_replacing_settings() -> None:
@@ -1304,15 +1292,13 @@ def test_fallback_parameter_edits_validate_before_replacing_settings() -> None:
     driver.handle(
         state,
         state.pending,
-        FormResponse(values={"grader_args": '{"criterion":"override"}'}),
+        FormResponse(values={"args.threshold": "2"}),
     )
     assert criterion.grader_args == {"threshold": 0.8, "model": "chosen-judge"}
     assert state.pending is not None
     driver.handle(
         state,
         state.pending,
-        FormResponse(
-            values={"grader_args": '{"threshold":0.6,"model":"chosen-judge"}'}
-        ),
+        FormResponse(values={"args.threshold": "0.6", "args.model": "chosen-judge"}),
     )
     assert criterion.grader_args == {"threshold": 0.6, "model": "chosen-judge"}

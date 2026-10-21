@@ -14,7 +14,6 @@ from metis.wizard.domain.patch import PatchOrigin
 from metis.wizard.domain.specification import (
     Behaviour,
     Criterion,
-    CriterionDescription,
     Feature,
     Persona,
     Scenario,
@@ -122,11 +121,7 @@ def add_criterion(
     criterion = Criterion(
         id=_next_numeric(issued_ids, prefix),
         name=draft.name,
-        description=CriterionDescription(
-            given=draft.given,
-            when=draft.when,
-            then=draft.then,
-        ),
+        description=draft.description,
     )
     _record(issued_ids, user_typed, criterion.id, origin)
     behaviour.criteria.append(criterion)

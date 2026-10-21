@@ -20,7 +20,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from metis.wizard.contracts.capabilities import CapabilityId
-from metis.wizard.contracts.conversation import AnyRequest
+from metis.wizard.contracts.conversation import AnyRequest, FormRequest
 from metis.wizard.contracts.documents import (
     InterviewDocument,
     validate_interview_documents,
@@ -124,6 +124,16 @@ class InterviewState(BaseModel):
     # The one live screen, or None between the finish and a fresh start. It carries its own
     # `request_id` and `stage`; the state stores neither separately.
     pending: AnyRequest | None = None
+
+    @model_validator(mode="after")
+    def _current_form_format(self) -> InterviewState:
+        if isinstance(self.pending, FormRequest) and {"given", "when", "then"} <= {
+            field.id for field in self.pending.fields
+        }:
+            raise ValueError(
+                "This saved Interview uses an older Criterion format. Start a new Interview to continue."
+            )
+        return self
 
     @model_validator(mode="after")
     def _pending_has_turn_metadata(self) -> InterviewState:

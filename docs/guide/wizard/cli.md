@@ -88,6 +88,10 @@ prints the complete resume command when an Interview starts.
 Without `--restart`, `init` does not overwrite an Interview in progress. It directs you to
 `resume`.
 
+Saved Interviews with Given/When/Then Criterion objects cannot resume. Start a new
+Interview in a new output directory to keep the saved file. See
+[Convert Criterion descriptions](../../../MIGRATION.md#convert-criterion-descriptions).
+
 ## Output files
 
 When the Interview is complete, the CLI retains its final state and writes this layout:

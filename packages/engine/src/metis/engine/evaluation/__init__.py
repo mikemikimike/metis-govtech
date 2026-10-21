@@ -7,10 +7,9 @@ from metis.engine.evaluation.judge import (
     resolve_grader_args,
 )
 from metis.engine.evaluation.orchestrator import (
-    CriterionGrader,
     GraderSetupError,
     SessionFacts,
-    build_criterion_grader,
+    build_grader,
     grade_session,
     record_results,
     resolve_grader_class,
@@ -18,11 +17,10 @@ from metis.engine.evaluation.orchestrator import (
 
 __all__ = [
     "DEFAULT_JUDGE_MODEL",
-    "CriterionGrader",
     "GraderSetupError",
     "JudgeGateway",
     "SessionFacts",
-    "build_criterion_grader",
+    "build_grader",
     "build_llm_settings",
     "grade_session",
     "record_results",

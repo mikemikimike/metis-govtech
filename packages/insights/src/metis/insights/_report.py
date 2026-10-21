@@ -36,7 +36,7 @@ PASS_THRESHOLD = 0.70
 
 def load_report_sources(
     run_dir: Path,
-) -> tuple[dict, dict[str, str], list[dict]] | None:
+) -> tuple[dict[str, Any], dict[str, str], list[dict[str, Any]]] | None:
     """Read specification.yaml, the persona map, and recorded Trial outcomes."""
     specification_path = run_dir / execution_layout.SPECIFICATION
     if not specification_path.is_file():
@@ -55,9 +55,9 @@ def load_report_sources(
     return specification, persona_of, trial_outcomes
 
 
-def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict]]:
+def _load_trial_records(run_dir: Path) -> tuple[dict[str, str], list[dict[str, Any]]]:
     persona_of: dict[str, str] = {}
-    trials: list[dict] = []
+    trials: list[dict[str, Any]] = []
     for record_path in sorted(
         (run_dir / execution_layout.TRIALS).glob(f"*/{execution_layout.TRIAL_RECORD}")
     ):
@@ -205,22 +205,50 @@ def _clean_prose(text: str | None) -> str:
     return (text or "").replace("—", ",").strip()
 
 
-def _new_bucket() -> dict:
-    return {"pass": 0, "fail": 0, "skip": 0}
+def _new_bucket() -> dict[str, Any]:
+    return {"pass": 0, "fail": 0, "skip": 0, "error": 0}
 
 
-def _rate_of(bucket: dict) -> float | None:
+def _rate_of(bucket: dict[str, Any]) -> float | None:
     ran = bucket["pass"] + bucket["fail"]
     return bucket["pass"] / ran if ran else None
 
 
-def _add(bucket: dict, row: dict) -> None:
-    if row["skipped"]:
+def _add(bucket: dict[str, Any], row: dict[str, Any]) -> None:
+    if row["errored"]:
+        bucket["error"] += 1
+    elif row["skipped"]:
         bucket["skip"] += 1
     elif row["success"]:
         bucket["pass"] += 1
     else:
         bucket["fail"] += 1
+
+
+def _evidence(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "task_id": row["task_id"],
+        "trial_index": row["trial_index"],
+        "criterion_id": row["criterion_id"],
+        "grader_fqn": row["grader_fqn"],
+        "grader_args": row["grader_args"],
+        "score": row["score"],
+        "status": (
+            "error"
+            if row["errored"]
+            else "skip"
+            if row["skipped"]
+            else "pass"
+            if row["success"]
+            else "fail"
+        ),
+        "message": row["reason"],
+        "trace": row["trace"],
+        "session": row["session"],
+        "turn": row["turn"],
+        "persona": row["persona"],
+        "scenario": row["scenario"],
+    }
 
 
 def _grader_refs(scenario: Mapping[str, Any]) -> list[str]:
@@ -240,12 +268,12 @@ def flatten_results(
     test_results: Sequence[Row],
     session_graders: Sequence[Row] | None,
     persona_of: Mapping[str, str],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """One row per grader result, tagged with its scenario and its persona."""
     scenario_of = {
         t.get("session_id", ""): t.get("scenario_id", "") for t in test_results
     }
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
 
     for case in test_results:
         for grader in case.get("graders", []):
@@ -260,6 +288,8 @@ def flatten_results(
                     "scenario": case.get("scenario_id", ""),
                     "persona": persona_of.get(case.get("session_id", "")),
                     "skipped": bool(grader.get("skipped")),
+                    "errored": bool(grader.get("errored")),
+                    "score": grader.get("score"),
                     "success": bool(grader.get("success")),
                     "reason": grader.get("reason", ""),
                     "trace": case.get("trace_id", ""),
@@ -279,14 +309,16 @@ def flatten_results(
                     "grader_args": grader.get("grader_args", {}),
                     "task_id": grader.get("task_id", ""),
                     "trial_index": grader.get("trial_index", 1),
-                    "scenario": scenario_of.get(sid, ""),
+                    "scenario": session.get("scenario_id") or scenario_of.get(sid, ""),
                     "persona": persona_of.get(sid),
                     "skipped": bool(grader.get("skipped")),
+                    "errored": bool(grader.get("errored")),
+                    "score": grader.get("score"),
                     "success": bool(grader.get("success")),
                     "reason": grader.get("reason", ""),
-                    "trace": sid,
+                    "trace": "",
                     "session": sid,
-                    "turn": f"session, {session.get('num_turns', 0)} turns",
+                    "turn": "",
                 }
             )
     return rows
@@ -298,8 +330,10 @@ def flatten_results(
 
 
 def build_plan(
-    experiment: Mapping[str, Any], rows: list[dict], task_criteria: dict[str, set[str]]
-) -> dict:
+    experiment: Mapping[str, Any],
+    rows: list[dict[str, Any]],
+    task_criteria: dict[str, set[str]],
+) -> dict[str, Any]:
     """Compare planned Tasks and Trials with the recorded scores."""
     plan_personas = [p["id"] for p in experiment.get("personas", [])]
     tasks = []
@@ -317,7 +351,12 @@ def build_plan(
                 "personasRun": sorted({r["persona"] for r in results if r["persona"]}),
                 "gradersAsked": len(asked),
                 "gradersScored": len(
-                    {r["criterion_id"] for r in results if not r["skipped"]} & asked
+                    {
+                        r["criterion_id"]
+                        for r in results
+                        if not r["skipped"] and not r["errored"]
+                    }
+                    & asked
                 ),
             }
         )
@@ -341,7 +380,7 @@ def build_report(
     timings: Mapping[str, Any] | None = None,
     routing: Mapping[str, Any] | None = None,
     trial_outcomes: Sequence[Row] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """Build the report the page renders.
 
     :param specification: The parsed specification.yaml frozen for this run.
@@ -353,7 +392,7 @@ def build_report(
     """
     rows = flatten_results(test_results, session_graders, persona_of or {})
 
-    criteria: dict[str, dict] = {}
+    criteria: dict[str, dict[str, Any]] = {}
     behaviour_of: dict[str, str] = {}
     for feature in specification.get("features") or []:
         for behaviour in feature.get("behaviours") or []:
@@ -389,7 +428,7 @@ def build_report(
     }
     unresolved: list[str] = []
 
-    per_criterion: dict[str, dict] = {
+    per_criterion: dict[str, dict[str, Any]] = {
         cid: {
             "all": _new_bucket(),
             "persona": defaultdict(_new_bucket),
@@ -401,21 +440,23 @@ def build_report(
         }
         for cid in criteria
     }
-    unmapped: dict[str, dict] = defaultdict(_new_bucket)
+    unmapped: dict[str, dict[str, Any]] = defaultdict(_new_bucket)
     unmapped_reason: dict[str, str] = {}
+    unmapped_evidence: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
-    def new_axis() -> dict:
+    def new_axis() -> dict[str, Any]:
         return {
             "pass": 0,
             "fail": 0,
             "skip": 0,
+            "error": 0,
             "sessions": set(),
             "behaviours": set(),
             "graders": set(),
             "partners": set(),
         }
 
-    axis_stats: dict[str, dict[str, dict]] = {
+    axis_stats: dict[str, dict[str, dict[str, Any]]] = {
         "P": defaultdict(new_axis),
         "S": defaultdict(new_axis),
     }
@@ -424,13 +465,14 @@ def build_report(
         cid = row["criterion_id"]
         task = tasks.get(row["task_id"])
         matched = [cid] if task and cid in task_criteria[task["id"]] else []
-        if not matched:
+        if task is None or not matched:
             _add(unmapped[row["grader"]], row)
+            unmapped_evidence[row["grader"]].append(_evidence(row))
             unmapped_reason[row["grader"]] = (
                 "Result has no matching Task and Criterion."
             )
             continue
-        row["scenario"] = task["scenario_ref"]
+        row["scenario"] = row["scenario"] or task["scenario_ref"]
         row["persona"] = task["persona_ref"]
         touched = {behaviour_of[cid] for cid in matched}
         for key, name, partner in (
@@ -458,49 +500,33 @@ def build_report(
                 _add(slot["scenario"][row["scenario"]], row)
             if row["session"]:
                 _add(slot["session"][(row["task_id"], row["trial_index"])], row)
-            slot["evidence"].append(
-                {
-                    "task_id": row["task_id"],
-                    "trial_index": row["trial_index"],
-                    "criterion_id": cid,
-                    "grader_fqn": row["grader_fqn"],
-                    "grader_args": row["grader_args"],
-                    "status": (
-                        "skip"
-                        if row["skipped"]
-                        else "pass"
-                        if row["success"]
-                        else "fail"
-                    ),
-                    "message": row["reason"],
-                    "trace": row["trace"],
-                    "session": row["session"],
-                    "turn": row["turn"],
-                    "persona": row["persona"],
-                    "scenario": row["scenario"],
-                }
-            )
+            slot["evidence"].append(_evidence(row))
             if row["skipped"]:
                 slot["skips"][clean_reason(row["reason"])] += 1
 
     personas = [p["id"] for p in specification.get("personas") or []]
     scenarios = [s["id"] for s in specification.get("scenarios") or []]
 
-    def split(slot: dict, key: str, order: list[str]) -> list[dict | None]:
+    def split(
+        slot: dict[str, Any], key: str, order: list[str]
+    ) -> list[dict[str, Any] | None]:
         """One cell per column of the tree strip. `None` means never exercised."""
-        out: list[dict | None] = []
+        out: list[dict[str, Any] | None] = []
         for name in order:
             bucket = slot[key].get(name)
-            if not bucket or bucket["pass"] + bucket["fail"] == 0:
+            if not bucket:
                 out.append(None)
             else:
                 out.append(
                     {
-                        "rate": round(100 * (_rate_of(bucket) or 0)),
+                        "rate": None
+                        if _rate_of(bucket) is None
+                        else round(100 * (_rate_of(bucket) or 0)),
                         "n": bucket["pass"] + bucket["fail"],
                         "pass": bucket["pass"],
                         "fail": bucket["fail"],
                         "skip": bucket["skip"],
+                        "error": bucket["error"],
                     }
                 )
         return out
@@ -508,7 +534,9 @@ def build_report(
     asked_criteria = {cid for selected in task_criteria.values() for cid in selected}
     appeared = {row["criterion_id"] for row in rows}
 
-    def blank_cause(criterion: Mapping[str, Any], slot: dict) -> dict:
+    def blank_cause(
+        criterion: Mapping[str, Any], slot: dict[str, Any]
+    ) -> dict[str, Any]:
         """Why a criterion has no pass rate. One cause each, checked in chain order.
 
         The chain can break in five places, and the reader needs to know which one,
@@ -532,6 +560,11 @@ def build_report(
                 "cause": "no result",
                 "note": f"{name} produced no result in this run",
             }
+        if slot["all"]["error"]:
+            return {
+                "cause": "grader error",
+                "note": f"{slot['all']['error']} grader results errored",
+            }
         if slot["skips"]:
             reason, count = slot["skips"].most_common(1)[0]
             return {
@@ -543,15 +576,13 @@ def build_report(
             "note": "the grader produced no result for this criterion",
         }
 
-    out_criteria: dict[str, dict] = {}
+    out_criteria: dict[str, dict[str, Any]] = {}
     for cid, criterion in criteria.items():
         slot = per_criterion[cid]
         rate = _rate_of(slot["all"])
         description = criterion["description"]
         out_criteria[cid] = {
-            "given": description["given"],
-            "when": description["when"],
-            "then": description["then"],
+            "description": description,
             "grader": slot["graderName"]
             or name_of.get(criterion.get("grader_fqn") or "", ""),
             "fqn": criterion.get("grader_fqn"),
@@ -559,6 +590,7 @@ def build_report(
             "pass": slot["all"]["pass"],
             "fail": slot["all"]["fail"],
             "skip": slot["all"]["skip"],
+            "error": slot["all"]["error"],
             "rate": None if rate is None else round(100 * rate),
             "status": status(rate),
             "blank": None if rate is not None else blank_cause(criterion, slot),
@@ -567,7 +599,7 @@ def build_report(
             "evidence": slot["evidence"],
         }
 
-    out_behaviours: dict[str, dict] = {}
+    out_behaviours: dict[str, dict[str, Any]] = {}
     for feature in specification.get("features") or []:
         for behaviour in feature.get("behaviours") or []:
             live = [
@@ -604,7 +636,9 @@ def build_report(
             }
         )
 
-    def axis_rows(key: str, order: list[str], partner_total: int) -> list[dict]:
+    def axis_rows(
+        key: str, order: list[str], partner_total: int
+    ) -> list[dict[str, Any]]:
         out = []
         for name in order:
             slot = axis_stats[key].get(name)
@@ -634,6 +668,7 @@ def build_report(
                     "fail": slot["fail"],
                     "ran": slot["pass"] + slot["fail"],
                     "skip": slot["skip"],
+                    "error": slot["error"],
                     "sessions": len(slot["sessions"]),
                     "behaviours": len(slot["behaviours"]),
                     "graders": len(slot["graders"]),
@@ -733,6 +768,7 @@ def build_report(
                 "pass": bucket["pass"],
                 "fail": bucket["fail"],
                 "skip": bucket["skip"],
+                "error": bucket["error"],
                 "evaluated": evaluated,
                 "rate": None if rate is None else round(100 * rate),
                 "status": status(rate),
@@ -743,7 +779,7 @@ def build_report(
         "target": (specification.get("target") or {}).get("name", "the target"),
         "run": run_id,
         "date": (timestamp or "")[:10],
-        "sessions": len({t.get("session_id", "") for t in test_results}),
+        "sessions": len({r["session"] for r in rows if r["session"]}),
         "turns": len(test_results),
         "results": len(rows),
         "latency": latency_seconds,
@@ -789,7 +825,12 @@ def build_report(
         "criteria": out_criteria,
         "resultTable": {"features": table_features, "rows": table_rows},
         "unmapped": [
-            {"grader": name, **bucket, "why": unmapped_reason.get(name, "")}
+            {
+                "grader": name,
+                **bucket,
+                "why": unmapped_reason.get(name, ""),
+                "evidence": unmapped_evidence[name],
+            }
             for name, bucket in sorted(unmapped.items())
         ],
         "unresolved": unresolved,

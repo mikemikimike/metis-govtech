@@ -7,11 +7,15 @@ offer this judge, because the form has no criterion description field.
 
 ## Edit the instructions
 
-To change what the judge checks, edit the criterion description:
+In the Interview, ask the Wizard to change the Criterion. It updates the description and
+grader settings together. You can also edit the description and settings directly in the
+Criterion form. Direct edits must keep those fields consistent.
+
+To edit an exported specification:
 
 1. Export the Interview specification.
 2. In `specification.yaml`, find the criterion under `features[].behaviours[].criteria[]`.
-3. Edit its `description.given`, `description.when`, and `description.then` clauses.
+3. Edit its `description` text. Include the complete rule that the judge must assess.
 4. Save the file before you start the next simulation.
 
 For example, a criterion can contain these fields:
@@ -19,17 +23,15 @@ For example, a criterion can contain these fields:
 ```yaml
 id: AC-1-1
 name: Cite sources
-description:
-  given: a question that needs evidence
-  when: the target returns an answer
-  then: each factual claim has a source citation
+description: For a question that needs evidence, each factual claim has a source citation.
 grader_fqn: metis.library.graders.CriterionJudgeGrader
 grader_args:
   threshold: 0.5
 ```
 
-Each description clause must contain text. At run time, the engine joins the clauses as
-`Given ..., when ..., then ... .` and gives that text to the judge as `grader_args.criterion`.
+The description must contain text. At run time, the engine gives the complete description
+to the judge as `grader_args.criterion`. Include exact limits when the judge needs them.
+The judge has no separate argument for an expected count or other assessment requirement.
 Do not set `criterion` under `grader_args` yourself. The engine reports it as a setup error
 before the run starts.
 

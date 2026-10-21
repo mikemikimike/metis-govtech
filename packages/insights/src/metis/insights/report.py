@@ -65,7 +65,9 @@ def format_terminal_summary(
         [s.model_dump() for s in session_results] if session_results else None,
     )
 
-    lines.append(f"  {'Grader':<40} {'Pass':>6} {'Fail':>6} {'Skip':>6} {'Rate':>7}")
+    lines.append(
+        f"  {'Grader':<40} {'Pass':>6} {'Fail':>6} {'Skip':>6} {'Error':>6} {'Rate':>7}"
+    )
     lines.append(f"  {'-' * 40} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 7}")
 
     for name, agg in sorted(grader_agg.items()):
@@ -74,17 +76,21 @@ def format_terminal_summary(
         marker = " " if agg["fail"] == 0 else "!"
         rate_str = f"{rate * 100:.1f}%" if evaluated > 0 else "  N/A"
         lines.append(
-            f" {marker}{name:<40} {agg['pass_count']:>6} {agg['fail']:>6} {agg['skip']:>6} {rate_str:>7}"
+            f" {marker}{name:<40} {agg['pass_count']:>6} {agg['fail']:>6} {agg['skip']:>6} {agg['error']:>6} {rate_str:>7}"
         )
 
     total_pass = sum(a["pass_count"] for a in grader_agg.values())
     total_fail = sum(a["fail"] for a in grader_agg.values())
     total_skip = sum(a["skip"] for a in grader_agg.values())
+    total_error = sum(a["error"] for a in grader_agg.values())
     evaluated = total_pass + total_fail
+    total_rate = f"{total_pass / evaluated * 100:.1f}%" if evaluated else "N/A"
     lines.append(
         f"\n  {'TOTAL':<40} {total_pass:>6} {total_fail:>6} "
-        f"{total_skip:>6} {total_pass / evaluated * 100 if evaluated else 0:>6.1f}%"
+        f"{total_skip:>6} {total_error:>6} {total_rate:>7}"
     )
+    if total_error:
+        lines.append(f"  ({total_error} grader errors excluded from pass rate)")
     if total_skip:
         lines.append(f"  ({total_skip} skipped — excluded from pass rate)")
 

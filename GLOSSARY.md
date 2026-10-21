@@ -11,7 +11,7 @@
 | Baseline | A scope qualifier for an **expected behaviour**, **criterion**, or **grader** that can be applied to every **target**. Baseline graders are provided by the library. |
 | Feature-specific | A scope qualifier for an **expected behaviour**, **criterion**, or **grader** arising from the requirements, constraints, or operating context of a particular **feature**. A feature-specific grader is provided by the library where one exists, or otherwise authored directly from its **criterion** as a *custom* grader. |
 | Expected Behaviour | An expected behaviour describing how the agent should act while performing a **feature**. |
-| Criterion | A specific, assessable property used to determine whether an **expected behaviour** was exhibited in an individual **trial**. |
+| Criterion | A specific, assessable property used to determine whether an **expected behaviour** was exhibited in an individual **trial**. Its description is one non-empty text value. Each Criterion retains its name, ID, Grader reference, and Grader arguments. |
 | Scenario | A concrete instantiation of a **feature**, specifying the particular situation and conditions in which the agent is evaluated. |
 | Persona | A concrete simulated user whose characteristics and behaviour are relevant to an evaluation interaction. |
 | Fixture | An artefact or piece of environment state selected by a **task** to execute its **scenario**. It may be supplied by the user or generated dynamically. A fixture is an input, not an expected answer or scoring rule. |

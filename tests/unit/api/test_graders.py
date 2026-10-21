@@ -23,7 +23,8 @@ def test_grader_catalogue_is_sorted_and_has_only_display_fields(
     assert rows == sorted(rows, key=lambda row: row["fqn"])
     assert rows
     assert all(
-        set(row) == {"fqn", "name", "description", "uses_criterion_description"}
+        set(row)
+        == {"fqn", "name", "description", "uses_criterion_description", "default_args"}
         for row in rows
     )
 

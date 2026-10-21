@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Annotated, Any, Generic, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field, StringConstraints
 
 DescriptionT = TypeVar("DescriptionT")
 
@@ -24,17 +24,22 @@ class Target(BaseModel):
     detail: str = ""  # prose — useful depth, including how the target works
 
 
-class CriterionDescription(BaseModel):
-    given: str
-    when: str
-    then: str
-
-    def __str__(self) -> str:
-        """Return the clauses as the flat text used for grader matching."""
-        return f"Given {self.given}, when {self.when}, then {self.then}."
+def _criterion_text(value: object) -> object:
+    if isinstance(value, dict) and {"given", "when", "then"} <= value.keys():
+        raise ValueError(
+            "This Criterion uses an older format. Replace its description with one non-empty assessment sentence. Start a new Interview for saved Interview data."
+        )
+    return value
 
 
-class Criterion(NamedNode[CriterionDescription]):
+CriterionText = Annotated[
+    str,
+    StringConstraints(strict=True, strip_whitespace=True, min_length=1),
+    BeforeValidator(_criterion_text),
+]
+
+
+class Criterion(NamedNode[CriterionText]):
     # The id is scoped to its behaviour: AC-1-1, AC-1-2.
     # resolved by the matcher, never by the model. `None` means matching has not run yet.
     grader_fqn: str | None = None

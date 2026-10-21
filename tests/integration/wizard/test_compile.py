@@ -121,7 +121,7 @@ def test_edited_yaml_description_reaches_the_judge_and_result_record(
     from metis.engine.cli import _validate_inputs
     from metis.engine.evaluation import (
         SessionFacts,
-        build_criterion_grader,
+        build_grader,
         grade_session,
     )
     from metis.library.grader import DEFAULT_MAX_INPUT_TOKENS, LLMSettings
@@ -140,7 +140,7 @@ def test_edited_yaml_description_reaches_the_judge_and_result_record(
     document = yaml.safe_load(path.read_text())
     stored = document["features"][0]["behaviours"][0]["criteria"][0]
     assert "criterion" not in stored["grader_args"]
-    stored["description"]["then"] = "it cites TWO independent sources"
+    stored["description"] = "it cites TWO independent sources"
     path.write_text(yaml.safe_dump(document))
     for task in specification.tasks:
         for fixture in task.fixtures:
@@ -150,9 +150,12 @@ def test_edited_yaml_description_reaches_the_judge_and_result_record(
     _validate_inputs(tmp_path)
     loaded = Specification.load_file(path)
     task = loaded.resolved_tasks()[0]
-    ref = next(ref for ref in task.grader_refs if ref.criterion_id == criterion.id)
-    built = build_criterion_grader(
-        ref, default_judge_model=loaded.experiment.defaults.judge_model, env={}
+    saved_criterion = loaded.criterion(criterion.id)
+    assert saved_criterion is not None
+    built = build_grader(
+        saved_criterion,
+        default_judge_model=loaded.experiment.defaults.judge_model,
+        env={},
     )
     requests = []
     client = judge_client(
@@ -165,7 +168,8 @@ def test_edited_yaml_description_reaches_the_judge_and_result_record(
     async def run():
         async with client:
             return await grade_session(
-                [built],
+                [saved_criterion],
+                {saved_criterion.id: built},
                 recorded_session(),
                 LLMSettings(client),
                 SessionFacts("session-1", task.id, task.task_id, 1),
@@ -187,7 +191,7 @@ def test_edited_yaml_description_reaches_the_judge_and_result_record(
     ("fault", "message"),
     [
         ("override", "description"),
-        ("blank", "then"),
+        ("blank", "description"),
         ("unknown", "unknown"),
         ("threshold", "threshold"),
     ],
@@ -205,20 +209,66 @@ def test_engine_preflight_reports_invalid_fallback_configuration(
     specification.id = "fallback-test"
     if fault == "override":
         criterion.grader_args["criterion"] = "second instruction source"
-    elif fault == "blank":
-        criterion.description.then = " "
     elif fault == "unknown":
         criterion.grader_args["unknown"] = 1
     else:
         criterion.grader_args["threshold"] = 2
     for task in specification.tasks:
         task.fixtures = []
-    (tmp_path / "specification.yaml").write_text(
-        yaml.safe_dump(specification.model_dump(mode="json"))
-    )
+    document = specification.model_dump(mode="json")
+    if fault == "blank":
+        document["features"][0]["behaviours"][0]["criteria"][0]["description"] = " "
+    (tmp_path / "specification.yaml").write_text(yaml.safe_dump(document))
     with pytest.raises(SystemExit) as caught:
         _validate_inputs(tmp_path)
     assert caught.value.code == 1
     output = capsys.readouterr().out
-    assert criterion.id in output
+    if fault != "blank":
+        assert criterion.id in output
     assert message in output
+
+
+def test_parameter_assessment_retains_identity_and_effective_settings_in_results(
+    tmp_path: Path,
+) -> None:
+    import asyncio
+
+    from metis.engine.evaluation import (
+        SessionFacts,
+        build_grader,
+        grade_session,
+    )
+    from metis.library.grader import LLMSettings
+    from tests.fixtures.criterion_judge import judge_client, recorded_session
+    from tests.fixtures.wizard.scripted import TRACE_BUDGET
+
+    specification = research_assistant()
+    criterion = specification.criterion("AC-1-1")
+    criterion.description = "The session stays within its trace budget."
+    criterion.grader_fqn = TRACE_BUDGET
+    criterion.grader_args = {"max_traces": 3}
+    path = tmp_path / "specification.yaml"
+    write_experiment(specification, "budget", path)
+    loaded = Specification.load_file(path)
+    task = loaded.resolved_tasks()[0]
+    saved_criterion = loaded.criterion(criterion.id)
+    assert saved_criterion is not None
+    built = build_grader(saved_criterion, default_judge_model=None, env={})
+    requests = []
+    client = judge_client("", requests)
+
+    async def run():
+        async with client:
+            return await grade_session(
+                [saved_criterion],
+                {saved_criterion.id: built},
+                recorded_session(),
+                LLMSettings(client),
+                SessionFacts("session-1", task.id, task.task_id, 1),
+            )
+
+    [record] = asyncio.run(run())
+    assert record.criterion_id == criterion.id
+    assert record.grader_args["max_traces"] == 3
+    assert record.results[0].outcome == "passed"
+    assert not requests

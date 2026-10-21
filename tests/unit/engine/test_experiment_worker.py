@@ -500,11 +500,7 @@ class TestFixtureContentDescriptions:
                                     {
                                         "id": "AC-1-1",
                                         "name": "Check 1",
-                                        "description": {
-                                            "given": "a request",
-                                            "when": "the agent responds",
-                                            "then": "the requirement is met",
-                                        },
+                                        "description": "Given a request, when the agent responds, then the requirement is met.",
                                         "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
                                         "grader_args": {},
                                     }
@@ -555,11 +551,7 @@ class TestFixtureContentDescriptions:
                                     {
                                         "id": "AC-1-1",
                                         "name": "Check 1",
-                                        "description": {
-                                            "given": "a request",
-                                            "when": "the agent responds",
-                                            "then": "the requirement is met",
-                                        },
+                                        "description": "Given a request, when the agent responds, then the requirement is met.",
                                         "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
                                         "grader_args": {},
                                     }
@@ -687,11 +679,7 @@ class TestFixtureContentDescriptions:
                                     {
                                         "id": "AC-1-1",
                                         "name": "Check 1",
-                                        "description": {
-                                            "given": "a request",
-                                            "when": "the agent responds",
-                                            "then": "the requirement is met",
-                                        },
+                                        "description": "Given a request, when the agent responds, then the requirement is met.",
                                         "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
                                         "grader_args": {},
                                     }
@@ -713,11 +701,7 @@ class TestFixtureContentDescriptions:
                                     {
                                         "id": "AC-2-1",
                                         "name": "Check 1",
-                                        "description": {
-                                            "given": "a request",
-                                            "when": "the agent responds",
-                                            "then": "the requirement is met",
-                                        },
+                                        "description": "Given a request, when the agent responds, then the requirement is met.",
                                         "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
                                         "grader_args": {},
                                     }

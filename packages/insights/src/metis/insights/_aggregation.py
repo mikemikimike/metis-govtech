@@ -7,12 +7,11 @@ from typing import TYPE_CHECKING, Any, TypedDict
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from metis.insights._legacy_results import SessionReport, TurnReport
-
 
 class GraderAggregate(TypedDict):
     pass_count: int
     fail: int
+    error: int
     skip: int
     scores: list[float]
     pass_rate: float
@@ -20,8 +19,8 @@ class GraderAggregate(TypedDict):
 
 
 def aggregate_graders(
-    turn_results: list[TurnReport],
-    session_results: list[SessionReport] | None = None,
+    turn_results: list[dict[str, Any]],
+    session_results: list[dict[str, Any]] | None = None,
 ) -> dict[str, GraderAggregate]:
     """Aggregate pass/fail/skip counts and scores by Criterion identity.
 
@@ -56,15 +55,23 @@ def _accumulate(agg: dict[str, GraderAggregate], grader: Mapping[str, Any]) -> N
             pass_count=0,
             fail=0,
             skip=0,
+            error=0,
             scores=[],
             pass_rate=0.0,
             avg_score=0.0,
         )
     entry = agg[name]
-    if grader.get("skipped"):
+    if grader.get("errored"):
+        entry["error"] += 1
+    elif grader.get("skipped"):
         entry["skip"] += 1
     elif grader["success"]:
         entry["pass_count"] += 1
     else:
         entry["fail"] += 1
-    entry["scores"].append(grader["score"])
+    if (
+        grader.get("score") is not None
+        and not grader.get("skipped")
+        and not grader.get("errored")
+    ):
+        entry["scores"].append(grader["score"])

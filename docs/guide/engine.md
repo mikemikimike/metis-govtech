@@ -173,7 +173,7 @@ experiments/execute/orca-eval-20260730-143022/
     └── evaluate.log
 ```
 
-`results.json` holds one GraderRecord per grader per session, each with one result per grading scope. `metis insights report` does not read this format yet (#454).
+`results.json` holds one GraderRecord per grader per session, each with one result per grading scope. `metis insights report` reads these records and shows the settings used for each assessment.
 
 The insights [Report model](../../packages/insights/src/metis/insights/_models.py) defines `report.json`. Python readers can validate report data with `Report.model_validate()`.
 
@@ -353,10 +353,7 @@ through `behaviour_refs`, and each selected Behaviour supplies all its Criteria.
 criteria:
   - id: AC-DA-1
     name: Finish within the trace budget
-    description:
-      given: a request for a Q3 revenue report
-      when: the session ends
-      then: the session used no more than 8 exchanges
+    description: A Q3 revenue report session uses no more than 8 exchanges.
     grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
     grader_args:
       max_traces: 8
@@ -981,10 +978,7 @@ features:
         criteria:
           - id: <string>            # Acceptance criterion ID (e.g. "AC-DA-20a")
             name: <string>          # Human-readable criterion name
-            description:
-              given: <string>       # Precondition
-              when: <string>        # Action or trigger
-              then: <string>        # Expected outcome
+            description: <string>  # One non-empty assessment rule
             grader_fqn: <string>
             grader_args: {}         # Grader constructor arguments
 
@@ -1039,15 +1033,13 @@ tasks:
 | `measured` | No | `true` when the evaluation measures this behaviour; defaults to `false` |
 | `criteria` | No | Acceptance criteria; defaults to `[]`. Measured Behaviours need Task coverage |
 
-**`features[].behaviours[].criteria[]`** — acceptance criteria (Given/When/Then):
+**`features[].behaviours[].criteria[]`** — assessment Criteria:
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | `id` | Yes | Identifier (conventionally `AC-<FEATURE>-N`) |
 | `name` | Yes | Human-readable criterion name |
-| `description.given` | Yes | Precondition or setup state |
-| `description.when` | Yes | User action or trigger |
-| `description.then` | Yes | Expected system response or outcome |
+| `description` | Yes | Non-empty text that states one assessable requirement, including any necessary condition |
 | `grader_fqn` | Yes for execution | Fully-qualified grader class name; drafts can use `null` |
 | `grader_args` | No | Constructor arguments; defaults to `{}` |
 
@@ -1074,10 +1066,7 @@ features:
         criteria:
           - id: AC-CHAT-1
             name: Short turn budget
-            description:
-              given: a user asks a factual question
-              when: the session ends
-              then: the session used no more than 4 exchanges
+            description: A session for a factual question uses no more than 4 exchanges.
             grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
             grader_args:
               max_traces: 4
@@ -1166,10 +1155,7 @@ features:
         criteria:
           - id: AC-CHAT-1
             name: Short turn budget
-            description:
-              given: a user asks a factual question
-              when: the session ends
-              then: the session used no more than 4 exchanges
+            description: A session for a factual question uses no more than 4 exchanges.
             grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
             grader_args:
               max_traces: 4

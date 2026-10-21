@@ -116,7 +116,7 @@ def test_personas_are_reached_by_nothing() -> None:
         specification,
         [
             edit(
-                "features[F-1].behaviours[EB-1].criteria[AC-1-1].description.then",
+                "features[F-1].behaviours[EB-1].criteria[AC-1-1].description",
                 "x",
             )
         ],

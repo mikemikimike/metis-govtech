@@ -218,7 +218,19 @@ test("choice and form receipts keep the offered fields and selections", () => {
     state: "pending" as const,
     request_id: "form-1",
     stage: "behaviours" as const,
-    fields: [{ id: "name", label: "Name", placeholder: "", multiline: false }],
+    fields: [
+      {
+        id: "name",
+        label: "Name",
+        placeholder: "",
+        multiline: false,
+        input_type: "string" as const,
+        value: "",
+        required: false,
+        choices: [],
+        help: "",
+      },
+    ],
     target: "B-1",
     answer: {},
   };

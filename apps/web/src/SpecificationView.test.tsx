@@ -131,11 +131,8 @@ test("the document keeps node names and descriptions in their presentation roles
                 id: "AC-1-1",
                 name: "Supported answer",
                 grader_fqn: "metis.graders.answer_quality",
-                description: {
-                  given: "a question",
-                  when: "the answer returns",
-                  then: "each claim cites its source",
-                },
+                description:
+                  "Given a question, when the answer returns, then each claim cites its source.",
               },
             ],
           },
@@ -206,11 +203,8 @@ test("hides grader identifiers and shows only the human summary when enabled", (
               id: "AC-1-1",
               name: "Supported answer",
               grader_fqn: "metis.graders.answer_quality",
-              description: {
-                given: "a question",
-                when: "it answers",
-                then: "claims cite sources",
-              },
+              description:
+                "Given a question, when it answers, then claims cite sources.",
             },
           ],
         },
@@ -254,12 +248,27 @@ test("the generic form renderer transports names, descriptions, and opaque targe
           prompt: "Add a Behaviour",
           state: "pending",
           fields: [
-            { id: "name", label: "Name", placeholder: "", multiline: false },
+            {
+              id: "name",
+              label: "Name",
+              placeholder: "",
+              multiline: false,
+              input_type: "string" as const,
+              value: "",
+              required: false,
+              choices: [],
+              help: "",
+            },
             {
               id: "description",
               label: "Description",
               placeholder: "",
               multiline: true,
+              input_type: "string" as const,
+              value: "",
+              required: false,
+              choices: [],
+              help: "",
             },
           ],
           target: "F-2",
@@ -380,4 +389,50 @@ test("a completed Interview reports that its specification is ready", () => {
 
   assert.match(markup, /Your specification is ready/);
   assert.doesNotMatch(markup, /Your evaluation is ready/);
+});
+
+test("generic fields show current values and keep settings in a closed disclosure", () => {
+  const markup = renderToStaticMarkup(
+    <Transcript
+      requests={[
+        {
+          type: "form",
+          prompt: "Edit assessment",
+          state: "pending",
+          request_id: "edit",
+          stage: "criteria",
+          answer: {},
+          fields: [
+            {
+              id: "statement",
+              label: "Assessment",
+              value: "The session stays within its trace budget.",
+              input_type: "string",
+              multiline: true,
+              required: true,
+              placeholder: "",
+              help: "",
+            },
+            {
+              id: "limit",
+              label: "Maximum traces",
+              value: "3",
+              input_type: "integer",
+              multiline: false,
+              required: true,
+              placeholder: "",
+              help: "",
+              group: "Settings",
+            },
+          ],
+        },
+      ]}
+      busy={false}
+      onRespond={() => undefined}
+    />,
+  );
+  assert.match(markup, /The session stays within its trace budget\./);
+  assert.match(markup, /<details[^>]*><summary[^>]*>Settings<\/summary>/);
+  assert.doesNotMatch(markup, /<details[^>]*\bopen/);
+  assert.match(markup, /type="number"[^>]*value="3"/);
 });

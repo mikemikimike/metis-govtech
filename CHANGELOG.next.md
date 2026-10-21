@@ -113,6 +113,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Breaking
 
+- Criterion descriptions are non-empty text. Remove `CriterionDescription` and reject older Given/When/Then objects with conversion guidance. Keep Criterion names, IDs, and Grader configuration (#490).
+
 - Target and TargetProfile replace Product and ProductProfile. Specifications
   use the `target` key across Python, YAML, and API JSON (#429).
 
@@ -161,6 +163,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-engine
 
 #### Changed
+
+- Pass the complete Criterion description to the criterion judge. The engine creates
+  one grader instance per active Criterion from the specification snapshot and reuses it
+  across sessions. Remove `CriterionGrader`; use `build_grader` with a shared Criterion
+  and pass the Criterion list and instance map to `grade_session`. Preserve result order,
+  Criterion IDs, configured grader paths, and validated run arguments. Reject older
+  description objects in specifications and Trial records with recovery guidance (#490).
 
 - `CriterionJudgeArgs` graders get `criterion` from the criterion description at run time. The
   engine carries the description on the optional `metis.core.trials.GraderRef.description`
@@ -281,6 +290,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Read recorded evaluation results in Insights. Preserve Criterion identity and run
+  settings, and report grader errors separately from failed assessments. Report JSON
+  and HTML use one plain Criterion description (#490).
+
 - `metis insights report` reads `record.json` through `metis.core.trials.TrialRecord`. A record
   the model rejects is skipped with a warning. The trial's cause comes from
   `outcome.failure_source`/`failure_message`, then `stop_reason` and the trial's logs. The report
@@ -397,6 +410,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   still reports any remaining gaps.
 
 #### Changed
+
+- Author and review each Criterion with one description. Match the complete text, then configure the description and selected Grader arguments together. Direct edits use normal field validation. Older saved Interviews require a new Interview (#490).
 
 - The wizard offers no graders until real ones are added to `metis.library.graders`: the
   interview cannot produce a runnable experiment, and the manual form's grader picker is empty
@@ -562,6 +577,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   field that needs a change, shows what to change, and moves the focus to the first one.
 
 #### Changed
+
+- Show Criterion descriptions by default with expandable Grader details and typed settings. Preserve incompatible saved Interviews and show the action needed to start again (#490).
 
 - Interview downloads send the final state for compilation and export. Interview and manual downloads use dated archive names and the shared `inputs/` and `outputs/` layout. The browser shows where to extract them (#453).
 

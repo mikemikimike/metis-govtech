@@ -275,11 +275,7 @@ def test_a_bundled_feature_cannot_carry_a_tick_or_a_grader() -> None:
                                 {
                                     "id": "AC-9-1",
                                     "name": "Flag gaps",
-                                    "description": {
-                                        "given": "a spreadsheet with missing values",
-                                        "when": "analysis is requested",
-                                        "then": "the gaps are flagged before any figure is quoted",
-                                    },
+                                    "description": "Given a spreadsheet with missing values, when analysis is requested, then the gaps are flagged before any figure is quoted.",
                                     "grader_fqn": "some.other.Grader",
                                 }
                             ],
@@ -298,7 +294,7 @@ def test_a_bundled_feature_cannot_carry_a_tick_or_a_grader() -> None:
     # A generic persisted-object compatibility patch keeps the domain default. Strict model
     # drafts and direct forms use the materializer and start selected.
     assert behaviour.measured is False
-    assert behaviour.criteria[0].description.then.startswith("the gaps are flagged")
+    assert behaviour.criteria[0].description.find("the gaps are flagged") >= 0
     assert behaviour.criteria[0].grader_fqn is None  # still the matcher's to resolve
 
 
@@ -573,11 +569,7 @@ def test_criteria_added_by_positional_index_actually_land() -> None:
                 {
                     "id": "AC-1-1",
                     "name": "Cite answer",
-                    "description": {
-                        "given": "a question",
-                        "when": "answered",
-                        "then": "it cites a source",
-                    },
+                    "description": "Given a question, when answered, then it cites a source.",
                 },
                 op=PatchOp.ADD,
                 origin=PatchOrigin.WIZARD,
@@ -630,9 +622,7 @@ def test_materializer_uses_dot_free_ids_for_every_specification_node() -> None:
         behaviour,
         CriterionDraft(
             name="Supported",
-            given="a question",
-            when="answered",
-            then="it cites a source",
+            description="Given a question, when answered, then it cites a source.",
         ),
         PatchOrigin.WIZARD,
         issued_ids=issued,
@@ -700,9 +690,7 @@ def test_removed_highest_ids_are_not_reused() -> None:
         specification.behaviour("EB-1"),  # type: ignore[arg-type]
         CriterionDraft(
             name="Another source",
-            given="a question",
-            when="answered",
-            then="it cites a source",
+            description="Given a question, when answered, then it cites a source.",
         ),
         PatchOrigin.MODEL,
         issued_ids=issued,
@@ -778,9 +766,7 @@ def test_stale_user_authorship_does_not_protect_a_new_id() -> None:
         behaviour,
         CriterionDraft(
             name="Fresh retry outcome",
-            given="a retry",
-            when="it fails",
-            then="it reports the attempt",
+            description="Given a retry, when it fails, then it reports the attempt.",
         ),
         PatchOrigin.MODEL,
         issued_ids=issued,

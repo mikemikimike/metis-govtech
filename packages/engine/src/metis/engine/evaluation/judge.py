@@ -37,7 +37,6 @@ from metis.library.grader import JudgeArgs, LLMSettings, criterion_judge_args
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from metis.core.profile import CriterionDescription
     from metis.library.grader import GraderArgs
 
 DEFAULT_JUDGE_MODEL = "gemini-3.5-flash-lite"
@@ -54,7 +53,7 @@ def resolve_grader_args(
     *,
     default_judge_model: str | None,
     env: Mapping[str, str],
-    description: CriterionDescription | None = None,
+    description: str | None = None,
 ) -> dict[str, Any]:
     """The criterion's ``grader_args`` with the judge model filled in, ready to validate.
 

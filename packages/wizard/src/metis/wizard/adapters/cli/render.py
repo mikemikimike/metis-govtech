@@ -142,6 +142,8 @@ def _draw_card(
                 # A blank line between two component groups — the terminal's rule between a
                 # behaviour's acceptance criteria, so a run of them does not read as one block.
                 out("")
+            case CardComponentType.DISCLOSURE:
+                out(f"    [{component.label}. Type details to inspect.]")
             case CardComponentType.TEXT:
                 out(f"    - {component.text}")
             case CardComponentType.OPTIONS:
@@ -375,9 +377,13 @@ def render(
         values = {}
         for field in request.fields:
             prompt = f"{field.label}"
-            if field.placeholder:
-                prompt += f" ({field.placeholder})"
-            values[field.id] = read(f"{prompt}\n> ").strip()
+            if field.value:
+                prompt += f" [{field.value}]"
+            if field.choices:
+                prompt += f" ({', '.join(field.choices)})"
+            if field.help:
+                out(field.help)
+            values[field.id] = read(f"{prompt}\n> ").strip() or field.value
         return FormResponse(values=values)
 
     editable: dict[str, CardNumberField | CardUploadField] = {}
@@ -392,6 +398,14 @@ def render(
             else "\nChoose one (number or name): "
         )
         raw = read(prompt).strip()
+        if raw == "details":
+            for card in request.cards:
+                for component in card.components:
+                    if component.type is CardComponentType.DISCLOSURE:
+                        out(component.label or "Details")
+                        for item in component.items:
+                            out(f"  {item.label or ''}: {item.text}")
+            continue
         entered = [k for k in (part.strip() for part in raw.split(",")) if k]
         keys = list(dict.fromkeys(numbers.get(key, key) for key in entered))
 

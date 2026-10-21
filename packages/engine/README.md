@@ -127,9 +127,15 @@ experiments/execute/orca-eval-20260730-143022/
 ## Programmatic usage
 
 ```python
-from metis.engine import build_criterion_grader, fetch_session, grade_session
+from metis.engine import build_grader, fetch_session, grade_session
 from metis.engine.extractor import get_langfuse_client
 ```
+
+`build_grader(criterion, default_judge_model=..., env=...)` returns a validated
+`Grader` instance. Keep one instance per Criterion ID. Pass the selected Criteria
+and the instance map to `grade_session(criteria, graders, grading_input, llm, facts)`.
+Use Criteria from the specification snapshot. Trial references select their IDs
+and order. The same instance can grade each required session.
 
 Build a report from saved results with `metis.insights.save_report` or `metis insights report`.
 
