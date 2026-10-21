@@ -14,7 +14,7 @@ The other five groups have one fixed value:
 | Group | Supported value |
 |---|---|
 | Measure | `None` |
-| Scope | `COMPLETE_TRAJECTORY_EPISODE` |
+| Scope | `SESSION` |
 | Grader type | `LLM` |
 | Reference type | `RUBRIC_BASED` |
 | Judgment form | `BINARY` |

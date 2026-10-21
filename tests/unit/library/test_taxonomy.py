@@ -34,7 +34,7 @@ def test_taxonomy_values_validate_and_round_trip_as_json(enum_type) -> None:
 def declaration() -> dict[str, object]:
     return {
         "measure": None,
-        "scopes": ["complete_trajectory_episode"],
+        "scopes": ["session"],
         "grader_types": ["llm"],
         "reference_types": ["rubric_based"],
         "judgment_forms": ["binary"],

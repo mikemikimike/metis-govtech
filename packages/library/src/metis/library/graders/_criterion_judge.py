@@ -32,7 +32,7 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
     args_model = CriterionJudgeArgs
     taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
         measure=None,
-        scopes=(Scope.COMPLETE_TRAJECTORY_EPISODE,),
+        scopes=(Scope.SESSION,),
         grader_types=(GraderType.LLM,),
         reference_types=(ReferenceType.RUBRIC_BASED,),
         judgment_forms=(JudgmentForm.BINARY,),

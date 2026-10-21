@@ -20,7 +20,7 @@
 | Run | A grouping of repeated **trials** of the same **test case**. |
 | Experiment | A collection of **runs** used to evaluate one or more **targets** across a set of **test cases**. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |
-| Scope | The evidence unit that a **grader** assesses, such as tool arguments, an artefact, a turn, or a complete trajectory. A grader declares its supported scopes. One judgment selects one attribute within one Scope subdimension. See [Scope](#scope). The **baseline** and **feature-specific** qualifiers describe which **targets** a grader applies to. |
+| Scope | The evidence unit that a **grader** assesses, such as tool arguments, an artefact, a trace, a subsession, or a session. A grader declares its supported scopes. One judgment selects one attribute within one Scope subdimension. See [Scope](#scope). The **baseline** and **feature-specific** qualifiers describe which **targets** a grader applies to. |
 | Trial Score | The value produced by applying a **grader** to a **trial** for a particular **criterion**. |
 | Grader Passing Threshold | A configurable rule applied to the **trial score** from the **grader** to mark it as pass or fail. |
 | Result | The pass rate of a set of **trial scores**. |
@@ -38,7 +38,7 @@ attribute within it.
 | Subdimension | Attributes |
 |--------------|------------|
 | Atomic | Model decision generation, model reasoning, artefact, tool selection, tool arguments, tool execution, environment action. |
-| Interaction | Turn, sub-trajectory, complete trajectory episode. |
+| Interaction | Trace, subsession, session. |
 
 The `Scope` enum defines these attributes. `GraderTaxonomy.scopes` lists the values
 that a grader supports. The grader's configuration selects a supported value when

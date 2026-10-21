@@ -7,7 +7,7 @@ The conceptual hierarchy for one judgment is:
         Choose one attribute within it, such as factual_accuracy.
     Scope
         Choose one subdimension, such as Interaction.
-        Choose one attribute within it, such as complete_trajectory_episode.
+        Choose one attribute within it, such as session.
     Mechanism
         For each subdimension, choose one attribute:
             Grader type, such as llm.
@@ -183,7 +183,11 @@ class Measure(StrEnum):
 
 
 class Scope(StrEnum):
-    """Evidence units that can each receive one grader result."""
+    """Evidence units that can each receive one grader result.
+
+    Interaction scopes select traces. Trace covers one trace. Subsession covers
+    a subset of a session's traces. Session covers all traces for one trial.
+    """
 
     # Atomic
     MODEL_DECISION_GENERATION = "model_decision_generation"
@@ -197,9 +201,9 @@ class Scope(StrEnum):
     )
 
     # Interaction
-    TURN = "turn"
-    SUB_TRAJECTORY = "sub_trajectory"
-    COMPLETE_TRAJECTORY_EPISODE = "complete_trajectory_episode"
+    TRACE = "trace"
+    SUBSESSION = "subsession"
+    SESSION = "session"
 
 
 class GraderType(StrEnum):

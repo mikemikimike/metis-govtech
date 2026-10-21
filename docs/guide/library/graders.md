@@ -14,6 +14,10 @@ aggregation. Measure and Scope subdimensions appear as group comments in their
 enums. The capability declaration stores supported attributes as flat enum values.
 A catch-all judge has no Measure mapping and declares `measure=None`.
 
+The Interaction subdimension of Scope contains `TRACE`, `SUBSESSION`, and `SESSION`.
+A trace contains recorded observations. A subsession contains a subset of the traces
+in one session. A session contains all traces for one trial.
+
 The taxonomy is a capability declaration. A supported value means that the grader
 accepts that value and implements the behavior that it names. The declaration does
 not show that the grader is accurate. Grader quality needs separate validation with
@@ -58,7 +62,7 @@ A tuple with one value records a fixed capability. A tuple with several values r
 several implemented capabilities. The declaration itself does not select a value for
 one grading request.
 
-A taxonomy value is a named enum member, such as `Scope.TURN` or
+A taxonomy value is a named enum member, such as `Scope.TRACE` or
 `JudgmentForm.BINARY`. A taxonomy definition can hold shared behavior for one value.
 This behavior can include evidence preparation, prompt text, response validation, or
 aggregation logic.
@@ -75,7 +79,7 @@ have one fixed value:
 | Group | Declared value | Reason |
 |---|---|---|
 | Measure | `None` | The catch-all judge has no category mapping. |
-| Scope | `COMPLETE_TRAJECTORY_EPISODE` | It assesses all supplied traces and returns one result. |
+| Scope | `SESSION` | It assesses all supplied traces and returns one result. |
 | Grader type | `LLM` | It uses the configured language model. |
 | Reference type | `RUBRIC_BASED` | The criterion description supplies the assessment rule. |
 | Judgment form | `BINARY` | A scored result is `1` or `0`. |
@@ -86,7 +90,7 @@ The declaration has this shape:
 ```python
 taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
     measure=None,
-    scopes=(Scope.COMPLETE_TRAJECTORY_EPISODE,),
+    scopes=(Scope.SESSION,),
     grader_types=(GraderType.LLM,),
     reference_types=(ReferenceType.RUBRIC_BASED,),
     judgment_forms=(JudgmentForm.BINARY,),

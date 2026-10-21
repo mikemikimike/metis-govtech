@@ -24,7 +24,7 @@ from tests.fixtures.criterion_judge import judge_client, recorded_session
 def test_uses_the_shared_binary_judgment_definition() -> None:
     assert CriterionJudgeGrader.taxonomy.model_dump() == {
         "measure": None,
-        "scopes": (Scope.COMPLETE_TRAJECTORY_EPISODE,),
+        "scopes": (Scope.SESSION,),
         "grader_types": (GraderType.LLM,),
         "reference_types": (ReferenceType.RUBRIC_BASED,),
         "judgment_forms": (JudgmentForm.BINARY,),

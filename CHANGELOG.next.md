@@ -148,6 +148,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Define the grader taxonomy in code with string enums for measures,
   scopes, grader types, reference types, judgment forms, and aggregation.
+  Interaction scopes are trace, subsession, and session.
   `GraderTaxonomy` declares one measure or an explicit `None` for a catch-all
   grader. The other five groups each contain one or more supported values. A taxonomy
   definition holds shared metadata and behavior for one taxonomy value. The Criterion

@@ -79,7 +79,7 @@ class TestArgs:
     def test_declares_one_supported_value_for_each_taxonomy_field(self) -> None:
         assert DemoTraceBudgetGrader.taxonomy.model_dump() == {
             "measure": Measure.TASK_CONSTRAINT_ADHERENCE,
-            "scopes": (Scope.COMPLETE_TRAJECTORY_EPISODE,),
+            "scopes": (Scope.SESSION,),
             "grader_types": (GraderType.DETERMINISTIC,),
             "reference_types": (ReferenceType.POLICY_RULE,),
             "judgment_forms": (JudgmentForm.BINARY,),

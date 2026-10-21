@@ -47,7 +47,7 @@ class DemoTraceBudgetGrader(Grader[DemoTraceBudgetArgs]):
     args_model = DemoTraceBudgetArgs
     taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
         measure=Measure.TASK_CONSTRAINT_ADHERENCE,
-        scopes=(Scope.COMPLETE_TRAJECTORY_EPISODE,),
+        scopes=(Scope.SESSION,),
         grader_types=(GraderType.DETERMINISTIC,),
         reference_types=(ReferenceType.POLICY_RULE,),
         judgment_forms=(JudgmentForm.BINARY,),
