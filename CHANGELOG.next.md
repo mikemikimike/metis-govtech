@@ -232,6 +232,21 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   retried, the earlier attempt's log is kept as `log-superseded-<UTC timestamp>.jsonl`, with
   its `.bin` bodies moved into a folder of the same name. The entry model is private to the
   engine, and `gen_1` does not write this log.
+- **One place to record a file, with code-computed file facts, for the `gen_2` runners
+  (#479).** The shared `metis.engine.simulation.artifacts` module records METIS's own
+  `Artifact`, unchanged. `ArtifactLedger.record_download` saves a file under the last
+  component of the target's name in `outputs/trials/<id>/artifacts/`, through a `.part` file
+  that is renamed only once the bytes are whole, so a partial download is never kept. A name
+  that is taken becomes `name-1.ext`, `name-2.ext`, and no saved file or entry is ever
+  overwritten. Code sets `path`, `digest` and `state`, and the caller supplies `at_turn`. It
+  returns the `ArtifactRef` the transport log uses. A download is refused, leaving no file
+  and no entry, when a `.png`, `.jpg`, `.gif`, `.pdf`, `.docx`, `.xlsx`, `.pptx` or `.zip`
+  does not start with its type's signature, or when a JSON document or JSON content type is
+  saved under a name that is not `.json`; a chat reply saved as `.docx` is the case it was
+  built for. A fixture has one entry however often it is uploaded, with the first upload's
+  turn on it. Each entry's `content_description` is one facts line written by code, never the
+  file's content: name, type and size, and for a CSV its data rows, columns and header,
+  computed once per digest. `gen_1` does not use it.
 
 #### Changed
 
