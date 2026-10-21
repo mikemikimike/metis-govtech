@@ -485,7 +485,7 @@ The Simulation TUI auto-disables when stderr is not a terminal, such as in CI or
 A grader subclasses `metis.library.grader.Grader`, names an args model, and implements one
 async method. It sees only the session's Langfuse traces and the run's artifacts, never the
 scenario or persona. The full rules are in the
-[graders README](../../packages/library/src/metis/library/graders/README.md).
+[grader guide](library/graders.md).
 
 The engine fetches the session and refuses traces it can't support, such as those recorded
 before the Langfuse server's v4 upgrade (#469). A grader then reads the session through

@@ -20,7 +20,7 @@
 | Run | A grouping of repeated **trials** of the same **test case**. |
 | Experiment | A collection of **runs** used to evaluate one or more **targets** across a set of **test cases**. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |
-| Grading Scope | The part of a **session** that one **grader** result grades: the whole **session**, a **subsession**, a single **trace**, or a single **observation**. See [Grading Scopes](#grading-scopes). It is identified by the **traces** the result covers. A **grader** chooses the grading scope of each result it returns; nothing fixes it in advance. Grading scope belongs to a result, not to a grader, and is distinct from the **baseline** and **feature-specific** scope qualifiers, which describe which **targets** a grader applies to. |
+| Scope | The evidence unit that a **grader** assesses, such as tool arguments, an artefact, a trace, a subsession, or a session. A grader declares its supported scopes. One judgment selects one attribute within one Scope subdimension. See [Scope](#scope). The **baseline** and **feature-specific** qualifiers describe which **targets** a grader applies to. |
 | Trial Score | The value produced by applying a **grader** to a **trial** for a particular **criterion**. |
 | Grader Passing Threshold | A configurable rule applied to the **trial score** from the **grader** to mark it as pass or fail. |
 | Result | The pass rate of a set of **trial scores**. |
@@ -29,9 +29,28 @@
 
 Note: **Expected Behaviour** corresponds to the `Behaviour` data models.
 
-## Grading Scopes
+## Scope
 
-A **grader** result grades one of these parts of a **session**. They are listed from largest to smallest.
+Scope is one of the three top-level taxonomy groups, with Measure and Mechanism.
+It describes the evidence unit to assess. Choose one subdimension, then one
+attribute within it.
+
+| Subdimension | Attributes |
+|--------------|------------|
+| Atomic | Model decision generation, model reasoning, artefact, tool selection, tool arguments, tool execution, environment action. |
+| Interaction | Trace, subsession, session. |
+
+The `Scope` enum defines these attributes. `GraderTaxonomy.scopes` lists the values
+that a grader supports. The grader's configuration selects a supported value when
+several values are available. See the [grader taxonomy guide](docs/guide/library/graders.md).
+
+Graders assess recorded evidence. The current result model has no structured field
+that identifies a scope item.
+
+### Evidence records
+
+The following terms describe the records that supply evidence for a scope.
+They are listed from largest to smallest.
 
 | Term | Definition |
 |------|------------|

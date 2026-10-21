@@ -10,7 +10,30 @@ from metis.core.artifacts import Artifact
 from metis.core.traces import GradingInput
 from metis.library.grader import CriterionJudgeArgs, LLMSettings
 from metis.library.graders import CriterionJudgeGrader
+from metis.library.judgment import JUDGMENT_FORM_DEFINITIONS, BinaryJudgment
+from metis.library.taxonomy import (
+    Aggregation,
+    GraderType,
+    JudgmentForm,
+    ReferenceType,
+    Scope,
+)
 from tests.fixtures.criterion_judge import judge_client, recorded_session
+
+
+def test_uses_the_shared_binary_judgment_definition() -> None:
+    assert CriterionJudgeGrader.taxonomy.model_dump() == {
+        "measure": None,
+        "scopes": (Scope.SESSION,),
+        "grader_types": (GraderType.LLM,),
+        "reference_types": (ReferenceType.RUBRIC_BASED,),
+        "judgment_forms": (JudgmentForm.BINARY,),
+        "aggregations": (Aggregation.NONE_SINGLE_SCORE,),
+    }
+    (judgment_form,) = CriterionJudgeGrader.taxonomy.judgment_forms
+    definition = JUDGMENT_FORM_DEFINITIONS[judgment_form]
+    assert definition.response_model is BinaryJudgment
+    assert "score 1" in definition.output_instructions
 
 
 @pytest.mark.parametrize(

@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import Field
 
 from metis.core.grading import GraderResult, GradingOutput
 from metis.core.trace_processing import Problem, select_all, turns
 from metis.library.grader import Grader, GraderArgs
+from metis.library.taxonomy import (
+    Aggregation,
+    GraderTaxonomy,
+    GraderType,
+    JudgmentForm,
+    Measure,
+    ReferenceType,
+    Scope,
+)
 
 if TYPE_CHECKING:
     from metis.core.traces import GradingInput
@@ -16,7 +25,12 @@ if TYPE_CHECKING:
 
 
 class DemoTraceBudgetArgs(GraderArgs):
-    max_traces: int = Field(default=10, ge=1, strict=True)
+    max_traces: int = Field(
+        default=10,
+        ge=1,
+        strict=True,
+        description="Maximum number of traces allowed in the session.",
+    )
     """The most traces the session may contain and still pass."""
 
 
@@ -31,6 +45,14 @@ class DemoTraceBudgetGrader(Grader[DemoTraceBudgetArgs]):
     """
 
     args_model = DemoTraceBudgetArgs
+    taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
+        measure=Measure.TASK_CONSTRAINT_ADHERENCE,
+        scopes=(Scope.SESSION,),
+        grader_types=(GraderType.DETERMINISTIC,),
+        reference_types=(ReferenceType.POLICY_RULE,),
+        judgment_forms=(JudgmentForm.BINARY,),
+        aggregations=(Aggregation.NONE_SINGLE_SCORE,),
+    )
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
         selected = select_all(turns(input))

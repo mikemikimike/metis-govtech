@@ -11,7 +11,15 @@ from metis.library.grader import (
     Grader,
     input_budget_error,
 )
-from metis.library.judgment import OUTPUT_INSTRUCTIONS, JudgmentShape
+from metis.library.judgment import JUDGMENT_FORM_DEFINITIONS
+from metis.library.taxonomy import (
+    Aggregation,
+    GraderTaxonomy,
+    GraderType,
+    JudgmentForm,
+    ReferenceType,
+    Scope,
+)
 
 if TYPE_CHECKING:
     from metis.core.traces import GradingInput
@@ -22,7 +30,14 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
     """Assess the recorded session against a criterion description with a binary score."""
 
     args_model = CriterionJudgeArgs
-    judgment_shape: ClassVar[JudgmentShape] = JudgmentShape.BINARY
+    taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
+        measure=None,
+        scopes=(Scope.SESSION,),
+        grader_types=(GraderType.LLM,),
+        reference_types=(ReferenceType.RUBRIC_BASED,),
+        judgment_forms=(JudgmentForm.BINARY,),
+        aggregations=(Aggregation.NONE_SINGLE_SCORE,),
+    )
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
         observations = [o for trace in input.traces for o in trace.observations]
@@ -36,6 +51,8 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
                 ]
             )
         try:
+            (judgment_form,) = self.taxonomy.judgment_forms
+            judgment = JUDGMENT_FORM_DEFINITIONS[judgment_form]
             evidence = [
                 {
                     "id": trace.id,
@@ -69,7 +86,7 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
                             "have inspected files.\n\n<criterion>\n"
                             + self.args.criterion
                             + "\n</criterion>\n\n<output_instructions>\n"
-                            + OUTPUT_INSTRUCTIONS[self.judgment_shape]
+                            + judgment.output_instructions
                             + "\n</output_instructions>"
                         ),
                     },
@@ -83,7 +100,7 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
                     "json_schema": {
                         "name": "criterion_result",
                         "strict": True,
-                        "schema": self.judgment_shape.response_model.model_json_schema(),
+                        "schema": judgment.response_model.model_json_schema(),
                     },
                 },
             )
@@ -93,7 +110,7 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
             choice = response.choices[0]
             if choice.finish_reason != "stop" or choice.message.refusal:
                 raise ValueError("The judge did not return a complete assessment.")
-            result = self.judgment_shape.response_model.model_validate_json(
+            result = judgment.response_model.model_validate_json(
                 choice.message.content or ""
             )
             return GradingOutput(results=[GraderResult(**result.model_dump())])
