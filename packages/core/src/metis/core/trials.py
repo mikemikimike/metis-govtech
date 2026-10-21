@@ -21,7 +21,7 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema as cs
 
 from metis.core.artifacts import Artifact
-from metis.core.profile import CriterionText
+from metis.core.profile import CriterionDescription
 
 _TRIAL_RECORD_VERSION = 1
 
@@ -51,7 +51,7 @@ class GraderRef(BaseModel):
             " defaults suffice."
         ),
     )
-    description: CriterionText | None = Field(
+    description: CriterionDescription | None = Field(
         default=None,
         description=(
             "A copy of the criterion description, for reading the trial on its"

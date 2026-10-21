@@ -38,7 +38,7 @@ from langfuse import get_client, observe
 from openai import APIError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
-from metis.core.profile import CriterionText
+from metis.core.profile import CriterionDescription
 from metis.library.grader import CriterionJudgeArgs, GraderArgs, JudgeArgs
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import (
@@ -290,7 +290,7 @@ class GatewayInterviewer:
             "AssessmentConfiguration",
             __config__=ConfigDict(extra="forbid"),
             description=(
-                CriterionText,
+                CriterionDescription,
                 Field(
                     description="The final assessment rule shown to the user. State what the agent or its output must satisfy. Do not include configuration instructions, grader names, or output format instructions."
                 ),

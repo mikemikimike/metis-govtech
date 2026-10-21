@@ -91,28 +91,10 @@ results.
 
 ## Review and edit Criteria
 
-Each Criterion has one non-empty description that states one assessable requirement.
-Keep any necessary condition in the sentence, such as "After a tool call fails, the agent reports the failure."
-The description appears by default. Expand the grader details to inspect the selected
-grader and its exact settings. Criterion names and IDs remain in the specification.
-
-Ask the Wizard to change a Criterion when you want it to update the assessment as a whole.
-The matcher uses the complete description to select a grader. The Wizard then configures
-the description and arguments for that grader. It validates the result before it saves
-the Criterion. A failed edit keeps the previous Criterion.
-
-The description identifies what the Criterion assesses. A parameter-based grader keeps
-its exact values in its arguments. The description can include those values when useful.
-A criterion judge needs the complete rule in the description, including any required limit.
-Slide count and concise language need separate Criteria. A count grader cannot assess language.
-
-You can edit the description and grader settings directly with typed fields. Raw JSON
-is not required. Keep the fields consistent when you edit them directly. The Wizard checks
-required fields and argument types and limits. It does not rewrite manually edited fields
-or block export because their meanings differ. Export and results keep the Criterion ID
-and grader settings used for the run.
-
-For older saved data, see [Convert Criterion descriptions](../../MIGRATION.md#convert-criterion-descriptions).
+Read each Criterion description, then expand **Grader details** to inspect its settings.
+Ask the Wizard to revise the assessment and settings together, or select
+**Edit assessment** to change them directly. Keep directly edited fields consistent.
+The Wizard validates the fields and grader arguments before it saves the edit.
 
 ## Edit fallback grading instructions
 

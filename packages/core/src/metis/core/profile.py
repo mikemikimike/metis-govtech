@@ -32,14 +32,14 @@ def _criterion_text(value: object) -> object:
     return value
 
 
-CriterionText = Annotated[
+CriterionDescription = Annotated[
     str,
     StringConstraints(strict=True, strip_whitespace=True, min_length=1),
     BeforeValidator(_criterion_text),
 ]
 
 
-class Criterion(NamedNode[CriterionText]):
+class Criterion(NamedNode[CriterionDescription]):
     # The id is scoped to its behaviour: AC-1-1, AC-1-2.
     # resolved by the matcher, never by the model. `None` means matching has not run yet.
     grader_fqn: str | None = None

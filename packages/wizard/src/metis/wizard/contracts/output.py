@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from metis.core.profile import CriterionText
+from metis.core.profile import CriterionDescription
 from metis.wizard.domain.patch import Patch, PatchOp
 
 
@@ -33,11 +33,11 @@ class FeatureDraft(_StrictDraft):
 
 class CriterionDraft(_StrictDraft):
     name: str
-    description: CriterionText
+    description: CriterionDescription
 
 
 class CriterionConfiguration(_StrictDraft):
-    description: CriterionText
+    description: CriterionDescription
     grader_args: dict[str, Any]
 
 

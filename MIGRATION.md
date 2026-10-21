@@ -27,67 +27,6 @@ survives past — the coordinated v1.0 release.
 
 ## Migrating to v1.0 (from v0.x)
 
-### Convert Criterion descriptions
-
-`Criterion.description` is one non-empty text value. The `CriterionDescription` model
-and its `given`, `when`, and `then` fields are removed. The loader rejects the older
-object format. Conversion is not automatic.
-
-For an existing specification:
-
-1. Keep a copy of the original file.
-2. Replace each Criterion description object with one assessment sentence.
-3. Keep any condition needed to interpret the assessment.
-4. Preserve the Criterion ID, name, `grader_fqn`, and `grader_args`.
-5. Check that the description and grader settings describe the same requirement.
-6. Load the converted specification before you run the next evaluation.
-
-For example, replace this object:
-
-```yaml
-description:
-  given: a request for a Q3 revenue report
-  when: the session ends
-  then: the session used no more than 8 exchanges
-```
-
-with this text:
-
-```yaml
-description: A Q3 revenue report session uses no more than 8 exchanges.
-```
-
-Keep `grader_args.max_traces: 8` for a trace-budget grader. For a criterion judge,
-include the complete rule in the description. Do not set `grader_args.criterion`
-yourself. The engine supplies that value from the description.
-
-Saved Interviews with the older format cannot resume. Start a new Interview.
-In the CLI, use a new output directory to retain the old state file. The browser
-keeps the old record and files when it reports the incompatible format. It does not
-convert stored state or transcript payloads. Custom API clients must also start
-a new Interview instead of resubmitting old state.
-
-Trial records can contain Grader references with the older Criterion description format. Those
-records also fail validation. Keep the old execution folder for reference. Convert
-the original input specification, then start a new execution from those inputs.
-Do not replace settings in an old result record. Those settings describe the run
-that produced the result.
-
-### Build graders from Criteria
-
-`CriterionGrader` and `build_criterion_grader` are removed. The criterion judge
-`CriterionJudgeGrader` remains available.
-
-For Python callers, use `build_grader(criterion, default_judge_model=..., env=...)`
-with a shared `Criterion` from the specification snapshot. It returns a `Grader`
-with validated arguments. Keep the instances in a map keyed by Criterion ID.
-Call `grade_session(criteria, graders, grading_input, llm, facts)` with the selected
-Criteria in result order and that instance map. Reuse the map for later sessions.
-
-Trial references select Criterion IDs. The engine gets the description, grader path,
-and arguments from the specification snapshot. Each result stores the Criterion ID
-and effective arguments, including defaults and the resolved judge model.
-
 ### Execution folders
 
 Engine creates `experiments/execute/<id>-YYYYMMDD-HHMMSS/`. Trial records and artifacts
@@ -330,8 +269,6 @@ behaviour tick and the product summary are renamed for clarity.
 - `Behaviour.priority` → `Behaviour.measured` (still a `bool` — the tick)
 - `Product.summary` → `Product.description`
 - `ProductProfile.ticked()` → `ProductProfile.measured_behaviours()`
-- `Criterion.description` is non-empty text. Use it directly for assessment instructions.
-  For pre-release structured descriptions, see [Convert Criterion descriptions](#convert-criterion-descriptions).
 
 #### The interview is now stateless and file-free
 

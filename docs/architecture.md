@@ -267,31 +267,15 @@ Every selected Behaviour supplies all its Criteria to grading.
 Each Criterion owns its Grader FQN and parameters. Scores retain Task, Trial,
 and Criterion identity plus the Grader configuration.
 
-A Criterion MUST store its description as one non-empty text value. The description
-MUST state one assessable requirement and retain any condition needed to interpret it.
-Its name and ID remain separate fields. Draft Criteria MAY have no selected Grader.
-Execution requires a Grader reference and valid arguments.
+Each Criterion states one assessable requirement. Review shows its description with
+expandable Grader settings. Wizard edits MUST keep the description and settings
+consistent. Direct edits validate fields and arguments. Users maintain their agreement.
+The criterion judge uses the complete description as its assessment instructions.
 
-Criterion review MUST show the description by default and offer expandable Grader
-details with exact settings. Users MUST be able to edit descriptions and settings
-without raw JSON. A Wizard edit MUST update the complete Criterion consistently.
-The matcher uses the complete description, then the Wizard configures the selected
-Grader and description together. A failed configuration MUST preserve the previous Criterion.
-Direct human edits require normal field and argument validation. Semantic differences
-between manually edited fields MUST NOT trigger automatic changes or block export.
-The criterion judge MUST receive the complete description as its assessment instructions.
-
-Engine MUST create one grader instance per active Criterion from the specification
-snapshot and reuse it across sessions. Trial references select Criterion IDs.
-The snapshot supplies grader configuration. Recorded results MUST retain result order,
-Criterion identity, configured grader paths, and validated arguments with resolved defaults.
-Insights MUST use those recorded values without creating grader instances.
-
-This contract supersedes the three-clause review requirement in
-[issue #353](https://github.com/govtech-responsibleai/metis/issues/353).
-Criterion quality evaluations in [issue #407](https://github.com/govtech-responsibleai/metis/issues/407)
-MUST assess the complete description and selected Grader configuration. Historical
-design records describe their original scope. This section defines the current contract.
+Engine MUST build one grader per active Criterion from the specification snapshot
+and reuse it across sessions. Results MUST preserve their order, Criterion IDs,
+configured grader paths, and validated arguments, including resolved defaults.
+Insights reads these recorded values without creating graders.
 
 The normal local run uses two processes: `PORT=8001 uv run metis-api` and
 `npm --prefix apps/web run dev`.

@@ -113,7 +113,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Breaking
 
-- Criterion descriptions are non-empty text. Remove `CriterionDescription` and reject older Given/When/Then objects with conversion guidance. Keep Criterion names, IDs, and Grader configuration (#490).
+- Each Criterion states one assessment rule and owns its Grader configuration (#490).
 
 - Target and TargetProfile replace Product and ProductProfile. Specifications
   use the `target` key across Python, YAML, and API JSON (#429).
@@ -164,12 +164,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
-- Pass the complete Criterion description to the criterion judge. The engine creates
-  one grader instance per active Criterion from the specification snapshot and reuses it
-  across sessions. Remove `CriterionGrader`; use `build_grader` with a shared Criterion
-  and pass the Criterion list and instance map to `grade_session`. Preserve result order,
-  Criterion IDs, configured grader paths, and validated run arguments. Reject older
-  description objects in specifications and Trial records with recovery guidance (#490).
+- Build one grader per active Criterion from the specification snapshot and reuse it
+  across sessions. Record Criterion IDs, configured grader paths, and resolved arguments (#490).
 
 - `CriterionJudgeArgs` graders get `criterion` from the criterion description at run time. The
   engine carries the description on the optional `metis.core.trials.GraderRef.description`
@@ -392,7 +388,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   guide explains requests and responses through a worked Interview, with document handling and
   error recovery references.
 - **Standardized wizard specification nodes.** Features, behaviours, criteria, personas, and scenarios use
-  explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
+  explicit `name` and `description` fields;
   behaviour selection is `measured`; and Product uses `description`.
 
 #### Fixed
@@ -411,7 +407,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
-- Author and review each Criterion with one description. Match the complete text, then configure the description and selected Grader arguments together. The engine resolves the judge `model` and `max_input_tokens`, so neither edits nor model configuration offer them. Direct edits use normal field validation. Older saved Interviews require a new Interview (#490).
+- Configure Criterion descriptions and Grader arguments together during Wizard edits.
+  Direct edits use typed fields and argument validation (#490).
 
 - The wizard offers no graders until real ones are added to `metis.library.graders`: the
   interview cannot produce a runnable experiment, and the manual form's grader picker is empty
@@ -578,7 +575,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
-- Show Criterion descriptions by default with expandable Grader details and typed settings. Preserve incompatible saved Interviews and show the action needed to start again (#490).
+- Show Criterion descriptions with expandable Grader details and typed edit fields (#490).
 
 - Interview downloads send the final state for compilation and export. Interview and manual downloads use dated archive names and the shared `inputs/` and `outputs/` layout. The browser shows where to extract them (#453).
 
