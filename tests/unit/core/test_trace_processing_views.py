@@ -44,7 +44,9 @@ def _session(*traces: Trace) -> GradingInput:
 
 class TestTurns:
     def test_turns_follow_trace_order_and_keep_ids(self) -> None:
-        result = turns(_session(_turn_trace("t1", 0), _turn_trace("t2", 5, user="q2")))
+        result = turns(
+            _session(_turn_trace("t1", 0), _turn_trace("t2", 5, user="q2")).traces
+        )
         assert [turn.index for turn in result] == [0, 1]
         assert result[1].trace_id == "t2"
         assert result[1].user == "q2"
@@ -84,7 +86,7 @@ class TestTurns:
             _obs(t, "run", 5, type="TOOL", name="run", parent_observation_id="analyst"),
         )
         (turn,) = turns(
-            _session(Trace(id=t, session_id="s", observations=observations))
+            _session(Trace(id=t, session_id="s", observations=observations)).traces
         )
         assert [(c.name, c.agent) for c in turn.tool_calls] == [
             ("delegate", "Router"),
@@ -100,13 +102,13 @@ class TestTurns:
             _obs(t, "tool", 1, type="TOOL", name="lone", parent_observation_id="root"),
         )
         (turn,) = turns(
-            _session(Trace(id=t, session_id="s", observations=observations))
+            _session(Trace(id=t, session_id="s", observations=observations)).traces
         )
         assert turn.tool_calls[0].agent is None
 
     def test_a_crashed_turn_keeps_its_place(self) -> None:
         """No reply is evidence the target failed, not a reason to drop the turn."""
-        (turn,) = turns(_session(_turn_trace("t1", 0, reply=None)))
+        (turn,) = turns(_session(_turn_trace("t1", 0, reply=None)).traces)
         assert isinstance(turn.reply, Problem)
         assert turn.reply.kind == "missing"
         assert turn.target_errors == (
@@ -134,17 +136,21 @@ class TestTurns:
             _obs(t, "gen", 2, type="GENERATION", name="llm", level="WARNING"),
         )
         (turn,) = turns(
-            _session(Trace(id=t, session_id="s", observations=observations))
+            _session(Trace(id=t, session_id="s", observations=observations)).traces
         )
         assert [e.message for e in turn.target_errors] == ["timeout", "WARNING on llm"]
         assert turn.target_errors[0].observation_id == "tool"
 
     def test_a_clean_turn_has_no_target_errors(self) -> None:
-        (turn,) = turns(_session(_turn_trace("t1", 0)))
+        (turn,) = turns(_session(_turn_trace("t1", 0)).traces)
         assert turn.target_errors == ()
 
     def test_no_traces_is_no_turns(self) -> None:
-        assert turns(_session()) == ()
+        assert turns(()) == ()
+
+    def test_turns_takes_traces_directly(self) -> None:
+        session = _session(_turn_trace("t1", 0), _turn_trace("t2", 5))
+        assert [turn.trace_id for turn in turns(session.traces)] == ["t1", "t2"]
 
 
 class TestSelection:
@@ -154,12 +160,14 @@ class TestSelection:
         assert problem.kind == "no_match"
 
     def test_select_all_and_final(self) -> None:
-        units = turns(_session(_turn_trace("t1", 0), _turn_trace("t2", 5)))
+        units = turns(_session(_turn_trace("t1", 0), _turn_trace("t2", 5)).traces)
         assert select_all(units) == units
         assert select_final(units) == (units[1],)
 
     def test_select_where_filters_and_reports_empty(self) -> None:
-        units = turns(_session(_turn_trace("t1", 0, user="hi"), _turn_trace("t2", 5)))
+        units = turns(
+            _session(_turn_trace("t1", 0, user="hi"), _turn_trace("t2", 5)).traces
+        )
         assert select_where(units, lambda turn: turn.user == "hi") == (units[0],)
         problem = select_where(units, lambda turn: turn.user == "nope")
         assert isinstance(problem, Problem)

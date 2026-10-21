@@ -19,7 +19,7 @@ def test_fixture_matches_the_captured_session() -> None:
     gi = load_orca_session()
     assert len(gi.traces) == 5
     assert sum(len(t.observations) for t in gi.traces) == 85
-    session_turns = turns(gi)
+    session_turns = turns(gi.traces)
     assert sum(len(turn.tool_calls) for turn in session_turns) == 27
     last = session_turns[4].tool_calls[-1]
     assert (last.name, last.agent) == ("make_ppt", "Slide_Maker.arun")
@@ -79,13 +79,13 @@ def test_trimming_kept_every_structured_payload_readable() -> None:
 
 def test_the_last_turn_still_holds_the_users_message() -> None:
     """The user's form response sits at the end of Orca's long root input; trimming must keep it."""
-    user = turns(load_orca_session())[4].user
+    user = turns(load_orca_session().traces)[4].user
     assert isinstance(user, str)
     assert '"skin_id":"kraft-paper"' in user
 
 
 def test_a_python_syntax_tool_result_reaches_graders_as_text() -> None:
-    (call,) = turns(load_orca_session())[0].tool_calls
+    (call,) = turns(load_orca_session().traces)[0].tool_calls
     assert call.name == "delegate_to_agent"
     assert isinstance(call.observation.output, str)
     assert call.observation.output.startswith("{'_type'")

@@ -226,7 +226,7 @@ The following work is outside this foundation:
 ## Reading traces
 
 Use `metis.core.trace_processing` when a grader needs normalized turns, tool calls,
-target errors, or artifact records. `turns(input)` returns one turn per trace, oldest
+target errors, or artifact records. `turns(input.traces)` returns one turn per trace, oldest
 first. Use `select_all`, `select_final`, or `select_where` to select evidence.
 `render_transcript` prepares a shared text view for LLM judges.
 

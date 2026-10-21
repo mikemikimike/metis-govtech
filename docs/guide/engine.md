@@ -510,7 +510,7 @@ class AnswerLengthGrader(Grader[AnswerLengthArgs]):
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
         results = []
-        for turn in turns(input):
+        for turn in turns(input.traces):
             if isinstance(turn.reply, Problem):
                 results.append(
                     GraderResult(

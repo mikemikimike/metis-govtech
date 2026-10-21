@@ -33,7 +33,7 @@ class DemoTaskCompletionGrader(Grader[JudgeArgs]):
     args_model = JudgeArgs
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
-        session = select_all(turns(input))
+        session = select_all(turns(input.traces))
         if isinstance(session, Problem):
             return GradingOutput(
                 results=[

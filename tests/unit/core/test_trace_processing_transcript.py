@@ -56,13 +56,13 @@ def _session(*, reply: object = "a") -> GradingInput:
 
 
 def test_transcript_tags_each_part_in_order() -> None:
-    assert render_transcript(turns(_session())) == (
+    assert render_transcript(turns(_session().traces)) == (
         '## Turn 1\nUser: q\nTool search (A): {"q": "x"}\nAssistant: a'
     )
 
 
 def test_transcript_marks_unreadable_and_target_errors() -> None:
-    text = render_transcript(turns(_session(reply=None)))
+    text = render_transcript(turns(_session(reply=None).traces))
     assert "Assistant: [unreadable: missing: no value]" in text
     assert text.endswith("[target error: the target returned no reply]")
 
@@ -70,7 +70,7 @@ def test_transcript_marks_unreadable_and_target_errors() -> None:
 def test_turns_are_separated_by_a_blank_line() -> None:
     gi = _session()
     two = GradingInput(traces=gi.traces * 2)
-    assert render_transcript(turns(two)).count("\n\n## Turn ") == 1
+    assert render_transcript(turns(two.traces)).count("\n\n## Turn ") == 1
 
 
 def _artifact(name: str, **fields: object) -> Artifact:

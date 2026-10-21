@@ -55,7 +55,7 @@ class DemoTraceBudgetGrader(Grader[DemoTraceBudgetArgs]):
     )
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
-        selected = select_all(turns(input))
+        selected = select_all(turns(input.traces))
         if isinstance(selected, Problem):
             return GradingOutput(
                 results=[

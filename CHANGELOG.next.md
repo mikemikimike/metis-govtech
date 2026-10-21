@@ -76,12 +76,18 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 #### Added
 
 - `metis.core.trace_processing`: the shared trace processor for graders and the report. It
-  gives turn and tool-call views of a session; readers for plain text, OpenAI-style and
+  gives turn and tool-call views of a session (`turns(traces)` takes the session's traces, so
+  a caller that holds only traces needs no `GradingInput`); readers for plain text, OpenAI-style and
   OpenTelemetry GenAI messages, and tool arguments and results; `select_all`, `select_final` and
   `select_where`; `render_transcript`; and `find_artifacts`. Data it cannot read comes back as a
   `Problem`, kept apart from the target's own errors. That includes text holding a Langfuse
   media reference (`@@@langfuseMedia:…@@@`), since METIS does not fetch the media. `Observation` gains `level` and
   `status_message`, and `Trace.root` prefers a flagged root with no parent (#431).
+
+- `Observation.raw` keeps the Langfuse row an observation was built from, and `SessionTraces` saves a
+  session's traces as those rows, so a saved trace loses nothing that was fetched. `raw` is for saving,
+  never for grading, and is left out of `model_dump` and `repr`. `execution_layout.TRACES` and
+  `trace_file_name` name `outputs/traces/<session_id>.json` (#462).
 
 - Preserve optional flat string metadata on Personas and Scenarios through
   Specification serialization. Accept arbitrary keys and reject non-string
@@ -182,6 +188,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- **`metis engine evaluate` saves each session's traces.** Right after a session is fetched, and
+  before it is graded, the traces are written to `outputs/traces/<session_id>.json` as the Langfuse
+  rows (`SessionTraces`), so `metis insights report` can show the conversation without Langfuse access.
+  The folder is cleared at the start of each evaluation, a session with no traces gets no file, and a
+  failed write warns without failing the record (#462).
 - Build one grader per active Criterion from the specification snapshot and reuse it
   across sessions. Record Criterion IDs, configured grader paths, and resolved arguments (#490).
 
