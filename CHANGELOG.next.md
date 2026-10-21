@@ -75,6 +75,17 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- `metis.core.target_binding.TargetBinding`: the YAML file a user writes to bind an app to
+  the generic HTTP runner, published as `packages/core/schemas/target-binding.schema.json`
+  (`schema_version` 1). It holds `identity`, `transport` (`http` only), `spec_url`,
+  `tls_verify`, `auth`, `secret_headers`, `submissions`, `forbidden_calls`,
+  `preflight_reads`, and an `advice` block (`limits`, `notes`) that is passed to the
+  runner agent and not checked by code. Secrets appear only as environment-variable
+  names, and validation error messages do not repeat a rejected value. `Specification` gains an
+  optional `target_binding`, a path relative to `specification.yaml`. It is omitted when
+  unset, so existing specifications and the wizard are unchanged. The engine does not
+  read it yet; that is #481 (#478).
+
 - `metis.core.trace_processing`: the shared trace processor for graders and the report. It
   gives turn and tool-call views of a session; readers for plain text, OpenAI-style and
   OpenTelemetry GenAI messages, and tool arguments and results; `select_all`, `select_final` and

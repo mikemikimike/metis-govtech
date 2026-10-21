@@ -831,7 +831,7 @@ the same. So the fields need to be designed for growth, and each new field docum
    ```yaml
    # 1. A named field of the specification (preferred)
    runner_factory_ref: metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory
-   target_profile: targets/my-app.yaml
+   target_binding: targets/my-app.yaml
 
    # 2. Inside the factory's own settings, as orca_api's config.yaml does today
    runner_factory_ref: metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory
@@ -840,7 +840,9 @@ the same. So the fields need to be designed for growth, and each new field docum
 
    The first is preferred, because the profile is what a user writes for their app, so
    it reads better as a named field than as hidden runner settings. It is a change to
-   `Specification` in `metis-core`. Decided in stage 2.
+   `Specification` in `metis-core`. Decided in stage 2. The model is named
+   `TargetBinding`, and the field `target_binding`, because `TargetProfile` already
+   names the Target and its Features (#478).
 
 **METIS today.** As the handoff says: `simulation/runners/orca_api/config.yaml` holds
 Orca's runner settings, validated by the Pydantic model in `_config.py` (112 lines), and
@@ -1187,7 +1189,7 @@ a package other than its writer reads it.
 
 | Model | Written by | Read by | Where |
 | --- | --- | --- | --- |
-| `TargetProfile` | the user, by hand | the engine; perhaps the wizard or web client later | **`metis-core`**, with a published schema, since users edit it |
+| `TargetBinding` | the user, by hand | the engine; perhaps the wizard or web client later | **`metis-core`**, with a published schema, since users edit it |
 | `LLMCallRecord` | the engine | only the engine | `metis-engine` (`simulation/llm_calls.py`). Move to core if insights starts reading it |
 | `LogEntry` | the engine | only the engine | `metis-engine` (`simulation/transport_log.py`). Private |
 | `TrialRecord` | the engine | engine, insights | `metis-core`, as today, plus #462's cause value |
@@ -1208,7 +1210,7 @@ merge, because `gen_1`'s behaviour never changes.
 | 2 | Move today's code into `gen_1`, behind the "run one trial" seam | workflow contract | engine | nothing |
 | 3 | LLM-call log, wrapping `gen_1`'s user agent and summarizer | LLM-call log | engine | 2 |
 | 4 | Transport log | transport log | engine | 2 |
-| 5 | Target profile model and schema, and the specification's `target_profile` field | card 8, card 6's submissions field | core | nothing |
+| 5 | Target binding model and schema, and the specification's `target_binding` field | card 8, card 6's submissions field | core | nothing |
 | 6 | Artifact write path and file facts | artifact ledger, card 3's byte check, card 13's file facts | engine | 2 |
 | 7 | `gen_2` interface, user agent and turn loop | card 13, card 11, card 7's promise list | engine | 2, 3 |
 | 8a | `gen_2` generic HTTP runner, with code-owned facts | card 1, cards 2, 4, 5, 6 | engine | 4, 5, 6, 7 |

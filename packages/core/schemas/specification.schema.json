@@ -333,6 +333,18 @@
       "title": "Runner Factory Ref",
       "type": "string"
     },
+    "target_binding": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Binding"
+    },
     "defaults": {
       "$ref": "#/$defs/ExperimentDefaults"
     },

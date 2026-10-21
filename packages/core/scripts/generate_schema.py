@@ -9,12 +9,14 @@ from pathlib import Path
 
 from metis.core.console import console
 from metis.core.specification import _SPECIFICATION_VERSION, Specification
+from metis.core.target_binding import _TARGET_BINDING_VERSION, TargetBinding
 
 SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schemas"
 REPO_ROOT = SCHEMA_DIR.parents[2]
 
 _MODELS = [
     (Specification, "specification.schema.json", _SPECIFICATION_VERSION, False),
+    (TargetBinding, "target-binding.schema.json", _TARGET_BINDING_VERSION, False),
 ]
 
 

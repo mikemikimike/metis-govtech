@@ -1,0 +1,116 @@
+"""A target binding: what the generic HTTP runner needs to know about one app.
+
+A user writes this file by hand instead of a Python runner. Core validates its shape
+only. The engine loads it and expands ``${NAME}`` references from the environment, so
+values such as ``spec_url`` are kept here as written. Secrets never appear in the file:
+it names environment variables, and the engine reads them only when sending.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+_TARGET_BINDING_VERSION = 1
+
+EnvName = Annotated[str, StringConstraints(pattern=r"^[A-Z_][A-Z0-9_]*$")]
+"""The name of an environment variable, never its value."""
+
+CallPattern = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|\*) /[^\s{}?#]*$"
+    ),
+]
+"""``METHOD /path/glob``: ``*`` matches within a path segment, ``**`` across segments.
+OpenAPI's ``{name}`` parameters, queries and fragments are rejected, since a pattern
+holding them would never match a request path; write ``*`` for a parameter."""
+
+_Path = Annotated[str, StringConstraints(pattern=r"^/[^\s{}?#]*$")]
+
+
+class _BindingModel(BaseModel):
+    # error messages never repeat the rejected value, which may be a pasted secret. This
+    # holds only when TargetBinding is validated directly, not as a field of another model,
+    # and only for str(error): never log error.errors() or error.json() unredacted.
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
+
+
+class TargetIdentity(_BindingModel):
+    """Which app this binding is for."""
+
+    name: str = Field(min_length=1)
+    version: str | None = None
+
+
+class Auth(_BindingModel):
+    """How the engine authenticates every request. The runner agent never sees it."""
+
+    scheme: Literal["from_spec"] = Field(
+        default="from_spec",
+        description="Use the security scheme the API specification declares.",
+    )
+    secret_env: EnvName = Field(
+        description="The environment variable holding the credential."
+    )
+
+
+class SecretHeader(_BindingModel):
+    """A header the engine adds, from an environment variable, to matching requests."""
+
+    match: CallPattern
+    header: str = Field(pattern=r"^[A-Za-z0-9-]+$")
+    env: EnvName = Field(description="The environment variable holding the value.")
+
+
+class Limits(_BindingModel):
+    """The target's rate limits, as the runner agent should pace itself."""
+
+    submit_per_minute: int | None = Field(default=None, gt=0)
+    read_per_minute: int | None = Field(default=None, gt=0)
+    note: str = ""
+
+
+class Advice(_BindingModel):
+    """Advice for the runner agent. Code does not check these fields."""
+
+    limits: Limits | None = None
+    notes: str = ""
+
+
+class TargetBinding(_BindingModel):
+    """A hand-written binding of one app to the generic HTTP runner."""
+
+    schema_version: Literal[1]
+    identity: TargetIdentity
+    transport: Literal["http"]
+    spec_url: str = Field(
+        min_length=1,
+        description=(
+            "Where to fetch the app's OpenAPI specification. `${NAME}` references are "
+            "expanded from the environment by the engine."
+        ),
+    )
+    tls_verify: bool = True
+    auth: Auth | None = None
+    secret_headers: list[SecretHeader] = Field(
+        default_factory=list,
+        description="Headers the engine adds to matching requests; never shown to the runner agent.",
+    )
+    submissions: list[CallPattern] = Field(
+        default_factory=list,
+        description=(
+            "Endpoints whose calls send the user's message. Empty means the engine's "
+            "default rule: any POST, PUT or PATCH with a JSON body."
+        ),
+    )
+    forbidden_calls: list[CallPattern] = Field(
+        default_factory=list,
+        description="Calls the engine refuses to send.",
+    )
+    preflight_reads: list[_Path] = Field(
+        default_factory=list,
+        description="Paths the engine reads before a trial; a failure is a warning only.",
+    )
+    advice: Advice = Field(default_factory=Advice)

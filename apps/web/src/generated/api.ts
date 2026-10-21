@@ -562,6 +562,8 @@ export interface components {
              * @default metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
              */
             runner_factory_ref: string;
+            /** Target Binding */
+            target_binding?: string | null;
             defaults?: components["schemas"]["ExperimentDefaults"];
             /** Personas */
             personas?: components["schemas"]["Persona"][];
@@ -1110,6 +1112,8 @@ export interface components {
              * @default metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
              */
             runner_factory_ref: string;
+            /** Target Binding */
+            target_binding?: string | null;
             defaults?: components["schemas"]["ExperimentDefaults"];
             target: components["schemas"]["Target"];
             /** Features */
