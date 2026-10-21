@@ -54,8 +54,8 @@ class GraderRef(BaseModel):
     description: CriterionText | None = Field(
         default=None,
         description=(
-            "The criterion description. A grader that takes its instructions"
-            " from the criterion receives it as grader_args.criterion."
+            "A copy of the criterion description, for reading the trial on its"
+            " own. Grading uses the description in the specification snapshot."
         ),
     )
 

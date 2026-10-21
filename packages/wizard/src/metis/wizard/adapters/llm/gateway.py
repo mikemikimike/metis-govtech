@@ -280,7 +280,10 @@ class GatewayInterviewer:
                 name == "criterion"
                 and issubclass(grader.args_model, CriterionJudgeArgs)
             )
-            and not (name == "model" and issubclass(grader.args_model, JudgeArgs))
+            and not (
+                name in {"model", "max_input_tokens"}
+                and issubclass(grader.args_model, JudgeArgs)
+            )
         }
         args_type = create_model("AssessmentSettings", __base__=GraderArgs, **fields)
         result_type = create_model(
@@ -349,12 +352,10 @@ class GatewayInterviewer:
         configured = CriterionConfiguration.model_validate(
             result.model_dump(mode="json")
         )
-        if (
-            previous
-            and "model" in previous.grader_args
-            and issubclass(grader.args_model, JudgeArgs)
-        ):
-            configured.grader_args["model"] = previous.grader_args["model"]
+        if previous and issubclass(grader.args_model, JudgeArgs):
+            for key in ("model", "max_input_tokens"):
+                if key in previous.grader_args:
+                    configured.grader_args[key] = previous.grader_args[key]
         validate_grader_args(
             criterion.grader_fqn,
             configured.grader_args,

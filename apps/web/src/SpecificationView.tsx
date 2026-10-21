@@ -653,8 +653,8 @@ function FeatureView({
         </span>
       </button>
       {open && (
-        // Behaviours within a group are spaced apart too — a behaviour with a Given/When/Then
-        // block below it must read as one unit set off from the next behaviour, not run flush
+        // Behaviours within a group are spaced apart too — a behaviour with its criteria
+        // below it must read as one unit set off from the next behaviour, not run flush
         // into it. The gap is smaller than the between-group gap so the hierarchy still reads:
         // groups first, behaviours within them second.
         <div className="ml-1.5 mt-1 border-l border-border pb-1 pl-3">
@@ -740,8 +740,7 @@ function BehaviourView({
       </span>
       {behaviour.criteria.length > 0 && (
         // The criteria are set apart from the description above them with a top gap, so a
-        // behaviour and its Given/When/Then read as a labelled unit rather than five stacked
-        // rows. Each criterion is spaced from the next for the same reason.
+        // behaviour and its criteria read as one labelled unit. Each criterion is spaced from the next for the same reason.
         <ul className="col-start-2 mt-1.5 flex flex-col gap-3 text-xs">
           {behaviour.criteria.map((c) => {
             const grader = c.grader_fqn

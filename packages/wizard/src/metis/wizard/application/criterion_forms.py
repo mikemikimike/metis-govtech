@@ -23,6 +23,8 @@ def settings_fields(criterion: Criterion) -> list[FormField]:
     for name, prop in schema["properties"].items():
         if name == "criterion" and issubclass(model, CriterionJudgeArgs):
             continue
+        if name == "max_input_tokens" and issubclass(model, JudgeArgs):
+            continue
         if "$ref" in prop:
             prop = schema["$defs"][prop["$ref"].rsplit("/", 1)[-1]]
         kind = prop.get("type")

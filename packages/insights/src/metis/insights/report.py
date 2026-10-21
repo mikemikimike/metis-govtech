@@ -68,7 +68,7 @@ def format_terminal_summary(
     lines.append(
         f"  {'Grader':<40} {'Pass':>6} {'Fail':>6} {'Skip':>6} {'Error':>6} {'Rate':>7}"
     )
-    lines.append(f"  {'-' * 40} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 7}")
+    lines.append(f"  {'-' * 40} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 7}")
 
     for name, agg in sorted(grader_agg.items()):
         evaluated = agg["pass_count"] + agg["fail"]

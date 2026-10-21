@@ -411,7 +411,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
-- Author and review each Criterion with one description. Match the complete text, then configure the description and selected Grader arguments together. Direct edits use normal field validation. Older saved Interviews require a new Interview (#490).
+- Author and review each Criterion with one description. Match the complete text, then configure the description and selected Grader arguments together. The engine resolves the judge `model` and `max_input_tokens`, so neither edits nor model configuration offer them. Direct edits use normal field validation. Older saved Interviews require a new Interview (#490).
 
 - The wizard offers no graders until real ones are added to `metis.library.graders`: the
   interview cannot produce a runnable experiment, and the manual form's grader picker is empty

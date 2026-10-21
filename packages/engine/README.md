@@ -7,7 +7,7 @@ Evaluation engine for METIS — simulation harness, trace extraction, and grader
 1. **Simulate** — drives the target system through its selected runner with LLM-powered user personas
 2. **Extract** — fetches every Langfuse trace of each session
 3. **Evaluate** — runs each criterion's grader once per session
-4. **Results** — writes grader results to `outputs/reports/results.json` (holding one GraderRecord per grader per session; `metis insights report` reads it after #454)
+4. **Results** — writes grader results to `outputs/reports/results.json` (holding one GraderRecord per grader per session; `metis insights report` reads it)
 
 ## Setup
 

@@ -88,6 +88,41 @@ def test_configuration_uses_the_actual_settings_schema_and_full_context(
     assert payload["settings_schema"]["properties"]["max_traces"]["minimum"] == 1
 
 
+def test_judge_input_limit_is_left_to_the_engine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from metis.wizard.application.criterion_forms import settings_fields
+    from metis.wizard.application.matching import CRITERION_JUDGE_FQN
+
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://gateway.example")
+    monkeypatch.setenv("OPENAI_API_KEY", "offline-test")
+    proposed = Criterion(
+        id="AC-1-1",
+        name="Deck length",
+        description="The deck contains exactly 10 slides.",
+        grader_fqn=CRITERION_JUDGE_FQN,
+    )
+    previous = proposed.model_copy(update={"grader_args": {"max_input_tokens": 5000}})
+    assert "args.max_input_tokens" not in {f.id for f in settings_fields(proposed)}
+
+    gateway, calls = interviewer(
+        [
+            json.dumps(
+                {
+                    "description": "The deck contains exactly 10 slides.",
+                    "grader_args": {},
+                }
+            )
+        ]
+    )
+    result = gateway.configure_criterion(
+        proposed, previous, research_assistant(), "", interview_context()
+    )
+    payload = json.loads(calls.calls[0]["messages"][1]["content"])
+    assert "max_input_tokens" not in payload["settings_schema"]["properties"]
+    assert result.grader_args["max_input_tokens"] == 5000
+
+
 @pytest.mark.parametrize("valid", [True, False])
 def test_guided_edit_commits_one_complete_criterion_or_keeps_the_previous_state(
     valid,
