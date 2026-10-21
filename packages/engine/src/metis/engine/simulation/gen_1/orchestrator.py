@@ -13,14 +13,8 @@ from typing import TYPE_CHECKING
 from metis.core.logging import get_logger
 from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 
-from ._contract import (
-    merge_withheld,
-    validate_action_results,
-    withhold_unstaged_uploads,
-)
-from ._fixture_artifacts import build_fixture_artifacts
-from .artifact_summarizer import summarize_artifact
-from .exceptions import (
+from .._fixture_artifacts import build_fixture_artifacts
+from ..exceptions import (
     ConsecutiveFailureEscalation,
     PostSubmissionObservationError,
     ResponseTimeoutError,
@@ -29,12 +23,17 @@ from .exceptions import (
     TrialRecoverableError,
     TurnRecoverableError,
 )
+from ._contract import (
+    merge_withheld,
+    validate_action_results,
+    withhold_unstaged_uploads,
+)
+from .artifact_summarizer import summarize_artifact
 from .types import (
     ActionResult,
     Artifact,
     ChosenAction,
     Observation,
-    Scenario,
     TrialMeta,
     UserAgentInput,
 )
@@ -45,6 +44,7 @@ if TYPE_CHECKING:
 
     from metis.engine.tui import SimulationState, TUIContext
 
+    from ..types import Scenario
     from .runner import Runner
     from .user_agent.agent import UserAgent
 

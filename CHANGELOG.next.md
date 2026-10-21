@@ -222,6 +222,20 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Report generation now reads named Behaviours, measured state, and structured Criteria from
   the Specification in `specification.yaml`.
 
+- **Moved today's user simulator into `metis.engine.simulation.gen_1`, behind a "run one
+  trial" seam (#475).** The orchestrator, user agent, artifact summarizer, runner contract
+  checks, the `Runner` ABC with its action and observation types, and the Orca API and
+  Playwright runners now live under `simulation/gen_1/`; `RunnerFactory` lives in
+  `simulation/factory.py`. The experiment's retry loop asks `simulation.trial.create_trial`
+  for each attempt's trial. A runner factory may name its generation in an optional
+  `generation` class attribute, and one without it runs on `gen_1`, so existing factories
+  need no change. Behaviour is unchanged. `metis.engine.simulation.runner`,
+  `metis.engine.simulation.types`, `metis.engine.simulation.runners.orca_api` and
+  `metis.engine.simulation.runners.orca_playwright` still re-export their names, so
+  existing `runner_factory_ref` values and the samples in `docs/guide/engine.md` keep
+  working. The other moved modules are importable only at their `gen_1` paths, and their
+  log lines show `gen_1` in the logger name.
+
 #### Breaking
 
 - Import `TrialRecord`, `TrialConfig`, `TrialOutcome`, `TrialFailure` and `GraderRef` from

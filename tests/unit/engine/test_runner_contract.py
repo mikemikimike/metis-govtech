@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from metis.engine.simulation._contract import validate_action_results
 from metis.engine.simulation.exceptions import RunnerContractError
+from metis.engine.simulation.gen_1._contract import validate_action_results
 from metis.engine.simulation.types import (
     ActionResult,
     ButtonClickAction,
@@ -156,7 +156,7 @@ class TestWithholdUnstagedUploads:
     DECLARED = {"sales.csv", "missing.csv"}
 
     def test_a_declared_but_absent_fixture_says_not_found(self) -> None:
-        from metis.engine.simulation._contract import withhold_unstaged_uploads
+        from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
         from metis.engine.simulation.types import UploadFileAction
 
         _, withheld = withhold_unstaged_uploads(
@@ -167,7 +167,7 @@ class TestWithholdUnstagedUploads:
         assert "was not found under the fixtures directory" in withheld[0].detail
 
     def test_an_undeclared_name_says_not_a_fixture_for_this_scenario(self) -> None:
-        from metis.engine.simulation._contract import withhold_unstaged_uploads
+        from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
         from metis.engine.simulation.types import UploadFileAction
 
         _, withheld = withhold_unstaged_uploads(
@@ -178,7 +178,7 @@ class TestWithholdUnstagedUploads:
         assert "is not a fixture for this scenario" in withheld[0].detail
 
     def test_a_staged_upload_is_forwarded_untouched(self) -> None:
-        from metis.engine.simulation._contract import withhold_unstaged_uploads
+        from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
         from metis.engine.simulation.types import UploadFileAction
 
         action = UploadFileAction(slot_id="s", filename="sales.csv")
@@ -189,7 +189,7 @@ class TestWithholdUnstagedUploads:
         assert withheld == []
 
     def test_non_upload_actions_are_never_withheld(self) -> None:
-        from metis.engine.simulation._contract import withhold_unstaged_uploads
+        from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
         from metis.engine.simulation.types import ButtonClickAction, FormFillAction
 
         actions = [
@@ -201,7 +201,7 @@ class TestWithholdUnstagedUploads:
         assert withheld == []
 
     def test_a_withheld_row_keeps_its_original_index_and_order_survives(self) -> None:
-        from metis.engine.simulation._contract import withhold_unstaged_uploads
+        from metis.engine.simulation.gen_1._contract import withhold_unstaged_uploads
         from metis.engine.simulation.types import (
             ButtonClickAction,
             FormFillAction,
@@ -256,7 +256,7 @@ class TestMergeWithheld:
     def test_every_permutation_re_bases_to_a_dense_ascending_list(
         self, positions: tuple[int, ...], expected_withheld_at: list[int]
     ) -> None:
-        from metis.engine.simulation._contract import merge_withheld
+        from metis.engine.simulation.gen_1._contract import merge_withheld
 
         total = 3
         merged = merge_withheld(
@@ -266,7 +266,7 @@ class TestMergeWithheld:
         assert [i for i, r in enumerate(merged) if r.withheld] == expected_withheld_at
 
     def test_runner_row_order_is_preserved_around_a_gap(self) -> None:
-        from metis.engine.simulation._contract import merge_withheld
+        from metis.engine.simulation.gen_1._contract import merge_withheld
 
         merged = merge_withheld(_runner_rows(2), _withheld_at(1))
         assert [r.detail for r in merged] == [
@@ -276,18 +276,18 @@ class TestMergeWithheld:
         ]
 
     def test_merging_nothing_yields_nothing(self) -> None:
-        from metis.engine.simulation._contract import merge_withheld
+        from metis.engine.simulation.gen_1._contract import merge_withheld
 
         assert merge_withheld([], []) == []
 
     def test_a_duplicate_withheld_position_is_rejected(self) -> None:
-        from metis.engine.simulation._contract import merge_withheld
+        from metis.engine.simulation.gen_1._contract import merge_withheld
 
         with pytest.raises(RunnerContractError, match="cannot re-base"):
             merge_withheld(_runner_rows(1), _withheld_at(0, 0))
 
     def test_a_withheld_position_past_the_end_is_rejected(self) -> None:
-        from metis.engine.simulation._contract import merge_withheld
+        from metis.engine.simulation.gen_1._contract import merge_withheld
 
         with pytest.raises(RunnerContractError, match="cannot re-base"):
             merge_withheld(_runner_rows(1), _withheld_at(5))
@@ -296,7 +296,7 @@ class TestMergeWithheld:
 class TestTheWholePipeline:
     def test_one_ascending_row_per_persona_action(self) -> None:
         """withhold → send → validate → merge, end to end on the data."""
-        from metis.engine.simulation._contract import (
+        from metis.engine.simulation.gen_1._contract import (
             merge_withheld,
             validate_action_results,
             withhold_unstaged_uploads,
@@ -349,7 +349,7 @@ def _withholding_orchestrator(runner, agent, tmp_path, declared: list[str]):
     from pathlib import Path
 
     from metis.core.trials import TrialConfig
-    from metis.engine.simulation.orchestrator import Orchestrator
+    from metis.engine.simulation.gen_1.orchestrator import Orchestrator
     from metis.engine.simulation.types import Scenario
 
     fixtures_dir = Path(tmp_path) / "fixtures"

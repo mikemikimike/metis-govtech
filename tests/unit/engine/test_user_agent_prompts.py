@@ -4,6 +4,15 @@ from __future__ import annotations
 
 import pytest
 
+from metis.engine.simulation.gen_1.user_agent import agent as agent_module
+from metis.engine.simulation.gen_1.user_agent.agent import (
+    UserAgent,
+    _render_artifacts,
+    _render_available_actions,
+    _render_observed_actions,
+    _render_problems,
+)
+from metis.engine.simulation.gen_1.user_agent.prompts import SYSTEM_PROMPT_TEMPLATE
 from metis.engine.simulation.types import (
     ActionResult,
     ActionSlot,
@@ -14,15 +23,6 @@ from metis.engine.simulation.types import (
     UserAgentInput,
     UserAgentOutput,
 )
-from metis.engine.simulation.user_agent import agent as agent_module
-from metis.engine.simulation.user_agent.agent import (
-    UserAgent,
-    _render_artifacts,
-    _render_available_actions,
-    _render_observed_actions,
-    _render_problems,
-)
-from metis.engine.simulation.user_agent.prompts import SYSTEM_PROMPT_TEMPLATE
 
 
 def test_render_available_actions_empty() -> None:
@@ -250,7 +250,7 @@ def test_agent_registry_accumulates_across_turns() -> None:
 
 def test_render_artifacts_groups_by_source() -> None:
     from metis.core import Artifact
-    from metis.engine.simulation.user_agent.agent import _render_artifacts
+    from metis.engine.simulation.gen_1.user_agent.agent import _render_artifacts
 
     fixture = Artifact(
         name="report.txt",
@@ -280,7 +280,7 @@ def test_render_artifacts_groups_by_source() -> None:
 
 
 def test_response_turn_prompt_has_artifacts_placeholder() -> None:
-    from metis.engine.simulation.user_agent.prompts import RESPONSE_TURN_PROMPT
+    from metis.engine.simulation.gen_1.user_agent.prompts import RESPONSE_TURN_PROMPT
 
     assert "{artifacts_section}" in RESPONSE_TURN_PROMPT
 

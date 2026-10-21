@@ -15,13 +15,13 @@ from metis.engine.simulation.exceptions import (
     TrialRecoverableError,
     TurnRecoverableError,
 )
-from metis.engine.simulation.runners.orca_playwright._config import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._config import (
     OrcaPlaywrightRunnerConfig,
 )
-from metis.engine.simulation.runners.orca_playwright._element_resolver import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._element_resolver import (
     resolve_element,
 )
-from metis.engine.simulation.runners.orca_playwright._retry import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._retry import (
     action_retry,
     track_submission,
 )
@@ -55,10 +55,12 @@ class TestFullImportGraph:
         import importlib
 
         importlib.reload(
-            importlib.import_module("metis.engine.simulation.orchestrator")
+            importlib.import_module("metis.engine.simulation.gen_1.orchestrator")
         )
         importlib.reload(
-            importlib.import_module("metis.engine.simulation.runners.orca_playwright")
+            importlib.import_module(
+                "metis.engine.simulation.gen_1.runners.orca_playwright"
+            )
         )
 
 

@@ -7,8 +7,8 @@ This README covers the **call sequence**, the **identifiers**, and **which parts
 | For | See |
 |-----|-----|
 | Resilience policy, status mapping, form handling, platform-key rationale | the module docstring in `__init__.py` |
-| Factory lifecycle, shared resources, `--concurrency` interaction | [Engine guide → API runner](../../../../../../../../docs/guide/engine.md#api-runner-orcaapirunner) |
-| `Runner` ABC, action/upload semantics common to both runners | [simulation README](../../README.md) |
+| Factory lifecycle, shared resources, `--concurrency` interaction | [Engine guide → API runner](../../../../../../../../../docs/guide/engine.md#api-runner-orcaapirunner) |
+| `Runner` ABC, action/upload semantics common to both runners | [simulation README](../../../README.md) |
 
 The authoritative protocol description is Orca's own published spec (`GET /api/v1/docs`, keyless). Orca owns it; where this README and the spec disagree, the spec is right and this file is stale.
 

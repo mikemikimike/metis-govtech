@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip("playwright")
 
 from metis.engine.simulation.exceptions import TransientDOMError
-from metis.engine.simulation.runners.orca_playwright._element_resolver import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._element_resolver import (
     AriaStrategy,
     CSSStrategy,
     TextStrategy,

@@ -5,7 +5,7 @@ import pytest
 pytest.importorskip("playwright")
 
 from metis.core.trials import TrialFailure, TrialRecord
-from metis.engine.simulation.runners.orca_playwright._config import RetryConfig
+from metis.engine.simulation.gen_1.runners.orca_playwright._config import RetryConfig
 
 
 class TestRunRetryBehavior:

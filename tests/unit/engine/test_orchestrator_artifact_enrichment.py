@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from metis.core.trials import TrialConfig
-from metis.engine.simulation import orchestrator as orch_module
-from metis.engine.simulation.orchestrator import Orchestrator
+from metis.engine.simulation.gen_1 import orchestrator as orch_module
+from metis.engine.simulation.gen_1.orchestrator import Orchestrator
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     Artifact,
@@ -100,7 +100,7 @@ async def test_orchestrator_summarizes_downloads(monkeypatch, tmp_path: Path) ->
 async def test_fixture_stub_swapped_for_registry_object_and_deduped(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from metis.engine.simulation import orchestrator as orch_mod
+    from metis.engine.simulation.gen_1 import orchestrator as orch_mod
 
     # The worker-enriched registry object (has a description; no at_turn yet).
     registry = Artifact(
@@ -156,7 +156,7 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
 async def test_target_artifact_still_stamped_and_summarized(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from metis.engine.simulation import orchestrator as orch_mod
+    from metis.engine.simulation.gen_1 import orchestrator as orch_mod
 
     orch = Orchestrator(
         runner=object(),

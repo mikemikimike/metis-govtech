@@ -14,8 +14,8 @@ from typing import Any
 import httpx
 import pytest
 
-import metis.engine.simulation.runners.orca_api._artifacts as _artifacts_mod
-from metis.engine.simulation.runners.orca_api import (
+import metis.engine.simulation.gen_1.runners.orca_api._artifacts as _artifacts_mod
+from metis.engine.simulation.gen_1.runners.orca_api import (
     OrcaApiRunner,
     OrcaApiRunnerConfig,
 )
@@ -446,7 +446,7 @@ class TestSweepDeduplicateMerge:
         raising: the log line is the only trace such a target would leave.
         """
         from metis.core import Artifact
-        from metis.engine.simulation.runners.orca_api._artifacts import (
+        from metis.engine.simulation.gen_1.runners.orca_api._artifacts import (
             reconcile_by_identity,
         )
 

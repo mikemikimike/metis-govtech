@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from metis.core.trials import TrialConfig
-from metis.engine.simulation.orchestrator import Orchestrator
+from metis.engine.simulation.gen_1.orchestrator import Orchestrator
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     ChosenAction,

@@ -10,8 +10,8 @@ from metis.engine.simulation.exceptions import (
     PostSubmissionObservationError,
     TransientDOMError,
 )
-from metis.engine.simulation.runners.orca_playwright._config import RetryConfig
-from metis.engine.simulation.runners.orca_playwright._retry import (
+from metis.engine.simulation.gen_1.runners.orca_playwright._config import RetryConfig
+from metis.engine.simulation.gen_1.runners.orca_playwright._retry import (
     action_retry,
     track_submission,
 )

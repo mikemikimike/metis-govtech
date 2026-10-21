@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from metis.core.trials import TrialConfig
-from metis.engine.simulation.orchestrator import Orchestrator
+from metis.engine.simulation.gen_1.orchestrator import Orchestrator
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
     ActionResult,
@@ -23,10 +23,10 @@ class TestRecoverPage:
     @pytest.mark.asyncio
     async def test_recover_page_reloads_and_waits_for_textarea(self) -> None:
         pytest.importorskip("playwright")
-        from metis.engine.simulation.runners.orca_playwright._config import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._config import (
             OrcaPlaywrightRunnerConfig,
         )
-        from metis.engine.simulation.runners.orca_playwright._recovery import (
+        from metis.engine.simulation.gen_1.runners.orca_playwright._recovery import (
             _recover_page,
         )
 
@@ -40,7 +40,7 @@ class TestRecoverPage:
         )
 
         with patch(
-            "metis.engine.simulation.runners.orca_playwright._recovery.dismiss_modals",
+            "metis.engine.simulation.gen_1.runners.orca_playwright._recovery.dismiss_modals",
             new_callable=AsyncMock,
         ):
             await _recover_page(page, config)
@@ -70,14 +70,14 @@ class TestUndeliveredObservation:
 
     def test_reason_for_a_timeout_keeps_the_existing_string(self) -> None:
         from metis.engine.simulation.exceptions import ResponseTimeoutError
-        from metis.engine.simulation.orchestrator import _undelivered_reason
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_reason
 
         reason = _undelivered_reason(ResponseTimeoutError("waited 300s"))
         assert reason == "Response timeout — no response received"
 
     def test_reason_for_an_unavailable_target_keeps_the_existing_string(self) -> None:
         from metis.engine.simulation.exceptions import TargetUnavailableError
-        from metis.engine.simulation.orchestrator import _undelivered_reason
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_reason
 
         reason = _undelivered_reason(TargetUnavailableError("503 for 120s"))
         assert reason == "Target unavailable — 503 for 120s"
@@ -88,7 +88,7 @@ class TestUndeliveredObservation:
         from metis.engine.simulation.exceptions import (
             PostSubmissionObservationError,
         )
-        from metis.engine.simulation.orchestrator import _undelivered_reason
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_reason
 
         reason = _undelivered_reason(PostSubmissionObservationError("DOM gone"))
         assert "No reply was captured for this turn" in reason
@@ -96,14 +96,14 @@ class TestUndeliveredObservation:
 
     def test_a_transient_dom_failure_uses_the_same_neutral_reason(self) -> None:
         from metis.engine.simulation.exceptions import TransientDOMError
-        from metis.engine.simulation.orchestrator import _undelivered_reason
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_reason
 
         assert "No reply was captured for this turn" in _undelivered_reason(
             TransientDOMError("locator missing")
         )
 
     def test_one_failed_row_per_submitted_action(self) -> None:
-        from metis.engine.simulation.orchestrator import _undelivered_observation
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
         from metis.engine.simulation.types import (
             ButtonClickAction,
             UploadFileAction,
@@ -124,7 +124,7 @@ class TestUndeliveredObservation:
         )
 
     def test_retryable_is_none_because_the_caller_observed_nothing(self) -> None:
-        from metis.engine.simulation.orchestrator import _undelivered_observation
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
         from metis.engine.simulation.types import ButtonClickAction
 
         obs = _undelivered_observation(
@@ -133,13 +133,13 @@ class TestUndeliveredObservation:
         assert obs.action_results[0].retryable is None
 
     def test_the_reason_is_also_a_response_notice(self) -> None:
-        from metis.engine.simulation.orchestrator import _undelivered_observation
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
 
         obs = _undelivered_observation([], "Target unavailable — 503", delivered=False)
         assert obs.response_notices == ["Target unavailable — 503"]
 
     def test_no_actions_yields_a_notice_and_no_rows(self) -> None:
-        from metis.engine.simulation.orchestrator import _undelivered_observation
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
 
         obs = _undelivered_observation(
             [], "Response timeout — no reply", delivered=False
@@ -148,7 +148,7 @@ class TestUndeliveredObservation:
         assert obs.response_notices == ["Response timeout — no reply"]
 
     def test_available_actions_is_none_because_nobody_looked(self) -> None:
-        from metis.engine.simulation.orchestrator import _undelivered_observation
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
 
         # send_turn raised, so no DOM and no API payload was ever inspected.
         # `[]` would claim an observation that never happened.
@@ -156,7 +156,7 @@ class TestUndeliveredObservation:
         assert obs.available_actions is None
 
     def test_no_row_is_withheld_because_the_persona_did_nothing_wrong(self) -> None:
-        from metis.engine.simulation.orchestrator import _undelivered_observation
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
         from metis.engine.simulation.types import ButtonClickAction
 
         obs = _undelivered_observation(
@@ -165,7 +165,7 @@ class TestUndeliveredObservation:
         assert obs.action_results[0].withheld is False
 
     def test_delivered_is_false_because_send_turn_never_returned(self) -> None:
-        from metis.engine.simulation.orchestrator import _undelivered_observation
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
 
         obs = _undelivered_observation([], "gone", delivered=False)
         assert obs.delivered is False
@@ -173,7 +173,7 @@ class TestUndeliveredObservation:
     def test_delivered_false_survives_serialisation(self) -> None:
         # Review Focus: delivered must survive a dump of the Observation
         # passed to the user agent.
-        from metis.engine.simulation.orchestrator import _undelivered_observation
+        from metis.engine.simulation.gen_1.orchestrator import _undelivered_observation
 
         dumped = _undelivered_observation([], "gone", delivered=False).model_dump()
         assert dumped["delivered"] is False
@@ -187,7 +187,7 @@ class TestUndeliveredObservation:
             PostSubmissionObservationError,
             ResponseTimeoutError,
         )
-        from metis.engine.simulation.orchestrator import (
+        from metis.engine.simulation.gen_1.orchestrator import (
             _undelivered_observation,
             _undelivered_reason,
         )
@@ -211,7 +211,7 @@ class TestUndeliveredObservation:
             PostSubmissionObservationError,
             ResponseTimeoutError,
         )
-        from metis.engine.simulation.orchestrator import (
+        from metis.engine.simulation.gen_1.orchestrator import (
             _undelivered_observation,
             _undelivered_reason,
         )

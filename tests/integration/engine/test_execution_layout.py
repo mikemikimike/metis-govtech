@@ -16,7 +16,7 @@ from metis.core import Artifact, resolve_artifact_path
 from metis.core.reporting import EvaluationResults
 from metis.core.trials import TrialConfig, TrialRecord
 from metis.engine import cli
-from metis.engine.simulation import experiment
+from metis.engine.simulation.gen_1 import trial as gen_1_trial
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import ChosenAction, Observation, UserAgentOutput
 from metis.wizard.application.compile.specification import (
@@ -133,7 +133,7 @@ def _exercise(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str) -> N
         (input_dir / "specification.yaml").write_text(yaml.safe_dump(document))
 
     monkeypatch.setattr(cli, "_find_project_root", lambda: tmp_path)
-    monkeypatch.setattr(experiment, "UserAgent", ScriptedUser)
+    monkeypatch.setattr(gen_1_trial, "UserAgent", ScriptedUser)
     _patch_evaluation(monkeypatch, traces=1)
     runner = CliRunner()
     simulation = runner.invoke(

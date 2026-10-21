@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .exceptions import RunnerContractError
+from ..exceptions import RunnerContractError
 from .types import ActionResult, UploadFileAction
 
 if TYPE_CHECKING:

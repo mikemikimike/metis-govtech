@@ -22,12 +22,12 @@ User Agent (Python/AsyncOpenAI)  →  Runner  →  Target
 
 ### Built-in runners
 
-The two Orca-specific runners under `runners/` are reference implementations for GovTech's Orca platform, not part of the framework contract:
+The two Orca-specific runners under `gen_1/runners/` are reference implementations for GovTech's Orca platform, not part of the framework contract:
 
 | Runner | Transport | Notes |
 |--------|-----------|-------|
 | `orca_playwright` | Playwright (browser) | Drives Orca's web UI via a headless browser. Each worker gets its own browser context with isolated login. |
-| `orca_api` | HTTP (`/api/v1`) | Drives Orca via its key-authenticated REST API. Turns are sequential within a run; concurrency comes from multiple runners sharing a rate limiter and fixture cache via the factory. See [`orca_api/README.md`](runners/orca_api/README.md) for the turn lifecycle, identifiers, and v1 endpoint coverage. |
+| `orca_api` | HTTP (`/api/v1`) | Drives Orca via its key-authenticated REST API. Turns are sequential within a run; concurrency comes from multiple runners sharing a rate limiter and fixture cache via the factory. See [`orca_api/README.md`](gen_1/runners/orca_api/README.md) for the turn lifecycle, identifiers, and v1 endpoint coverage. |
 
 Both satisfy the normative [runner contract](../../../../../../docs/runner-contract.md); a custom runner must too.
 
@@ -78,19 +78,26 @@ Simulation uses the live TUI in a terminal. Evaluation uses a normal progress ba
 
 ```
 simulation/
-├── runner.py          — Runner ABC and RunnerFactory protocol
+├── factory.py         — RunnerFactory protocol
+├── trial.py           — "Run one trial" seam; picks the generation from the factory
 ├── runner_resolver.py — Resolves runner_factory_ref FQN to a class
 ├── experiment.py      — Experiment orchestrator (worker distribution, asyncio.gather)
-├── orchestrator.py    — Single-run orchestration (turn loop, retries)
-├── types.py           — Pydantic models (Specification, Scenario, Persona, Observation, ...)
+├── types.py           — Pydantic models (Specification, Scenario, Persona)
 ├── config.py          — Shared configuration (retry defaults)
-├── _contract.py       — Runner↔Observation contract enforcement (see docs/runner-contract.md)
 ├── exceptions.py      — Simulation-specific exceptions
 ├── _artifact_store.py — Artifact capture and storage
-├── user_agent/        — LLM-powered user agent (persona embodiment)
-└── runners/
-    ├── _http.py           — Shared HTTP utilities (rate limiter, backoff, polling)
-    ├── orca_playwright/   — Orca browser runner (auth, page actions, UI capture,
-    │                        element resolution, recovery, retry)
-    └── orca_api/          — Orca API runner (transport, fixtures, artifacts)
+├── runner.py, runners/ — old import paths; re-export from gen_1
+└── gen_1/             — today's simulator: typed actions on offered slots
+    ├── trial.py           — Builds today's UserAgent and Orchestrator for one attempt
+    ├── runner.py          — Runner ABC
+    ├── types.py           — Actions, slots, Observation, user agent input/output
+    ├── orchestrator.py    — Single-run orchestration (turn loop, retries)
+    ├── _contract.py       — Runner↔Observation contract enforcement (see docs/runner-contract.md)
+    ├── artifact_summarizer.py — LLM descriptions of fixtures and artifacts
+    ├── user_agent/        — LLM-powered user agent (persona embodiment)
+    └── runners/
+        ├── _http.py           — Shared HTTP utilities (rate limiter, backoff, polling)
+        ├── orca_playwright/   — Orca browser runner (auth, page actions, UI capture,
+        │                        element resolution, recovery, retry)
+        └── orca_api/          — Orca API runner (transport, fixtures, artifacts)
 ```

@@ -18,8 +18,8 @@ from pydantic import BaseModel
 from metis.core import Artifact, resolve_artifact_path
 from metis.core.logging import get_logger
 
-from ._fixture_artifacts import build_fixture_artifacts
-from ._hashing import sha256_file
+from .._fixture_artifacts import build_fixture_artifacts
+from .._hashing import sha256_file
 from .user_agent.config import (
     USER_AGENT_API_KEY,
     USER_AGENT_BASE_URL,
