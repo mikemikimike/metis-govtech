@@ -30,9 +30,8 @@ def test_uses_the_shared_binary_judgment_definition() -> None:
         "judgment_forms": (JudgmentForm.BINARY,),
         "aggregations": (Aggregation.NONE_SINGLE_SCORE,),
     }
-    definition = JUDGMENT_FORM_DEFINITIONS[
-        CriterionJudgeGrader.taxonomy.judgment_forms[0]
-    ]
+    (judgment_form,) = CriterionJudgeGrader.taxonomy.judgment_forms
+    definition = JUDGMENT_FORM_DEFINITIONS[judgment_form]
     assert definition.response_model is BinaryJudgment
     assert "score 1" in definition.output_instructions
 

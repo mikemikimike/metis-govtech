@@ -17,8 +17,8 @@ The conceptual hierarchy for one judgment is:
 
 Measure and Scope are flat enums of attributes. Group comments name their
 subdimensions. The mechanism subdimensions have separate enums.
-GraderTaxonomy declares the values a grader supports. A configured judgment
-selects supported values. A catch-all judge has no fixed Measure and uses None.
+GraderTaxonomy declares the values a grader supports. It does not select defaults
+or validate combinations. A catch-all judge has no fixed Measure and uses None.
 
 Update these enums directly when the taxonomy changes. Group comments mark V1
 exclusions until the next group heading or enum class. Do not implement V1 graders
@@ -31,8 +31,9 @@ working binary judgment-form definition. Definitions for the other groups remain
 design work.
 
 Graders assess recorded traces and linked artifacts with explicit references.
-They cannot inspect live state. A Criterion selects one supported configuration
-and stores its values in grader_args.
+They cannot inspect live state. A Criterion stores settings in grader_args. Each
+grader defines which settings it accepts. General taxonomy selection is not
+implemented.
 """
 
 from enum import StrEnum
@@ -296,9 +297,9 @@ class GraderTaxonomy(BaseModel):
     Each other field lists one or more supported values. A one-value field is fixed
     for that grader. A field with several values can
     become a form choice when the grader's args model has the matching setting.
-    A selected value uses its shared taxonomy definition. This declaration records
-    support only. Runtime routing from selected values to definitions remains design
-    work.
+    This declaration records support only. Tuple order does not select a default.
+    The grader must validate the combinations it implements. General runtime
+    routing from selected values to definitions remains design work.
     """
 
     model_config = ConfigDict(frozen=True)

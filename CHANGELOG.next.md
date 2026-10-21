@@ -47,7 +47,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Add the grader taxonomy vocabulary and authoring method. Define supported values as
   capabilities that a grader accepts and implements. Record that taxonomy groups can
   overlap and constrain each other, and that grader authors own the validity of
-  declared combinations. Use the Criterion Judge as the complete public example.
+  declared combinations. Document Criterion Judge and DemoTraceBudget as working
+  reference graders, with authoring steps and explicit limits on future capabilities.
+  Align the glossary with Scope and its trace, subsession, and session attributes.
 
 - **Defined Grading Scope in `GLOSSARY.md`.** The term names the part of a session that
   one grader result grades — the whole session, a trace, or an observation. It belongs
@@ -134,9 +136,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   uses the current criterion description, returns a binary session score, and records skipped
   or errored assessments separately. YAML description edits apply on the next run. Model and
   threshold settings survive description edits. The judge reads recorded trace input and
-  output. It does not read artifact files. `JudgmentForm.BINARY` selects its shared taxonomy
-  definition with output instructions and response validation in `metis.library.judgment`
-  (#299).
+  output. It does not read artifact files. Shared binary output instructions and response
+  validation live in `metis.library.judgment`. No taxonomy fields are required by the
+  base grader contract (#299).
 
 - `CriterionJudgeArgs` marks a model-based grader that takes its instructions from the
   criterion description. `criterion_judge_args` adds the description as `criterion` and rejects a
@@ -151,9 +153,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   Interaction scopes are trace, subsession, and session.
   `GraderTaxonomy` declares one measure or an explicit `None` for a catch-all
   grader. The other five groups each contain one or more supported values. A taxonomy
-  definition holds shared metadata and behavior for one taxonomy value. The Criterion
-  Judge is the complete example with no measure mapping and one fixed value in
-  each other group. Record the current integration limits.
+  definition can hold shared behavior for one taxonomy value. The binary judgment
+  definition supplies shared instructions and validation. Criterion Judge demonstrates
+  an LLM assessment with no measure mapping. DemoTraceBudget demonstrates a deterministic
+  task-constraint check. Both return one binary session result and declare fixed
+  capabilities. The taxonomy does not add generic method selection or runtime routing.
 
 #### Breaking
 

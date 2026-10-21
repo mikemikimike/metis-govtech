@@ -51,7 +51,8 @@ class CriterionJudgeGrader(Grader[CriterionJudgeArgs]):
                 ]
             )
         try:
-            judgment = JUDGMENT_FORM_DEFINITIONS[self.taxonomy.judgment_forms[0]]
+            (judgment_form,) = self.taxonomy.judgment_forms
+            judgment = JUDGMENT_FORM_DEFINITIONS[judgment_form]
             evidence = [
                 {
                     "id": trace.id,

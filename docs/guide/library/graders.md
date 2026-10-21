@@ -37,11 +37,11 @@ declared path.
 
 For example, an `EXPECTED_OUTPUT` reference needs an expected output. A
 `TOOL_ARGUMENTS` scope needs recorded tool arguments. A weighted aggregation needs
-weights. A grader must reject a configuration when its required evidence or settings
-are absent.
+weights. Validate required settings before a run. During grading, report missing
+evidence as `skipped` or `errored`, according to the documented evidence contract.
 
-The taxonomy guides the grader to the best supported method. It does not prevent an
-LLM judge from making an incorrect assessment.
+The taxonomy does not select a method. Grader code and validated arguments determine
+the method for each request. A taxonomy declaration does not establish grading accuracy.
 
 ## Taxonomy contract
 
@@ -67,12 +67,17 @@ A taxonomy value is a named enum member, such as `Scope.TRACE` or
 This behavior can include evidence preparation, prompt text, response validation, or
 aggregation logic.
 
-The current shared definition registry contains the binary judgment form. Its
-definition owns the output instructions and the `BinaryJudgment` response model.
+The enums define the accepted vocabulary for future grader implementations. An enum
+member alone does not provide runtime support.
+
+The current shared definition registry, `JUDGMENT_FORM_DEFINITIONS` in
+`metis.library.judgment`, contains only `JudgmentForm.BINARY`. Its definition owns the
+output instructions and the `BinaryJudgment` response model. A judge uses the same
+definition for its prompt, response schema, and response validation.
 
 ## Criterion Judge example
 
-`CriterionJudgeGrader` is the public example of a complete taxonomy declaration.
+`CriterionJudgeGrader` is the LLM reference grader in the public catalog.
 It is a catch-all judge with no measure mapping. The other five groups each
 have one fixed value:
 
@@ -102,12 +107,35 @@ The criterion text defines the check for each assessment. `None` means that the 
 has no measure mapping. It does not declare support for every measure.
 The judge can assess only the evidence that it receives.
 
-The judge resolves its binary output instructions and response validation from the
-declared judgment form. This keeps the taxonomy declaration and the implemented
-judgment behavior aligned.
+The judge uses the shared binary output instructions and response validation. Its
+fixed declaration describes that implementation. It has no per-request form selector.
 
 See [the Criterion Judge guide](criterionjudge.md) for its settings and evidence
 limits.
+
+## Deterministic reference grader
+
+`metis.library.graders.demo.DemoTraceBudgetGrader` checks a trace budget for a session.
+It declares `Measure.TASK_CONSTRAINT_ADHERENCE`, `Scope.SESSION`,
+`GraderType.DETERMINISTIC`, `ReferenceType.POLICY_RULE`, `JudgmentForm.BINARY`, and
+`Aggregation.NONE_SINGLE_SCORE`.
+
+The `max_traces` argument supplies the policy rule. The grader counts all traces,
+including traces with target errors. It returns `1` when the count is within the
+budget and `0` when the count exceeds it. An empty session produces a skipped result.
+It makes no LLM call. This example checks one task constraint. It does not assess
+all task constraints.
+
+A criterion can select the demo with these settings:
+
+```yaml
+grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
+grader_args:
+  max_traces: 4
+```
+
+The demo is exported only from `metis.library.graders.demo`. The wizard does not offer
+demo graders in its catalog.
 
 ## Grader arguments
 
@@ -147,37 +175,70 @@ method needs it. Missing required evidence cannot produce a passing result.
 The taxonomy is library metadata. The base `Grader` contract does not require it. The
 engine, wizard, insights, and reports do not inspect it.
 
-Only the Criterion Judge is documented as the complete public example in this work.
-Other graders do not gain taxonomy support through this example.
+Criterion Judge and DemoTraceBudget are the working reference graders. Each has one
+fixed value in each capability tuple. Other graders need their own declarations and
+behavior tests before they claim taxonomy support.
 
 Only the binary judgment definition has shared runtime behavior. Scope, grader type,
 reference type, measure, and aggregation values are descriptive declarations.
 Their shared definition registries and runtime routing are not implemented.
 
 The current result model has no structured scope-item or evidence-source identifier.
-This is sufficient for the Criterion Judge because it returns one result for the
-complete session.
+Both reference graders return one result for the complete session. Graders that
+return results for individual evidence items need a defined way to identify those items.
 
 The taxonomy does not test validity, reliability, calibration, or agreement with
 human assessors. Those properties need a separate evaluation method.
 
-## Checks for grader authors
+## Decisions needed for further implementations
 
-Before an author declares a value as supported, the author must confirm that the
-grader:
+The following work is outside this foundation:
 
-1. receives the evidence and reference data that the method needs;
-2. implements the declared scope, procedure, judgment, and aggregation behavior;
-3. rejects unsupported value combinations and missing required data;
-4. returns a result with the documented meaning;
-5. has tests for every declared behavior path;
-6. has separate quality checks against representative examples.
+- A grader with several capabilities needs explicit selection arguments and validation
+  of supported combinations. Tuple membership does not establish every combination.
+- Subsession graders need rules for trace membership, ordering, and the context visible
+  to each judgment. Their results need a way to identify the selected evidence.
+- Internal aggregation combines checks within one judgment's scope. Cross-trial
+  aggregation belongs to reporting. Each implementation needs to define its score
+  meaning and required settings, such as weights.
+- Shared definitions for other taxonomy groups need concrete consumers before they
+  become registries. Generic method selection and runtime routing are not implemented.
+
+## Author a grader
+
+1. Define an arguments model that extends `GraderArgs`. For an LLM judge, extend
+   `JudgeArgs`. Declare reference values and selection arguments in that model.
+2. Subclass `Grader[YourArgs]`. Set `args_model = YourArgs` to the same class.
+3. Declare a `GraderTaxonomy` that describes the behavior you implement. Start with
+   fixed capabilities when the grader needs only one combination.
+4. Implement `async grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput`.
+   Apply the evidence and result rules in this guide. For an LLM call, check
+   `input_budget_error` first and use `llm.client`.
+5. Validate settings in the arguments model. Use `check_setup()` for checks that need
+   the specification, such as whether a named fixture exists.
+6. Export the grader from `metis.library.graders`. Export demos only from
+   `metis.library.graders.demo`.
+7. Add tests under `tests/unit/library/` for each supported behavior, invalid settings,
+   absent evidence, and assessment failures. Mock external providers in offline tests.
+8. Evaluate grading quality against representative examples with human labels. Record
+   the dataset, model settings, and results separately from capability tests.
 
 ## Reading traces
 
 Use `metis.core.trace_processing` when a grader needs normalized turns, tool calls,
-target errors, or artifact records. Its readers return a value or a `Problem`. Never
-score a `Problem` as evidence.
+target errors, or artifact records. `turns(input)` returns one turn per trace, oldest
+first. Use `select_all`, `select_final`, or `select_where` to select evidence.
+`render_transcript` prepares a shared text view for LLM judges.
+
+Readers return a value or a `Problem`. A `Problem` means that METIS could not read the
+evidence. Map `no_match` and `artifact_unavailable` to `skipped`. Document whether
+`unsupported` and `missing` produce `skipped` or `errored`. Never score a `Problem`.
+A recorded target error is evidence about the target and can support an assessment.
+
+`find_artifacts` returns artifact records. It does not open files. Langfuse media
+references are unavailable to these readers. For a judgment of one trace, provide
+only the context permitted by the grader's contract. Exclude later traces when the
+judgment must use only information available at that point.
 
 The Criterion Judge is a specific exception. It serializes the supported observation
 fields directly. It sends observation IDs, parent IDs, types, names, inputs, and

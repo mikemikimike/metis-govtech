@@ -7,8 +7,9 @@ offer this judge, because the form has no criterion description field.
 
 ## Taxonomy declaration
 
-The Criterion Judge is the public example of a complete grader taxonomy declaration.
-It is a catch-all judge with `measure=None`. It has no category mapping.
+The Criterion Judge is the LLM reference grader for the taxonomy foundation.
+[DemoTraceBudget](graders.md#deterministic-reference-grader) is the deterministic reference grader.
+Criterion Judge is a catch-all judge with `measure=None`. It has no category mapping.
 The other five groups have one fixed value:
 
 | Group | Supported value |
@@ -27,8 +28,8 @@ The evidence limits below apply to every assessment.
 Taxonomy groups can overlap and constrain each other. A taxonomy declaration does not
 define every possible combination of its values. The human author of a grader class
 must use domain knowledge to declare sensible values and validate each supported
-combination. The taxonomy guides the assessment method. It does not prove that the
-model's assessment is correct.
+combination. This judge has fixed capabilities and no taxonomy selection arguments.
+Its taxonomy does not select a method or prove that the model's assessment is correct.
 
 ## Edit the instructions
 
