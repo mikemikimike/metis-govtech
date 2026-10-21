@@ -180,6 +180,16 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 ### metis-engine
 
+#### Added
+
+- **`fetch_session` rejects traces recorded before the Langfuse server's v4 upgrade.** Such a
+  trace comes back from the v2 observations API with every observation duplicated and an extra
+  root with id `t-<traceId>`, and its stored set changes with page size, so METIS does not try to
+  repair it. `fetch_session` raises the new `UnsupportedTraceError` when a trace has that root or
+  any repeated observation id. `metis engine evaluate` marks the session failed with a message
+  naming the session and trace, then grades the remaining sessions. Re-run the trial to grade the
+  session (#469).
+
 #### Changed
 
 - Build one grader per active Criterion from the specification snapshot and reuse it

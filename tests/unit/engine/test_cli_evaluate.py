@@ -13,6 +13,7 @@ from metis.core.traces import GradingInput, Observation, Trace
 from metis.core.trials import GraderRef, TrialConfig, TrialOutcome, TrialRecord
 from metis.engine import cli
 from metis.engine.cli import EvaluationOutcome, app
+from metis.engine.extractor.langfuse import UnsupportedTraceError
 
 runner = CliRunner()
 
@@ -401,6 +402,44 @@ def test_evaluation_progress_advances_for_success_and_soft_failure(
         phase="extracting",
     )
     assert "Evaluation 1/2: alice x task-1 — extracting" in capsys.readouterr().out
+
+
+def test_an_unsupported_trace_fails_its_session_and_the_rest_are_graded(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """Issue #469: no special handling in evaluate; the per-session catch already covers it."""
+    output = _write_experiment_dir(tmp_path)
+    _write_record(output, run_name="run-1", session_id="sess-old")
+    _write_record(output, run_name="run-2", session_id="sess-new")
+    reason = (
+        "Session `sess-old` can't be graded: trace `t1` was recorded before this "
+        "Langfuse server's v4 upgrade (synthetic root `t-t1`). "
+        "Re-run the trial to grade it."
+    )
+    fetched: list[str] = []
+
+    def fetch(session_id: str, *_args: object, **_kwargs: object) -> GradingInput:
+        fetched.append(session_id)
+        if session_id == "sess-old":
+            raise UnsupportedTraceError(reason)
+        return _session(session_id)
+
+    monkeypatch.setattr("metis.engine.extractor.get_langfuse_client", lambda: object())
+    monkeypatch.setattr("metis.engine.extractor.fetch_session", fetch)
+
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0
+    assert sorted(fetched) == ["sess-new", "sess-old"]
+    results = EvaluationResults.load_file(
+        output / "outputs" / "reports" / "results.json"
+    )
+    assert {record.session_id for record in results.records} == {"sess-new"}
+    assert reason in _compact(result.output) or _compact(reason) in _compact(
+        result.output
+    )
+    evaluation_log = (output / "logs" / "evaluate.log").read_text()
+    assert f"FAILED — {reason}" in evaluation_log
 
 
 # ── grading through the new contract ────────────────────────────────────────
