@@ -13,8 +13,11 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
+
 from metis.core import Artifact
 from metis.engine.extractor.langfuse import (
+    UnsupportedTraceError,
     _fetch_trace,
     _page_through_observations,
     fetch_session,
@@ -273,3 +276,72 @@ class TestArtifacts:
         original = Artifact(name="a", path="rel/a", state="received")
         _fetch(lf, tmp_path, artifacts=[original])
         assert original.path == "rel/a"
+
+
+class TestTracesFromBeforeTheV4Upgrade:
+    """Issue #469: such traces come back with every observation doubled and a ``t-<traceId>``
+    root, and the stored set changes with page size, so they are rejected, not repaired."""
+
+    def test_synthetic_root_fails_the_session(self, tmp_path: Path) -> None:
+        root = _obs("r1", "t1")
+        synthetic = _obs("t-t1", "t1")
+        lf = FakeLangfuse(session=[root], traces={"t1": [root, synthetic]})
+
+        with pytest.raises(UnsupportedTraceError) as excinfo:
+            _fetch(lf, tmp_path)
+
+        assert str(excinfo.value) == (
+            "Session `s1` can't be graded: trace `t1` was recorded before this "
+            "Langfuse server's v4 upgrade (synthetic root `t-t1`). "
+            "Re-run the trial to grade it."
+        )
+
+    def test_repeated_observation_id_fails_the_session(self, tmp_path: Path) -> None:
+        root = _obs("r1", "t1")
+        child = _obs("c1", "t1", parent="r1")
+        lf = FakeLangfuse(
+            session=[root], traces={"t1": [root, child, child, root, child]}
+        )
+
+        with pytest.raises(UnsupportedTraceError) as excinfo:
+            _fetch(lf, tmp_path)
+
+        assert str(excinfo.value) == (
+            "Session `s1` can't be graded: trace `t1` was recorded before this "
+            "Langfuse server's v4 upgrade (3 duplicated observations). "
+            "Re-run the trial to grade it."
+        )
+
+    def test_message_names_both_signs_when_both_are_present(
+        self, tmp_path: Path
+    ) -> None:
+        root = _obs("r1", "t1")
+        synthetic = _obs("t-t1", "t1")
+        lf = FakeLangfuse(session=[root], traces={"t1": [root, synthetic, root]})
+
+        with pytest.raises(UnsupportedTraceError) as excinfo:
+            _fetch(lf, tmp_path)
+
+        assert "(synthetic root `t-t1`, 1 duplicated observation)" in str(excinfo.value)
+
+    def test_one_affected_trace_fails_the_whole_session(self, tmp_path: Path) -> None:
+        clean = _obs("r1", "t1", start="2026-01-01T00:01:00Z")
+        doubled = _obs("r2", "t2", start="2026-01-01T00:02:00Z")
+        lf = FakeLangfuse(
+            session=[clean, doubled],
+            traces={"t1": [clean], "t2": [doubled, doubled]},
+        )
+
+        with pytest.raises(UnsupportedTraceError, match="trace `t2`"):
+            _fetch(lf, tmp_path)
+
+    def test_clean_trace_is_unaffected(self, tmp_path: Path) -> None:
+        """One copy per id and no ``t-<traceId>`` id. Another trace's ``t-`` id is not one."""
+        root = _obs("r1", "t1")
+        child = _obs("c1", "t1", parent="r1")
+        lookalike = _obs("t-t2", "t1", parent="r1")
+        lf = FakeLangfuse(session=[root], traces={"t1": [root, child, lookalike]})
+
+        (trace,) = _fetch(lf, tmp_path).traces
+
+        assert {o.id for o in trace.observations} == {"r1", "c1", "t-t2"}

@@ -562,6 +562,12 @@ and makes calls through `llm.client`, a shared `AsyncOpenAI`.
 | "has invalid grader_args" | A grader_args key is misspelt, has the wrong type, or is out of range | Fix the field the message names; keys must match the grader's args_model |
 | Duplicate persona/scenario ID error | Two entries share the same `id` | Use unique IDs for every persona and scenario |
 
+### Traces recorded before a Langfuse v4 upgrade
+
+METIS can't grade traces recorded before your Langfuse server was upgraded to v4. It detects them automatically and tells you which session is affected. Re-run that trial to grade it.
+
+The affected session is marked failed with a message such as ``Session `sess-…` can't be graded: trace `1c73de62…` was recorded before this Langfuse server's v4 upgrade``. `metis engine evaluate` still grades the other sessions and exits normally.
+
 ---
 
 ## Adapting to Your Target

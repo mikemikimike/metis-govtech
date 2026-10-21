@@ -19,6 +19,11 @@ Langfuse truncates any metadata value over 200 characters unless its key is name
 metadata may have been truncated is fetched a second time with every key it carries
 expanded (see ``_fetch_trace``).
 
+A trace recorded while its Langfuse server was moving to v4 comes back with every observation
+duplicated and a synthetic root with id ``t-<traceId>``, and the stored set changes with page
+size (issue #469). METIS does not repair such a trace; ``fetch_session`` raises
+``UnsupportedTraceError`` for it, so the session fails and the trial must be re-run.
+
 Input/output arrive as raw strings (``parse_io_as_json`` is rejected with HTTP 400), and
 ``metis.core.traces.Observation`` parses JSON-looking values itself.
 """
@@ -45,6 +50,10 @@ _PAGE_SIZE = 1000
 _TRUNCATION_LIMIT = 200
 """Langfuse truncates metadata values longer than this unless the key is expanded."""
 _RETRY_SECONDS = 10
+
+
+class UnsupportedTraceError(RuntimeError):
+    """A session has a trace recorded before its Langfuse server's v4 upgrade (issue #469)."""
 
 
 def get_langfuse_client() -> Langfuse:
@@ -138,6 +147,27 @@ def _session_trace_ids(langfuse: Langfuse, session_id: str) -> list[str]:
     return list(dict.fromkeys(observation.trace_id for observation in observations))
 
 
+def _check_supported(
+    session_id: str, trace_id: str, observations: list[Observation]
+) -> None:
+    """Raise ``UnsupportedTraceError`` if the trace shows the signs of a pre-v4 recording."""
+    ids = [observation.id for observation in observations]
+    synthetic_root = f"t-{trace_id}"
+    reasons: list[str] = []
+    if synthetic_root in ids:
+        reasons.append(f"synthetic root `{synthetic_root}`")
+    duplicated = len(ids) - len(set(ids))
+    if duplicated:
+        noun = "observation" if duplicated == 1 else "observations"
+        reasons.append(f"{duplicated} duplicated {noun}")
+    if reasons:
+        raise UnsupportedTraceError(
+            f"Session `{session_id}` can't be graded: trace `{trace_id}` was recorded "
+            f"before this Langfuse server's v4 upgrade ({', '.join(reasons)}). "
+            "Re-run the trial to grade it."
+        )
+
+
 def _resolve_artifacts(
     artifacts: list[Artifact], experiment_root: Path
 ) -> tuple[Artifact, ...]:
@@ -167,6 +197,7 @@ def fetch_session(
 
     :param retry_timeout: Seconds to keep polling while Langfuse returns no traces for the
         session (ingestion can lag a finished run); ``0`` asks once.
+    :raises UnsupportedTraceError: When a trace was recorded before the server's v4 upgrade.
     :returns: A ``GradingInput`` with ``traces=()`` when the session has none, so the
         caller can tell "nothing ingested" apart from an error.
     """
@@ -189,6 +220,7 @@ def fetch_session(
                 session_id,
             )
             continue
+        _check_supported(session_id, trace_id, observations)
         traces.append(Trace.from_observations(trace_id, session_id, observations))
     traces.sort(key=_root_start)
     return GradingInput(
