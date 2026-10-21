@@ -8,7 +8,6 @@ interview ever having run.
 from metis.wizard.contracts import (
     Behaviour,
     Criterion,
-    CriterionDescription,
     Feature,
     Persona,
     Scenario,
@@ -87,25 +86,13 @@ def research_assistant() -> Specification:
                             Criterion(
                                 id="AC-1-1",
                                 name="Cite supported answers",
-                                description=CriterionDescription(
-                                    given="a question answerable from the library",
-                                    when="the answer is returned",
-                                    then=(
-                                        "every factual claim names the document it came from"
-                                    ),
-                                ),
+                                description="Given a question answerable from the library, when the answer is returned, then every factual claim names the document it came from.",
                                 grader_fqn=CITATION_GRADER,
                             ),
                             Criterion(
                                 id="AC-1-2",
                                 name="Do not cite unrelated sources",
-                                description=CriterionDescription(
-                                    given="a question the library cannot answer",
-                                    when="the answer is returned",
-                                    then=(
-                                        "it says so rather than citing an unrelated document"
-                                    ),
-                                ),
+                                description="Given a question the library cannot answer, when the answer is returned, then it says so rather than citing an unrelated document.",
                                 grader_fqn=CITATION_GRADER,
                             ),
                         ],
@@ -119,11 +106,7 @@ def research_assistant() -> Specification:
                             Criterion(
                                 id="AC-2-1",
                                 name="Default length limit",
-                                description=CriterionDescription(
-                                    given="a question with no length instruction",
-                                    when="the answer is returned",
-                                    then="it is under 500 words",
-                                ),
+                                description="Given a question with no length instruction, when the answer is returned, then it is under 500 words.",
                                 grader_fqn=TURN_BUDGET,
                             ),
                         ],
@@ -146,11 +129,7 @@ def research_assistant() -> Specification:
                             Criterion(
                                 id="AC-3-1",
                                 name="Report failed retries",
-                                description=CriterionDescription(
-                                    given="a document search that times out repeatedly",
-                                    when="the agent has retried three times",
-                                    then="it stops and reports what it attempted",
-                                ),
+                                description="Given a document search that times out repeatedly, when the agent has retried three times, then it stops and reports what it attempted.",
                                 grader_fqn=BOUNDED_TROUBLESHOOTING,
                             ),
                         ],

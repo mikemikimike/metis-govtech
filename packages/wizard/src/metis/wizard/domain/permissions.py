@@ -63,9 +63,7 @@ StepPermissions: dict[InterviewStep, list[str]] = {
         "features[*].behaviours[*].criteria",
         "features[*].behaviours[*].criteria[*]",
         "features[*].behaviours[*].criteria[*].name",
-        "features[*].behaviours[*].criteria[*].description.given",
-        "features[*].behaviours[*].criteria[*].description.when",
-        "features[*].behaviours[*].criteria[*].description.then",
+        "features[*].behaviours[*].criteria[*].description",
     ],
     InterviewStep.PERSONAS: [
         "personas",

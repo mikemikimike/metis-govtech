@@ -40,7 +40,6 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
     from metis.core.grading import GradingOutput
-    from metis.core.profile import CriterionDescription
     from metis.core.specification import Specification
     from metis.core.traces import GradingInput
 
@@ -113,12 +112,12 @@ class CriterionJudgeArgs(JudgeArgs):
 def criterion_judge_args(
     args_model: type[GraderArgs],
     settings: Mapping[str, Any],
-    description: CriterionDescription | None,
+    description: str | None,
 ) -> dict[str, Any]:
     """Copy ``settings`` and, for a ``CriterionJudgeArgs`` model, add the description as ``criterion``.
 
     Raises ``ValueError`` when the settings already name ``criterion`` or the description has a
-    blank clause.
+    blank description.
     """
     resolved = dict(settings)
     if not issubclass(args_model, CriterionJudgeArgs):
@@ -129,9 +128,8 @@ def criterion_judge_args(
         )
     if description is None:
         raise ValueError("The criterion description is required.")
-    for clause in ("given", "when", "then"):
-        if not getattr(description, clause).strip():
-            raise ValueError(f"Criterion description.{clause} must not be blank.")
+    if not description.strip():
+        raise ValueError("Criterion description must not be blank.")
     resolved["criterion"] = str(description)
     return resolved
 

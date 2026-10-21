@@ -13,8 +13,12 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from metis.wizard.contracts.interview_state import InterviewContext, Turn
-    from metis.wizard.contracts.output import ClarifyResult, StepResult
-    from metis.wizard.domain.specification import Specification
+    from metis.wizard.contracts.output import (
+        ClarifyResult,
+        CriterionConfiguration,
+        StepResult,
+    )
+    from metis.wizard.domain.specification import Criterion, Specification
 
 
 class InterviewerUnavailable(RuntimeError):
@@ -31,6 +35,17 @@ class InterviewContextBudgetError(InterviewerOutputError):
 
 class Interviewer(Protocol):
     """The model, from the driver's point of view."""
+
+    def configure_criterion(
+        self,
+        criterion: Criterion,
+        previous: Criterion | None,
+        specification: Specification,
+        request: str,
+        context: InterviewContext | None = None,
+    ) -> CriterionConfiguration:
+        """Configure the matched assessment from its full requirement and current settings."""
+        ...
 
     def clarify(
         self,

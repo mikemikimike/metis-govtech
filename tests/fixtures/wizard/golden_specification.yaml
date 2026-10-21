@@ -21,18 +21,14 @@ features:
     criteria:
     - id: AC-1-1
       name: Cite supported answers
-      description:
-        given: a question answerable from the library
-        when: the answer is returned
-        then: every factual claim names the document it came from
+      description: Given a question answerable from the library, when the answer is returned,
+        then every factual claim names the document it came from.
       grader_fqn: tests.unit.engine.graders_for_tests.FixedScoreGrader
       grader_args: {}
     - id: AC-1-2
       name: Do not cite unrelated sources
-      description:
-        given: a question the library cannot answer
-        when: the answer is returned
-        then: it says so rather than citing an unrelated document
+      description: Given a question the library cannot answer, when the answer is returned,
+        then it says so rather than citing an unrelated document.
       grader_fqn: tests.unit.engine.graders_for_tests.FixedScoreGrader
       grader_args: {}
   - id: EB-2
@@ -42,10 +38,8 @@ features:
     criteria:
     - id: AC-2-1
       name: Default length limit
-      description:
-        given: a question with no length instruction
-        when: the answer is returned
-        then: it is under 500 words
+      description: Given a question with no length instruction, when the answer is returned,
+        then it is under 500 words.
       grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
       grader_args: {}
 - id: F-2
@@ -59,10 +53,8 @@ features:
     criteria:
     - id: AC-3-1
       name: Report failed retries
-      description:
-        given: a document search that times out repeatedly
-        when: the agent has retried three times
-        then: it stops and reports what it attempted
+      description: Given a document search that times out repeatedly, when the agent has retried
+        three times, then it stops and reports what it attempted.
       grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
       grader_args: {}
 personas:

@@ -110,7 +110,19 @@ function formRequest(): FormRequest {
     state: "pending",
     request_id: "form-1",
     stage: "behaviours",
-    fields: [{ id: "name", label: "Name", placeholder: "", multiline: false }],
+    fields: [
+      {
+        id: "name",
+        label: "Name",
+        placeholder: "",
+        multiline: false,
+        input_type: "string" as const,
+        value: "",
+        required: false,
+        choices: [],
+        help: "",
+      },
+    ],
     target: "B-1",
     answer: {},
   };

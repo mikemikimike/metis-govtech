@@ -182,10 +182,7 @@ features:
         criteria:
           - id: AC-EXEC-3
             name: Trace budget
-            description:
-              given: an evaluation interaction
-              when: the interaction is evaluated
-              then: the session completed within the allowed trace budget
+            description: The session completes within the allowed trace budget.
             grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
             grader_args:
               max_traces: 4
@@ -272,9 +269,6 @@ behaviour tick and the product summary are renamed for clarity.
 - `Behaviour.priority` → `Behaviour.measured` (still a `bool` — the tick)
 - `Product.summary` → `Product.description`
 - `ProductProfile.ticked()` → `ProductProfile.measured_behaviours()`
-- A criterion's `description` is now a structured `CriterionDescription`
-  (`given` / `when` / `then`) instead of a flat string. Use
-  `str(criterion.description)` for the old flat "Given …, when …, then …." text.
 
 #### The interview is now stateless and file-free
 
@@ -534,8 +528,8 @@ failed.
 
 - `fetch_by_session_id` and `FetchLangfuseResult` → `fetch_session`, which returns a
   `metis.core.traces.GradingInput`.
-- `evaluate` and `EvalResult` → `build_criterion_grader` and `grade_session`, which return
-  `metis.core.reporting.GraderRecord` objects.
+- `evaluate` and `EvalResult` → `build_grader` to create an instance, then
+  `grade_session` to return `metis.core.reporting.GraderRecord` objects.
 - `RoutingSummary` is removed.
 
 **Configuration**
@@ -553,8 +547,8 @@ failed.
 **On disk**
 
 - `reports/results.json` holds one `GraderRecord` per grader per session, with
-  `schema_version` still `1`. `metis insights report` rejects this file until its redesign
-  (#454) lands.
+  `schema_version` still `1`. `metis insights report` reads these records, preserves
+  their settings, and reports grader errors separately from failed assessments.
 - An experiment directory from before the redesign cannot be evaluated again. Its frozen
   `inputs/specification.yaml` names deleted graders, so `metis engine evaluate` stops at
   validation. Update the source `specification.yaml` and run `metis engine simulate` again.

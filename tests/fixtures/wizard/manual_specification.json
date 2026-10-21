@@ -23,22 +23,14 @@
             {
               "id": "AC-1-1",
               "name": "Synthesis faithfulness",
-              "description": {
-                "given": "the target agent is evaluated in scenario supported-answer with persona analyst",
-                "when": "Ask for a supported answer.",
-                "then": "the result is evaluated by Synthesis faithfulness: Checks that the answer uses its evidence."
-              },
+              "description": "Synthesis faithfulness: Checks that the answer uses its evidence.",
               "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
               "grader_args": {}
             },
             {
               "id": "AC-1-2",
               "name": "Turn budget",
-              "description": {
-                "given": "the target agent is evaluated in scenario supported-answer with persona analyst",
-                "when": "Ask for a supported answer.",
-                "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
-              },
+              "description": "Turn budget: Checks that the conversation stays within its turn budget.",
               "grader_fqn": "metis.library.graders.demo.DemoTraceBudgetGrader",
               "grader_args": {}
             }
@@ -53,22 +45,14 @@
             {
               "id": "AC-2-1",
               "name": "Synthesis faithfulness",
-              "description": {
-                "given": "the target agent is evaluated in scenario supported-answer with persona director",
-                "when": "Ask for a supported answer.",
-                "then": "the result is evaluated by Synthesis faithfulness: Checks that the answer uses its evidence."
-              },
+              "description": "Synthesis faithfulness: Checks that the answer uses its evidence.",
               "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
               "grader_args": {}
             },
             {
               "id": "AC-2-2",
               "name": "Turn budget",
-              "description": {
-                "given": "the target agent is evaluated in scenario supported-answer with persona director",
-                "when": "Ask for a supported answer.",
-                "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
-              },
+              "description": "Turn budget: Checks that the conversation stays within its turn budget.",
               "grader_fqn": "metis.library.graders.demo.DemoTraceBudgetGrader",
               "grader_args": {}
             }
@@ -83,11 +67,7 @@
             {
               "id": "AC-3-1",
               "name": "Turn budget",
-              "description": {
-                "given": "the target agent is evaluated in scenario short-recovery with persona analyst",
-                "when": "Recover after a failed search.",
-                "then": "the result is evaluated by Turn budget: Checks that the conversation stays within its turn budget."
-              },
+              "description": "Turn budget: Checks that the conversation stays within its turn budget.",
               "grader_fqn": "metis.library.graders.demo.DemoTraceBudgetGrader",
               "grader_args": {}
             }
@@ -121,7 +101,9 @@
       "timeout_minutes": 15,
       "response_wait_ms": 300000,
       "max_run_retries": null,
-      "behaviour_refs": ["EB-1"]
+      "behaviour_refs": [
+        "EB-1"
+      ]
     },
     {
       "id": "",
@@ -135,7 +117,9 @@
       "timeout_minutes": 15,
       "response_wait_ms": 300000,
       "max_run_retries": null,
-      "behaviour_refs": ["EB-2"]
+      "behaviour_refs": [
+        "EB-2"
+      ]
     },
     {
       "id": "",
@@ -149,7 +133,9 @@
       "timeout_minutes": 15,
       "response_wait_ms": 300000,
       "max_run_retries": null,
-      "behaviour_refs": ["EB-3"]
+      "behaviour_refs": [
+        "EB-3"
+      ]
     }
   ],
   "scenarios": [

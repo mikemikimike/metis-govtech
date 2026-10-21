@@ -120,6 +120,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Breaking
 
+- Each Criterion states one assessment rule and owns its Grader configuration (#490).
+
 - Target and TargetProfile replace Product and ProductProfile. Specifications
   use the `target` key across Python, YAML, and API JSON (#429).
 
@@ -179,6 +181,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-engine
 
 #### Changed
+
+- Build one grader per active Criterion from the specification snapshot and reuse it
+  across sessions. Record Criterion IDs, configured grader paths, and resolved arguments (#490).
 
 - `CriterionJudgeArgs` graders get `criterion` from the criterion description at run time. The
   engine carries the description on the optional `metis.core.trials.GraderRef.description`
@@ -313,6 +318,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Read recorded evaluation results in Insights. Preserve Criterion identity and run
+  settings, and report grader errors separately from failed assessments. Report JSON
+  and HTML use one plain Criterion description (#490).
+
 - `metis insights report` reads `record.json` through `metis.core.trials.TrialRecord`. A record
   the model rejects is skipped with a warning. The trial's cause comes from
   `outcome.failure_source`/`failure_message`, then `stop_reason` and the trial's logs. The report
@@ -411,7 +420,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   guide explains requests and responses through a worked Interview, with document handling and
   error recovery references.
 - **Standardized wizard specification nodes.** Features, behaviours, criteria, personas, and scenarios use
-  explicit `name` and `description` fields; criteria use structured Given/When/Then clauses;
+  explicit `name` and `description` fields;
   behaviour selection is `measured`; and Product uses `description`.
 
 #### Fixed
@@ -429,6 +438,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   still reports any remaining gaps.
 
 #### Changed
+
+- Configure Criterion descriptions and Grader arguments together during Wizard edits.
+  Direct edits use typed fields and argument validation (#490).
 
 - The wizard offers no graders until real ones are added to `metis.library.graders`: the
   interview cannot produce a runnable experiment, and the manual form's grader picker is empty
@@ -594,6 +606,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   field that needs a change, shows what to change, and moves the focus to the first one.
 
 #### Changed
+
+- Show Criterion descriptions with expandable Grader details and typed edit fields (#490).
 
 - Interview downloads send the final state for compilation and export. Interview and manual downloads use dated archive names and the shared `inputs/` and `outputs/` layout. The browser shows where to extract them (#453).
 

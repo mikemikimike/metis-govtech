@@ -56,6 +56,11 @@ The web client gets the opening text, Perspectives, capability catalogue, and do
 the API. It keeps the returned Interview state and sends the whole state with each answer. The API
 does not save the state.
 
+## Review Criteria
+
+Expand **Grader details** to inspect the settings, or select **Edit assessment** to change them.
+See [Review and edit Criteria](../wizard.md#review-and-edit-criteria).
+
 ## Add documents
 
 1. Select the plus button in the opening message.

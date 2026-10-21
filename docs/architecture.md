@@ -215,8 +215,8 @@ Engine creates `experiments/execute/<specification-id>-YYYYMMDD-HHMMSS/`. It cop
 `--input-dir` into `inputs/`, writes trial records and artifacts under `outputs/trials/`,
 and writes evaluation results to `outputs/reports/results.json`. Insights reads the
 same execution root and writes `report.json` and `report.html` beside the results.
-The current Insights CLI accepts the legacy `turn_results` and `session_results`
-format. It rejects the engine's current `records` format until #454 is complete.
+Insights accepts recorded results and the legacy `turn_results` and `session_results`
+format. It uses recorded Criterion IDs and arguments without creating graders.
 `--experiment-dir` identifies the execution root for evaluation and resume.
 `metis.core.execution_layout` owns the paths shared by Engine and Insights.
 Logs remain under `logs/`, with the existing simulation log override. Artifact paths
@@ -266,6 +266,16 @@ Each Task selects one Scenario, one Persona, fixtures, a Trial count, and measur
 Every selected Behaviour supplies all its Criteria to grading.
 Each Criterion owns its Grader FQN and parameters. Scores retain Task, Trial,
 and Criterion identity plus the Grader configuration.
+
+Each Criterion states one assessable requirement. Review shows its description with
+expandable Grader settings. Wizard edits MUST keep the description and settings
+consistent. Direct edits validate fields and arguments. Users maintain their agreement.
+The criterion judge uses the complete description as its assessment instructions.
+
+Engine MUST build one grader per active Criterion from the specification snapshot
+and reuse it across sessions. Results MUST preserve their order, Criterion IDs,
+configured grader paths, and validated arguments, including resolved defaults.
+Insights reads these recorded values without creating graders.
 
 The normal local run uses two processes: `PORT=8001 uv run metis-api` and
 `npm --prefix apps/web run dev`.

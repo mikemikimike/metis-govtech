@@ -653,8 +653,8 @@ function FeatureView({
         </span>
       </button>
       {open && (
-        // Behaviours within a group are spaced apart too — a behaviour with a Given/When/Then
-        // block below it must read as one unit set off from the next behaviour, not run flush
+        // Behaviours within a group are spaced apart too — a behaviour with its criteria
+        // below it must read as one unit set off from the next behaviour, not run flush
         // into it. The gap is smaller than the between-group gap so the hierarchy still reads:
         // groups first, behaviours within them second.
         <div className="ml-1.5 mt-1 border-l border-border pb-1 pl-3">
@@ -740,8 +740,7 @@ function BehaviourView({
       </span>
       {behaviour.criteria.length > 0 && (
         // The criteria are set apart from the description above them with a top gap, so a
-        // behaviour and its Given/When/Then read as a labelled unit rather than five stacked
-        // rows. Each criterion is spaced from the next for the same reason.
+        // behaviour and its criteria read as one labelled unit. Each criterion is spaced from the next for the same reason.
         <ul className="col-start-2 mt-1.5 flex flex-col gap-3 text-xs">
           {behaviour.criteria.map((c) => {
             const grader = c.grader_fqn
@@ -750,45 +749,32 @@ function BehaviourView({
             return (
               <li
                 key={c.id}
-                // A hairline sits between criteria when a behaviour has more than one, so two
-                // Given/When/Then blocks read as two units rather than one six-row stack. The rule
-                // is gated on `:not(:first-child)`, which is what makes it appear only from the
-                // second criterion on: a behaviour with a single AC draws no divider at all, and
-                // none is ever drawn above the first. The padding lifts the rule into the gap
-                // above rather than crowding the label row beneath it.
                 className="animate-arrive flex flex-col gap-1 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-border [&:not(:first-child)]:pt-3"
               >
-                {/* Given/when/then, three labelled rows rather than one run-on sentence. The
-                    prose form put the whole criterion in a single wrapped paragraph whose three
-                    clauses were separated by nothing but two commas and a colour change, so the
-                    longest content in the document was also the least scannable. Aligned in a
-                    column, the keywords become a fixed edge to read down, and the clause is
-                    findable without reading the sentence that precedes it.
-
-                    The label is the quiet part and the clause is the loud part — the inverse of
-                    a first pass that set the keywords in foreground weight and let the clauses
-                    recede into muted grey. That put the three repeated words "Given/When/Then" in
-                    the strongest ink on the page and the actual content behind them, so the eye
-                    read the scaffolding before the substance on every criterion. Muted,
-                    letter-spaced keywords become a fixed edge to scan down; the foreground clause
-                    is what reads. (Sentence case, not caps: all-caps labels are the house style's
-                    named AI tell, and the letter-spacing gives the label its quiet-marker look
-                    without them.) */}
-                <p className="font-medium text-foreground">{c.name}</p>
-                <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-x-2 gap-y-0.5">
-                  <span className="tracking-wide text-muted-foreground">
-                    Given
-                  </span>
-                  <span className="text-foreground">{c.description.given}</span>
-                  <span className="tracking-wide text-muted-foreground">
-                    When
-                  </span>
-                  <span className="text-foreground">{c.description.when}</span>
-                  <span className="tracking-wide text-muted-foreground">
-                    Then
-                  </span>
-                  <span className="text-foreground">{c.description.then}</span>
-                </div>
+                <p className="text-foreground">{c.description}</p>
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-muted-foreground">
+                    Grader details
+                  </summary>
+                  <p>{c.name}</p>
+                  <p>{grader?.name ?? c.grader_fqn ?? "Not selected"}</p>
+                  {!grader && c.grader_fqn && (
+                    <p className="text-muted-foreground">
+                      Unlisted settings use the grader defaults.
+                    </p>
+                  )}
+                  <dl>
+                    {Object.entries({
+                      ...grader?.default_args,
+                      ...c.grader_args,
+                    }).map(([key, value]) => (
+                      <div key={key}>
+                        <dt>{key}</dt>
+                        <dd>{JSON.stringify(value)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </details>
                 {showGraders && grader && (
                   <Mono className="block break-words rounded border border-border bg-muted px-2 py-1 leading-relaxed">
                     <span className="block text-foreground">{grader.name}</span>

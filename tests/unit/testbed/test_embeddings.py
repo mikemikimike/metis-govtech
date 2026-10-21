@@ -71,8 +71,8 @@ def test_cache_saves_exact_text_and_reuses_unchanged_inputs(specification_path):
         text for text in texts if text.startswith("Feature:") and behaviour in text
     )
     assert "Feature: Billing support\n" in context
-    assert "Criteria:\nVerify identity before high-risk changes\nGiven:" in context
-    assert "Keep access within the caller’s account\nGiven:" in context
+    assert "Criteria:\nVerify identity before high-risk changes\nGiven" in context
+    assert "Keep access within the caller’s account\nGiven" in context
     assert "grader_fqn" not in context
     assert len(provider.calls) == len(set(provider.calls))
     provider.calls.clear()

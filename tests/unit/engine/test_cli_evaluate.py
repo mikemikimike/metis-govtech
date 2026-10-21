@@ -16,7 +16,7 @@ from metis.engine.cli import EvaluationOutcome, app
 
 runner = CliRunner()
 
-MINIMAL_EXPERIMENT = "schema_version: 1\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\ntarget:\n  name: Test target\n  users: Test users\n  description: Test target\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  behaviour_refs:\n  - EB-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description:\n        given: a request\n        when: the agent responds\n        then: the requirement is met\n      grader_fqn: tests.unit.engine.graders_for_tests.FixedScoreGrader\n      grader_args: {}\n"
+MINIMAL_EXPERIMENT = 'schema_version: 1\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\ntarget:\n  name: Test target\n  users: Test users\n  description: Test target\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  behaviour_refs:\n  - EB-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description: "The response meets the requirement."\n      grader_fqn: tests.unit.engine.graders_for_tests.FixedScoreGrader\n      grader_args: {}\n'
 
 
 def _write_snapshot(experiment_dir: Path, content: str = MINIMAL_EXPERIMENT) -> Path:
@@ -453,22 +453,84 @@ def test_a_failing_score_is_recorded_as_failed(monkeypatch, tmp_path: Path) -> N
     assert record.grader_args == {"threshold": 0.5, "score": 0.2}
 
 
-def test_graders_use_the_snapshot_criteria_not_the_record_copy(
+def test_criteria_keep_snapshot_settings_and_reuse_instances_across_sessions(
     monkeypatch, tmp_path: Path
 ) -> None:
-    """A record's grader_refs pick which criteria apply; their args come from the spec."""
-    output = _write_experiment_dir(
-        tmp_path, content=_spec_with(f"{GRADERS}.FixedScoreGrader", "{score: 0.9}")
+    import yaml
+
+    from tests.unit.engine.graders_for_tests import FixedScoreGrader
+
+    specification = yaml.safe_load(MINIMAL_EXPERIMENT)
+    behaviour = specification["features"][0]["behaviours"][0]
+    behaviour["criteria"][0]["grader_args"] = {"score": 0.9}
+    behaviour["criteria"].append(
+        {
+            "id": "AC-1-2",
+            "name": "Second assessment",
+            "description": "The response satisfies the second requirement.",
+            "grader_fqn": f"{GRADERS}.FixedScoreGrader",
+            "grader_args": {"score": 0.2, "threshold": 0.3},
+        }
     )
-    _write_record(output)  # its GraderRef carries args={}
+    specification["features"][0]["behaviours"].append(
+        {
+            "id": "EB-DORMANT",
+            "name": "Unused assessment",
+            "description": "This behaviour is outside the selected task.",
+            "measured": False,
+            "criteria": [
+                {
+                    "id": "AC-DORMANT",
+                    "name": "Unused criterion",
+                    "description": "The session meets an unused requirement.",
+                    "grader_fqn": "unavailable.module.Grader",
+                }
+            ],
+        }
+    )
+    output = _write_experiment_dir(tmp_path, content=yaml.safe_dump(specification))
+    for index in (1, 2):
+        path = _write_record(
+            output, run_name=f"run-{index}", session_id=f"session-{index}"
+        )
+        trial = TrialRecord.load_file(path)
+        trial.config.grader_refs = [
+            GraderRef(
+                criterion_id=cid, fqn="unavailable.trial.Grader", args={"score": 1.0}
+            )
+            for cid in ("AC-1-2", "AC-1-1")
+        ]
+        path.write_text(trial.model_dump_json())
     _patch_evaluation(monkeypatch)
+    calls = []
+    grade = FixedScoreGrader.grade
 
-    runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+    async def observe(self, grading_input, llm):
+        calls.append(self)
+        return await grade(self, grading_input, llm)
 
-    (record,) = EvaluationResults.load_file(
+    monkeypatch.setattr(FixedScoreGrader, "grade", observe)
+    result = runner.invoke(app, ["evaluate", "--experiment-dir", str(output)])
+
+    assert result.exit_code == 0, result.output
+    records = EvaluationResults.load_file(
         output / "outputs" / "reports" / "results.json"
     ).records
-    assert record.results[0].score == 0.9
+    assert [(record.session_id, record.criterion_id) for record in records] == [
+        ("session-1", "AC-1-2"),
+        ("session-1", "AC-1-1"),
+        ("session-2", "AC-1-2"),
+        ("session-2", "AC-1-1"),
+    ]
+    assert [record.grader_args for record in records] == [
+        {"threshold": 0.3, "score": 0.2},
+        {"threshold": 0.5, "score": 0.9},
+    ] * 2
+    assert all(record.grader_fqn == f"{GRADERS}.FixedScoreGrader" for record in records)
+    assert [record.results[0].outcome for record in records] == ["failed", "passed"] * 2
+    assert calls[0] is calls[2]
+    assert calls[1] is calls[3]
+    assert calls[0] is not calls[1]
 
 
 def test_every_session_is_fetched_with_its_artifacts_and_timeout(

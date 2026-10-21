@@ -14,7 +14,6 @@ from metis.core.experiment import Scenario as Scenario
 from metis.core.experiment import Task as Task
 from metis.core.profile import Behaviour as Behaviour
 from metis.core.profile import Criterion as Criterion
-from metis.core.profile import CriterionDescription as CriterionDescription
 from metis.core.profile import Feature as Feature
 from metis.core.profile import NamedNode as NamedNode
 from metis.core.profile import Target as Target

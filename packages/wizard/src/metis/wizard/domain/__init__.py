@@ -8,7 +8,6 @@ from metis.wizard.domain.permissions import InterviewStep, StepPermissions, owne
 from metis.wizard.domain.specification import (
     Behaviour,
     Criterion,
-    CriterionDescription,
     Feature,
     NamedNode,
     Persona,
@@ -21,7 +20,6 @@ from metis.wizard.domain.types import InteractionType
 __all__ = [
     "Behaviour",
     "Criterion",
-    "CriterionDescription",
     "InteractionType",
     "Patch",
     "PatchOp",

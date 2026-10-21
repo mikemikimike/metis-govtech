@@ -7,7 +7,7 @@ Evaluation engine for METIS — simulation harness, trace extraction, and grader
 1. **Simulate** — drives the target system through its selected runner with LLM-powered user personas
 2. **Extract** — fetches every Langfuse trace of each session
 3. **Evaluate** — runs each criterion's grader once per session
-4. **Results** — writes grader results to `outputs/reports/results.json` (holding one GraderRecord per grader per session; `metis insights report` reads it after #454)
+4. **Results** — writes grader results to `outputs/reports/results.json` (holding one GraderRecord per grader per session; `metis insights report` reads it)
 
 ## Setup
 
@@ -127,9 +127,15 @@ experiments/execute/orca-eval-20260730-143022/
 ## Programmatic usage
 
 ```python
-from metis.engine import build_criterion_grader, fetch_session, grade_session
+from metis.engine import build_grader, fetch_session, grade_session
 from metis.engine.extractor import get_langfuse_client
 ```
+
+`build_grader(criterion, default_judge_model=..., env=...)` returns a validated
+`Grader` instance. Keep one instance per Criterion ID. Pass the selected Criteria
+and the instance map to `grade_session(criteria, graders, grading_input, llm, facts)`.
+Use Criteria from the specification snapshot. Trial references select their IDs
+and order. The same instance can grade each required session.
 
 Build a report from saved results with `metis.insights.save_report` or `metis insights report`.
 

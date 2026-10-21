@@ -403,3 +403,76 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
   );
   assert.equal(noLongerUsed.fixtures.length, 0);
 });
+
+test("preserves unreadable assessment records and gives a restart action", async () => {
+  const repository = new InterviewRepository();
+  const record = emptyRecord("old-assessment", state, "criteria", []);
+  const oldRows = [
+    {
+      ...record,
+      id: "old-assessment",
+      state: {
+        ...state,
+        specification: {
+          ...state.specification,
+          features: [
+            {
+              id: "F-1",
+              behaviours: [
+                {
+                  id: "EB-1",
+                  criteria: [
+                    {
+                      id: "AC-1-1",
+                      description: {
+                        given: "a request",
+                        when: "it answers",
+                        then: "it cites sources",
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    {
+      ...record,
+      id: "old-pending-form",
+      state: {
+        ...state,
+        pending: {
+          type: "form",
+          fields: ["given", "when", "then"].map((id) => ({ id })),
+        },
+      },
+    },
+  ];
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = fakeIndexedDB.open("metis-web", 5);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const tx = database.transaction("interviews", "readwrite");
+    for (const row of oldRows) tx.objectStore("interviews").put(row);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  for (const expected of oldRows) {
+    assert.equal(await repository.read(expected.id), undefined);
+    assert.match(repository.problems[0].message, /Start a new Interview/);
+    const raw = await new Promise<unknown>((resolve, reject) => {
+      const request = database
+        .transaction("interviews", "readonly")
+        .objectStore("interviews")
+        .get(expected.id);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    assert.deepEqual(raw, expected);
+  }
+  database.close();
+});

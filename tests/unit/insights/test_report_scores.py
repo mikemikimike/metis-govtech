@@ -56,7 +56,7 @@ def _specification() -> dict[str, Any]:
                         "criteria": [
                             {
                                 "id": "c1",
-                                "description": {"given": "g", "when": "w", "then": "t"},
+                                "description": "Given g, when w, then t.",
                                 "grader_fqn": "pkg.graders.Grader1",
                             }
                         ],

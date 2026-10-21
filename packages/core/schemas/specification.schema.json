@@ -46,7 +46,9 @@
           "type": "string"
         },
         "description": {
-          "$ref": "#/$defs/CriterionDescription"
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
         },
         "grader_fqn": {
           "anyOf": [
@@ -72,29 +74,6 @@
         "description"
       ],
       "title": "Criterion",
-      "type": "object"
-    },
-    "CriterionDescription": {
-      "properties": {
-        "given": {
-          "title": "Given",
-          "type": "string"
-        },
-        "when": {
-          "title": "When",
-          "type": "string"
-        },
-        "then": {
-          "title": "Then",
-          "type": "string"
-        }
-      },
-      "required": [
-        "given",
-        "when",
-        "then"
-      ],
-      "title": "CriterionDescription",
       "type": "object"
     },
     "ExperimentDefaults": {

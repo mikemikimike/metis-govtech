@@ -433,6 +433,24 @@ function ComponentBlock({
   // without the door ever learning it is a scenario.
   const value = (() => {
     switch (component.type) {
+      case "disclosure":
+        return (
+          <details className="w-full text-sm">
+            <summary className="cursor-pointer text-muted-foreground">
+              {component.label ?? "Details"}
+            </summary>
+            <dl className="mt-2 space-y-2">
+              {component.items.map((item, i) => (
+                <div key={i}>
+                  <dt className="text-muted-foreground">{item.label}</dt>
+                  <dd className="whitespace-pre-wrap break-words">
+                    {item.text}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        );
       case "text":
         return (
           <p className="whitespace-pre-wrap text-sm text-foreground">
@@ -508,7 +526,8 @@ function ComponentBlock({
 
   // A divider owns the whole row — it carries no label, so it skips FormRow's label/value split
   // and rules straight across.
-  if (component.type === "divider") return value;
+  if (component.type === "divider" || component.type === "disclosure")
+    return value;
 
   return <FormRow label={component.label}>{value}</FormRow>;
 }
@@ -720,7 +739,10 @@ function FormBlock({
   const drafts = useContext(FormDraftContext);
   const key = `${drafts?.prefix}:${request.request_id}`;
   const [values, updateValues] = useState<Record<string, string>>(
-    drafts?.values.get(key) ?? {},
+    drafts?.values.get(key) ??
+      Object.fromEntries(
+        request.fields.map((field) => [field.id, field.value ?? ""]),
+      ),
   );
   const setValues = (value: Record<string, string>) => {
     drafts?.values.set(key, value);
@@ -747,6 +769,63 @@ function FormBlock({
     );
   }
 
+  const renderField = (field: FormRequest["fields"][number]) => (
+    <label key={field.id} className="flex flex-col gap-1">
+      <span className="text-sm font-medium">{field.label}</span>
+      {field.help && (
+        <span className="text-xs text-muted-foreground">{field.help}</span>
+      )}
+      {field.choices?.length || field.input_type === "boolean" ? (
+        <select
+          className="rounded-md border border-input bg-background p-2 text-sm"
+          value={values[field.id] ?? ""}
+          disabled={busy}
+          required={field.required}
+          onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
+        >
+          <option value="">Select a value</option>
+          {(field.choices?.length ? field.choices : ["true", "false"]).map(
+            (choice) => (
+              <option key={choice} value={choice}>
+                {choice}
+              </option>
+            ),
+          )}
+        </select>
+      ) : field.multiline ? (
+        <textarea
+          className="min-h-20 rounded-lg border border-input bg-background p-2 text-sm"
+          placeholder={field.placeholder}
+          value={values[field.id] ?? ""}
+          disabled={busy}
+          required={field.required}
+          onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
+        />
+      ) : (
+        <input
+          className="rounded-md border border-input bg-background p-2 text-sm"
+          type={
+            field.input_type === "integer" || field.input_type === "number"
+              ? "number"
+              : "text"
+          }
+          step={field.input_type === "integer" ? 1 : "any"}
+          placeholder={field.placeholder}
+          value={values[field.id] ?? ""}
+          disabled={busy}
+          required={field.required}
+          onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
+        />
+      )}
+    </label>
+  );
+  const groups = [
+    ...new Set(
+      request.fields
+        .map((field) => field.group)
+        .filter((group) => group != null),
+    ),
+  ];
   return (
     <form
       className="flex flex-col gap-3"
@@ -756,31 +835,16 @@ function FormBlock({
         onRespond({ type: "form", values });
       }}
     >
-      {request.fields.map((field) => (
-        <label key={field.id} className="flex flex-col gap-1">
-          <span className="text-sm font-medium">{field.label}</span>
-          {field.multiline ? (
-            <textarea
-              className="min-h-20 rounded-lg border border-input bg-background p-2 text-sm"
-              placeholder={field.placeholder}
-              value={values[field.id] ?? ""}
-              disabled={busy}
-              onChange={(e) =>
-                setValues({ ...values, [field.id]: e.target.value })
-              }
-            />
-          ) : (
-            <input
-              className="rounded-md border border-input bg-background p-2 text-sm"
-              placeholder={field.placeholder}
-              value={values[field.id] ?? ""}
-              disabled={busy}
-              onChange={(e) =>
-                setValues({ ...values, [field.id]: e.target.value })
-              }
-            />
-          )}
-        </label>
+      {request.fields.filter((field) => !field.group).map(renderField)}
+      {groups.map((group) => (
+        <details key={group} className="space-y-3">
+          <summary className="cursor-pointer text-sm text-muted-foreground">
+            {group}
+          </summary>
+          {request.fields
+            .filter((field) => field.group === group)
+            .map(renderField)}
+        </details>
       ))}
       <div>
         <Button type="submit" variant="primary" disabled={busy}>

@@ -87,7 +87,6 @@ from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.specification import (
     Behaviour,
     Criterion,
-    CriterionDescription,
     Feature,
     NamedNode,
     Persona,
@@ -127,7 +126,6 @@ __all__ = [
     "ChoiceResponse",
     "ClarifyResult",
     "Criterion",
-    "CriterionDescription",
     "CriterionDraft",
     "FormField",
     "FormRequest",

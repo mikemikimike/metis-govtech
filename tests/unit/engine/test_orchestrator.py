@@ -9,12 +9,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from metis.core.grading import GraderResult, GradingOutput
+from metis.core.profile import Criterion
 from metis.core.traces import GradingInput, Observation, Trace
-from metis.core.trials import GraderRef
 from metis.engine.evaluation.orchestrator import (
     GraderSetupError,
     SessionFacts,
-    build_criterion_grader,
+    build_grader,
     grade_session,
     record_results,
     resolve_grader_class,
@@ -150,17 +150,38 @@ class NotAGrader:
 
 
 def _build(cls: type, args: dict[str, Any] | None = None, **kwargs: Any):
-    ref = GraderRef(criterion_id="AC-1", fqn=f"{HERE}.{cls.__name__}", args=args or {})
-    return build_criterion_grader(
-        ref,
+    criterion = Criterion(
+        id="AC-1",
+        name="Assessment",
+        description="Assess the session.",
+        grader_fqn=f"{HERE}.{cls.__name__}",
+        grader_args=args or {},
+    )
+    return build_grader(
+        criterion,
         default_judge_model=kwargs.get("default"),
         env=kwargs.get("env", {}),
     )
 
 
-def _run(*criteria: Any, grading_input: GradingInput | None = None, llm=None):
+def _run(*instances: Any, grading_input: GradingInput | None = None, llm=None):
+    criteria = [
+        Criterion(
+            id=f"AC-{i}",
+            name="Assessment",
+            description="Assess the session.",
+            grader_fqn=f"{HERE}.{type(grader).__name__}",
+        )
+        for i, grader in enumerate(instances, 1)
+    ]
+    graders = {
+        criterion.id: grader
+        for criterion, grader in zip(criteria, instances, strict=True)
+    }
     return asyncio.run(
-        grade_session(criteria, grading_input or _session("a"), llm or _llm(), FACTS)
+        grade_session(
+            criteria, graders, grading_input or _session("a"), llm or _llm(), FACTS
+        )
     )
 
 
@@ -183,13 +204,20 @@ class TestResolveGraderClass:
             resolve_grader_class(fqn)
 
 
-class TestBuildCriterionGrader:
+class TestBuildGrader:
     def test_builds_with_validated_args(self) -> None:
         built = _build(FixedGrader, {"score": 0.3, "threshold": 0.2})
-        assert isinstance(built.grader, FixedGrader)
+        assert isinstance(built, FixedGrader)
         assert built.args == FixedArgs(score=0.3, threshold=0.2)
-        assert built.criterion_id == "AC-1"
-        assert not built.needs_llm
+
+    def test_criterion_needs_a_grader_before_execution(self) -> None:
+        criterion = Criterion(
+            id="AC-DRAFT", name="Draft", description="Assess the response."
+        )
+        with pytest.raises(
+            GraderSetupError, match="Criterion 'AC-DRAFT' has no grader_fqn"
+        ):
+            build_grader(criterion, default_judge_model=None, env={})
 
     def test_errors_name_the_criterion(self) -> None:
         with pytest.raises(GraderSetupError, match="Criterion 'AC-1'.*no attribute"):
@@ -208,7 +236,6 @@ class TestBuildCriterionGrader:
     def test_judge_model_is_resolved_before_validation(self) -> None:
         built = _build(EchoJudgeGrader, default="spec-model")
         assert built.args.model == "spec-model"  # type: ignore[attr-defined]
-        assert built.needs_llm
 
     def test_model_on_a_code_grader_is_rejected(self) -> None:
         with pytest.raises(GraderSetupError, match="model: Extra inputs"):
@@ -374,9 +401,14 @@ def test_one_grader_mutating_payloads_cannot_change_what_another_sees() -> None:
 
 
 def test_the_grader_base_itself_is_not_a_grader() -> None:
-    ref = GraderRef(criterion_id="AC-1", fqn="metis.library.grader.Grader")
+    criterion = Criterion(
+        id="AC-1",
+        name="Assessment",
+        description="Assess the session.",
+        grader_fqn="metis.library.grader.Grader",
+    )
     with pytest.raises(GraderSetupError, match="Criterion 'AC-1'.*abstract base"):
-        build_criterion_grader(ref, default_judge_model=None, env={})
+        build_grader(criterion, default_judge_model=None, env={})
 
 
 async def _awaitable(value: str) -> str:

@@ -44,7 +44,7 @@ test("grader loading waits until the Specification contains a Criterion", () => 
               {
                 id: "C-1",
                 name: "Criterion",
-                description: { given: "", when: "", then: "" },
+                description: "Given , when , then .",
               },
             ],
           },

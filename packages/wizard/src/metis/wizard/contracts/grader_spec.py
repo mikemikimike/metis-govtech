@@ -42,3 +42,4 @@ class GraderSummary(BaseModel):
     name: str
     description: str
     uses_criterion_description: bool = False
+    default_args: dict[str, Any] = Field(default_factory=dict)

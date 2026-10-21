@@ -436,3 +436,36 @@ def test_the_header_is_drawn_once_and_only_when_the_step_changes() -> None:
     body = "\n".join(suppressed)
     assert "step 2 of 6" not in body and "Behaviours" not in body
     assert body.lstrip().startswith(a_screen().prompt)
+
+
+def test_disclosure_values_are_shown_on_request() -> None:
+    from metis.wizard.contracts.conversation import CardDisclosure
+
+    screen = ChoiceRequest(
+        prompt="Review",
+        cards=[
+            BehaviourCard(
+                id="row",
+                title="Check",
+                components=[
+                    CardText(text="The session stays within its budget."),
+                    CardDisclosure(
+                        label="Details", items=[CardText(label="Limit", text="3")]
+                    ),
+                ],
+            )
+        ],
+        options=[Option(id=OptionId(action="continue"), label="Continue")],
+    )
+    output = []
+    answers = iter(["details", "continue"])
+
+    def read(prompt):
+        answer = next(answers)
+        if answer == "details":
+            assert "Limit: 3" not in "\n".join(output)
+        return answer
+
+    response = cli.render(screen, out=output.append, read=read)
+    assert response.selected == ["continue"]
+    assert "Limit: 3" in "\n".join(output)

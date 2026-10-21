@@ -49,7 +49,7 @@ class Trial(BaseModel):
     conversation: list[ConversationTurn] = Field(default_factory=list)
     category: str
     features: list[str] = Field(default_factory=list)
-    results: dict[str, object] = Field(default_factory=dict)
+    results: dict[str, TrialResult] = Field(default_factory=dict)
 
 
 class TrialsSummary(BaseModel):
@@ -103,6 +103,7 @@ class AxisRow(BaseModel):
     pass_: int = Field(0, alias="pass")
     fail: int = 0
     ran: int = 0
+    error: int = 0
     skip: int = 0
     sessions: int = 0
     behaviours: int = 0
@@ -114,10 +115,11 @@ class AxisRow(BaseModel):
 
 
 class CriterionBreakdownCell(BaseModel):
-    rate: int
+    rate: int | None
     n: int
     pass_: int = Field(alias="pass")
     fail: int
+    error: int = 0
     skip: int
 
     model_config = {"populate_by_name": True}
@@ -129,6 +131,7 @@ class BlankCause(BaseModel):
 
 
 class EvidenceItem(BaseModel):
+    score: float | None = None
     task_id: str = ""
     trial_index: int = 1
     criterion_id: str = ""
@@ -145,13 +148,12 @@ class EvidenceItem(BaseModel):
 
 class Criterion(BaseModel):
     grader_args: dict[str, Any] = Field(default_factory=dict)
-    given: str
-    when: str
-    then: str
+    description: str
     grader: str
     fqn: str | None = None
     pass_: int = Field(0, alias="pass")
     fail: int = 0
+    error: int = 0
     skip: int = 0
     rate: int | None = None
     status: str | None = None
@@ -195,6 +197,7 @@ class ResultTableFeature(BaseModel):
 class TrialResult(BaseModel):
     pass_: int = Field(0, alias="pass")
     fail: int = 0
+    error: int = 0
     skip: int = 0
     evaluated: int = 0
     rate: int | None = None
@@ -213,9 +216,11 @@ class ResultTable(BaseModel):
 
 
 class UnmappedGrader(BaseModel):
+    evidence: list[EvidenceItem] = Field(default_factory=list)
     grader: str
     pass_: int = Field(0, alias="pass")
     fail: int = 0
+    error: int = 0
     skip: int = 0
     why: str = ""
 

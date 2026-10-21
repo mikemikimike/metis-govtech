@@ -15,7 +15,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import typer
 from dotenv import load_dotenv
@@ -152,9 +152,10 @@ def _grader_setup_errors(specification: Specification) -> list[str]:
     in place. ``check_setup`` runs after its args validate. No client or credentials are
     needed: the gateway is checked separately, at the start of ``evaluate``.
     """
-    from metis.engine.evaluation import GraderSetupError, build_criterion_grader
+    from metis.engine.evaluation import GraderSetupError, build_grader
 
     errors: list[str] = []
+    criteria_by_id = {c.id: c for b in specification.behaviours() for c in b.criteria}
     checked: set[str] = set()
     default_judge_model = specification.experiment.defaults.judge_model
     for scenario in specification.resolved_tasks():
@@ -163,14 +164,16 @@ def _grader_setup_errors(specification: Specification) -> list[str]:
                 continue
             checked.add(ref.criterion_id)
             try:
-                built = build_criterion_grader(
-                    ref, default_judge_model=default_judge_model, env=os.environ
+                built = build_grader(
+                    criteria_by_id[ref.criterion_id],
+                    default_judge_model=default_judge_model,
+                    env=os.environ,
                 )
             except GraderSetupError as exc:
                 errors.append(str(exc))
                 continue
             try:
-                problems = type(built.grader).check_setup(built.args, specification)
+                problems = type(built).check_setup(built.args, specification)
             except Exception as exc:  # a grader bug must not crash validation
                 problems = [f"check_setup raised {type(exc).__name__}: {exc}"]
             errors.extend(f"Criterion '{ref.criterion_id}': {p}" for p in problems)
@@ -837,8 +840,8 @@ async def _evaluate_records(
 ) -> EvaluationOutcome:
     """Grade every trial record's session and write one GraderRecord per grader per session.
 
-    Graders are built once per criterion, from the frozen snapshot's criteria rather than each
-    record's own copy, so a criterion graded in many trials shares one grader. One judge client
+    Graders are built once per criterion from the specification snapshot.
+    A criterion graded in many trials shares one grader. One judge client
     is opened for the whole evaluation, and only when some criterion's grader needs one.
     """
     import asyncio
@@ -847,26 +850,30 @@ async def _evaluate_records(
     from metis.core.reporting import EvaluationResults
     from metis.engine import extractor
     from metis.engine.evaluation import (
-        CriterionGrader,
         JudgeGateway,
         SessionFacts,
-        build_criterion_grader,
+        build_grader,
         build_llm_settings,
         grade_session,
     )
-    from metis.library.grader import LLMSettings
+    from metis.library.grader import Grader, JudgeArgs, LLMSettings
 
     default_judge_model = specification.experiment.defaults.judge_model
-    graders: dict[str, CriterionGrader] = {}
+    criteria_by_id = {c.id: c for b in specification.behaviours() for c in b.criteria}
+    graders: dict[str, Grader[Any]] = {}
     for scenario in specification.resolved_tasks():
         for ref in scenario.grader_refs:
             if ref.criterion_id not in graders:
-                graders[ref.criterion_id] = build_criterion_grader(
-                    ref, default_judge_model=default_judge_model, env=os.environ
+                graders[ref.criterion_id] = build_grader(
+                    criteria_by_id[ref.criterion_id],
+                    default_judge_model=default_judge_model,
+                    env=os.environ,
                 )
 
     gateway = JudgeGateway.from_env(os.environ)
-    needs_llm = sorted(cid for cid, g in graders.items() if g.needs_llm)
+    needs_llm = sorted(
+        cid for cid, g in graders.items() if isinstance(g.args, JudgeArgs)
+    )
     if needs_llm and gateway is None:
         console.print(
             "Error: criteria "
@@ -930,7 +937,7 @@ async def _evaluate_records(
 
                 session_id = record.target_session_id
                 criteria = [
-                    graders[ref.criterion_id]
+                    criteria_by_id[ref.criterion_id]
                     for ref in record.config.grader_refs
                     if ref.criterion_id in graders
                 ]
@@ -979,11 +986,11 @@ async def _evaluate_records(
                                     + json.dumps(
                                         {
                                             "record": label,
-                                            "criterion_id": criterion.criterion_id,
+                                            "criterion_id": criterion.id,
                                             "fqn": criterion.grader_fqn,
-                                            "args": criterion.args.model_dump(
-                                                mode="json"
-                                            ),
+                                            "args": graders[
+                                                criterion.id
+                                            ].args.model_dump(mode="json"),
                                         },
                                         ensure_ascii=False,
                                         sort_keys=True,
@@ -992,6 +999,7 @@ async def _evaluate_records(
                             phase("evaluating")
                             session_records = await grade_session(
                                 criteria,
+                                graders,
                                 grading_input,
                                 llm,
                                 SessionFacts(

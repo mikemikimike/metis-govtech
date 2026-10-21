@@ -108,11 +108,7 @@ def test_specification_fields_map_to_report():
                         "criteria": [
                             {
                                 "id": "C-1",
-                                "description": {
-                                    "given": "a factual question",
-                                    "when": "the assistant answers",
-                                    "then": "each claim has a source",
-                                },
+                                "description": "Given a factual question, when the assistant answers, then each claim has a source.",
                             }
                         ],
                     }
@@ -135,11 +131,10 @@ def test_specification_fields_map_to_report():
         "priority": True,
     }
     criterion = report["criteria"]["C-1"]
-    assert {key: criterion[key] for key in ("given", "when", "then")} == {
-        "given": "a factual question",
-        "when": "the assistant answers",
-        "then": "each claim has a source",
-    }
+    assert (
+        criterion["description"]
+        == "Given a factual question, when the assistant answers, then each claim has a source."
+    )
 
 
 class TestReportModel:

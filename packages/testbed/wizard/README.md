@@ -61,7 +61,7 @@ item IDs or order.
 |---|---|
 | Feature | Name and description |
 | Expected Behaviour | Name, description, parent Feature, and measurement selection |
-| Criterion | Name and Given/When/Then clauses within matched Behaviours |
+| Criterion | Name and complete description within matched Behaviours |
 | Grader | Exact Grader FQN and arguments for matched Criteria |
 | Task | Scenario, Persona, Behaviour references, fixtures, and execution settings |
 

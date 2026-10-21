@@ -22,6 +22,7 @@ from metis.wizard.application.trials import format_trials
 from metis.wizard.contracts.conversation import (
     AnyCardComponent,
     BehaviourCard,
+    CardDisclosure,
     CardDivider,
     CardNumberField,
     CardOptionGroup,
@@ -228,31 +229,27 @@ def behaviours_screen(specification: Specification, message: str) -> ChoiceReque
 
 
 def _criterion_components(behaviour: Behaviour) -> list[AnyCardComponent]:
-    # Each clause is its own labelled component rather than one run-on sentence. A labelled
-    # component is a form row in both doors — the web aligns the label in a left column and the
-    # CLI prints it above the value — so "Given / When / Then" reads as three aligned rows,
-    # matching how the criterion is drawn in the document pane. The door stays shape-only: it
-    # renders whatever labels arrive and never learns these three are a criterion.
-    #
-    # A divider sits *between* criteria, never before the first or after the last, so a behaviour
-    # with several acceptance criteria does not read as one undifferentiated run of Given/When/Then
-    # rows. The divider is shape, not domain — the door draws a rule where one arrives and never
-    # learns it marks a criterion boundary.
     components: list[AnyCardComponent] = []
     for criterion in behaviour.criteria:
         if components:
             components.append(CardDivider())
-        components.append(CardText(label="Name", text=criterion.name))
-        components.append(CardText(label="Given", text=criterion.description.given))
-        components.append(CardText(label="When", text=criterion.description.when))
-        components.append(CardText(label="Then", text=criterion.description.then))
+        components.append(CardText(text=criterion.description))
+        from metis.wizard.application.matching.matcher import default_grader_args
+
+        settings = {**default_grader_args(criterion), **criterion.grader_args}
         components.append(
-            CardText(label="Grader", text=criterion.grader_fqn or "Not selected")
-        )
-        components.append(
-            CardText(
-                label="Parameters",
-                text=json.dumps(criterion.grader_args, sort_keys=True),
+            CardDisclosure(
+                label="Grader details",
+                items=[
+                    CardText(label="Name", text=criterion.name),
+                    CardText(
+                        label="Grader", text=criterion.grader_fqn or "Not selected"
+                    ),
+                    *[
+                        CardText(label=name, text=json.dumps(value, ensure_ascii=False))
+                        for name, value in settings.items()
+                    ],
+                ],
             )
         )
         components.append(
@@ -260,7 +257,7 @@ def _criterion_components(behaviour: Behaviour) -> list[AnyCardComponent]:
                 options=[
                     Option(
                         id=OptionId(action="parameters", target=criterion.id),
-                        label="Set Grader parameters",
+                        label="Edit assessment",
                     )
                 ]
             )

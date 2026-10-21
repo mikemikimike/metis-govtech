@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from metis.core.traces import GradingInput, Observation, Trace
 from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 from metis.engine.cli import _classify_resume_trials
-from metis.engine.evaluation import SessionFacts, build_criterion_grader, grade_session
+from metis.engine.evaluation import SessionFacts, build_grader, grade_session
 from metis.engine.simulation.experiment import expand_trial_plan, trial_folder_name
 from metis.engine.simulation.types import Specification
 from metis.library.grader import LLMSettings
@@ -42,11 +42,7 @@ def specification() -> Specification:
                                 {
                                     "id": "AC-UNI-22",
                                     "name": "Short budget",
-                                    "description": {
-                                        "given": "a question",
-                                        "when": "the session ends",
-                                        "then": "at most 4 turns",
-                                    },
+                                    "description": "Given a question, when the session ends, then at most 4 turns.",
                                     "grader_fqn": "tests.unit.engine.graders_for_tests.FixedScoreGrader",
                                     "grader_args": {"score": 0.2},
                                 }
@@ -125,10 +121,15 @@ def test_task_records_keep_criterion_configuration_and_trial_identity(
     records = []
     for item in plan:
         scenario, persona, index = item
-        graders = [
-            build_criterion_grader(ref, default_judge_model=None, env={})
-            for ref in scenario.grader_refs
+        criteria = [
+            experiment.criterion(ref.criterion_id) for ref in scenario.grader_refs
         ]
+        assert all(criterion is not None for criterion in criteria)
+        criteria = [criterion for criterion in criteria if criterion is not None]
+        graders = {
+            criterion.id: build_grader(criterion, default_judge_model=None, env={})
+            for criterion in criteria
+        }
         facts = SessionFacts(
             session_id=f"session-{scenario.task_id}",
             scenario_id=scenario.id,
@@ -138,6 +139,7 @@ def test_task_records_keep_criterion_configuration_and_trial_identity(
         records.extend(
             asyncio.run(
                 grade_session(
+                    criteria,
                     graders,
                     _session(facts.session_id),
                     LLMSettings(client=MagicMock()),

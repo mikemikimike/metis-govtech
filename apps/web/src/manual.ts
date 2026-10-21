@@ -130,11 +130,7 @@ export function synthesizeManualSpecification(
       criteria: task.scorers.map((scorer, scorerIndex) => ({
         id: `AC-${taskIndex + 1}-${scorerIndex + 1}`,
         name: scorer.name,
-        description: {
-          given: `the target agent is evaluated in scenario ${task.scenario_ref} with persona ${task.persona_ref}`,
-          when: scenario?.description.trim() ?? "",
-          then: `the result is evaluated by ${scorer.name}: ${scorer.description}`,
-        },
+        description: `${scorer.name}: ${scorer.description}`,
         grader_fqn: scorer.fqn,
         grader_args: scorerParameters(task, scorer.fqn),
       })),

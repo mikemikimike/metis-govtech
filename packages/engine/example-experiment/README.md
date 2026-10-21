@@ -65,7 +65,7 @@ uv run metis engine simulate --input-dir packages/engine/example-experiment/
 uv run metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/
 ```
 
-`run` writes `outputs/reports/results.json` (holding one GraderRecord per grader per session) under the new `experiments/execute/orca-eval-<timestamp>/` directory and prints a `metis insights report` command. That command cannot read this format yet (#454).
+`run` writes `outputs/reports/results.json` (holding one GraderRecord per grader per session) under the new `experiments/execute/orca-eval-<timestamp>/` directory and prints the `metis insights report` command that builds a report from it.
 
 Simulation uses the live TUI in a terminal. Use `--no-tui` to turn it off. Evaluation uses a normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file in the named output.
 

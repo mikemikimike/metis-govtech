@@ -89,9 +89,16 @@ metis engine run --input-dir experiments/design/20261016-223045-interview/output
 See the [Engine guide](engine.md) for the evaluation run and the [Report guide](report.md) for the
 results.
 
+## Review and edit Criteria
+
+Read each Criterion description, then expand **Grader details** to inspect its settings.
+Ask the Wizard to revise the assessment and settings together, or select
+**Edit assessment** to change them directly. Keep directly edited fields consistent.
+The Wizard validates the fields and grader arguments before it saves the edit.
+
 ## Edit fallback grading instructions
 
 When no specific grader matches a criterion, the Interview selects the criterion fallback judge.
 The judge uses the criterion description as its instructions. To change what the judge checks,
-edit that description in the exported YAML before the next run. For the settings and the
+edit the Criterion in the Interview or change its description in the exported YAML before the next run. For the settings and the
 evidence that the judge reads, see [Edit the criterion fallback judge](library/criterionjudge.md).

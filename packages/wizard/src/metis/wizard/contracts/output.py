@@ -12,6 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from metis.core.profile import CriterionDescription
 from metis.wizard.domain.patch import Patch, PatchOp
 
 
@@ -32,9 +33,12 @@ class FeatureDraft(_StrictDraft):
 
 class CriterionDraft(_StrictDraft):
     name: str
-    given: str
-    when: str
-    then: str
+    description: CriterionDescription
+
+
+class CriterionConfiguration(_StrictDraft):
+    description: CriterionDescription
+    grader_args: dict[str, Any]
 
 
 class PersonaDraft(_StrictDraft):
@@ -100,9 +104,7 @@ def _legacy_value(path: str, value: Any) -> Any:
     if field == "criteria":
         return CriterionDraft(
             name=value["name"],
-            given=value["given"],
-            when=value["when"],
-            then=value["then"],
+            description=value["description"],
         )
     if field == "personas":
         return PersonaDraft(
@@ -169,7 +171,7 @@ class StepResultPatch(BaseModel):
             required = {
                 "features": {"name", "description", "behaviours"},
                 "behaviours": {"name", "description"},
-                "criteria": {"name", "given", "when", "then"},
+                "criteria": {"name", "description"},
                 "personas": {"name", "description"},
                 "scenarios": {
                     "name",

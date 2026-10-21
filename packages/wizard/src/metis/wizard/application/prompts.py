@@ -86,7 +86,7 @@ class PromptCatalogError(RuntimeError):
 class ModelPrompt:
     """One complete, immutable model call composed from one catalogue snapshot."""
 
-    name: ModelCall
+    name: str
     system: str
     user: str
 

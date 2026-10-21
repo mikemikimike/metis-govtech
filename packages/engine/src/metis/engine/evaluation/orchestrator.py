@@ -28,13 +28,13 @@ from metis.core.grading import GraderResult, GradingOutput, RecordedResult
 from metis.core.logging import get_logger
 from metis.core.reporting import GraderRecord
 from metis.engine.evaluation.judge import resolve_grader_args
-from metis.library.grader import Grader, GraderArgs, JudgeArgs
+from metis.library.grader import Grader
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+    from metis.core.profile import Criterion
     from metis.core.traces import GradingInput
-    from metis.core.trials import GraderRef
     from metis.library.grader import LLMSettings
 
 logger = get_logger(__name__)
@@ -45,24 +45,6 @@ class GraderSetupError(ValueError):
 
     The message names the criterion and is meant to be shown to the user as-is.
     """
-
-
-@dataclass(frozen=True)
-class CriterionGrader:
-    """One criterion's grader, built and ready to run on any number of sessions."""
-
-    criterion_id: str
-    grader_fqn: str
-    grader: Grader[Any]
-
-    @property
-    def args(self) -> GraderArgs:
-        return self.grader.args
-
-    @property
-    def needs_llm(self) -> bool:
-        """Whether this grader makes grader LLM calls (its args extend ``JudgeArgs``)."""
-        return isinstance(self.grader.args, JudgeArgs)
 
 
 @dataclass(frozen=True)
@@ -103,31 +85,33 @@ def resolve_grader_class(fqn: str) -> type[Grader[Any]]:
     return cls
 
 
-def build_criterion_grader(
-    ref: GraderRef,
+def build_grader(
+    criterion: Criterion,
     *,
     default_judge_model: str | None,
     env: Mapping[str, str],
-) -> CriterionGrader:
+) -> Grader[Any]:
     """Resolve, fill in the judge model, validate and build one criterion's grader.
 
     Raises ``GraderSetupError`` naming the criterion for every way this can fail, so the
     pre-run pass can report it before anything runs.
     """
+    if not criterion.grader_fqn:
+        raise GraderSetupError(f"Criterion '{criterion.id}' has no grader_fqn")
     try:
-        cls = resolve_grader_class(ref.fqn)
+        cls = resolve_grader_class(criterion.grader_fqn)
     except GraderSetupError as exc:
-        raise GraderSetupError(f"Criterion '{ref.criterion_id}': {exc}") from exc
+        raise GraderSetupError(f"Criterion '{criterion.id}': {exc}") from exc
     try:
         raw = resolve_grader_args(
             cls.args_model,
-            ref.args,
+            criterion.grader_args,
             default_judge_model=default_judge_model,
             env=env,
-            description=ref.description,
+            description=criterion.description,
         )
     except ValueError as exc:
-        raise GraderSetupError(f"Criterion '{ref.criterion_id}': {exc}") from exc
+        raise GraderSetupError(f"Criterion '{criterion.id}': {exc}") from exc
     try:
         args = cls.args_model.model_validate(raw)
     except ValidationError as exc:
@@ -136,11 +120,9 @@ def build_criterion_grader(
             for error in exc.errors()
         )
         raise GraderSetupError(
-            f"Criterion '{ref.criterion_id}' has invalid grader_args for {ref.fqn}: {problems}"
+            f"Criterion '{criterion.id}' has invalid grader_args for {criterion.grader_fqn}: {problems}"
         ) from exc
-    return CriterionGrader(
-        criterion_id=ref.criterion_id, grader_fqn=ref.fqn, grader=cls(args)
-    )
+    return cls(args)
 
 
 def record_results(output: GradingOutput, threshold: float) -> list[RecordedResult]:
@@ -168,7 +150,8 @@ def _record(result: GraderResult, threshold: float) -> RecordedResult:
 
 
 async def _run_one(
-    criterion: CriterionGrader,
+    criterion: Criterion,
+    grader: Grader[Any],
     grading_input: GradingInput,
     llm: LLMSettings,
     facts: SessionFacts,
@@ -180,18 +163,19 @@ async def _run_one(
     executes concurrently, so a grader that edits a payload in place would otherwise change
     what the others see.
     """
+    assert criterion.grader_fqn is not None
     try:
-        output = await criterion.grader.grade(grading_input.model_copy(deep=True), llm)
+        output = await grader.grade(grading_input.model_copy(deep=True), llm)
         if not isinstance(output, GradingOutput):
             raise TypeError(
                 f"grade() returned {type(output).__name__}, not GradingOutput"
             )
-        results = record_results(output, criterion.args.threshold)
+        results = record_results(output, grader.args.threshold)
     except Exception as exc:  # a grader bug must not take down the other grader runs
         logger.exception(
             "[evaluation] grader %s raised on criterion %s, session %s",
             criterion.grader_fqn,
-            criterion.criterion_id,
+            criterion.id,
             facts.session_id,
         )
         results = [
@@ -204,15 +188,16 @@ async def _run_one(
         scenario_id=facts.scenario_id,
         task_id=facts.task_id,
         trial_index=facts.trial_index,
-        criterion_id=criterion.criterion_id,
+        criterion_id=criterion.id,
         grader_fqn=criterion.grader_fqn,
-        grader_args=criterion.args.model_dump(mode="json"),
+        grader_args=grader.args.model_dump(mode="json"),
         results=results,
     )
 
 
 async def grade_session(
-    graders: Sequence[CriterionGrader],
+    criteria: Sequence[Criterion],
+    graders: Mapping[str, Grader[Any]],
     grading_input: GradingInput,
     llm: LLMSettings,
     facts: SessionFacts,
@@ -220,6 +205,9 @@ async def grade_session(
     """Run every grader once on one session, concurrently, one record each, in input order."""
     return list(
         await asyncio.gather(
-            *(_run_one(criterion, grading_input, llm, facts) for criterion in graders)
+            *(
+                _run_one(criterion, graders[criterion.id], grading_input, llm, facts)
+                for criterion in criteria
+            )
         )
     )

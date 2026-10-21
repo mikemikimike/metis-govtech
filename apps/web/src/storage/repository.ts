@@ -25,10 +25,28 @@ export interface LocalStorageProblem {
   message: string;
 }
 
+function hasOldCriterionFormat(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasOldCriterionFormat);
+  if (!storedObject(value)) return false;
+  if ("given" in value && "when" in value && "then" in value) return true;
+  if (value.type === "form" && Array.isArray(value.fields)) {
+    const ids = value.fields.filter(storedObject).map((field) => field.id);
+    if (["given", "when", "then"].every((id) => ids.includes(id))) return true;
+  }
+  return Object.values(value).some(hasOldCriterionFormat);
+}
+
+function unreadableMessage(value: unknown): string {
+  return hasOldCriterionFormat(value)
+    ? "This saved Interview uses an older Criterion format. Start a new Interview to continue. The saved Interview remains in this browser."
+    : "This local Interview cannot be read.";
+}
+
 function validRecord(value: unknown): value is LocalInterviewRecord {
   if (!value || typeof value !== "object") return false;
   const record = value as Partial<LocalInterviewRecord>;
   return (
+    !hasOldCriterionFormat(value) &&
     record.storage_version === STORAGE_VERSION &&
     typeof record.id === "string" &&
     typeof record.created_at === "number" &&
@@ -256,7 +274,7 @@ export class InterviewRepository {
             typeof row === "object" && row && "id" in row
               ? String((row as { id?: unknown }).id)
               : "unknown",
-          message: "This local Interview cannot be read.",
+          message: unreadableMessage(row),
         });
     }
     return healthy.sort((a, b) => b.updated_at - a.updated_at);
@@ -266,9 +284,7 @@ export class InterviewRepository {
     const row = await this.raw(id);
     if (row === undefined) return undefined;
     if (!validRecord(row)) {
-      this.problemsValue = [
-        { id, message: "This local Interview cannot be read." },
-      ];
+      this.problemsValue = [{ id, message: unreadableMessage(row) }];
       return undefined;
     }
     return row;

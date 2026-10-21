@@ -1,11 +1,9 @@
-"""The legacy results.json models, kept for ``metis insights report`` until its redesign (#454).
+"""Legacy evaluation input models and the private report projection.
 
-These models are a verbatim copy of what ``metis.core.reporting`` contained before the grader
-redesign (#428), with one addition: the before-validator also rejects files that carry a
-``"records"`` key, because those use the new GraderRecord format that this module cannot read.
-
-``metis insights report`` exits with a clear message for both cases. Delete this module when
-#454 lands and the command is rewritten against the new format.
+``_results.py`` reads both supported input formats. It validates modern records with
+core models, then projects each recorded outcome into these report input models.
+The legacy file validator rejects records to prevent silent data loss when called
+without that input adapter.
 """
 
 from __future__ import annotations
@@ -33,12 +31,14 @@ class SessionGraderResult(BaseModel):
     reason: str
     success: bool
     skipped: bool
+    errored: bool = False
 
 
 class SessionReport(BaseModel):
     """Report-ready projection of a SessionResult."""
 
     session_id: str
+    scenario_id: str = ""
     graders: list[SessionGraderResult]
 
 
@@ -55,6 +55,7 @@ class TurnGraderResult(BaseModel):
     reason: str
     success: bool
     skipped: bool
+    errored: bool = False
     cost: float | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -99,9 +100,8 @@ class EvaluationResults(BaseModel, extra="ignore"):
             )
         if "records" in data:
             raise ValueError(
-                "This results.json uses the new GraderRecord format (grader redesign #428), "
-                "which metis insights report cannot read yet. "
-                "Rerun the report once #454 is released."
+                "This results file uses GraderRecord records. "
+                "Read it through metis.insights._results.load_results."
             )
         return data
 
