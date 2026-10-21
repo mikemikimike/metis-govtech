@@ -31,6 +31,8 @@ from pydantic import BaseModel
 from metis.core import execution_layout
 from metis.core.logging import get_logger
 
+from ._superseded import superseded_path
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -101,13 +103,7 @@ class LLMCallLog:
         """
         if not self.path.is_file():
             return None
-        stamp = (now or datetime.now(tz=UTC)).strftime("%Y%m%dT%H%M%SZ")
-        stem = f"{self.path.stem}-superseded-{stamp}"
-        dest = self.path.with_name(stem + self.path.suffix)
-        suffix = 2
-        while dest.exists():
-            dest = self.path.with_name(f"{stem}-{suffix}{self.path.suffix}")
-            suffix += 1
+        dest = superseded_path(self.path, now=now)
         self.path.rename(dest)
         return dest
 

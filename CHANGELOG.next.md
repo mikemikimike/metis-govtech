@@ -219,6 +219,19 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `llm_calls-superseded-<UTC timestamp>.jsonl` beside the new one. The row model is private
   to the engine. The user agent no longer writes its debug-level token-usage line, since the
   log carries those counts.
+- **A transport log of every request and response, for the `gen_2` runners (#477).** The
+  shared `metis.engine.simulation.transport_log` module writes
+  `outputs/trials/<id>/evidence/log.jsonl`, one JSON line per entry: an ID, time, kind
+  (`request` or `response`), role (`action` or `result`), the request a response answers, a
+  one-line summary written by code, the headers and the body. `LoggingTransport` wraps an
+  `httpx` transport, so every attempt is its own pair of entries, retries included.
+  `Authorization` and every header a target binding lists under `secret_headers` are written
+  as `***`, in requests and responses alike; the summary leaves the query string out. A body
+  over 64 KB goes to `evidence/<id>.bin`, and a body that is a downloaded artifact is an
+  `ArtifactRef` (the file's path and SHA-256) rather than a second copy. When a trial is
+  retried, the earlier attempt's log is kept as `log-superseded-<UTC timestamp>.jsonl`, with
+  its `.bin` bodies moved into a folder of the same name. The entry model is private to the
+  engine, and `gen_1` does not write this log.
 
 #### Changed
 
