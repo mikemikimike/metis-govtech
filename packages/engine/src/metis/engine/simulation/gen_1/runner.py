@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
+
+from ..factory import RunnerFactory
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from metis.core.trials import TrialConfig
 
     from .types import ChosenAction, Observation
@@ -57,3 +61,13 @@ class Runner(ABC):
     @abstractmethod
     async def get_session_id(self) -> str | None:
         """Return the target's session identifier, if available."""
+
+
+class Gen1RunnerFactory(RunnerFactory, Protocol):
+    """A ``RunnerFactory`` whose runners are gen_1 ``Runner``s."""
+
+    async def create(
+        self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
+    ) -> Runner:
+        """Create a fresh gen_1 Runner for one attempt."""
+        ...

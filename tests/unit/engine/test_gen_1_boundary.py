@@ -23,13 +23,7 @@ ALLOWED = {  # module importing gen_1 → gen_1 modules it may import
     "metis.engine.simulation.runners.orca_playwright": {
         f"{GEN_1}.runners.orca_playwright"
     },
-    # gen_1.runner: the Runner type in annotations, until gen_2's sub-issue splits
-    # RunnerFactory per generation.
-    "metis.engine.simulation.trial": {f"{GEN_1}.trial", f"{GEN_1}.runner"},
-    "metis.engine.simulation.factory": {f"{GEN_1}.runner"},
-    # Runs once per experiment, before workers start; gen_2's sub-issue moves it
-    # behind the seam.
-    "metis.engine.simulation.experiment": {f"{GEN_1}.artifact_summarizer"},
+    "metis.engine.simulation.trial": {f"{GEN_1}.trial"},
 }
 
 

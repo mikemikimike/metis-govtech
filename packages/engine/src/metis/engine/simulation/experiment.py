@@ -22,10 +22,9 @@ from metis.core.trials import TrialConfig, TrialFailure, TrialOutcome, TrialReco
 from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
 from ._fixture_artifacts import build_fixture_artifacts
 from .exceptions import TrialRecoverableError
-from .gen_1.artifact_summarizer import resolve_fixture_descriptions
 from .llm_calls import LLMCallLog
 from .transport_log import TransportLog
-from .trial import create_trial
+from .trial import create_trial, resolve_generation
 
 if TYPE_CHECKING:
     import threading
@@ -34,7 +33,7 @@ if TYPE_CHECKING:
     from metis.engine.tui import SimulationState, TUIContext
 
     from .factory import RunnerFactory
-    from .trial import Trial
+    from .trial import SimulatorGeneration, Trial
     from .types import Persona, Scenario, Specification
 
 
@@ -169,6 +168,10 @@ async def _execute_experiment_async(
     # Shared across workers so scenario_started fires exactly once
     started_scenarios: set[str] = set()
 
+    # An unknown generation fails here, before anything starts, not inside an
+    # attempt where the retry loop would try it again.
+    generation = resolve_generation(runner_factory)
+
     # Resolve each undescribed fixture's content_description exactly once, here,
     # before workers fan out — a fixture's content is invariant across scenarios
     # and runs, so it is summarized once per experiment (spec §6), not per run or
@@ -176,7 +179,7 @@ async def _execute_experiment_async(
     # builds; those builds never re-summarize.
     all_fixture_names = [name for task in specification.tasks for name in task.fixtures]
     experiment_root = output_dir if output_dir is not None else Path("results")
-    resolved_fixture_descriptions = await resolve_fixture_descriptions(
+    resolved_fixture_descriptions = await generation.resolve_fixture_descriptions(
         all_fixture_names,
         fixtures_dir,
         experiment_root,
@@ -194,6 +197,7 @@ async def _execute_experiment_async(
                     _worker(
                         worker_id=wid,
                         runner_factory=runner_factory,
+                        generation=generation,
                         worker_trials=worker_trials,
                         experiment_root=experiment_root,
                         fixtures_dir=fixtures_dir,
@@ -257,6 +261,7 @@ async def _worker(
     log_router: LogRouter | None = None,
     tui_ctx: TUIContext | None = None,
     shutdown_event: threading.Event | None = None,
+    generation: SimulatorGeneration | None = None,
 ) -> list[TrialRecord]:
     """One concurrent worker: creates a fresh runner per trial for isolation."""
     structlog.contextvars.clear_contextvars()
@@ -424,6 +429,7 @@ async def _worker(
                 try:
                     trial = create_trial(
                         runner_factory,
+                        generation=generation,
                         runner=runner,
                         persona=persona,
                         scenario=scenario,
