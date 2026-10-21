@@ -111,6 +111,8 @@ experiments/execute/orca-eval-20260730-143022/
 │   │   └── TC-001-cooperative-delegator-1/
 │   │       ├── record.json
 │   │       ├── simulate.log       # Link to the trial log
+│   │       ├── evidence/
+│   │       │   └── llm_calls.jsonl  # One row per user-agent and summarizer LLM request
 │   │       └── artifacts/
 │   │           ├── run-manifest.json
 │   │           └── ...
@@ -121,6 +123,7 @@ experiments/execute/orca-eval-20260730-143022/
 └── logs/
     ├── simulate.log
     ├── simulate-TC-001_cooperative-delegator-01.log
+    ├── llm_calls.jsonl            # LLM requests made once per experiment
     └── evaluate.log
 ```
 

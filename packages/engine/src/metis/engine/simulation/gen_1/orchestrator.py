@@ -23,6 +23,7 @@ from ..exceptions import (
     TrialRecoverableError,
     TurnRecoverableError,
 )
+from ..llm_calls import LLMCallLog
 from ._contract import (
     merge_withheld,
     validate_action_results,
@@ -129,6 +130,7 @@ class Orchestrator:
         self._run_dir = run_dir
         self._fixtures_dir = fixtures_dir
         self._experiment_root = experiment_root
+        self._llm_log = LLMCallLog.for_trial(run_dir)
         self._fixture_artifacts = (
             fixture_artifacts
             if fixture_artifacts is not None
@@ -597,6 +599,7 @@ class Orchestrator:
                     experiment_root=self._experiment_root,
                     triggering_message=current_message,
                     turn_number=turn_count,
+                    llm_log=self._llm_log,
                 )
 
     def _build_record(

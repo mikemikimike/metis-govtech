@@ -1,14 +1,16 @@
 """Core user agent logic for simulating persona-driven interactions."""
 
+from __future__ import annotations
+
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from openai import APIError, AsyncOpenAI
-from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 
 from metis.core.logging import get_logger
 
-from ...types import Persona, Scenario
+from ...llm_calls import parse_completion
 from ..types import (
     ActionResult,
     ActionSlot,
@@ -29,6 +31,12 @@ from .prompts import (
     RESPONSE_TURN_PROMPT,
     SYSTEM_PROMPT_TEMPLATE,
 )
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletionMessageParam
+
+    from ...llm_calls import LLMCallLog
+    from ...types import Persona, Scenario
 
 logger = get_logger()
 
@@ -197,11 +205,15 @@ class HistoryEntry(BaseModel, frozen=True):
 class UserAgent:
     """Simulates a user persona interacting with an AI assistant."""
 
-    def __init__(self, persona: Persona, scenario: Scenario) -> None:
+    def __init__(
+        self, persona: Persona, scenario: Scenario, *, llm_log: LLMCallLog
+    ) -> None:
         """Initialize with persona definition and scenario description.
 
         :param persona: The persona driving the simulated user.
         :param scenario: The experiment scenario defining the goal.
+        :param llm_log: The trial's LLM-call log; every attempt at every call
+            appends a row.
         """
         self.persona = persona
         self.scenario = scenario
@@ -212,9 +224,12 @@ class UserAgent:
         # populates it turn-by-turn). The keys are internal: every consumer
         # reads .values().
         self._artifacts: dict[str, Artifact] = {}
+        self._llm_log = llm_log
+        # Retries go through parse_completion so each attempt is logged.
         self.client = AsyncOpenAI(
             api_key=USER_AGENT_API_KEY,
             base_url=USER_AGENT_BASE_URL,
+            max_retries=0,
         )
         self._system_prompt = self._build_system_prompt()
 
@@ -424,26 +439,22 @@ class UserAgent:
         )
 
         try:
-            kwargs: dict[str, object] = dict(
+            options: dict[str, object] = {}
+            if USER_AGENT_MAX_TOKENS is not None:
+                options["max_tokens"] = USER_AGENT_MAX_TOKENS
+            if USER_AGENT_TEMPERATURE is not None:
+                options["temperature"] = USER_AGENT_TEMPERATURE
+            response = await parse_completion(
+                self.client,
+                self._llm_log,
+                component="user_agent",
                 model=USER_AGENT_MODEL,
                 messages=messages,
                 response_format=UserAgentOutput,
+                **options,
             )
-            if USER_AGENT_MAX_TOKENS is not None:
-                kwargs["max_tokens"] = USER_AGENT_MAX_TOKENS
-            if USER_AGENT_TEMPERATURE is not None:
-                kwargs["temperature"] = USER_AGENT_TEMPERATURE
-            response = await self.client.beta.chat.completions.parse(**kwargs)
             message = response.choices[0].message
             if message.parsed is not None:
-                usage = response.usage
-                if usage:
-                    logger.debug(
-                        "[user_agent] LLM usage: prompt=%d, completion=%d, total=%d tokens",
-                        usage.prompt_tokens,
-                        usage.completion_tokens,
-                        usage.total_tokens,
-                    )
                 return message.parsed
             if message.refusal:
                 logger.error(

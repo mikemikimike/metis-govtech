@@ -12,6 +12,7 @@ import pytest
 from metis.core.trials import TrialConfig
 from metis.engine.simulation.experiment import TrialPlanItem, _worker
 from metis.engine.simulation.gen_1 import trial as gen_1_trial
+from metis.engine.simulation.llm_calls import LLMCallLog
 from metis.engine.simulation.trial import create_trial
 from metis.engine.simulation.types import Persona, Scenario
 
@@ -115,7 +116,11 @@ def test_factory_without_generation_gets_gen_1_trial(
     trial = create_trial(_Factory(), **_trial_kwargs(persona, scenario, tmp_path))
 
     assert trial == "orch"
-    assert built["agent"] == {"persona": persona, "scenario": scenario}
+    assert built["agent"] == {
+        "persona": persona,
+        "scenario": scenario,
+        "llm_log": LLMCallLog.for_trial(tmp_path),
+    }
     assert set(built["orch"]) == {
         "runner",
         "agent",
