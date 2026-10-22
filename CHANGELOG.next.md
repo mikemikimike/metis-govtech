@@ -288,6 +288,20 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `GET` the binding forbids is refused with the same message as in `http_request`, which now
   shares that check. `resume_poll()` repeats the last poll while a submission is open.
 
+- **The generic HTTP runner's `fetch_files` tool (#525).** `HttpRunner.fetch_files(listing,
+  id_key, name_key, download_path, where=None)` downloads the files in a logged listing: code
+  copies each item's ID and name from it, sends one `GET` per file and records it with the
+  shared byte check, at the runner's turn. It refuses a listing that is not an array, one that is
+  not this conversation's (its entry answered no submission and its request path does not name
+  the recorded session ID as a whole segment), one over 100 files, and a `download_path` that
+  lacks exactly one `{id}` or that the binding forbids. It skips a file already held, the user's
+  own upload, and an ID that is not a single path segment. A non-2xx download or bytes that
+  fail the type check are recorded `unfetched` with the reason, and a listed file with no ID
+  `unavailable`, through the new `ArtifactLedger.record_failure`. `http_request` takes an optional
+  `file_id_from` (a JSON path into a one-file upload's response) and passes the ID to
+  `ArtifactLedger.record_upload(external_id=)`, which is how the user's upload is told from the
+  target's files.
+
 - **`gen_2`'s interface, user agent and turn loop (#480).** A runner factory that sets
   `generation = "gen_2"` now runs on `metis.engine.simulation.gen_2`. Its `Runner` has
   `setup(config)`, `act(action, promised) -> Observation`, `end_chat(promised)` and

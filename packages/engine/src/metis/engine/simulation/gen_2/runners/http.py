@@ -4,8 +4,9 @@
 transport for every trial. Its runner fetches the target's OpenAPI specification once,
 and ``http_request`` is the one call the runner agent makes on the target: code checks
 the path, the headers and the binding's rules, substitutes the user's quoted words,
-adds the credentials, and records which responses answered a submission. Polling
-(``poll_until``), file downloads (#525) and the agent loop (#481) arrive in later steps.
+adds the credentials, and records which responses answered a submission. ``poll_until``
+waits for a submission's reply and ``fetch_files`` downloads the files this conversation
+produced; the agent loop (#481) arrives in a later step.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx
 
+from ...artifacts import ArtifactRejected
 from ...config import TrialRetryConfig
 from ...transport_log import LoggingTransport, TransportLog
 from ..binding import TargetBindingError, load_target_binding
@@ -34,11 +36,14 @@ if TYPE_CHECKING:
     from metis.core.trials import TrialConfig
 
     from ...artifacts import ArtifactLedger
+    from ...transport_log import LogEntry
     from ..binding import LoadedBinding
     from ..types import Observation, Promise
 
 MAX_429_RESENDS = 3
 _TIMEOUT = httpx.Timeout(60.0)
+MAX_FILES_PER_LISTING = 100
+"""A conversation does not produce more files than this; a bigger listing is not its own."""
 POLL_INTERVAL = 5.0
 """Seconds between polls; the binding and ``TrialConfig`` have no field for it."""
 _sleep = asyncio.sleep  # names tests replace
@@ -161,6 +166,7 @@ class HttpRunner(Runner):
         json: Any = None,
         multipart: dict[str, str] | None = None,
         headers: dict[str, str] | None = None,
+        file_id_from: str | None = None,
     ) -> dict[str, Any]:
         """Send one request for the runner agent, if the rules allow it.
 
@@ -168,11 +174,19 @@ class HttpRunner(Runner):
         :param json: A body; ``{{n}}`` stands for the user's n-th quoted span.
         :param multipart: Part name to value; ``@name`` is a held file, anything else
             text that may hold placeholders.
+        :param file_id_from: A JSON path (``$.fileId``) into the response of a
+            one-file upload; code copies the target's ID for the file from it, so
+            ``fetch_files`` can tell the user's own upload from the target's files.
         :raises ToolRefused: Whatever breaks a rule; nothing is sent.
         """
         method = method.upper()
         check_call(method, path, self._binding.binding.forbidden_calls)
         extra = check_headers(headers)
+        uploads = [v[1:] for v in (multipart or {}).values() if v.startswith("@")]
+        if file_id_from is not None and len(uploads) != 1:
+            raise ToolRefused(
+                "file_id_from needs a multipart request that uploads exactly one held file"
+            )
         if json is not None and multipart is not None:
             raise ToolRefused("send json or multipart, not both")
         submission = self._is_submission(method, path, json is not None)
@@ -198,12 +212,23 @@ class HttpRunner(Runner):
         if submission and response.is_success:
             self.open_submission = OpenSubmission(request_id, response_id, self._turn)
             self.answers.append(response_id)
-        return {
+        reply: dict[str, Any] = {
             "request_entry": request_id,
             "response_entry": response_id,
             "status": response.status_code,
             "body": _preview(response),
         }
+        if file_id_from is not None and response.is_success:
+            try:
+                value, _ = resolve(Pointer(response_id, file_id_from), self._log)
+            except PointerError as exc:
+                reply["file_id_error"] = str(exc)
+            else:
+                self.ledger.record_upload(
+                    uploads[0], at_turn=self._turn, external_id=str(value)
+                )
+                reply["file_id"] = str(value)
+        return reply
 
     async def poll_until(
         self,
@@ -263,6 +288,120 @@ class HttpRunner(Runner):
                     "condition": "timed out; the submission is still open",
                 }
             await _sleep(POLL_INTERVAL)
+
+    async def fetch_files(
+        self,
+        listing: Pointer,
+        id_key: str,
+        name_key: str,
+        download_path: str,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Download the files in one logged listing of this conversation's files.
+
+        Code copies each item's ID and name from the listing, sends one ``GET`` per file
+        and records what came back; the agent never points at bytes.
+
+        :param listing: Points at an array in a logged result.
+        :param download_path: The file's path with exactly one ``{id}``.
+        :param where: Keeps only the items whose keys have these values.
+        :raises ToolRefused: When the listing is not an array, is not this
+            conversation's, is over the cap, or the path breaks a rule.
+        :raises PointerError: When the pointer leads nowhere.
+        """
+        items, entry = resolve(listing, self._log, allowed=self.results)
+        if not isinstance(items, list):
+            raise ToolRefused("`listing` must point at an array of files")
+        if not self._is_this_conversations(entry):
+            raise ToolRefused(
+                f"{entry.id} is not part of this conversation (it answers no submission "
+                "and its request does not name this session); list the session's own "
+                "files instead"
+            )
+        if download_path.count("{id}") != 1:
+            raise ToolRefused("download_path needs exactly one {id}")
+        forbidden = self._binding.binding.forbidden_calls
+        check_call("GET", download_path.replace("{id}", "x"), forbidden)
+        if len(items) > MAX_FILES_PER_LISTING:
+            raise ToolRefused(
+                f"{entry.id} lists {len(items)} files, more than one conversation makes "
+                f"(limit {MAX_FILES_PER_LISTING}); list the session's own files"
+            )
+        held = self.ledger.artifacts()
+        uploaded = {a.external_id for a in held if a.source == "fixture"}
+        received = {
+            a.external_id
+            for a in held
+            if a.source == "target" and a.state == "received"
+        }
+        files: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict) or any(
+                item.get(k) != v for k, v in (where or {}).items()
+            ):
+                continue
+            name, raw_id = item.get(name_key), item.get(id_key)
+            if not isinstance(name, str) or not name:
+                files.append(_skipped(None, "no name in the listing"))
+            elif raw_id in (None, ""):
+                self.ledger.record_failure(
+                    name,
+                    "unavailable",
+                    f"listed with no ID in {entry.id}",
+                    at_turn=self._turn,
+                )
+                files.append({"name": name, "outcome": "unavailable"})
+            elif str(raw_id) in uploaded:
+                files.append(_skipped(name, "the user's own upload"))
+            elif str(raw_id) in received:
+                files.append(_skipped(name, "already held"))
+            elif "/" in str(raw_id) or ".." in str(raw_id):
+                files.append(_skipped(name, "an ID that is not a single path segment"))
+            else:
+                done = await self._download(name, str(raw_id), download_path)
+                if done["outcome"] == "received":
+                    received.add(str(raw_id))
+                files.append(done)
+        return {"listing": entry.id, "files": files}
+
+    def _is_this_conversations(self, entry: LogEntry) -> bool:
+        """Whether a result answers a submission or names this session in its request."""
+        if entry.id in self.answers:
+            return True
+        if self._session_id is None or entry.pairs_with is None:
+            return False
+        summary = self._log.get(entry.pairs_with).summary  # METHOD /path
+        return self._session_id in summary.partition(" ")[2].split("/")
+
+    async def _download(self, name: str, file_id: str, template: str) -> dict[str, Any]:
+        """One file: a ``GET``, the byte check and the ledger entry, received or not."""
+        path = template.replace("{id}", file_id)
+        try:
+            check_call("GET", path, self._binding.binding.forbidden_calls)
+        except ToolRefused as exc:
+            return _skipped(name, str(exc))
+        response = await self._send(
+            "GET", path, self._credentials("GET", path), None, None, None, None
+        )
+        response_id = self._log.last_id() or ""
+        problem = None if response.is_success else self._log.get(response_id).summary
+        if problem is None:
+            try:
+                self.ledger.record_download(
+                    name,
+                    response.content,
+                    at_turn=self._turn,
+                    external_id=file_id,
+                    content_type=response.headers.get("content-type"),
+                )
+            except ArtifactRejected as exc:
+                problem = str(exc)
+        if problem is not None:
+            self.ledger.record_failure(
+                name, "unfetched", problem, at_turn=self._turn, external_id=file_id
+            )
+        outcome = "received" if problem is None else "unfetched"
+        return {"name": name, "outcome": outcome, "entry": response_id}
 
     async def resume_poll(self) -> dict[str, Any] | None:
         """Repeat the last poll if a submission is still open; ``act`` calls it first."""
@@ -353,6 +492,10 @@ class HttpRunner(Runner):
 
     async def teardown(self) -> None:
         pass  # the HTTP transport is the factory's
+
+
+def _skipped(name: str | None, why: str) -> dict[str, Any]:
+    return {"name": name, "outcome": "skipped", "why": why}
 
 
 def _preview(response: httpx.Response) -> str:
