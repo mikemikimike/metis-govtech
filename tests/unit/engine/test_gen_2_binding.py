@@ -302,3 +302,11 @@ def test_a_scheme_from_the_environment_is_not_echoed(
         load_target_binding(inputs, "targets/app.yaml")
 
     assert "sentinel-url" not in str(caught.value).lower()
+
+
+def test_a_binding_that_is_not_utf8_is_a_clear_error(inputs: Path) -> None:
+    _write(inputs, "")
+    (inputs / "targets/app.yaml").write_bytes(b"identity: \xff\xfe\n")
+
+    with pytest.raises(TargetBindingError, match="not valid UTF-8"):
+        load_target_binding(inputs, "targets/app.yaml")

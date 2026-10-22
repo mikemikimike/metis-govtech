@@ -258,6 +258,23 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   path the value is the body as text. `resolve` accepts only a `result` entry, so the agent
   cannot cite its own request, and only an entry in `allowed` when that set is given. Every
   refusal is a `PointerError` with a message the agent can act on. No tool uses it yet.
+- **The generic HTTP runner's `http_request` tool and the rules code enforces on it (#509).**
+  `HttpRunner.http_request` takes a method, an absolute `path` as the specification writes it
+  (refused with `//`, a `..` segment or no leading `/`), a query, a JSON or multipart body and
+  extra headers; the agent can never set `Authorization`, `Cookie` or `Host`. Code refuses a call
+  matching the binding's `forbidden_calls` before sending it, adds `auth` and `secret_headers`
+  (a header whose variable is unset is left out), and resends a 429 after its `Retry-After`, up
+  to three times and never beyond the trial's remaining time. The specification is fetched once
+  per trial and logged; the server is its first `servers` entry resolved against `spec_url`, and
+  the entry is not one a pointer may cite. The user agent's `⟦…⟧` spans are numbered `{{1}}`,
+  `{{2}}` for the runner agent, and code substitutes the exact text; a placeholder naming no span
+  is refused. A submission (a call matching `submissions`, else any `POST`, `PUT` or `PATCH`
+  with a JSON body) is refused when the action quoted nothing or another is still open; the
+  runner exposes the open one and the responses that answered a submission, and takes the
+  session ID only from such a response. `HttpRunnerFactory.start` opens the HTTP transport
+  (honouring `tls_verify`) and `close` closes it. A binding file that is not UTF-8 gives a clear
+  `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is
+  fetched.
 
 - **`gen_2`'s interface, user agent and turn loop (#480).** A runner factory that sets
   `generation = "gen_2"` now runs on `metis.engine.simulation.gen_2`. Its `Runner` has

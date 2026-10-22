@@ -131,6 +131,11 @@ class TransportLog:
                 return entry
         raise ValueError(f"no entry {entry_id} in the transport log")
 
+    def last_id(self) -> str | None:
+        """The ID of the newest entry, or ``None`` when the log is empty."""
+        entries = self._entries()
+        return entries[-1].id if entries else None
+
     def body_bytes(self, entry: LogEntry) -> bytes:
         """The raw bytes of an entry's body, whichever way it was stored.
 
