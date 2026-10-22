@@ -127,7 +127,8 @@ def _identity(binding: TargetBinding) -> str:
 def first_message(
     *,
     binding: TargetBinding,
-    operations: str,
+    specification: str,
+    indexed: bool,
     spans: Spans,
     files: list[Artifact],
     promised: list[Promise],
@@ -156,8 +157,13 @@ def first_message(
             "## The user's action\n" + spans.masked,
             "## The user's words for the target\n" + words,
             f"## The target\n{_identity(binding)}",
-            "## The target's operations\nThis index is not the whole specification; "
-            "call `operation` to read an endpoint before you use it.\n" + operations,
+            (
+                "## The target's operations\nThis index is not the whole "
+                "specification; call `operation` to read an endpoint before you use it.\n"
+                if indexed
+                else "## The target's specification\n"
+            )
+            + specification,
             "## Files\n" + _file_lines(files),
             "## Open submission\n" + opened,
             "## Promised files not yet received\n"

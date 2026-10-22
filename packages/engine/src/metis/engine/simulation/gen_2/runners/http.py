@@ -548,7 +548,7 @@ class HttpRunner(Runner):
                     self._llm_log,
                     component="runner_agent",
                     model=RUNNER_AGENT_MODEL,
-                    messages=messages,
+                    messages=trimmed(messages),
                     tools=TOOLS,
                     tool_choice="required",
                 )
@@ -595,9 +595,18 @@ class HttpRunner(Runner):
 
     def _first_message(self, promised: list[Promise]) -> str:
         opened = self.open_submission
+        indexed = "paths" in self.document
+        specification = (
+            operation_index(self.document)
+            if indexed
+            else self._log.body_bytes(self._log.get(self.spec_entry)).decode(
+                "utf-8", errors="replace"
+            )
+        )
         return first_message(
             binding=self._binding.binding,
-            operations=operation_index(self.document),
+            specification=specification,
+            indexed=indexed,
             spans=self.spans,
             files=self.ledger.artifacts(),
             promised=promised,
@@ -645,6 +654,40 @@ class HttpRunner(Runner):
     async def teardown(self) -> None:
         if self._owns_llm and self._llm is not None:
             await self._llm.close()  # the HTTP transport is the factory's
+
+
+def trimmed(messages: list[Any]) -> list[Any]:
+    """A copy of ``messages`` with the bodies of earlier rounds' results shortened.
+
+    The agent points at log entries, never at message text, so a body it has already
+    read is replaced by the entry that holds it. The latest round, errors, statuses and
+    entry IDs stay whole; ``messages`` itself is not changed.
+    """
+    last = max(
+        (i for i, m in enumerate(messages) if m["role"] == "assistant"), default=0
+    )
+    sent = list(messages)
+    for i, message in enumerate(messages[:last]):
+        if message["role"] != "tool":
+            continue
+        result = json.loads(message["content"])
+        if isinstance(result.get("body"), str) and "response_entry" in result:
+            size = len(result["body"])
+            result["body"] = (
+                f"(logged as {result['response_entry']}, {size:,} characters)"
+            )
+        elif (
+            isinstance(result.get("definition"), (dict, str)) and "operation" in result
+        ):
+            size = len(json.dumps(result["definition"], ensure_ascii=False))
+            result["definition"] = (
+                f"(definition of {result['operation']}, {size:,} characters; "
+                "call operation again to re-read)"
+            )
+        else:
+            continue
+        sent[i] = {**message, "content": json.dumps(result, ensure_ascii=False)}
+    return sent
 
 
 def _skipped(name: str | None, why: str) -> dict[str, Any]:

@@ -123,6 +123,25 @@ async def test_the_first_message_holds_the_index_and_no_schemas(tmp_path: Path) 
     assert "ITEM-MARKER" not in message and "requestBody" not in message
 
 
+@pytest.mark.asyncio
+async def test_a_specification_without_paths_is_sent_whole_and_operation_refuses(
+    tmp_path: Path,
+) -> None:
+    spec = {"title": "Odd API", "endpoints": {"chat": "POST /talk"}}
+    llm = ScriptedLLM(
+        [("operation", {"method": "POST", "path": "/talk"})],
+        [("report", {"outcome": "unknown", "why": "x"})],
+    )
+    runner = await _runner(tmp_path, llm, spec)
+
+    await runner.act("Say ⟦hi⟧", [])
+
+    assert "POST /talk" in llm.first_message()  # the text, as before
+    assert "not the whole specification" not in llm.first_message()
+    result = json.loads(llm.requests[1]["messages"][-1]["content"])
+    assert "no `paths`" in result["error"]
+
+
 def test_a_definition_follows_a_ref_into_components() -> None:
     found = definition(SPEC, "post", "/orders")
 

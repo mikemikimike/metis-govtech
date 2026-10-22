@@ -207,6 +207,11 @@ def definition(document: dict[str, Any], method: str, path: str) -> dict[str, An
 
     :raises ToolRefused: When the specification has no such operation.
     """
+    if "paths" not in document:
+        raise ToolRefused(
+            "this specification has no `paths`, so there is nothing to look up; "
+            "read the specification text in the first message"
+        )
     method = method.lower()
     item = (document.get("paths") or {}).get(path)
     op = item.get(method) if isinstance(item, dict) else None
