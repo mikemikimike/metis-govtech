@@ -25,7 +25,7 @@ def schema_path(repo_root: Path) -> Path:
 @pytest.fixture
 def example_path(repo_root: Path) -> Path:
     return (
-        repo_root / "packages" / "engine" / "example-experiment" / "specification.yaml"
+        repo_root / "packages" / "engine" / "example-experiment" / "full" / "specification.yaml"
     )
 
 

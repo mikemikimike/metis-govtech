@@ -52,7 +52,7 @@ The wizard persistence model is `metis.wizard.domain.specification.Specification
 
 Merge the old `profile.yaml` and `experiment.yaml` into `specification.yaml`.
 Keep `schema_version: 1` on `next`. Use the complete example in
-`packages/engine/example-experiment/specification.yaml` as the reference.
+`packages/engine/example-experiment/full/specification.yaml` as the reference.
 
 - Keep `id` and `runner_factory_ref`. Use `product.description` for the description.
 - Point editor schema directives at `packages/core/schemas/specification.schema.json`.
@@ -210,9 +210,9 @@ tasks:
 ```
 
 The full converted file is
-`packages/engine/example-experiment/specification.yaml`. Only `AC-EXEC-3` in it names a
-Grader, so the engine refuses to run it until the other Criteria get one. The
-`packages/engine/example-experiment/simple/` example runs end to end.
+`packages/engine/example-experiment/full/specification.yaml`. `AC-EXEC-3` in it names
+`DemoTraceBudgetGrader`; every other Criterion names `CriterionJudgeGrader`. The smaller
+`packages/engine/example-experiment/simple/` example is a quick first run.
 
 
 ### metis-wizard

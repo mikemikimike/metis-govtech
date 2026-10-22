@@ -267,12 +267,10 @@ class TestRunnerRefValidation:
 
 
 class TestExampleExperiment:
-    """Verify the shipped example experiment's state after the grader redesign (#428).
+    """Verify the shipped full example experiment loads.
 
-    Only AC-EXEC-3 has a grader (the demo DemoTraceBudgetGrader); every other Criterion's
-    ``grader_fqn`` is left empty until graders are written for it. The document still parses,
-    and the engine refuses to run it, naming exactly those Criteria. When a grader is added
-    for a Criterion, this test fails and its expected set shrinks.
+    Every Criterion names a Grader: ``DemoTraceBudgetGrader`` for AC-EXEC-3 and the generic
+    ``CriterionJudgeGrader`` (which judges against the Criterion description) for the rest.
     """
 
     EXAMPLE = (
@@ -280,6 +278,7 @@ class TestExampleExperiment:
         / "packages"
         / "engine"
         / "example-experiment"
+        / "full"
         / "specification.yaml"
     )
 
@@ -298,37 +297,17 @@ class TestExampleExperiment:
             == "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
         )
 
-    def test_only_the_demo_criterion_has_a_grader(self) -> None:
+    def test_every_criterion_has_a_grader_and_the_file_loads(self) -> None:
         from metis.core.specification import Specification as Document
 
         document = Document.model_validate(self._document())
-        graded = {
-            c.id: (c.grader_fqn, c.grader_args)
-            for b in document.behaviours()
-            for c in b.criteria
-            if c.grader_fqn
+        graders = {
+            c.id: c.grader_fqn for b in document.behaviours() for c in b.criteria
         }
-        assert graded == {
-            "AC-EXEC-3": (
-                "metis.library.graders.demo.DemoTraceBudgetGrader",
-                {"max_traces": 4},
-            )
-        }
-
-    def test_the_engine_refuses_it_naming_every_criterion_without_a_grader(
-        self,
-    ) -> None:
-        from metis.core.specification import Specification as Document
-
-        ungraded = {
-            c.id
-            for b in Document.model_validate(self._document()).behaviours()
-            for c in b.criteria
-            if not c.grader_fqn
-        }
-        assert len(ungraded) == 83
-        with pytest.raises(ValidationError) as exc_info:
-            Specification.load_file(self.EXAMPLE)
-        message = str(exc_info.value)
-        assert all(f"Criterion {cid} needs a Grader." in message for cid in ungraded)
-        assert "AC-EXEC-3 needs a Grader" not in message
+        assert len(graders) == 84
+        assert (
+            graders["AC-EXEC-3"] == "metis.library.graders.demo.DemoTraceBudgetGrader"
+        )
+        others = {fqn for cid, fqn in graders.items() if cid != "AC-EXEC-3"}
+        assert others == {"metis.library.graders.CriterionJudgeGrader"}
+        Specification.load_file(self.EXAMPLE)

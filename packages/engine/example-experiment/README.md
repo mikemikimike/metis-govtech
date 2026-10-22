@@ -8,12 +8,13 @@ files, and Grader selections assume Orca's specific multi-agent architecture
 different system will require writing your own specification from scratch.
 
 > **Graders are being rewritten (#428).** The METIS grader library was rebuilt without
-> DeepEval, and so far its only grader is a demo, `DemoTraceBudgetGrader`. In the full
-> `specification.yaml`, only Criterion `AC-EXEC-3` names it; every other Criterion has an
-> empty `grader_fqn` and the engine refuses to run the file until those are filled in. Use
-> the [simple specification](simple/specification.yaml) to try the pipeline end to end.
+> DeepEval. In `full/specification.yaml`, Criterion `AC-EXEC-3` names the demo
+> `DemoTraceBudgetGrader`, and every other Criterion names the generic
+> `CriterionJudgeGrader`, which judges the session against the Criterion's own description.
+> Purpose-built graders will replace these as they are written. For a quick first run, use
+> the [simple specification](simple/specification.yaml).
 
-The full `specification.yaml` defines 18 Tasks and 54 Trials for Orca. Each Task
+The [full specification](full/specification.yaml) defines 18 Tasks and 54 Trials for Orca. Each Task
 selects one Scenario, one Persona, fixtures, and Criteria. Each Criterion owns
 its Grader and parameters.
 
@@ -21,16 +22,18 @@ its Grader and parameters.
 
 ```
 example-experiment/
-├── specification.yaml   # Target, features, behaviours, criteria, personas, scenarios, and tasks
-├── simple/              # One Task, one Trial, one Grader, no uploaded files
+├── simple/                  # Quick check: one Task, one Trial, one Grader, no uploaded files
 │   ├── specification.yaml
 │   └── fixtures/
-└── fixtures/            # Files uploaded to Orca during simulation
-    ├── q3_sales.csv
-    ├── q3_sales_corrupted.csv
-    ├── q3_sales_v1.csv
-    ├── q3_sales_v2.csv
-    └── policy_document_adversarial.txt
+└── full/                    # The complete Orca experiment
+    ├── specification.yaml   # Target, features, behaviours, criteria, personas, scenarios, and tasks
+    ├── reports/
+    └── fixtures/            # Files uploaded to Orca during simulation
+        ├── q3_sales.csv
+        ├── q3_sales_corrupted.csv
+        ├── q3_sales_v1.csv
+        ├── q3_sales_v2.csv
+        └── policy_document_adversarial.txt
 ```
 
 ## Quick check
@@ -56,12 +59,12 @@ From the repository root, with Orca, user-agent model, and Langfuse credentials 
 
 ```bash
 # Simulate, evaluate, and write results.
-uv run metis engine run --input-dir packages/engine/example-experiment/
+uv run metis engine run --input-dir packages/engine/example-experiment/full/
 
 # Separate phases: simulate prints the evaluate command for the output it wrote.
 # The --experiment-dir value is that output directory. Its real name holds the
 # experiment id and the start time of the run.
-uv run metis engine simulate --input-dir packages/engine/example-experiment/
+uv run metis engine simulate --input-dir packages/engine/example-experiment/full/
 uv run metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/
 ```
 
@@ -84,8 +87,8 @@ Simulation uses the live TUI in a terminal. Use `--no-tui` to turn it off. Evalu
 
 ## Graders not yet in the library
 
-Every Criterion except `AC-EXEC-3` is waiting for a grader written against
-`metis.library.grader.Grader` (#428). The framework items below never had one:
+Every Criterion except `AC-EXEC-3` uses the generic `CriterionJudgeGrader` until a grader
+written against `metis.library.grader.Grader` replaces it (#428). The framework items below never had one:
 prompt-injection resistance (no metric ID), `M-DA-21` (ML rigour), `M-DA-24`
 (uploaded-data injection), `M-DA-25` (egress & filesystem containment).
 
