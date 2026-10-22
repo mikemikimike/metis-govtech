@@ -26,6 +26,8 @@ import httpx
 import openai
 from openai import AsyncOpenAI
 
+from metis.core.logging import get_logger
+
 from ...artifacts import ArtifactRejected
 from ...config import TrialRetryConfig
 from ...exceptions import TurnRecoverableError
@@ -50,6 +52,8 @@ if TYPE_CHECKING:
     from ...transport_log import LogEntry
     from ..binding import LoadedBinding
     from ..types import Promise
+
+logger = get_logger()
 
 MAX_429_RESENDS = 3
 _TIMEOUT = httpx.Timeout(60.0)
@@ -539,16 +543,20 @@ class HttpRunner(Runner):
             {"role": "user", "content": self._first_message(promised)},
         ]
         nudged = False
-        for _ in range(MAX_ROUNDS):
+        for round_number in range(1, MAX_ROUNDS + 1):
             if _now() - started >= limit:
                 return "the action's time limit passed before the agent reported"
+            sent = trimmed(messages)
+            logger.debug(
+                "runner_agent_round", round=round_number, chars_sent=sent_chars(sent)
+            )
             try:
                 completion = await create_completion(
                     self._llm,
                     self._llm_log,
                     component="runner_agent",
                     model=RUNNER_AGENT_MODEL,
-                    messages=trimmed(messages),
+                    messages=sent,
                     tools=TOOLS,
                     tool_choice="required",
                 )
@@ -654,6 +662,11 @@ class HttpRunner(Runner):
     async def teardown(self) -> None:
         if self._owns_llm and self._llm is not None:
             await self._llm.close()  # the HTTP transport is the factory's
+
+
+def sent_chars(messages: list[Any]) -> int:
+    """The characters of ``messages`` as the model receives them: what a round costs."""
+    return len(json.dumps(messages, ensure_ascii=False))
 
 
 def trimmed(messages: list[Any]) -> list[Any]:

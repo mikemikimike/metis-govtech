@@ -321,6 +321,21 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `gen_2` works, the rules code enforces and how to write a binding for a new app. The runner
   has been tried on Orca's API only.
 
+- **The generic HTTP runner's agent sends only what each round needs (#482).** The first
+  message lists the target's operations as `METHOD path - summary` lines instead of the whole
+  specification, and a new tool, `operation(method, path)`, returns one operation's definition
+  from the parsed specification: local `$ref` links are followed three links deep and the
+  result is cut at 6,000 characters, saying so. It makes no HTTP call and adds nothing to
+  `results`, so it cannot be cited as evidence; an unknown operation is refused with the close
+  paths, or the methods that path has. A specification with no `paths` is sent whole, as
+  before, and `operation` refuses on it. Before each round, the body of every earlier
+  `http_request` and `poll_until` result is replaced by `(logged as e7, 1,830 characters)`,
+  and an earlier `operation` definition by a note to call `operation` again; the latest round,
+  errors, statuses and entry IDs stay whole, and the full conversation is unchanged, so
+  `report` can still cite any entry. Each round logs the characters it sends at debug level
+  (`runner_agent_round`, field `chars_sent`). The agent's tools are now seven. YAML
+  specifications are still not supported.
+
 - **`gen_2`'s interface, user agent and turn loop (#480).** A runner factory that sets
   `generation = "gen_2"` now runs on `metis.engine.simulation.gen_2`. Its `Runner` has
   `setup(config)`, `act(action, promised) -> Observation`, `end_chat(promised)` and

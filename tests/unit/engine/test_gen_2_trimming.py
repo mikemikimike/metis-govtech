@@ -6,10 +6,14 @@ import copy
 import json
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pytest
+import structlog.testing
 
-from metis.engine.simulation.gen_2.runners.http import trimmed
+from metis.engine.simulation.gen_2.runners import http as http_module
+from metis.engine.simulation.gen_2.runners.http import sent_chars, trimmed
 from tests.unit.engine.test_gen_2_agent_loop import (
+    Reply,
     ScriptedLLM,
     _chat,
     _ready,
@@ -99,3 +103,49 @@ async def test_a_stubbed_result_can_still_be_cited_by_report(tmp_path: Path) -> 
     chat = next(m for m in last if m["role"] == "tool")
     assert _body(chat)["body"].startswith("(logged as e")  # shortened when sent
     assert observation.reply == "hi"  # the entry still resolves
+
+
+def test_sent_chars_counts_the_messages_as_the_model_receives_them() -> None:
+    messages = [{"role": "user", "content": "abc"}]
+
+    assert sent_chars(messages) == len(json.dumps(messages, ensure_ascii=False))
+
+
+async def _long_conversation(tmp_path: Path) -> list[int]:
+    """Eight reads of a 3,000-character response, then a report."""
+    tmp_path.mkdir()
+    read: Reply = [("http_request", {"method": "GET", "path": "/status"})]
+    done: Reply = [("report", {"outcome": "unknown", "why": "x"})]
+    llm = ScriptedLLM(*[read] * 8, done)
+    runner, target = await _ready(tmp_path, llm)
+    target.status = [httpx.Response(200, json={"pad": "p" * 3000})]
+    await runner.act("Say ⟦hello⟧", [])
+    return [sent_chars(r["messages"]) for r in llm.requests]
+
+
+@pytest.mark.asyncio
+async def test_a_long_conversation_sends_fewer_characters_than_the_untrimmed_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with_trim = await _long_conversation(tmp_path / "a")
+    monkeypatch.setattr(http_module, "trimmed", lambda messages: messages)
+    without = await _long_conversation(tmp_path / "b")
+
+    assert len(with_trim) == len(without) == 9
+    assert sum(with_trim) < sum(without)
+    assert with_trim[-1] < without[-1] / 2  # the late rounds gain the most
+
+
+@pytest.mark.asyncio
+async def test_each_round_logs_the_characters_sent_at_debug_level(
+    tmp_path: Path,
+) -> None:
+    llm = ScriptedLLM([_chat()], [("report", {"outcome": "unknown", "why": "x"})])
+    runner, _ = await _ready(tmp_path, llm)
+
+    with structlog.testing.capture_logs() as logs:
+        await runner.act("Say ⟦hello⟧", [])
+
+    sent = [e for e in logs if e["event"] == "runner_agent_round"]
+    assert [e["round"] for e in sent] == [1, 2]
+    assert all(e["log_level"] == "debug" and e["chars_sent"] > 0 for e in sent)
