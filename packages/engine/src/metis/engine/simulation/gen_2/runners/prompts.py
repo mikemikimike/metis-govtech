@@ -26,7 +26,9 @@ and the notes about it, then do it, look at the result, and report.
 1. Read the action, the file list, the open submission and your notes.
 2. If a submission is open, it must settle before a new one can be sent. Settle it with \
 `poll_until`.
-3. Do the action with the tools, one step at a time, and read each result before the \
+3. Call `operation` to read an endpoint's definition before you use it: you are shown \
+only an index of the specification, and `operation` sends nothing to the target. Then do \
+the action with the tools, one step at a time, and read each result before the \
 next step. One action may take several calls: an upload and the message that uses it \
 are one action.
 4. When you are done, or cannot go further, call `report`, once, last.
@@ -126,6 +128,7 @@ def first_message(
     *,
     binding: TargetBinding,
     specification: str,
+    indexed: bool,
     spans: Spans,
     files: list[Artifact],
     promised: list[Promise],
@@ -154,7 +157,13 @@ def first_message(
             "## The user's action\n" + spans.masked,
             "## The user's words for the target\n" + words,
             f"## The target\n{_identity(binding)}",
-            "## The target's specification\n" + specification,
+            (
+                "## The target's operations\nThis index is not the whole "
+                "specification; call `operation` to read an endpoint before you use it.\n"
+                if indexed
+                else "## The target's specification\n"
+            )
+            + specification,
             "## Files\n" + _file_lines(files),
             "## Open submission\n" + opened,
             "## Promised files not yet received\n"

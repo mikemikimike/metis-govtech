@@ -26,6 +26,8 @@ import httpx
 import openai
 from openai import AsyncOpenAI
 
+from metis.core.logging import get_logger
+
 from ...artifacts import ArtifactRejected
 from ...config import TrialRetryConfig
 from ...exceptions import TurnRecoverableError
@@ -40,7 +42,7 @@ from .config import RUNNER_AGENT_MODEL
 from .prompts import NUDGE, SYSTEM_PROMPT, first_message
 from .rules import SUBMIT_METHODS, ToolRefused, check_call, check_headers, matches
 from .spans import Spans
-from .tools import TOOLS, ActionState, run_tool
+from .tools import TOOLS, ActionState, operation_index, run_tool
 
 if TYPE_CHECKING:
     from metis.core.specification import Specification
@@ -50,6 +52,8 @@ if TYPE_CHECKING:
     from ...transport_log import LogEntry
     from ..binding import LoadedBinding
     from ..types import Promise
+
+logger = get_logger()
 
 MAX_429_RESENDS = 3
 _TIMEOUT = httpx.Timeout(60.0)
@@ -116,6 +120,8 @@ class HttpRunner(Runner):
         self.spans = Spans.of("")
         self.spec_entry = ""
         """The log entry holding the specification: the target's description, not an answer."""
+        self.document: dict[str, Any] = {}
+        """The parsed specification; ``operation`` reads definitions from it."""
         self.results: list[str] = []
         """Response entries of the agent's calls, in order: what a pointer may cite."""
         self.answers: list[str] = []
@@ -163,7 +169,8 @@ class HttpRunner(Runner):
                     f"the specification could not be fetched: {response.status_code}"
                 )
             raw = response.content
-        servers = loads(raw).get("servers") or [{"url": "/"}]
+        self.document = loads(raw)
+        servers = self.document.get("servers") or [{"url": "/"}]
         self._base = urljoin(url, str(servers[0].get("url") or "/")).rstrip("/")
         if not self._base.startswith(("http://", "https://")):
             raise TargetBindingError(
@@ -536,16 +543,20 @@ class HttpRunner(Runner):
             {"role": "user", "content": self._first_message(promised)},
         ]
         nudged = False
-        for _ in range(MAX_ROUNDS):
+        for round_number in range(1, MAX_ROUNDS + 1):
             if _now() - started >= limit:
                 return "the action's time limit passed before the agent reported"
+            sent = trimmed(messages)
+            logger.debug(
+                "runner_agent_round", round=round_number, chars_sent=sent_chars(sent)
+            )
             try:
                 completion = await create_completion(
                     self._llm,
                     self._llm_log,
                     component="runner_agent",
                     model=RUNNER_AGENT_MODEL,
-                    messages=messages,
+                    messages=sent,
                     tools=TOOLS,
                     tool_choice="required",
                 )
@@ -591,13 +602,17 @@ class HttpRunner(Runner):
         return f"the agent did not report within {MAX_ROUNDS} rounds"
 
     def _first_message(self, promised: list[Promise]) -> str:
-        spec = self._log.body_bytes(self._log.get(self.spec_entry)).decode(
-            "utf-8", errors="replace"
-        )
         opened = self.open_submission
+        specification = operation_index(self.document)
+        indexed = bool(specification)
+        if not indexed:  # nothing to list, so the agent gets the text, as in #481
+            specification = self._log.body_bytes(self._log.get(self.spec_entry)).decode(
+                "utf-8", errors="replace"
+            )
         return first_message(
             binding=self._binding.binding,
-            specification=spec,
+            specification=specification,
+            indexed=indexed,
             spans=self.spans,
             files=self.ledger.artifacts(),
             promised=promised,
@@ -645,6 +660,45 @@ class HttpRunner(Runner):
     async def teardown(self) -> None:
         if self._owns_llm and self._llm is not None:
             await self._llm.close()  # the HTTP transport is the factory's
+
+
+def sent_chars(messages: list[Any]) -> int:
+    """The characters of ``messages`` as the model receives them: what a round costs."""
+    return len(json.dumps(messages, ensure_ascii=False))
+
+
+def trimmed(messages: list[Any]) -> list[Any]:
+    """A copy of ``messages`` with the bodies of earlier rounds' results shortened.
+
+    The agent points at log entries, never at message text, so a body it has already
+    read is replaced by the entry that holds it. The latest round, errors, statuses and
+    entry IDs stay whole; ``messages`` itself is not changed.
+    """
+    last = max(
+        (i for i, m in enumerate(messages) if m["role"] == "assistant"), default=0
+    )
+    sent = list(messages)
+    for i, message in enumerate(messages[:last]):
+        if message["role"] != "tool":
+            continue
+        result = json.loads(message["content"])
+        if isinstance(result.get("body"), str) and "response_entry" in result:
+            size = len(result["body"])
+            result["body"] = (
+                f"(logged as {result['response_entry']}, {size:,} characters)"
+            )
+        elif (
+            isinstance(result.get("definition"), (dict, str)) and "operation" in result
+        ):
+            size = len(json.dumps(result["definition"], ensure_ascii=False))
+            result["definition"] = (
+                f"(definition of {result['operation']}, {size:,} characters; "
+                "call operation again to re-read)"
+            )
+        else:
+            continue
+        sent[i] = {**message, "content": json.dumps(result, ensure_ascii=False)}
+    return sent
 
 
 def _skipped(name: str | None, why: str) -> dict[str, Any]:

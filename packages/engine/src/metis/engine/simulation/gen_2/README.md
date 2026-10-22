@@ -23,8 +23,10 @@ user agent ──action──▶ HttpRunner.act ──▶ runner agent (LLM) ─
 1. The user agent writes one action. Text meant for the target sits between `⟦` and `⟧`.
 2. `act` numbers those spans `{{1}}`, `{{2}}`, ... and settles any submission left open by
    an earlier action.
-3. The runner agent, an LLM, reads the target's OpenAPI specification (fetched once per
-   trial) and calls tools until it calls `report`. It is limited to 12 rounds and to
+3. The runner agent, an LLM, is shown an index of the target's OpenAPI specification
+   (fetched once per trial), reads an endpoint's definition with `operation` when it needs
+   it, and calls tools until it calls `report`. Results from earlier rounds are shortened
+   to the log entry that holds them. It is limited to 12 rounds and to
    `response_wait_ms` plus 60 seconds, and never goes past the trial deadline.
 4. Code builds the `Observation`. The agent's own words fill only `reading`
    (`outcome`, `why`, `next_options`), which the user agent is told is an interpretation.
