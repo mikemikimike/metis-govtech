@@ -51,6 +51,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   reference graders, with authoring steps and explicit limits on future capabilities.
   Align the glossary with Scope and its trace, subsession, and session attributes.
 
+- Add the Docusaurus site setup, task-based navigation, shared page layout
+  components, and METIS visual style. Include logo assets and Make commands
+  to install, preview, check, and build the site.
+
 - **Defined Grading Scope in `GLOSSARY.md`.** The term names the part of a session that
   one grader result grades — the whole session, a trace, or an observation. It belongs
   to a result, not to a grader, and is distinct from the Baseline and Feature-specific

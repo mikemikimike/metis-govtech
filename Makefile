@@ -1,4 +1,4 @@
-.PHONY: help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-init release-branch release-issue
+.PHONY: install-docs run-docs build-docs check-docs help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-init release-branch release-issue
 
 help:
 	@printf "Available targets:\n"
@@ -9,6 +9,7 @@ help:
 	@printf "  make install-engine              Install metis-engine + Playwright browser\n"
 	@printf "  make install-api                 Install metis-api only\n"
 	@printf "  make install-web                 Install apps/web dependencies from its lockfile\n"
+	@printf "  make install-docs                Install website dependencies from its lockfile\n"
 	@printf "  make install-extras              Install all optional extras\n"
 	@printf "  make install-extras-playwright   Install Playwright Python package + Chromium binary\n"
 	@printf "\n"
@@ -16,6 +17,7 @@ help:
 	@printf "  make run                  Show instructions for starting all services\n"
 	@printf "  make run-api              Start the API server on port 8001\n"
 	@printf "  make run-web              Start the web dev server\n"
+	@printf "  make run-docs             Start the docs on port 3000\n"
 	@printf "\n"
 	@printf "Code quality:\n"
 	@printf "  make lint              Run Ruff lint checks\n"
@@ -29,6 +31,8 @@ help:
 	@printf "  make test-unit         Run unit tests only\n"
 	@printf "  make ci                Full CI suite: check + web checks + test\n"
 	@printf "  make check-web         Run non-mutating apps/web checks\n"
+	@printf "  make check-docs        Check links and build the docs\n"
+	@printf "  make build-docs        Build the docs site\n"
 	@printf "\n"
 	@printf "Other:\n"
 	@printf "  make clean             Remove all generated/cached files\n"
@@ -52,6 +56,17 @@ install-api:
 
 install-web:
 	npm --prefix apps/web ci
+
+install-docs:
+	npm --prefix website ci --omit=optional
+
+run-docs:
+	npm --prefix website start
+
+build-docs:
+	npm --prefix website run build
+
+check-docs: build-docs
 
 install-extras: install-extras-playwright
 
