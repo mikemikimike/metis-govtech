@@ -10,9 +10,11 @@ Evaluating a different system will require writing your own specification.
 
 ```
 example-experiment/
-└── simple/
-    ├── specification.yaml
-    └── fixtures/
+├── simple/
+│   ├── specification.yaml
+│   └── fixtures/
+└── targets/              # An example target binding for the generic HTTP runner
+    └── orca-api.yaml
 ```
 
 ## Running
@@ -42,6 +44,22 @@ under the new `experiments/execute/orca-simple-<timestamp>/` directory and print
 Simulation uses the live TUI in a terminal. Use `--no-tui` to turn it off. Evaluation uses a
 normal progress bar, has no TUI option, and writes one complete `logs/evaluate.log` file in
 the named output.
+
+## Binding another API
+
+`targets/orca-api.yaml` is an example *target binding*: it lets the generic HTTP runner
+drive Orca's REST API from a YAML file, with no Python runner. To use it, name it in a
+specification:
+
+```yaml
+runner_factory_ref: metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory
+target_binding: targets/orca-api.yaml
+```
+
+The [simple specification](simple/specification.yaml) does not do so; it uses the Orca
+runner above. The [`gen_2` README](../src/metis/engine/simulation/gen_2/README.md)
+explains each field and how to write one for your own app. The runner has been tried on
+Orca's API only.
 
 ## A larger example
 

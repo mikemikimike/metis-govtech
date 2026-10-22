@@ -316,7 +316,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   transport, and `notice` reports a failed poll, an open submission, a transport failure, the
   time limit or the round cap. An LLM failure raises `TurnRecoverableError`.
   `HttpRunnerFactory` takes an optional `llm` client and otherwise builds one from
-  `OPENAI_API_KEY` and `OPENAI_BASE_URL`.
+  `OPENAI_API_KEY` and `OPENAI_BASE_URL`. `example-experiment/targets/orca-api.yaml` is an
+  example target binding for Orca's API, and `simulation/gen_2/README.md` explains how
+  `gen_2` works, the rules code enforces and how to write a binding for a new app. The runner
+  has been tried on Orca's API only.
 
 - **`gen_2`'s interface, user agent and turn loop (#480).** A runner factory that sets
   `generation = "gen_2"` now runs on `metis.engine.simulation.gen_2`. Its `Runner` has
