@@ -7,6 +7,10 @@ API, a header that carries a credential, a call the binding forbids.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 SUBMIT_METHODS = frozenset({"POST", "PUT", "PATCH"})
 """With a JSON body, the default meaning of a submission."""
@@ -31,6 +35,13 @@ def check_path(path: str) -> None:
             f"path must be an absolute path on the target as the specification "
             f"writes it, without // or .. or a query: {path!r}"
         )
+
+
+def check_call(method: str, path: str, forbidden: Iterable[str]) -> None:
+    """Refuse a bad path, then a call the binding forbids; every tool that sends uses it."""
+    check_path(path)
+    if any(matches(pattern, method, path) for pattern in forbidden):
+        raise ToolRefused(f"{method} {path} is forbidden by the target binding")
 
 
 def check_headers(headers: dict[str, str] | None) -> dict[str, str]:

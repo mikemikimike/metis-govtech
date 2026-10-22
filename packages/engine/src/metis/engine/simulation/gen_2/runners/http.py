@@ -5,13 +5,14 @@ transport for every trial. Its runner fetches the target's OpenAPI specification
 and ``http_request`` is the one call the runner agent makes on the target: code checks
 the path, the headers and the binding's rules, substitutes the user's quoted words,
 adds the credentials, and records which responses answered a submission. Polling
-(#524), file downloads (#525) and the agent loop (#481) arrive in later steps.
+(``poll_until``), file downloads (#525) and the agent loop (#481) arrive in later steps.
 """
 
 from __future__ import annotations
 
 import asyncio
 import mimetypes
+import time
 from dataclasses import dataclass
 from json import loads
 from pathlib import Path
@@ -23,9 +24,9 @@ import httpx
 from ...config import TrialRetryConfig
 from ...transport_log import LoggingTransport, TransportLog
 from ..binding import TargetBindingError, load_target_binding
-from ..evidence import Pointer, resolve
+from ..evidence import Pointer, PointerError, resolve
 from ..runner import Runner
-from .rules import SUBMIT_METHODS, ToolRefused, check_headers, check_path, matches
+from .rules import SUBMIT_METHODS, ToolRefused, check_call, check_headers, matches
 from .spans import Spans
 
 if TYPE_CHECKING:
@@ -38,18 +39,30 @@ if TYPE_CHECKING:
 
 MAX_429_RESENDS = 3
 _TIMEOUT = httpx.Timeout(60.0)
-_sleep = asyncio.sleep  # a name tests replace
+POLL_INTERVAL = 5.0
+"""Seconds between polls; the binding and ``TrialConfig`` have no field for it."""
+_sleep = asyncio.sleep  # names tests replace
+_now = time.monotonic
 
 
 @dataclass(frozen=True)
 class OpenSubmission:
-    """A submission the target accepted and nothing has settled yet (#524 settles it)."""
+    """A submission the target accepted and nothing has settled yet (``poll_until`` settles it)."""
 
     request: str
     """The transport-log entry of the request."""
     response: str
     """The entry of the response that accepted it."""
     turn: int
+
+
+@dataclass(frozen=True)
+class Unresolved:
+    """A submission a poll could not settle because the target answered it with a 4xx."""
+
+    submission: OpenSubmission
+    response: str
+    """The entry of the response that showed the failure."""
 
 
 class HttpRunner(Runner):
@@ -68,6 +81,10 @@ class HttpRunner(Runner):
         self._root = experiment_root
         self._base = ""
         self._deadline = 0.0
+        self._wait = 0.0
+        self._last_poll: tuple[str, str, list[Any] | None, list[Any] | None] | None = (
+            None
+        )
         self._turn = 0
         self._session_id: str | None = None
         self.spans = Spans.of("")
@@ -79,7 +96,9 @@ class HttpRunner(Runner):
         """Response entries that accepted a submission. #525 uses them to tell this
         conversation's listings from an account-wide one."""
         self.open_submission: OpenSubmission | None = None
-        """The accepted submission nothing has settled yet; #524 clears it."""
+        """The accepted submission nothing has settled yet; ``poll_until`` clears it."""
+        self.unresolved: Unresolved | None = None
+        """Set by a 4xx during a poll while a submission was open; a timeout leaves it open."""
 
     @property
     def session_id(self) -> str | None:
@@ -90,7 +109,8 @@ class HttpRunner(Runner):
 
     async def setup(self, config: TrialConfig) -> None:
         """Fetch and log the specification, once, and work out the server URL."""
-        self._deadline = asyncio.get_running_loop().time() + config.timeout_minutes * 60
+        self._deadline = _now() + config.timeout_minutes * 60
+        self._wait = config.response_wait_ms / 1000
         url = self._binding.spec_url
         parts = urlsplit(url)
         if parts.scheme in ("http", "https") and not parts.netloc:
@@ -151,10 +171,8 @@ class HttpRunner(Runner):
         :raises ToolRefused: Whatever breaks a rule; nothing is sent.
         """
         method = method.upper()
-        check_path(path)
+        check_call(method, path, self._binding.binding.forbidden_calls)
         extra = check_headers(headers)
-        if any(matches(p, method, path) for p in self._binding.binding.forbidden_calls):
-            raise ToolRefused(f"{method} {path} is forbidden by the target binding")
         if json is not None and multipart is not None:
             raise ToolRefused("send json or multipart, not both")
         submission = self._is_submission(method, path, json is not None)
@@ -184,8 +202,74 @@ class HttpRunner(Runner):
             "request_entry": request_id,
             "response_entry": response_id,
             "status": response.status_code,
-            "body": response.content.decode("utf-8", errors="replace")[:4000],
+            "body": _preview(response),
         }
+
+    async def poll_until(
+        self,
+        path: str,
+        at: str,
+        *,
+        not_in: list[Any] | None = None,
+        in_: list[Any] | None = None,
+    ) -> dict[str, Any]:
+        """``GET path`` every few seconds until the JSON value at ``at`` settles.
+
+        :param not_in: Values that mean still waiting; anything else is done.
+        :param in_: Values that mean done; anything else is still waiting.
+        :raises ToolRefused: Unless exactly one of ``not_in`` and ``in_`` is given, or
+            when the path breaks a rule.
+        """
+        if (not_in is None) == (in_ is None):
+            raise ToolRefused(
+                "give exactly one of not_in (values that mean still waiting) "
+                "or in_ (values that mean done)"
+            )
+        check_call("GET", path, self._binding.binding.forbidden_calls)
+        self._last_poll = (path, at, not_in, in_)
+        stop_at = _now() + min(self._wait, max(0.0, self._deadline - _now()))
+        wire = self._credentials("GET", path)
+        polls = 0
+        while True:
+            response = await self._send("GET", path, wire, None, None, None, None)
+            polls += 1
+            response_id = self._log.last_id() or ""
+            self.results.append(response_id)
+            reply: dict[str, Any] = {
+                "response_entry": response_id,
+                "status": response.status_code,
+                "polls": polls,
+                "body": _preview(response),
+            }
+            if response.status_code != 429:  # _send waited it out; carry on
+                if not response.is_success:
+                    if 400 <= response.status_code < 500 and self.open_submission:
+                        self.unresolved = Unresolved(self.open_submission, response_id)
+                        self.open_submission = None
+                    return reply
+                try:
+                    value, _ = resolve(Pointer(response_id, at), self._log)
+                except PointerError as exc:
+                    return {**reply, "error": str(exc)}
+                waiting = (
+                    value in not_in if not_in is not None else value not in (in_ or [])
+                )
+                if not waiting:
+                    self.open_submission = None
+                    return {**reply, "condition": "holds", "value": value}
+            if _now() + POLL_INTERVAL > stop_at:
+                return {
+                    **reply,
+                    "condition": "timed out; the submission is still open",
+                }
+            await _sleep(POLL_INTERVAL)
+
+    async def resume_poll(self) -> dict[str, Any] | None:
+        """Repeat the last poll if a submission is still open; ``act`` calls it first."""
+        if self.open_submission is None or self._last_poll is None:
+            return None
+        path, at, not_in, in_ = self._last_poll
+        return await self.poll_until(path, at, not_in=not_in, in_=in_)
 
     def _is_submission(self, method: str, path: str, has_json: bool) -> bool:
         patterns = self._binding.binding.submissions
@@ -238,7 +322,6 @@ class HttpRunner(Runner):
         files: dict[str, tuple[str, bytes, str]] | None,
     ) -> httpx.Response:
         """Send, resending a 429 after its ``Retry-After`` while the trial has time."""
-        loop = asyncio.get_running_loop()
         for attempt in range(MAX_429_RESENDS + 1):
             response = await self._client.request(
                 method,
@@ -252,7 +335,7 @@ class HttpRunner(Runner):
             if response.status_code != 429 or attempt == MAX_429_RESENDS:
                 break
             wait = _retry_after(response)
-            if wait > self._deadline - loop.time():
+            if wait > self._deadline - _now():
                 break
             await _sleep(wait)
         return response
@@ -270,6 +353,10 @@ class HttpRunner(Runner):
 
     async def teardown(self) -> None:
         pass  # the HTTP transport is the factory's
+
+
+def _preview(response: httpx.Response) -> str:
+    return response.content.decode("utf-8", errors="replace")[:4000]
 
 
 def _retry_after(response: httpx.Response) -> float:
