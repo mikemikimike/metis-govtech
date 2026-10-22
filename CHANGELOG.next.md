@@ -247,6 +247,17 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   turn on it. Each entry's `content_description` is one facts line written by code, never the
   file's content: name, type and size, and for a CSV its data rows, columns and header,
   computed once per digest. `gen_1` does not use it.
+- **Evidence pointers into the transport log, for the `gen_2` runners (#508).** A runner
+  agent never states a fact for the record; it points at a logged response and code copies
+  the value. `TransportLog.get` returns one entry by ID and `TransportLog.body_bytes` returns
+  its raw bytes, whether the body is inline, in `evidence/<id>.bin` or an `ArtifactRef`; an
+  artifact whose file no longer matches its recorded SHA-256 is refused. In
+  `metis.engine.simulation.gen_2.evidence`, a `Pointer` is an entry ID, an optional path into
+  its JSON body (`$`, `.key`, `["key"]` and `[n]`, no wildcards) and an optional regular
+  expression applied to the text, which yields its one group or else the whole match. With no
+  path the value is the body as text. `resolve` accepts only a `result` entry, so the agent
+  cannot cite its own request, and only an entry in `allowed` when that set is given. Every
+  refusal is a `PointerError` with a message the agent can act on. No tool uses it yet.
 
 - **`gen_2`'s interface, user agent and turn loop (#480).** A runner factory that sets
   `generation = "gen_2"` now runs on `metis.engine.simulation.gen_2`. Its `Runner` has

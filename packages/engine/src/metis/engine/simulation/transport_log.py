@@ -23,6 +23,7 @@ file yet, and ``gen_1`` is not wired to it.
 from __future__ import annotations
 
 import base64
+import hashlib
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Annotated, Literal
@@ -120,6 +121,34 @@ class TransportLog:
             for line in self.path.read_text(encoding="utf-8").splitlines()
         ]
 
+    def get(self, entry_id: str) -> LogEntry:
+        """The entry with this ID.
+
+        :raises ValueError: When the log has no such entry.
+        """
+        for entry in self._entries():
+            if entry.id == entry_id:
+                return entry
+        raise ValueError(f"no entry {entry_id} in the transport log")
+
+    def body_bytes(self, entry: LogEntry) -> bytes:
+        """The raw bytes of an entry's body, whichever way it was stored.
+
+        :raises ValueError: When a stored path leaves its folder, or an artifact no
+            longer matches the ``sha256`` recorded for it.
+        """
+        body = entry.body
+        if isinstance(body, InlineBody):
+            if body.encoding == "base64":
+                return base64.b64decode(body.text)
+            return body.text.encode("utf-8")
+        if isinstance(body, FileBody):
+            return _read_inside(self.path.parent, body.path)
+        data = _read_inside(self.path.parent.parent, body.path)
+        if hashlib.sha256(data).hexdigest() != body.sha256:
+            raise ValueError(f"{body.path} no longer matches its recorded sha256")
+        return data
+
     def append(
         self,
         kind: Literal["request", "response"],
@@ -210,6 +239,13 @@ class TransportLog:
         dest.write_text("".join(lines), encoding="utf-8")
         self.path.unlink()
         return dest
+
+
+def _read_inside(folder: Path, relative: str) -> bytes:
+    path = (folder / relative).resolve()
+    if not path.is_relative_to(folder.resolve()):
+        raise ValueError(f"{relative} is outside {folder.name}/")
+    return path.read_bytes()
 
 
 def _redact(headers: httpx.Headers, secret_names: frozenset[str]) -> dict[str, str]:
