@@ -77,7 +77,8 @@ change these:
 - `identity` names the app.
 - `spec_url` is where the OpenAPI document lives. `${NAME}` is read from the environment.
   The runner joins each path to the specification's first server URL, so patterns and
-  paths are written *relative to that server*: a chat call is `/chat`, not `/api/v1/chat`.
+  paths are written *relative to that server*: if the document's server is `/`, a chat call is
+  `/api/v1/chat`; if it is `/api/v1`, the same call is `/chat`.
 - `auth.secret_env` names the environment variable holding the credential, sent as the
   scheme the specification declares. Secrets are never written in the file.
 - `secret_headers` adds a header from an environment variable to matching calls. A secret
@@ -93,28 +94,16 @@ The example, `packages/engine/examples/orca-api-http-simple1/orca-api.yaml`:
 
 ```yaml
 # yaml-language-server: $schema=../../../core/schemas/target-binding.schema.json
-# Orca's REST API, bound to the generic HTTP runner. Paths here are the ones the
-# specification writes, relative to its server URL (/api/v1), so a chat call is /chat.
+# Orca's REST API, bound to the generic HTTP runner. What the OpenAPI document already
+# says (routes, bearer auth, polling) is left to it. This file adds only what it cannot.
 schema_version: 1
 identity: {name: Orca, version: "1.0.0"}
 transport: http
 spec_url: ${ORCA_API_URL}/openapi.json  # ORCA_API_URL ends in /api/v1
 tls_verify: false  # Orca's host uses a self-signed certificate
 auth: {scheme: from_spec, secret_env: ORCA_API_KEY}
-secret_headers:
-  # Optional: bills every chat turn to your own platform project on a fixed model.
-  - {match: "POST /chat", header: X-PlatformAI-Key, env: ORCA_PLATFORM_AI_KEY}
 forbidden_calls:
-  - "DELETE /**"
-  - "POST /chat/cancel"
-advice:
-  limits:
-    submit_per_minute: 6
-    read_per_minute: 120
-    note: Over a limit is a 429 with Retry-After; code waits and resends. Poll every few seconds.
-  notes: |
-    The first POST /chat without a sessionId starts the session; never call POST /sessions.
-    Upload a file with POST /files first, then list its fileId in the chat turn's files.
+  - "DELETE /**"  # the document lists deletes, but a trial must not remove sessions or files
 ```
 
 To try a binding, set the variables it names and run the experiment as usual. The runner

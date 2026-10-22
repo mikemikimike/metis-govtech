@@ -8,7 +8,7 @@ import pytest
 
 from metis.core.target_binding import TargetBinding
 from metis.engine.simulation.gen_2.binding import load_target_binding
-from metis.engine.simulation.gen_2.runners.rules import ToolRefused, check_call, matches
+from metis.engine.simulation.gen_2.runners.rules import ToolRefused, check_call
 
 ENGINE = Path(__file__).resolve().parents[3] / "packages" / "engine"
 EXAMPLE = ENGINE / "examples"
@@ -21,7 +21,6 @@ SCHEMA = EXAMPLE.parents[1] / "core" / "schemas" / "target-binding.schema.json"
 def binding(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ORCA_API_URL", "https://orca.example:7443/api/v1")
     monkeypatch.setenv("ORCA_API_KEY", "key-1")
-    monkeypatch.setenv("ORCA_PLATFORM_AI_KEY", "platform-1")
     return load_target_binding(EXAMPLE / "orca-api-http-simple1", "orca-api.yaml")
 
 
@@ -41,7 +40,8 @@ def test_the_example_points_editors_at_the_published_schema() -> None:
 
 
 @pytest.mark.parametrize(
-    ("method", "path"), [("DELETE", "/sessions/s-1"), ("POST", "/chat/cancel")]
+    ("method", "path"),
+    [("DELETE", "/api/v1/sessions/s-1"), ("DELETE", "/api/v1/files/f-1")],
 )
 def test_the_example_forbids_the_calls_orca_should_not_get(
     binding, method: str, path: str
@@ -51,16 +51,13 @@ def test_the_example_forbids_the_calls_orca_should_not_get(
 
 
 def test_the_example_allows_the_calls_a_trial_needs(binding) -> None:
-    for method, path in [("POST", "/chat"), ("POST", "/files"), ("GET", "/files/f-1")]:
+    for method, path in [
+        ("POST", "/api/v1/chat"),
+        ("POST", "/api/v1/chat/cancel"),
+        ("POST", "/api/v1/files"),
+        ("GET", "/api/v1/files/f-1/content"),
+    ]:
         check_call(method, path, binding.binding.forbidden_calls)
-
-
-def test_the_platform_key_goes_on_chat_submissions_only(binding) -> None:
-    [rule] = binding.binding.secret_headers
-
-    assert rule.header == "X-PlatformAI-Key"
-    assert matches(rule.match, "POST", "/chat")
-    assert not matches(rule.match, "GET", "/files/f-1")
 
 
 def test_the_example_matches_the_model_it_is_written_for() -> None:
