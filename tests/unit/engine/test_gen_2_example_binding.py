@@ -12,7 +12,7 @@ from metis.engine.simulation.gen_2.runners.rules import ToolRefused, check_call,
 
 ENGINE = Path(__file__).resolve().parents[3] / "packages" / "engine"
 EXAMPLE = ENGINE / "examples"
-BINDING = EXAMPLE / "targets" / "orca-api.yaml"
+BINDING = EXAMPLE / "orca-api-http-simple1" / "orca-api.yaml"
 README = ENGINE / "src/metis/engine/simulation/gen_2/README.md"
 SCHEMA = EXAMPLE.parents[1] / "core" / "schemas" / "target-binding.schema.json"
 
@@ -22,7 +22,7 @@ def binding(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ORCA_API_URL", "https://orca.example:7443/api/v1")
     monkeypatch.setenv("ORCA_API_KEY", "key-1")
     monkeypatch.setenv("ORCA_PLATFORM_AI_KEY", "platform-1")
-    return load_target_binding(EXAMPLE, "targets/orca-api.yaml")
+    return load_target_binding(EXAMPLE / "orca-api-http-simple1", "orca-api.yaml")
 
 
 def test_the_example_loads_and_expands_its_spec_url(binding) -> None:

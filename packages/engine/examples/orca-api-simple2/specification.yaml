@@ -1,4 +1,4 @@
-schema_version: 2
+schema_version: 1
 id: orca-simple2
 runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
 target:
@@ -17,12 +17,8 @@ features:
     criteria:
     - id: AC-DA-8e
       name: Chart technical correctness
-      description:
-        given: a generated chart + data
-        when: examining chart construction
-        then: chart type matches the data pattern, granularity appropriate, outliers handled
-          sensibly, output format correct
-      grader_fqn: metis.library.graders.TraceBudgetGrader
+      description: "Given a generated chart and its data, when examining chart construction, then the chart type matches the data pattern, the granularity is appropriate, outliers are handled sensibly and the output format is correct."
+      grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
       grader_args:
         max_traces: 20
 

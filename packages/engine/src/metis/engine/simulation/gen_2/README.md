@@ -67,7 +67,7 @@ The binding is a YAML file inside the experiment's `inputs/` folder, named from
 
 ```yaml
 runner_factory_ref: metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory
-target_binding: targets/my-app.yaml
+target_binding: my-app.yaml
 ```
 
 Its shape is `TargetBinding` in `metis.core.target_binding`, published as
@@ -89,7 +89,7 @@ change these:
 - `advice` (`limits`, `notes`) is for the agent only. Code does not check it. Put in it
   what the specification cannot say, such as "the first chat call starts the session".
 
-The example, `packages/engine/examples/targets/orca-api.yaml`:
+The example, `packages/engine/examples/orca-api-http-simple1/orca-api.yaml`:
 
 ```yaml
 # yaml-language-server: $schema=../../../core/schemas/target-binding.schema.json

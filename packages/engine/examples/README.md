@@ -1,15 +1,16 @@
 # Examples
 
-Each folder here is a ready-to-run experiment input for `metis engine run`, except `targets/`,
-which holds a target binding that an experiment can name. All of them are written for Orca, so
-they need Orca, user-agent model, and Langfuse credentials. Evaluating a different system
-requires writing your own specification.
+Each folder here is a ready-to-run experiment input for `metis engine run`. The `orca-` ones
+are written for Orca and need Orca, user-agent model, and Langfuse credentials; the toy app
+one needs the toy app running instead of Orca. Evaluating a different system requires writing
+your own specification.
 
 | Folder | What it shows | Runner |
 |---|---|---|
 | [`orca-api-simple1/`](orca-api-simple1/specification.yaml) | The smallest complete experiment: one Persona, one Scenario, one Task, one Trial, and one Grader, with no uploaded files. The persona asks Orca a direct question, and `DemoTraceBudgetGrader` checks that the session used at most four traces (persona–target exchanges). The Task also shows the optional execution settings, including the separate turn limit and retry count. | `OrcaApiRunnerFactory` |
-| [`orca-api-simple2/`](orca-api-simple2/specification.yaml) | An experiment with a fixture file. The persona uploads `q3_sales.csv` and asks for an analysis with constraints, so the run exercises file upload and a longer session. One Behaviour, "Chart quality", is graded with `TraceBudgetGrader`. | `OrcaApiRunnerFactory` |
-| [`targets/orca-api.yaml`](targets/orca-api.yaml) | A *target binding*: it lets the generic HTTP runner drive Orca's REST API from a YAML file, with no Python runner. | none yet; see below |
+| [`orca-api-simple2/`](orca-api-simple2/specification.yaml) | An experiment with a fixture file. The persona uploads `q3_sales.csv` and asks for an analysis with constraints, so the run exercises file upload and a longer session. One Behaviour, "Chart quality", is graded with `DemoTraceBudgetGrader`. | `OrcaApiRunnerFactory` |
+| [`orca-api-http-simple1/`](orca-api-http-simple1/specification.yaml) | The same question as `orca-api-simple1`, run through the generic HTTP runner instead of a Python runner. [`orca-api.yaml`](orca-api-http-simple1/orca-api.yaml) is a *target binding*: it tells the runner where Orca's OpenAPI document is, which calls are forbidden and how to authenticate, with no code. | `HttpRunnerFactory` |
+| [`agentic-eval-toyapp-simple1/`](agentic-eval-toyapp-simple1/specification.yaml) | The generic HTTP runner on a second app. A new employee asks the [agentic-eval toy app](https://github.com/govtech-responsibleai/agentic-eval-toyapp) how many annual leave days they get and how many carry over. Its binding, [`toyapp-api.yaml`](agentic-eval-toyapp-simple1/toyapp-api.yaml), has no auth and no advice: it names the app and where its OpenAPI document is. Start the app and set `TOYAPP_API_URL` (for example `http://127.0.0.1:8000`) first. | `HttpRunnerFactory` |
 
 ## Structure
 
@@ -21,8 +22,14 @@ examples/
 ├── orca-api-simple2/
 │   ├── specification.yaml
 │   └── fixtures/q3_sales.csv
-└── targets/
-    └── orca-api.yaml
+├── orca-api-http-simple1/
+│   ├── specification.yaml
+│   ├── orca-api.yaml          # the target binding, beside the specification
+│   └── fixtures/
+└── agentic-eval-toyapp-simple1/
+    ├── specification.yaml
+    ├── toyapp-api.yaml
+    └── fixtures/
 ```
 
 ## Running
@@ -50,18 +57,19 @@ the named output.
 
 ## Binding another API
 
-`targets/orca-api.yaml` is an example target binding. To use it, name it in a specification:
+`orca-api-http-simple1/` shows how an experiment uses a target binding. Its specification
+names the generic HTTP runner and the binding file next to it:
 
 ```yaml
 runner_factory_ref: metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory
-target_binding: targets/orca-api.yaml
+target_binding: orca-api.yaml
 ```
 
-The path is relative to the specification and must stay inside the experiment folder, so an
-experiment keeps its own `targets/` folder rather than reaching into this one. Neither Orca
-example above does this today. The [`gen_2` README](../src/metis/engine/simulation/gen_2/README.md)
-explains each field and how to write a binding for your own app. The runner has been tried on
-Orca's API only.
+The path is relative to the specification and must stay inside the experiment folder, so each
+experiment keeps its own copy of the binding. The
+[`gen_2` README](../src/metis/engine/simulation/gen_2/README.md) explains each field and how
+to write a binding for your own app. The runner has been tried on Orca's API only. The toy
+app example is its second target and has not been run yet.
 
 ## A larger example
 

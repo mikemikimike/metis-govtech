@@ -1,0 +1,52 @@
+schema_version: 1
+id: toyapp-http-simple
+runner_factory_ref: metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory
+target_binding: toyapp-api.yaml
+target:
+  name: Agentic Eval Toy App
+  users: Employees of Northstar Services, a fictional company.
+  description: A retrieval-augmented assistant that answers questions about the company's employment and expense policies.
+features:
+- id: XC-UNI
+  name: Universal Behaviours
+  description: Expected behaviours that apply across target workflows.
+  behaviours:
+  - id: EB-UNI-1
+    name: Efficient information gathering
+    description: Collect the necessary information without unnecessary turns.
+    measured: true
+    criteria:
+    - id: AC-UNI-22
+      name: Short trace budget
+      description: "Given a policy question the assistant can answer directly, when the session ends, then it used no more than 4 traces (persona–target exchanges)."
+      grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
+      grader_args:
+        max_traces: 4
+
+personas:
+- id: new-employee
+  name: New employee
+  description: >-
+    An employee who joined recently and is not sure what the company policies say. They
+    ask plainly, answer follow-up questions briefly, and say so when an answer is unclear.
+
+scenarios:
+- id: annual-leave
+  name: Annual leave
+  description: >-
+    Ask how many days of annual leave an employee receives each year, and how many unused
+    days can be carried over to the next year. No files are needed. The assistant should
+    answer directly from the leave policy.
+
+tasks:
+- id: TC-001
+  scenario_ref: annual-leave
+  persona_ref: new-employee
+  fixtures: []
+  num_trials: 1
+  max_turns: 10
+  timeout_minutes: 10
+  response_wait_ms: 60000
+  max_run_retries: 2
+  behaviour_refs:
+  - EB-UNI-1
