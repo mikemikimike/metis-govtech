@@ -161,7 +161,8 @@ experiments/execute/orca-eval-20260730-143022/
 │   │       ├── record.json
 │   │       ├── simulate.log       # Link to the trial log
 │   │       ├── evidence/
-│   │       │   └── llm_calls.jsonl  # One row per user-agent and summarizer LLM request
+│   │       │   ├── llm_calls.jsonl  # One row per user-agent and summarizer LLM request
+│   │       │   └── log.jsonl        # One entry per request and response (gen_2 runners)
 │   │       └── artifacts/
 │   │           ├── run-manifest.json
 │   │           └── ...

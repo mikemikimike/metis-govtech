@@ -24,6 +24,7 @@ from ._fixture_artifacts import build_fixture_artifacts
 from .exceptions import TrialRecoverableError
 from .gen_1.artifact_summarizer import resolve_fixture_descriptions
 from .llm_calls import LLMCallLog
+from .transport_log import TransportLog
 from .trial import create_trial
 
 if TYPE_CHECKING:
@@ -386,6 +387,13 @@ async def _worker(
                     logger.info(
                         "[experiment] Previous LLM-call log moved to %s",
                         superseded_log.name,
+                    )
+                # So is the transport log, which an attempt's facts are copied from.
+                superseded_transport = TransportLog.for_trial(run_dir).supersede()
+                if superseded_transport is not None:
+                    logger.info(
+                        "[experiment] Previous transport log moved to %s",
+                        superseded_transport.name,
                     )
                 runner = await runner_factory.create(
                     run_dir, fixtures_dir, experiment_root
