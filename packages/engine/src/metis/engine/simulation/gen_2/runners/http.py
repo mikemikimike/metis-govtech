@@ -40,7 +40,7 @@ from .config import RUNNER_AGENT_MODEL
 from .prompts import NUDGE, SYSTEM_PROMPT, first_message
 from .rules import SUBMIT_METHODS, ToolRefused, check_call, check_headers, matches
 from .spans import Spans
-from .tools import TOOLS, ActionState, run_tool
+from .tools import TOOLS, ActionState, operation_index, run_tool
 
 if TYPE_CHECKING:
     from metis.core.specification import Specification
@@ -116,6 +116,8 @@ class HttpRunner(Runner):
         self.spans = Spans.of("")
         self.spec_entry = ""
         """The log entry holding the specification: the target's description, not an answer."""
+        self.document: dict[str, Any] = {}
+        """The parsed specification; ``operation`` reads definitions from it."""
         self.results: list[str] = []
         """Response entries of the agent's calls, in order: what a pointer may cite."""
         self.answers: list[str] = []
@@ -163,7 +165,8 @@ class HttpRunner(Runner):
                     f"the specification could not be fetched: {response.status_code}"
                 )
             raw = response.content
-        servers = loads(raw).get("servers") or [{"url": "/"}]
+        self.document = loads(raw)
+        servers = self.document.get("servers") or [{"url": "/"}]
         self._base = urljoin(url, str(servers[0].get("url") or "/")).rstrip("/")
         if not self._base.startswith(("http://", "https://")):
             raise TargetBindingError(
@@ -591,13 +594,10 @@ class HttpRunner(Runner):
         return f"the agent did not report within {MAX_ROUNDS} rounds"
 
     def _first_message(self, promised: list[Promise]) -> str:
-        spec = self._log.body_bytes(self._log.get(self.spec_entry)).decode(
-            "utf-8", errors="replace"
-        )
         opened = self.open_submission
         return first_message(
             binding=self._binding.binding,
-            specification=spec,
+            operations=operation_index(self.document),
             spans=self.spans,
             files=self.ledger.artifacts(),
             promised=promised,

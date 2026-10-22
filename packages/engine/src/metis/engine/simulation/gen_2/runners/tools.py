@@ -8,6 +8,7 @@ here raises for the agent's mistakes.
 
 from __future__ import annotations
 
+import difflib
 import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -22,6 +23,11 @@ if TYPE_CHECKING:
     from .http import HttpRunner
 
 OUTCOMES = ("done", "not_done", "partial", "unknown")
+MAX_DEFINITION_CHARS = 6000
+"""Most characters of one operation's definition the agent is shown."""
+REF_DEPTH = 3
+"""How many ``$ref`` links in a row ``operation`` follows."""
+_METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 
 
 @dataclass
@@ -78,6 +84,14 @@ def _tool(
 
 
 TOOLS: list[Any] = [
+    _tool(
+        "operation",
+        "Read one operation's definition from the specification: parameters, body and "
+        "responses. Sends nothing to the target.",
+        {"method": {"type": "string"}, "path": {"type": "string"}},
+        "method",
+        "path",
+    ),
     _tool(
         "http_request",
         "Send one request to the target. Write {{n}} where the user's n-th words go.",
@@ -155,6 +169,71 @@ TOOLS: list[Any] = [
 ]
 
 
+def operation_index(document: dict[str, Any]) -> str:
+    """The target's title and one ``METHOD path - summary`` line per operation."""
+    lines = [str(title)] if (title := (document.get("info") or {}).get("title")) else []
+    for path, item in (document.get("paths") or {}).items():
+        for method, op in item.items():
+            if method in _METHODS and isinstance(op, dict):
+                label = op.get("summary") or op.get("operationId")
+                lines.append(
+                    f"{method.upper()} {path}" + (f" - {label}" if label else "")
+                )
+    return "\n".join(lines)
+
+
+def _follow(node: Any, document: dict[str, Any], depth: int) -> Any:
+    """Copy ``node``, replacing each local ``$ref`` by what it points at, ``depth`` deep."""
+    if isinstance(node, list):
+        return [_follow(n, document, depth) for n in node]
+    if not isinstance(node, dict):
+        return node
+    ref = node.get("$ref")
+    if isinstance(ref, str) and ref.startswith("#/") and depth > 0:
+        target: Any = document
+        for part in ref[2:].split("/"):
+            target = (
+                target.get(part.replace("~1", "/").replace("~0", "~"))
+                if isinstance(target, dict)
+                else None
+            )
+        if target is not None:
+            return _follow(target, document, depth - 1)
+    return {k: _follow(v, document, depth) for k, v in node.items()}
+
+
+def definition(document: dict[str, Any], method: str, path: str) -> dict[str, Any]:
+    """One operation as the specification writes it, with its ``$ref`` links followed.
+
+    :raises ToolRefused: When the specification has no such operation.
+    """
+    method = method.lower()
+    item = (document.get("paths") or {}).get(path)
+    op = item.get(method) if isinstance(item, dict) else None
+    if not isinstance(op, dict):
+        known = [m.upper() for m in _METHODS if isinstance(item, dict) and m in item]
+        if known:
+            raise ToolRefused(
+                f"no operation {method.upper()} {path}; that path has {', '.join(known)}"
+            )
+        close = difflib.get_close_matches(path, list(document.get("paths") or {}), n=5)
+        raise ToolRefused(
+            f"no operation {method.upper()} {path}; close paths: "
+            + (", ".join(close) or "none")
+        )
+    shared = item.get("parameters")
+    body = {**op, "parameters": [*shared, *op.get("parameters", [])]} if shared else op
+    found: dict[str, Any] = {
+        "operation": f"{method.upper()} {path}",
+        "definition": _follow(body, document, REF_DEPTH),
+    }
+    text = json.dumps(found["definition"], ensure_ascii=False)
+    if len(text) > MAX_DEFINITION_CHARS:
+        found["definition"] = text[:MAX_DEFINITION_CHARS]
+        found["cut"] = f"cut at {MAX_DEFINITION_CHARS:,} of {len(text):,} characters"
+    return found
+
+
 def _need(args: dict[str, Any], key: str) -> Any:
     if args.get(key) is None:
         raise ToolRefused(f"the argument {key!r} is required")
@@ -189,6 +268,14 @@ async def run_tool(
     except httpx.TransportError as exc:
         state.transport_failed = True
         return {"error": f"the call failed at the transport: {type(exc).__name__}"}
+
+
+async def _operation(
+    runner: HttpRunner, state: ActionState, args: dict[str, Any]
+) -> dict[str, Any]:
+    return definition(
+        runner.document, str(_need(args, "method")), str(_need(args, "path"))
+    )
 
 
 async def _http_request(
@@ -275,6 +362,7 @@ async def _report(
 
 
 _HANDLERS = {
+    "operation": _operation,
     "http_request": _http_request,
     "poll_until": _poll_until,
     "fetch_files": _fetch_files,

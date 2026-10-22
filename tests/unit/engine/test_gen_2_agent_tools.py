@@ -93,10 +93,11 @@ async def _chat(runner: HttpRunner, state: ActionState) -> dict[str, Any]:
     )
 
 
-def test_the_tools_are_the_six_the_agent_may_call() -> None:
+def test_the_tools_are_the_seven_the_agent_may_call() -> None:
     names = {tool["function"]["name"] for tool in TOOLS}
 
     assert names == {
+        "operation",
         "http_request",
         "poll_until",
         "fetch_files",
