@@ -11,7 +11,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from .gen_1.trial import build_trial, resolve_fixture_descriptions
+from .gen_1.trial import build_trial as build_gen_1_trial
+from .gen_1.trial import resolve_fixture_descriptions as gen_1_descriptions
+from .gen_2.trial import build_trial as build_gen_2_trial
+from .gen_2.trial import resolve_fixture_descriptions as gen_2_descriptions
 
 if TYPE_CHECKING:
     import threading
@@ -52,8 +55,12 @@ class SimulatorGeneration:
 
 _GENERATIONS: dict[str, SimulatorGeneration] = {
     "gen_1": SimulatorGeneration(
-        build_trial=build_trial,
-        resolve_fixture_descriptions=resolve_fixture_descriptions,
+        build_trial=build_gen_1_trial,
+        resolve_fixture_descriptions=gen_1_descriptions,
+    ),
+    "gen_2": SimulatorGeneration(
+        build_trial=build_gen_2_trial,
+        resolve_fixture_descriptions=gen_2_descriptions,
     ),
 }
 

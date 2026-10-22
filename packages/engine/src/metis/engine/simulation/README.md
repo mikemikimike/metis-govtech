@@ -58,6 +58,8 @@ Every simulation LLM call goes through `llm_calls.parse_completion`, which write
 
 `artifacts.ArtifactLedger` is the one place a `gen_2` runner records a file, as METIS's own `Artifact`. `record_download` saves the body under the last component of the target's name in `<trial>/artifacts/`, writing `<name>.part` and renaming it only once the bytes are whole and checked, so a partial download is never kept. A name that is taken becomes `name-1.ext`, `name-2.ext`; nothing already saved is overwritten and no entry is ever replaced. It returns the transport log's `ArtifactRef`. The byte check refuses a `.png`, `.jpg`, `.gif`, `.pdf`, `.docx`, `.xlsx`, `.pptx` or `.zip` that does not start with its type's signature, and any JSON document or JSON content type saved under a name that is not `.json`; a refused download leaves no file and no entry. A fixture has one entry however often it is uploaded: `record_upload` stamps the first upload's turn on it and adds nothing. The caller supplies `at_turn`. Each entry's `content_description` is one facts line written by code, never the file's content: name, type and size, and for a CSV its data rows, columns and header. Facts are computed once per distinct digest. `gen_1` does not use it.
 
+`gen_2` is chosen by a runner factory's `generation = "gen_2"`. Its `Runner` is `setup`, `act(action, promised)`, `end_chat(promised)` and `teardown`; the orchestrator owns the trial's `ArtifactLedger` and binds it to the runner with `use_ledger` before `setup`, so every file a runner records lands in the one record. `act` is called once per turn and the runner's own count of calls is the turn's `at_turn`, from 1. The closing `end_chat` runs after goal, abandonment, `max_turns` or `timeout`, but not after `interrupted`, `target_exhausted` or `system_error`, and it is not a turn. A `TurnRecoverableError` or `ResponseTimeoutError` from `act` becomes an undelivered `Observation` the user agent is told about, and a second one in a row raises `ConsecutiveFailureEscalation`, as in `gen_1`. Fixtures are described by `file_facts`, with no LLM call.
+
 ## Environment variables
 
 | Variable | Required | Purpose |
@@ -97,17 +99,23 @@ simulation/
 ├── exceptions.py      — Simulation-specific exceptions
 ├── _artifact_store.py — Artifact capture and storage
 ├── runner.py, runners/ — old import paths; re-export from gen_1
-└── gen_1/             — today's simulator: typed actions on offered slots
-    ├── trial.py           — Builds today's UserAgent and Orchestrator for one attempt
-    ├── runner.py          — Runner ABC
-    ├── types.py           — Actions, slots, Observation, user agent input/output
-    ├── orchestrator.py    — Single-run orchestration (turn loop, retries)
-    ├── _contract.py       — Runner↔Observation contract enforcement (see docs/runner-contract.md)
-    ├── artifact_summarizer.py — LLM descriptions of fixtures and artifacts
-    ├── user_agent/        — LLM-powered user agent (persona embodiment)
-    └── runners/
-        ├── _http.py           — Shared HTTP utilities (rate limiter, backoff, polling)
-        ├── orca_playwright/   — Orca browser runner (auth, page actions, UI capture,
-        │                        element resolution, recovery, retry)
-        └── orca_api/          — Orca API runner (transport, fixtures, artifacts)
+├── gen_1/             — today's simulator: typed actions on offered slots
+│   ├── trial.py           — Builds today's UserAgent and Orchestrator for one attempt
+│   ├── runner.py          — Runner ABC
+│   ├── types.py           — Actions, slots, Observation, user agent input/output
+│   ├── orchestrator.py    — Single-run orchestration (turn loop, retries)
+│   ├── _contract.py       — Runner↔Observation contract enforcement (see docs/runner-contract.md)
+│   ├── artifact_summarizer.py — LLM descriptions of fixtures and artifacts
+│   ├── user_agent/        — LLM-powered user agent (persona embodiment)
+│   └── runners/
+│       ├── _http.py           — Shared HTTP utilities (rate limiter, backoff, polling)
+│       ├── orca_playwright/   — Orca browser runner (auth, page actions, UI capture,
+│       │                        element resolution, recovery, retry)
+│       └── orca_api/          — Orca API runner (transport, fixtures, artifacts)
+└── gen_2/             — the runner-agent simulator: one plain-language action per turn
+    ├── trial.py           — Builds gen_2's UserAgent and Orchestrator; fixture descriptions are file facts
+    ├── runner.py          — Runner ABC: setup, act, end_chat, teardown
+    ├── types.py           — Observation (reply apart from the runner's reading), Promise
+    ├── orchestrator.py    — Turn loop; owns the ArtifactLedger
+    └── user_agent/        — Persona and scenario prompt, ⟦ ⟧ actions, file facts, promise list
 ```

@@ -248,6 +248,25 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   file's content: name, type and size, and for a CSV its data rows, columns and header,
   computed once per digest. `gen_1` does not use it.
 
+- **`gen_2`'s interface, user agent and turn loop (#480).** A runner factory that sets
+  `generation = "gen_2"` now runs on `metis.engine.simulation.gen_2`. Its `Runner` has
+  `setup(config)`, `act(action, promised) -> Observation`, `end_chat(promised)` and
+  `teardown()`, and a `session_id` property for the ID code recorded. The `Observation` keeps
+  the target's reply as code copied it apart from the runner's `Reading`, and the user agent
+  is told the reading is an interpretation. The user agent states one plain-language action
+  per turn, with the text for the target between `⟦` and `⟧`. Its prompt holds the persona and
+  scenario descriptions and no knowledge of any target. Each file the user holds is its
+  `file_facts` line and never its content, and files the target promised but has not
+  delivered are listed. Its calls go through `parse_completion` into the trial's LLM-call log.
+  The turn loop uses `gen_1`'s stop reasons and numbers `at_turn` from 1. Each turn updates
+  the progress display, and a set `shutdown_event` ends the trial as `interrupted`. After the
+  last turn it calls `end_chat` once. That call is not a turn and is not in `total_turns`.
+  Errors behave as in `gen_1`, so the retry loop's partial record keeps the turns, artifacts
+  and session ID so far. The record is the same `TrialRecord`, with one artifact per fixture.
+  `gen_2` describes fixtures with `file_facts`, so no LLM call is made for them, and an
+  author-supplied description still wins. Nothing in `gen_2` imports from `gen_1`. The seam
+  now lists `'gen_1', 'gen_2'` as supported generations. There is no real `gen_2` runner yet.
+
 #### Changed
 
 - **`metis engine evaluate` saves each session's traces.** Right after a session is fetched, and

@@ -156,11 +156,11 @@ def test_factory_without_generation_gets_gen_1_trial(
 def test_unknown_generation_raises(
     persona: Persona, scenario: Scenario, tmp_path: Path
 ) -> None:
-    class _Gen2Factory(_Factory):
-        generation = "gen_2"
+    class _Gen9Factory(_Factory):
+        generation = "gen_9"
 
-    with pytest.raises(ValueError, match=r"'gen_2'.*supported: 'gen_1'"):
-        create_trial(_Gen2Factory(), **_trial_kwargs(persona, scenario, tmp_path))
+    with pytest.raises(ValueError, match=r"'gen_9'.*supported: 'gen_1', 'gen_2'"):
+        create_trial(_Gen9Factory(), **_trial_kwargs(persona, scenario, tmp_path))
 
 
 def test_generation_is_read_from_the_factory_class(
@@ -258,7 +258,9 @@ def test_unknown_generation_error_lists_registered_generations(
     class _BadFactory(_Factory):
         generation = "gen_9"
 
-    with pytest.raises(ValueError, match=r"'gen_9'.*_BadFactory.*supported: 'gen_1'"):
+    with pytest.raises(
+        ValueError, match=r"'gen_9'.*_BadFactory.*supported: 'gen_1', 'gen_2'"
+    ):
         seam.resolve_generation(_BadFactory())
 
 

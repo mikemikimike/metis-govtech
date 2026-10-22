@@ -1,0 +1,471 @@
+"""The gen_2 turn loop, driven by a scripted runner and a scripted user agent (#480)."""
+
+from __future__ import annotations
+
+import json
+import threading
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
+from unittest.mock import MagicMock
+
+import pytest
+
+from metis.core.trials import TrialConfig, TrialRecord
+from metis.engine.simulation._fixture_artifacts import build_fixture_artifacts
+from metis.engine.simulation.exceptions import (
+    AuthLossError,
+    ConsecutiveFailureEscalation,
+    ResponseTimeoutError,
+    TargetSessionEnded,
+    TransientDOMError,
+)
+from metis.engine.simulation.gen_2.orchestrator import Orchestrator
+from metis.engine.simulation.gen_2.runner import Runner
+from metis.engine.simulation.gen_2.types import (
+    Observation,
+    Promise,
+    Reading,
+    UserAgentOutput,
+)
+from metis.engine.simulation.types import Scenario
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from metis.core import Artifact
+
+
+def _observation(reply: str = "ok", **kwargs: Any) -> Observation:
+    return Observation(
+        reply=reply,
+        reading=Reading(outcome="sent", why="the message went through"),
+        **kwargs,
+    )
+
+
+@dataclass
+class Step:
+    """What one scripted ``act`` does: records files, then answers or raises."""
+
+    observation: Observation | None = None
+    raises: Exception | None = None
+    uploads: list[str] = field(default_factory=list)
+    downloads: dict[str, bytes] = field(default_factory=dict)
+    set_event: threading.Event | None = None
+
+
+class FakeRunner(Runner):
+    """A gen_2 runner that follows a script and records what it was asked."""
+
+    def __init__(self, script: list[Step], *, late: dict[str, bytes] | None = None):
+        self._script = script
+        self._late = late or {}
+        self.events: list[str] = []
+        self.actions: list[str] = []
+        self.promised_seen: list[list[Promise]] = []
+        self.turn = 0
+        self._session_id: str | None = None
+
+    @property
+    def session_id(self) -> str | None:
+        return self._session_id
+
+    async def setup(self, config: TrialConfig) -> None:
+        self.events.append("setup")
+
+    async def act(self, action: str, promised: list[Promise]) -> Observation:
+        self.turn += 1
+        self.events.append("act")
+        self.actions.append(action)
+        self.promised_seen.append(list(promised))
+        step = self._script[self.turn - 1]
+        self._session_id = "sess-1"
+        if step.set_event is not None:
+            step.set_event.set()
+        for name in step.uploads:
+            self.ledger.record_upload(name, at_turn=self.turn)
+        for name, data in step.downloads.items():
+            self.ledger.record_download(name, data, at_turn=self.turn)
+        if step.raises is not None:
+            raise step.raises
+        assert step.observation is not None
+        return step.observation
+
+    async def end_chat(self, promised: list[Promise]) -> None:
+        self.events.append("end_chat")
+        for name, data in self._late.items():
+            self.ledger.record_download(name, data, at_turn=self.turn)
+
+    async def teardown(self) -> None:
+        self.events.append("teardown")
+
+
+class ScriptedAgent:
+    """A user agent that plays back decisions and records what it was shown."""
+
+    def __init__(self, outputs: list[UserAgentOutput | Exception]) -> None:
+        self._outputs = outputs
+        self.turns: list[int] = []
+        self.held: list[list[str]] = []
+        self.promised: list[list[str]] = []
+        self.remembered: list[Observation] = []
+
+    async def decide(
+        self, turn: int, held: list[Artifact], promised: list[Promise]
+    ) -> UserAgentOutput:
+        self.turns.append(turn)
+        self.held.append([a.name for a in held])
+        self.promised.append([p.name for p in promised])
+        out = self._outputs[min(len(self.turns), len(self._outputs)) - 1]
+        if isinstance(out, Exception):
+            raise out
+        return out
+
+    def remember(self, output: UserAgentOutput, observation: Observation) -> None:
+        self.remembered.append(observation)
+
+
+def _go(action: str = "Say ⟦hi⟧") -> UserAgentOutput:
+    return UserAgentOutput(reasoning="r", action=action, decision="continue")
+
+
+def _done(decision: str = "goal_achieved") -> UserAgentOutput:
+    return UserAgentOutput(reasoning="r", action="", decision=decision)
+
+
+def _build(
+    tmp_path: Path,
+    runner: FakeRunner,
+    agent: ScriptedAgent,
+    *,
+    fixtures: list[str] | None = None,
+    max_turns: int = 20,
+    timeout_minutes: int = 15,
+    state: Any = None,
+    tui_ctx: Any = None,
+    shutdown_event: threading.Event | None = None,
+) -> Orchestrator:
+    fixtures = fixtures or []
+    fixtures_dir = tmp_path / "fixtures"
+    fixtures_dir.mkdir(exist_ok=True)
+    (fixtures_dir / "q3_sales.csv").write_text("region,amount\nN,1\nS,2\n")
+    run_dir = tmp_path / "outputs" / "trials" / "t1"
+    run_dir.mkdir(parents=True)
+    config = TrialConfig(
+        persona="p1",
+        scenario="s1",
+        max_turns=max_turns,
+        timeout_minutes=timeout_minutes,
+        fixtures=fixtures,
+    )
+    return Orchestrator(
+        runner=runner,
+        agent=agent,
+        trial_config=config,
+        scenario=Scenario(
+            id="s1", description="goal", persona_refs=["p1"], fixtures=fixtures
+        ),
+        run_dir=run_dir,
+        experiment_root=tmp_path,
+        fixture_artifacts=build_fixture_artifacts(fixtures, fixtures_dir, tmp_path),
+        trial_index=1,
+        state=state,
+        tui_ctx=tui_ctx,
+        shutdown_event=shutdown_event,
+    )
+
+
+@pytest.mark.asyncio
+async def test_full_trial_writes_a_record_that_load_file_reads(tmp_path: Path) -> None:
+    runner = FakeRunner(
+        [
+            Step(_observation("got the file"), uploads=["q3_sales.csv"]),
+            Step(
+                _observation("here is the report"),
+                downloads={"report.csv": b"a,b\n1,2\n"},
+            ),
+        ],
+        late={"chart.vl.json": b"{}"},
+    )
+    agent = ScriptedAgent([_go("Upload q3_sales.csv"), _go(), _done()])
+    orch = _build(tmp_path, runner, agent, fixtures=["q3_sales.csv"])
+
+    record = await orch.execute()
+
+    path = tmp_path / "record.json"
+    path.write_text(json.dumps(record.model_dump()), encoding="utf-8")
+    loaded = TrialRecord.load_file(path)
+    assert loaded.outcome.stop_reason == "goal_achieved"
+    assert loaded.outcome.total_turns == 2
+    assert loaded.target_session_id == "sess-1"
+    assert [(a.name, a.source, a.at_turn) for a in loaded.artifacts] == [
+        ("q3_sales.csv", "fixture", 1),
+        ("report.csv", "target", 2),
+        ("chart.vl.json", "target", 2),
+    ]
+    assert runner.events == ["setup", "act", "act", "end_chat", "teardown"]
+
+
+@pytest.mark.asyncio
+async def test_a_fixture_uploaded_twice_is_one_entry(tmp_path: Path) -> None:
+    runner = FakeRunner(
+        [
+            Step(_observation(), uploads=["q3_sales.csv"]),
+            Step(_observation(), uploads=["q3_sales.csv"]),
+        ]
+    )
+    orch = _build(
+        tmp_path,
+        runner,
+        ScriptedAgent([_go(), _go(), _done()]),
+        fixtures=["q3_sales.csv"],
+    )
+
+    record = await orch.execute()
+
+    assert [(a.name, a.at_turn) for a in record.artifacts] == [("q3_sales.csv", 1)]
+
+
+@pytest.mark.asyncio
+async def test_the_user_agent_is_shown_the_fixture_before_any_turn(
+    tmp_path: Path,
+) -> None:
+    agent = ScriptedAgent([_done()])
+    orch = _build(tmp_path, FakeRunner([]), agent, fixtures=["q3_sales.csv"])
+
+    await orch.execute()
+
+    assert agent.held == [["q3_sales.csv"]]
+
+
+@pytest.mark.asyncio
+async def test_closing_call_is_not_a_turn(tmp_path: Path) -> None:
+    runner = FakeRunner([Step(_observation())], late={"late.txt": b"x"})
+    orch = _build(tmp_path, runner, ScriptedAgent([_go(), _done()]))
+
+    record = await orch.execute()
+
+    assert record.outcome.total_turns == 1
+    assert [(a.name, a.at_turn) for a in record.artifacts] == [("late.txt", 1)]
+
+
+@pytest.mark.asyncio
+async def test_no_closing_call_when_no_action_was_taken(tmp_path: Path) -> None:
+    runner = FakeRunner([])
+    orch = _build(tmp_path, runner, ScriptedAgent([_done("giving_up")]))
+
+    record = await orch.execute()
+
+    assert record.outcome.stop_reason == "user_abandoned"
+    assert record.outcome.total_turns == 0
+    assert runner.events == ["setup", "teardown"]
+
+
+@pytest.mark.asyncio
+async def test_max_turns_stops_without_asking_the_user_again(tmp_path: Path) -> None:
+    runner = FakeRunner([Step(_observation()) for _ in range(3)])
+    agent = ScriptedAgent([_go()])
+    orch = _build(tmp_path, runner, agent, max_turns=3)
+
+    record = await orch.execute()
+
+    assert record.outcome.stop_reason == "max_turns"
+    assert record.outcome.total_turns == 3
+    assert agent.turns == [1, 2, 3]
+    assert runner.events[-2:] == ["end_chat", "teardown"]
+
+
+@pytest.mark.asyncio
+async def test_timeout_stops_before_the_first_turn(tmp_path: Path) -> None:
+    runner = FakeRunner([])
+    orch = _build(tmp_path, runner, ScriptedAgent([_go()]), timeout_minutes=0)
+
+    record = await orch.execute()
+
+    assert record.outcome.stop_reason == "timeout"
+    assert record.outcome.total_turns == 0
+
+
+@pytest.mark.asyncio
+async def test_set_shutdown_event_ends_the_trial_cleanly(tmp_path: Path) -> None:
+    event = threading.Event()
+    event.set()
+    runner = FakeRunner([])
+    orch = _build(tmp_path, runner, ScriptedAgent([_go()]), shutdown_event=event)
+
+    record = await orch.execute()
+
+    assert record.outcome.stop_reason == "interrupted"
+    assert runner.events == ["setup", "teardown"]
+
+
+@pytest.mark.asyncio
+async def test_shutdown_during_a_turn_keeps_that_turn_and_skips_the_closing_call(
+    tmp_path: Path,
+) -> None:
+    event = threading.Event()
+    runner = FakeRunner([Step(_observation(), set_event=event)])
+    orch = _build(tmp_path, runner, ScriptedAgent([_go()]), shutdown_event=event)
+
+    record = await orch.execute()
+
+    assert record.outcome.stop_reason == "interrupted"
+    assert record.outcome.total_turns == 1
+    assert runner.events == ["setup", "act", "teardown"]
+
+
+@pytest.mark.asyncio
+async def test_progress_state_advances_each_turn(tmp_path: Path) -> None:
+    state, tui_ctx = MagicMock(), MagicMock()
+    runner = FakeRunner([Step(_observation()) for _ in range(2)])
+    orch = _build(
+        tmp_path,
+        runner,
+        ScriptedAgent([_go()]),
+        max_turns=2,
+        state=state,
+        tui_ctx=tui_ctx,
+    )
+
+    await orch.execute()
+
+    turns = [c.kwargs["turn"] for c in state.mark_trial_turn.call_args_list]
+    assert sorted(set(turns)) == [1, 2]
+    assert turns == sorted(turns)
+    for call in state.mark_trial_turn.call_args_list:
+        assert call.args == ("s1", "p1")
+        assert call.kwargs["trial_index"] == 1
+        assert call.kwargs["max_turns"] == 2
+    assert tui_ctx.refresh.call_count == state.mark_trial_turn.call_count
+
+
+@pytest.mark.asyncio
+async def test_target_session_ended_is_target_exhausted(tmp_path: Path) -> None:
+    runner = FakeRunner([Step(raises=TargetSessionEnded("spent"))])
+    orch = _build(tmp_path, runner, ScriptedAgent([_go()]))
+
+    record = await orch.execute()
+
+    assert record.outcome.stop_reason == "target_exhausted"
+    assert record.target_session_id == "sess-1"
+    assert "end_chat" not in runner.events
+    assert runner.events[-1] == "teardown"
+
+
+@pytest.mark.asyncio
+async def test_a_failing_user_agent_is_a_system_error(tmp_path: Path) -> None:
+    runner = FakeRunner([Step(_observation())])
+    orch = _build(tmp_path, runner, ScriptedAgent([_go(), RuntimeError("llm down")]))
+
+    record = await orch.execute()
+
+    assert record.outcome.stop_reason == "system_error"
+    assert record.outcome.total_turns == 1
+    assert "end_chat" not in runner.events
+
+
+@pytest.mark.asyncio
+async def test_a_recoverable_turn_error_counts_and_tells_the_user(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner([Step(raises=TransientDOMError("dom")), Step(_observation())])
+    agent = ScriptedAgent([_go(), _go(), _done()])
+    orch = _build(tmp_path, runner, agent)
+
+    record = await orch.execute()
+
+    assert record.outcome.total_turns == 2
+    failed = agent.remembered[0]
+    assert failed.reply is None
+    assert failed.observed is False
+    assert failed.notice
+    assert agent.remembered[1].notice is None
+
+
+@pytest.mark.asyncio
+async def test_a_timed_out_reply_is_told_apart_from_an_unsent_message(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner([Step(raises=ResponseTimeoutError("slow"))])
+    agent = ScriptedAgent([_go(), _done()])
+
+    await _build(tmp_path, runner, agent).execute()
+
+    assert "timeout" in (agent.remembered[0].notice or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_two_consecutive_turn_errors_escalate_and_keep_progress(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner(
+        [
+            Step(_observation(), downloads={"a.txt": b"x"}),
+            Step(raises=TransientDOMError("1")),
+            Step(raises=TransientDOMError("2")),
+        ]
+    )
+    orch = _build(tmp_path, runner, ScriptedAgent([_go()]))
+
+    with pytest.raises(ConsecutiveFailureEscalation):
+        await orch.execute()
+
+    partial = orch.partial_record("system_error")
+    assert partial.outcome.stop_reason == "system_error"
+    assert partial.outcome.total_turns == 2
+    assert partial.target_session_id == "sess-1"
+    assert [a.name for a in partial.artifacts] == ["a.txt"]
+    assert runner.events[-1] == "teardown"
+
+
+@pytest.mark.asyncio
+async def test_a_trial_level_error_propagates_for_the_retry_loop(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner(
+        [
+            Step(_observation(), downloads={"a.txt": b"x"}),
+            Step(raises=AuthLossError("out")),
+        ]
+    )
+    orch = _build(tmp_path, runner, ScriptedAgent([_go()]))
+
+    with pytest.raises(AuthLossError):
+        await orch.execute()
+
+    partial = orch.partial_record("system_error")
+    assert partial.outcome.total_turns == 1
+    assert [a.name for a in partial.artifacts] == ["a.txt"]
+    assert runner.events[-1] == "teardown"
+
+
+@pytest.mark.asyncio
+async def test_partial_record_before_execute_has_the_fixtures(tmp_path: Path) -> None:
+    orch = _build(
+        tmp_path, FakeRunner([]), ScriptedAgent([_go()]), fixtures=["q3_sales.csv"]
+    )
+
+    partial = orch.partial_record("system_error")
+
+    assert partial.outcome.total_turns == 0
+    assert [a.name for a in partial.artifacts] == ["q3_sales.csv"]
+
+
+@pytest.mark.asyncio
+async def test_promised_files_are_listed_until_they_arrive(tmp_path: Path) -> None:
+    runner = FakeRunner(
+        [
+            Step(_observation(promised=["report.csv", "report.csv"])),
+            Step(_observation(), downloads={"report.csv": b"a\n1\n"}),
+            Step(_observation()),
+        ]
+    )
+    agent = ScriptedAgent([_go(), _go(), _go(), _done()])
+    orch = _build(tmp_path, runner, agent)
+
+    await orch.execute()
+
+    assert agent.promised == [[], ["report.csv"], [], []]
+    assert runner.promised_seen[0] == []
+    assert runner.promised_seen[1] == [Promise(name="report.csv", turn=1)]
+    assert runner.promised_seen[2] == []

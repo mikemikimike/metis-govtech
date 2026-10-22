@@ -1,0 +1,253 @@
+"""The gen_2 user agent: one plain-language action per turn, facts apart from readings (#480)."""
+
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
+
+import pytest
+
+from metis.core import Artifact
+from metis.engine.simulation.artifacts import file_facts
+from metis.engine.simulation.gen_2.types import (
+    Observation,
+    Promise,
+    Reading,
+    UserAgentOutput,
+)
+from metis.engine.simulation.gen_2.user_agent.agent import HISTORY_TURNS, UserAgent
+from metis.engine.simulation.llm_calls import LLMCallLog
+from metis.engine.simulation.types import Persona, Scenario
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
+class FakeClient:
+    """Stands in for ``AsyncOpenAI``: returns canned outputs and keeps every request."""
+
+    def __init__(self, *outputs: UserAgentOutput, refusal: str | None = None) -> None:
+        self._outputs = list(outputs)
+        self._refusal = refusal
+        self.requests: list[list[dict[str, Any]]] = []
+        self.beta = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(parse=self._parse))
+        )
+
+    async def _parse(self, *, messages: list[dict[str, Any]], **_kw: Any) -> Any:
+        self.requests.append(messages)
+        message = SimpleNamespace(
+            parsed=None if self._refusal else self._outputs.pop(0),
+            refusal=self._refusal,
+            content=None,
+        )
+        return SimpleNamespace(
+            model="m",
+            usage=None,
+            choices=[SimpleNamespace(message=message, finish_reason="stop")],
+        )
+
+
+def _out(action: str = "Say ⟦hi⟧", decision: str = "continue") -> UserAgentOutput:
+    return UserAgentOutput(reasoning="because", action=action, decision=decision)  # type: ignore[arg-type]
+
+
+def _agent(tmp_path: Path, client: FakeClient) -> UserAgent:
+    return UserAgent(
+        persona=Persona(id="p1", description="A careful accountant named Dana."),
+        scenario=Scenario(
+            id="s1", description="Get a Q3 summary report.", persona_refs=["p1"]
+        ),
+        llm_log=LLMCallLog.for_trial(tmp_path),
+        client=client,  # type: ignore[arg-type]
+    )
+
+
+def _text(messages: list[dict[str, Any]]) -> str:
+    return "\n".join(m["content"] for m in messages)
+
+
+@pytest.mark.asyncio
+async def test_the_prompt_has_the_persona_and_scenario_and_no_target_knowledge(
+    tmp_path: Path,
+) -> None:
+    client = FakeClient(_out())
+    await _agent(tmp_path, client).decide(1, [], [])
+
+    system = client.requests[0][0]
+    assert system["role"] == "system"
+    assert "A careful accountant named Dana." in system["content"]
+    assert "Get a Q3 summary report." in system["content"]
+    assert "⟦" in system["content"]
+    for advice in ("Haiku", "Sonnet", "AI Model", "Orca", "dropdown"):
+        assert advice not in _text(client.requests[0])
+
+
+@pytest.mark.asyncio
+async def test_a_held_file_is_its_facts_line_and_never_its_content(
+    tmp_path: Path,
+) -> None:
+    csv = tmp_path / "q3_sales.csv"
+    csv.write_text("region,amount\nNORTH-SECRET-ROW,1\nSOUTH,2\n")
+    held = Artifact(
+        name="q3_sales.csv",
+        source="fixture",
+        state="received",
+        path="q3_sales.csv",
+        content_description=file_facts(csv, "q3_sales.csv"),
+    )
+    client = FakeClient(_out())
+
+    await _agent(tmp_path, client).decide(1, [held], [])
+
+    prompt = _text(client.requests[0])
+    assert "q3_sales.csv (text/csv," in prompt
+    assert "2 data rows, 2 columns; header: region,amount" in prompt
+    assert "NORTH-SECRET-ROW" not in prompt
+
+
+@pytest.mark.asyncio
+async def test_files_the_user_sent_and_received_are_told_apart(tmp_path: Path) -> None:
+    sent = Artifact(
+        name="in.csv",
+        source="fixture",
+        state="received",
+        path="in.csv",
+        content_description="in.csv (x)",
+    )
+    got = Artifact(
+        name="out.csv",
+        source="target",
+        state="received",
+        path="out.csv",
+        content_description="out.csv (y)",
+    )
+    client = FakeClient(_out())
+
+    await _agent(tmp_path, client).decide(2, [sent, got], [])
+
+    prompt = client.requests[0][-1]["content"]
+    assert prompt.index("in.csv (x)") < prompt.index("out.csv (y)")
+    assert "from the assistant" in prompt.split("out.csv (y)")[0].split("in.csv (x)")[1]
+
+
+@pytest.mark.asyncio
+async def test_promised_files_are_listed_with_the_turn_they_were_promised(
+    tmp_path: Path,
+) -> None:
+    client = FakeClient(_out())
+
+    await _agent(tmp_path, client).decide(3, [], [Promise(name="report.pdf", turn=2)])
+
+    last = client.requests[0][-1]["content"]
+    assert "report.pdf" in last
+    assert "turn 2" in last
+
+
+@pytest.mark.asyncio
+async def test_with_nothing_promised_the_prompt_says_so(tmp_path: Path) -> None:
+    client = FakeClient(_out())
+
+    await _agent(tmp_path, client).decide(1, [], [])
+
+    assert "promised" in client.requests[0][-1]["content"].lower()
+    assert "none" in client.requests[0][-1]["content"].lower()
+
+
+@pytest.mark.asyncio
+async def test_the_reply_is_copied_and_the_reading_is_labelled_an_interpretation(
+    tmp_path: Path,
+) -> None:
+    client = FakeClient(_out(), _out())
+    agent = _agent(tmp_path, client)
+    first = await agent.decide(1, [], [])
+    reply = 'Sure! Here is "the report" — 42 rows.\n\nAnything else?'
+    agent.remember(
+        first,
+        Observation(
+            reply=reply,
+            reading=Reading(
+                outcome="sent", why="it answered", next_options="ask a follow-up"
+            ),
+        ),
+    )
+
+    await agent.decide(2, [], [])
+
+    history = client.requests[1]
+    assert history[1] == {
+        "role": "assistant",
+        "content": json.dumps(
+            {"action": first.action, "decision": "continue"}, ensure_ascii=False
+        ),
+    }
+    seen = history[2]["content"]
+    assert reply in seen
+    facts, reading = seen.split("interpretation", 1)
+    assert reply in facts
+    assert "it answered" in reading
+    assert "ask a follow-up" in reading
+    assert "it answered" not in facts
+
+
+@pytest.mark.asyncio
+async def test_a_turn_without_a_reply_says_so_and_carries_the_notice(
+    tmp_path: Path,
+) -> None:
+    client = FakeClient(_out(), _out())
+    agent = _agent(tmp_path, client)
+    first = await agent.decide(1, [], [])
+    agent.remember(
+        first,
+        Observation(
+            reply=None,
+            reading=Reading(outcome="not_completed", why="no reply"),
+            observed=False,
+            notice="Response timeout — no response received",
+        ),
+    )
+
+    await agent.decide(2, [], [])
+
+    seen = client.requests[1][2]["content"]
+    assert "no reply was shown" in seen.lower()
+    assert "Response timeout — no response received" in seen
+
+
+@pytest.mark.asyncio
+async def test_only_the_last_turns_of_history_are_sent(tmp_path: Path) -> None:
+    turns = HISTORY_TURNS + 5
+    client = FakeClient(*[_out(f"Say ⟦{i}⟧") for i in range(turns + 1)])
+    agent = _agent(tmp_path, client)
+    for i in range(turns):
+        out = await agent.decide(i + 1, [], [])
+        agent.remember(
+            out, Observation(reply=f"r{i}", reading=Reading(outcome="sent", why="w"))
+        )
+
+    await agent.decide(turns + 1, [], [])
+
+    roles = [m["role"] for m in client.requests[-1]]
+    assert roles.count("assistant") == HISTORY_TURNS
+    assert "Say ⟦0⟧" not in _text(client.requests[-1])
+    assert f"Say ⟦{turns - 1}⟧" in _text(client.requests[-1])
+
+
+@pytest.mark.asyncio
+async def test_each_call_is_logged_to_the_trial_llm_log(tmp_path: Path) -> None:
+    await _agent(tmp_path, FakeClient(_out())).decide(1, [], [])
+
+    rows = LLMCallLog.for_trial(tmp_path).path.read_text().splitlines()
+    assert [json.loads(r)["component"] for r in rows] == ["user_agent"]
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_raises(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="refused"):
+        await _agent(tmp_path, FakeClient(refusal="no")).decide(1, [], [])
+
+
+def test_a_continue_decision_needs_an_action() -> None:
+    with pytest.raises(ValueError, match="action"):
+        UserAgentOutput(reasoning="", action="  ", decision="continue")
