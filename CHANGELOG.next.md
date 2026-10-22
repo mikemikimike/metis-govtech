@@ -282,6 +282,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- **`packages/engine/example-experiment/` holds only the `simple/` example.** The complete Orca
+  specification, its fixtures, and the sample report are removed from it: the specification and
+  the four CSV fixtures are already kept with the Wizard testbed in
+  `packages/testbed/wizard/cases/orca/outputs/` (#414).
+
 - **`metis engine evaluate` saves each session's traces.** Right after a session is fetched, and
   before it is graded, the traces are written to `outputs/traces/<session_id>.json` as the Langfuse
   rows (`SessionTraces`), so `metis insights report` can show the conversation without Langfuse access.
@@ -394,10 +399,6 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `FetchLangfuseResult`, `evaluate`, `EvalResult`, `RoutingSummary` and
   `DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE` are removed; use `fetch_session`,
   `build_criterion_grader` and `grade_session` (#428).
-
-- The bundled full example experiment names a grader on one Criterion (`AC-EXEC-3`) and leaves
-  the other 83 empty, so the engine refuses to run it until graders exist; the `simple`
-  example runs end to end with `TraceBudgetGrader` (#428).
 
 - `TrialRecord.conversation` is removed, along with the `ConversationTurn`, `TurnDiagnostics`
   and `ActionRetry` models, so `record.json` no longer holds a copy of the transcript. The

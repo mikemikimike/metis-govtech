@@ -8,7 +8,7 @@ End-to-end evaluation of ORCA's various capabilities.
 
 The reference Specification is `outputs/specification.yaml`. Its criteria include the ORCA grader assignments. Only files in `inputs/` are supplied to Wizard. This README and the reference are for review.
 
-The four CSV files in `outputs/fixtures/` are user uploads for the ORCA Test Cases. They are copies of the files in `packages/engine/example-experiment/fixtures/` and are not Wizard input documents.
+The four CSV files in `outputs/fixtures/` are user uploads for the ORCA Test Cases. They are not Wizard input documents.
 
 ORCA inputs stay Git-ignored. Restore `inputs/prompt.md` locally before running this evaluation. `.gitkeep` preserves the input folder.
 
@@ -16,7 +16,6 @@ ORCA inputs stay Git-ignored. Restore `inputs/prompt.md` locally before running 
 
 Source locations used to author the inputs and reference:
 
-- packages/engine/example-experiment/specification.yaml
 - tests/fixtures/wizard/specifications.py::orca_handover (product text)
 - centralized-evaluation-framework-teams/centralized-evaluation-framework-teams - Data Analyst.csv
 - centralized-evaluation-framework-teams/centralized-evaluation-framework-teams - Orchestration.csv

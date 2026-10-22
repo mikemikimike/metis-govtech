@@ -23,8 +23,7 @@ cp packages/engine/.env.example .env
 
 ## Running
 
-These commands use the `simple` example. The full `example-experiment/` does not run yet:
-only one of its Criteria names a grader, so the engine refuses it at validation (see its
+These commands use the `simple` example, which is small enough for a quick first run (see its
 [README](example-experiment/README.md)).
 
 ```bash
@@ -97,7 +96,7 @@ my-experiment/
     └── data.csv
 ```
 
-See [`example-experiment/`](example-experiment/) for a working reference.
+See [`example-experiment/simple/`](example-experiment/simple/) for a working reference.
 
 Each execution produces output in `experiments/execute/<id>-<timestamp>/`. Reports appear after `evaluate` or `run`:
 
