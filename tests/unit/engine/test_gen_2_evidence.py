@@ -137,3 +137,67 @@ def test_an_artifact_body_resolves_while_its_digest_matches(
     (tmp_path / "artifacts" / "r.json").write_bytes(b'{"id": "changed"}')
     with pytest.raises(PointerError, match="sha256"):
         resolve(Pointer(entry_id, "$.id"), log)
+
+
+_SNAPSHOT = """\
+- main [ref=e1]:
+  - paragraph [ref=e2]: Hello there
+  - list [ref=e3]:
+    - listitem [ref=e4]: a.txt
+    - listitem [ref=e5]: b.txt
+  - button "Send" [ref=e6]"""
+
+
+def _capture(log: TransportLog, snapshot: str = _SNAPSHOT) -> str:
+    return _result(
+        log, {"url": "https://app.example/", "title": "T", "snapshot": snapshot}
+    )
+
+
+def test_a_ref_names_one_element_of_a_snapshot(log: TransportLog) -> None:
+    entry_id = _capture(log)
+
+    value, entry = resolve(Pointer(entry_id, ref="e2"), log)
+
+    assert value == "- paragraph [ref=e2]: Hello there"
+    assert entry.id == entry_id
+
+
+def test_a_ref_brings_the_elements_nested_under_it(log: TransportLog) -> None:
+    entry_id = _capture(log)
+
+    value, _ = resolve(Pointer(entry_id, ref="e3"), log)
+
+    assert value == (
+        "- list [ref=e3]:\n  - listitem [ref=e4]: a.txt\n  - listitem [ref=e5]: b.txt"
+    )
+
+
+def test_a_pattern_narrows_a_ref(log: TransportLog) -> None:
+    entry_id = _capture(log)
+
+    assert resolve(Pointer(entry_id, ref="e5", pattern=r": (.+)$"), log)[0] == "b.txt"
+
+
+def test_a_ref_absent_from_the_snapshot_is_refused(log: TransportLog) -> None:
+    entry_id = _capture(log)
+
+    with pytest.raises(PointerError, match="no element e9"):
+        resolve(Pointer(entry_id, ref="e9"), log)
+
+
+def test_a_ref_and_a_path_together_are_refused(log: TransportLog) -> None:
+    entry_id = _capture(log)
+
+    with pytest.raises(PointerError, match="ref or a path"):
+        resolve(Pointer(entry_id, "$.title", ref="e2"), log)
+
+
+def test_a_ref_needs_a_capture(log: TransportLog) -> None:
+    text = _result(log, b"plain text")
+    no_snapshot = _result(log, {"title": "T"})
+
+    with pytest.raises(PointerError, match="not a page capture"):
+        resolve(Pointer(text, ref="e1"), log)
+    with pytest.raises(PointerError, match="not a page capture"):
+        resolve(Pointer(no_snapshot, ref="e1"), log)

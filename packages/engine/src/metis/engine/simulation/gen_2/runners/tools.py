@@ -20,7 +20,11 @@ from ..types import Reading
 from .rules import ToolRefused
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from .http import HttpRunner
+
+    Handler = Callable[[Any, "ActionState", dict[str, Any]], Awaitable[dict[str, Any]]]
 
 OUTCOMES = ("done", "not_done", "partial", "unknown")
 MAX_DEFINITION_CHARS = 6000
@@ -50,7 +54,7 @@ class ActionState:
     refusals: list[str] = field(default_factory=list)
 
 
-def _pointer(properties: dict[str, Any] | None = None) -> dict[str, Any]:
+def pointer_schema(properties: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "type": "object",
         "properties": {
@@ -66,7 +70,7 @@ def _pointer(properties: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-def _tool(
+def tool_schema(
     name: str, description: str, properties: dict[str, Any], *required: str
 ) -> Any:
     return {
@@ -84,7 +88,7 @@ def _tool(
 
 
 TOOLS: list[Any] = [
-    _tool(
+    tool_schema(
         "operation",
         "Read one operation's definition from the specification: parameters, body and "
         "responses. Sends nothing to the target.",
@@ -92,7 +96,7 @@ TOOLS: list[Any] = [
         "method",
         "path",
     ),
-    _tool(
+    tool_schema(
         "http_request",
         "Send one request to the target. Write {{n}} where the user's n-th words go.",
         {
@@ -113,7 +117,7 @@ TOOLS: list[Any] = [
         "method",
         "path",
     ),
-    _tool(
+    tool_schema(
         "poll_until",
         "GET a path until the value at `at` settles. Give not_in (still waiting) or in "
         "(done), not both.",
@@ -126,11 +130,11 @@ TOOLS: list[Any] = [
         "path",
         "at",
     ),
-    _tool(
+    tool_schema(
         "fetch_files",
         "Download the files in one logged listing. Code copies each ID and name.",
         {
-            "listing": _pointer(),
+            "listing": pointer_schema(),
             "id_key": {"type": "string"},
             "name_key": {"type": "string"},
             "download_path": {"type": "string", "description": "has exactly one {id}"},
@@ -141,27 +145,27 @@ TOOLS: list[Any] = [
         "name_key",
         "download_path",
     ),
-    _tool(
+    tool_schema(
         "session_id_from",
         "Record the target's session ID from the reply to a submission.",
-        _pointer()["properties"],
+        pointer_schema()["properties"],
         "entry",
     ),
-    _tool(
+    tool_schema(
         "note",
         "Keep what you learned about this target for later turns.",
         {"text": {"type": "string"}},
         "text",
     ),
-    _tool(
+    tool_schema(
         "report",
         "End the action. Call it once, last.",
         {
             "outcome": {"type": "string", "enum": list(OUTCOMES)},
             "why": {"type": "string"},
             "next_options": {"type": "string"},
-            "reply_from": _pointer(),
-            "promised": {"type": "array", "items": _pointer()},
+            "reply_from": pointer_schema(),
+            "promised": {"type": "array", "items": pointer_schema()},
         },
         "outcome",
         "why",
@@ -257,15 +261,24 @@ def _need(args: dict[str, Any], key: str) -> Any:
 def _point(raw: Any) -> Pointer:
     if not isinstance(raw, dict):
         raise ToolRefused("a pointer is an object with `entry`, and `at` or `pattern`")
-    return Pointer(str(_need(raw, "entry")), raw.get("at"), raw.get("pattern"))
+    return Pointer(
+        str(_need(raw, "entry")), raw.get("at"), raw.get("pattern"), raw.get("ref")
+    )
 
 
 async def run_tool(
-    runner: HttpRunner, state: ActionState, name: str, raw_args: str
+    runner: Any,
+    state: ActionState,
+    name: str,
+    raw_args: str,
+    handlers: dict[str, Handler] | None = None,
 ) -> dict[str, Any]:
-    """Run one tool call. A mistake of the agent's comes back as an error result."""
+    """Run one tool call. A mistake of the agent's comes back as an error result.
+
+    :param handlers: The runner's tools by name; the HTTP runner's when omitted.
+    """
     try:
-        handler = _HANDLERS.get(name)
+        handler = (handlers or _HANDLERS).get(name)
         if handler is None:
             raise ToolRefused(f"there is no tool {name!r}")
         try:
@@ -375,12 +388,18 @@ async def _report(
     return {"ok": True}
 
 
-_HANDLERS = {
+SHARED_HANDLERS: dict[str, Handler] = {
+    "session_id_from": _session_id_from,
+    "note": _note,
+    "report": _report,
+}
+"""The tools every runner has. They touch only ``results``, ``log``, ``notes`` and
+``record_session_id``, which each runner supplies."""
+
+_HANDLERS: dict[str, Handler] = {
     "operation": _operation,
     "http_request": _http_request,
     "poll_until": _poll_until,
     "fetch_files": _fetch_files,
-    "session_id_from": _session_id_from,
-    "note": _note,
-    "report": _report,
+    **SHARED_HANDLERS,
 }

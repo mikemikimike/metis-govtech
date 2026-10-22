@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlsplit
 
 import yaml
@@ -66,10 +66,13 @@ def _env(name: str) -> str | None:
     return os.environ.get(name) or None
 
 
-def load_target_binding(inputs_dir: Path, relative: str) -> LoadedBinding:
+def load_target_binding(
+    inputs_dir: Path, relative: str, transport: Literal["http", "browser"] = "http"
+) -> LoadedBinding:
     """Load the binding at ``relative`` (relative to ``specification.yaml``).
 
     :param inputs_dir: The experiment's ``inputs/`` folder.
+    :param transport: The transport the caller's runner speaks; any other is refused.
     :raises TargetBindingError: Whatever makes the binding unusable. The message
         starts with ``relative`` as written.
     """
@@ -107,6 +110,11 @@ def load_target_binding(inputs_dir: Path, relative: str) -> LoadedBinding:
     except ValidationError as exc:
         raise fail(str(exc)) from None
 
+    if binding.transport != transport:
+        raise fail(
+            f"this runner needs a {transport} binding, but the binding's transport "
+            f"is {binding.transport}"
+        )
     spec_url = start_url = None
     if binding.spec_url is not None:
         spec_url = _resolve_url("spec_url", binding.spec_url, path.parent, root, fail)

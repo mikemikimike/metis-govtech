@@ -11,13 +11,39 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .rules import ToolRefused
+
+if TYPE_CHECKING:
+    from collections.abc import Collection
 
 OPEN, CLOSE = "⟦", "⟧"
 _SPAN = re.compile(re.escape(OPEN) + r"(.*?)" + re.escape(CLOSE), re.DOTALL)
 _PLACEHOLDER = re.compile(r"\{\{(\d+)\}\}")
+_SECRET = re.compile(r"\{\{secret:([^{}]*)\}\}")
+
+
+def secret_name(text: str, allowed: Collection[str]) -> str | None:
+    """The variable a ``{{secret:NAME}}`` stands for, or ``None`` if ``text`` has none.
+
+    A secret is typed alone, so it never shares a field with other text, and only the
+    names the binding lists are allowed.
+
+    :raises ToolRefused: When ``text`` mixes a secret with anything else, or names a
+        variable the binding does not list.
+    """
+    names = _SECRET.findall(text)
+    if not names:
+        return None
+    if _SECRET.sub("", text).strip() or len(names) != 1:
+        raise ToolRefused("a secret is typed alone, with no other text and only one")
+    if names[0] not in allowed:
+        raise ToolRefused(
+            f"{names[0]!r} is not a secret the binding lists: "
+            + (", ".join(sorted(allowed)) or "it lists none")
+        )
+    return names[0]
 
 
 @dataclass

@@ -331,7 +331,7 @@ def test_a_browser_binding_loads_with_its_login_secrets(
     monkeypatch.setenv("APP_PASSWORD", "SENTINEL-PASSWORD")
     _write(inputs, _browser_binding())
 
-    loaded = load_target_binding(inputs, "targets/app.yaml")
+    loaded = load_target_binding(inputs, "targets/app.yaml", "browser")
 
     assert loaded.start_url == "https://app.example/login"
     assert loaded.binding.start_url == "${APP_URL}/login"
@@ -348,7 +348,7 @@ def test_a_browser_binding_without_a_login_needs_no_secrets(inputs: Path) -> Non
         "start_url: https://app.example/\n",
     )
 
-    loaded = load_target_binding(inputs, "targets/app.yaml")
+    loaded = load_target_binding(inputs, "targets/app.yaml", "browser")
 
     assert loaded.start_url == "https://app.example/"
     assert loaded.secrets == {}
@@ -364,7 +364,7 @@ def test_an_unset_login_secret_is_named(
     with pytest.raises(
         TargetBindingError, match="login.secrets names APP_PASSWORD, which is not set"
     ):
-        load_target_binding(inputs, "targets/app.yaml")
+        load_target_binding(inputs, "targets/app.yaml", "browser")
 
 
 def test_an_unset_start_url_variable_is_named(
@@ -377,7 +377,7 @@ def test_an_unset_start_url_variable_is_named(
         TargetBindingError,
         match="start_url needs the environment variable APP_URL, which is not set",
     ):
-        load_target_binding(inputs, "targets/app.yaml")
+        load_target_binding(inputs, "targets/app.yaml", "browser")
 
 
 @pytest.mark.parametrize(
@@ -387,4 +387,14 @@ def test_a_start_url_must_be_http_or_https(inputs: Path, start_url: str) -> None
     _write(inputs, _browser_binding(start_url=start_url))
 
     with pytest.raises(TargetBindingError, match="start_url must be an http"):
+        load_target_binding(inputs, "targets/app.yaml", "browser")
+
+
+def test_a_binding_of_the_other_transport_is_refused(inputs: Path) -> None:
+    _write(inputs, _browser_binding())
+    _write(inputs, _binding(), name="targets/http.yaml")
+
+    with pytest.raises(TargetBindingError, match="needs a http binding"):
         load_target_binding(inputs, "targets/app.yaml")
+    with pytest.raises(TargetBindingError, match="needs a browser binding"):
+        load_target_binding(inputs, "targets/http.yaml", "browser")
