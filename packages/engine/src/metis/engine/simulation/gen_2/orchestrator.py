@@ -203,9 +203,17 @@ class Orchestrator:
                 self._promised.append(Promise(name=name, turn=turn))
 
     def _still_promised(self) -> list[Promise]:
-        """Promised files not yet received, worked out from the ledger each time."""
-        held = {a.name for a in self._ledger.artifacts() if a.source == "target"}
-        return [p for p in self._promised if p.name not in held]
+        """Promised files still worth waiting for, worked out from the ledger each time.
+
+        A file the ledger holds as ``received`` or has given up on as ``unavailable`` is
+        settled; an ``unfetched`` one can still be retried, so it stays promised.
+        """
+        settled = {
+            a.name
+            for a in self._ledger.artifacts()
+            if a.source == "target" and a.state != "unfetched"
+        }
+        return [p for p in self._promised if p.name not in settled]
 
     def _mark(self, turn: int, detail: str) -> None:
         if not self._state:

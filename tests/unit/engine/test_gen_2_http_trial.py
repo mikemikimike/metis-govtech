@@ -200,6 +200,8 @@ async def test_a_full_trial_writes_a_record_from_a_real_session_and_a_real_downl
                 },
             )
         ],
+        # the closing step: nothing to collect, so it reports at once
+        [("report", {"outcome": "done", "why": "nothing more"})],
     ]
 
     record = await orchestrator.execute()
@@ -228,7 +230,7 @@ async def test_a_full_trial_writes_a_record_from_a_real_session_and_a_real_downl
     assert summaries.count(f"POST {API}/chat") == 2
     assert f"GET {API}/files/f-9 -> 200" in summaries
     calls = _jsonl(run_dir / "evidence" / "llm_calls.jsonl")
-    assert [c["component"] for c in calls] == ["runner_agent"] * 9
+    assert [c["component"] for c in calls] == ["runner_agent"] * 10
     assert runner.open_submission is None
 
 
@@ -248,7 +250,8 @@ async def test_the_round_cap_ends_a_looping_agent_and_the_trial_goes_on(
     assert seen.reply is None
     assert seen.notice is not None and f"{MAX_ROUNDS} rounds" in seen.notice
     assert target.bodies("/chat") == []  # a looping agent sent nothing
-    assert len(_jsonl(run_dir / "evidence" / "llm_calls.jsonl")) == MAX_ROUNDS
+    # the action and the closing step each run to the cap
+    assert len(_jsonl(run_dir / "evidence" / "llm_calls.jsonl")) == 2 * MAX_ROUNDS
 
 
 @pytest.mark.asyncio

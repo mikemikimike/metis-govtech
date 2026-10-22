@@ -519,6 +519,10 @@ class HttpRunner(Runner):
         :raises TurnRecoverableError: When the runner agent's LLM cannot be reached.
         """
         self.begin_action(action)
+        return await self._attempt(promised, closing=False)
+
+    async def _attempt(self, promised: list[Promise], *, closing: bool) -> Observation:
+        """The loop ``act`` and ``end_chat`` share: resume, run the agent, observe."""
         state = ActionState(first_result=len(self.results))
         started = _now()
         limit = min(self._wait + ACT_MARGIN, max(0.0, self._deadline - started))
@@ -526,11 +530,16 @@ class HttpRunner(Runner):
             await self.resume_poll()
         except httpx.TransportError:
             state.transport_failed = True
-        stopped = await self._run_agent(state, promised, started, limit)
+        stopped = await self._run_agent(state, promised, started, limit, closing)
         return self._observation(state, stopped)
 
     async def _run_agent(
-        self, state: ActionState, promised: list[Promise], started: float, limit: float
+        self,
+        state: ActionState,
+        promised: list[Promise],
+        started: float,
+        limit: float,
+        closing: bool,
     ) -> str | None:
         """Ask the LLM for tool calls until it reports. Returns why it stopped early."""
         if self._llm is None:
@@ -540,7 +549,7 @@ class HttpRunner(Runner):
             self._owns_llm = True
         messages: list[Any] = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": self._first_message(promised)},
+            {"role": "user", "content": self._first_message(promised, closing)},
         ]
         nudged = False
         for round_number in range(1, MAX_ROUNDS + 1):
@@ -601,7 +610,7 @@ class HttpRunner(Runner):
                 return None
         return f"the agent did not report within {MAX_ROUNDS} rounds"
 
-    def _first_message(self, promised: list[Promise]) -> str:
+    def _first_message(self, promised: list[Promise], closing: bool) -> str:
         opened = self.open_submission
         specification = operation_index(self.document)
         indexed = bool(specification)
@@ -624,6 +633,7 @@ class HttpRunner(Runner):
             notes=self.notes,
             session_id=self._session_id,
             rounds=MAX_ROUNDS,
+            closing=closing,
         )
 
     def _observation(self, state: ActionState, stopped: str | None) -> Observation:
@@ -655,7 +665,31 @@ class HttpRunner(Runner):
         )
 
     async def end_chat(self, promised: list[Promise]) -> None:
-        pass
+        """Collect what the target made available, then give up on the rest.
+
+        Not a turn: ``begin_action`` is not called, so files are recorded under the last
+        turn's number, and with no quoted words code refuses any submission. The agent's
+        report is discarded.
+
+        :raises TurnRecoverableError: When the runner agent's LLM cannot be reached.
+        """
+        self.spans = Spans.of("")
+        try:
+            await self._attempt(promised, closing=True)
+        finally:
+            held = {
+                a.name
+                for a in self.ledger.artifacts()
+                if a.source == "target" and a.state == "received"
+            }
+            for p in promised:
+                if p.name not in held:
+                    self.ledger.record_failure(
+                        p.name,
+                        "unavailable",
+                        f"promised in turn {p.turn}, never delivered",
+                        at_turn=self._turn,
+                    )
 
     async def teardown(self) -> None:
         if self._owns_llm and self._llm is not None:

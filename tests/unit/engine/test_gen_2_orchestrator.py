@@ -50,6 +50,7 @@ class Step:
     observation: Observation | None = None
     raises: Exception | None = None
     uploads: list[str] = field(default_factory=list)
+    unfetched: list[str] = field(default_factory=list)
     downloads: dict[str, bytes] = field(default_factory=dict)
     set_event: threading.Event | None = None
 
@@ -84,6 +85,8 @@ class FakeRunner(Runner):
             step.set_event.set()
         for name in step.uploads:
             self.ledger.record_upload(name, at_turn=self.turn)
+        for name in step.unfetched:
+            self.ledger.record_failure(name, "unfetched", "404", at_turn=self.turn)
         for name, data in step.downloads.items():
             self.ledger.record_download(name, data, at_turn=self.turn)
         if step.raises is not None:
@@ -469,3 +472,35 @@ async def test_promised_files_are_listed_until_they_arrive(tmp_path: Path) -> No
     assert runner.promised_seen[0] == []
     assert runner.promised_seen[1] == [Promise(name="report.csv", turn=1)]
     assert runner.promised_seen[2] == []
+
+
+@pytest.mark.asyncio
+async def test_an_unfetched_file_is_still_promised(tmp_path: Path) -> None:
+    runner = FakeRunner(
+        [
+            Step(_observation(promised=["report.csv"]), unfetched=["report.csv"]),
+            Step(_observation()),
+        ]
+    )
+    agent = ScriptedAgent([_go(), _go(), _done()])
+    orch = _build(tmp_path, runner, agent)
+
+    await orch.execute()
+
+    assert agent.promised == [[], ["report.csv"], ["report.csv"]]
+
+
+@pytest.mark.asyncio
+async def test_a_promise_recorded_unavailable_is_no_longer_promised(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner([Step(_observation(promised=["report.csv"]))])
+    orch = _build(tmp_path, runner, ScriptedAgent([_go(), _done()]))
+
+    await orch.execute()
+    assert [p.name for p in orch._still_promised()] == ["report.csv"]
+    orch._ledger.record_failure(
+        "report.csv", "unavailable", "never delivered", at_turn=1
+    )
+
+    assert orch._still_promised() == []
