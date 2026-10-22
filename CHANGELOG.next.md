@@ -276,6 +276,18 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is
   fetched.
 
+- **The generic HTTP runner's `poll_until` tool (#524).** `HttpRunner.poll_until(path, at,
+  not_in=…, in_=…)` sends `GET path` every 5 seconds until the JSON value at `at` is no longer
+  one of `not_in` (still waiting) or is one of `in_` (done); exactly one of the two is required.
+  Code does the waiting, up to the trial's `response_wait_ms` and never beyond the trial deadline.
+  When the condition holds, the open submission is cleared. A 4xx while a submission is open
+  stops the poll, clears the submission and records it, with the failing response, in
+  `HttpRunner.unresolved`; a timeout leaves it open and says so; a 429 is waited out, as in
+  `http_request`, and the poll carries on. A path missing from the body, or a body that is not
+  JSON, stops the poll with the pointer's message. Every poll's response can be cited, and a
+  `GET` the binding forbids is refused with the same message as in `http_request`, which now
+  shares that check. `resume_poll()` repeats the last poll while a submission is open.
+
 - **`gen_2`'s interface, user agent and turn loop (#480).** A runner factory that sets
   `generation = "gen_2"` now runs on `metis.engine.simulation.gen_2`. Its `Runner` has
   `setup(config)`, `act(action, promised) -> Observation`, `end_chat(promised)` and
