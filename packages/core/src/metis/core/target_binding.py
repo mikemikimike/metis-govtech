@@ -3,7 +3,8 @@
 A user writes this file by hand instead of a Python runner. Core validates its shape
 only. The engine loads it and expands ``${NAME}`` references from the environment, so
 values such as ``spec_url`` are kept here as written. Secrets never appear in the file:
-it names environment variables, and the engine reads them only when sending.
+it names environment variables, which the engine reads when it loads the binding and uses
+only when sending.
 """
 
 from __future__ import annotations

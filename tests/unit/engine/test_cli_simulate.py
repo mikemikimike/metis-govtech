@@ -11,12 +11,68 @@ from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 from metis.engine import cli
 from metis.engine.cli import app
 from metis.engine.simulation import experiment as experiment_module
+from metis.engine.simulation.gen_2.binding import TargetBindingError
+from tests.unit.engine.test_runner_ref import StubRunnerFactory
 
 runner = CliRunner()
 
 MINIMAL_EXPERIMENT = 'schema_version: 1\nid: test-exp\nrunner_factory_ref: tests.unit.engine.test_runner_ref.StubRunnerFactory\npersonas:\n- id: alice\n  description: test persona\n  name: alice\nscenarios:\n- id: task-1\n  description: test scenario\n  name: task-1\ntarget:\n  name: Test target\n  users: Test users\n  description: Test target\ntasks:\n- id: TC-001\n  scenario_ref: task-1\n  persona_ref: alice\n  fixtures: []\n  num_trials: 1\n  behaviour_refs:\n  - EB-1\nfeatures:\n- id: F-1\n  name: Responses\n  description: Responses\n  behaviours:\n  - id: EB-1\n    name: Respond\n    description: Respond correctly\n    measured: true\n    criteria:\n    - id: AC-1-1\n      name: Check 1\n      description: "Given a request, when the agent responds, then the requirement is met."\n      grader_fqn: tests.unit.engine.graders_for_tests.FixedScoreGrader\n      grader_args: {}\n'
 
 TWO_TRIAL_EXPERIMENT = MINIMAL_EXPERIMENT.replace("num_trials: 1", "num_trials: 2")
+_STUB_REF = "tests.unit.engine.test_runner_ref.StubRunnerFactory"
+
+
+class _SpecFactory(StubRunnerFactory):
+    """A factory that asks for the specification, recording what it was given."""
+
+    received: tuple[object, Path] | None = None
+
+    @classmethod
+    def from_specification(cls, specification, inputs_dir: Path) -> _SpecFactory:
+        cls.received = (specification.target_binding, inputs_dir)
+        return cls()
+
+
+class _MarkupSpecFactory(StubRunnerFactory):
+    @classmethod
+    def from_specification(cls, specification, inputs_dir: Path) -> _MarkupSpecFactory:
+        raise TargetBindingError("targets/app.yaml: spec_url 'specs/[/v1].json' [x]")
+
+
+class _FailingSpecFactory(StubRunnerFactory):
+    @classmethod
+    def from_specification(cls, specification, inputs_dir: Path) -> _FailingSpecFactory:
+        raise TargetBindingError("targets/app.yaml: target binding file not found")
+
+
+def _with_factory(factory_ref: str, experiment_yaml: str = MINIMAL_EXPERIMENT) -> str:
+    return experiment_yaml.replace(
+        f"runner_factory_ref: {_STUB_REF}\n",
+        f"runner_factory_ref: {factory_ref}\ntarget_binding: targets/app.yaml\n",
+    )
+
+
+def _capture_factory(monkeypatch) -> list[object]:
+    """Replace the experiment with a fake that keeps the factory it was given."""
+    factories: list[object] = []
+
+    def fake_execute_experiment(*_args: object, **kwargs: object) -> None:
+        factories.append(kwargs["runner_factory"])
+        _write_record_marker(kwargs["output_dir"])  # type: ignore[arg-type]
+
+    monkeypatch.setattr(cli, "_configure_process_logging", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        experiment_module, "execute_experiment", fake_execute_experiment
+    )
+    return factories
+
+
+def _simulate_fresh(monkeypatch, tmp_path: Path, factory_ref: str):
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    (input_dir / "specification.yaml").write_text(_with_factory(factory_ref))
+    monkeypatch.setattr(cli, "_find_project_root", lambda: tmp_path / "project")
+    return runner.invoke(app, ["simulate", "--input-dir", str(input_dir), "--no-tui"])
 
 
 def _write_source(tmp_path: Path) -> Path:
@@ -221,3 +277,70 @@ def test_reject_invalid_path_options(
 
     assert result.exit_code == 1
     assert expected in result.output
+
+
+def test_a_factory_without_from_specification_is_built_with_no_arguments(
+    monkeypatch, tmp_path: Path
+) -> None:
+    factories = _capture_factory(monkeypatch)
+
+    result = _simulate_fresh(monkeypatch, tmp_path, _STUB_REF)
+
+    assert result.exit_code == 0, result.output
+    [factory] = factories
+    assert type(factory) is StubRunnerFactory
+
+
+def test_a_factory_with_from_specification_gets_the_specification_and_inputs(
+    monkeypatch, tmp_path: Path
+) -> None:
+    ref = "tests.unit.engine.test_cli_simulate._SpecFactory"
+    _capture_factory(monkeypatch)
+
+    result = _simulate_fresh(monkeypatch, tmp_path, ref)
+
+    assert result.exit_code == 0, result.output
+    assert _SpecFactory.received is not None
+    binding, inputs_dir = _SpecFactory.received
+    assert binding == "targets/app.yaml"
+    assert inputs_dir.name == "inputs"
+    assert (inputs_dir / "specification.yaml").is_file()
+    assert inputs_dir.parent.parent == tmp_path / "project" / "experiments" / "execute"
+
+    output_dir = _write_output(
+        tmp_path / "resumed" / "test-exp-20260101-010101", _with_factory(ref)
+    )
+    _write_record(output_dir, "TC-001-alice-1", "system_error")
+    _SpecFactory.received = None
+
+    result = runner.invoke(
+        app, ["simulate", "--resume", "--experiment-dir", str(output_dir), "--no-tui"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert _SpecFactory.received == ("targets/app.yaml", output_dir / "inputs")
+
+
+def test_a_binding_error_prints_and_exits_one(monkeypatch, tmp_path: Path) -> None:
+    _capture_factory(monkeypatch)
+
+    result = _simulate_fresh(
+        monkeypatch, tmp_path, "tests.unit.engine.test_cli_simulate._FailingSpecFactory"
+    )
+
+    assert result.exit_code == 1
+    assert "Error: targets/app.yaml: target binding file not found" in " ".join(
+        result.output.split()
+    )
+
+
+def test_a_binding_error_is_printed_as_written(monkeypatch, tmp_path: Path) -> None:
+    """Rich must not read the message as markup: it holds text the user wrote."""
+    _capture_factory(monkeypatch)
+
+    result = _simulate_fresh(
+        monkeypatch, tmp_path, "tests.unit.engine.test_cli_simulate._MarkupSpecFactory"
+    )
+
+    assert result.exit_code == 1
+    assert "spec_url 'specs/[/v1].json' [x]" in " ".join(result.output.split())
