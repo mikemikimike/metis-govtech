@@ -14,7 +14,11 @@ import pytest
 from pydantic import BaseModel
 
 from metis.engine.simulation import llm_calls
-from metis.engine.simulation.llm_calls import LLMCallLog, parse_completion
+from metis.engine.simulation.llm_calls import (
+    LLMCallLog,
+    create_completion,
+    parse_completion,
+)
 
 _REQUEST = httpx.Request("POST", "https://llm.example/v1/chat/completions")
 
@@ -44,7 +48,8 @@ def _server_error() -> openai.InternalServerError:
 
 
 class _FakeClient:
-    """Answers ``beta.chat.completions.parse`` from a script, one entry per call."""
+    """Answers ``beta.chat.completions.parse`` and ``chat.completions.create`` from one
+    script, one entry per call."""
 
     def __init__(self, *script: object) -> None:
         self._script = list(script)
@@ -52,6 +57,7 @@ class _FakeClient:
         self.beta = SimpleNamespace(
             chat=SimpleNamespace(completions=SimpleNamespace(parse=self._parse))
         )
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._parse))
 
     async def _parse(self, **kwargs: Any) -> object:
         self.calls.append(kwargs)
@@ -73,6 +79,23 @@ async def _call(client: _FakeClient, log: LLMCallLog, **options: Any) -> object:
         model="requested-model",
         messages=[{"role": "user", "content": "hello"}],
         response_format=_Out,
+        **options,
+    )
+
+
+_TOOLS: list[Any] = [
+    {"type": "function", "function": {"name": "note", "parameters": {"type": "object"}}}
+]
+
+
+async def _tool_call(client: _FakeClient, log: LLMCallLog, **options: Any) -> object:
+    return await create_completion(
+        client,  # type: ignore[arg-type]
+        log,
+        component="runner_agent",
+        model="requested-model",
+        messages=[{"role": "user", "content": "hello"}],
+        tools=_TOOLS,
         **options,
     )
 
@@ -200,6 +223,62 @@ async def test_a_truncated_completion_logs_the_usage_it_carries(
     assert row["error"].startswith("LengthFinishReasonError: ")
     assert row["returned_model"] == "served-model"
     assert (row["tokens_in"], row["tokens_out"]) == (500, 64)
+
+
+@pytest.mark.asyncio
+async def test_a_tool_call_writes_one_row_under_its_component(tmp_path: Path) -> None:
+    log = LLMCallLog.for_trial(tmp_path)
+    client = _FakeClient(_completion(usage=_usage(40, 5)))
+
+    await _tool_call(client, log, tool_choice="auto")
+
+    assert client.calls[0]["tools"] == _TOOLS
+    assert client.calls[0]["tool_choice"] == "auto"
+    [row] = _rows(log)
+    assert row["component"] == "runner_agent"
+    assert row["returned_model"] == "served-model"
+    assert (row["tokens_in"], row["tokens_out"], row["error"]) == (40, 5, None)
+
+
+@pytest.mark.asyncio
+async def test_a_retried_tool_call_writes_a_row_per_attempt(tmp_path: Path) -> None:
+    log = LLMCallLog.for_trial(tmp_path)
+    client = _FakeClient(_server_error(), _completion())
+
+    await _tool_call(client, log)
+
+    rows = _rows(log)
+    assert rows[0]["error"].startswith("InternalServerError: ")
+    assert rows[1]["error"] is None
+    assert len(rows) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_failed_tool_call_writes_its_row_and_reraises(tmp_path: Path) -> None:
+    log = LLMCallLog.for_trial(tmp_path)
+    error = openai.BadRequestError(
+        "bad tools", response=httpx.Response(400, request=_REQUEST), body=None
+    )
+    client = _FakeClient(error)
+
+    with pytest.raises(openai.BadRequestError):
+        await _tool_call(client, log)
+
+    assert len(client.calls) == 1
+    [row] = _rows(log)
+    assert row["error"].startswith("BadRequestError: ")
+
+
+@pytest.mark.asyncio
+async def test_tool_call_retries_stop_after_the_last_attempt(tmp_path: Path) -> None:
+    log = LLMCallLog.for_trial(tmp_path)
+    attempts = llm_calls.MAX_RETRIES + 1
+    client = _FakeClient(*(_server_error() for _ in range(attempts)))
+
+    with pytest.raises(openai.InternalServerError):
+        await _tool_call(client, log)
+
+    assert len(_rows(log)) == attempts
 
 
 def test_the_experiment_log_lives_under_logs(tmp_path: Path) -> None:

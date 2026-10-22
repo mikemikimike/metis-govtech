@@ -1,7 +1,7 @@
 """One log row per simulation LLM request, retries included.
 
-Every LLM call the simulator makes goes through :func:`parse_completion`, which
-appends an :class:`LLMCallRecord` to an :class:`LLMCallLog` for each attempt. A
+Every LLM call the simulator makes goes through :func:`parse_completion` or, for
+tool-calling requests, :func:`create_completion`. Each an :class:`LLMCallRecord` to an :class:`LLMCallLog` for each attempt. A
 trial's calls go to ``outputs/trials/<id>/evidence/llm_calls.jsonl``; calls made
 once per experiment, such as the summarizer's fixture descriptions, go to
 ``logs/llm_calls.jsonl``. The log answers what a simulation cost and which model
@@ -34,10 +34,16 @@ from metis.core.logging import get_logger
 from ._superseded import superseded_path
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
     from openai import AsyncOpenAI
-    from openai.types.chat import ChatCompletionMessageParam, ParsedChatCompletion
+    from openai.types.chat import (
+        ChatCompletion,
+        ChatCompletionMessageParam,
+        ChatCompletionToolParam,
+        ParsedChatCompletion,
+    )
 
 logger = get_logger()
 
@@ -51,6 +57,7 @@ _INITIAL_RETRY_DELAY = 0.5
 _MAX_RETRY_DELAY = 8.0
 
 _T = TypeVar("_T", bound=BaseModel)
+_R = TypeVar("_R")
 
 
 class LLMCallRecord(BaseModel):
@@ -162,16 +169,62 @@ async def parse_completion(
     :param component: The row's ``component``.
     :param options: Further ``parse`` arguments, e.g. ``max_tokens``.
     """
+    return await _logged_attempts(
+        log,
+        component=component,
+        model=model,
+        send=lambda: client.beta.chat.completions.parse(
+            model=model,
+            messages=messages,
+            response_format=response_format,
+            **options,
+        ),
+    )
+
+
+async def create_completion(
+    client: AsyncOpenAI,
+    log: LLMCallLog,
+    *,
+    component: str,
+    model: str,
+    messages: list[ChatCompletionMessageParam],
+    tools: list[ChatCompletionToolParam],
+    **options: Any,
+) -> ChatCompletion:
+    """Call ``client.chat.completions.create`` with ``tools``, logging and retrying each
+    attempt as :func:`parse_completion` does.
+
+    :param client: A client built with ``max_retries=0``.
+    :param log: Where this call's rows go.
+    :param component: The row's ``component``, e.g. ``"runner_agent"``.
+    :param options: Further ``create`` arguments, e.g. ``tool_choice``.
+    """
+    return await _logged_attempts(
+        log,
+        component=component,
+        model=model,
+        send=lambda: client.chat.completions.create(
+            model=model, messages=messages, tools=tools, **options
+        ),
+    )
+
+
+async def _logged_attempts(
+    log: LLMCallLog,
+    *,
+    component: str,
+    model: str,
+    send: Callable[[], Awaitable[_R]],
+) -> _R:
+    """Run ``send`` until it succeeds, retrying a retryable failure up to
+    :data:`MAX_RETRIES` times. Every attempt appends one row to ``log``, and the last
+    attempt's exception is re-raised unchanged."""
     for retry in range(MAX_RETRIES + 1):
         at = datetime.now(tz=UTC)
         start = time.monotonic()
         try:
-            completion = await client.beta.chat.completions.parse(
-                model=model,
-                messages=messages,
-                response_format=response_format,
-                **options,
-            )
+            completion = await send()
         except Exception as exc:
             # A finish-reason error carries the completion, and so its usage.
             failed = getattr(exc, "completion", None)
@@ -208,7 +261,7 @@ async def parse_completion(
                 at=at,
                 component=component,
                 requested_model=model,
-                returned_model=completion.model or None,
+                returned_model=getattr(completion, "model", None) or None,
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
                 latency_ms=round((time.monotonic() - start) * 1000),
