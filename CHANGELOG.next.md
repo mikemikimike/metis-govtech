@@ -55,6 +55,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   components, and METIS visual style. Include logo assets and Make commands
   to install, preview, check, and build the site.
 
+- Add the MIT licence and a security policy. The README shows the new logo, a
+  centred title and description, and badges for the supported Python versions,
+  the licence, and the project status. It also has sections for the project
+  status, the maintainers and contact, and security reporting.
+
 - **Defined Grading Scope in `GLOSSARY.md`.** The term names the part of a session that
   one grader result grades — the whole session, a trace, or an observation. It belongs
   to a result, not to a grader, and is distinct from the Baseline and Feature-specific
