@@ -83,7 +83,7 @@ from ....exceptions import (
     TargetSessionLostError,
     TargetUnavailableError,
 )
-from ...runner import Runner
+from ...runner import Gen1RunnerFactory, Runner
 from ...types import (
     ActionResult,
     ActionSlot,
@@ -1359,7 +1359,7 @@ def _as_number(value: str | list[str] | int | float) -> int | float | None:
             return None
 
 
-class OrcaApiRunnerFactory:
+class OrcaApiRunnerFactory(Gen1RunnerFactory):
     """Owns the HTTP client and submit limiter; mints a runner per attempt."""
 
     def __init__(

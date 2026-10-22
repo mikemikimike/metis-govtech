@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..llm_calls import LLMCallLog
+from .artifact_summarizer import resolve_fixture_descriptions
 from .orchestrator import Orchestrator
 from .user_agent.agent import UserAgent
 
@@ -18,6 +19,9 @@ if TYPE_CHECKING:
 
     from ..types import Persona, Scenario
     from .runner import Runner
+
+
+__all__ = ["build_trial", "resolve_fixture_descriptions"]
 
 
 def build_trial(

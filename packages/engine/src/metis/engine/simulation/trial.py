@@ -1,17 +1,21 @@
 """The per-attempt seam between the retry loop and a simulator generation.
 
 The runner factory's optional ``generation`` attribute picks the generation; a factory
-without one is ``"gen_1"``.
+without one is ``"gen_1"``. Each generation registers in ``_GENERATIONS`` what the
+experiment needs from it: how to build an attempt's trial and how to describe the
+fixtures. Retiring a generation means deleting its entry and its folder.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from .gen_1.trial import build_trial
+from .gen_1.trial import build_trial, resolve_fixture_descriptions
 
 if TYPE_CHECKING:
     import threading
+    from collections.abc import Awaitable, Callable, Iterable
     from pathlib import Path
 
     from metis.core import Artifact
@@ -19,7 +23,6 @@ if TYPE_CHECKING:
     from metis.engine.tui import SimulationState, TUIContext
 
     from .factory import RunnerFactory
-    from .gen_1.runner import Runner
     from .types import Persona, Scenario
 
 
@@ -35,10 +38,47 @@ class Trial(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class SimulatorGeneration:
+    """What the experiment needs from one simulator generation."""
+
+    build_trial: Callable[..., Trial]
+    """Build one attempt's trial around a runner (the keyword arguments of ``create_trial``)."""
+    resolve_fixture_descriptions: Callable[
+        [Iterable[str], Path, Path, dict[str, str]], Awaitable[dict[str, str]]
+    ]
+    """Resolve one description per fixture, once per experiment, before workers start."""
+
+
+_GENERATIONS: dict[str, SimulatorGeneration] = {
+    "gen_1": SimulatorGeneration(
+        build_trial=build_trial,
+        resolve_fixture_descriptions=resolve_fixture_descriptions,
+    ),
+}
+
+
+def resolve_generation(runner_factory: RunnerFactory) -> SimulatorGeneration:
+    """Return the generation ``runner_factory``'s runners belong to.
+
+    Raises:
+        ValueError: If the factory names a generation that is not registered.
+    """
+    name = getattr(type(runner_factory), "generation", "gen_1")
+    if name not in _GENERATIONS:
+        supported = ", ".join(repr(g) for g in sorted(_GENERATIONS))
+        raise ValueError(
+            f"Unsupported simulator generation {name!r} on "
+            f"{type(runner_factory).__name__}; supported: {supported}"
+        )
+    return _GENERATIONS[name]
+
+
 def create_trial(
     runner_factory: RunnerFactory,
     *,
-    runner: Runner,
+    generation: SimulatorGeneration | None = None,
+    runner: object,
     persona: Persona,
     scenario: Scenario,
     trial_config: TrialConfig,
@@ -51,14 +91,13 @@ def create_trial(
     tui_ctx: TUIContext | None,
     shutdown_event: threading.Event | None,
 ) -> Trial:
-    """Return the trial for ``runner_factory``'s generation, built around ``runner``."""
-    generation = getattr(type(runner_factory), "generation", "gen_1")
-    if generation != "gen_1":
-        raise ValueError(
-            f"Unsupported simulator generation {generation!r} on "
-            f"{type(runner_factory).__name__}; supported: 'gen_1'"
-        )
-    return build_trial(
+    """Return the trial for ``runner_factory``'s generation, built around ``runner``.
+
+    The experiment passes the ``generation`` it already resolved; without one, it is
+    looked up from the factory.
+    """
+    generation = generation or resolve_generation(runner_factory)
+    return generation.build_trial(
         runner=runner,
         persona=persona,
         scenario=scenario,

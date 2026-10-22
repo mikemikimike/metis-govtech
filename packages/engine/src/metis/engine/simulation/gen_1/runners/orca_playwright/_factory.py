@@ -8,6 +8,7 @@ from playwright.async_api import async_playwright
 
 from metis.core.logging import get_logger
 
+from ...runner import Gen1RunnerFactory
 from ._config import OrcaPlaywrightRunnerConfig
 
 if TYPE_CHECKING:
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
-class OrcaPlaywrightRunnerFactory:
+class OrcaPlaywrightRunnerFactory(Gen1RunnerFactory):
     """Factory that owns the Playwright browser and creates runners per attempt.
 
     Note: the runners this factory creates are hardcoded for the Orca chat UI

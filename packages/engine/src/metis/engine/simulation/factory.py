@@ -1,4 +1,4 @@
-"""RunnerFactory protocol — shared lifecycle for creating runners per attempt."""
+"""RunnerFactory protocol — the lifecycle every generation's factory shares."""
 
 from __future__ import annotations
 
@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from .gen_1.runner import Runner
 
 
 class RunnerFactory(Protocol):
@@ -19,6 +17,9 @@ class RunnerFactory(Protocol):
     A factory may set a class attribute ``generation`` naming the simulator
     generation its runners belong to. A factory without one is ``"gen_1"``.
     The attribute is optional, so it is not declared here.
+
+    Each generation narrows ``create`` to its own ``Runner`` type (for
+    ``gen_1``, ``gen_1.runner.Gen1RunnerFactory``).
     """
 
     async def start(self) -> None:
@@ -27,7 +28,7 @@ class RunnerFactory(Protocol):
 
     async def create(
         self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
-    ) -> Runner:
+    ) -> object:
         """Create a fresh Runner for one attempt."""
         ...
 
