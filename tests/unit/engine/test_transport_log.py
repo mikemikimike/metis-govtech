@@ -115,7 +115,49 @@ async def test_a_failed_attempt_still_gets_a_result(tmp_path: Path) -> None:
     assert result["pairs_with"] == request["id"]
     assert result["role"] == "result"
     assert result["summary"] == "GET /api/v1/sessions -> ConnectError"
-    assert result["body"]["text"] == "connection refused"
+    # Not the exception's own message: a transport can echo request content
+    # (including a secret header value) into str(exc). See
+    # test_a_malformed_header_value_does_not_leak_into_the_log.
+    assert result["body"]["text"] == (
+        "ConnectError: request failed before a response was received"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_malformed_header_value_does_not_leak_into_the_log(
+    tmp_path: Path,
+) -> None:
+    """h11 echoes a header's raw bytes into LocalProtocolError's message when the
+    value itself is malformed (e.g. a secret pasted with a trailing CRLF). That
+    message must never reach the log, even though it never passes through our own
+    header-redaction step."""
+
+    class _LeakyInner(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            # Mirrors h11.Connection.send's own wording for an illegal header value,
+            # https://github.com/python-hyper/h11/blob/master/h11/_writers.py
+            value = request.headers.raw[-1][1]
+            raise httpx.LocalProtocolError(f"Illegal header value {value!r}")
+
+    log = TransportLog.for_trial(tmp_path)
+    transport = LoggingTransport(
+        _LeakyInner(), log, secret_headers=("x-platformai-key",)
+    )
+    async with httpx.AsyncClient(
+        transport=transport, base_url="https://app.example"
+    ) as client:
+        with pytest.raises(httpx.LocalProtocolError):
+            await client.get(
+                "/api/v1/sessions",
+                headers={"x-platformai-key": f"{_CANARY}\r\nEvil: true"},
+            )
+
+    files = [p for p in tmp_path.rglob("*") if p.is_file()]
+    assert files
+    assert all(_CANARY.encode() not in p.read_bytes() for p in files)
+    request, result = _log_rows(tmp_path)
+    assert result["pairs_with"] == request["id"]
+    assert result["summary"] == "GET /api/v1/sessions -> LocalProtocolError"
 
 
 @pytest.mark.asyncio

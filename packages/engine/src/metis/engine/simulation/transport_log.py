@@ -256,10 +256,15 @@ class LoggingTransport(httpx.AsyncBaseTransport):
             response = await self._inner.handle_async_request(request)
             await response.aread()
         except Exception as exc:
+            # Never str(exc): some transports echo a header's raw value into their
+            # own exception message (h11.LocalProtocolError does this for a header
+            # value it rejects, e.g. one with an embedded CRLF), which would put an
+            # unredacted secret in the log. The type name and a message we write
+            # ourselves are the only things guaranteed not to carry one.
             self._log.append(
                 "response",
                 f"{label} -> {type(exc).__name__}",
-                str(exc).encode("utf-8"),
+                f"{type(exc).__name__}: request failed before a response was received".encode(),
                 pairs_with=request_id,
             )
             raise
