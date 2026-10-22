@@ -90,7 +90,10 @@ def _done() -> UserAgentOutput:
 
 
 async def _trial(
-    tmp_path: Path, llm: ScriptedLLM, agent: ScriptedAgent
+    tmp_path: Path,
+    llm: ScriptedLLM,
+    agent: ScriptedAgent,
+    names: list[str] | None = None,
 ) -> tuple[Orchestrator, HttpRunner, Target, Path]:
     inputs = tmp_path / "inputs"
     inputs.mkdir()
@@ -98,6 +101,7 @@ async def _trial(
     fixtures = tmp_path / "fixtures"
     fixtures.mkdir()
     (fixtures / "q3_sales.csv").write_text("region,amount\nN,1\n", encoding="utf-8")
+    names = ["q3_sales.csv"] if names is None else names
     target = Target()
     factory = HttpRunnerFactory(
         load_target_binding(inputs, "app.yaml"),
@@ -111,18 +115,16 @@ async def _trial(
     orchestrator = Orchestrator(
         runner=runner,
         agent=agent,  # type: ignore[arg-type]
-        trial_config=TrialConfig(
-            persona="p1", scenario="s1", fixtures=["q3_sales.csv"]
-        ),
+        trial_config=TrialConfig(persona="p1", scenario="s1", fixtures=names),
         scenario=Scenario(
             id="s1",
             description="goal",
             persona_refs=["p1"],
-            fixtures=["q3_sales.csv"],
+            fixtures=names,
         ),
         run_dir=run_dir,
         experiment_root=tmp_path,
-        fixture_artifacts=build_fixture_artifacts(["q3_sales.csv"], fixtures, tmp_path),
+        fixture_artifacts=build_fixture_artifacts(names, fixtures, tmp_path),
     )
     return orchestrator, runner, target, run_dir
 
@@ -240,7 +242,7 @@ async def test_the_round_cap_ends_a_looping_agent_and_the_trial_goes_on(
 ) -> None:
     llm = ScriptedLLM([("note", {"text": "thinking"})])
     agent = ScriptedAgent([_go("Say ⟦hi⟧"), _done()])
-    orchestrator, _, target, run_dir = await _trial(tmp_path, llm, agent)
+    orchestrator, _, target, run_dir = await _trial(tmp_path, llm, agent, [])
 
     record = await orchestrator.execute()
 
@@ -265,7 +267,7 @@ async def test_a_failed_runner_agent_call_costs_one_turn_not_the_trial(
     )
     llm = ScriptedLLM(denied, [("report", {"outcome": "done", "why": "fine"})])
     agent = ScriptedAgent([_go("Say ⟦a⟧"), _go("Say ⟦b⟧"), _done()])
-    orchestrator, _, _, _ = await _trial(tmp_path, llm, agent)
+    orchestrator, _, _, _ = await _trial(tmp_path, llm, agent, [])
 
     record = await orchestrator.execute()
 

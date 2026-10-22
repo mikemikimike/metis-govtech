@@ -41,6 +41,8 @@ _STOPS_WITH_CLOSING_CALL = frozenset(
     {"goal_achieved", "user_abandoned", "max_turns", "timeout"}
 )
 """Endings after which the session is healthy and the user still wants its files."""
+_UNCHECKED_STOPS = frozenset({"interrupted", "system_error"})
+"""Endings after which the fixture check does not run: the trial is already cut short."""
 _DECISION_STOPS = {"goal_achieved": "goal_achieved", "giving_up": "user_abandoned"}
 
 
@@ -97,6 +99,8 @@ class Orchestrator:
         self._promised: list[Promise] = []
         self._session_id: str | None = None
         self._start = time.time()
+        self._failure: tuple[str, str] | None = None
+        """``(failure_source, failure_message)`` when a METIS check failed the trial."""
 
     async def execute(self) -> TrialRecord:
         """Run the trial to a stop reason and return its record."""
@@ -111,15 +115,31 @@ class Orchestrator:
         try:
             await self._runner.setup(self._config)
             stop_reason = await self._run_turns()
-            if stop_reason in _STOPS_WITH_CLOSING_CALL and self._turns:
+            if self._turns and (
+                stop_reason in _STOPS_WITH_CLOSING_CALL or self._failure is not None
+            ):
                 await self._close()
+            if self._turns and stop_reason not in _UNCHECKED_STOPS:
+                stop_reason = self._check_fixtures(stop_reason)
             logger.info("[sim] STOP: %s after %d turn(s)", stop_reason, self._turns)
             return self.partial_record(stop_reason)
         finally:
             await self._runner.teardown()
 
+    def _check_fixtures(self, stop_reason: str) -> str:
+        """Check 1: a fixture the scenario names that was never sent fails the trial."""
+        for a in self._ledger.artifacts():
+            if a.source == "fixture" and a.at_turn is None:
+                self._failure = (
+                    "evaluation_runner",
+                    f"fixture_never_uploaded: {a.name}",
+                )
+                return "system_error"
+        return stop_reason
+
     def partial_record(self, stop_reason: str) -> TrialRecord:
         """A record from whatever progress the trial has made, for the retry loop."""
+        source, message = self._failure or (None, None)
         return TrialRecord(
             config=self._config,
             target_session_id=self._session_id,
@@ -127,6 +147,8 @@ class Orchestrator:
                 stop_reason=stop_reason,
                 total_turns=self._turns,
                 duration_seconds=round(time.time() - self._start, 1),
+                failure_source=source,
+                failure_message=message,
             ),
             artifacts=self._ledger.artifacts(),
         )
@@ -181,6 +203,12 @@ class Orchestrator:
             self._turns += 1
             self._note_promises(observation, turn)
             self._agent.remember(output, observation)
+            if observation.submission_unresolved:
+                # No new submission may be sent while one is open, so no later turn
+                # could proceed; the closing step still collects what it can.
+                self._failure = ("evaluation_runner", "submission_unresolved")
+                logger.info("[turn %d] STOP: submission_unresolved", turn)
+                return "system_error"
             logger.info(
                 "[turn %d] action=%r reply=%r",
                 turn,

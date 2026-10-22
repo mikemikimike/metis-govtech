@@ -48,6 +48,8 @@ class Observation(BaseModel):
     """``False`` when nobody could check the target's state after the action."""
     notice: str | None = None
     """A problem METIS itself found with the turn, such as a timeout. Not the runner's."""
+    submission_unresolved: bool = False
+    """``True`` when a submission never settled, so the target cannot take another."""
 
 
 class Promise(BaseModel, frozen=True):

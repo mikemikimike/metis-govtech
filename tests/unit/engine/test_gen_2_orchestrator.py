@@ -504,3 +504,85 @@ async def test_a_promise_recorded_unavailable_is_no_longer_promised(
     )
 
     assert orch._still_promised() == []
+
+
+def _failure(record: TrialRecord) -> tuple[str, str | None, str | None]:
+    o = record.outcome
+    return o.stop_reason, o.failure_source, o.failure_message
+
+
+@pytest.mark.asyncio
+async def test_an_unsettled_submission_ends_the_loop_and_still_closes(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner(
+        [Step(_observation(submission_unresolved=True)), Step(_observation())]
+    )
+    agent = ScriptedAgent([_go(), _go(), _done()])
+    orch = _build(tmp_path, runner, agent)
+
+    record = await orch.execute()
+
+    assert _failure(record) == (
+        "system_error",
+        "evaluation_runner",
+        "submission_unresolved",
+    )
+    assert record.outcome.total_turns == 1
+    assert agent.turns == [1]  # the user is not asked again
+    assert runner.events == ["setup", "act", "end_chat", "teardown"]
+
+
+@pytest.mark.asyncio
+async def test_a_fixture_never_sent_is_a_system_error_even_after_goal_achieved(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner([Step(_observation())])
+    orch = _build(
+        tmp_path, runner, ScriptedAgent([_go(), _done()]), fixtures=["q3_sales.csv"]
+    )
+
+    record = await orch.execute()
+
+    assert _failure(record) == (
+        "system_error",
+        "evaluation_runner",
+        "fixture_never_uploaded: q3_sales.csv",
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_fixture_sent_in_time_is_no_failure(tmp_path: Path) -> None:
+    runner = FakeRunner([Step(_observation(), uploads=["q3_sales.csv"])])
+    orch = _build(
+        tmp_path, runner, ScriptedAgent([_go(), _done()]), fixtures=["q3_sales.csv"]
+    )
+
+    record = await orch.execute()
+
+    assert _failure(record) == ("goal_achieved", None, None)
+
+
+@pytest.mark.asyncio
+async def test_no_fixture_check_on_an_interrupted_or_zero_turn_trial(
+    tmp_path: Path,
+) -> None:
+    event = threading.Event()
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    interrupted = _build(
+        tmp_path / "a",
+        FakeRunner([Step(_observation(), set_event=event)]),
+        ScriptedAgent([_go(), _go()]),
+        fixtures=["q3_sales.csv"],
+        shutdown_event=event,
+    )
+    empty = _build(
+        tmp_path / "b",
+        FakeRunner([]),
+        ScriptedAgent([_done("giving_up")]),
+        fixtures=["q3_sales.csv"],
+    )
+
+    assert _failure(await interrupted.execute()) == ("interrupted", None, None)
+    assert _failure(await empty.execute()) == ("user_abandoned", None, None)

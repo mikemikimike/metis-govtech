@@ -639,7 +639,8 @@ class HttpRunner(Runner):
     def _observation(self, state: ActionState, stopped: str | None) -> Observation:
         """Build the result from what was logged; the agent's words only fill ``reading``."""
         notices: list[str] = []
-        if (unresolved := self.unresolved) is not None:
+        unsettled = (unresolved := self.unresolved) is not None
+        if unresolved is not None:
             self.unresolved = None  # read once; #524 never clears it
             notices.append(
                 f"A submission ({unresolved.submission.request}) never settled: the "
@@ -662,6 +663,7 @@ class HttpRunner(Runner):
             promised=report.promised if report else [],
             observed=self.open_submission is None and not state.transport_failed,
             notice=" ".join(notices) or None,
+            submission_unresolved=unsettled,
         )
 
     async def end_chat(self, promised: list[Promise]) -> None:
