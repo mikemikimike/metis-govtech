@@ -11,7 +11,7 @@ from metis.engine.simulation.gen_2.binding import load_target_binding
 from metis.engine.simulation.gen_2.runners.rules import ToolRefused, check_call, matches
 
 ENGINE = Path(__file__).resolve().parents[3] / "packages" / "engine"
-EXAMPLE = ENGINE / "example-experiment"
+EXAMPLE = ENGINE / "examples"
 BINDING = EXAMPLE / "targets" / "orca-api.yaml"
 README = ENGINE / "src/metis/engine/simulation/gen_2/README.md"
 SCHEMA = EXAMPLE.parents[1] / "core" / "schemas" / "target-binding.schema.json"
