@@ -64,9 +64,7 @@ def test_retry_defaults_are_the_shared_defaults(inputs: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_returns_a_gen_2_runner_whose_act_waits_for_481(
-    inputs: Path, tmp_path: Path
-) -> None:
+async def test_create_returns_a_gen_2_runner(inputs: Path, tmp_path: Path) -> None:
     transport = httpx.MockTransport(lambda request: httpx.Response(200, json={}))
     factory = HttpRunnerFactory(_factory(inputs).binding, transport=transport)
     await factory.start()
@@ -76,8 +74,6 @@ async def test_create_returns_a_gen_2_runner_whose_act_waits_for_481(
     assert isinstance(runner, gen_2_runner.Runner)
     assert runner.session_id is None
     assert await runner.setup(TrialConfig(persona="p", scenario="s")) is None
-    with pytest.raises(NotImplementedError, match="#481"):
-        await runner.act("hi", [])
     assert await runner.end_chat([]) is None
     assert await runner.teardown() is None
     await factory.close()
