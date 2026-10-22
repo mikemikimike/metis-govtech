@@ -547,8 +547,29 @@ failed.
 **On disk**
 
 - `reports/results.json` holds one `GraderRecord` per grader per session, with
-  `schema_version` still `1`. `metis insights report` reads these records, preserves
-  their settings, and reports grader errors separately from failed assessments.
+  `schema_version` still `1`. `metis insights report` calculates one verdict per run
+  from the mean scored result and its recorded threshold. Scored runs require a valid
+  recorded threshold. Grader errors are reported separately from failed assessments.
+  Re-run the report to regenerate `report.json` and `report.html`.
+- `report.json` keeps `schema_version: 1`, but its fields change. A reader of the old file
+  must make these changes:
+  - Read `grader_name` and `grader_fqn` in place of `grader` and `fqn`.
+  - Read the criterion `description` as one string in place of `given`, `when`, and `then`.
+  - Read evidence `result_number` in place of `trace` and `turn`.
+  - Read the evidence and status value `error` for a grader error. `dataError` now means
+    only a setup or mapping problem.
+  - Read `resultTable.rows` as one entry per Task. Each row has `results` per criterion and a
+    `trials` list with the per-trial `results`.
+  - Read trial `total_turns` in place of `turns`. Read the per-trial `results` from
+    `resultTable.rows[].trials` in place of trial `results`.
+  - Read unmapped entry `records` in place of `evidence`. Each item is the original
+    `GraderRecord`.
+  - Do not read `scores.graderPassRate.status`. The report no longer applies a fixed 70% pass
+    threshold to rates. Read `rate` and the `pass`, `fail`, `skip`, and `error` counts.
+  - Do not read the top-level `turns`, `routing`, or `threshold`. Read the threshold of each
+    run from evidence `grader_args.threshold` or `run_threshold`.
+  - Behaviour, feature, and headline rates are now the unweighted mean of their evaluated
+    children. Before, a behaviour and a feature used their lowest child rate.
 - An experiment directory from before the redesign cannot be evaluated again. Its frozen
   `inputs/specification.yaml` names deleted graders, so `metis engine evaluate` stops at
   validation. Update the source `specification.yaml` and run `metis engine simulate` again.

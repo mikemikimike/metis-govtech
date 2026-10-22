@@ -394,10 +394,19 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Expand Task Behaviour selections for plan counts, Criterion score attribution, and missing-result explanations (#413).
 
-- `metis insights report` still reads `results.json` version 1 and rejects files from the
-  current `metis engine evaluate` with "This results.json uses the new GraderRecord format
-  (grader redesign #428), which metis insights report cannot read yet. Rerun the report once
-  #454 is released."; its redesign is #454 (#428).
+- `metis insights report` reads core `GraderRecord` results and writes terminal,
+  JSON, and HTML reports. Each run uses the equal-weight mean of scored results and its
+  recorded threshold. A criterion pools its runs. Behaviours, features, the headline, and
+  persona and scenario rows take the unweighted mean of their evaluated children.
+  Passed, failed, skipped, and errored counts appear beside every rate and mean score.
+  The results table has one row per Task, and each trial tab shows that trial's result
+  per criterion. The terminal summary adds errored counts and a mean score per criterion
+  (#454).
+  - The report rejects a `results.json` with `turn_results` or `session_results` and exits
+    1. Re-run `metis engine evaluate`.
+  - `report.json` keeps `schema_version: 1`. It adds `mean_score`, `judge_models`, and
+    `error` counts, and it renames and removes other fields. The metis-engine section of
+    `MIGRATION.md` lists the changes that a reader of the old file must make.
 
 - Reports write `schema_version: 1`. `metis.insights.Report` defaults a missing version to
   `1` and rejects other explicit versions. The published `report.schema.json` file is

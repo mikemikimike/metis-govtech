@@ -10,20 +10,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from metis.core.reporting import GraderRecord
+
 _REPORT_VERSION = 1
-
-
-class Timings(BaseModel, extra="allow"):
-    turn_graders_seconds: float = 0.0
-    session_graders_seconds: float = 0.0
-
-
-class Routing(BaseModel, extra="allow"):
-    total_traces: int = 0
-    total_sessions: int = 0
-    direct_handle: int = 0
-    routing_failed: int = 0
-    subagent_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class ConversationTurn(BaseModel):
@@ -43,13 +32,12 @@ class Trial(BaseModel):
     stopReason: str
     message: str
     failureSource: str
-    turns: int
+    total_turns: int
     duration: float | None = None
     attempt: int = 1
     conversation: list[ConversationTurn] = Field(default_factory=list)
     category: str
     features: list[str] = Field(default_factory=list)
-    results: dict[str, TrialResult] = Field(default_factory=dict)
 
 
 class TrialsSummary(BaseModel):
@@ -60,10 +48,13 @@ class TrialsSummary(BaseModel):
 
 
 class GraderPassRate(BaseModel):
+    fail: int = 0
     rate: int | None = None
+    mean_score: float | None = None
     pass_: int = Field(0, alias="pass")
     ran: int = 0
-    status: str | None = None
+    skip: int = 0
+    error: int = 0
 
     model_config = {"populate_by_name": True}
 
@@ -103,8 +94,8 @@ class AxisRow(BaseModel):
     pass_: int = Field(0, alias="pass")
     fail: int = 0
     ran: int = 0
-    error: int = 0
     skip: int = 0
+    error: int = 0
     sessions: int = 0
     behaviours: int = 0
     graders: int = 0
@@ -119,8 +110,8 @@ class CriterionBreakdownCell(BaseModel):
     n: int
     pass_: int = Field(alias="pass")
     fail: int
-    error: int = 0
     skip: int
+    error: int = 0
 
     model_config = {"populate_by_name": True}
 
@@ -131,7 +122,6 @@ class BlankCause(BaseModel):
 
 
 class EvidenceItem(BaseModel):
-    score: float | None = None
     task_id: str = ""
     trial_index: int = 1
     criterion_id: str = ""
@@ -139,9 +129,13 @@ class EvidenceItem(BaseModel):
     grader_args: dict[str, Any] = Field(default_factory=dict)
     status: str
     message: str
-    trace: str
     session: str
-    turn: str
+    run_score: float | None = None
+    run_threshold: float | None = None
+    run_outcome: Literal["passed", "failed", "skipped", "errored"]
+    result_number: int
+    outcome: Literal["passed", "failed", "skipped", "errored"]
+    score: float | None = None
     persona: str | None = None
     scenario: str | None = None
 
@@ -149,13 +143,15 @@ class EvidenceItem(BaseModel):
 class Criterion(BaseModel):
     grader_args: dict[str, Any] = Field(default_factory=dict)
     description: str
-    grader: str
-    fqn: str | None = None
+    grader_name: str
+    grader_fqn: str | None = None
+    judge_models: list[str] = Field(default_factory=list)
     pass_: int = Field(0, alias="pass")
     fail: int = 0
-    error: int = 0
     skip: int = 0
+    error: int = 0
     rate: int | None = None
+    mean_score: float | None = None
     status: str | None = None
     blank: BlankCause | None = None
     P: list[CriterionBreakdownCell | None] = Field(default_factory=list)
@@ -166,26 +162,43 @@ class Criterion(BaseModel):
 
 
 class Behaviour(BaseModel):
+    pass_: int = Field(0, alias="pass")
+    fail: int = 0
+    skip: int = 0
+    error: int = 0
+
+    model_config = {"populate_by_name": True}
+
     label: str
     statement: str
     detail: str
     priority: bool
     criteria: list[str]
     rate: int | None = None
+    mean_score: float | None = None
     status: str | None = None
 
 
 class Feature(BaseModel):
+    pass_: int = Field(0, alias="pass")
+    fail: int = 0
+    skip: int = 0
+    error: int = 0
+
+    model_config = {"populate_by_name": True}
+
     id: str
     name: str
     behaviours: list[str]
     rate: int | None = None
+    mean_score: float | None = None
     status: str | None = None
 
 
 class ResultTableColumn(BaseModel):
+    grader_fqn: str | None = None
     criterion: str
-    grader: str
+    grader_name: str
 
 
 class ResultTableFeature(BaseModel):
@@ -197,17 +210,28 @@ class ResultTableFeature(BaseModel):
 class TrialResult(BaseModel):
     pass_: int = Field(0, alias="pass")
     fail: int = 0
-    error: int = 0
     skip: int = 0
+    error: int = 0
     evaluated: int = 0
     rate: int | None = None
+    mean_score: float | None = None
     status: str | None = None
 
     model_config = {"populate_by_name": True}
 
 
-class ResultTableRow(Trial):
+class ResultTableTrial(Trial):
     results: dict[str, TrialResult] = Field(default_factory=dict)
+
+
+class ResultTableRow(BaseModel):
+    """One test case: the grader runs of all its trials, pooled per criterion."""
+
+    task_id: str
+    persona: str
+    scenario: str
+    results: dict[str, TrialResult] = Field(default_factory=dict)
+    trials: list[ResultTableTrial] = Field(default_factory=list)
 
 
 class ResultTable(BaseModel):
@@ -216,12 +240,14 @@ class ResultTable(BaseModel):
 
 
 class UnmappedGrader(BaseModel):
-    evidence: list[EvidenceItem] = Field(default_factory=list)
-    grader: str
+    grader_fqn: str
+    records: list[GraderRecord] = Field(default_factory=list)
+    criterion_id: str
+    grader_name: str
     pass_: int = Field(0, alias="pass")
     fail: int = 0
-    error: int = 0
     skip: int = 0
+    error: int = 0
     why: str = ""
 
     model_config = {"populate_by_name": True}
@@ -238,12 +264,9 @@ class Report(BaseModel):
     run: str
     date: str
     sessions: int
-    turns: int
     results: int
     latency: float | None = None
-    timings: Timings = Field(default_factory=Timings)
-    routing: Routing = Field(default_factory=Routing)
-    threshold: int
+    timings: dict[str, Any] = Field(default_factory=dict)
     trials: TrialsSummary
     scores: Scores
     plan: Plan

@@ -14,87 +14,56 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from metis.core import execution_layout
 from metis.core.logging import get_logger
-from metis.insights._aggregation import aggregate_graders
+from metis.insights._aggregation import OutcomeCounts, aggregate_graders, mean_of
 from metis.insights._models import Report
 from metis.insights._report import build_report, load_report_sources
 from metis.insights._report_page import render_report_page
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from pathlib import Path
 
-    from metis.insights._legacy_results import (
-        EvaluationResults,
-        SessionReport,
-        TurnReport,
-    )
+    from metis.core.reporting import EvaluationResults
 
 logger = get_logger(__name__)
 
 
-def format_terminal_summary(
-    turn_results: list[TurnReport],
-    run_id: str,
-    routing_summary: Mapping[str, Any] | None = None,
-    session_results: list[SessionReport] | None = None,
-) -> str:
-    """Print a compact terminal summary of all grader results."""
-    lines = []
-    lines.append(f"\n{'=' * 70}")
-    lines.append(f"  EVAL RUN: {run_id}")
-    lines.append(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append(f"{'=' * 70}\n")
+def format_terminal_summary(results: EvaluationResults) -> str:
+    """Summarize all grader runs, including records with no specification match.
 
-    if routing_summary:
-        lines.append("  TRACE ROUTING")
-        lines.append(f"  {'-' * 40}")
-        lines.append(f"  Sessions:            {routing_summary['total_sessions']}")
-        lines.append(f"  Total traces:        {routing_summary['total_traces']}")
-        lines.append(f"  Direct handle:       {routing_summary['direct_handle']}")
-        lines.append(f"  Routing failed:      {routing_summary['routing_failed']}")
-        for agent, count in sorted(routing_summary["subagent_counts"].items()):
-            lines.append(f"  -> {agent:<20} {count}")
-        lines.append("")
-
-    grader_agg = aggregate_graders(
-        [t.model_dump() for t in turn_results],
-        [s.model_dump() for s in session_results] if session_results else None,
-    )
-
-    lines.append(
-        f"  {'Grader':<40} {'Pass':>6} {'Fail':>6} {'Skip':>6} {'Error':>6} {'Rate':>7}"
-    )
-    lines.append(f"  {'-' * 40} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 6} {'-' * 7}")
-
-    for name, agg in sorted(grader_agg.items()):
-        evaluated = agg["pass_count"] + agg["fail"]
-        rate = agg["pass_count"] / evaluated if evaluated > 0 else 0
-        marker = " " if agg["fail"] == 0 else "!"
-        rate_str = f"{rate * 100:.1f}%" if evaluated > 0 else "  N/A"
-        lines.append(
-            f" {marker}{name:<40} {agg['pass_count']:>6} {agg['fail']:>6} {agg['skip']:>6} {agg['error']:>6} {rate_str:>7}"
+    The summary has no specification, so its last row takes the unweighted mean of the
+    criterion rows. Its counts are the totals of all runs.
+    """
+    groups = aggregate_graders(results.records)
+    lines = [
+        f"EVAL RUN: {results.run_id}",
+        "Criterion / grader                   Pass  Fail  Skip  Error   Rate  Mean",
+    ]
+    total = OutcomeCounts()
+    for (criterion, grader), bucket in sorted(groups.items()):
+        label = f"{criterion} / {grader}"
+        rate = (
+            f"{bucket.pass_rate * 100:.1f}%" if bucket.pass_rate is not None else "N/A"
         )
-
-    total_pass = sum(a["pass_count"] for a in grader_agg.values())
-    total_fail = sum(a["fail"] for a in grader_agg.values())
-    total_skip = sum(a["skip"] for a in grader_agg.values())
-    total_error = sum(a["error"] for a in grader_agg.values())
-    evaluated = total_pass + total_fail
-    total_rate = f"{total_pass / evaluated * 100:.1f}%" if evaluated else "N/A"
+        mean = (
+            f"{bucket.average_score:.2f}" if bucket.average_score is not None else "N/A"
+        )
+        lines.append(
+            f"{label:<36} {bucket.passed:>4}  {bucket.failed:>4}  "
+            f"{bucket.skipped:>4}  {bucket.errored:>5}  {rate:>5}  {mean:>4}"
+        )
+        total.merge(bucket)
+    total_rate = mean_of(bucket.pass_rate for bucket in groups.values())
+    total_mean = mean_of(bucket.average_score for bucket in groups.values())
+    rate = f"{total_rate * 100:.1f}%" if total_rate is not None else "N/A"
+    mean = f"{total_mean:.2f}" if total_mean is not None else "N/A"
     lines.append(
-        f"\n  {'TOTAL':<40} {total_pass:>6} {total_fail:>6} "
-        f"{total_skip:>6} {total_error:>6} {total_rate:>7}"
+        f"{'MEAN OF CRITERIA':<36} {total.passed:>4}  {total.failed:>4}  "
+        f"{total.skipped:>4}  {total.errored:>5}  {rate:>5}  {mean:>4}"
     )
-    if total_error:
-        lines.append(f"  ({total_error} grader errors excluded from pass rate)")
-    if total_skip:
-        lines.append(f"  ({total_skip} skipped — excluded from pass rate)")
-
-    lines.append(f"\n{'=' * 70}\n")
     return "\n".join(lines)
 
 
@@ -112,20 +81,12 @@ def save_report(
     sources = load_report_sources(experiment_dir)
     if sources is None:
         return None
-    specification, persona_of, trial_outcomes = sources
+    specification, trial_outcomes = sources
 
     report = build_report(
         specification,
-        [t.model_dump() for t in results.turn_results],
-        persona_of=persona_of,
-        session_graders=[s.model_dump() for s in results.session_results]
-        if results.session_results
-        else None,
-        run_id=results.run_id,
+        results,
         timestamp=datetime.now().isoformat(),
-        latency_seconds=results.latency_seconds,
-        timings=results.timings,
-        routing=results.routing,
         trial_outcomes=trial_outcomes,
     )
 

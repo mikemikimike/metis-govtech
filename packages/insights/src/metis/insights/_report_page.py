@@ -28,7 +28,7 @@ REPORT_BODY = """\
           <button id="table-tab" type="button" role="tab" aria-controls="table-view" aria-selected="false">Results table</button>
         </div>
         <h2 id="result-view-title">Experiment result tree</h2>
-        <p id="result-view-description" class="section-description">Feature and behaviour scores show the lowest score in each group.</p>
+        <p id="result-view-description" class="section-description">A criterion pools its grader runs. Each higher level averages its evaluated children.</p>
       </div>
       <div class="tree-tools">
         <label class="search"><span>Search</span><input id="tree-search" type="search" placeholder="Feature, behaviour, criterion, grader"></label>
@@ -42,9 +42,9 @@ REPORT_BODY = """\
         <aside id="selection-panel" class="selection-panel" aria-live="polite"></aside>
       </div>
       <div class="status-key" aria-label="Status key">
-        <span><i class="key-pass"></i>Pass</span><span><i class="key-fail"></i>Fail</span>
-        <span><i class="key-none"></i>Not evaluated</span><span><i class="key-error"></i>Data error</span>
-        <span class="threshold-note" id="threshold-note"></span>
+        <span><i class="key-pass"></i>No failed runs</span><span><i class="key-fail"></i>Has failed runs</span>
+        <span><i class="key-none"></i>Not evaluated</span><span><i class="key-error"></i>Grader error</span><span><i class="key-error"></i>Data error</span>
+        <span>Criterion rate = passed / evaluated runs. Higher levels average their children.</span>
       </div>
     </div>
     <div id="table-view" role="tabpanel" aria-labelledby="table-tab" hidden>
@@ -53,7 +53,7 @@ REPORT_BODY = """\
         <button id="table-fail-only" class="quiet-button" type="button" aria-pressed="false">Fail only</button>
         <span id="table-count" class="section-count"></span>
       </div>
-      <div class="table-status-key" aria-label="Grader aggregation notes"><span>Grader cells show trial pass rate</span><span id="table-threshold-note"></span><span>Skipped and not run excluded</span></div>
+      <div class="table-status-key" aria-label="Grader aggregation notes"><span>Grader cells pool the runs of all trials in the test case</span><span>Skipped and errored runs are excluded from rates</span></div>
       <div id="results-table" class="results-table-wrap"></div>
     </div>
   </section>
@@ -74,12 +74,15 @@ REPORT_BODY = """\
 
 REPORT_SCRIPT = r"""
 const V=__METIS_REPORT__;
-const B=V.behaviours||{}, C=V.criteria||{}, TH=V.threshold??70;
-const LABELS={pass:"Pass",fail:"Fail",notEvaluated:"Not evaluated",dataError:"Data error",skip:"Skipped",error:"Grader error"};
+const B=V.behaviours||{}, C=V.criteria||{};
+const LABELS={pass:"No failed runs",fail:"Has failed runs",notEvaluated:"Not evaluated",dataError:"Data error",error:"Grader error",skip:"Skipped"};
+const RESULT_LABELS={pass:"Passed",fail:"Failed",skip:"Skipped",error:"Grader error"};
 const esc=value=>String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const clip=(value,max)=>String(value??"").length>max?String(value).slice(0,max-1)+"…":String(value??"");
-const statusOf=item=>item?.status||(item?.error?"error":item?.blank?.cause==="no class"?"dataError":"notEvaluated");
+const statusOf=item=>item?.status||"notEvaluated";
+const runCounts=c=>`${c.pass||0} pass · ${c.fail||0} fail · ${c.skip||0} skip · ${c.error||0} error`;
 const rateText=rate=>rate==null?"—":rate+"%";
+const meanText=mean=>mean==null?"No mean score":`Mean score ${mean.toFixed(2)}`;
 const allFeatures=V.features||[];
 let selected=null,failOnly=false,query="",resultFilters={persona:null,scenario:null},openResultFilter="";
 let tableQuery="",tableFailOnly=false,expandedTrial="";
@@ -101,8 +104,7 @@ function syncExpandControl(){
 }
 
 document.getElementById("report-title").textContent=V.target;
-document.getElementById("threshold-note").textContent=`Pass threshold ${TH}%`;
-document.getElementById("table-threshold-note").textContent=`Pass threshold ${TH}%`;
+
 
 function setResultView(view){
  const tree=view==="tree";
@@ -112,27 +114,21 @@ function setResultView(view){
  document.getElementById("tree-tab").setAttribute("aria-selected",String(tree));
  document.getElementById("table-tab").setAttribute("aria-selected",String(!tree));
  document.getElementById("result-view-title").textContent=tree?"Experiment result tree":"Results table";
- document.getElementById("result-view-description").textContent=tree?"Feature and behaviour scores show the lowest score in each group.":"Each row groups one persona and scenario.";
+ document.getElementById("result-view-description").textContent=tree?"A criterion pools its grader runs. Each higher level averages its evaluated children.":"Each row is one test case. Expand a row to see each trial.";
  if(!tree)renderResultsTable();
 }
 document.getElementById("tree-tab").onclick=()=>setResultView("tree");
 document.getElementById("table-tab").onclick=()=>setResultView("table");
 
-const summaryCard=(label,rate,detail,threshold)=>{
- const status=rate==null?"notEvaluated":rate>=threshold?"pass":"fail";
- const marker=Math.max(0,Math.min(100,threshold));
- return `<div class="summary-label">${esc(label)}</div><div class="summary-value ${status}">${rateText(rate)}</div>
-  <div class="score-rail"><i style="width:${rate??0}%" class="${status}"></i><b style="left:${marker}%"><span aria-label="${marker}% pass threshold" title="${marker}% pass threshold">${marker}%</span></b></div>
-  <div class="summary-detail">${esc(detail)}</div>`;
-};
+const summaryCard=(label,rate,detail)=>`<div class="summary-label">${esc(label)}</div><div class="summary-value">${rateText(rate)}</div><div class="score-rail"><i style="width:${rate??0}%"></i></div><div class="summary-detail">${esc(detail)}</div>`;
 const trials=V.trials||{attempted:0,successful:0,rate:null,items:[]};
 const trialScore=V.scores?.trialSuccess||{rate:null,successful:0,attempted:0};
-const graderScore=V.scores?.graderPassRate||{rate:null,pass:0,ran:0};
-const scoredFeatures=allFeatures.filter(feature=>feature.rate!=null),belowFeatures=scoredFeatures.filter(feature=>feature.rate<TH);
-if(!scoredFeatures.length)document.getElementById("executive-summary").textContent="No feature score was evaluated.";
-else{const lowestFeature=scoredFeatures.reduce((lowest,feature)=>feature.rate<lowest.rate?feature:lowest),featureScores=scoredFeatures.length===1?"feature score":"feature scores";document.getElementById("executive-summary").textContent=belowFeatures.length?`${belowFeatures.length} of ${scoredFeatures.length} ${featureScores} ${belowFeatures.length===1?"is":"are"} below the ${TH}% threshold; ${lowestFeature.name} is lowest at ${lowestFeature.rate}%.`:`All ${scoredFeatures.length} ${featureScores} ${scoredFeatures.length===1?"meets":"meet"} the ${TH}% threshold; ${lowestFeature.name} is lowest at ${lowestFeature.rate}%.`}
-document.getElementById("trial-summary").innerHTML=summaryCard("Trial success",trialScore.rate,`${trialScore.successful} of ${trialScore.attempted} trials passed`,TH);
-document.getElementById("grader-summary").innerHTML=summaryCard("Evaluated grader pass rate",graderScore.rate,`${graderScore.pass} of ${graderScore.ran} results passed`,TH);
+const graderScore=V.scores?.graderPassRate||{rate:null,mean_score:null,pass:0,ran:0,skip:0,error:0};
+const scoredFeatures=allFeatures.filter(feature=>feature.rate!=null);
+if(!scoredFeatures.length)document.getElementById("executive-summary").textContent="No feature has evaluated runs.";
+else{const lowest=scoredFeatures.reduce((a,b)=>a.rate<b.rate?a:b);document.getElementById("executive-summary").textContent=`${scoredFeatures.length} feature${scoredFeatures.length===1?" has":"s have"} evaluated runs. The lowest feature pass rate is ${lowest.rate}% for ${lowest.name}.`}
+document.getElementById("trial-summary").innerHTML=summaryCard("Trial success",trialScore.rate,`${trialScore.successful} of ${trialScore.attempted} trials succeeded`);
+document.getElementById("grader-summary").innerHTML=summaryCard("Evaluated grader pass rate",graderScore.rate,`Mean of feature rates. ${meanText(graderScore.mean_score)}. ${graderScore.ran} evaluated runs; ${runCounts(graderScore)}`);
 
 const tip=document.getElementById("tree-tip");
 const showTip=(event,html)=>{tip.innerHTML=html;tip.classList.add("on");const r=tip.getBoundingClientRect();tip.style.left=Math.min(event.clientX+12,innerWidth-r.width-12)+"px";tip.style.top=Math.max(12,event.clientY-r.height-12)+"px"};
@@ -142,7 +138,7 @@ function leafMatches(feature,behaviour,cid){
  const criterion=C[cid]||{};
  if(failOnly&&statusOf(criterion)!=="fail")return false;
  if(!query)return true;
- return [feature.name,feature.id,behaviour.label,behaviour.statement,cid,criterion.grader,criterion.description].join(" ").toLowerCase().includes(query);
+ return [feature.name,feature.id,behaviour.label,behaviour.statement,cid,criterion.grader_name,criterion.description].join(" ").toLowerCase().includes(query);
 }
 
 function renderTree(){
@@ -186,29 +182,29 @@ function renderTree(){
  };
  const dataErrors=(V.unresolved||[]).length;
  svg+=box(X.target,targetY,widths.target,66,dataErrors?"dataError":"neutral","target","target",V.target,"","Target",dataErrors?`${dataErrors} data errors`:"",false);
- for(const group of featureGroups){const feature=group.feature,y=centre(group.start,group.end),closed=shutFeatures.has(feature.id);svg+=box(X.feature,y,widths.feature,62,statusOf(feature),"feature",feature.id,feature.name,rateText(feature.rate),feature.id,"",false,!closed);
-  for(const bg of group.behaviourGroups){const b=bg.behaviour,yb=centre(bg.start,bg.end),closedB=shutBehaviours.has(bg.bid);svg+=box(X.behaviour,yb,widths.behaviour,62,statusOf(b),"behaviour",bg.bid,b.label,rateText(b.rate),bg.bid,"",false,!closedB)}
+ for(const group of featureGroups){const feature=group.feature,y=centre(group.start,group.end),closed=shutFeatures.has(feature.id);svg+=box(X.feature,y,widths.feature,62,statusOf(feature),"feature",feature.id,feature.name,rateText(feature.rate),runCounts(feature),"",false,!closed);
+  for(const bg of group.behaviourGroups){const b=bg.behaviour,yb=centre(bg.start,bg.end),closedB=shutBehaviours.has(bg.bid);svg+=box(X.behaviour,yb,widths.behaviour,62,statusOf(b),"behaviour",bg.bid,b.label,rateText(b.rate),runCounts(b),"",false,!closedB)}
  }
- rows.forEach((row,i)=>{if(!row.cid)return;const c=row.criterion,y=rowY(i),st=statusOf(c),graderName=c.grader||(c.fqn||"").split(".").pop()||"No grader";svg+=box(X.criterion,y,widths.criterion,58,st,"criterion",row.cid,row.cid,rateText(c.rate),"Criterion",LABELS[st],true);svg+=box(X.grader,y,widths.grader,58,st,"grader",row.cid,graderName,rateText(c.rate),"Grader",LABELS[st],true)});
+ rows.forEach((row,i)=>{if(!row.cid)return;const c=row.criterion,y=rowY(i),st=statusOf(c),graderName=c.grader_name||(c.grader_fqn||"").split(".").pop()||"No grader";svg+=box(X.criterion,y,widths.criterion,58,st,"criterion",row.cid,row.cid,rateText(c.rate),runCounts(c),"",true);svg+=box(X.grader,y,widths.grader,58,st,"grader",row.cid,graderName,rateText(c.rate),runCounts(c),"",true)});
  host.innerHTML=svg+"</svg>";
  syncExpandControl();
  host.querySelectorAll('.tree-node[role="button"]').forEach(node=>{
   const activate=()=>{hideTip();const kind=node.dataset.kind,id=node.dataset.id;if(kind==="feature"){shutFeatures.has(id)?shutFeatures.delete(id):shutFeatures.add(id);renderTree();return}if(kind==="behaviour"){shutBehaviours.has(id)?shutBehaviours.delete(id):shutBehaviours.add(id);renderTree();return}if(kind==="criterion"||kind==="grader"){if(selected?.id!==id)resultFilters={persona:null,scenario:null};selected={type:kind,id};renderTree();renderSelection();if(innerWidth<=1000)document.getElementById("selection-panel").scrollIntoView({behavior:"auto",block:"start"})}};
   node.addEventListener("click",activate);node.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();activate()}});
-  node.addEventListener("mousemove",e=>{const kind=node.dataset.kind;if(kind==="criterion"||kind==="grader"){const c=C[node.dataset.id];showTip(e,`<strong>${esc(kind==="grader"?(c.grader||"No grader"):node.dataset.id)}</strong><span>${esc(LABELS[statusOf(c)])} · ${rateText(c.rate)}</span>`)}else if(kind==="feature"){showTip(e,"Feature score = lowest behaviour score.")}else if(kind==="behaviour"){showTip(e,"Behaviour score = lowest criterion score.")}});node.addEventListener("mouseleave",hideTip);
+  node.addEventListener("mousemove",e=>{const kind=node.dataset.kind;if(kind==="criterion"||kind==="grader"){const c=C[node.dataset.id];showTip(e,`<strong>${esc(kind==="grader"?(c.grader_name||"No grader"):node.dataset.id)}</strong><span>${esc(LABELS[statusOf(c)])} · ${rateText(c.rate)} · ${esc(meanText(c.mean_score))}</span>`)}else if(kind==="feature"){showTip(e,`Feature rate = mean of its evaluated behaviour rates. ${meanText(allFeatures.find(f=>f.id===node.dataset.id)?.mean_score)}.`)}else if(kind==="behaviour"){showTip(e,`Behaviour rate = mean of its evaluated criterion rates. ${meanText(B[node.dataset.id]?.mean_score)}.`)}});node.addEventListener("mouseleave",hideTip);
  });
 }
 
 const statPill=st=>`<span class="status-pill ${st}"><i></i>${esc(LABELS[st])}</span>`;
-const resultRail=c=>{const st=statusOf(c);return `<div class="leaf-score"><div><strong class="${st}">${rateText(c.rate)}</strong>${statPill(st)}</div><div class="score-rail"><i style="width:${c.rate??0}%" class="${st}"></i><b style="left:${TH}%"></b></div><div class="threshold-line">Pass threshold <b>${TH}%</b></div></div>`};
+const resultRail=c=>{const st=statusOf(c),settings=[...new Set((c.evidence||[]).map(item=>item.grader_args?.threshold).filter(value=>value!=null))];return `<div class="leaf-score"><div><strong class="${st}">${rateText(c.rate)}</strong>${statPill(st)}</div><div class="score-rail"><i style="width:${c.rate??0}%" class="${st}"></i></div><div class="threshold-line">Runs: ${esc(runCounts(c))}</div><div class="threshold-line">${esc(meanText(c.mean_score))}</div><div class="threshold-line">${(c.judge_models||[]).length?`Judge model: ${c.judge_models.map(esc).join(", ")}`:"No judge model recorded"}</div><div class="threshold-line">${settings.length?`Recorded run threshold: ${settings.map(esc).join(", ")}`:"No scored run threshold recorded"}</div></div>`};
 const resultCounts=items=>({pass:items.filter(item=>item.status==="pass").length,fail:items.filter(item=>item.status==="fail").length,skip:items.filter(item=>item.status==="skip").length,error:items.filter(item=>item.status==="error").length});
-const evidenceCounts=items=>{const counts=resultCounts(items);return `<div class="evidence-counts" aria-label="Evaluator result counts"><div class="pass"><strong>${counts.pass}</strong><span>Pass</span></div><div class="fail"><strong>${counts.fail}</strong><span>Fail</span></div><div class="skip"><strong>${counts.skip}</strong><span>Skip</span></div><div class="error"><strong>${counts.error}</strong><span>Grader error</span></div></div>`};
+const evidenceCounts=items=>{const counts=resultCounts(items);return `<div class="evidence-counts" aria-label="Raw result counts"><div class="pass"><strong>${counts.pass}</strong><span>Pass</span></div><div class="fail"><strong>${counts.fail}</strong><span>Fail</span></div><div class="skip"><strong>${counts.skip}</strong><span>Skip</span></div><div class="error"><strong>${counts.error}</strong><span>Grader error</span></div></div>`};
 function filterOptions(c,key){
  const values=[...new Set((c.evidence||[]).map(item=>item[key]).filter(Boolean))];
- return values.map(value=>{const items=c.evidence.filter(item=>item[key]===value),counts=resultCounts(items),evaluated=counts.pass+counts.fail;return {value,fail:counts.fail,evaluated,skip:counts.skip,rate:evaluated?counts.fail/evaluated:0}})
+ return values.map(value=>{const items=c.evidence.filter(item=>item[key]===value),counts=resultCounts(items),evaluated=counts.pass+counts.fail;return {value,fail:counts.fail,evaluated,skip:counts.skip,error:counts.error,rate:evaluated?counts.fail/evaluated:0}})
   .sort((a,b)=>b.fail-a.fail||b.rate-a.rate||b.evaluated-a.evaluated||a.value.localeCompare(b.value));
 }
-const filterMeta=row=>`${row.fail} of ${row.evaluated} failed${row.skip?` · ${row.skip} skipped`:""}`;
+const filterMeta=row=>`${row.fail} of ${row.evaluated} scored raw results failed${row.skip?` · ${row.skip} skipped`:""}${row.error?` · ${row.error} errored`:""}`;
 function resultFilter(c,key,label){
  const options=filterOptions(c,key),current=resultFilters[key],allSelected=current===null,currentValues=allSelected?options.map(option=>option.value):current;
  const allLabel=`All ${label.toLowerCase()}s`,emptyLabel=`No ${label.toLowerCase()}s`,currentLabel=allSelected?allLabel:current.length===0?emptyLabel:current.length===1?current[0]:`${current.length} ${label.toLowerCase()}s`;
@@ -219,16 +215,14 @@ function filteredEvidence(c){return (c.evidence||[]).filter(item=>filterIncludes
 function evidenceList(c,evidence){
  if(!(c.evidence||[]).length)return `<div class="blank-note">${esc(c.blank?.note||"No grader result was recorded.")}</div>`;
  if(!evidence.length)return '<div class="blank-note filter-empty">No results match these filters.<button type="button" data-clear-result-filters>Clear filters</button></div>';
- return `<div class="evidence-list">${evidence.map(item=>`<article class="evidence-item ${esc(item.status)}"><div class="evidence-head"><span class="evidence-status">${esc(LABELS[item.status]||item.status)}</span><span>${esc(item.persona||"No persona")} · ${esc(item.scenario||"No scenario")}</span></div><p>${esc(item.message||"No message recorded")}</p><div class="evidence-meta"><span>${esc(item.session||item.trace||"No trial ID")}</span><span>${esc(item.turn)}</span><span>${esc(item.trace)}</span><span>Criterion ${esc(item.criterion_id)}</span><span>Task ${esc(item.task_id)} · Trial ${esc(item.trial_index)}</span></div><details><summary>Recorded grader settings</summary><p>${esc(item.grader_fqn)}</p><pre>${esc(JSON.stringify(item.grader_args||{},null,2))}</pre></details></article>`).join("")}</div>`;
+ return `<div class="evidence-list">${evidence.map(item=>`<article class="evidence-item ${esc(item.status)}"><div class="evidence-head"><span class="evidence-status">${esc(RESULT_LABELS[item.status]||item.status)}</span><span>${esc(item.persona||"No persona")} · ${esc(item.scenario||"No scenario")}</span></div><p>${esc(item.message||"No message recorded")}</p><div class="evidence-meta"><span>${esc(item.task_id)} trial ${esc(item.trial_index)}</span><span>Session ${esc(item.session)}</span><span>Result ${esc(item.result_number)}${item.score==null?"":` · Score ${esc(item.score)}`}</span><span>Run: ${esc(item.run_outcome)}${item.run_score==null?"":` · Mean ${esc(item.run_score)} · Threshold ${esc(item.run_threshold)}`}</span></div><details class="grader-settings"><summary>Recorded grader settings</summary><p>${esc(item.grader_fqn)}</p><pre>${esc(JSON.stringify(item.grader_args||{},null,2))}</pre></details></article>`).join("")}</div>`;
 }
-function individualResults(c){const allEvidence=c.evidence||[];if(!allEvidence.length)return `<section class="individual-results"><h4>Individual results</h4>${evidenceList(c,[])}</section>`;const evidence=filteredEvidence(c);return `<section class="individual-results"><h4>Individual results</h4><div class="result-filters">${resultFilter(c,"persona","Persona")}${resultFilter(c,"scenario","Scenario")}</div>${evidenceCounts(evidence)}${evidenceList(c,evidence)}</section>`}
+function unmappedEvidence(group){return (group.records||[]).flatMap(record=>record.results.map((result,index)=>({task_id:record.task_id,trial_index:record.trial_index,session:record.session_id,scenario:record.scenario_id,persona:"",criterion_id:record.criterion_id,grader_fqn:record.grader_fqn,grader_args:record.grader_args,result_number:index+1,score:result.score,message:result.reason,outcome:result.outcome,status:{passed:"pass",failed:"fail",skipped:"skip",errored:"error"}[result.outcome],run_outcome:"not matched"})))}
 function unmappedResults(groups){
  if(!groups.length)return "";
- return `<h2 id="unmapped-title">Results without a matching criterion</h2><p>These results could not be matched to a Task and Criterion in the specification. They are excluded from the target pass rate.</p>${groups.map(group=>`<section class="individual-results"><h3>${esc(group.grader)}</h3><p>${esc(group.why)}</p>${evidenceCounts(group.evidence||[])}${evidenceList(group,group.evidence||[])}</section>`).join("")}`;
+ return `<h2 id="unmapped-title">Results without a matching criterion</h2><p>These results could not be matched to a Task and Criterion in the specification. They are excluded from the target pass rate.</p>${groups.map(group=>{const evidence=unmappedEvidence(group);return `<section class="individual-results"><h3>${esc(group.criterion_id)} / ${esc(group.grader_fqn)}</h3><p>${esc(group.why)}</p>${evidenceCounts(evidence)}${evidenceList({evidence},evidence)}</section>`}).join("")}`;
 }
-const unmappedPanel=document.getElementById("unmapped-results");
-unmappedPanel.innerHTML=unmappedResults(V.unmapped||[]);
-unmappedPanel.hidden=!(V.unmapped||[]).length;
+function individualResults(c){const allEvidence=c.evidence||[];if(!allEvidence.length)return `<section class="individual-results"><h4>Raw results</h4>${evidenceList(c,[])}</section>`;const evidence=filteredEvidence(c);return `<section class="individual-results"><h4>Raw results</h4><div class="result-filters">${resultFilter(c,"persona","Persona")}${resultFilter(c,"scenario","Scenario")}</div>${evidenceCounts(evidence)}${evidenceList(c,evidence)}</section>`}
 function bindResultFilters(c,panel){
  panel.querySelectorAll("[data-result-filter]").forEach(button=>button.onclick=event=>{event.stopPropagation();const key=button.dataset.resultFilter,allValues=filterOptions(c,key).map(option=>option.value),current=resultFilters[key]===null?allValues:resultFilters[key],next=new Set(current),value=button.dataset.filterValue;next.has(value)?next.delete(value):next.add(value);resultFilters={...resultFilters,[key]:next.size===allValues.length?null:[...next]};openResultFilter=key;renderSelection()});
  panel.querySelectorAll("[data-filter-action]").forEach(button=>button.onclick=event=>{event.stopPropagation();const key=button.dataset.filterKey;resultFilters={...resultFilters,[key]:button.dataset.filterAction==="all"?null:[]};openResultFilter=key;renderSelection()});
@@ -238,10 +232,10 @@ function bindResultFilters(c,panel){
 function renderSelection(){
  const panel=document.getElementById("selection-panel");
  if(!selected){panel.innerHTML=`<div class="empty-selection"><div class="path-visual"><i></i><i></i><i></i><i></i></div><h3>Select a criterion or grader</h3><p>Feature → Behaviour → Criterion → Grader</p></div>`;return}
- const c=C[selected.id],graderName=c.grader||(c.fqn||"").split(".").pop()||"No grader";
+ const c=C[selected.id],graderName=c.grader_name||(c.grader_fqn||"").split(".").pop()||"No grader";
  panel.innerHTML=`<div class="selected-title"><h3>${esc(selected.id)}</h3></div>${resultRail(c)}
   <p class="assessment-description">${esc(c.description)}</p>
-  <div class="grader-field"><span>Grader</span><strong>${esc(graderName)}</strong></div>
+  <div class="grader-field"><span>Grader</span><strong>${esc(graderName)}</strong><small>${esc(c.grader_fqn||"")}</small></div>
   ${individualResults(c)}`;
  bindResultFilters(c,panel);
 }
@@ -256,23 +250,25 @@ const outcomeLabel={succeeded:"Succeeded",abandoned:"Abandoned",timedOut:"Timed 
 const tableCases=[];
 const tableCaseByKey=new Map();
 const activeTrialByCase=new Map();
-for(const trial of tableData.rows||[]){const key=trial.task_id;let testCase=tableCaseByKey.get(key);if(!testCase){testCase={id:`case-${tableCases.length+1}`,taskId:trial.task_id,persona:trial.persona||"",scenario:trial.scenario||"",trials:[]};tableCaseByKey.set(key,testCase);tableCases.push(testCase)}testCase.trials.push(trial)}
-const trialSquares=(testCase,stateOf,labelOf)=>`<span class="trial-statuses">${testCase.trials.map((trial,index)=>{const state=stateOf(trial);return `<i class="trial-mark ${state}" title="Trial ${trial.trial_index||index+1}: ${esc(labelOf(trial,state))}" aria-label="Trial ${index+1}: ${esc(labelOf(trial,state))}"></i>`}).join("")}</span>`;
-const graderCell=(testCase,column)=>{const results=testCase.trials.map(trial=>(trial.results||{})[column.criterion]).filter(result=>result?.evaluated),passed=results.filter(result=>result.status==="pass").length,evaluated=results.length,notEvaluated=testCase.trials.length-evaluated;if(!evaluated){const errors=testCase.trials.reduce((n,trial)=>n+((trial.results||{})[column.criterion]?.error||0),0),skips=testCase.trials.reduce((n,trial)=>n+((trial.results||{})[column.criterion]?.skip||0),0);return `<span class="table-score ${errors?"error":"notEvaluated"}" aria-label="${errors?"Grader error":skips?"Skipped":"Not evaluated"}" title="${errors} grader errors · ${skips} skipped">${errors?"Error":skips?"Skipped":"—"}</span>`;}const rate=Math.round(100*passed/evaluated),state=rate>=TH?"pass":"fail",detail=`${passed} of ${evaluated} evaluated trials passed${notEvaluated?` · ${notEvaluated} not evaluated`:""}`;return `<span class="table-score ${state}" title="${esc(detail)}" aria-label="${esc(LABELS[state])}, ${rate}%. ${esc(detail)}">${rate}%</span>`};
+for(const row of tableData.rows||[]){const testCase={id:`case-${tableCases.length+1}`,taskId:row.task_id,persona:row.persona||"",scenario:row.scenario||"",results:row.results||{},trials:row.trials||[]};tableCaseByKey.set(row.task_id,testCase);tableCases.push(testCase)}
+const trialSquares=(testCase,stateOf,labelOf)=>`<span class="trial-statuses">${testCase.trials.map((trial,index)=>{const state=stateOf(trial);return `<i class="trial-mark ${state}" title="Trial ${trial.trial_index}: ${esc(labelOf(trial,state))}" aria-label="Trial ${trial.trial_index}: ${esc(labelOf(trial,state))}"></i>`}).join("")}</span>`;
+const resultCell=result=>{const value=result||{},detail=`Runs: ${value.pass||0} pass; ${value.fail||0} fail; ${value.skip||0} skip; ${value.error||0} error`;if(value.rate==null){const state=value.error?"error":"notEvaluated";return `<span class="table-score ${state}" title="${esc(detail)}" aria-label="${esc(detail)}">—<small>${esc(detail)}</small></span>`}const state=value.status||"pass",mean=value.mean_score==null?"":` · mean ${value.mean_score.toFixed(2)}`;return `<span class="table-score ${state}" title="${esc(detail+mean)}" aria-label="${value.rate}%. ${esc(detail+mean)}">${value.rate}%<small>${esc(detail+mean)}</small></span>`};
+const graderCell=(testCase,column)=>resultCell(testCase.results[column.criterion]);
+const trialResults=trial=>tableColumns.length?`<table class="trial-results"><thead><tr>${tableColumns.map(column=>`<th title="${esc(column.grader_fqn)}">${esc(column.criterion)}</th>`).join("")}</tr></thead><tbody><tr>${tableColumns.map(column=>`<td>${resultCell((trial.results||{})[column.criterion])}</td>`).join("")}</tr></tbody></table>`:"";
 const outcomeCell=testCase=>trialSquares(testCase,trial=>trial.category||"abandoned",(trial,state)=>outcomeLabel[state]||state);
-const trialTrace=(row,index)=>{const turns=row.conversation||[],category=row.category||"abandoned";return `<section class="trial-trace"><div class="trial-trace-head"><div><strong>Trial ${index+1}</strong><span>${esc(row.id)}</span>${row.attempt>1?'<span class="trial-retried">retried · attempt '+row.attempt+'</span>':""}</div><span class="outcome-state ${category}"><i></i>${esc(outcomeLabel[category]||category)}</span><span>${turns.length} turn${turns.length===1?"":"s"}</span></div>${turns.length?turns.map(turn=>`<article class="conversation-turn"><span class="turn-number">Turn ${turn.turn}</span><div><b>User agent</b><p>${esc(turn.user||"No user message recorded")}</p></div><div><b>Target</b><p>${esc(turn.target||"No target response recorded")}</p>${(turn.errors||[]).map(error=>`<p class="turn-error">${esc(error)}</p>`).join("")}</div></article>`).join(""):'<div class="conversation-empty">No conversation was recorded for this trial.</div>'}</section>`};
-const testCaseTraces=testCase=>{const active=Math.min(activeTrialByCase.get(testCase.id)??0,testCase.trials.length-1),trial=testCase.trials[active];return `<div class="test-case-detail"><div class="trial-tabs" role="tablist" aria-label="Trials">${testCase.trials.map((item,index)=>{const category=item.category||"abandoned",selected=index===active;return `<button type="button" role="tab" id="${testCase.id}-trial-${index}-tab" aria-controls="${testCase.id}-trial-panel" aria-selected="${selected}" data-trial-tab data-test-case="${testCase.id}" data-trial-index="${index}"><i class="${category}"></i>Trial ${index+1}</button>`}).join("")}</div><div id="${testCase.id}-trial-panel" role="tabpanel" aria-labelledby="${testCase.id}-trial-${active}-tab">${trialTrace(trial,active)}</div></div>`};
+const trialTrace=row=>{const turns=row.conversation||[],category=row.category||"abandoned";return `<section class="trial-trace"><div class="trial-trace-head"><div><strong>Trial ${row.trial_index}</strong><span>${esc(row.id)}</span>${row.attempt>1?'<span class="trial-retried">retried · attempt '+row.attempt+'</span>':""}</div><span class="outcome-state ${category}"><i></i>${esc(outcomeLabel[category]||category)}</span><span>${row.total_turns==null?"Turns unavailable":`${row.total_turns} recorded turns`}</span></div>${trialResults(row)}${turns.length?turns.map(turn=>`<article class="conversation-turn"><span class="turn-number">Turn ${turn.turn}</span><div><b>User agent</b><p>${esc(turn.user||"No user message recorded")}</p></div><div><b>Target</b><p>${esc(turn.target||"No target response recorded")}</p>${(turn.errors||[]).map(error=>`<p class="turn-error">${esc(error)}</p>`).join("")}</div></article>`).join(""):'<div class="conversation-empty">No conversation was recorded for this trial.</div>'}</section>`};
+const testCaseTraces=testCase=>{const active=Math.min(activeTrialByCase.get(testCase.id)??0,testCase.trials.length-1),trial=testCase.trials[active];return `<div class="test-case-detail"><div class="trial-tabs" role="tablist" aria-label="Trials">${testCase.trials.map((item,index)=>{const category=item.category||"abandoned",selected=index===active;return `<button type="button" role="tab" id="${testCase.id}-trial-${index}-tab" aria-controls="${testCase.id}-trial-panel" aria-selected="${selected}" data-trial-tab data-test-case="${testCase.id}" data-trial-index="${index}"><i class="${category}"></i>Trial ${item.trial_index}</button>`}).join("")}</div><div id="${testCase.id}-trial-panel" role="tabpanel" aria-labelledby="${testCase.id}-trial-${active}-tab">${trialTrace(trial)}</div></div>`};
 function bindTrialTabs(){document.querySelectorAll("[data-trial-tab]").forEach(button=>button.onclick=()=>{const testCase=tableCases.find(item=>item.id===button.dataset.testCase),detail=button.closest(".test-case-detail");if(!testCase||!detail)return;activeTrialByCase.set(testCase.id,Number(button.dataset.trialIndex));detail.outerHTML=testCaseTraces(testCase);bindTrialTabs()})}
 function renderResultsTable(){
  const rows=tableCases.filter(testCase=>{
   const matches=!tableQuery||[testCase.taskId,testCase.persona,testCase.scenario,...testCase.trials.map(trial=>trial.id)].join(" ").toLowerCase().includes(tableQuery);
-  const hasFail=testCase.trials.some(trial=>Object.values(trial.results||{}).some(result=>result.status==="fail"));
+  const hasFail=Object.values(testCase.results).some(result=>result.status==="fail");
   return matches&&(!tableFailOnly||hasFail);
  });
  const visibleTrials=rows.reduce((total,testCase)=>total+testCase.trials.length,0),allTrials=tableCases.reduce((total,testCase)=>total+testCase.trials.length,0);
  document.getElementById("table-count").textContent=`${rows.length} of ${tableCases.length} test cases · ${visibleTrials} of ${allTrials} trials`;
  const groupHead=tableData.features.map(feature=>`<th class="feature-group" colspan="${Math.max(1,(feature.columns||[]).length)}">${esc(feature.name)}</th>`).join("");
- const graderHead=tableData.features.flatMap(feature=>(feature.columns||[]).map(column=>`<th class="grader-heading" title="${esc(column.grader)}"><strong>${esc(clip(column.grader||"No grader",24))}</strong><span>${esc(column.criterion)}</span></th>`)).join("");
+ const graderHead=tableData.features.flatMap(feature=>(feature.columns||[]).map(column=>`<th class="grader-heading" title="${esc(column.grader_fqn)}"><strong>${esc(clip(column.grader_name||"No grader",24))}</strong><span>${esc(column.criterion)}</span></th>`)).join("");
  const columnCount=4+tableColumns.length;
  const body=rows.map(testCase=>{const expanded=expandedTrial===testCase.id;return `<tr class="result-table-row"><td class="expand-cell"><button type="button" data-expand-trial="${testCase.id}" aria-expanded="${expanded}" aria-label="${expanded?"Hide":"Show"} trials for ${esc(testCase.persona)} and ${esc(testCase.scenario)}"><i></i></button></td><td class="persona-cell"><strong>${esc(testCase.persona||"No persona")}</strong><span>${esc(testCase.taskId)} · ${testCase.trials.length} trial${testCase.trials.length===1?"":"s"}</span></td><td>${esc(testCase.scenario||"No scenario")}</td><td>${outcomeCell(testCase)}</td>${tableColumns.map(column=>`<td class="grader-result-cell">${graderCell(testCase,column)}</td>`).join("")}</tr>${expanded?`<tr class="conversation-row"><td colspan="${columnCount}">${testCaseTraces(testCase)}</td></tr>`:""}`}).join("");
  document.getElementById("results-table").innerHTML=rows.length?`<table class="results-table"><thead><tr><th class="sticky-meta expand-cell" rowspan="2"></th><th class="sticky-meta persona-cell" rowspan="2">Persona</th><th class="sticky-meta scenario-cell" rowspan="2">Scenario</th><th class="sticky-meta outcome-cell" rowspan="2">Trial outcomes</th>${groupHead}</tr><tr>${graderHead}</tr></thead><tbody>${body}</tbody></table>`:'<div class="blank-note">No test cases match this view.</div>';
@@ -297,9 +293,12 @@ function renderOutcomes(){
  const filtered=activeOutcome==="all"?outcomeItems:outcomeItems.filter(item=>item.category===activeOutcome);
  const groups=new Map();for(const item of filtered){const features=(item.features||[]).join(" · ")||"Not mapped",source=item.failureSource||"",message=recordedOutcomeMessage(item);const key=JSON.stringify([features,item.scenario||"",item.persona||"",source,item.category||"",message]);if(!groups.has(key))groups.set(key,{key,features,scenario:item.scenario||"",persona:item.persona||"",source,message,items:[]});groups.get(key).items.push(item)}
  const rows=[...groups.values()].sort((a,b)=>b.items.length-a.items.length||a.features.localeCompare(b.features)||a.scenario.localeCompare(b.scenario)||a.persona.localeCompare(b.persona));
- document.getElementById("outcome-detail").innerHTML=rows.length?`<div class="outcome-table-wrap"><table class="outcome-table"><thead><tr><th>Feature</th><th>Scenario</th><th>Persona</th><th>Error source</th><th>Message</th><th>Trials</th></tr></thead><tbody>${rows.map((group,index)=>{const open=openOutcomeGroup===group.key,source=failureSourceLabel(group.source);return `<tr class="outcome-row"><td><button type="button" data-outcome-group="${index}" aria-expanded="${open}"><i></i><span>${esc(group.features)}</span></button></td><td>${esc(group.scenario||"—")}</td><td>${esc(group.persona||"—")}</td><td>${esc(source)}</td><td class="outcome-message-cell">${esc(group.message)}</td><td class="eval-count">${group.items.length}</td></tr><tr class="outcome-detail-row"${open?"":" hidden"}><td colspan="6"><div class="trial-list">${group.items.map(item=>`<div><strong>${esc(item.id)}</strong><span>${esc(item.persona)} · ${esc(item.scenario)}</span><span>${item.turns} turns${item.duration==null?"":` · ${Math.round(item.duration)}s`}${item.attempt>1?" · retried":""}</span></div>`).join("")}</div></td></tr>`}).join("")}</tbody></table></div>`:'<div class="blank-note">No trials in this group.</div>';
+ document.getElementById("outcome-detail").innerHTML=rows.length?`<div class="outcome-table-wrap"><table class="outcome-table"><thead><tr><th>Feature</th><th>Scenario</th><th>Persona</th><th>Error source</th><th>Message</th><th>Trials</th></tr></thead><tbody>${rows.map((group,index)=>{const open=openOutcomeGroup===group.key,source=failureSourceLabel(group.source);return `<tr class="outcome-row"><td><button type="button" data-outcome-group="${index}" aria-expanded="${open}"><i></i><span>${esc(group.features)}</span></button></td><td>${esc(group.scenario||"—")}</td><td>${esc(group.persona||"—")}</td><td>${esc(source)}</td><td class="outcome-message-cell">${esc(group.message)}</td><td class="eval-count">${group.items.length}</td></tr><tr class="outcome-detail-row"${open?"":" hidden"}><td colspan="6"><div class="trial-list">${group.items.map(item=>`<div><strong>${esc(item.id)}</strong><span>${esc(item.persona)} · ${esc(item.scenario)}</span><span>${item.total_turns} turns${item.duration==null?"":` · ${Math.round(item.duration)}s`}${item.attempt>1?" · retried":""}</span></div>`).join("")}</div></td></tr>`}).join("")}</tbody></table></div>`:'<div class="blank-note">No trials in this group.</div>';
  document.querySelectorAll("[data-outcome-group]").forEach(button=>button.onclick=()=>{const group=rows[Number(button.dataset.outcomeGroup)];openOutcomeGroup=openOutcomeGroup===group.key?"":group.key;renderOutcomes()});
 }
+const unmappedPanel=document.getElementById("unmapped-results");
+unmappedPanel.innerHTML=unmappedResults(V.unmapped||[]);
+unmappedPanel.hidden=!(V.unmapped||[]).length;
 renderOutcomes();renderSelection();renderTree();
 document.addEventListener("click",event=>{document.querySelectorAll(".filter-dropdown[open]").forEach(dropdown=>{if(!dropdown.contains(event.target)){dropdown.open=false;openResultFilter=""}})});
 let redrawTimer;addEventListener("resize",()=>{clearTimeout(redrawTimer);redrawTimer=setTimeout(renderTree,100)});addEventListener("scroll",hideTip,true);

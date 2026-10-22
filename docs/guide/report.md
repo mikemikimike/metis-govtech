@@ -12,14 +12,13 @@ The report writer validates data through this model. Saved reports contain `"sch
 The model defaults a missing version to `1` and rejects other explicit values.
 The version remains `1` during the `next` pre-release phase.
 
-The Insights CLI reads `metis.core.reporting.EvaluationResults` with a `records` list.
-It also reads legacy evaluation files with `turn_results` and `session_results`.
-Both input formats use version `1`. Insights validates records with the core model.
-It uses Criterion IDs to match results. Each evidence item keeps the recorded grader
-path, validated arguments, score, reason, Task, Trial, Scenario, and session.
-Expand an evidence item's recorded grader settings to see the values used for that run.
-Insights does not create graders. New records contain no trace or turn identity.
-The report leaves those evidence fields empty and counts only recorded turns.
+The Insights CLI reads `metis.core.reporting.EvaluationResults` from
+`outputs/reports/results.json`. Each `GraderRecord` in its `records` list is one grader run
+on one session, with one or more `RecordedResult` entries. The command joins records to the
+frozen `inputs/specification.yaml` and to the saved `outputs/trials/*/record.json` files.
+It writes `report.json` and an offline `report.html` beside the results file. A results
+file in the format from before the grader redesign has `turn_results` or `session_results`.
+The CLI rejects that file and writes no report. Insights does not create graders.
 
 ## Reader and purpose
 
@@ -35,67 +34,135 @@ The report leaves those evidence fields empty and counts only recorded turns.
 The summary shows these facts before the evidence explorer:
 
 1. Trial success, calculated from completed simulation outcomes.
-2. Evaluated metric pass rate, calculated from pass and fail results that the report
+2. Evaluated grader pass rate and mean score, calculated from grader runs that the report
    can attribute to the target specification.
 3. Feature results.
 4. Coverage gaps and evaluation-data errors.
 5. Repeated exact error messages from unsuccessful trials.
 
-Show one templated sentence below the target name. State how many evaluated feature scores
-are below the pass threshold and name the lowest-scoring feature. Generate all values from
-report data.
+Show one templated sentence below the target name. State how many features have evaluated
+runs and name the feature with the lowest pass rate. Generate all values from report data.
 
-Trial success and evaluated metric pass rate are separate measures. Neither value is an
+Trial success and evaluated grader pass rate are separate measures. Neither value is an
 overall target score. The report must label both measures and show their denominators.
 
 ## Temporary pass contract
 
-The aggregator is the future authority for rates, thresholds, counts, statuses, and
-aggregation methods. Until it supplies all of that metadata, the report uses this
-fallback contract:
+A grader returns one result for each scope item, such as one trace or the whole session.
+Each result is already combined inside the grader by its declared aggregation. See the
+[grader guide](library/graders.md). The report reads only the recorded results. It does
+not inspect the grader. How the results of one record combine into one run score is not
+decided yet. Until then, the report uses this contract:
 
-1. Use a value supplied by the aggregator when it exists.
-2. Calculate a missing rate as `pass / (pass + fail)`.
-3. Exclude skipped results and grader errors from the rate denominator.
-4. Use a 70% pass threshold when the aggregator supplies no threshold.
-5. Treat exactly 70% as Pass.
-6. Show the numeric rate, Pass or Fail status, threshold, and pass/fail/skip/error counts.
+1. Each `GraderRecord` is one grader run. Its combined score is the equal-weight mean of
+   its scored results.
+2. Compare the combined score with the recorded `grader_args.threshold`. A score at or above
+   the threshold passes. A lower score fails.
+3. A scored run needs a finite numeric threshold from 0 to 1. A missing or invalid threshold
+   stops report generation, and the error names the run.
+4. A run with no scored results is errored if any result errored. Otherwise, it is skipped.
+5. Exclude skipped and errored runs from rates and mean scores. Show their counts beside
+   every rate and mean score.
+6. Show the numeric rate, mean score, status, recorded threshold, judge model, and
+   passed/failed/skipped/errored counts.
+
+Partial skipped or errored results stay visible as raw evidence when a run has scored
+results. They do not add extra run verdicts. Original result outcomes and scores stay
+unchanged.
 
 The visible states are:
 
-- Pass
-- Fail
+- No failed runs
+- Has failed runs
 - Not evaluated
-- Data error
+- Grader error: a grader run errored. This says something about the grader, not the target.
+- Data error: a grader setup or mapping problem.
 
 ## Hierarchy roll-up
 
-The report uses these aggregation rules:
+Each item shows two numbers:
 
-- A criterion aggregates metric results from different trials with
-  `pass / (pass + fail)`.
-- A behaviour uses the lowest non-null criterion rate.
-- A feature uses the lowest non-null behaviour rate.
-- A node with no usable evidence is Not evaluated.
-- A metric setup or mapping problem is Data error.
+- **Pass rate:** the share of grader runs that passed. A run passes when its score is at or
+  above the recorded threshold.
+- **Mean score:** the average score from 0 to 1, before the threshold.
 
-The normalized profile gives each criterion a name and an ID. Report JSON uses the criterion ID as the criterion key and tree title.
-The criterion name is part of the profile contract; the report uses the exact metric result
-name as the metric title. If a result is missing, it uses the metric class name as
-a fallback. Scores retain Task, Trial, Criterion, Grader FQN, and arguments.
+The two numbers can differ. Runs that score just below the threshold give a low pass rate
+and a high mean score.
+
+The table shows how each item calculates both numbers, from the most detailed item to the
+least detailed. A grader run is one `GraderRecord`.
+
+| Item | How it is averaged |
+| --- | --- |
+| Grader run | Equal-weight mean of its scored results. The run passes or fails by the [temporary pass contract](#temporary-pass-contract). A trial tab shows one grader run for each criterion. |
+| Grader runs across all trials of one test case | Mean of the grader runs of one criterion, over all trials in one test case. The results table shows this number in each cell. |
+| Criterion | Mean of all its grader runs, over all test cases. |
+| Behaviour | Mean of its evaluated criteria. |
+| Feature | Mean of its evaluated behaviours. |
+| Headline result | Mean of the evaluated features. |
+
+Every mean is unweighted, so each item in it counts once. For a pass rate, a passed run
+counts as 1 and a failed run as 0. The mean of a criterion's runs is therefore passed runs /
+evaluated runs. A behaviour takes the mean of its criteria and not of their runs. A
+criterion with many runs then has the same weight as a criterion with few runs.
+
+`report.json` also has persona and scenario rows in `axes`. Each row is the mean of the
+evaluated criteria, each calculated over the runs for that persona or scenario. These rows
+have a pass rate only. The HTML page does not show them.
+
+The terminal summary has one row per criterion and grader, which uses the criterion rule.
+Its last row is the mean of the criterion rows.
+
+These rules apply to every item:
+
+- An evaluated run passed or failed. Skipped and errored runs are left out of rates and mean
+  scores.
+- A child counts only when it has at least one scored run. A node with no usable evidence
+  is Not evaluated.
+- A grader setup or mapping problem is Data error.
+- Counts beside a rate are the totals of the runs below it. They show coverage. They do not
+  weight the mean. Calculate from unrounded values.
+
+The normalized profile gives each criterion a name and an ID. Report JSON uses the criterion
+ID as the criterion key and tree title. A criterion names one grader. Criteria, table
+columns, and unmapped entries use `grader_fqn` for the full grader path and `grader_name`
+for its display label. The display label never identifies a criterion or a recorded
+result. Scores retain Task, Trial, Session, Criterion, Grader FQN, and arguments.
 IDs join Features, Behaviours, Criteria, Personas, Scenarios, Tasks, and
-metric results. The insights [Report model](../../packages/insights/src/metis/insights/_models.py)
+grader records. The insights [Report model](../../packages/insights/src/metis/insights/_models.py)
 defines these fields.
+
+A record joins to a criterion through its task and criterion IDs. The recorded scenario must
+match the task scenario, and the task must select the criterion's behaviour. When trial
+records are available, a record joins to a trial through its task ID, trial index, and
+session ID. A different session cannot inherit that trial's persona or outcome. The report
+rejects two grader records for the same task, trial index, session, and criterion.
+
+The terminal summary includes all stored grader runs, with one row per criterion and grader.
+It has no specification, so its last row is the unweighted mean of the criterion rows. The
+report's hierarchy, axes, and headline use runs that match the specification. Unmatched runs
+stay in `unmapped` with a reason and their original grader records. Distinct reasons stay in
+separate groups. The top-level `results` count includes every raw result, including
+unmatched results.
 
 These rules are report inputs. The report must not replace an aggregator-supplied rate
 or aggregation method.
 
 ## Failure evidence
 
-- For a selected metric, use one `Individual results` section.
+- For a selected criterion, use one `Raw results` section.
 - Use multi-select persona and scenario filters that omit values with no result for the
-  selected metric.
-- Show the exact evaluator message in each individual result.
+  selected criterion.
+- Show the exact grader reason in each raw result.
+- Each raw result keeps its task, trial index, session, criterion, grader FQN, recorded grader
+  arguments, outcome, score, reason, and position within its grader record. It also shows
+  the run's combined score, threshold, and verdict. Core results do not store a trace ID or
+  a conversation position, and the report does not infer either value.
+- Each raw result has an expandable `Recorded grader settings` section with the grader FQN
+  and the recorded grader arguments of that run.
+- Show results that match no Task and Criterion in a separate `Results without a matching
+  criterion` section. Group them by criterion ID, grader FQN, and reason. These results are
+  excluded from the target pass rate.
 - The report shows the recorded failure source. A target-response error is from the
   target. A user-agent LLM failure is from the user agent. A simulation crash is from
   the evaluation runner.
@@ -118,19 +185,20 @@ or aggregation method.
 ## Information architecture
 
 - Show every feature at the first hierarchy level.
-- Keep behaviours, criteria, and metrics accessible through expansion.
+- Keep behaviours, criteria, and graders accessible through expansion.
 - Do not require all hierarchy levels to be expanded at the same time.
 - Do not impose a target-level limit on the number of result nodes.
 - Search and filters can inspect the complete data set.
 - Default ordering must not claim to be a target-priority order.
 - Put the result explorer in two tabs: `Experiment tree` and `Results table`.
 - Keep the tree as the default view.
-- In the table, use one row per Task, identified by its ID. Group metric columns by feature.
-- In each metric cell, show the percentage of evaluated trials that pass. Give each
-  trial equal weight. Exclude skipped and not-run trials from the denominator. Keep the
-  separate status squares for trial outcomes.
-- Let the reader expand a row, select a trial tab, and read its user-agent and target
-  turns.
+- In the table, use one row per Task, identified by its ID. Group grader columns by feature.
+- In each grader cell, pool the grader runs of all trials in that Task for that criterion.
+  Show the pass rate, mean score, and run counts. Exclude skipped and errored runs from the
+  rate. Keep the separate status squares for trial outcomes.
+- Let the reader expand a row and select a trial tab. The tab shows that trial's result for
+  each criterion and its user-agent and target turns. Trial data keeps the engine's
+  `total_turns` value.
 - Do not show a separate persona and scenario coverage section. The table shows who and
   what ran.
 

@@ -38,7 +38,7 @@ def _only_trial(
     trial_dir = tmp_path / "outputs" / "trials" / "trial-1"
     trial_dir.mkdir(parents=True)
     (trial_dir / "record.json").write_text(json.dumps(record.model_dump()))
-    _, trials = _load_trial_records(tmp_path)
+    trials = _load_trial_records(tmp_path)
     assert len(trials) == 1
     return trials[0]
 

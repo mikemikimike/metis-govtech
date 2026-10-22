@@ -1,77 +1,117 @@
-"""Single source of truth for grader aggregation across report outputs."""
-
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypedDict
+from dataclasses import dataclass
+from math import fsum, isfinite
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable
+
+    from metis.core.grading import RecordedResult
+    from metis.core.reporting import GraderRecord
 
 
-class GraderAggregate(TypedDict):
-    pass_count: int
-    fail: int
-    error: int
-    skip: int
-    scores: list[float]
-    pass_rate: float
-    avg_score: float
+@dataclass(frozen=True)
+class GraderRunSummary:
+    score: float | None
+    threshold: float | None
+    outcome: Literal["passed", "failed", "skipped", "errored"]
+
+
+def summarize_run(record: GraderRecord) -> GraderRunSummary:
+    # A record holds one result per scope item, each already combined by its grader.
+    # TODO: decide how one record's results combine; until then, use an equal-weight mean.
+    scores = [result.score for result in record.results if result.score is not None]
+    if not scores:
+        outcome = (
+            "errored"
+            if any(r.outcome == "errored" for r in record.results)
+            else "skipped"
+        )
+        return GraderRunSummary(None, None, outcome)
+    threshold = record.grader_args.get("threshold")
+    if (
+        isinstance(threshold, bool)
+        or not isinstance(threshold, (int, float))
+        or not isfinite(threshold)
+        or not 0 <= threshold <= 1
+    ):
+        raise ValueError(
+            f"Invalid recorded threshold for {record.task_id} / trial {record.trial_index} / "
+            f"session {record.session_id} / {record.criterion_id} / {record.grader_fqn}: "
+            "expected a finite number from 0 to 1"
+        )
+    score = fsum(scores) / len(scores)
+    return GraderRunSummary(
+        score, float(threshold), "passed" if score >= threshold else "failed"
+    )
+
+
+@dataclass
+class OutcomeCounts:
+    passed: int = 0
+    failed: int = 0
+    skipped: int = 0
+    errored: int = 0
+    score_sum: float = 0.0
+
+    def add(self, result: RecordedResult | GraderRunSummary) -> None:
+        if result.outcome == "passed":
+            self.passed += 1
+        elif result.outcome == "failed":
+            self.failed += 1
+        elif result.outcome == "skipped":
+            self.skipped += 1
+        else:
+            self.errored += 1
+        if result.score is not None:
+            self.score_sum += result.score
+
+    def merge(self, other: OutcomeCounts) -> None:
+        self.passed += other.passed
+        self.failed += other.failed
+        self.skipped += other.skipped
+        self.errored += other.errored
+        self.score_sum += other.score_sum
+
+    @property
+    def evaluated(self) -> int:
+        return self.passed + self.failed
+
+    @property
+    def total(self) -> int:
+        return self.evaluated + self.skipped + self.errored
+
+    @property
+    def pass_rate(self) -> float | None:
+        return self.passed / self.evaluated if self.evaluated else None
+
+    @property
+    def average_score(self) -> float | None:
+        return self.score_sum / self.evaluated if self.evaluated else None
+
+    def as_dict(self) -> dict[str, int]:
+        return {
+            "pass": self.passed,
+            "fail": self.failed,
+            "skip": self.skipped,
+            "error": self.errored,
+        }
+
+
+def mean_of(values: Iterable[float | None]) -> float | None:
+    """Return the unweighted mean of the values that exist, or `None` if none exist."""
+    present = [value for value in values if value is not None]
+    return fsum(present) / len(present) if present else None
 
 
 def aggregate_graders(
-    turn_results: list[dict[str, Any]],
-    session_results: list[dict[str, Any]] | None = None,
-) -> dict[str, GraderAggregate]:
-    """Aggregate pass/fail/skip counts and scores by Criterion identity.
-
-    Processes both per-trace graders (from turn_results) and session-level
-    graders (from session_results) into a single unified summary.
-    """
-    agg: dict[str, GraderAggregate] = {}
-
-    for result in turn_results:
-        for grader in result.get("graders", []):
-            _accumulate(agg, grader)
-
-    if session_results:
-        for sess in session_results:
-            for grader in sess.get("graders", []):
-                _accumulate(agg, grader)
-
-    for entry in agg.values():
-        evaluated = entry["pass_count"] + entry["fail"]
-        entry["pass_rate"] = entry["pass_count"] / evaluated if evaluated > 0 else 0.0
-        entry["avg_score"] = (
-            sum(entry["scores"]) / len(entry["scores"]) if entry["scores"] else 0.0
+    records: Iterable[GraderRecord],
+) -> dict[tuple[str, str], OutcomeCounts]:
+    counts: dict[tuple[str, str], OutcomeCounts] = {}
+    for record in records:
+        bucket = counts.setdefault(
+            (record.criterion_id, record.grader_fqn), OutcomeCounts()
         )
-
-    return agg
-
-
-def _accumulate(agg: dict[str, GraderAggregate], grader: Mapping[str, Any]) -> None:
-    name = grader.get("criterion_id") or grader["name"]
-    if name not in agg:
-        agg[name] = GraderAggregate(
-            pass_count=0,
-            fail=0,
-            skip=0,
-            error=0,
-            scores=[],
-            pass_rate=0.0,
-            avg_score=0.0,
-        )
-    entry = agg[name]
-    if grader.get("errored"):
-        entry["error"] += 1
-    elif grader.get("skipped"):
-        entry["skip"] += 1
-    elif grader["success"]:
-        entry["pass_count"] += 1
-    else:
-        entry["fail"] += 1
-    if (
-        grader.get("score") is not None
-        and not grader.get("skipped")
-        and not grader.get("errored")
-    ):
-        entry["scores"].append(grader["score"])
+        bucket.add(summarize_run(record))
+    return counts

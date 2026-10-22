@@ -215,8 +215,8 @@ Engine creates `experiments/execute/<specification-id>-YYYYMMDD-HHMMSS/`. It cop
 `--input-dir` into `inputs/`, writes trial records and artifacts under `outputs/trials/`,
 and writes evaluation results to `outputs/reports/results.json`. Insights reads the
 same execution root and writes `report.json` and `report.html` beside the results.
-Insights accepts recorded results and the legacy `turn_results` and `session_results`
-format. It uses recorded Criterion IDs and arguments without creating graders.
+Insights reads recorded `GraderRecord` results and rejects the earlier `turn_results` and
+`session_results` format. It uses recorded Criterion IDs and arguments without creating graders.
 `--experiment-dir` identifies the execution root for evaluation and resume.
 `metis.core.execution_layout` owns the paths shared by Engine and Insights.
 Logs remain under `logs/`, with the existing simulation log override. Artifact paths
