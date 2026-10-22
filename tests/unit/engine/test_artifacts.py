@@ -368,3 +368,50 @@ def test_a_fixture_must_be_a_fixture(tmp_path: Path, trial_dir: Path) -> None:
 
     with pytest.raises(ValueError, match="fixture"):
         ArtifactLedger(tmp_path, trial_dir, ledger.artifacts())
+
+
+def test_a_failed_download_is_recorded_once_with_its_reason(
+    tmp_path: Path, trial_dir: Path
+) -> None:
+    ledger = _ledger(tmp_path, trial_dir)
+
+    first = ledger.record_failure(
+        "a.pdf", "unfetched", "GET /f/1 -> 404", at_turn=2, external_id="1"
+    )
+    ledger.record_failure("b.pdf", "unavailable", "listed with no ID", at_turn=2)
+    again = ledger.record_failure("b.pdf", "unavailable", "listed again", at_turn=3)
+
+    assert first is not None
+    assert (first.state, first.state_description, first.external_id) == (
+        "unfetched",
+        "GET /f/1 -> 404",
+        "1",
+    )
+    assert again is None
+    assert [(a.name, a.state) for a in ledger.artifacts()] == [
+        ("a.pdf", "unfetched"),
+        ("b.pdf", "unavailable"),
+    ]
+
+
+def test_a_file_already_held_is_not_recorded_as_a_failure(
+    tmp_path: Path, trial_dir: Path
+) -> None:
+    ledger = _ledger(tmp_path, trial_dir)
+    ledger.record_download("a.pdf", PDF, at_turn=1)
+
+    assert ledger.record_failure("a.pdf", "unfetched", "late", at_turn=2) is None
+    assert [a.state for a in ledger.artifacts()] == ["received"]
+
+
+def test_an_upload_can_keep_the_targets_id_for_the_file(
+    tmp_path: Path, trial_dir: Path
+) -> None:
+    (tmp_path / "inputs" / "fixtures").mkdir(parents=True)
+    (tmp_path / "inputs" / "fixtures" / "q3_sales.csv").write_bytes(_sales_csv(3))
+    ledger = _ledger(tmp_path, trial_dir, ["q3_sales.csv"])
+
+    kept = ledger.record_upload("q3_sales.csv", at_turn=1, external_id="up-1")
+
+    assert kept.external_id == "up-1"
+    assert ledger.artifacts()[0].external_id == "up-1"

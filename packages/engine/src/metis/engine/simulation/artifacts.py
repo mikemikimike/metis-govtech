@@ -34,7 +34,7 @@ import hashlib
 import json
 import mimetypes
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from metis.core import Artifact
 
@@ -222,18 +222,58 @@ class ArtifactLedger:
             path=dest.relative_to(self._trial_dir).as_posix(), sha256=sha256
         )
 
-    def record_upload(self, name: str, *, at_turn: int) -> Artifact:
+    def record_failure(
+        self,
+        name: str,
+        state: Literal["unfetched", "unavailable"],
+        reason: str,
+        *,
+        at_turn: int | None,
+        external_id: str | None = None,
+    ) -> Artifact | None:
+        """Record a file that was not received: ``unfetched`` can be retried, ``unavailable`` not.
+
+        :param reason: Becomes ``state_description``.
+        :returns: The new entry, or ``None`` when the name is already held or already
+            recorded as ``unavailable``, which is not recorded again.
+        """
+        safe = _safe_name(name)
+        if any(
+            e.name == safe and e.state in ("received", "unavailable")
+            for e in self._entries
+        ):
+            return None
+        entry = Artifact(
+            name=safe,
+            source="target",
+            state=state,
+            external_id=external_id,
+            at_turn=at_turn,
+            state_description=reason,
+        )
+        self._entries.append(entry)
+        return entry.model_copy(deep=True)
+
+    def record_upload(
+        self, name: str, *, at_turn: int, external_id: str | None = None
+    ) -> Artifact:
         """Note that a held file was sent to the target; no entry is added.
 
         A fixture's entry gets ``at_turn`` the first time it is uploaded. Later uploads
         change nothing: the transport log has each one.
 
+        :param external_id: The target's ID for the uploaded file, kept on a fixture's
+            entry so a listing's copy of the user's own upload can be told from the
+            target's files. The latest one is kept.
         :raises KeyError: No held file has this name.
         """
         for entry in reversed(self._entries):
             if entry.name == name:
-                if entry.source == "fixture" and entry.at_turn is None:
-                    entry.at_turn = at_turn
+                if entry.source == "fixture":
+                    if entry.at_turn is None:
+                        entry.at_turn = at_turn
+                    if external_id is not None:
+                        entry.external_id = external_id
                 return entry.model_copy(deep=True)
         raise KeyError(name)
 
