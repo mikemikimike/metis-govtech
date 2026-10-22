@@ -84,6 +84,8 @@ def load_target_binding(inputs_dir: Path, relative: str) -> LoadedBinding:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         raise fail("target binding file not found") from None
+    except UnicodeDecodeError:
+        raise fail("target binding file is not valid UTF-8") from None
     except OSError:
         raise fail("target binding file cannot be read") from None
 

@@ -6,6 +6,7 @@ import importlib
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import pytest
 
 from metis.core.trials import TrialConfig
@@ -63,10 +64,11 @@ def test_retry_defaults_are_the_shared_defaults(inputs: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_returns_a_gen_2_runner_that_does_nothing_yet(
+async def test_create_returns_a_gen_2_runner_whose_act_waits_for_481(
     inputs: Path, tmp_path: Path
 ) -> None:
-    factory = _factory(inputs)
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={}))
+    factory = HttpRunnerFactory(_factory(inputs).binding, transport=transport)
     await factory.start()
 
     runner = await factory.create(tmp_path, tmp_path, tmp_path)
