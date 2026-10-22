@@ -97,6 +97,14 @@ interpretation, not as fact.
 - If a tool refuses a call, read why, and do something else. Nothing was sent.
 """
 
+CLOSING = """\
+## The closing step
+The conversation is over: the user has nothing more to say, and this is not an action. \
+Collect everything this session's target made available that the file list above does \
+not hold. If the target can list a session's files, read that list and call \
+`fetch_files` on it, since a reply may have left files out. Send no message and no \
+answer to the target. Then call `report`; it is discarded."""
+
 NUDGE = "Act only through the tools, and end with report."
 
 
@@ -136,6 +144,7 @@ def first_message(
     notes: list[str],
     session_id: str | None,
     rounds: int,
+    closing: bool = False,
 ) -> str:
     """The user message that starts an action: what the agent needs and nothing it
     must not see (no credentials; the user's words only as numbered placeholders)."""
@@ -154,7 +163,7 @@ def first_message(
     )
     return "\n\n".join(
         [
-            "## The user's action\n" + spans.masked,
+            CLOSING if closing else "## The user's action\n" + spans.masked,
             "## The user's words for the target\n" + words,
             f"## The target\n{_identity(binding)}",
             (

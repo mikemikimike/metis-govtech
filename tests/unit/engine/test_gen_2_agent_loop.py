@@ -360,8 +360,10 @@ async def test_unresolved_is_a_notice_once_then_cleared(
     second = await runner.act("Say ⟦b⟧", [])
 
     assert first.notice is not None and "never settled" in first.notice
+    assert first.submission_unresolved is True
     assert runner.unresolved is None
     assert second.notice is None
+    assert second.submission_unresolved is False
 
 
 @pytest.mark.asyncio

@@ -74,7 +74,6 @@ async def test_create_returns_a_gen_2_runner(inputs: Path, tmp_path: Path) -> No
     assert isinstance(runner, gen_2_runner.Runner)
     assert runner.session_id is None
     assert await runner.setup(TrialConfig(persona="p", scenario="s")) is None
-    assert await runner.end_chat([]) is None
     assert await runner.teardown() is None
     await factory.close()
 

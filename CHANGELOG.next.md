@@ -321,6 +321,22 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `gen_2` works, the rules code enforces and how to write a binding for a new app. The runner
   has been tried on Orca's API only.
 
+- **The generic HTTP runner's closing step, and checks that catch a trial METIS broke
+  (#483).** `HttpRunner.end_chat` now runs the runner agent's loop with a closing
+  instruction written by code and no user action: collect what the target made available
+  that the file list lacks, reading the session's file list and calling `fetch_files` if
+  the target has one, and send no message. It is not a turn, and the files it fetches are
+  recorded under the last turn's number. Every promise still not `received` is then
+  recorded `unavailable` ("promised in turn N, never delivered"). `Orchestrator` now
+  treats only `received` and `unavailable` files as settled, so an `unfetched` file stays
+  promised and is retried. Two checks fail a trial with `stop_reason` `system_error`,
+  `failure_source` `evaluation_runner` and a `failure_message`, which the report already
+  shows: `fixture_never_uploaded: <name>`, for a scenario fixture that was never sent,
+  checked after the closing step on any trial that ran a turn and was not `interrupted`
+  (including one that said `goal_achieved`); and `submission_unresolved`, which ends the
+  loop at once when a reply never settles, and still runs the closing step.
+  `Observation` gains `submission_unresolved` (default `False`), set by `HttpRunner`.
+
 - **The generic HTTP runner's agent sends only what each round needs (#482).** The first
   message lists the target's operations as `METHOD path - summary` lines instead of the whole
   specification, and a new tool, `operation(method, path)`, returns one operation's definition
