@@ -577,7 +577,8 @@ def _run_simulation(
             else factory_cls()
         )
     except TargetBindingError as exc:
-        console.print(f"Error: {exc}", style="bold red")
+        # the message holds text the user wrote, so it must not be read as markup
+        console.print(f"Error: {exc}", style="bold red", markup=False)
         raise typer.Exit(code=1) from None
 
     trial_max_retries, trial_retry_delay_seconds = runner_factory.retry_defaults

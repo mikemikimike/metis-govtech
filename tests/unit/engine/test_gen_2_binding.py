@@ -217,7 +217,7 @@ def test_a_refused_scheme_does_not_echo_the_url(inputs: Path) -> None:
     with pytest.raises(TargetBindingError, match='not "ftp:"') as caught:
         load_target_binding(inputs, "targets/app.yaml")
 
-    assert "SENTINEL-KEY" not in str(caught.value)
+    assert "sentinel-key" not in str(caught.value).lower()
 
 
 def test_an_unset_auth_secret_is_an_error(
@@ -269,4 +269,36 @@ def test_no_secret_appears_in_repr_errors_or_logs(
 
     for text in shown:
         for sentinel in _SENTINELS:
-            assert sentinel not in text
+            assert sentinel.lower() not in text.lower()
+
+
+@pytest.mark.parametrize(
+    ("spec_url", "value"),
+    [
+        ("http://[${H}]/spec", "SENTINEL-URL"),
+        ("http://${H}/spec", "SENTINEL-URL＃x"),
+        ("${H}", "SENTINEL-URL" * 30),
+    ],
+)
+def test_an_unusable_expanded_spec_url_does_not_echo_the_value(
+    inputs: Path, monkeypatch: pytest.MonkeyPatch, spec_url: str, value: str
+) -> None:
+    monkeypatch.setenv("H", value)
+    _write(inputs, _binding(spec_url=spec_url))
+
+    with pytest.raises(TargetBindingError, match="once expanded") as caught:
+        load_target_binding(inputs, "targets/app.yaml")
+
+    assert "sentinel-url" not in str(caught.value).lower()
+
+
+def test_a_scheme_from_the_environment_is_not_echoed(
+    inputs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("U", "SENTINEL-URL:x@host/spec")
+    _write(inputs, _binding(spec_url="${U}"))
+
+    with pytest.raises(TargetBindingError, match="unsupported scheme") as caught:
+        load_target_binding(inputs, "targets/app.yaml")
+
+    assert "sentinel-url" not in str(caught.value).lower()

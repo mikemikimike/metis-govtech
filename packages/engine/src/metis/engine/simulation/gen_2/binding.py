@@ -125,13 +125,34 @@ def _resolve_spec_url(written: str, folder: Path, root: Path, fail: _Fail) -> st
         return value
 
     expanded = _ENV.sub(expand, written)
+    try:
+        return _absolute(expanded, written, folder, root, fail)
+    except TargetBindingError:
+        raise
+    except (ValueError, OSError):
+        # urlsplit and the path calls quote the value they reject, which may be secret
+        raise fail(
+            f"spec_url {written!r}, once expanded, is not a usable URL or path"
+        ) from None
+
+
+def _absolute(
+    expanded: str, written: str, folder: Path, root: Path, fail: _Fail
+) -> str:
+    """``expanded`` as an http(s) URL or a ``file:`` URI; messages quote ``written`` only."""
     scheme = urlsplit(expanded).scheme.lower()
     if scheme in ("http", "https"):
         return expanded
     if scheme:
+        # name the scheme only when the user wrote it, not when a variable supplied it
+        shown = urlsplit(written).scheme.lower() == scheme
         raise fail(
             "spec_url must be an http(s) URL or a file path relative to the binding, "
-            f'not "{scheme}:"'
+            + (
+                f'not "{scheme}:"'
+                if shown
+                else "and the expanded spec_url has an unsupported scheme"
+            )
         )
     local = (folder / expanded).resolve()
     if not local.is_relative_to(root):

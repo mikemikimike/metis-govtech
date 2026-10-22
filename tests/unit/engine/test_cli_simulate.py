@@ -33,6 +33,12 @@ class _SpecFactory(StubRunnerFactory):
         return cls()
 
 
+class _MarkupSpecFactory(StubRunnerFactory):
+    @classmethod
+    def from_specification(cls, specification, inputs_dir: Path) -> _MarkupSpecFactory:
+        raise TargetBindingError("targets/app.yaml: spec_url 'specs/[/v1].json' [x]")
+
+
 class _FailingSpecFactory(StubRunnerFactory):
     @classmethod
     def from_specification(cls, specification, inputs_dir: Path) -> _FailingSpecFactory:
@@ -326,3 +332,15 @@ def test_a_binding_error_prints_and_exits_one(monkeypatch, tmp_path: Path) -> No
     assert "Error: targets/app.yaml: target binding file not found" in " ".join(
         result.output.split()
     )
+
+
+def test_a_binding_error_is_printed_as_written(monkeypatch, tmp_path: Path) -> None:
+    """Rich must not read the message as markup: it holds text the user wrote."""
+    _capture_factory(monkeypatch)
+
+    result = _simulate_fresh(
+        monkeypatch, tmp_path, "tests.unit.engine.test_cli_simulate._MarkupSpecFactory"
+    )
+
+    assert result.exit_code == 1
+    assert "spec_url 'specs/[/v1].json' [x]" in " ".join(result.output.split())
