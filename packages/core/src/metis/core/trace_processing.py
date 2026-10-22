@@ -52,7 +52,7 @@ from pydantic import BaseModel
 from metis.core.traces import Observation, Trace  # noqa: TC001
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from metis.core.artifacts import Artifact
     from metis.core.traces import GradingInput
@@ -376,9 +376,9 @@ def _locate_value(
     return _locate(value, observation, field) if isinstance(value, Problem) else value
 
 
-def turns(input: GradingInput) -> tuple[Turn, ...]:
+def turns(traces: Sequence[Trace]) -> tuple[Turn, ...]:
     """Every turn in the session, oldest first, including turns where the target failed."""
-    return tuple(_turn(index, trace) for index, trace in enumerate(input.traces))
+    return tuple(_turn(index, trace) for index, trace in enumerate(traces))
 
 
 # ---------------------------------------------------------------------------

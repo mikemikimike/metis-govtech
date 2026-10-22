@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     import types as _types
 
     from metis.core.reporting import GraderRecord
+    from metis.core.traces import Trace
     from metis.core.trials import TrialRecord
     from metis.engine.simulation.experiment import TrialPlanItem
     from metis.engine.simulation.types import Specification
@@ -787,6 +788,35 @@ def _log_grader_records(
     evaluation_log.write(f"GRADER RESULTS — record={record_label} count={count}")
 
 
+def _save_session_traces(
+    experiment_dir: Path,
+    session_id: str,
+    traces: tuple[Trace, ...],
+    evaluation_log: EvaluationLogger,
+) -> None:
+    """Save one session's traces for `metis insights report`; a failed write only warns.
+
+    The file is display data, so grading must never depend on it. A payload JSON cannot
+    encode (a lone surrogate, say) raises ``ValueError``, so that is caught as well as ``OSError``.
+    """
+    from metis.core import SessionTraces
+
+    path = (
+        experiment_dir
+        / execution_layout.TRACES
+        / execution_layout.trace_file_name(session_id)
+    )
+    try:
+        SessionTraces.from_traces(session_id, traces).save(path)
+    except (OSError, ValueError) as exc:
+        console.print(
+            f"  WARNING: traces for session {session_id} were not saved: {exc}",
+            style="yellow",
+            markup=False,
+        )
+        evaluation_log.write(f"TRACES NOT SAVED — session={session_id} — {exc}")
+
+
 def _run_evaluation(
     experiment_dir: Path,
     *,
@@ -890,6 +920,9 @@ async def _evaluate_records(
         else LLMSettings(client=_NoJudgeClient())  # type: ignore[arg-type]
     )
 
+    # Traces saved by an earlier evaluation must not outlive it, or the report would show a
+    # conversation that differs from the grades beside it.
+    shutil.rmtree(experiment_dir / execution_layout.TRACES, ignore_errors=True)
     langfuse = extractor.get_langfuse_client()
     all_records: list[GraderRecord] = []
     successful = 0
@@ -977,6 +1010,12 @@ async def _evaluate_records(
                         if not grading_input.traces:
                             failure_reason = "No traces found in Langfuse"
                         else:
+                            _save_session_traces(
+                                experiment_dir,
+                                session_id,
+                                grading_input.traces,
+                                evaluation_log,
+                            )
                             evaluation_log.write(
                                 f"RECORD {index + 1}/{len(records)} {label} — EVALUATING"
                             )

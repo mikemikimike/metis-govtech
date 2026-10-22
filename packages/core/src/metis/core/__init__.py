@@ -6,7 +6,7 @@ from metis.core.artifacts import Artifact, resolve_artifact_path
 from metis.core.console import console
 from metis.core.logging import configure_logging, get_logger
 from metis.core.models import Status
-from metis.core.traces import GradingInput, Observation, Trace
+from metis.core.traces import GradingInput, Observation, SessionTraces, Trace
 
 try:
     __version__ = version("metis-core")
@@ -17,6 +17,7 @@ __all__ = [
     "Artifact",
     "GradingInput",
     "Observation",
+    "SessionTraces",
     "Status",
     "Trace",
     "__version__",
