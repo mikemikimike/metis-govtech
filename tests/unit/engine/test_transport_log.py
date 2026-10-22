@@ -19,6 +19,7 @@ from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.transport_log import (
     INLINE_LIMIT,
     ArtifactRef,
+    FileBody,
     LoggingTransport,
     TransportLog,
 )
@@ -367,3 +368,73 @@ async def test_a_retried_trial_keeps_the_earlier_attempts_log(tmp_path: Path) ->
     assert not (evidence / "log.jsonl").exists()
     [kept] = evidence.glob("log-superseded-*.jsonl")
     assert _rows(kept)[0]["summary"] == "GET /earlier"
+
+
+def _artifact(trial: Path, content: bytes) -> ArtifactRef:
+    (trial / "artifacts").mkdir(exist_ok=True)
+    (trial / "artifacts" / "report.pdf").write_bytes(content)
+    return ArtifactRef(
+        path="artifacts/report.pdf", sha256=hashlib.sha256(content).hexdigest()
+    )
+
+
+def test_get_returns_the_entry_with_that_id(tmp_path: Path) -> None:
+    log = TransportLog.for_trial(tmp_path)
+    log.append("request", "GET /a", b"")
+    second = log.append("request", "GET /b", b"")
+
+    assert log.get(second).summary == "GET /b"
+
+
+def test_get_names_an_unknown_id(tmp_path: Path) -> None:
+    log = TransportLog.for_trial(tmp_path)
+    log.append("request", "GET /a", b"")
+
+    with pytest.raises(ValueError, match="no entry e9"):
+        log.get("e9")
+
+
+def test_body_bytes_reads_utf8_and_base64_inline_bodies(tmp_path: Path) -> None:
+    log = TransportLog.for_trial(tmp_path)
+    text_id = log.append("request", "POST /a", "héllo".encode())
+    binary_id = log.append("request", "POST /b", b"\xff\x00")
+
+    assert log.body_bytes(log.get(text_id)) == "héllo".encode()
+    assert log.body_bytes(log.get(binary_id)) == b"\xff\x00"
+
+
+def test_body_bytes_reads_a_body_stored_in_a_file(tmp_path: Path) -> None:
+    log = TransportLog.for_trial(tmp_path)
+    big = b"x" * (INLINE_LIMIT + 1)
+    entry_id = log.append("response", "GET /big", big)
+
+    assert log.body_bytes(log.get(entry_id)) == big
+
+
+def test_body_bytes_reads_an_artifact_from_the_trial_folder(tmp_path: Path) -> None:
+    log = TransportLog.for_trial(tmp_path)
+    entry_id = log.append("response", "GET /f", _artifact(tmp_path, b"%PDF"))
+
+    assert log.body_bytes(log.get(entry_id)) == b"%PDF"
+
+
+def test_body_bytes_refuses_an_artifact_that_changed_since_it_was_logged(
+    tmp_path: Path,
+) -> None:
+    log = TransportLog.for_trial(tmp_path)
+    entry_id = log.append("response", "GET /f", _artifact(tmp_path, b"%PDF"))
+    (tmp_path / "artifacts" / "report.pdf").write_bytes(b"tampered")
+
+    with pytest.raises(ValueError, match="sha256"):
+        log.body_bytes(log.get(entry_id))
+
+
+def test_body_bytes_refuses_a_file_body_that_leaves_the_evidence_folder(
+    tmp_path: Path,
+) -> None:
+    log = TransportLog.for_trial(tmp_path)
+    entry_id = log.append("response", "GET /big", b"x" * (INLINE_LIMIT + 1))
+    entry = log.get(entry_id).model_copy(update={"body": FileBody(path="../secret")})
+
+    with pytest.raises(ValueError, match="outside"):
+        log.body_bytes(entry)
