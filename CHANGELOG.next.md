@@ -302,6 +302,22 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `ArtifactLedger.record_upload(external_id=)`, which is how the user's upload is told from the
   target's files.
 
+- **The generic HTTP runner's agent loop and `act()` (#481).** `HttpRunner.act` now carries
+  out an action: it settles an open submission, then asks the runner agent
+  (`RUNNER_AGENT_MODEL`, through `create_completion`, logged as component `runner_agent`) for
+  tool calls until it calls `report`, at most 12 rounds and never past `response_wait_ms` plus
+  60 seconds or the trial deadline. The agent's tools are `http_request`, `poll_until`,
+  `fetch_files`, `session_id_from`, `note` and `report`; a refusal, a bad pointer or an argument
+  that is not a JSON object goes back to the agent as `{"error": "refused, nothing was sent:
+  …"}`. `note` keeps what the agent learned for later actions of the trial. Code builds the
+  `Observation`: `reply` and `promised` are copied from entries logged during this action (a
+  promised name must be a single line), the agent's `outcome`, `why` and `next_options` stay
+  apart in `Reading`, `observed` is `False` while a submission is open or a call failed at the
+  transport, and `notice` reports a failed poll, an open submission, a transport failure, the
+  time limit or the round cap. An LLM failure raises `TurnRecoverableError`.
+  `HttpRunnerFactory` takes an optional `llm` client and otherwise builds one from
+  `OPENAI_API_KEY` and `OPENAI_BASE_URL`.
+
 - **`gen_2`'s interface, user agent and turn loop (#480).** A runner factory that sets
   `generation = "gen_2"` now runs on `metis.engine.simulation.gen_2`. Its `Runner` has
   `setup(config)`, `act(action, promised) -> Observation`, `end_chat(promised)` and

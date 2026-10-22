@@ -6,12 +6,14 @@ and ``http_request`` is the one call the runner agent makes on the target: code 
 the path, the headers and the binding's rules, substitutes the user's quoted words,
 adds the credentials, and records which responses answered a submission. ``poll_until``
 waits for a submission's reply and ``fetch_files`` downloads the files this conversation
-produced; the agent loop (#481) arrives in a later step.
+produced. ``act`` runs the runner agent's loop over those tools and builds the
+``Observation`` from the evidence the tools logged.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import mimetypes
 import time
 from dataclasses import dataclass
@@ -21,15 +23,24 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx
+import openai
+from openai import AsyncOpenAI
 
 from ...artifacts import ArtifactRejected
 from ...config import TrialRetryConfig
+from ...exceptions import TurnRecoverableError
+from ...llm_calls import LLMCallLog, create_completion
 from ...transport_log import LoggingTransport, TransportLog
 from ..binding import TargetBindingError, load_target_binding
 from ..evidence import Pointer, PointerError, resolve
 from ..runner import Runner
+from ..types import Observation, Reading
+from ..user_agent.config import USER_AGENT_API_KEY, USER_AGENT_BASE_URL
+from .config import RUNNER_AGENT_MODEL
+from .prompts import NUDGE, SYSTEM_PROMPT, first_message
 from .rules import SUBMIT_METHODS, ToolRefused, check_call, check_headers, matches
 from .spans import Spans
+from .tools import TOOLS, ActionState, run_tool
 
 if TYPE_CHECKING:
     from metis.core.specification import Specification
@@ -38,7 +49,7 @@ if TYPE_CHECKING:
     from ...artifacts import ArtifactLedger
     from ...transport_log import LogEntry
     from ..binding import LoadedBinding
-    from ..types import Observation, Promise
+    from ..types import Promise
 
 MAX_429_RESENDS = 3
 _TIMEOUT = httpx.Timeout(60.0)
@@ -46,6 +57,10 @@ MAX_FILES_PER_LISTING = 100
 """A conversation does not produce more files than this; a bigger listing is not its own."""
 POLL_INTERVAL = 5.0
 """Seconds between polls; the binding and ``TrialConfig`` have no field for it."""
+MAX_ROUNDS = 12
+"""Most LLM rounds one action may take."""
+ACT_MARGIN = 60.0
+"""Seconds added to ``response_wait_ms`` for one action's time limit."""
 _sleep = asyncio.sleep  # names tests replace
 _now = time.monotonic
 
@@ -79,11 +94,17 @@ class HttpRunner(Runner):
         client: httpx.AsyncClient,
         log: TransportLog,
         experiment_root: Path,
+        *,
+        llm_log: LLMCallLog,
+        llm: AsyncOpenAI | None = None,
     ) -> None:
         self._binding = binding
         self._client = client
         self._log = log
         self._root = experiment_root
+        self._llm_log = llm_log
+        self._llm = llm
+        self._owns_llm = False
         self._base = ""
         self._deadline = 0.0
         self._wait = 0.0
@@ -486,18 +507,144 @@ class HttpRunner(Runner):
         return response
 
     async def act(self, action: str, promised: list[Promise]) -> Observation:
-        """Not implemented until #481.
+        """Carry out ``action``: settle an open submission, run the agent, build the result.
 
-        It raises rather than returning an empty ``Observation``, which would record a
-        reply the target never sent.
+        :raises TurnRecoverableError: When the runner agent's LLM cannot be reached.
         """
-        raise NotImplementedError("HttpRunner.act is not implemented until #481")
+        self.begin_action(action)
+        state = ActionState(first_result=len(self.results))
+        started = _now()
+        limit = min(self._wait + ACT_MARGIN, max(0.0, self._deadline - started))
+        try:
+            await self.resume_poll()
+        except httpx.TransportError:
+            state.transport_failed = True
+        stopped = await self._run_agent(state, promised, started, limit)
+        return self._observation(state, stopped)
+
+    async def _run_agent(
+        self, state: ActionState, promised: list[Promise], started: float, limit: float
+    ) -> str | None:
+        """Ask the LLM for tool calls until it reports. Returns why it stopped early."""
+        if self._llm is None:
+            self._llm = AsyncOpenAI(
+                api_key=USER_AGENT_API_KEY, base_url=USER_AGENT_BASE_URL, max_retries=0
+            )
+            self._owns_llm = True
+        messages: list[Any] = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": self._first_message(promised)},
+        ]
+        nudged = False
+        for _ in range(MAX_ROUNDS):
+            if _now() - started >= limit:
+                return "the action's time limit passed before the agent reported"
+            try:
+                completion = await create_completion(
+                    self._llm,
+                    self._llm_log,
+                    component="runner_agent",
+                    model=RUNNER_AGENT_MODEL,
+                    messages=messages,
+                    tools=TOOLS,
+                    tool_choice="required",
+                )
+            except openai.OpenAIError as exc:
+                raise TurnRecoverableError(
+                    f"the runner agent's LLM call failed: {type(exc).__name__}"
+                ) from exc
+            message = completion.choices[0].message
+            calls = [c for c in message.tool_calls or [] if c.type == "function"]
+            assistant: dict[str, Any] = {
+                "role": "assistant",
+                "content": message.content or "",
+            }
+            if calls:
+                assistant["tool_calls"] = [
+                    {
+                        "id": c.id,
+                        "type": "function",
+                        "function": {
+                            "name": c.function.name,
+                            "arguments": c.function.arguments or "{}",
+                        },
+                    }
+                    for c in calls
+                ]
+            messages.append(assistant)
+            if not calls and not nudged:
+                nudged = True
+                messages.append({"role": "user", "content": NUDGE})
+            for call in calls:
+                result = await run_tool(
+                    self, state, call.function.name, call.function.arguments
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": json.dumps(result, ensure_ascii=False),
+                    }
+                )
+            if state.report is not None:
+                return None
+        return f"the agent did not report within {MAX_ROUNDS} rounds"
+
+    def _first_message(self, promised: list[Promise]) -> str:
+        spec = self._log.body_bytes(self._log.get(self.spec_entry)).decode(
+            "utf-8", errors="replace"
+        )
+        opened = self.open_submission
+        return first_message(
+            binding=self._binding.binding,
+            specification=spec,
+            spans=self.spans,
+            files=self.ledger.artifacts(),
+            promised=promised,
+            open_submission=(
+                f"the submission logged as {opened.request} (accepted in {opened.response})"
+                if opened
+                else None
+            ),
+            notes=self.notes,
+            session_id=self._session_id,
+            rounds=MAX_ROUNDS,
+        )
+
+    def _observation(self, state: ActionState, stopped: str | None) -> Observation:
+        """Build the result from what was logged; the agent's words only fill ``reading``."""
+        notices: list[str] = []
+        if (unresolved := self.unresolved) is not None:
+            self.unresolved = None  # read once; #524 never clears it
+            notices.append(
+                f"A submission ({unresolved.submission.request}) never settled: the "
+                f"target answered the poll with a failure ({unresolved.response})."
+            )
+        if self.open_submission is not None:
+            notices.append(
+                f"A submission ({self.open_submission.request}) is still open."
+            )
+        if state.transport_failed:
+            notices.append("A call to the target failed at the transport.")
+        if stopped is not None:
+            notices.append(stopped[0].upper() + stopped[1:] + ".")
+        report = state.report
+        return Observation(
+            reply=report.reply if report else None,
+            reading=report.reading
+            if report
+            else Reading(outcome="unknown", why="The runner agent did not report."),
+            promised=report.promised if report else [],
+            observed=self.open_submission is None and not state.transport_failed,
+            notice=" ".join(notices) or None,
+        )
 
     async def end_chat(self, promised: list[Promise]) -> None:
         pass
 
     async def teardown(self) -> None:
-        pass  # the HTTP transport is the factory's
+        if self._owns_llm and self._llm is not None:
+            await self._llm.close()  # the HTTP transport is the factory's
 
 
 def _skipped(name: str | None, why: str) -> dict[str, Any]:
@@ -521,11 +668,16 @@ class HttpRunnerFactory:
     generation: ClassVar[str] = "gen_2"
 
     def __init__(
-        self, binding: LoadedBinding, transport: httpx.AsyncBaseTransport | None = None
+        self,
+        binding: LoadedBinding,
+        transport: httpx.AsyncBaseTransport | None = None,
+        llm: AsyncOpenAI | None = None,
     ) -> None:
         self._binding = binding
         self._transport = transport
         """Replaced by a fake in tests; otherwise ``start`` opens the real one."""
+        self._llm = llm
+        """Replaced by a fake in tests; otherwise each runner builds its own client."""
 
     @property
     def binding(self) -> LoadedBinding:
@@ -571,7 +723,14 @@ class HttpRunnerFactory:
             secret_headers=[h.header for h in self._binding.binding.secret_headers],
         )
         client = httpx.AsyncClient(transport=logged, timeout=_TIMEOUT)
-        return HttpRunner(self._binding, client, log, experiment_root)
+        return HttpRunner(
+            self._binding,
+            client,
+            log,
+            experiment_root,
+            llm_log=LLMCallLog.for_trial(run_dir),
+            llm=self._llm,
+        )
 
     async def close(self) -> None:
         if self._transport is not None:
