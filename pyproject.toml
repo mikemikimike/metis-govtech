@@ -81,7 +81,7 @@ ignore = [
 # Pydantic resolves annotation strings at runtime via `get_type_hints()`, so a field type
 # imported only under `if TYPE_CHECKING:` leaves the model "not fully defined". Telling the
 # TCH rule that BaseModel subclasses are runtime-evaluated stops it from moving field-type
-# imports into a TYPE_CHECKING block (see CLAUDE.md — Coding Conventions).
+# imports into a TYPE_CHECKING block (see AGENTS.md — Coding Conventions).
 runtime-evaluated-base-classes = ["pydantic.BaseModel"]
 
 

@@ -83,8 +83,8 @@ major cycle re-adds equivalents when it opens its own `next`):
 - Delete the **"Target branch: `next` vs. `vP.x`"** section from [CONTRIBUTING.md](../CONTRIBUTING.md)
   (the exception-zone rules, the branch-selection table, and the `CHANGELOG.next.md` sentence in the
   `vP.x` paragraph).
-- Remove the **pre-release note** from [AGENTS.md](../AGENTS.md) (`CLAUDE.md` symlinks to it, so both
-  update at once). The adjacent "each package maintains a `CHANGELOG.md` — write entries during
+- Remove the **pre-release note** from [AGENTS.md](../AGENTS.md).
+  The adjacent "each package maintains a `CHANGELOG.md` — write entries during
   development" bullet stays and again reads correctly on its own once the note is gone.
 
 Keep this "Graduating `next` to `main`" section — it is the durable playbook for the next cycle.

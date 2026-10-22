@@ -69,6 +69,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- Use `AGENTS.md` as the agent instruction file. Remove the root and Wizard
+  `CLAUDE.md` symlinks and update documentation and source references.
+
 - Use Target for the evaluation subject in interface labels, prompts, code
   documentation, and guides (#429).
 

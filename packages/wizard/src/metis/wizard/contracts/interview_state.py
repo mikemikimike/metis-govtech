@@ -28,7 +28,7 @@ from metis.wizard.contracts.documents import (
 
 # `specification` is a Pydantic field, so `Specification` must be a runtime import — Pydantic
 # resolves the annotation at runtime and a TYPE_CHECKING-only import leaves InterviewState
-# "not fully defined". See CLAUDE.md — Coding Conventions.
+# "not fully defined". See AGENTS.md — Coding Conventions.
 from metis.wizard.domain.specification import Specification
 
 # The most recent clarification turns kept for model context. Older turns are trimmed after each
