@@ -23,8 +23,7 @@ cp packages/engine/.env.example .env
 
 ## Running
 
-These commands use the `simple` example, which is small enough for a quick first run.
-The `example-experiment/full/` example has 54 Trials (see its
+These commands use the `simple` example, which is small enough for a quick first run (see its
 [README](example-experiment/README.md)).
 
 ```bash

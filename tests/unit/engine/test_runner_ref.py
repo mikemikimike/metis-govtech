@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -267,47 +266,23 @@ class TestRunnerRefValidation:
 
 
 class TestExampleExperiment:
-    """Verify the shipped full example experiment loads.
-
-    Every Criterion names a Grader: ``DemoTraceBudgetGrader`` for AC-EXEC-3 and the generic
-    ``CriterionJudgeGrader`` (which judges against the Criterion description) for the rest.
-    """
+    """Verify the shipped simple example experiment loads and names a real Grader."""
 
     EXAMPLE = (
         Path(__file__).resolve().parents[3]
         / "packages"
         / "engine"
         / "example-experiment"
-        / "full"
+        / "simple"
         / "specification.yaml"
     )
 
-    def _document(self) -> dict[str, Any]:
-        import yaml
-
-        return yaml.safe_load(self.EXAMPLE.read_text(encoding="utf-8"))
-
-    def test_example_experiment_parses_as_a_document(self) -> None:
-        from metis.core.specification import Specification as Document
-
-        document = Document.model_validate(self._document())
-        assert document.experiment.id == "orca-eval"
+    def test_example_experiment_loads(self) -> None:
+        document = Specification.load_file(self.EXAMPLE)
+        assert document.experiment.id == "orca-simple"
         assert (
             document.experiment.runner_factory_ref
             == "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
         )
-
-    def test_every_criterion_has_a_grader_and_the_file_loads(self) -> None:
-        from metis.core.specification import Specification as Document
-
-        document = Document.model_validate(self._document())
-        graders = {
-            c.id: c.grader_fqn for b in document.behaviours() for c in b.criteria
-        }
-        assert len(graders) == 84
-        assert (
-            graders["AC-EXEC-3"] == "metis.library.graders.demo.DemoTraceBudgetGrader"
-        )
-        others = {fqn for cid, fqn in graders.items() if cid != "AC-EXEC-3"}
-        assert others == {"metis.library.graders.CriterionJudgeGrader"}
-        Specification.load_file(self.EXAMPLE)
+        graders = {c.grader_fqn for b in document.behaviours() for c in b.criteria}
+        assert graders == {"metis.library.graders.demo.DemoTraceBudgetGrader"}

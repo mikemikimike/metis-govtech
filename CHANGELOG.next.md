@@ -269,10 +269,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
-- **The example experiment has two sibling directories, `full/` and `simple/`.** The complete
-  Orca specification, its fixtures, and the sample report now live in
-  `packages/engine/example-experiment/full/`, next to the quick-check `simple/` example, so
-  each path names what it holds (#414).
+- **`packages/engine/example-experiment/` holds only the `simple/` example.** The complete Orca
+  specification, its fixtures, and the sample report are removed from it: the specification and
+  the four CSV fixtures are already kept with the Wizard testbed in
+  `packages/testbed/wizard/cases/orca/outputs/` (#414).
 
 - **`metis engine evaluate` saves each session's traces.** Right after a session is fetched, and
   before it is graded, the traces are written to `outputs/traces/<session_id>.json` as the Langfuse
@@ -386,10 +386,6 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `FetchLangfuseResult`, `evaluate`, `EvalResult`, `RoutingSummary` and
   `DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE` are removed; use `fetch_session`,
   `build_criterion_grader` and `grade_session` (#428).
-
-- In the bundled full example experiment, `AC-EXEC-3` names `DemoTraceBudgetGrader` and the
-  other 83 Criteria name `CriterionJudgeGrader`, so the file validates and runs; the `simple`
-  example is a quick first run (#428, #414).
 
 - `TrialRecord.conversation` is removed, along with the `ConversationTurn`, `TurnDiagnostics`
   and `ActionRetry` models, so `record.json` no longer holds a copy of the transcript. The

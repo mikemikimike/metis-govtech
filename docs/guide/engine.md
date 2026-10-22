@@ -83,25 +83,20 @@ Run the bundled example experiment to verify everything works end-to-end.
 
 ### The Example Experiment
 
-The directory `packages/engine/example-experiment/full/` contains a complete experiment definition written for Orca. The personas, task descriptions, fixture files, and grader selections assume Orca's specific multi-agent architecture.
+The directory `packages/engine/example-experiment/simple/` contains a small experiment definition written for Orca. The persona, task description, and grader selection assume Orca's API.
 
 ```
 example-experiment/
-├── simple/                  # One Task, one Trial, one Grader, no uploaded files
-└── full/
-    ├── specification.yaml   # Complete evaluation specification
-    └── fixtures/            # Files uploaded during simulation
-        ├── q3_sales.csv
-        ├── q3_sales_corrupted.csv
-        ├── q3_sales_v1.csv
-        ├── q3_sales_v2.csv
-        └── policy_document_adversarial.txt
+└── simple/                  # One Task, one Trial, one Grader, no uploaded files
+    ├── specification.yaml
+    └── fixtures/
 ```
 
 ### Run It
 
 The commands below use `example-experiment/simple/`, which is small enough for a quick first run.
-The `full/` example has 54 Trials (see the example's README).
+The complete Orca specification, with 18 Tasks and 54 Trials, is in
+`packages/testbed/wizard/cases/orca/outputs/`.
 
 ```bash
 metis engine run --input-dir packages/engine/example-experiment/simple/
@@ -383,7 +378,7 @@ limit.
 
 ### Working Reference
 
-For a complete working example with personas, scenarios, fixtures, and graders already configured, see [`packages/engine/example-experiment/`](../../packages/engine/example-experiment/) and its [README](../../packages/engine/example-experiment/README.md).
+For a small working example with a persona, scenario, and grader already configured, see [`packages/engine/example-experiment/`](../../packages/engine/example-experiment/) and its [README](../../packages/engine/example-experiment/README.md).
 
 ---
 
@@ -961,7 +956,7 @@ the grader configuration used for each Criterion.
 The [JSON Schema](../../packages/core/schemas/specification.schema.json) provides
 editor completion and shape validation. The engine also checks references and
 coverage when it loads the document. From a specification in
-`packages/engine/example-experiment/full/` or `simple/`, use this editor directive:
+`packages/engine/example-experiment/simple/`, use this editor directive:
 
 ```yaml
 # yaml-language-server: $schema=../../../core/schemas/specification.schema.json
