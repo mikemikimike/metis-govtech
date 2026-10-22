@@ -327,8 +327,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   from the parsed specification: local `$ref` links are followed three links deep and the
   result is cut at 6,000 characters, saying so. It makes no HTTP call and adds nothing to
   `results`, so it cannot be cited as evidence; an unknown operation is refused with the close
-  paths, or the methods that path has. A specification with no `paths` is sent whole, as
-  before, and `operation` refuses on it. Before each round, the body of every earlier
+  paths, or the methods that path has. A specification that lists no operations is sent
+  whole, as before, and `operation` refuses on it. Before each round, the body of every earlier
   `http_request` and `poll_until` result is replaced by `(logged as e7, 1,830 characters)`,
   and an earlier `operation` definition by a note to call `operation` again; the latest round,
   errors, statuses and entry IDs stay whole, and the full conversation is unchanged, so
