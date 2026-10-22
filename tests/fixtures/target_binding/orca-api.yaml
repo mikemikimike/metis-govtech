@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=../../../packages/core/schemas/target-binding.schema.json
+# Orca's REST API, bound by configuration only. Rewritten from the user simulation
+# prototype's orca-api.yaml (corrections A1 to A11).
+schema_version: 1
+identity: { name: Orca, version: "1.0.0" }                   # A5: the spec's info.version
+transport: http
+spec_url: "${ORCA_API_URL}/openapi.json"                     # A1: ORCA_API_URL ends in /api/v1
+# A2: no base_url; requests go to the spec's servers[0].url, resolved against spec_url.
+tls_verify: false                                            # A4: self-signed certificate
+auth: { scheme: from_spec, secret_env: ORCA_API_KEY }        # HTTPBearer in the spec
+secret_headers:                                              # A3: billing rule
+  - { match: "POST /api/v1/chat", header: X-PlatformAI-Key, env: ORCA_PLATFORM_AI_KEY }
+submissions: ["POST /api/v1/chat"]                           # card 6
+forbidden_calls:                                             # A8: patterns code checks
+  - "DELETE /api/v1/**"
+  - "POST /api/v1/chat/cancel"
+preflight_reads: ["/api/v1/usage"]                           # A11: warn-only
+advice:
+  limits:                                                    # A9
+    submit_per_minute: 6
+    read_per_minute: 120
+    note: "Over a limit is a 429 with Retry-After; code waits and resends. Poll every few seconds."
+  notes: |
+    The first POST /chat without a sessionId starts the session; never call POST /sessions.
+    Upload a file with POST /files first, then list its fileId in the chat turn's files.

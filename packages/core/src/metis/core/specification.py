@@ -25,6 +25,7 @@ from metis.core.experiment import (
     Experiment,
     ExperimentDefaults,
     Persona,
+    RelativePath,
     Scenario,
     Task,
 )
@@ -52,6 +53,7 @@ class SpecificationDocument(BaseModel):
     runner_factory_ref: str = (
         "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
     )
+    target_binding: RelativePath | None = None
     defaults: ExperimentDefaults = Field(default_factory=ExperimentDefaults)
     target: Target
     features: list[Feature] = Field(default_factory=list)
@@ -96,6 +98,7 @@ class Specification(BaseModel):
             "experiment": Experiment(
                 id=document.id,
                 runner_factory_ref=document.runner_factory_ref,
+                target_binding=document.target_binding,
                 defaults=document.defaults,
                 personas=document.personas,
                 scenarios=document.scenarios,
@@ -121,6 +124,8 @@ class Specification(BaseModel):
         )
         if not self.experiment.defaults.model_dump(exclude_none=True):
             dumped.pop("defaults", None)
+        if self.experiment.target_binding is None:
+            dumped.pop("target_binding", None)
         return dumped
 
     @classmethod
@@ -164,6 +169,14 @@ class Specification(BaseModel):
     @runner_factory_ref.setter
     def runner_factory_ref(self, value: str) -> None:
         self.experiment.runner_factory_ref = value
+
+    @property
+    def target_binding(self) -> str | None:
+        return self.experiment.target_binding
+
+    @target_binding.setter
+    def target_binding(self, value: str | None) -> None:
+        self.experiment.target_binding = value
 
     @property
     def personas(self) -> list[Persona]:

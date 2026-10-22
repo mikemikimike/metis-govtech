@@ -259,7 +259,9 @@ In this first version the manual form collects only what an engine run absolutel
 reads the complete `specification.yaml`. Reporting reads its frozen copy at
 `inputs/specification.yaml`. `metis.core.profile.TargetProfile` holds Target context
 and the Feature → Behaviour → Criterion hierarchy. `metis.core.experiment.Experiment`
-holds Personas, Scenarios, Tasks, and execution settings.
+holds Personas, Scenarios, Tasks, and execution settings. Its optional `target_binding`
+names a `metis.core.target_binding.TargetBinding` file, relative to `specification.yaml`,
+which the generic runner reads.
 `metis.core.specification.Specification` contains a Profile and the configuration needed to conduct an Experiment.
 The serialized document keeps these fields at the top level.
 Each Task selects one Scenario, one Persona, fixtures, a Trial count, and measured Behaviours.

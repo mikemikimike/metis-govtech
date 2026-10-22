@@ -2,11 +2,32 @@
 
 from __future__ import annotations
 
-from typing import Any
+from pathlib import PurePosixPath, PureWindowsPath
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, SerializerFunctionWrapHandler, model_serializer
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 
 from metis.core.profile import NamedNode
+
+
+def _require_relative(path: str) -> str:
+    if (
+        not path
+        or PurePosixPath(path).is_absolute()
+        or PureWindowsPath(path).is_absolute()
+    ):
+        raise ValueError("must be a non-empty path relative to specification.yaml")
+    return path
+
+
+RelativePath = Annotated[str, AfterValidator(_require_relative)]
+"""A path relative to ``specification.yaml``; ``..`` is allowed."""
 
 
 class Persona(NamedNode[str]):
@@ -52,6 +73,8 @@ class Experiment(BaseModel):
     runner_factory_ref: str = (
         "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
     )
+    target_binding: RelativePath | None = None
+    """The ``TargetBinding`` file the generic runner reads, relative to ``specification.yaml``."""
     defaults: ExperimentDefaults = Field(default_factory=ExperimentDefaults)
     personas: list[Persona] = Field(default_factory=list)
     scenarios: list[Scenario] = Field(default_factory=list)
@@ -60,10 +83,14 @@ class Experiment(BaseModel):
 
     @model_serializer(mode="wrap")
     def _omit_empty_defaults(self, handler: SerializerFunctionWrapHandler) -> Any:
-        """Leave ``defaults`` out until one is set, so existing specs serialise unchanged."""
+        """Leave ``defaults`` and ``target_binding`` out until set, so existing specs serialise
+        unchanged."""
         data = handler(self)
-        if isinstance(data, dict) and not self.defaults.model_dump(exclude_none=True):
-            data.pop("defaults", None)
+        if isinstance(data, dict):
+            if not self.defaults.model_dump(exclude_none=True):
+                data.pop("defaults", None)
+            if self.target_binding is None:
+                data.pop("target_binding", None)
         return data
 
     def persona(self, persona_id: str) -> Persona | None:
