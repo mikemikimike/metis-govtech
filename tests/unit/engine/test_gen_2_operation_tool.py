@@ -139,7 +139,39 @@ async def test_a_specification_without_paths_is_sent_whole_and_operation_refuses
     assert "POST /talk" in llm.first_message()  # the text, as before
     assert "not the whole specification" not in llm.first_message()
     result = json.loads(llm.requests[1]["messages"][-1]["content"])
-    assert "no `paths`" in result["error"]
+    assert "lists no operations" in result["error"]
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"info": {"title": "T"}, "paths": {}},
+        {"info": {"title": "T"}, "paths": ["/a", "/b"]},
+        {"info": {"title": "T"}, "paths": "none"},
+        {"info": {"title": "T"}, "paths": {"/a": {"$ref": "#/components/pathItems/A"}}},
+        {"info": {"title": "T"}, "paths": {"/a": {"summary": "no methods"}}},
+    ],
+)
+def test_a_document_with_no_listable_operation_has_an_empty_index(
+    document: dict[str, Any],
+) -> None:
+    assert operation_index(document) == ""
+    with pytest.raises(ToolRefused, match="lists no operations"):
+        definition(document, "GET", "/a")
+
+
+@pytest.mark.asyncio
+async def test_a_specification_with_nothing_to_index_is_sent_whole(
+    tmp_path: Path,
+) -> None:
+    spec = {"info": {"title": "Odd API"}, "paths": ["/talk"], "marker": "WHOLE-TEXT"}
+    llm = ScriptedLLM([("report", {"outcome": "unknown", "why": "x"})])
+    runner = await _runner(tmp_path, llm, spec)
+
+    await runner.act("Say ⟦hi⟧", [])
+
+    assert "WHOLE-TEXT" in llm.first_message()
+    assert "not the whole specification" not in llm.first_message()
 
 
 def test_a_definition_follows_a_ref_into_components() -> None:

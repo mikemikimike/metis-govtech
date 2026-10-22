@@ -603,14 +603,12 @@ class HttpRunner(Runner):
 
     def _first_message(self, promised: list[Promise]) -> str:
         opened = self.open_submission
-        indexed = "paths" in self.document
-        specification = (
-            operation_index(self.document)
-            if indexed
-            else self._log.body_bytes(self._log.get(self.spec_entry)).decode(
+        specification = operation_index(self.document)
+        indexed = bool(specification)
+        if not indexed:  # nothing to list, so the agent gets the text, as in #481
+            specification = self._log.body_bytes(self._log.get(self.spec_entry)).decode(
                 "utf-8", errors="replace"
             )
-        )
         return first_message(
             binding=self._binding.binding,
             specification=specification,

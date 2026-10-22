@@ -170,16 +170,25 @@ TOOLS: list[Any] = [
 
 
 def operation_index(document: dict[str, Any]) -> str:
-    """The target's title and one ``METHOD path - summary`` line per operation."""
-    lines = [str(title)] if (title := (document.get("info") or {}).get("title")) else []
-    for path, item in (document.get("paths") or {}).items():
-        for method, op in item.items():
+    """The target's title and one ``METHOD path - summary`` line per operation.
+
+    Empty when the document lists no operation (no usable ``paths``), which is how
+    callers tell that it cannot be indexed.
+    """
+    paths = document.get("paths")
+    lines: list[str] = []
+    for path, item in (paths if isinstance(paths, dict) else {}).items():
+        for method, op in (item if isinstance(item, dict) else {}).items():
             if method in _METHODS and isinstance(op, dict):
                 label = op.get("summary") or op.get("operationId")
                 lines.append(
                     f"{method.upper()} {path}" + (f" - {label}" if label else "")
                 )
-    return "\n".join(lines)
+    if not lines:
+        return ""
+    info = document.get("info")
+    title = info.get("title") if isinstance(info, dict) else None
+    return "\n".join(([str(title)] if title else []) + lines)
 
 
 def _follow(node: Any, document: dict[str, Any], depth: int) -> Any:
@@ -207,9 +216,9 @@ def definition(document: dict[str, Any], method: str, path: str) -> dict[str, An
 
     :raises ToolRefused: When the specification has no such operation.
     """
-    if "paths" not in document:
+    if not operation_index(document):
         raise ToolRefused(
-            "this specification has no `paths`, so there is nothing to look up; "
+            "this specification lists no operations, so there is nothing to look up; "
             "read the specification text in the first message"
         )
     method = method.lower()
