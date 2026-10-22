@@ -87,6 +87,32 @@
       "title": "Limits",
       "type": "object"
     },
+    "Login": {
+      "additionalProperties": false,
+      "description": "How the runner agent signs in to a web app before the first trial.",
+      "properties": {
+        "note": {
+          "description": "The sign-in steps in plain words. Write `{{secret:NAME}}` where a secret is typed; the engine fills it in and logs `***`.",
+          "minLength": 1,
+          "title": "Note",
+          "type": "string"
+        },
+        "secrets": {
+          "description": "The environment variables holding the secrets the note types.",
+          "items": {
+            "pattern": "^[A-Z_][A-Z0-9_]*$",
+            "type": "string"
+          },
+          "title": "Secrets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "note"
+      ],
+      "title": "Login",
+      "type": "object"
+    },
     "SecretHeader": {
       "additionalProperties": false,
       "description": "A header the engine adds, from an environment variable, to matching requests.",
@@ -146,7 +172,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "A hand-written binding of one app to the generic HTTP runner.",
+  "description": "A hand-written binding of one app to the generic HTTP or browser runner.\n\nAn ``http`` binding needs ``spec_url``. A ``browser`` binding needs ``start_url`` and\nmay add ``login``. Each transport rejects the other's fields.",
   "properties": {
     "schema_version": {
       "const": 1,
@@ -157,15 +183,51 @@
       "$ref": "#/$defs/TargetIdentity"
     },
     "transport": {
-      "const": "http",
+      "enum": [
+        "http",
+        "browser"
+      ],
       "title": "Transport",
       "type": "string"
     },
     "spec_url": {
-      "description": "Where to fetch the app's OpenAPI specification. `${NAME}` references are expanded from the environment by the engine.",
-      "minLength": 1,
-      "title": "Spec Url",
-      "type": "string"
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Where to fetch the app's OpenAPI specification; required for `http`. `${NAME}` references are expanded from the environment by the engine.",
+      "title": "Spec Url"
+    },
+    "start_url": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The page the browser opens first; required for `browser`. `${NAME}` references are expanded from the environment by the engine.",
+      "title": "Start Url"
+    },
+    "login": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Login"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "tls_verify": {
       "default": true,
@@ -225,8 +287,7 @@
   "required": [
     "schema_version",
     "identity",
-    "transport",
-    "spec_url"
+    "transport"
   ],
   "title": "TargetBinding v1",
   "type": "object"

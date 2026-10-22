@@ -11,7 +11,13 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 _TARGET_BINDING_VERSION = 1
 
@@ -80,19 +86,61 @@ class Advice(_BindingModel):
     notes: str = ""
 
 
+class Login(_BindingModel):
+    """How the runner agent signs in to a web app before the first trial."""
+
+    note: str = Field(
+        min_length=1,
+        description=(
+            "The sign-in steps in plain words. Write `{{secret:NAME}}` where a secret "
+            "is typed; the engine fills it in and logs `***`."
+        ),
+    )
+    secrets: list[EnvName] = Field(
+        default_factory=list,
+        description="The environment variables holding the secrets the note types.",
+    )
+
+
+_HTTP_ONLY = (
+    "spec_url",
+    "tls_verify",
+    "auth",
+    "secret_headers",
+    "submissions",
+    "forbidden_calls",
+    "preflight_reads",
+)
+_BROWSER_ONLY = ("start_url", "login")
+
+
 class TargetBinding(_BindingModel):
-    """A hand-written binding of one app to the generic HTTP runner."""
+    """A hand-written binding of one app to the generic HTTP or browser runner.
+
+    An ``http`` binding needs ``spec_url``. A ``browser`` binding needs ``start_url`` and
+    may add ``login``. Each transport rejects the other's fields.
+    """
 
     schema_version: Literal[1]
     identity: TargetIdentity
-    transport: Literal["http"]
-    spec_url: str = Field(
+    transport: Literal["http", "browser"]
+    spec_url: str | None = Field(
+        default=None,
         min_length=1,
         description=(
-            "Where to fetch the app's OpenAPI specification. `${NAME}` references are "
-            "expanded from the environment by the engine."
+            "Where to fetch the app's OpenAPI specification; required for `http`. "
+            "`${NAME}` references are expanded from the environment by the engine."
         ),
     )
+    start_url: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "The page the browser opens first; required for `browser`. `${NAME}` "
+            "references are expanded from the environment by the engine."
+        ),
+    )
+    login: Login | None = None
     tls_verify: bool = True
     auth: Auth | None = None
     secret_headers: list[SecretHeader] = Field(
@@ -115,3 +163,20 @@ class TargetBinding(_BindingModel):
         description="Paths the engine reads before a trial; a failure is a warning only.",
     )
     advice: Advice = Field(default_factory=Advice)
+
+    @model_validator(mode="after")
+    def _fields_match_transport(self) -> TargetBinding:
+        # messages name fields only, never values, which may be a pasted secret
+        required, foreign = (
+            ("spec_url", _BROWSER_ONLY)
+            if self.transport == "http"
+            else ("start_url", _HTTP_ONLY)
+        )
+        if getattr(self, required) is None:
+            raise ValueError(f"a {self.transport} binding needs {required}")
+        wrong = [name for name in foreign if name in self.model_fields_set]
+        if wrong:
+            raise ValueError(
+                f"a {self.transport} binding cannot set {', '.join(wrong)}"
+            )
+        return self

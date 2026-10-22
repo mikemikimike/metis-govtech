@@ -310,3 +310,81 @@ def test_a_binding_that_is_not_utf8_is_a_clear_error(inputs: Path) -> None:
 
     with pytest.raises(TargetBindingError, match="not valid UTF-8"):
         load_target_binding(inputs, "targets/app.yaml")
+
+
+def _browser_binding(start_url: str = "${APP_URL}/login", extra: str = "") -> str:
+    return f"""\
+schema_version: 1
+identity: {{name: App}}
+transport: browser
+start_url: "{start_url}"
+login:
+  note: "Type {{{{secret:APP_USER}}}} and {{{{secret:APP_PASSWORD}}}}."
+  secrets: [APP_USER, APP_PASSWORD]
+{extra}"""
+
+
+def test_a_browser_binding_loads_with_its_login_secrets(
+    inputs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("APP_USER", "SENTINEL-USER")
+    monkeypatch.setenv("APP_PASSWORD", "SENTINEL-PASSWORD")
+    _write(inputs, _browser_binding())
+
+    loaded = load_target_binding(inputs, "targets/app.yaml")
+
+    assert loaded.start_url == "https://app.example/login"
+    assert loaded.binding.start_url == "${APP_URL}/login"
+    assert loaded.spec_url is None
+    password = loaded.secret("APP_PASSWORD")
+    assert password is not None and password.get_secret_value() == "SENTINEL-PASSWORD"
+    assert "SENTINEL" not in repr(loaded)
+
+
+def test_a_browser_binding_without_a_login_needs_no_secrets(inputs: Path) -> None:
+    _write(
+        inputs,
+        "schema_version: 1\nidentity: {name: App}\ntransport: browser\n"
+        "start_url: https://app.example/\n",
+    )
+
+    loaded = load_target_binding(inputs, "targets/app.yaml")
+
+    assert loaded.start_url == "https://app.example/"
+    assert loaded.secrets == {}
+
+
+def test_an_unset_login_secret_is_named(
+    inputs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("APP_USER", "SENTINEL-USER")
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
+    _write(inputs, _browser_binding())
+
+    with pytest.raises(
+        TargetBindingError, match="login.secrets names APP_PASSWORD, which is not set"
+    ):
+        load_target_binding(inputs, "targets/app.yaml")
+
+
+def test_an_unset_start_url_variable_is_named(
+    inputs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("APP_URL")
+    _write(inputs, _browser_binding())
+
+    with pytest.raises(
+        TargetBindingError,
+        match="start_url needs the environment variable APP_URL, which is not set",
+    ):
+        load_target_binding(inputs, "targets/app.yaml")
+
+
+@pytest.mark.parametrize(
+    "start_url", ["file:///etc/passwd", "/etc/passwd", "about:blank"]
+)
+def test_a_start_url_must_be_http_or_https(inputs: Path, start_url: str) -> None:
+    _write(inputs, _browser_binding(start_url=start_url))
+
+    with pytest.raises(TargetBindingError, match="start_url must be an http"):
+        load_target_binding(inputs, "targets/app.yaml")
