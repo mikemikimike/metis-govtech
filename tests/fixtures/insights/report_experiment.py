@@ -6,12 +6,16 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from metis.core import SessionTraces, execution_layout
 from metis.core.grading import RecordedResult
 from metis.core.reporting import EvaluationResults, GraderRecord
 from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
+
+    from metis.core.traces import Trace
 
 # One feature. B-1 has two criteria, B-2 has one. Two test cases with two trials each.
 TASKS = {"T-1": "S-1", "T-2": "S-2"}
@@ -138,3 +142,10 @@ def write_experiment(root: Path, records: list[GraderRecord]) -> Path:
     results_path = root / "outputs/reports/results.json"
     EvaluationResults(run_id="run-1", records=records).save(results_path)
     return results_path
+
+
+def save_trial_traces(root: Path, session_id: str, traces: Sequence[Trace]) -> Path:
+    """Save traces where `metis engine evaluate` puts them for one trial session."""
+    path = root / execution_layout.TRACES / execution_layout.trace_file_name(session_id)
+    SessionTraces.from_traces(session_id, traces).save(path)
+    return path

@@ -443,11 +443,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   the model rejects is skipped with a warning. The trial's cause comes from
   `outcome.failure_source`/`failure_message`, then `stop_reason` and the trial's logs. The report
   no longer reads top-level `failure_source` or `error`, or `outcome.message`/`outcome.error`,
-  which no engine writes, nor `conversation`, which #461 removed, so the trial-trace view stays
-  empty until #462 (#423).
+  which no engine writes, nor `conversation`, which #461 removed (#423).
 
 - Reports read trial records from `outputs/trials/` and write `report.json` and
   `report.html` beside `outputs/reports/results.json` (#453).
+
+- Each trial tab shows the conversation saved in `outputs/traces/<session_id>.json` (#503).
 
 - Use Target in report JSON, failure sources, and report labels (#429).
 

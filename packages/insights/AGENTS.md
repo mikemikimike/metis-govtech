@@ -16,7 +16,7 @@ Depends on `metis-core` only. Never import `metis.engine`, `metis.library`, or
 The core `EvaluationResults`, `GraderRecord`, `RecordedResult`, and `TrialRecord`
 models own the saved input contracts. Insights owns the private output `Report` model.
 Preserve recorded Criterion IDs, grader settings, and Task and Trial identity. Keep grader
-errors separate from target failures and skips. New records have no trace or turn identity.
+errors separate from target failures and skips.
 
 ## Layout
 

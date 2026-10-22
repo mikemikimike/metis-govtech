@@ -13,8 +13,14 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from metis.core import execution_layout
 from metis.core.logging import get_logger
+from metis.core.trace_processing import Problem
 from metis.core.trials import TrialRecord
 from metis.insights._aggregation import OutcomeCounts, mean_of, summarize_run
+from metis.insights._conversation import (
+    conversation_rows,
+    read_turns,
+    turn_count_note,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -170,11 +176,28 @@ def _load_trial_records(run_dir: Path) -> list[dict[str, Any]]:
                 # for ConsecutiveFailureEscalation. Issue #346.
                 #
                 "attempt": record.attempt_number,
-                # #462 reads the conversation from the trial Langfuse session.
-                "conversation": [],
+                **_conversation(run_dir, session, outcome.total_turns),
             }
         )
     return trials
+
+
+def _conversation(
+    run_dir: Path, session: str | None, total_turns: int
+) -> dict[str, Any]:
+    """The trial's conversation fields: its turns, or why there are none."""
+    if not session:
+        return {
+            "conversation": [],
+            "conversationProblem": "the trial record names no target session",
+        }
+    session_turns = read_turns(run_dir, session)
+    if isinstance(session_turns, Problem):
+        return {"conversation": [], "conversationProblem": session_turns.detail}
+    return {
+        "conversation": conversation_rows(session_turns),
+        "turnCountNote": turn_count_note(len(session_turns), total_turns),
+    }
 
 
 def _failure_source(value: object) -> str | None:

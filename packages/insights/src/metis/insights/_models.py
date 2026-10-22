@@ -36,6 +36,8 @@ class Trial(BaseModel):
     duration: float | None = None
     attempt: int = 1
     conversation: list[ConversationTurn] = Field(default_factory=list)
+    conversationProblem: str | None = None
+    turnCountNote: str | None = None
     category: str
     features: list[str] = Field(default_factory=list)
 
