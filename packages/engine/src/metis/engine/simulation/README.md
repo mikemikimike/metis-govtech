@@ -48,6 +48,10 @@ Each turn the user agent emits a typed action list (`ChosenAction` — a union o
 - **Uploads are gated by the scenario fixture allow-list, not by the target's per-turn permission.** A `file_upload` slot is offered for each `scenario.fixtures` entry not yet attached (and, in `orca_api`, not yet rejected) — synthetic, not derived from the target's current state. The **caller** validates an upload against that allow-list and the fixture's presence on disk before dispatch, withholding the action and reporting it as `withheld` if it fails; the runner never sees it. Neither side checks whether the target is prompting for a file this turn. This matches Orca, where attaching a file is a composer affordance available on any message.
 - **Only the persona honors conversational "wait" cues.** If the target says "please wait until next turn," that stays natural-language text in the observation — nothing mechanically blocks an upload. The persona LLM is trusted to read the cue and hold the action. A premature upload is discovered only at the transport layer (a backend rejection in `orca_api`, marking the fixture spent; a browser interaction in `orca_playwright`), never pre-empted. A target that truly gated uploads per turn would need runner-level enforcement that does not exist today.
 
+### LLM-call log
+
+Every simulation LLM call goes through `llm_calls.parse_completion`, which writes one row per request to an `LLMCallLog`: a trial's calls to `outputs/trials/<id>/evidence/llm_calls.jsonl`, and calls made once per experiment (fixture descriptions) to `logs/llm_calls.jsonl`. Each row records the component, the requested and returned model, tokens in and out (`null` when the endpoint did not report them), latency, and any error. The wrapper retries failed requests itself, so a new caller must build its `AsyncOpenAI` client with `max_retries=0` to keep every attempt in the log.
+
 ## Environment variables
 
 | Variable | Required | Purpose |

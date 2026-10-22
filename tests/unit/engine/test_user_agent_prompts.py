@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from metis.engine.simulation.gen_1.user_agent import agent as agent_module
@@ -13,6 +15,7 @@ from metis.engine.simulation.gen_1.user_agent.agent import (
     _render_problems,
 )
 from metis.engine.simulation.gen_1.user_agent.prompts import SYSTEM_PROMPT_TEMPLATE
+from metis.engine.simulation.llm_calls import LLMCallLog
 from metis.engine.simulation.types import (
     ActionResult,
     ActionSlot,
@@ -23,6 +26,9 @@ from metis.engine.simulation.types import (
     UserAgentInput,
     UserAgentOutput,
 )
+
+# Never written: these tests stub or skip the LLM call.
+_UNUSED_LOG = LLMCallLog(Path("unused-llm_calls.jsonl"))
 
 
 def test_render_available_actions_empty() -> None:
@@ -149,7 +155,7 @@ async def test_opening_offers_fixture_upload_slots(monkeypatch) -> None:
         fixtures=["sales.csv"],
         persona_refs=["p"],
     )
-    ua = UserAgent(persona, scenario)
+    ua = UserAgent(persona, scenario, llm_log=_UNUSED_LOG)
 
     captured: dict[str, str] = {}
 
@@ -175,7 +181,7 @@ async def test_generate_response_surfaces_problems(monkeypatch) -> None:
         fixtures=[],
         persona_refs=["p"],
     )
-    ua = UserAgent(persona, scenario)
+    ua = UserAgent(persona, scenario, llm_log=_UNUSED_LOG)
 
     captured: dict[str, str] = {}
 
@@ -238,6 +244,7 @@ def test_agent_registry_accumulates_across_turns() -> None:
     agent = UserAgent(
         persona=Persona(id="p", description="a user"),
         scenario=Scenario(id="s", description="do a thing", persona_refs=["p"]),
+        llm_log=_UNUSED_LOG,
     )
     a1 = Artifact(id="1", name="a.csv", content_description="rows", state="unavailable")
     a2 = Artifact(
@@ -293,6 +300,7 @@ def test_turn_prompt_surfaces_described_artifact_307() -> None:
         scenario=Scenario(
             id="s", description="reconcile the sales data", persona_refs=["p"]
         ),
+        llm_log=_UNUSED_LOG,
     )
     art = Artifact(
         id="art1",
@@ -487,6 +495,7 @@ class TestRegistryKeysOnIdentity:
         return UserAgent(
             persona=Persona(id="p", description="a user"),
             scenario=Scenario(id="s", description="do a thing", persona_refs=["p"]),
+            llm_log=_UNUSED_LOG,
         )
 
     def test_a_successful_retry_replaces_the_earlier_failure(self) -> None:

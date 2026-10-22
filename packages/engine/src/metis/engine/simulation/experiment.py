@@ -23,6 +23,7 @@ from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
 from ._fixture_artifacts import build_fixture_artifacts
 from .exceptions import TrialRecoverableError
 from .gen_1.artifact_summarizer import resolve_fixture_descriptions
+from .llm_calls import LLMCallLog
 from .trial import create_trial
 
 if TYPE_CHECKING:
@@ -377,6 +378,14 @@ async def _worker(
                     logger.info(
                         "[experiment] Previous artifacts moved to %s",
                         quarantine_dest.name,
+                    )
+                # The LLM-call log is kept the same way: the record describes
+                # one attempt, but the earlier attempts' calls were still spent.
+                superseded_log = LLMCallLog.for_trial(run_dir).supersede()
+                if superseded_log is not None:
+                    logger.info(
+                        "[experiment] Previous LLM-call log moved to %s",
+                        superseded_log.name,
                     )
                 runner = await runner_factory.create(
                     run_dir, fixtures_dir, experiment_root

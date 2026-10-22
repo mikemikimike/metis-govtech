@@ -20,6 +20,7 @@ from metis.core.logging import get_logger
 
 from .._fixture_artifacts import build_fixture_artifacts
 from .._hashing import sha256_file
+from ..llm_calls import LLMCallLog, parse_completion
 from .user_agent.config import (
     USER_AGENT_API_KEY,
     USER_AGENT_BASE_URL,
@@ -31,6 +32,8 @@ from .user_agent.config import (
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
+
+    from openai.types.chat import ChatCompletionMessageParam
 
 logger = get_logger()
 
@@ -73,29 +76,42 @@ class _SummaryOut(BaseModel):
 
 
 async def _summarize_via_llm(
-    text: str, *, name: str, triggering_message: str, turn_number: int
+    text: str,
+    *,
+    name: str,
+    triggering_message: str,
+    turn_number: int,
+    llm_log: LLMCallLog,
 ) -> tuple[str, str]:
     """Return ``(content_description, state_description)`` from the LLM."""
-    client = AsyncOpenAI(api_key=USER_AGENT_API_KEY, base_url=USER_AGENT_BASE_URL)
+    # Retries go through parse_completion so each attempt is logged.
+    client = AsyncOpenAI(
+        api_key=USER_AGENT_API_KEY, base_url=USER_AGENT_BASE_URL, max_retries=0
+    )
     user = (
         f"File name: {name}\n"
         f"Delivered on turn {turn_number}.\n"
         f"User's triggering message: {triggering_message!r}\n\n"
         f"File content (may be truncated):\n{text}"
     )
-    kwargs: dict[str, object] = dict(
-        model=USER_AGENT_MODEL,
-        messages=[
-            {"role": "system", "content": _SUMMARIZER_SYSTEM},
-            {"role": "user", "content": user},
-        ],
-        response_format=_SummaryOut,
-    )
+    messages: list[ChatCompletionMessageParam] = [
+        {"role": "system", "content": _SUMMARIZER_SYSTEM},
+        {"role": "user", "content": user},
+    ]
+    options: dict[str, object] = {}
     if USER_AGENT_MAX_TOKENS is not None:
-        kwargs["max_tokens"] = USER_AGENT_MAX_TOKENS
+        options["max_tokens"] = USER_AGENT_MAX_TOKENS
     if USER_AGENT_TEMPERATURE is not None:
-        kwargs["temperature"] = USER_AGENT_TEMPERATURE
-    response = await client.beta.chat.completions.parse(**kwargs)
+        options["temperature"] = USER_AGENT_TEMPERATURE
+    response = await parse_completion(
+        client,
+        llm_log,
+        component="artifact_summarizer",
+        model=USER_AGENT_MODEL,
+        messages=messages,
+        response_format=_SummaryOut,
+        **options,
+    )
     parsed = response.choices[0].message.parsed
     if parsed is None:
         raise RuntimeError("summarizer LLM returned an unparseable response")
@@ -108,8 +124,13 @@ async def summarize_artifact(
     experiment_root: Path,
     triggering_message: str,
     turn_number: int,
+    llm_log: LLMCallLog,
 ) -> None:
-    """Enrich ``artifact`` in place. Never raises."""
+    """Enrich ``artifact`` in place. Never raises.
+
+    :param llm_log: Where the summary call's rows go: the trial's log for a
+        download, the experiment's for a fixture.
+    """
     if artifact.state != "received":
         return
     path = resolve_artifact_path(experiment_root, artifact.path)
@@ -152,6 +173,7 @@ async def summarize_artifact(
             name=artifact.name,
             triggering_message=triggering_message,
             turn_number=turn_number,
+            llm_log=llm_log,
         )
         artifact.content_description = content_desc
         artifact.state_description = state_desc
@@ -166,7 +188,7 @@ async def summarize_artifact(
 
 
 async def summarize_fixture_artifacts(
-    fixtures: list[Artifact], experiment_root: Path
+    fixtures: list[Artifact], experiment_root: Path, *, llm_log: LLMCallLog
 ) -> None:
     """Fill ``content_description`` for fixtures the author left undescribed.
 
@@ -184,6 +206,7 @@ async def summarize_fixture_artifacts(
             experiment_root=experiment_root,
             triggering_message="(staged fixture, uploaded by the user)",
             turn_number=0,
+            llm_log=llm_log,
         )
         artifact.state_description = None
 
@@ -202,13 +225,16 @@ async def resolve_fixture_descriptions(
     workers fan out — not per run and not per attempt. The returned name→description
     map is threaded into every per-run :func:`build_fixture_artifacts` call, so no
     run re-summarizes. Names absent from the map (missing/unreadable on disk) are
-    simply omitted. Never raises into the caller.
+    simply omitted. Never raises into the caller. The summaries' LLM calls go to
+    the experiment's ``logs/llm_calls.jsonl``, since they belong to no one trial.
     """
     unique_names = sorted(set(fixture_names))
     artifacts = build_fixture_artifacts(
         unique_names, fixtures_dir, experiment_root, author_descriptions
     )
-    await summarize_fixture_artifacts(artifacts, experiment_root)
+    await summarize_fixture_artifacts(
+        artifacts, experiment_root, llm_log=LLMCallLog.for_experiment(experiment_root)
+    )
     return {
         a.name: a.content_description
         for a in artifacts

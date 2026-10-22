@@ -13,6 +13,7 @@ from metis.engine.simulation.gen_1.artifact_summarizer import (
     _SUMMARIZER_SYSTEM,
     summarize_artifact,
 )
+from metis.engine.simulation.llm_calls import LLMCallLog
 
 
 @pytest.mark.asyncio
@@ -21,13 +22,17 @@ async def test_digest_is_sha256_of_bytes(tmp_path: Path, monkeypatch) -> None:
     payload = b"a,b\n1,2\n"
     f.write_bytes(payload)
 
-    async def _fake(text, *, name, triggering_message, turn_number):
+    async def _fake(text, *, name, triggering_message, turn_number, llm_log):
         return ("2 rows x 2 cols", f"delivered at turn {turn_number}")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _fake)
     art = Artifact(name="data.csv", path="data.csv", state="received")
     await summarize_artifact(
-        art, experiment_root=tmp_path, triggering_message="make a csv", turn_number=3
+        art,
+        experiment_root=tmp_path,
+        triggering_message="make a csv",
+        turn_number=3,
+        llm_log=LLMCallLog.for_trial(tmp_path),
     )
 
     assert art.digest == hashlib.sha256(payload).hexdigest()
@@ -41,14 +46,18 @@ async def test_fact_rich_description_from_stubbed_llm(
     f = tmp_path / "sales.csv"
     f.write_text("region,total\nnorth,100\nsouth,200\n")
 
-    async def _fake(text, *, name, triggering_message, turn_number):
+    async def _fake(text, *, name, triggering_message, turn_number, llm_log):
         assert "region,total" in text  # the file content reaches the LLM
         return ("2 data rows; totals north=100 south=200", "delivered at turn 2")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _fake)
     art = Artifact(name="sales.csv", path="sales.csv", state="received")
     await summarize_artifact(
-        art, experiment_root=tmp_path, triggering_message="totals please", turn_number=2
+        art,
+        experiment_root=tmp_path,
+        triggering_message="totals please",
+        turn_number=2,
+        llm_log=LLMCallLog.for_trial(tmp_path),
     )
 
     assert "north=100" in (art.content_description or "")
@@ -66,7 +75,11 @@ async def test_binary_degrades_without_llm(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(summ, "_summarize_via_llm", _boom)
     art = Artifact(name="deck.pptx", path="deck.pptx", state="received")
     await summarize_artifact(
-        art, experiment_root=tmp_path, triggering_message="make slides", turn_number=1
+        art,
+        experiment_root=tmp_path,
+        triggering_message="make slides",
+        turn_number=1,
+        llm_log=LLMCallLog.for_trial(tmp_path),
     )
 
     assert art.digest is not None
@@ -84,7 +97,11 @@ async def test_llm_failure_never_raises(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(summ, "_summarize_via_llm", _fail)
     art = Artifact(name="notes.txt", path="notes.txt", state="received")
     await summarize_artifact(
-        art, experiment_root=tmp_path, triggering_message="save notes", turn_number=1
+        art,
+        experiment_root=tmp_path,
+        triggering_message="save notes",
+        turn_number=1,
+        llm_log=LLMCallLog.for_trial(tmp_path),
     )  # no raise
 
     assert art.digest is not None
@@ -95,7 +112,11 @@ async def test_llm_failure_never_raises(tmp_path: Path, monkeypatch) -> None:
 async def test_missing_file_is_noop(tmp_path: Path) -> None:
     art = Artifact(name="gone.csv", path="nope/gone.csv", state="received")
     await summarize_artifact(
-        art, experiment_root=tmp_path, triggering_message="x", turn_number=1
+        art,
+        experiment_root=tmp_path,
+        triggering_message="x",
+        turn_number=1,
+        llm_log=LLMCallLog.for_trial(tmp_path),
     )  # no raise
     assert art.digest is None
     assert art.content_description is None
@@ -116,6 +137,7 @@ async def test_state_gate_is_checked_before_touching_disk(tmp_path: Path) -> Non
         experiment_root=tmp_path,
         triggering_message="here you go",
         turn_number=1,
+        llm_log=LLMCallLog.for_trial(tmp_path),
     )
     assert artifact.content_description is None
     assert artifact.digest is None
@@ -143,7 +165,7 @@ async def test_summarize_fixtures_skips_described_and_fills_gaps(
     calls: list[str] = []
 
     async def fake_summarize(
-        artifact, *, experiment_root, triggering_message, turn_number
+        artifact, *, experiment_root, triggering_message, turn_number, llm_log
     ):
         calls.append(artifact.name)
         artifact.content_description = "auto"
@@ -158,7 +180,9 @@ async def test_summarize_fixtures_skips_described_and_fills_gaps(
         summarize_fixture_artifacts,
     )
 
-    await summarize_fixture_artifacts([described, gap], tmp_path)
+    await summarize_fixture_artifacts(
+        [described, gap], tmp_path, llm_log=LLMCallLog.for_trial(tmp_path)
+    )
 
     assert calls == ["notes.txt"]  # described one skipped
     assert described.content_description == "author supplied"
@@ -176,7 +200,7 @@ async def test_resolve_fixture_descriptions_summarizes_each_unique_once(
     calls: list[str] = []
 
     async def fake_summarize(
-        artifact, *, experiment_root, triggering_message, turn_number
+        artifact, *, experiment_root, triggering_message, turn_number, llm_log
     ):
         calls.append(artifact.name)
         artifact.content_description = f"auto:{artifact.name}"

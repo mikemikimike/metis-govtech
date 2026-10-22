@@ -207,6 +207,19 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   naming the session and trace, then grades the remaining sessions. Re-run the trial to grade the
   session (#469).
 
+- **Every simulation LLM call is logged, one row per request (#476).** `gen_1`'s user agent
+  and artifact summarizer call through the shared `metis.engine.simulation.llm_calls`
+  wrapper, which writes `at`, `component`, `requested_model`, `returned_model`, `tokens_in`,
+  `tokens_out`, `latency_ms` and `error` as JSONL. A trial's calls go to
+  `outputs/trials/<id>/evidence/llm_calls.jsonl`; the fixture descriptions summarized once
+  per experiment go to `logs/llm_calls.jsonl`. A count the endpoint did not report is `null`,
+  never `0`. The wrapper, not the OpenAI SDK, now retries a failed request (twice, on the
+  SDK's rules: connection errors, timeouts, 408, 409, 429 and 5xx), so each attempt is its
+  own row. When a trial is retried, the earlier attempt's file is kept as
+  `llm_calls-superseded-<UTC timestamp>.jsonl` beside the new one. The row model is private
+  to the engine. The user agent no longer writes its debug-level token-usage line, since the
+  log carries those counts.
+
 #### Changed
 
 - **`metis engine evaluate` saves each session's traces.** Right after a session is fetched, and

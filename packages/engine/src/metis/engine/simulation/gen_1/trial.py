@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..llm_calls import LLMCallLog
 from .orchestrator import Orchestrator
 from .user_agent.agent import UserAgent
 
@@ -35,7 +36,9 @@ def build_trial(
     shutdown_event: threading.Event | None,
 ) -> Orchestrator:
     """Build the user agent and the orchestrator that drives ``runner`` for one attempt."""
-    agent = UserAgent(persona=persona, scenario=scenario)
+    agent = UserAgent(
+        persona=persona, scenario=scenario, llm_log=LLMCallLog.for_trial(run_dir)
+    )
     return Orchestrator(
         runner=runner,
         agent=agent,
