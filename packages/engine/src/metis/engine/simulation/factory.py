@@ -18,6 +18,11 @@ class RunnerFactory(Protocol):
     generation its runners belong to. A factory without one is ``"gen_1"``.
     The attribute is optional, so it is not declared here.
 
+    A factory may also define a classmethod
+    ``from_specification(specification, inputs_dir)``. ``metis engine simulate`` then
+    builds it with the specification and the experiment's ``inputs/`` folder instead of
+    with no arguments. It is optional too, so it is not declared here.
+
     Each generation narrows ``create`` to its own ``Runner`` type (for
     ``gen_1``, ``gen_1.runner.Gen1RunnerFactory``).
     """

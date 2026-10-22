@@ -563,11 +563,22 @@ def _run_simulation(
         redo_plan = trial_plan
         completed_records = {}
 
+    from metis.engine.simulation.gen_2.binding import TargetBindingError
     from metis.engine.simulation.runner_resolver import resolve_runner_factory
 
     factory_cls = resolve_runner_factory(specification.runner_factory_ref)
 
-    runner_factory = factory_cls()
+    # a factory that needs the specification asks for it; gen_1's are built bare
+    from_specification = getattr(factory_cls, "from_specification", None)
+    try:
+        runner_factory = (
+            from_specification(specification, experiment_dir / execution_layout.INPUTS)
+            if from_specification is not None
+            else factory_cls()
+        )
+    except TargetBindingError as exc:
+        console.print(f"Error: {exc}", style="bold red")
+        raise typer.Exit(code=1) from None
 
     trial_max_retries, trial_retry_delay_seconds = runner_factory.retry_defaults
 

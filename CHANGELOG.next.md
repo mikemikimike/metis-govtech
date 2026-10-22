@@ -266,6 +266,19 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `gen_2` describes fixtures with `file_facts`, so no LLM call is made for them, and an
   author-supplied description still wins. Nothing in `gen_2` imports from `gen_1`. The seam
   now lists `'gen_1', 'gen_2'` as supported generations. There is no real `gen_2` runner yet.
+- **The generic HTTP runner's factory, binding loader and runner-agent LLM calls (#507).** A
+  runner factory may define `from_specification(specification, inputs_dir)`, and
+  `metis engine simulate` then builds it with the specification instead of with no
+  arguments. `HttpRunnerFactory` (`metis.engine.simulation.gen_2.runners.http`) does this to
+  load the specification's `target_binding` from the experiment's `inputs/`; a binding
+  outside the input folder is refused. `${NAME}` references in `spec_url` are expanded from
+  the environment, and a relative `spec_url` is a file beside the binding. The
+  `auth.secret_env` credential is required, and a secret header whose variable is unset is
+  left out with a warning. Errors name a missing variable but never contain a value read
+  from the environment. Its runner does nothing yet (#481). `llm_calls` gains
+  `create_completion` for tool-calling requests, logged and retried as `parse_completion`
+  is, and the runner agent's model is `RUNNER_AGENT_MODEL`, falling back to
+  `USER_AGENT_MODEL`.
 
 #### Changed
 
