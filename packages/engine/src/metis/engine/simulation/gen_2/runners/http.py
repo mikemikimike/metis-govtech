@@ -104,10 +104,16 @@ class HttpRunner(Runner):
         """The accepted submission nothing has settled yet; ``poll_until`` clears it."""
         self.unresolved: Unresolved | None = None
         """Set by a 4xx during a poll while a submission was open; a timeout leaves it open."""
+        self.notes: list[str] = []
+        """What the agent learned about the target, shown again in each later action."""
 
     @property
     def session_id(self) -> str | None:
         return self._session_id
+
+    @property
+    def log(self) -> TransportLog:
+        return self._log
 
     def use_ledger(self, ledger: ArtifactLedger) -> None:
         self.ledger = ledger
