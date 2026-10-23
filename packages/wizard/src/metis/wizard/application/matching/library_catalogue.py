@@ -2,7 +2,7 @@
 
 **This is the one function that knows where the graders live.** They live in metis-library,
 which the wizard is allowed to depend on, so nothing here breaks the `wizard ↛ engine`
-invariant in the root CLAUDE.md. Keeping the location in one string is what made moving them
+invariant in the root AGENTS.md. Keeping the location in one string is what made moving them
 out of the engine a one-line change here.
 
 The graders each live in their own `_`-prefixed module and are re-exported flat from

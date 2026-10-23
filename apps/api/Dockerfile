@@ -11,7 +11,7 @@ FROM python:3.12-slim AS runtime
 
 # A corporate proxy intercepts TLS, so `uv sync` and every later model call fail with
 # CERTIFICATE_VERIFY_FAILED unless the CA bundle is installed early and every client points at it.
-# (See the root CLAUDE.md note.)
+# (See the root AGENTS.md note.)
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates \
  && update-ca-certificates \

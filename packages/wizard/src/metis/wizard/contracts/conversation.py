@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_v
 
 # `Option.patch` and `WizardRequest.stage` are Pydantic fields, so `Patch` and `InterviewStep`
 # must be runtime imports — Pydantic resolves the annotation at runtime and a TYPE_CHECKING-only
-# import leaves the nesting models "not fully defined". See CLAUDE.md — Coding Conventions.
+# import leaves the nesting models "not fully defined". See AGENTS.md — Coding Conventions.
 from metis.wizard.domain.patch import Patch
 from metis.wizard.domain.permissions import InterviewStep
 from metis.wizard.domain.types import InteractionType

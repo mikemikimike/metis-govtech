@@ -1,20 +1,39 @@
 <p align="center">
-  <img src="docs/assets/METIS.png" alt="METIS" width="128">
+  <img src="docs/assets/METIS.png" alt="METIS" width="160">
 </p>
 
-# METIS
+<h1 align="center">METIS</h1>
 
-**Measurement and Evaluation of Trustworthy Intelligent Systems**
+<p align="center">
+  <strong>Measurement and Evaluation of Trustworthy Intelligent Systems</strong>
+</p>
 
-METIS is an extensible agentic evaluation suite for assessing AI safety, alignment, and operational reliability. It ingests agent execution traces (from platforms like Langfuse and OpenTelemetry), runs configurable evaluation metrics against them, and produces diagnostics and compliance analytics.
+<p align="center">
+  <img src="https://img.shields.io/badge/python-%E2%89%A53.11-3776AB?logo=python&logoColor=white" alt="Python 3.11 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-4c1" alt="MIT licence"></a>
+  <img src="https://img.shields.io/badge/status-active-brightgreen" alt="Status: active">
+</p>
+
+<p align="center">
+  METIS is an extensible agentic evaluation suite for assessing AI safety, alignment, and operational reliability. It ingests agent execution traces (from platforms like Langfuse and OpenTelemetry), runs configurable evaluation metrics against them, and produces diagnostics and compliance analytics.
+</p>
 
 ## Table of Contents
 
+- [Status](#status)
 - [Architecture](#architecture)
 - [Quickstart](#quickstart)
 - [Development](#development)
 - [Project Layout](#project-layout)
 - [Versioning](#versioning)
+- [Maintainers and contact](#maintainers-and-contact)
+- [Security](#security)
+- [License](#license)
+
+## Status
+
+**Active.** METIS is under active development. We monitor issues and pull requests.
+The current release is a pre-release, so the API can change.
 
 ## Architecture
 
@@ -146,3 +165,18 @@ metis/
 Each package maintains its own **independent semantic version**. Releases are tracked with scoped git tags (`<package-name>/v<semver>`). Every merge to `main` that modifies package source MUST be tagged with a version bump for the affected package(s).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md#versioning--release) for the full release flow and tagging conventions, and [docs/architecture.md](docs/architecture.md) for the versioning specification.
+
+## Maintainers and contact
+
+METIS is maintained by [@mqf20](https://github.com/mqf20) and
+[@leannetan](https://github.com/leannetan). For questions, contact
+[aipractice@tech.gov.sg](mailto:aipractice@tech.gov.sg).
+
+## Security
+
+Do not report security vulnerabilities in public issues. See [SECURITY.md](SECURITY.md)
+for how to report a vulnerability.
+
+## License
+
+METIS is released under the [MIT License](LICENSE).

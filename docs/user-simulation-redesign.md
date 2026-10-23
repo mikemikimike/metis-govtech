@@ -819,7 +819,7 @@ the same. So the fields need to be designed for growth, and each new field docum
 
 1. **A core model with a published schema.** The profile becomes a Pydantic model in
    `metis-core`, published as a `*.schema.json` in `packages/core/schemas/`, so users get
-   validation and editor help. The shared-schema rule in `CLAUDE.md` requires this.
+   validation and editor help. The shared-schema rule in `AGENTS.md` requires this.
 2. **Only fields code checks.** The prototype mixes fields code enforces
    (`forbidden_calls`, `secret_headers`, `tls_verify`) with advice (`limits`, `notes`).
    Advice is fine, but should be marked as advice in the schema.
