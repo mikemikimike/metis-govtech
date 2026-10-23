@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from typing import TYPE_CHECKING, Any
 
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from metis.core.reporting import EvaluationResults, GraderRecord
 from metis.insights._aggregation import summarize_run
 from metis.insights._models import Report
 from metis.insights._report import build_report, load_report_sources
-from metis.insights._report_page import REPORT_SCRIPT, render_report_page
 from metis.insights.cli import app
 from metis.insights.report import format_terminal_summary
 from tests.fixtures.insights.report_experiment import (
@@ -254,58 +252,35 @@ def test_empty_run_has_unavailable_rates(experiment: Path) -> None:
     assert all(criterion["rate"] is None for criterion in report["criteria"].values())
 
 
+def test_report_records_the_pass_rate_target(experiment: Path) -> None:
+    assert _build(experiment)["passRateTarget"] == 70
+
+
+def test_report_carries_display_names(experiment: Path) -> None:
+    report = _build(experiment)
+    assert report["criteria"]["C-1"]["name"] == "C-1"
+    assert report["names"]["P"] == {"P-1": "P-1"}
+    assert report["names"]["S"] == {"S-1": "S-1", "S-2": "S-2"}
+
+
+def test_report_uses_specification_names(experiment: Path) -> None:
+    spec_path = experiment.parents[2] / "inputs/specification.yaml"
+    spec = yaml.safe_load(spec_path.read_text())
+    spec["features"][0]["behaviours"][0]["criteria"][0]["name"] = "Check one"
+    spec["personas"][0]["name"] = "Busy parent"
+    spec["scenarios"][0]["name"] = "Seoul in December"
+    spec_path.write_text(yaml.safe_dump(spec))
+    report = _build(experiment)
+    assert report["criteria"]["C-1"]["name"] == "Check one"
+    assert report["names"]["P"]["P-1"] == "Busy parent"
+    assert report["names"]["S"]["S-1"] == "Seoul in December"
+
+
 def test_report_version_is_one(experiment: Path) -> None:
     report = _build(experiment)
     assert report["schema_version"] == 1
     with pytest.raises(ValueError, match="schema_version"):
         Report.model_validate({**report, "schema_version": 2})
-
-
-def test_html_shows_settings_errors_and_unmatched_results(experiment: Path) -> None:
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("Node.js is needed to run the report renderer")
-    records = grader_records()
-    records[6].scenario_id = "S-other"
-    report = _build(experiment, records)
-    renderers = (
-        REPORT_SCRIPT[
-            REPORT_SCRIPT.index("const LABELS=") : REPORT_SCRIPT.index("const clip=")
-        ]
-        + REPORT_SCRIPT[
-            REPORT_SCRIPT.index("const resultCounts=") : REPORT_SCRIPT.index(
-                "function filterOptions"
-            )
-        ]
-        + REPORT_SCRIPT[
-            REPORT_SCRIPT.index("function evidenceList") : REPORT_SCRIPT.index(
-                "function individualResults"
-            )
-        ]
-    )
-    script = f"{renderers}\nprocess.stdout.write(unmappedResults({json.dumps(report['unmapped'])}));"
-    rendered = subprocess.run(
-        [node, "-e", script], check=True, capture_output=True, text=True
-    ).stdout
-    for text in (
-        "Results without a matching criterion",
-        "C-3 / g.three.Grader",
-        "The result scenario differs from the task scenario.",
-        "Grader error",
-        "Recorded grader settings",
-        "judge-a",
-        "T-2 trial 1",
-    ):
-        assert text in rendered
-
-
-def test_html_escapes_embedded_text(experiment: Path) -> None:
-    records = grader_records()
-    records[0].results[0].reason = "</script><script>alert(1)</script>"
-    html = render_report_page(_build(experiment, records), title="<Target>")
-    assert "<title>&lt;Target&gt;</title>" in html
-    assert "</script><script>alert(1)</script>" not in html
-    assert "<\\/script>" in html
 
 
 def test_cli_writes_both_valid_reports(experiment: Path) -> None:

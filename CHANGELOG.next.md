@@ -522,6 +522,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- Report JSON includes 95% Wilson confidence intervals for each Task and Criterion,
+  using passed and failed trial grades and excluding ungraded runs (#535).
+
 - New package. `metis insights report --results-file <path>` reads an evaluation's
   `results.json`, prints the pass/fail/skip summary, and writes `report.json` and
   `report.html` into the same experiment's `reports/` directory (#417).
@@ -560,6 +563,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   - `report.json` keeps `schema_version: 1`. It adds `mean_score`, `judge_models`, and
     `error` counts, and it renames and removes other fields. The metis-engine section of
     `MIGRATION.md` lists the changes that a reader of the old file must make.
+  - `report.json` adds `passRateTarget`, the 70% target below which the page shows a rate in
+    red. It also adds each criterion's `name` and a `names` map of persona and scenario names.
+
+- `report.html` is one page. It shows the average pass rate, the specification as a list or
+  a tree with a detail panel, and a results table with each cell's pass rate and 95%
+  interval. A click on a test case opens a panel with its trials, each criterion's 95% range
+  against the 70% target, and each trial's conversation beside what each grader returned
+  (#535).
 
 - Reports write `schema_version: 1`. `metis.insights.Report` defaults a missing version to
   `1` and rejects other explicit versions. The published `report.schema.json` file is

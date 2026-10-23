@@ -9,13 +9,13 @@ import yaml
 from metis.core import SessionTraces, execution_layout
 from metis.core.grading import RecordedResult
 from metis.core.reporting import EvaluationResults, GraderRecord
+from metis.core.traces import Observation, Trace
 from metis.core.trials import TrialConfig, TrialOutcome, TrialRecord
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from metis.core.traces import Trace
 
 # One feature. B-1 has two criteria, B-2 has one. Two test cases with two trials each.
 TASKS = {"T-1": "S-1", "T-2": "S-2"}
@@ -149,3 +149,11 @@ def save_trial_traces(root: Path, session_id: str, traces: Sequence[Trace]) -> P
     path = root / execution_layout.TRACES / execution_layout.trace_file_name(session_id)
     SessionTraces.from_traces(session_id, traces).save(path)
     return path
+
+
+def turn_trace(index: int, user: str, reply: str | None) -> Trace:
+    """One trace whose root observation is one user message and the target's reply."""
+    root = Observation(
+        id=f"o{index}", trace_id=f"t{index}", type="SPAN", input=user, output=reply
+    )
+    return Trace(id=f"t{index}", session_id="any", observations=(root,))

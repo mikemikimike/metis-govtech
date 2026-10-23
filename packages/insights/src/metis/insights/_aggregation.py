@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import fsum, isfinite
+from math import fsum, isfinite, sqrt
+from statistics import NormalDist
 from typing import TYPE_CHECKING, Literal
+
+from metis.insights._models import WilsonConfidenceInterval
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -115,3 +118,23 @@ def aggregate_graders(
         )
         bucket.add(summarize_run(record))
     return counts
+
+
+def wilson_interval(passed: int, failed: int) -> WilsonConfidenceInterval | None:
+    n = passed + failed
+    if n == 0:
+        return None
+    # Wilson keeps bounds in [0, 1] and retains uncertainty when all trials pass or fail.
+    # The normal (Wald) interval has zero width in those cases.
+    z_squared = NormalDist().inv_cdf(0.975) ** 2
+    proportion = passed / n
+    denominator = 1 + z_squared / n
+    center = (proportion + z_squared / (2 * n)) / denominator
+    margin = (
+        sqrt(z_squared * (proportion * (1 - proportion) / n + z_squared / (4 * n * n)))
+        / denominator
+    )
+    return WilsonConfidenceInterval(
+        lower=0.0 if passed == 0 else max(0.0, center - margin),
+        upper=1.0 if failed == 0 else min(1.0, center + margin),
+    )

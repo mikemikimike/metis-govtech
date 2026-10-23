@@ -563,8 +563,11 @@ failed.
     `resultTable.rows[].trials` in place of trial `results`.
   - Read unmapped entry `records` in place of `evidence`. Each item is the original
     `GraderRecord`.
-  - Do not read `scores.graderPassRate.status`. The report no longer applies a fixed 70% pass
-    threshold to rates. Read `rate` and the `pass`, `fail`, `skip`, and `error` counts.
+  - Do not read `scores.graderPassRate.status` as a pass mark. Read `rate` and the `pass`,
+    `fail`, `skip`, and `error` counts. `passRateTarget` records the 70% target that the page
+    uses to show a rate in red. It does not change any `status`.
+  - Read display names from criterion `name` and from `names.P` and `names.S`. The IDs stay
+    the keys.
   - Do not read the top-level `turns`, `routing`, or `threshold`. Read the threshold of each
     run from evidence `grader_args.threshold` or `run_threshold`.
   - Behaviour, feature, and headline rates are now the unweighted mean of their evaluated

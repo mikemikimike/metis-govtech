@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
-import subprocess
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -17,11 +15,11 @@ from metis.core.traces import Observation, Trace
 from metis.insights._conversation import conversation_rows, read_turns, turn_count_note
 from metis.insights._models import Report
 from metis.insights._report import build_report, load_report_sources
-from metis.insights._report_page import REPORT_SCRIPT, render_report_page
 from tests.fixtures.insights.report_experiment import (
     grader_records,
     save_trial_traces,
     trial_record,
+    turn_trace,
     write_experiment,
 )
 from tests.fixtures.traces import SESSION_ID, load_orca_session
@@ -146,13 +144,6 @@ def test_unreadable_row_problem_says_which_field(tmp_path: Path) -> None:
     assert str(tmp_path) not in result.detail
 
 
-def _turn(index: int, user: str, reply: str | None) -> Trace:
-    root = Observation(
-        id=f"o{index}", trace_id=f"t{index}", type="SPAN", input=user, output=reply
-    )
-    return Trace(id=f"t{index}", session_id="any", observations=(root,))
-
-
 @pytest.fixture
 def experiment_root(tmp_path: Path) -> Path:
     root = tmp_path / "experiment"
@@ -176,14 +167,14 @@ def _trial(report: dict[str, Any], trial_id: str) -> dict[str, Any]:
     return trial
 
 
-def test_trial_shows_each_saved_turn(experiment_root: Path) -> None:
+def test_trial_shows_each_savedturn_trace(experiment_root: Path) -> None:
     save_trial_traces(
         experiment_root,
         "T-1-1",
         [
-            _turn(1, "hello", "hi there"),
-            _turn(2, "and?", "more"),
-            _turn(3, "bye", None),
+            turn_trace(1, "hello", "hi there"),
+            turn_trace(2, "and?", "more"),
+            turn_trace(3, "bye", None),
         ],
     )
 
@@ -207,7 +198,9 @@ def test_trial_with_fewer_saved_turns_than_recorded_has_a_note(
     experiment_root: Path,
 ) -> None:
     save_trial_traces(
-        experiment_root, "T-1-1", [_turn(1, "hello", "hi"), _turn(2, "bye", "ok")]
+        experiment_root,
+        "T-1-1",
+        [turn_trace(1, "hello", "hi"), turn_trace(2, "bye", "ok")],
     )
 
     trial = _trial(_report(experiment_root), "T-1-1")
@@ -221,13 +214,13 @@ def _missing(root: Path) -> None:
 
 
 def _corrupt(root: Path) -> None:
-    path = save_trial_traces(root, "T-1-1", [_turn(1, "hello", "hi")])
+    path = save_trial_traces(root, "T-1-1", [turn_trace(1, "hello", "hi")])
     path.write_text(path.read_text(encoding="utf-8")[:40], encoding="utf-8")
 
 
 def _other_session(root: Path) -> None:
-    path = save_trial_traces(root, "T-1-1", [_turn(1, "hello", "hi")])
-    SessionTraces.from_traces("someone-else", [_turn(1, "hello", "hi")]).save(path)
+    path = save_trial_traces(root, "T-1-1", [turn_trace(1, "hello", "hi")])
+    SessionTraces.from_traces("someone-else", [turn_trace(1, "hello", "hi")]).save(path)
 
 
 @pytest.mark.parametrize(
@@ -267,7 +260,7 @@ def test_trial_without_a_session_gives_the_reason(experiment_root: Path) -> None
 def test_trial_without_grader_records_keeps_its_conversation_tab(
     experiment_root: Path,
 ) -> None:
-    save_trial_traces(experiment_root, "T-2-1", [_turn(1, "hello", "hi")])
+    save_trial_traces(experiment_root, "T-2-1", [turn_trace(1, "hello", "hi")])
     t1_only = [record for record in grader_records() if record.task_id == "T-1"]
 
     report = _report(experiment_root, t1_only)
@@ -276,56 +269,3 @@ def test_trial_without_grader_records_keeps_its_conversation_tab(
     assert row["results"] == {}
     (trial,) = [trial for trial in row["trials"] if trial["id"] == "T-2-1"]
     assert trial["conversation"][0]["target"] == "hi"
-
-
-def _page_script(html: str) -> str:
-    return html[html.index("<script>") + len("<script>") : html.rindex("</script>")]
-
-
-def test_page_shows_the_count_note_and_the_reason(
-    experiment_root: Path, tmp_path: Path
-) -> None:
-    node = shutil.which("node")
-    if node is None:
-        pytest.skip("Node.js is needed to run the report renderer")
-    save_trial_traces(
-        experiment_root, "T-1-1", [_turn(1, "<b>hello</b>", "hi"), _turn(2, "x", "y")]
-    )
-    report = _report(experiment_root)
-    page = tmp_path / "page.js"
-    page.write_text(_page_script(render_report_page(report)), encoding="utf-8")
-    subprocess.run([node, "--check", str(page)], check=True, capture_output=True)
-
-    renderers = (
-        REPORT_SCRIPT[
-            REPORT_SCRIPT.index("const esc=") : REPORT_SCRIPT.index("const clip=")
-        ]
-        + REPORT_SCRIPT[
-            REPORT_SCRIPT.index("const outcomeLabel=") : REPORT_SCRIPT.index(
-                "const tableCases="
-            )
-        ]
-        + REPORT_SCRIPT[
-            REPORT_SCRIPT.index("const trialTrace=") : REPORT_SCRIPT.index(
-                "const testCaseTraces="
-            )
-        ]
-    )
-    trials = {item["id"]: item for item in report["trials"]["items"]}
-    script = (
-        f'const trialResults=()=>"";{renderers}\n'
-        f"const trials={json.dumps(trials)};\n"
-        "process.stdout.write(JSON.stringify(Object.fromEntries("
-        "Object.entries(trials).map(([id,row])=>[id,trialTrace(row)]))));"
-    )
-    rendered = json.loads(
-        subprocess.run(
-            [node, "-e", script], check=True, capture_output=True, text=True
-        ).stdout
-    )
-
-    assert "2 of 3 recorded turns have traces" in rendered["T-1-1"]
-    assert "&lt;b&gt;hello&lt;/b&gt;" in rendered["T-1-1"]
-    assert "No conversation was recorded" not in rendered["T-1-1"]
-    assert "No conversation was recorded for this trial." in rendered["T-1-2"]
-    assert "no saved traces (T-1-2.json)" in rendered["T-1-2"]

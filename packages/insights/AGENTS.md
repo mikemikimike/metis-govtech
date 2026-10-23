@@ -24,7 +24,11 @@ errors separate from target failures and skips.
 - `report.py` — `format_terminal_summary`, `save_report`
 - `_models.py` — `Report`, the `report.json` contract
 - `_report.py` — `build_report`, `load_report_sources` (the behaviour/criterion rollup)
-- `_aggregation.py`, `_report_page.py`, `_report_styles.py` — summary counts and HTML
+- `_aggregation.py` — summary counts and the mean of children
+- `_report_page.py`, `_report_styles.py` — the HTML page. `RENDER_SCRIPT` holds pure
+  functions that turn report data and a view state into HTML strings. `WIRING_SCRIPT` holds
+  the view state and the click handlers. Page tests run the renderers in Node through
+  `tests/fixtures/insights/report_page.py`.
 
 ## Run calculations
 

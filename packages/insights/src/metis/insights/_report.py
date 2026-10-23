@@ -15,7 +15,12 @@ from metis.core import execution_layout
 from metis.core.logging import get_logger
 from metis.core.trace_processing import Problem
 from metis.core.trials import TrialRecord
-from metis.insights._aggregation import OutcomeCounts, mean_of, summarize_run
+from metis.insights._aggregation import (
+    OutcomeCounts,
+    mean_of,
+    summarize_run,
+    wilson_interval,
+)
 from metis.insights._conversation import (
     conversation_rows,
     read_turns,
@@ -31,6 +36,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 Row = Mapping[str, Any]
+# A rate below this is shown in red on the page.
+PASS_RATE_TARGET = 70
+
 _OUTCOME_LABELS = {
     "passed": "pass",
     "failed": "fail",
@@ -496,6 +504,7 @@ def _criterion_rows(
                 "note": "No result was recorded for this criterion.",
             }
         out_criteria[cid] = {
+            "name": criterion.get("name") or cid,
             "description": criterion["description"],
             "grader_name": fqn.rsplit(".", 1)[-1] if fqn else "",
             "grader_fqn": fqn or None,
@@ -604,6 +613,14 @@ def _result_cell(bucket: OutcomeCounts) -> dict[str, Any]:
     }
 
 
+def _case_result_cell(bucket: OutcomeCounts) -> dict[str, Any]:
+    interval = wilson_interval(bucket.passed, bucket.failed)
+    return {
+        **_result_cell(bucket),
+        "confidence_interval": interval.model_dump() if interval is not None else None,
+    }
+
+
 def _result_table(
     specification: Mapping[str, Any],
     tasks: Mapping[str, Row],
@@ -637,7 +654,7 @@ def _result_table(
     for task_id, task in tasks.items():
         task_trials = [trial for trial in trials if trial["task_id"] == task_id]
         results_by_criterion = {
-            cid: _result_cell(runs.case_counts[(task_id, cid)])
+            cid: _case_result_cell(runs.case_counts[(task_id, cid)])
             for cid in criteria
             if (task_id, cid) in runs.case_counts
         }
@@ -783,6 +800,14 @@ def build_report(
         "plan": {"personas": personas, "tasks": plan_tasks},
         "personas": personas,
         "scenarios": scenarios,
+        "passRateTarget": PASS_RATE_TARGET,
+        "names": {
+            axis: {item["id"]: item.get("name") or item["id"] for item in items}
+            for axis, items in (
+                ("P", specification.get("personas") or []),
+                ("S", specification.get("scenarios") or []),
+            )
+        },
         "describe": {
             "P": {
                 item["id"]: _clean_prose(item.get("description"))

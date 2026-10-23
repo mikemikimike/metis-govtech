@@ -143,6 +143,7 @@ class EvidenceItem(BaseModel):
 
 
 class Criterion(BaseModel):
+    name: str
     grader_args: dict[str, Any] = Field(default_factory=dict)
     description: str
     grader_name: str
@@ -222,6 +223,17 @@ class TrialResult(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class WilsonConfidenceInterval(BaseModel):
+    method: Literal["wilson"] = "wilson"
+    confidence_level: float = Field(0.95, ge=0.95, le=0.95)
+    lower: float = Field(ge=0, le=1)
+    upper: float = Field(ge=0, le=1)
+
+
+class CaseResult(TrialResult):
+    confidence_interval: WilsonConfidenceInterval | None = None
+
+
 class ResultTableTrial(Trial):
     results: dict[str, TrialResult] = Field(default_factory=dict)
 
@@ -232,7 +244,7 @@ class ResultTableRow(BaseModel):
     task_id: str
     persona: str
     scenario: str
-    results: dict[str, TrialResult] = Field(default_factory=dict)
+    results: dict[str, CaseResult] = Field(default_factory=dict)
     trials: list[ResultTableTrial] = Field(default_factory=list)
 
 
@@ -274,6 +286,8 @@ class Report(BaseModel):
     plan: Plan
     personas: list[str]
     scenarios: list[str]
+    passRateTarget: int
+    names: dict[str, dict[str, str]]
     describe: dict[str, dict[str, str]]
     axes: dict[str, list[AxisRow]]
     behaviourTotal: int
