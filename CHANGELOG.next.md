@@ -135,6 +135,18 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - `defaults.judge_model` in `specification.yaml`: the experiment's default judge model for
   model-based graders. It is omitted from the document when unset (#428).
 
+#### Changed
+
+- **`TargetBinding` also binds a web page: `transport` is `http` or `browser` (#484).** A
+  `browser` binding has a `start_url` and an optional `login` (`note`, the sign-in steps in
+  plain words, and `secrets`, the environment variables it types), and `spec_url` is
+  required only for `http`. Each transport rejects the other's fields: a browser binding sets
+  none of `spec_url`, `tls_verify`, `auth`, `secret_headers`, `submissions`,
+  `forbidden_calls` or `preflight_reads`, and an HTTP binding sets neither `start_url` nor
+  `login`. Every existing HTTP binding stays valid, and `target-binding.schema.json` is
+  regenerated. The published schema cannot express the per-transport rule, so only the
+  model and the engine loader enforce it.
+
 #### Breaking
 
 - Each Criterion states one assessment rule and owns its Grader configuration (#490).
@@ -336,6 +348,28 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   (including one that said `goal_achieved`); and `submission_unresolved`, which ends the
   loop at once when a reply never settles, and still runs the closing step.
   `Observation` gains `submission_unresolved` (default `False`), set by `HttpRunner`.
+
+- **A generic browser runner, for an app with only a web page (#484).**
+  `metis.engine.simulation.gen_2.runners.browser.BrowserRunnerFactory` binds an app with a
+  `transport: browser` target binding. It launches headless Chromium once, and if the binding
+  has a `login` the runner agent signs in once in `start()`; code types each
+  `{{secret:NAME}}` (a name the binding lists, typed alone) and the logs show `***`. The
+  logged-in state stays in memory, and each trial starts a context from it. The agent sees
+  the page as an accessibility snapshot and acts through `snapshot`, `click`, `type`,
+  `choose`, `choose_file`, `wait_for` and `fetch_files`, by element `ref`. Code refuses a
+  choice the user did not name and any text typed when the action quoted none; a message is
+  sent when its text leaves the field, and the submission stays open until `wait_for` settles
+  it. Each action is logged as a `request` and each page capture, `{url, title, snapshot}`,
+  as a `response`, so `report` can cite an element of a capture: `Pointer` gains `ref`. Files
+  go through the ledger: downloads with `record_download`, and an upload only when the page
+  then shows the file's name. `end_chat` does nothing for a browser. `run_tool` takes an
+  optional table of handlers, which the browser runner uses to share `note`, `report` and
+  `session_id_from`; the HTTP runner is unchanged. `load_target_binding` takes the transport
+  the caller needs and refuses the other. `example-experiment/targets/web-chat.yaml` is an
+  example, and `simulation/gen_2/README.md` has a section on it. **The runner has never met
+  a live page:** it is tested on a fake page and on a static page in headless Chromium, its
+  loop is a copy of `HttpRunner`'s to be merged with it in stage 4, and `orca_playwright`
+  stays the runner for Orca's UI.
 
 - **The generic HTTP runner's agent sends only what each round needs (#482).** The first
   message lists the target's operations as `METHOD path - summary` lines instead of the whole

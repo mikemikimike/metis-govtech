@@ -5,7 +5,7 @@ validators. It is generated from `SpecificationDocument` in
 [`metis.core.specification`](../src/metis/core/specification.py). Do not edit the JSON file.
 
 `target-binding.schema.json` describes a target binding, the YAML file a user writes to
-bind an app to the generic HTTP runner. It is generated from `TargetBinding` in
+bind an app to the generic HTTP or browser runner. It is generated from `TargetBinding` in
 [`metis.core.target_binding`](../src/metis/core/target_binding.py). Editors pick it up
 from a `# yaml-language-server: $schema=...` line at the top of the file.
 
