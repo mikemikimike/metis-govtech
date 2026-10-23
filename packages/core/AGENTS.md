@@ -30,7 +30,7 @@ Private runtime models and API models stay in their owning packages. See the
   published schema for `specification.yaml`. After changing it or a model it contains, run
   `make -C packages/core generate-schema` and commit the result.
 - `target_binding.py`: `TargetBinding`, the YAML file a user writes by hand to bind an app
-  to the generic HTTP runner. Source of `schemas/target-binding.schema.json`. Core checks
+  to the generic HTTP or browser runner (`transport`). Source of `schemas/target-binding.schema.json`. Core checks
   its shape only; the engine loads it and expands `${NAME}` references. Secrets appear
   only as environment-variable names; validate it with `TargetBinding.model_validate` directly
   and never log `ValidationError.errors()` unredacted, or a pasted secret can leak. Call

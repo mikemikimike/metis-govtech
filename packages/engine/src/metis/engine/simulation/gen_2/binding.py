@@ -1,8 +1,9 @@
 """Loads a target binding from the experiment's ``inputs/`` and reads its secrets.
 
 Core's ``TargetBinding`` checks the file's shape. This module adds what needs the
-environment: ``${NAME}`` references in ``spec_url`` are expanded, a relative ``spec_url``
-becomes a file beside the binding, and the credentials the binding names are read. A
+environment: ``${NAME}`` references in ``spec_url`` (or a browser binding's ``start_url``)
+are expanded, a relative ``spec_url`` becomes a file beside the binding, and the
+credentials the binding names are read. A
 value read from the environment never appears in an error, a repr or a log line; errors
 name the variable instead.
 
@@ -15,7 +16,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlsplit
 
 import yaml
@@ -47,10 +48,13 @@ class LoadedBinding:
     """The binding file, resolved."""
     binding: TargetBinding
     """As written: holds ``${NAME}`` references and no environment value."""
-    spec_url: str = field(repr=False)
-    """``spec_url`` expanded: an http(s) URL, or a ``file:`` URI inside the input folder."""
+    spec_url: str | None = field(repr=False)
+    """``spec_url`` expanded: an http(s) URL, or a ``file:`` URI inside the input folder.
+    ``None`` for a browser binding."""
     secrets: Mapping[str, SecretStr]
     """Environment variable name to value, for the variables that are set."""
+    start_url: str | None = field(default=None, repr=False)
+    """A browser binding's ``start_url`` expanded to an http(s) URL; ``None`` for http."""
 
     def secret(self, env: str) -> SecretStr | None:
         """The value of ``env``, or ``None`` when it was not set."""
@@ -62,10 +66,13 @@ def _env(name: str) -> str | None:
     return os.environ.get(name) or None
 
 
-def load_target_binding(inputs_dir: Path, relative: str) -> LoadedBinding:
+def load_target_binding(
+    inputs_dir: Path, relative: str, transport: Literal["http", "browser"] = "http"
+) -> LoadedBinding:
     """Load the binding at ``relative`` (relative to ``specification.yaml``).
 
     :param inputs_dir: The experiment's ``inputs/`` folder.
+    :param transport: The transport the caller's runner speaks; any other is refused.
     :raises TargetBindingError: Whatever makes the binding unusable. The message
         starts with ``relative`` as written.
     """
@@ -103,45 +110,71 @@ def load_target_binding(inputs_dir: Path, relative: str) -> LoadedBinding:
     except ValidationError as exc:
         raise fail(str(exc)) from None
 
-    spec_url = _resolve_spec_url(binding.spec_url, path.parent, root, fail)
+    if binding.transport != transport:
+        raise fail(
+            f"this runner needs a {transport} binding, but the binding's transport "
+            f"is {binding.transport}"
+        )
+    spec_url = start_url = None
+    if binding.spec_url is not None:
+        spec_url = _resolve_url("spec_url", binding.spec_url, path.parent, root, fail)
+    if binding.start_url is not None:
+        start_url = _resolve_url("start_url", binding.start_url, None, root, fail)
     return LoadedBinding(
         path=path,
         binding=binding,
         spec_url=spec_url,
         secrets=_read_secrets(binding, fail),
+        start_url=start_url,
     )
 
 
-def _resolve_spec_url(written: str, folder: Path, root: Path, fail: _Fail) -> str:
-    """Expand ``${NAME}`` in ``written`` and make it absolute."""
+def _resolve_url(
+    name: str, written: str, folder: Path | None, root: Path, fail: _Fail
+) -> str:
+    """Expand ``${NAME}`` in ``written`` and make it absolute.
+
+    :param name: The binding field, for messages.
+    :param folder: Where a relative file path is read from; ``None`` allows http(s) only.
+    """
     if "${" in _ENV.sub("", written):
-        raise fail('spec_url has a "${" that is not a ${NAME} reference')
+        raise fail(f'{name} has a "${{" that is not a ${{NAME}} reference')
 
     def expand(match: re.Match[str]) -> str:
         value = _env(match.group(1))
         if value is None:
             raise fail(
-                f"spec_url needs the environment variable {match.group(1)}, "
+                f"{name} needs the environment variable {match.group(1)}, "
                 "which is not set"
             )
         return value
 
     expanded = _ENV.sub(expand, written)
     try:
-        return _absolute(expanded, written, folder, root, fail)
+        return _absolute(name, expanded, written, folder, root, fail)
     except TargetBindingError:
         raise
     except (ValueError, OSError):
         # urlsplit and the path calls quote the value they reject, which may be secret
         raise fail(
-            f"spec_url {written!r}, once expanded, is not a usable URL or path"
+            f"{name} {written!r}, once expanded, is not a usable URL or path"
         ) from None
 
 
 def _absolute(
-    expanded: str, written: str, folder: Path, root: Path, fail: _Fail
+    name: str,
+    expanded: str,
+    written: str,
+    folder: Path | None,
+    root: Path,
+    fail: _Fail,
 ) -> str:
     """``expanded`` as an http(s) URL or a ``file:`` URI; messages quote ``written`` only."""
+    what = (
+        "an http(s) URL"
+        if folder is None
+        else "an http(s) URL or a file path relative to the binding"
+    )
     scheme = urlsplit(expanded).scheme.lower()
     if scheme in ("http", "https"):
         return expanded
@@ -149,24 +182,32 @@ def _absolute(
         # name the scheme only when the user wrote it, not when a variable supplied it
         shown = urlsplit(written).scheme.lower() == scheme
         raise fail(
-            "spec_url must be an http(s) URL or a file path relative to the binding, "
+            f"{name} must be {what}, "
             + (
                 f'not "{scheme}:"'
                 if shown
-                else "and the expanded spec_url has an unsupported scheme"
+                else f"and the expanded {name} has an unsupported scheme"
             )
         )
+    if folder is None:
+        raise fail(f"{name} must be {what}")
     local = (folder / expanded).resolve()
     if not local.is_relative_to(root):
-        raise fail(f"spec_url {written!r} must name a file inside the input folder")
+        raise fail(f"{name} {written!r} must name a file inside the input folder")
     if not local.is_file():
-        raise fail(f"spec_url {written!r} names a file that does not exist")
+        raise fail(f"{name} {written!r} names a file that does not exist")
     return local.as_uri()
 
 
 def _read_secrets(binding: TargetBinding, fail: _Fail) -> dict[str, SecretStr]:
-    """Read the credential (required) and each secret header's value (optional)."""
+    """Read the credential and each login secret (required) and each secret header's value (optional)."""
     secrets: dict[str, SecretStr] = {}
+    if binding.login is not None:
+        for env in binding.login.secrets:
+            value = _env(env)
+            if value is None:
+                raise fail(f"login.secrets names {env}, which is not set")
+            secrets[env] = SecretStr(value)
     if binding.auth is not None:
         value = _env(binding.auth.secret_env)
         if value is None:

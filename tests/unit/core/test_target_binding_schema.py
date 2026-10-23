@@ -50,3 +50,11 @@ def test_published_schema_rejects_secret_value(schema, orca):
     orca["auth"]["secret_env"] = "sk-live-AbC123"
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=orca, schema=schema)
+
+
+def test_a_browser_binding_validates_against_published_schema(schema, repo_root):
+    path = repo_root / "packages/engine/example-experiment/targets/web-chat.yaml"
+    example = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    jsonschema.validate(instance=example, schema=schema)
+    TargetBinding.model_validate(example)

@@ -81,11 +81,96 @@ def test_call_patterns_accepted(pattern):
     assert binding.submissions == [pattern]
 
 
-def test_browser_transport_rejected():
+def _browser(**overrides):
+    data = {
+        "schema_version": 1,
+        "identity": {"name": "App"},
+        "transport": "browser",
+        "start_url": "${APP_URL}/login",
+    }
+    data.update(overrides)
+    return data
+
+
+def test_minimal_browser_binding_takes_defaults():
+    binding = TargetBinding.model_validate(_browser())
+    assert binding.start_url == "${APP_URL}/login"
+    assert binding.spec_url is None
+    assert binding.login is None
+    assert binding.advice.notes == ""
+
+
+def test_browser_login_names_secrets_and_notes_how_to_sign_in():
+    binding = TargetBinding.model_validate(
+        _browser(
+            login={
+                "note": "Type {{secret:APP_USER}} in the email box.",
+                "secrets": ["APP_USER", "APP_PASSWORD"],
+            }
+        )
+    )
+    assert binding.login is not None
+    assert binding.login.secrets == ["APP_USER", "APP_PASSWORD"]
+
+
+def test_browser_login_secret_value_in_place_of_env_name_is_rejected_without_echo():
     with pytest.raises(ValidationError) as error:
         TargetBinding.model_validate(
-            _minimal(transport="browser", start_url="https://app.example")
+            _browser(login={"note": "Sign in.", "secrets": ["hunter2-password"]})
         )
+    assert "hunter2-password" not in str(error.value)
+
+
+def test_browser_binding_needs_a_start_url():
+    data = _browser()
+    del data["start_url"]
+    with pytest.raises(ValidationError) as error:
+        TargetBinding.model_validate(data)
+    assert "start_url" in str(error.value)
+
+
+def test_http_binding_needs_a_spec_url():
+    data = _minimal()
+    del data["spec_url"]
+    with pytest.raises(ValidationError) as error:
+        TargetBinding.model_validate(data)
+    assert "spec_url" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"spec_url": "https://app.example/openapi.json"},
+        {"tls_verify": False},
+        {"auth": {"secret_env": "APP_KEY"}},
+        {"secret_headers": []},
+        {"submissions": ["POST /chat"]},
+        {"forbidden_calls": ["DELETE /**"]},
+        {"preflight_reads": ["/usage"]},
+    ],
+)
+def test_browser_binding_rejects_http_only_fields(overrides):
+    with pytest.raises(ValidationError) as error:
+        TargetBinding.model_validate(_browser(**overrides))
+    assert "browser" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"start_url": "https://app.example"},
+        {"login": {"note": "Sign in.", "secrets": []}},
+    ],
+)
+def test_http_binding_rejects_browser_only_fields(overrides):
+    with pytest.raises(ValidationError) as error:
+        TargetBinding.model_validate(_minimal(**overrides))
+    assert "http" in str(error.value)
+
+
+def test_unknown_transport_rejected():
+    with pytest.raises(ValidationError) as error:
+        TargetBinding.model_validate(_minimal(transport="grpc"))
     assert "transport" in str(error.value)
 
 

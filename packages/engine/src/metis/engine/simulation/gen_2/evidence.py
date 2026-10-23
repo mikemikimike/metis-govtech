@@ -33,6 +33,8 @@ class Pointer:
     """``$``, ``.key``, ``["key"]`` and ``[n]`` steps; no wildcards."""
     pattern: str | None = None
     """A regular expression applied to the text; its one group, else the whole match."""
+    ref: str | None = None
+    """An element of a page capture's snapshot (``e12``), instead of a path."""
 
 
 def _steps(path: str) -> list[str | int]:
@@ -78,6 +80,8 @@ def resolve(
     :raises PointerError: When the entry is unknown, outside ``allowed`` or an action,
         or the path or pattern leads nowhere.
     """
+    if pointer.ref is not None and pointer.path is not None:
+        raise PointerError("point at a ref or a path, not both")
     if allowed is not None and pointer.entry not in allowed:
         raise PointerError(
             f"entry {pointer.entry} is not one of the entries you may cite here: "
@@ -100,7 +104,9 @@ def resolve(
 
     value: Any
     try:
-        if pointer.path is None:
+        if pointer.ref is not None:
+            value = _element(raw, pointer.ref, pointer.entry)
+        elif pointer.path is None:
             value = raw.decode("utf-8")
         else:
             value = _walk(json.loads(raw), pointer.path, pointer.entry)
@@ -114,6 +120,31 @@ def resolve(
     if pointer.pattern is not None:
         value = _narrow(value, pointer.pattern)
     return value, entry
+
+
+def _element(raw: bytes, ref: str, entry_id: str) -> str:
+    """The snapshot line marked ``[ref=<ref>]`` and the lines nested under it."""
+    try:
+        capture = json.loads(raw)
+    except ValueError:
+        capture = None
+    snapshot = capture.get("snapshot") if isinstance(capture, dict) else None
+    if not isinstance(snapshot, str):
+        raise PointerError(
+            f"entry {entry_id} is not a page capture, so a ref cannot apply"
+        )
+    lines = snapshot.splitlines()
+    marker = f"[ref={ref}]"
+    for i, line in enumerate(lines):
+        if marker in line:
+            indent = len(line) - len(line.lstrip())
+            block = [line]
+            for nested in lines[i + 1 :]:
+                if nested.strip() and len(nested) - len(nested.lstrip()) <= indent:
+                    break
+                block.append(nested)
+            return "\n".join(text[indent:] for text in block)
+    raise PointerError(f"no element {ref} in the snapshot of entry {entry_id}")
 
 
 def _narrow(value: Any, pattern: str) -> str:

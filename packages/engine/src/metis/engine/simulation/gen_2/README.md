@@ -110,6 +110,61 @@ To try a binding, set the variables it names and run the experiment as usual. Th
 agent uses `RUNNER_AGENT_MODEL` (falling back to `USER_AGENT_MODEL`) with the same
 `OPENAI_API_KEY` and `OPENAI_BASE_URL` as the user agent.
 
+## The browser runner, for an app with only a web page
+
+> **Never run against a live page.** `BrowserRunner` has been tested on a fake page and on
+> a static page in headless Chromium, and on nothing else. Orca's web sign-in changed
+> after the prototype it was ported from, and `orca_playwright` stays the runner for
+> Orca's UI. Expect the first real app to need changes. Making it work on one belongs to
+> stage 4.
+
+A browser binding has `transport: browser` and a `start_url` instead of `spec_url`; it
+takes no `auth`, `secret_headers`, `submissions`, `forbidden_calls` or `preflight_reads`.
+Point `runner_factory_ref` at
+`metis.engine.simulation.gen_2.runners.browser.BrowserRunnerFactory`.
+
+- `login.note` says in plain words how to sign in, and `login.secrets` names the
+  environment variables holding what it types. The note writes `{{secret:NAME}}` where a
+  secret goes. The factory's `start()` has the runner agent sign in once; code types the
+  secret, and the log shows `***`. The logged-in state is kept in memory, never written,
+  and each trial starts from it.
+- The agent sees the page as an accessibility snapshot, one element per line, and acts by
+  `ref` (`snapshot`, `click`, `type`, `choose`, `choose_file`, `wait_for`, `fetch_files`).
+  Code refuses a choice the user did not name, and any text typed when the action quoted
+  none. A message counts as sent when the text leaves its field, and the submission stays
+  open until `wait_for` settles it.
+- Each action is a `request` in the transport log and each capture of the page a `response`
+  whose body is `{url, title, snapshot}`. `report` cites an element of a capture with
+  `ref`, and the session ID with `at: $.url` and a `pattern`.
+- Files go through the ledger as for HTTP: downloads with `record_download`, uploads with
+  `record_upload`, recorded only when the page then shows the file's name.
+- `end_chat` does nothing: a page has no list of a session's files to collect afterwards.
+- The loop in `runners/browser.py` is a copy of `HttpRunner`'s, and its prompt a copy of the
+  frame of the HTTP one. Stage 4 merges them into a shared base.
+
+The example, `packages/engine/example-experiment/targets/web-chat.yaml`. Its URL, secret
+names and sign-in steps are made up:
+
+```yaml
+# yaml-language-server: $schema=../../../core/schemas/target-binding.schema.json
+# A chat app that has only a web page, bound to the generic browser runner. The runner
+# has never met a live page, and this file is a template to change: the URL, the secret
+# names and the sign-in steps are made up. Orca's own sign-in is not described here.
+schema_version: 1
+identity: {name: Example web chat}
+transport: browser
+start_url: ${CHAT_URL}
+login:
+  note: >-
+    Sign in on the start page: type {{secret:CHAT_USER}} in the email box and
+    {{secret:CHAT_PASSWORD}} in the password box, then press Sign in.
+  secrets: [CHAT_USER, CHAT_PASSWORD]
+advice:
+  notes: |
+    Type the message in the chat box and press Send. Wait until the reply has finished
+    before acting again. Attach files with the attach control before sending.
+```
+
 ## Not covered yet
 
 Trimming what is resent to the LLM each round (#482). The closing step that collects files

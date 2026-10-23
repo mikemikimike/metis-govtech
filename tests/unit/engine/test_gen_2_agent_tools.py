@@ -12,7 +12,12 @@ from metis.core.trials import TrialConfig
 from metis.engine.simulation.artifacts import ArtifactLedger
 from metis.engine.simulation.gen_2.binding import load_target_binding
 from metis.engine.simulation.gen_2.runners.http import HttpRunner, HttpRunnerFactory
-from metis.engine.simulation.gen_2.runners.tools import TOOLS, ActionState, run_tool
+from metis.engine.simulation.gen_2.runners.tools import (
+    SHARED_HANDLERS,
+    TOOLS,
+    ActionState,
+    run_tool,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -336,3 +341,21 @@ async def test_a_transport_failure_is_an_error_and_is_remembered(
 
     assert "error" in result
     assert state.transport_failed is True
+
+
+@pytest.mark.asyncio
+async def test_run_tool_uses_the_handlers_it_is_given(tmp_path: Path) -> None:
+    runner, _, state = await _ready(tmp_path)
+
+    async def ping(_runner: Any, _state: ActionState, args: dict[str, Any]) -> Any:
+        return {"pong": args}
+
+    given = await run_tool(runner, state, "ping", '{"a": 1}', {"ping": ping})
+    default = await run_tool(runner, state, "ping", "{}")
+
+    assert given == {"pong": {"a": 1}}
+    assert default["error"].startswith("refused, nothing was sent: there is no tool")
+
+
+def test_the_handlers_any_runner_can_share() -> None:
+    assert set(SHARED_HANDLERS) == {"session_id_from", "note", "report"}
