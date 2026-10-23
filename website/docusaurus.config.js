@@ -4,8 +4,9 @@ import {themes} from 'prism-react-renderer';
 const config = {
   title: 'METIS',
   tagline: 'Measurement and Evaluation of Trustworthy Intelligent Systems',
-  url: 'http://localhost:3000',
-  baseUrl: '/',
+  url: 'https://govtech-responsibleai.github.io',
+  baseUrl: '/metis/',
+  trailingSlash: false,
   favicon: 'img/metis-mark.png',
   onBrokenLinks: 'throw',
   markdown: {

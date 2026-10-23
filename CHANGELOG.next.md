@@ -53,7 +53,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Add the Docusaurus site setup, task-based navigation, shared page layout
   components, and METIS visual style. Include logo assets and Make commands
-  to install, preview, check, and build the site.
+  to install, preview, check, and build the site. A `Docs` workflow checks the
+  site on each pull request and publishes it to GitHub Pages from `main` when
+  the repository is public.
 
 - Add the MIT licence and a security policy. The README shows the new logo, a
   centred title and description, and badges for the supported Python versions,

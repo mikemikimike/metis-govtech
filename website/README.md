@@ -7,8 +7,6 @@ make install-docs
 make run-docs
 ```
 
-Open <http://localhost:3000>.
-
 To check links and build the site, run:
 
 ```bash
