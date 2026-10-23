@@ -1,0 +1,51 @@
+schema_version: 1
+id: orca-http-simple
+runner_factory_ref: metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory
+target_binding: orca-api.yaml
+target:
+  name: Orca
+  users: Programme managers, senior directors, and domain specialists.
+  description: An agentic system that answers questions and coordinates specialist agents.
+features:
+- id: XC-UNI
+  name: Universal Behaviours
+  description: Expected behaviours that apply across target workflows.
+  behaviours:
+  - id: EB-UNI-1
+    name: Efficient information gathering
+    description: Collect the necessary information without unnecessary turns.
+    measured: true
+    criteria:
+    - id: AC-UNI-22
+      name: Short trace budget
+      description: "Given a request that Orca can answer directly, when the session ends, then it used no more than 4 traces (persona–target exchanges)."
+      grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
+      grader_args:
+        max_traces: 4
+
+personas:
+- id: cooperative-delegator
+  name: Cooperative delegator
+  description: >-
+    A programme manager who is comfortable with AI tools and has time to answer questions.
+    They provide information freely and give clear feedback if work stops.
+
+scenarios:
+- id: direct-question
+  name: Direct question
+  description: >-
+    Ask Orca for the difference between a bar chart and a histogram, and when to use each.
+    No files are needed. Orca should answer directly.
+
+tasks:
+- id: TC-001
+  scenario_ref: direct-question
+  persona_ref: cooperative-delegator
+  fixtures: []
+  num_trials: 1
+  max_turns: 20
+  timeout_minutes: 15
+  response_wait_ms: 300000
+  max_run_retries: 2
+  behaviour_refs:
+  - EB-UNI-1

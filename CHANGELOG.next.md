@@ -316,7 +316,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   transport, and `notice` reports a failed poll, an open submission, a transport failure, the
   time limit or the round cap. An LLM failure raises `TurnRecoverableError`.
   `HttpRunnerFactory` takes an optional `llm` client and otherwise builds one from
-  `OPENAI_API_KEY` and `OPENAI_BASE_URL`. `example-experiment/targets/orca-api.yaml` is an
+  `OPENAI_API_KEY` and `OPENAI_BASE_URL`. `examples/orca-api-http-simple1/orca-api.yaml` is an
   example target binding for Orca's API, and `simulation/gen_2/README.md` explains how
   `gen_2` works, the rules code enforces and how to write a binding for a new app. The runner
   has been tried on Orca's API only.
@@ -386,7 +386,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
-- **`packages/engine/example-experiment/` holds only the `simple/` example.** The complete Orca
+- **`packages/engine/examples/` holds only the `orca-api-simple1/` example.** The complete Orca
   specification, its fixtures, and the sample report are removed from it: the specification and
   the four CSV fixtures are already kept with the Wizard testbed in
   `packages/testbed/wizard/cases/orca/outputs/` (#414).

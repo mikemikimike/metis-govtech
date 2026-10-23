@@ -272,8 +272,8 @@ class TestExampleExperiment:
         Path(__file__).resolve().parents[3]
         / "packages"
         / "engine"
-        / "example-experiment"
-        / "simple"
+        / "examples"
+        / "orca-api-simple1"
         / "specification.yaml"
     )
 

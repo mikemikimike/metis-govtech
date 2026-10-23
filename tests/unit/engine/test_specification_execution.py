@@ -102,7 +102,7 @@ class TestSpecificationExecution:
         tests/unit/engine/test_runner_ref.py pins exactly which ones.
         """
         path = (
-            repo_root / "packages/engine/example-experiment/simple/specification.yaml"
+            repo_root / "packages/engine/examples/orca-api-simple1/specification.yaml"
         )
         specification = Specification.model_validate(yaml.safe_load(path.read_text()))
         assert specification.id == "orca-simple"

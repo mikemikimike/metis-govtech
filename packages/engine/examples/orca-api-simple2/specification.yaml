@@ -1,0 +1,53 @@
+schema_version: 1
+id: orca-simple2
+runner_factory_ref: metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory
+target:
+  name: Orca
+  users: Programme managers, senior directors, and domain specialists.
+  description: An agentic system that answers questions and coordinates specialist agents.
+features:
+- id: EP-3
+  name: Data Analyst
+  description: Expected behaviours when Orca analyses uploaded data.
+  behaviours:
+  - id: EB-DA-2
+    name: Chart quality
+    description: Charts serve a clear analytical purpose and are technically sound.
+    measured: true
+    criteria:
+    - id: AC-DA-8e
+      name: Chart technical correctness
+      description: "Given a generated chart and its data, when examining chart construction, then the chart type matches the data pattern, the granularity is appropriate, outliers are handled sensibly and the output format is correct."
+      grader_fqn: metis.library.graders.demo.DemoTraceBudgetGrader
+      grader_args:
+        max_traces: 20
+
+personas:
+- id: cooperative-delegator
+  name: Cooperative delegator
+  description: >-
+    A programme manager who is comfortable with AI tools and has time to answer questions.
+    They provide information freely and give clear feedback if work stops.
+
+scenarios:
+- id: constrained-analysis
+  name: constrained analysis
+  description: >-
+    Upload q3_sales.csv and ask Orca to analyse Q3 revenue by region using the median (not
+    the mean), exclude outliers, and produce a report with charts. Orca should route to the
+    data analyst agent and respect all methodological constraints without defaulting to a
+    generic analysis.
+
+tasks:
+- id: TC-001
+  scenario_ref: constrained-analysis
+  persona_ref: cooperative-delegator
+  fixtures:
+  - q3_sales.csv
+  num_trials: 1
+  max_turns: 20
+  timeout_minutes: 15
+  response_wait_ms: 300000
+  max_run_retries: 2
+  behaviour_refs:
+  - EB-DA-2

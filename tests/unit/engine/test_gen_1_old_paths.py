@@ -122,5 +122,5 @@ def test_moved_module_has_no_old_path(old: str) -> None:
 def test_example_specification_loads() -> None:
     from metis.engine.simulation.types import Specification
 
-    path = SIM.parents[3] / "example-experiment/simple/specification.yaml"
+    path = SIM.parents[3] / "examples/orca-api-simple1/specification.yaml"
     assert Specification.load_file(path).runner_factory_ref == OLD_API
