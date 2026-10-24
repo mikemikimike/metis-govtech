@@ -38,20 +38,48 @@ class SettingsError(RuntimeError):
     """A required setting is missing from the environment."""
 
 
+CONNECTION_CHECK_ENV = "METIS_API_CONNECTION_CHECK"
+"""`1` lets the connection-check route reach the target, and `0` stops it. When it is unset,
+the check is on only for an API that listens on this computer."""
+
+_LOCAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def connection_check_from_env() -> bool:
+    """Whether the connection check reads the environment and reaches the target.
+
+    An API that listens only on this computer runs for one user, who owns its `.env`, so the
+    check is on. A server that other people can reach keeps it off, because it would fetch any
+    URL that a user types. ``METIS_API_CONNECTION_CHECK`` overrides both.
+    """
+    flag = os.environ.get(CONNECTION_CHECK_ENV, "").strip()
+    if flag in ("0", "1"):
+        return flag == "1"
+    return os.environ.get("HOST", "0.0.0.0").strip() in _LOCAL_HOSTS  # noqa: S104
+
+
 @dataclass(frozen=True)
 class Settings:
-    """The environment that the API reads its model settings from.
+    """The environment that the API reads its model settings and connection-check switch from.
+
+    The connection check reads the environment and reaches the target only for an API that
+    listens on this computer. See ``connection_check_from_env``.
 
     ``env`` is a copy of the process environment, so it holds keys. ``repr`` leaves it out.
     """
 
     env: Mapping[str, str] = field(repr=False)
     env_file: Path | None = None
+    connection_check: bool = False
 
     @classmethod
     def from_env(cls, env_file: Path | None = None) -> Settings:
         """Take a copy of the process environment."""
-        return cls(env=dict(os.environ), env_file=env_file or find_env_file())
+        return cls(
+            env=dict(os.environ),
+            env_file=env_file or find_env_file(),
+            connection_check=connection_check_from_env(),
+        )
 
     def role(self, role: ModelRole) -> RoleSettings:
         """The settings of ``role``. As in the engine, the runner agent defaults to the user
@@ -75,9 +103,10 @@ InterviewHandler: TypeAlias = Callable[[InterviewRequest], InterviewResult]
 
 @dataclass(frozen=True)
 class WizardDependencies:
-    """The configured public Interview handler used by the API routes."""
+    """The configured public Interview handler and connection-check switch used by the routes."""
 
     interview_handler: InterviewHandler
+    connection_check: bool = False
 
 
 def build_dependencies(settings: Settings) -> WizardDependencies:
@@ -99,14 +128,19 @@ def build_dependencies(settings: Settings) -> WizardDependencies:
         interview=settings.role(ModelRole.INTERVIEW),
         embeddings=settings.role(ModelRole.EMBEDDINGS),
     )
-    return WizardDependencies(interview_handler=handle_interview)
+    return WizardDependencies(
+        interview_handler=handle_interview,
+        connection_check=settings.connection_check,
+    )
 
 
 __all__ = [
     "API_ROLES",
+    "CONNECTION_CHECK_ENV",
     "InterviewHandler",
     "Settings",
     "SettingsError",
     "WizardDependencies",
     "build_dependencies",
+    "connection_check_from_env",
 ]

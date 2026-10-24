@@ -818,6 +818,7 @@ name = "metis-wizard"
 version = "1.0.0a1"
 source = { editable = "packages/wizard" }
 dependencies = [
+    { name = "httpx" },
     { name = "langfuse" },
     { name = "metis-core" },
     { name = "metis-library" },
@@ -832,6 +833,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.27" },
     { name = "langfuse", specifier = ">=3.0,<4.0" },
     { name = "metis-core", editable = "packages/core" },
     { name = "metis-library", editable = "packages/library" },

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -21,6 +22,14 @@ from metis.wizard.contracts import (
     Specification,
 )
 from metis.wizard.domain.permissions import InterviewStep
+from tests.fixtures.api._shared import scripted_interview_handler
+from tests.fixtures.wizard.connections import (
+    OPENAPI_DOCUMENT,
+    PLANTED_SECRET,
+    connection,
+    http_binding,
+    mock_client_factory,
+)
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.scripted import ScriptedInterviewer
 from tests.fixtures.wizard.specifications import research_assistant
@@ -367,3 +376,112 @@ def test_an_unexpected_compile_fault_is_a_stable_500_failure(
 
     assert response.status_code == 500
     assert response.json()["code"] == "internal_error"
+
+
+def test_connection_check_returns_field_errors_without_the_rejected_value(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/wizard/connection/check",
+        json={"binding": http_binding(auth={"secret_env": PLANTED_SECRET})},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["binding"] is None
+    assert body["errors"][0]["loc"] == ["auth", "secret_env"]
+    assert set(body["errors"][0]) == {"loc", "msg"}
+    assert PLANTED_SECRET not in response.text
+
+
+@pytest.mark.parametrize("operator_enabled", [False, True])
+def test_connection_check_reaches_the_target_only_when_the_operator_turns_it_on(
+    monkeypatch: pytest.MonkeyPatch, operator_enabled: bool
+) -> None:
+    from metis.wizard.application import connection as connection_module
+
+    factory = mock_client_factory(lambda _: httpx.Response(200, json=OPENAPI_DOCUMENT))
+    monkeypatch.setattr(connection_module, "_default_client", factory)
+    monkeypatch.setenv("APP_URL", "https://app.example")
+    monkeypatch.setenv("APP_KEY", PLANTED_SECRET)
+    client = TestClient(
+        create_app(scripted_interview_handler(), connection_check=operator_enabled)
+    )
+
+    response = client.post(
+        "/api/v1/wizard/connection/check", json={"binding": http_binding()}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["binding"]["spec_url"] == "${APP_URL}/openapi.json"
+    assert body["live"] is operator_enabled
+    assert body["status"] == ("checked" if operator_enabled else "unchecked")
+    assert len(factory.requests) == (2 if operator_enabled else 0)
+    assert PLANTED_SECRET not in response.text
+
+
+def test_connection_route_sets_and_removes_the_connection_on_state(
+    client: TestClient,
+) -> None:
+    state = _pending_state().model_dump(mode="json")
+    target = connection().model_dump(mode="json")
+
+    connected = client.post(
+        "/api/v1/wizard/connection", json={"state": state, "connection": target}
+    )
+    removed = client.post(
+        "/api/v1/wizard/connection",
+        json={"state": connected.json(), "connection": None},
+    )
+
+    assert connected.status_code == removed.status_code == 200
+    assert connected.json()["context"]["connection"] == target
+    assert connected.json()["specification"] == state["specification"]
+    assert "connection" not in removed.json()["context"]
+
+
+@pytest.mark.parametrize(
+    "path", ["/api/v1/wizard/connection", "/api/v1/wizard/interview/start"]
+)
+def test_a_422_names_the_field_and_never_repeats_the_input(
+    client: TestClient, path: str
+) -> None:
+    bad = {
+        "transport": "http",
+        "binding": http_binding(auth={"secret_env": PLANTED_SECRET}),
+    }
+    body = (
+        {"state": _pending_state().model_dump(mode="json"), "connection": bad}
+        if path.endswith("/connection")
+        else {**_start_body(), "connection": bad}
+    )
+
+    response = client.post(path, json=body)
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+    assert "secret_env" in response.json()["message"]
+    assert PLANTED_SECRET not in response.text
+
+
+@pytest.mark.parametrize(
+    ("host", "flag", "expected"),
+    [
+        ("127.0.0.1", None, True),
+        ("0.0.0.0", None, False),
+        ("0.0.0.0", "1", True),
+        ("127.0.0.1", "0", False),
+    ],
+)
+def test_the_live_check_is_on_for_a_local_api_unless_the_operator_says_otherwise(
+    monkeypatch: pytest.MonkeyPatch, host: str, flag: str | None, expected: bool
+) -> None:
+    from metis.api.settings import CONNECTION_CHECK_ENV, connection_check_from_env
+
+    monkeypatch.setenv("HOST", host)
+    if flag is None:
+        monkeypatch.delenv(CONNECTION_CHECK_ENV, raising=False)
+    else:
+        monkeypatch.setenv(CONNECTION_CHECK_ENV, flag)
+    assert connection_check_from_env() is expected

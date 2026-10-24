@@ -261,7 +261,10 @@ reads the complete `specification.yaml`. Reporting reads its frozen copy at
 and the Feature → Behaviour → Criterion hierarchy. `metis.core.experiment.Experiment`
 holds Personas, Scenarios, Tasks, and execution settings. Its optional `target_binding`
 names a `metis.core.target_binding.TargetBinding` file, relative to `specification.yaml`,
-which the generic runner reads.
+which the generic runner reads. In run mode, the Wizard exports `target-binding.yaml` next to
+`specification.yaml` and sets `runner_factory_ref` to the gen_2 HTTP or browser factory as an
+FQN string. The Wizard MUST NOT import the engine to do this. The binding names environment
+variables only. It travels in the client-held Interview context, and prompts MUST NOT read it.
 `metis.core.specification.Specification` contains a Profile and the configuration needed to conduct an Experiment.
 The serialized document keeps these fields at the top level.
 Each Task selects one Scenario, one Persona, fixtures, a Trial count, and measured Behaviours.

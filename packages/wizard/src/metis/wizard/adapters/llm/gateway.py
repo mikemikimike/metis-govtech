@@ -377,7 +377,10 @@ class GatewayInterviewer:
                     if previous
                     else None,
                     "specification": specification.model_dump(mode="json"),
-                    "context": context.model_dump(mode="json") if context else None,
+                    # the target connection is never sent to the model or to tracing
+                    "context": context.model_dump(mode="json", exclude={"connection"})
+                    if context
+                    else None,
                     "grader": grader.__doc__,
                     "uses_criterion_description": issubclass(
                         grader.args_model, CriterionJudgeArgs

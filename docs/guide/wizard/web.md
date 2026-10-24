@@ -48,8 +48,8 @@ forwards `/api` requests to that address.
 
 ## Start a guided Interview
 
-The opening box holds all of the setup. Its bottom row has the documents button, the Perspective
-control, and **Capabilities**.
+Above the opening box, choose the mode: **Build Spec only**, or **Build Spec and Run Evals**. The
+bottom row of the box has the documents button, the Perspective control, and **Capabilities**.
 
 1. Enter a description of the target.
 2. Select who the evaluation is for. The Perspective control shows the current Perspective. End
@@ -61,7 +61,10 @@ control, and **Capabilities**.
 4. Optional: under **Confidence**, select Low, Medium, or High. The value states how complete the
    selection is. With no confidence, the Wizard uses Low, because the selection may be
    incomplete.
-5. Select Send, or press Enter. This sends all opening values in one request.
+5. The default mode is Build Spec only. In Build Spec and Run Evals, enter the target binding in
+   the **Target connection** card under the box. See [Connect the target](#connect-the-target).
+6. Select Send, or press Enter. In run mode, the Wizard first checks the binding. It starts the
+   Interview only when the binding is valid. This sends all opening values in one request.
 
 The web client gets the opening text, Perspectives, capability catalogue, and document limits from
 the API. It keeps the returned Interview state and sends the whole state with each answer. The API
@@ -81,6 +84,25 @@ content.
 Clarify has no Back, because it is the first step. To correct the description, say so in your
 answer, for example "The target is for staff only." To change the Perspective, capabilities, or
 documents, select **New evaluation**. The earlier Interview stays in History.
+
+## Connect the target
+
+In run mode, select **HTTP API** or **Browser**, and enter the required fields. **More options**
+holds the optional fields. Each secret field takes the name of an environment variable, never its
+value. See [Connect the target](../wizard.md#connect-the-target) for the fields.
+
+Select **Test connection** at the bottom of the card. Each check shows with ✓ or ✗. Send uses the
+last test. If you change a field after the test, Send tests the binding again. If the fields are
+not valid, Send marks them and does not start the Interview. Fix the fields, or choose **Build
+Spec only**.
+
+The API reads your `.env` and reaches the target only when it runs on your computer
+(`make run-api` listens on `127.0.0.1`). An API that other people can reach checks the fields
+only, because it would fetch any URL that a user types. Then the card says "This server checks
+the fields only". An operator can set `METIS_API_CONNECTION_CHECK=1` or `0` to choose.
+
+To add a binding to a finished Interview, select **Connect target** in the completed message. The
+next download includes the binding.
 
 ## Review Criteria
 
@@ -129,6 +151,7 @@ YYYYMMDD-HHMMSS-interview/
 │   └── interview_state.json
 └── outputs/
     ├── specification.yaml
+    ├── target-binding.yaml   (run mode only)
     └── fixtures/
 ```
 

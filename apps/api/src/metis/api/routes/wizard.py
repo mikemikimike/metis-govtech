@@ -40,10 +40,13 @@ from metis.api.settings import SettingsError
 from metis.wizard import (
     CompilationError,
     CompileResult,
+    ConnectionCheckRequest,
+    ConnectionCheckResult,
     DocumentExtractionError,
     DocumentExtractionErrorCode,
     DocumentExtractionResult,
     InterviewConfig,
+    InterviewConnectionRequest,
     InterviewEndRequest,
     InterviewErrorCode,
     InterviewFailure,
@@ -55,10 +58,12 @@ from metis.wizard import (
     Specification,
     SpecificationError,
     SpecificationFixture,
+    check_connection,
     compile_specification,
     extract_documents,
     interview_client_config,
     package_specification,
+    set_connection,
 )
 
 if TYPE_CHECKING:
@@ -473,6 +478,38 @@ def end(
     """
     result = dependencies.interview_handler(body)
     return _result_response(result)
+
+
+@router.post(
+    "/connection/check",
+    summary="Check a target binding",
+    response_model=ConnectionCheckResult,
+    responses={422: {"model": ServiceError}, 500: {"model": ServiceError}},
+)
+def check_target_connection(
+    body: ConnectionCheckRequest,
+    dependencies: WizardDependencies = Depends(get_dependencies),
+) -> ConnectionCheckResult:
+    """Validate binding values and return field errors as `loc` and `msg` only.
+
+    The API reaches the target only when its operator sets `METIS_API_CONNECTION_CHECK=1`.
+    Otherwise `live` is false and `status` is `unchecked`.
+    """
+    return check_connection(body.binding, live=dependencies.connection_check)
+
+
+@router.post(
+    "/connection",
+    summary="Set or remove the target connection on Interview state",
+    response_model=InterviewState,
+    responses={422: {"model": ServiceError}, 500: {"model": ServiceError}},
+)
+def update_target_connection(body: InterviewConnectionRequest) -> InterviewState:
+    """Return the state with the connection set, or removed when `connection` is null.
+
+    This changes no Specification content and calls no model. Save the returned state.
+    """
+    return set_connection(body.state, body.connection)
 
 
 def _result_response(result: InterviewResult) -> JSONResponse:

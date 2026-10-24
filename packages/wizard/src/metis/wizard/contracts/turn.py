@@ -8,6 +8,7 @@ from typing import Annotated, Literal, TypeAlias
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from metis.wizard.contracts.capabilities import CapabilityId
+from metis.wizard.contracts.connection import TargetConnection
 from metis.wizard.contracts.conversation import AnyResponse
 from metis.wizard.contracts.documents import (
     InterviewDocument,
@@ -25,13 +26,18 @@ from metis.wizard.domain.specification import Specification
 class InterviewStartRequest(BaseModel):
     """The first operation, containing all opening evidence."""
 
-    model_config = ConfigDict(extra="forbid")
+    # a rejected binding value can be a pasted secret, so validation errors never repeat input
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
     description: str
     perspective: Perspective = Perspective.END_USER
     known_capability_ids: list[CapabilityId]
     capability_confidence: CapabilityConfidence
     documents: list[InterviewDocument] = Field(default_factory=list)
+    # The target connection for run mode. Omit it for spec-only mode.
+    connection: TargetConnection | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @field_validator("description")
     @classmethod
@@ -60,7 +66,7 @@ class InterviewStartRequest(BaseModel):
 class _InterviewStateRequest(BaseModel):
     """Shared required state for operations after start."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
     state: InterviewState
 
@@ -74,6 +80,15 @@ class InterviewTurnRequest(_InterviewStateRequest):
 
 class InterviewEndRequest(_InterviewStateRequest):
     """Run best-effort completion for the supplied client-held state."""
+
+
+class InterviewConnectionRequest(_InterviewStateRequest):
+    """Set the target connection on client-held state, or remove it with `None`.
+
+    This is not an Interview operation: it changes no Specification content and calls no model.
+    """
+
+    connection: TargetConnection | None = None
 
 
 InterviewRequest: TypeAlias = (
@@ -162,6 +177,7 @@ class CompileResult(BaseModel):
 
 __all__ = [
     "CompileResult",
+    "InterviewConnectionRequest",
     "InterviewEndRequest",
     "InterviewErrorCode",
     "InterviewFailure",

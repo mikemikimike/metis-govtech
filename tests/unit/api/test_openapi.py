@@ -23,6 +23,8 @@ def test_the_route_table_is_exactly_health_catalogues_interview_lifecycle_compil
         "/api/v1/graders",
         "/api/v1/models",
         "/api/v1/wizard/config",
+        "/api/v1/wizard/connection",
+        "/api/v1/wizard/connection/check",
         "/api/v1/wizard/documents/extract",
         "/api/v1/wizard/package",
         "/api/v1/wizard/interview/start",

@@ -188,6 +188,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   regenerated. The published schema cannot express the per-transport rule, so only the
   model and the engine loader enforce it.
 
+- `TargetBinding` requires each `{{secret:NAME}}` placeholder in `login.note` to name a
+  variable in `login.secrets`. The error never repeats a placeholder that is not a variable
+  name (#283).
+
 #### Breaking
 
 - Each Criterion states one assessment rule and owns its Grader configuration (#490).
@@ -702,6 +706,26 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-wizard
 
 #### Added
+
+- **Target connection with a gen_2 target binding.** At the start, the Wizard asks for **Build
+  Spec only** or **Build Spec and Run Evals**. In run mode, the user selects HTTP API or Browser
+  and enters the binding values. Secret fields take environment-variable names only. Every client
+  validates the binding with `TargetBinding` and refuses a URL with a user name or password. The
+  CLI also reports each named variable as set or not set and fetches the OpenAPI document or loads
+  the start page and checks that the API server answers. The user can test again, fix the values,
+  or continue. Run mode needs valid fields. A run-mode download has `outputs/target-binding.yaml`,
+  and `specification.yaml` names the gen_2 runner and the binding. A spec-only download is the
+  same as before. The connection travels in the optional `InterviewContext.connection` and in
+  `InterviewStartRequest.connection`. Prompts and the model never read it. `metis wizard init`
+  takes `--mode spec|run` and `--binding PATH`, and the new `metis wizard connect` command adds a
+  binding later. In the web client, the mode is a toggle above the opening box, and run mode shows
+  a Target connection card under the box. Send starts the Interview only with a valid binding. The
+  completed Interview has a **Connect target** action. In the CLI, the mode is the first question.
+  The API adds `POST /api/v1/wizard/connection/check` and `POST /api/v1/wizard/connection`. The
+  check reaches the target only for an API that listens on this computer, and
+  `METIS_API_CONNECTION_CHECK=1` or `0` overrides this. `make run-api` listens on `127.0.0.1`. The
+  API 422 response and binding errors never repeat an input value. `httpx` is a direct dependency
+  (#283).
 
 - The matcher selects `CriterionJudgeGrader` when no specific grader is similar enough, when
   the catalogue has no specific grader, or when the embedding provider fails. A rematch keeps

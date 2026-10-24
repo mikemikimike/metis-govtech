@@ -40,6 +40,10 @@ type GradersOperation = operations["graders_api_v1_graders_get"];
 type ModelsOperation = operations["models_api_v1_models_get"];
 type ConfigOperation = operations["config_api_v1_wizard_config_get"];
 type PackageOperation = operations["package_api_v1_wizard_package_post"];
+type ConnectionCheckOperation =
+  operations["check_target_connection_api_v1_wizard_connection_check_post"];
+type ConnectionOperation =
+  operations["update_target_connection_api_v1_wizard_connection_post"];
 type PackageWireRequest = Schema["Body_package_api_v1_wizard_package_post"];
 
 export type InterviewStep = Schema["InterviewStep"];
@@ -154,6 +158,15 @@ export type InterviewFailure = Omit<
 };
 export type InterviewResult = InterviewSuccess | InterviewFailure;
 export type CompileResult = Schema["CompileResult"];
+export type ConnectionTransport = Schema["ConnectionTransport"];
+export type ConnectionStatus = Schema["ConnectionStatus"];
+export type TargetBinding = Schema["TargetBinding"];
+export type TargetConnection = Schema["TargetConnection"];
+export type ConnectionProbe = Schema["ConnectionProbe"];
+export type ConnectionCheckRequest = Schema["ConnectionCheckRequest"];
+export type ConnectionCheckResult = JsonResponse<ConnectionCheckOperation>;
+export type ConnectionRequest = Schema["InterviewConnectionRequest"];
+export type ConnectionResponse = JsonResponse<ConnectionOperation>;
 export type GraderSpec = Schema["GraderSummary"];
 export type ModelRole = Schema["ModelRole"];
 export type ModelStatus = Schema["ModelStatus"];
@@ -431,6 +444,7 @@ export const api = {
     capabilityEvidence: CapabilityEvidence,
     perspective: Perspective = "end_user",
     documents: InterviewDocument[] = [],
+    connection: TargetConnection | null = null,
   ) => {
     const body: StartRequest = {
       description,
@@ -438,6 +452,8 @@ export const api = {
       known_capability_ids: capabilityEvidence.known_capability_ids,
       capability_confidence: capabilityEvidence.confidence,
       documents,
+      // spec-only mode sends no connection, so its request is unchanged
+      ...(connection ? { connection } : {}),
     };
     return result(
       await call<StartResponse>("/api/v1/wizard/interview/start", {
@@ -473,6 +489,25 @@ export const api = {
       ...JSON_POST,
       body: JSON.stringify(specification),
     }),
+  checkConnection: (binding: Record<string, unknown>) => {
+    const body: ConnectionCheckRequest = { binding };
+    return call<ConnectionCheckResult>("/api/v1/wizard/connection/check", {
+      ...JSON_POST,
+      body: JSON.stringify(body),
+    });
+  },
+  setConnection: async (
+    state: InterviewState,
+    connection: TargetConnection | null,
+  ) => {
+    const body: ConnectionRequest = { state, connection };
+    return normalizeState(
+      await call<ConnectionResponse>("/api/v1/wizard/connection", {
+        ...JSON_POST,
+        body: JSON.stringify(body),
+      }),
+    );
+  },
   graders: () => call<GradersResponse>("/api/v1/graders"),
   models: () => call<ModelsResponse>("/api/v1/models"),
   config: () => call<ConfigResponse>("/api/v1/wizard/config"),

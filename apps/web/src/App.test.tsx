@@ -12,6 +12,7 @@ import {
   InitialDocumentPicker,
   OpeningConfigurationState,
   OpeningRoute,
+  ModePicker,
   OpeningScreen,
   type CapabilityEvidenceDraft,
   type OpeningControl,
@@ -24,6 +25,8 @@ import {
   PerspectivePicker,
 } from "./OpeningControls";
 import { Composer, FixtureField, Transcript } from "./Conversation";
+import { ConnectionForm } from "./ConnectionStep";
+import { emptyConnectionDraft, type ConnectionDraft } from "./connection";
 import { InterviewRail } from "./InterviewRail";
 import {
   api,
@@ -123,6 +126,10 @@ test("blocks the opening form until configuration is ready and offers retry", ()
   const openingProps = {
     busy: false,
     canStart: true,
+    connectionDraft: emptyConnectionDraft(),
+    onConnectionDraft: () => undefined,
+    connectionResult: null,
+    onTestConnection: () => undefined,
     description: "",
     perspective: "end_user" as const,
     onPerspective: () => undefined,
@@ -255,6 +262,10 @@ function openingHarness(
         onRetry: () => undefined,
         busy,
         canStart,
+        connectionDraft: emptyConnectionDraft(),
+        onConnectionDraft: () => undefined,
+        connectionResult: null,
+        onTestConnection: () => undefined,
         description,
         onDescription: (value) => {
           description = value;
@@ -836,4 +847,72 @@ test("failed reply feedback routes retry through its Interview", () => {
   );
   (retry.props.onClick as () => void)();
   assert.equal(retries, 1);
+});
+
+test("the mode toggle above the box shows the connection card only in run mode", () => {
+  const config = {
+    opening_question: "What are you building?",
+    working_status: "Working…",
+    perspectives: [],
+    capability_categories: [],
+  } as unknown as React.ComponentProps<typeof OpeningScreen>["config"];
+  let draft: ConnectionDraft = emptyConnectionDraft();
+  let control: React.ComponentProps<typeof OpeningScreen>["openControl"] = null;
+  const render = () =>
+    OpeningScreen({
+      config,
+      busy: false,
+      canStart: true,
+      description: "A support assistant",
+      perspective: "end_user",
+      onPerspective: () => undefined,
+      documents: [],
+      documentTrayOpen: false,
+      onDocumentTrayOpen: () => undefined,
+      documentReads: {},
+      onAddDocuments: () => undefined,
+      onRemoveDocument: () => undefined,
+      onKeepDocumentUnread: () => undefined,
+      capabilityEvidence: { known_capability_ids: [], confidence: null },
+      onCapabilityEvidence: () => undefined,
+      onManualOpen: () => undefined,
+      openControl: control,
+      onOpenControl: (next) => {
+        control = next;
+      },
+      perspectiveSeen: true,
+      connectionDraft: draft,
+      onConnectionDraft: (next) => {
+        draft = next;
+      },
+      connectionResult: null,
+      onTestConnection: () => undefined,
+      onBegin: () => undefined,
+    });
+  const toggle = () => {
+    const picker = findElement(
+      render(),
+      (element) => element.type === ModePicker,
+    );
+    return ModePicker(picker.props as React.ComponentProps<typeof ModePicker>);
+  };
+  const option = (label: string) =>
+    findElement(
+      toggle(),
+      (element) =>
+        element.props.role === "radio" && element.props.children === label,
+    );
+  const card = () =>
+    findElements(
+      render(),
+      (element) => element.props.id === "opening-connection",
+    );
+
+  assert.equal(option("Build Spec only").props["aria-checked"], true);
+  assert.equal(card().length, 0);
+
+  (option("Build Spec and Run Evals").props.onClick as () => void)();
+  assert.equal(draft.mode, "run");
+  findElement(card()[0], (element) => element.type === ConnectionForm);
+  assert.equal(control, null);
 });

@@ -66,7 +66,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-def create_app(interview_handler: InterviewHandler | None = None) -> FastAPI:
+def create_app(
+    interview_handler: InterviewHandler | None = None,
+    *,
+    connection_check: bool = False,
+) -> FastAPI:
     """Assemble the API for production or with an injected handler for offline tests."""
     app = FastAPI(
         title="METIS API",
@@ -76,7 +80,7 @@ def create_app(interview_handler: InterviewHandler | None = None) -> FastAPI:
     )
     if interview_handler is not None:
         app.state.wizard_dependencies = WizardDependencies(
-            interview_handler=interview_handler
+            interview_handler=interview_handler, connection_check=connection_check
         )
 
     @app.get("/health")
@@ -93,7 +97,13 @@ def create_app(interview_handler: InterviewHandler | None = None) -> FastAPI:
     ) -> JSONResponse:
         # A request or Specification that does not match its schema. Reported in the service error
         # shape, not FastAPI's default body, so a client parses one failure format everywhere.
-        error = ServiceError(code="validation_error", message=str(exc), retryable=False)
+        # The message names each field and its reason but never the rejected input, which can
+        # be a secret pasted into a target binding.
+        error = ServiceError(
+            code="validation_error",
+            message=_validation_message(exc),
+            retryable=False,
+        )
         return JSONResponse(error.model_dump(), status_code=422)
 
     @app.exception_handler(InterviewerUnavailable)
@@ -124,6 +134,17 @@ def create_app(interview_handler: InterviewHandler | None = None) -> FastAPI:
         return JSONResponse(error.model_dump(), status_code=500)
 
     return app
+
+
+def _validation_message(exc: RequestValidationError) -> str:
+    """Name each failed field and its reason, without the input value."""
+    lines = [
+        f"{' -> '.join(str(part) for part in error.get('loc', ()))}: {error.get('msg', '')}"
+        for error in exc.errors()
+    ]
+    count = len(lines)
+    heading = f"{count} validation error{'' if count == 1 else 's'} in the request"
+    return "\n".join([heading, *lines])
 
 
 app = create_app()

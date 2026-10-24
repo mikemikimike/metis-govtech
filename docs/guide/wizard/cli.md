@@ -66,12 +66,14 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
    metis wizard init "A research assistant that answers questions from internal documents and cites each source."
    ```
 
-2. The CLI shows the fixed ARC capability catalogue. Select known capabilities by number, name, or
+2. Choose the mode: `1` to build a Specification only, or `2` to build it and run evals. In run
+   mode, enter the target binding values. See [Connect the target](#connect-the-target).
+3. The CLI shows the fixed ARC capability catalogue. Select known capabilities by number, name, or
    ID, separated by commas. Enter a blank line when you know none.
-3. Enter one confidence value: `low`, `medium`, or `high`. The value states how complete the full
+4. Enter one confidence value: `low`, `medium`, or `high`. The value states how complete the full
    selection is.
-4. Answer the clarification questions.
-5. Review the Features, Behaviours, Criteria, Personas, Scenarios, and Test Cases that the Wizard drafts.
+5. Answer the clarification questions.
+6. Review the Features, Behaviours, Criteria, Personas, Scenarios, and Test Cases that the Wizard drafts.
 
 ## Go back to an earlier step
 
@@ -125,6 +127,39 @@ The CLI keeps a copy of each document in `inputs/documents/`. A Test Case can se
 document to the target as a fixture file. `resume` uses this copy, so you can move the source
 files after `init`.
 
+## Connect the target
+
+In run mode, the Wizard asks for the target binding before the capability questions. Choose how
+to give it: fill in the fields in the CLI, or give the path to a binding YAML file. Each secret
+field takes the name of an environment variable, never its value. The CLI reads `.env` and the
+environment, then checks the binding on your computer:
+
+- It validates the binding fields.
+- It reports each named variable as set or not set. It never shows a value.
+- For HTTP, it fetches the OpenAPI document. For a browser, it loads the start page.
+
+After the test, choose **test again**, **fix the values**, or **continue**. If the fields are not
+valid, fix them. To continue without a binding, run with `--mode spec`.
+
+| Option | Effect |
+|---|---|
+| `--mode spec` | Write a Specification only. Ask no connection question. |
+| `--mode run` | Ask for the binding values. |
+| `--binding PATH` | Check the binding in a YAML file. This option implies `--mode run`. |
+
+Without `--mode`, a terminal asks for the mode. When no terminal is available, the mode is
+`spec`. With `--binding` and no terminal, the CLI checks the file once and asks nothing.
+
+To add or replace the binding later, run:
+
+```bash
+metis wizard connect --out-dir my-eval
+metis wizard connect --out-dir my-eval --binding my-binding.yaml
+```
+
+For a complete export, `connect` writes the Specification, `review.md`, and the binding again.
+For an Interview in progress, it saves the connection, and `resume` writes the binding at the end.
+
 ## Resume or restart
 
 Resume requires `--out-dir`, including when the Interview continues on another day. The CLI
@@ -146,6 +181,7 @@ When the Interview is complete, the CLI retains its final state and writes this 
 |---|---|
 | `outputs/specification.yaml` | Target, Features, Behaviours, Criteria and Grader settings, Personas, Scenarios, and Tasks |
 | `outputs/review.md` | A human-readable review of the specification |
+| `outputs/target-binding.yaml` | The target binding, in run mode only. It names environment variables and holds no secret value. |
 | `inputs/interview_state.json` | The final state used to compile the Specification |
 | `inputs/documents/` | A copy of the documents given to `init` |
 | `outputs/fixtures/` | The documents that a Test Case uses. The CLI copies them from `inputs/documents/`. |

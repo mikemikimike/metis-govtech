@@ -294,7 +294,7 @@ jq -c '.state' interview.json | \
 Add one `-F 'files=@<path>'` part for each original fixture referenced by the completed Specification.
 The response `Content-Disposition` header supplies the ZIP filename. The ZIP contains a
 `YYYYMMDD-HHMMSS-interview/` root folder with `inputs/interview_state.json`, `outputs/specification.yaml`, and
-`outputs/fixtures/`. The API compiles the Specification directly from the supplied state and
+`outputs/fixtures/`. In run mode, it also contains `outputs/target-binding.yaml`. The API compiles the Specification directly from the supplied state and
 saves that same state with its current JSON format. Send exactly one source field; requests
 with both `state` and `specification` are rejected.
 
@@ -307,6 +307,59 @@ a generated Specification and marks a completed export. Extract the archive into
 and use its dated folder as the Engine input. For example, run
 `metis engine run --input-dir experiments/design/20261016-223045-interview/outputs/`. Task fixture references stay relative
 to `outputs/fixtures/`. Wizard exports contain no Testbed embedding caches or score files.
+
+## Connect the target
+
+A target binding tells the Engine how to reach the target. See
+[Connect the target](../wizard.md#connect-the-target) for the fields and the rules. Each secret
+field takes the name of an environment variable, never its value.
+
+| Endpoint | Body | Response |
+|---|---|---|
+| `POST /connection/check` | `{"binding": {...}}` | `binding` (the valid binding, or `null`), `errors` as `loc` and `msg` only, `live`, `probes`, and `status` |
+| `POST /connection` | `{"state": ..., "connection": ... or null}` | The state with the connection set or removed |
+
+A binding that is not valid gives a 200 response with `errors`. No error repeats the value that
+was rejected. A request with the wrong shape gives a 422 response. Its message names each field
+and its reason, and never the input.
+
+An API that listens on `127.0.0.1` or `localhost` runs for one user, so it also reads its own
+environment, fetches the OpenAPI document or loads the start page, and checks that the API server
+answers. Any other API only validates the binding: `live` is `false` and `status` is
+`unchecked`, because a server that fetches any URL that a client sends is a risk.
+`METIS_API_CONNECTION_CHECK=1` or `0` overrides this.
+
+Check a binding:
+
+```bash
+curl --fail-with-body http://localhost:8001/api/v1/wizard/connection/check \
+  -H 'Content-Type: application/json' \
+  -d '{"binding": {"schema_version": 1, "identity": {"name": "Policy assistant"},
+       "transport": "http", "spec_url": "${APP_URL}/openapi.json",
+       "auth": {"secret_env": "APP_KEY"}}}'
+```
+
+To start in run mode, put a connection in the start request:
+
+```json
+{
+  "description": "A research assistant for policy analysts.",
+  "known_capability_ids": [],
+  "capability_confidence": "medium",
+  "connection": {
+    "transport": "http",
+    "binding": {"schema_version": 1, "identity": {"name": "Policy assistant"},
+                "transport": "http", "spec_url": "${APP_URL}/openapi.json"},
+    "status": "unchecked"
+  }
+}
+```
+
+The connection travels in `state.context.connection`. Prompts and the model never read it. A
+spec-only state has no `connection` key. To add or replace the connection later, send the state
+to `POST /connection` and save the returned state. `POST /package` then adds
+`outputs/target-binding.yaml`, and `outputs/specification.yaml` names the gen_2 runner and the
+binding file.
 
 ## Handle errors and resume
 

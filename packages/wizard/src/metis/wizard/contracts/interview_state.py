@@ -20,6 +20,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from metis.wizard.contracts.capabilities import CapabilityId
+from metis.wizard.contracts.connection import TargetConnection
 from metis.wizard.contracts.conversation import AnyRequest, FormRequest
 from metis.wizard.contracts.documents import (
     InterviewDocument,
@@ -77,12 +78,18 @@ class CapabilityEvidence(BaseModel):
 class InterviewContext(BaseModel):
     """User-owned context that travels with an Interview but is not Specification data."""
 
-    model_config = ConfigDict(extra="forbid")
+    # a rejected binding value can be a pasted secret, so validation errors never repeat input
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
     perspective: Perspective = Perspective.END_USER
     capability_evidence: CapabilityEvidence
     opening_description: str = ""
     documents: list[InterviewDocument] = Field(default_factory=list)
+    # How the engine reaches the target, in run mode. It is None in spec-only mode and is then
+    # left out of the JSON, so a spec-only state is the same as before. Prompts never read it.
+    connection: TargetConnection | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @property
     def document_names(self) -> list[str]:
@@ -102,7 +109,7 @@ class InterviewState(BaseModel):
     the only structured request, and it carries its own stage; the stage is not duplicated here.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
     specification: Specification
     # The user's point of view for the opening interview steps. This is deliberately outside

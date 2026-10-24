@@ -13,10 +13,12 @@ import inspect
 import shlex
 import sys
 import tempfile
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
 import typer
+import yaml
 
 from metis.core.console import console
 from metis.wizard import (
@@ -27,11 +29,13 @@ from metis.wizard import (
     InterviewState,
     InterviewStep,
     InterviewTurnRequest,
+    TargetConnection,
     __version__,
     compile_specification,
     core_version,
     derive_stage,
     handle_interview,
+    set_connection,
 )
 from metis.wizard.application import export_layout
 from metis.wizard.application.trials import format_trials
@@ -46,6 +50,15 @@ if TYPE_CHECKING:
 
 
 app = typer.Typer(help="Generate METIS evaluation configurations.")
+
+
+class Mode(StrEnum):
+    """`spec` writes a Specification only. `run` also connects the target."""
+
+    SPEC = "spec"
+    RUN = "run"
+
+
 _interviewer_factory: Callable[..., Interviewer] | None = None
 
 
@@ -210,14 +223,26 @@ def _fail(failure: InterviewFailure) -> NoReturn:
     raise typer.Exit(1)
 
 
-def _write_outputs(state: InterviewState, out_dir: Path) -> None:
-    """Save the final state and review, then publish the completed Specification."""
+def _write_outputs(
+    state: InterviewState, out_dir: Path, *, connection_skipped: bool = False
+) -> None:
+    """Save the final state, review, and binding, then publish the completed Specification."""
     from metis.wizard.application.compile import render_review
+    from metis.wizard.application.connection import (
+        binding_yaml,
+        connected_specification,
+    )
     from metis.wizard.application.turn import experiment_id
 
-    specification = state.specification
+    connection = state.context.connection
+    specification = connected_specification(state.specification, connection)
     compiled = compile_specification(specification)
-    review = render_review(specification, experiment_id(specification))
+    review = render_review(
+        specification,
+        experiment_id(specification),
+        connection=connection,
+        connection_skipped=connection_skipped,
+    )
 
     _save(state, out_dir)
     from metis.wizard.adapters.cli.documents import publish_task_fixtures
@@ -230,6 +255,11 @@ def _write_outputs(state: InterviewState, out_dir: Path) -> None:
     specification_path = out_dir / export_layout.SPECIFICATION
     review_path = out_dir / export_layout.REVIEW
     review_path.write_text(review, encoding="utf-8")
+    binding_path = out_dir / export_layout.TARGET_BINDING
+    if connection is not None:
+        binding_path.write_text(binding_yaml(connection), encoding="utf-8")
+    else:
+        binding_path.unlink(missing_ok=True)
     # Publish the completion marker only after every other file is saved.
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", dir=specification_path.parent, delete=False
@@ -249,6 +279,8 @@ def _write_outputs(state: InterviewState, out_dir: Path) -> None:
             f"Add {name} to {out_dir / export_layout.FIXTURES} before you run. "
             "A Test Case uses this file."
         )
+    if connection is not None:
+        typer.echo(f"Wrote {binding_path}")
     typer.echo(
         f"Run with: metis engine run --input-dir {shlex.quote(str(out_dir / export_layout.OUTPUTS))}"
     )
@@ -364,6 +396,17 @@ def init(
         readable=True,
         help="A file for the Interview to read. Repeat the option to add more files.",
     ),
+    mode: Mode | None = typer.Option(
+        None,
+        "--mode",
+        help="spec: write a Specification only. run: also connect the target. "
+        "A terminal asks when this is not given; otherwise the mode is spec.",
+    ),
+    binding: Path | None = typer.Option(
+        None,
+        "--binding",
+        help="A target binding YAML file to check and use. Implies --mode run.",
+    ),
 ) -> None:
     """Start a new interview."""
     # Refuse before anything else — the filesystem check costs no model call and needs no
@@ -416,6 +459,10 @@ def init(
         raise typer.Exit(1) from exc
     _warn_without_embeddings()
 
+    # The mode comes first, so a user who wants to run evals sees how to connect the target
+    # before the Interview questions.
+    connection, connection_skipped = _read_connection(mode, binding)
+
     from metis.wizard.adapters.cli.opening import read_capability_evidence
 
     known_capability_ids, capability_confidence = read_capability_evidence(
@@ -436,13 +483,60 @@ def init(
             known_capability_ids=known_capability_ids,
             capability_confidence=capability_confidence,
             documents=opening_documents,
+            connection=connection,
         ),
         interviewer=interviewer,
         matcher=_matcher(interviewer),
         out_dir=out_dir,
         console=console,
     )
-    _write_outputs(state, out_dir)
+    _write_outputs(state, out_dir, connection_skipped=connection_skipped)
+
+
+def _read_connection(
+    mode: Mode | None, binding: Path | None
+) -> tuple[TargetConnection | None, bool]:
+    """Read the target connection for `init`. Returns it and whether run mode got no binding.
+
+    With no `--mode`, a terminal asks for the mode; with no terminal, the mode is spec-only.
+    """
+    from metis.wizard.adapters.cli.connection import (
+        load_binding_file,
+        read_binding_source,
+        read_mode,
+        read_target_connection,
+    )
+
+    terminal = sys.stdin.isatty()
+    if mode is None:
+        if binding is not None:
+            mode = Mode.RUN
+        elif terminal:
+            mode = Mode(read_mode(out=console.print))
+        else:
+            mode = Mode.SPEC
+    if mode is Mode.SPEC:
+        return None, False
+    if binding is None and terminal:
+        binding = read_binding_source(out=console.print)
+    values = None
+    if binding is not None:
+        try:
+            values = load_binding_file(binding)
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            # name the file only: the YAML error can quote a line of the file
+            typer.echo(
+                f"Error: cannot read the target binding {binding} ({type(exc).__name__}).",
+                err=True,
+            )
+            raise typer.Exit(1) from None
+    connection = read_target_connection(
+        out=console.print,
+        values=values,
+        # a binding file with no terminal is checked once; nothing is asked
+        interactive=terminal or binding is None,
+    )
+    return connection, connection is None
 
 
 @app.command()
@@ -500,3 +594,47 @@ def resume(
         console=console,
     )
     _write_outputs(state, out_dir)
+
+
+@app.command()
+def connect(
+    out_dir: Path = typer.Option(
+        ...,
+        "--out-dir",
+        help="The experiment root holding inputs/interview_state.json.",
+    ),
+    binding: Path | None = typer.Option(
+        None,
+        "--binding",
+        help="A target binding YAML file to check and use. Without it, the CLI asks.",
+    ),
+) -> None:
+    """Add or replace the target connection of an Interview.
+
+    A completed export is written again with the binding. An Interview in progress keeps the
+    connection, and `resume` writes the binding when the Interview is complete.
+    """
+    path = _state_path(out_dir)
+    if not path.is_file():
+        typer.echo(f"Error: no interview at {path}.", err=True)
+        raise typer.Exit(1)
+    complete = (out_dir / export_layout.SPECIFICATION).is_file()
+    state = _load(out_dir)
+
+    env_file = _load_env()
+    if env_file is not None:
+        typer.echo(f"Read variables from {env_file}")
+    connection, _ = _read_connection(Mode.RUN, binding)
+    if connection is None:
+        typer.echo("Error: no valid target binding. Nothing was changed.", err=True)
+        raise typer.Exit(1)
+
+    state = set_connection(state, connection)
+    if complete:
+        _write_outputs(state, out_dir)
+    else:
+        _save(state, out_dir)
+        typer.echo(
+            "Saved the connection. Resume with: "
+            f"metis wizard resume --out-dir {shlex.quote(str(out_dir))}"
+        )

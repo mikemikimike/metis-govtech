@@ -17,9 +17,19 @@ import type {
   ModelStatus,
   Perspective,
   UserResponse,
+  ConnectionCheckResult,
+  TargetConnection,
 } from "./transport/api";
 import { api, TransportError, toSummary } from "./transport/api";
 import { Composer, Transcript } from "./Conversation";
+import { ConnectionForm } from "./ConnectionStep";
+import {
+  bindingFromDraft,
+  emptyConnectionDraft,
+  startConnection,
+  type ConnectionDraft,
+  type ConnectionMode,
+} from "./connection";
 import { AddDocuments, DocumentTray } from "./DocumentTray";
 import { Done } from "./Done";
 import {
@@ -186,6 +196,12 @@ export function App() {
   >({});
   const [capabilityEvidence, setCapabilityEvidence] =
     useState<CapabilityEvidenceDraft>(emptyCapabilityEvidence);
+  // The opening owns the connection in run mode. "add" is the Done pane's Connect target.
+  const [connectionStep, setConnectionStep] = useState<"add" | null>(null);
+  const [connectionDraft, setConnectionDraft] =
+    useState<ConnectionDraft>(emptyConnectionDraft);
+  const [connectionResult, setConnectionResult] =
+    useState<ConnectionCheckResult | null>(null);
 
   const [loadingRecord, setLoadingRecord] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -276,6 +292,7 @@ export function App() {
       destinationRef.current = entry;
       setDestination(entry);
       setManualOpen(false);
+      setConnectionStep(null);
       setRecord(null);
       setLoadingRecord(entry.destination.kind === "interview");
       void (async () => {
@@ -336,6 +353,9 @@ export function App() {
     setDocumentTrayOpen(false);
     setOpeningDocumentReads({});
     setCapabilityEvidence(emptyCapabilityEvidence());
+    setConnectionStep(null);
+    setConnectionDraft(emptyConnectionDraft());
+    setConnectionResult(null);
   }, []);
 
   const addOpeningDocuments = useCallback(
@@ -438,6 +458,7 @@ export function App() {
       description: string,
       perspective: Perspective,
       evidence: CapabilityEvidence,
+      connection: TargetConnection | null = null,
     ) => {
       if (busy) return;
       const origin = destinationRef.current?.entry;
@@ -455,6 +476,7 @@ export function App() {
           return status === "reading" || status === "failed";
         });
         if (unresolved.length > 0) {
+          setConnectionStep(null);
           setOpeningControl(null);
           setDocumentTrayOpen(true);
           setError(
@@ -469,6 +491,7 @@ export function App() {
           );
         }, 0);
         if (limits && totalText > limits.max_text_characters_total) {
+          setConnectionStep(null);
           setOpeningControl(null);
           setDocumentTrayOpen(true);
           setError(
@@ -488,6 +511,7 @@ export function App() {
           evidence,
           perspective,
           documents,
+          connection,
         );
         const started = emptyRecord(
           localId,
@@ -585,6 +609,65 @@ export function App() {
     );
   }, [record, operations]);
 
+  // Check the binding. In the opening, Send starts the Interview only with a valid binding. On
+  // the Done pane, Save adds it to the finished Interview.
+  const connectionKey =
+    connectionStep === "add" && record ? record.id : operationKey;
+  const checkDraft = useCallback(async () => {
+    const result = await api.checkConnection(bindingFromDraft(connectionDraft));
+    setConnectionResult(result);
+    return result;
+  }, [connectionDraft]);
+  const beginOpening = useCallback(
+    async (
+      description: string,
+      perspective: Perspective,
+      evidence: CapabilityEvidence,
+    ) => {
+      if (connectionDraft.mode === "spec") {
+        void beginWithMessage(description, perspective, evidence, null);
+        return;
+      }
+      // Reuse the last test when no field changed since; a field change clears the result.
+      let connection: TargetConnection | null = null;
+      await operations.run(operationKey, async () => {
+        connection = startConnection(
+          connectionDraft,
+          connectionResult ?? (await checkDraft()),
+        );
+      });
+      // On an invalid binding, the connection card under the box shows the marked fields.
+      if (connection)
+        void beginWithMessage(description, perspective, evidence, connection);
+    },
+    [
+      connectionDraft,
+      connectionResult,
+      beginWithMessage,
+      operations,
+      operationKey,
+      checkDraft,
+    ],
+  );
+  const saveConnection = useCallback(async () => {
+    if (!record) return;
+    await operations.run(record.id, async () => {
+      const connection = startConnection(
+        connectionDraft,
+        connectionResult ?? (await checkDraft()),
+      );
+      if (!connection) return;
+      const state = await api.setConnection(record.state, connection);
+      await operations.save({ ...record, state });
+      setConnectionStep(null);
+    });
+  }, [record, operations, connectionDraft, connectionResult, checkDraft]);
+  const openAddConnection = useCallback(() => {
+    setConnectionDraft({ ...emptyConnectionDraft(), mode: "run" });
+    setConnectionResult(null);
+    setConnectionStep("add");
+  }, []);
+
   const remove = useCallback(
     async (id: string) => {
       if (operations.active.has(id) || operations.pendingSaves.has(id)) return;
@@ -665,6 +748,23 @@ export function App() {
         )}
         {manualOpen ? (
           <ManualForm onBack={() => setManualOpen(false)} />
+        ) : connectionStep === "add" && view !== null ? (
+          <AddConnection
+            draft={connectionDraft}
+            onDraft={(next) => {
+              setConnectionDraft(next);
+              setConnectionResult(null);
+            }}
+            result={connectionResult}
+            busy={busy || operations.active.has(connectionKey)}
+            onTest={() =>
+              void operations.run(connectionKey, async () => {
+                await checkDraft();
+              })
+            }
+            onSave={() => void saveConnection()}
+            onCancel={() => setConnectionStep(null)}
+          />
         ) : view === null && destination?.destination.kind === "interview" ? (
           <div className="m-auto flex flex-col gap-4 p-8" role="status">
             <p>
@@ -697,7 +797,18 @@ export function App() {
             capabilityEvidence={capabilityEvidence}
             onCapabilityEvidence={setCapabilityEvidence}
             onBegin={(description, perspective, evidence) =>
-              void beginWithMessage(description, perspective, evidence)
+              void beginOpening(description, perspective, evidence)
+            }
+            connectionDraft={connectionDraft}
+            onConnectionDraft={(next) => {
+              setConnectionDraft(next);
+              setConnectionResult(null);
+            }}
+            connectionResult={connectionResult}
+            onTestConnection={() =>
+              void operations.run(operationKey, async () => {
+                await checkDraft();
+              })
             }
             onManualOpen={() => setManualOpen(true)}
             openControl={openingControl}
@@ -760,7 +871,12 @@ export function App() {
                     onContinue={() => void continueToDownload()}
                   />
                 ) : (
-                  view.done && <Done />
+                  view.done && (
+                    <Done
+                      connection={record?.state.context.connection ?? null}
+                      onConnect={openAddConnection}
+                    />
+                  )
                 )}
               </div>
             </div>
@@ -852,6 +968,11 @@ type OpeningScreenProps = {
   onOpenControl: (control: OpeningControl | null) => void;
   // False until the user first opens the Perspective control. Until then, the default is marked.
   perspectiveSeen: boolean;
+  // "Build Spec only" or "Build Spec and Run Evals". Run mode shows the connection form.
+  connectionDraft: ConnectionDraft;
+  onConnectionDraft: (draft: ConnectionDraft) => void;
+  connectionResult: ConnectionCheckResult | null;
+  onTestConnection: () => void;
   onBegin: (
     description: string,
     perspective: Perspective,
@@ -907,9 +1028,103 @@ export function OpeningConfigurationState({
   );
 }
 
+const MODE_LABELS: Record<ConnectionMode, string> = {
+  spec: "Build Spec only",
+  run: "Build Spec and Run Evals",
+};
+
+// The mode is a choice about the whole session, so it sits above the box, apart from the chips
+// that give the Interview its context.
+export function ModePicker({
+  mode,
+  disabled,
+  onSelect,
+}: {
+  mode: ConnectionMode;
+  disabled: boolean;
+  onSelect: (mode: ConnectionMode) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Mode"
+      className="inline-flex self-center rounded-lg border border-border bg-card p-0.5"
+    >
+      {(["spec", "run"] as const).map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="radio"
+          aria-checked={mode === id}
+          disabled={disabled}
+          onClick={() => onSelect(id)}
+          className={cn(
+            "rounded-md px-3.5 py-1.5 text-sm transition-colors duration-150",
+            mode === id
+              ? "bg-accent/10 font-medium text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+            "disabled:cursor-not-allowed disabled:opacity-45",
+          )}
+        >
+          {MODE_LABELS[id]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// "Connect target" on the Done pane: the same form, with Save and Cancel.
+function AddConnection({
+  draft,
+  onDraft,
+  result,
+  busy,
+  onTest,
+  onSave,
+  onCancel,
+}: {
+  draft: ConnectionDraft;
+  onDraft: (draft: ConnectionDraft) => void;
+  result: ConnectionCheckResult | null;
+  busy: boolean;
+  onTest: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="quiet-scrollbar flex flex-1 overflow-y-auto px-6 py-10">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <h1 className="text-2xl font-semibold text-foreground">
+          Connect the target
+        </h1>
+        <ConnectionForm
+          draft={draft}
+          onDraft={onDraft}
+          result={result}
+          busy={busy}
+          onTest={onTest}
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" disabled={busy} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            disabled={busy}
+            onClick={onSave}
+          >
+            Save connection
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // The opening is one view. The description box holds the setup controls along its bottom edge:
-// documents, the Perspective, and the capabilities. Each control opens a panel under the box.
-// Enter and Send both start the Interview.
+// documents, the Perspective, the capabilities, and the mode. Each control opens a panel under the
+// box. Enter and Send both start the Interview. In run mode, Send first checks the binding.
 export function OpeningScreen(props: OpeningScreenProps) {
   const {
     config,
@@ -926,6 +1141,10 @@ export function OpeningScreen(props: OpeningScreenProps) {
     onOpenControl,
     perspectiveSeen,
     canStart,
+    connectionDraft,
+    onConnectionDraft,
+    connectionResult,
+    onTestConnection,
   } = props;
   const currentPerspective = config.perspectives.find(
     (item) => item.id === perspective,
@@ -933,6 +1152,7 @@ export function OpeningScreen(props: OpeningScreenProps) {
   const PerspectiveIcon = PERSPECTIVE_ICONS[perspective];
   const perspectiveOpen = openControl === "perspective";
   const capabilitiesOpen = openControl === "capabilities";
+  const runMode = connectionDraft.mode === "run";
   const start = (text: string) => {
     onDescription?.(text);
     props.onBegin(
@@ -948,6 +1168,11 @@ export function OpeningScreen(props: OpeningScreenProps) {
         <h1 className="text-center text-2xl font-semibold text-foreground">
           {config.opening_question}
         </h1>
+        <ModePicker
+          mode={connectionDraft.mode}
+          disabled={busy}
+          onSelect={(mode) => onConnectionDraft({ ...connectionDraft, mode })}
+        />
         <div className="flex flex-col gap-4">
           <div className="flex flex-col">
             <div className="relative z-10">
@@ -1084,6 +1309,25 @@ export function OpeningScreen(props: OpeningScreenProps) {
                   />
                 </div>
               </UnderBoxSurface>
+            )}
+            {runMode && (
+              // Run mode needs the binding, so this card stays open and is not a footer panel.
+              <section
+                id="opening-connection"
+                aria-label="Target connection"
+                className="animate-open-under-box relative z-0 mx-auto -mt-4 flex w-[95%] flex-col gap-3 rounded-2xl border border-border bg-card px-5 pb-5 pt-9"
+              >
+                <h2 className="text-sm font-medium text-foreground">
+                  Target connection
+                </h2>
+                <ConnectionForm
+                  draft={connectionDraft}
+                  onDraft={onConnectionDraft}
+                  result={connectionResult}
+                  busy={busy}
+                  onTest={onTestConnection}
+                />
+              </section>
             )}
           </div>
           <ManualAuthoringEntry onOpen={props.onManualOpen} />
