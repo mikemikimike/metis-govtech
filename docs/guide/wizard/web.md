@@ -46,11 +46,20 @@ forwards `/api` requests to that address.
 
 ## Start a guided Interview
 
+The opening box holds all of the setup. Its bottom row has the documents button, the Perspective
+control, and **Capabilities**.
+
 1. Enter a description of the target.
-2. Select who the evaluation is for. Hover over or focus a Perspective to see its guiding question.
-3. Select all ARC capabilities that you know the target has. The list can be empty.
-4. Select Low, Medium, or High confidence. The value states how complete the full selection is.
-5. Select **Start interview**. This sends all opening values in one request.
+2. Select who the evaluation is for. The Perspective control shows the current Perspective. End
+   user is the default, and the control marks it until you open the control. The panel under the
+   box shows the guiding question of each Perspective.
+3. Optional: select **Capabilities**. The ARC capabilities show in three columns, one for each
+   group. Select each capability that you know the target has. On a small screen, the
+   capabilities open in a full-width sheet.
+4. Optional: under **Confidence**, select Low, Medium, or High. The value states how complete the
+   selection is. With no confidence, the Wizard uses Low, because the selection may be
+   incomplete.
+5. Select Send, or press Enter. This sends all opening values in one request.
 
 The web client gets the opening text, Perspectives, capability catalogue, and document limits from
 the API. It keeps the returned Interview state and sends the whole state with each answer. The API

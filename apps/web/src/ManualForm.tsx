@@ -122,7 +122,7 @@ export function ManualAuthoringEntry({ onOpen }: { onOpen: () => void }) {
   return (
     <button
       type="button"
-      aria-label="Prefer to skip the interview? Write it yourself"
+      aria-label="Skip the interview and write it yourself"
       onClick={onOpen}
       className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-4 text-left text-card-foreground transition-colors hover:bg-muted active:bg-border"
     >
@@ -131,10 +131,7 @@ export function ManualAuthoringEntry({ onOpen }: { onOpen: () => void }) {
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-sm font-medium text-foreground">
-          Prefer to skip the interview? Write it yourself
-        </span>
-        <span className="text-xs text-muted-foreground">
-          Define Personas and Scenarios, then select them in test cases.
+          Skip the interview and write it yourself
         </span>
       </span>
       <ChevronRight

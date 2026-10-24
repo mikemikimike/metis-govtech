@@ -210,9 +210,10 @@
   animation: enter-conversation 0.28s ease-out both;
 }
 
-/* The opening flow has two client-side views before the one start request. A short lateral entry
-   confirms that Continue changed the setup view without making it look like the Interview has
-   started. */
+/* The opening view enters with a short lateral movement when the user starts a new evaluation.
+   The fill mode is `backwards`, so no transform stays on the view after the animation. A kept
+   transform would make the fixed capability sheet on a small screen position against the view
+   and not against the window. */
 @keyframes enter-opening-step {
   from {
     opacity: 0;
@@ -225,7 +226,7 @@
 }
 
 .animate-enter-opening-step {
-  animation: enter-opening-step 0.22s ease-out both;
+  animation: enter-opening-step 0.22s ease-out backwards;
 }
 
 /* Content landing in the document. A row that has just been written rises the last few pixels
@@ -297,6 +298,47 @@
   }
 
   .section-writing-marker {
+    animation: none !important;
+  }
+}
+
+/* A surface that opens under the opening box rises a few pixels out of the box edge. It is the
+   result of a click on its trigger, so it is the one movement for that action. */
+@keyframes open-under-box {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-open-under-box {
+  animation: open-under-box 0.16s ease-out both;
+}
+
+/* The default Perspective is marked until the user first opens the Perspective control. The teal
+   ring draws in once when the opening appears and then stays as a still marker. It does not loop.
+   The marker goes away when the user opens the control. */
+@keyframes perspective-default-in {
+  from {
+    box-shadow: 0 0 0 6px hsl(var(--accent) / 0);
+  }
+  to {
+    box-shadow: 0 0 0 2px hsl(var(--accent) / 0.45);
+  }
+}
+
+.perspective-default {
+  box-shadow: 0 0 0 2px hsl(var(--accent) / 0.45);
+  animation: perspective-default-in 0.6s ease-out 0.2s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-open-under-box,
+  .perspective-default {
     animation: none !important;
   }
 }

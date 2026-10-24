@@ -901,6 +901,16 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- **Opening setup in the chat box.** The Perspective and capability controls are now in the bottom
+  row of the opening box, next to the documents button. The separate capability screen and its
+  **Edit target** button are removed. The Perspective control marks End user as the default until
+  the user opens it. Its panel shows the question of each Perspective as text, so hover is not
+  necessary. The **Capabilities** control opens the capabilities and the confidence in a panel
+  under the box, or in a full-width sheet on a small screen. Each capability group is one column,
+  so the panel needs no scroll. The capabilities and the confidence are optional. With no
+  confidence, the web client sends Low. The opening has less text: the placeholder is an example
+  description, the panels have no title, and the manual entry is one line (#555).
+
 - Show Criterion descriptions with expandable Grader details and typed edit fields (#490).
 
 - Interview downloads send the final state for compilation and export. Interview and manual downloads use dated archive names and the shared `inputs/` and `outputs/` layout. The browser shows where to extract them (#453).
