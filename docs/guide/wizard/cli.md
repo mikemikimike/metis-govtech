@@ -4,7 +4,7 @@ The CLI runs the Interview in a terminal and writes the specification to local f
 need the API server.
 
 - It saves the Interview state after each turn. You can close the terminal and resume later.
-- It does not accept documents. Use the [web client](web.md) or the [API](api.md) to add documents.
+- It accepts documents when the Interview starts. See [Add documents](#add-documents).
 - It always uses the End user Perspective. Use the web client or the API for the Engineer,
   Compliance, or Security Perspective.
 
@@ -75,6 +75,34 @@ machine when `init` starts. Use `--out-dir` to select an exact experiment root:
 metis wizard init "<description>" --out-dir my-eval
 ```
 
+## Add documents
+
+Give `init` one `--document` option (short form `-d`) for each file. The Interview reads the text
+of each file, in the same way as the web client and the API:
+
+```bash
+metis wizard init "<description>" --document policy.pdf --document diagram.png
+```
+
+The CLI checks the files before it asks for capabilities or calls the model. It uses the same file
+types, limits, and error messages as the web client. It shows one line for each file:
+
+| Line | Meaning |
+|---|---|
+| `Read: policy.pdf` | The Interview uses the text of the file. |
+| `Not read: diagram.png (no text reader for this file type)` | The file type has no text reader. The Interview knows the file by name only. |
+| `Could not read: scan.pdf: <reason>` | The file has a text reader, but the CLI could not read the text. |
+
+A file type that the Wizard does not accept stops the command with exit code 1.
+
+When a file could not be read, the CLI asks `Keep unread files without text?` The default is No.
+Answer Yes to keep the file by name only. Answer No to stop. Then remove the file from the
+command and run `init` again. A run with no terminal, such as a script, stops with exit code 1.
+
+The CLI keeps a copy of each document in `inputs/documents/`. A Test Case can send an opening
+document to the target as a fixture file. `resume` uses this copy, so you can move the source
+files after `init`.
+
 ## Resume or restart
 
 Resume requires `--out-dir`, including when the Interview continues on another day. The CLI
@@ -97,7 +125,11 @@ When the Interview is complete, the CLI retains its final state and writes this 
 | `outputs/specification.yaml` | Target, Features, Behaviours, Criteria and Grader settings, Personas, Scenarios, and Tasks |
 | `outputs/review.md` | A human-readable review of the specification |
 | `inputs/interview_state.json` | The final state used to compile the Specification |
-| `outputs/fixtures/` | Fixture files referenced by Tasks |
+| `inputs/documents/` | A copy of the documents given to `init` |
+| `outputs/fixtures/` | The documents that a Test Case uses. The CLI copies them from `inputs/documents/`. |
+
+When a Test Case uses a file that is not in `inputs/documents/`, the CLI names the file. Put
+that file in `outputs/fixtures/` before you run the Experiment.
 
 The CLI publishes `outputs/specification.yaml` after the other export files are saved.
 Its presence marks a completed export. `resume` reports completion even though the final state

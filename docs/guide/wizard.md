@@ -41,7 +41,7 @@ The interface guides give the exact files or archive that each interface produce
 
 ## Interview flow
 
-1. Describe the target. In the web client and the API, you can also add documents.
+1. Describe the target. You can also add documents.
 2. Select the evaluation Perspective (who the evaluation is for, such as an end user or an
    engineer). Web and API only. The CLI always uses End user.
 3. Select the known ARC capabilities and a confidence value.

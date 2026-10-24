@@ -186,6 +186,10 @@ def _retry_confirmed(failure: InterviewFailure) -> bool:
     return typer.confirm(f"{failure.message} Try again?", default=True)
 
 
+def _confirm(prompt: str) -> bool:
+    return typer.confirm(prompt, default=False)
+
+
 def _fail(failure: InterviewFailure) -> NoReturn:
     """Report an Interview failure and stop. Any structured gaps are listed under the message."""
     typer.echo(f"Error: {failure.message}", err=True)
@@ -204,7 +208,13 @@ def _write_outputs(state: InterviewState, out_dir: Path) -> None:
     review = render_review(specification, experiment_id(specification))
 
     _save(state, out_dir)
-    (out_dir / export_layout.FIXTURES).mkdir(parents=True, exist_ok=True)
+    from metis.wizard.adapters.cli.documents import publish_task_fixtures
+
+    missing_fixtures = publish_task_fixtures(
+        [task.fixtures for task in specification.tasks],
+        out_dir / export_layout.DOCUMENTS,
+        out_dir / export_layout.FIXTURES,
+    )
     specification_path = out_dir / export_layout.SPECIFICATION
     review_path = out_dir / export_layout.REVIEW
     review_path.write_text(review, encoding="utf-8")
@@ -222,6 +232,11 @@ def _write_outputs(state: InterviewState, out_dir: Path) -> None:
 
     typer.echo(f"\nWrote {specification_path}")
     typer.echo(f"Wrote {review_path}")
+    for name in missing_fixtures:
+        typer.echo(
+            f"Add {name} to {out_dir / export_layout.FIXTURES} before you run. "
+            "A Test Case uses this file."
+        )
     typer.echo(
         f"Run with: metis engine run --input-dir {shlex.quote(str(out_dir / export_layout.OUTPUTS))}"
     )
@@ -292,6 +307,15 @@ def init(
         "--restart",
         help="Discard an interview already in progress and start over.",
     ),
+    documents: list[Path] | None = typer.Option(
+        None,
+        "--document",
+        "-d",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="A file for the Interview to read. Repeat the option to add more files.",
+    ),
 ) -> None:
     """Start a new interview."""
     # Refuse before anything else — the filesystem check costs no model call and needs no
@@ -317,6 +341,20 @@ def init(
         )
         raise typer.Exit(1)
 
+    # Read the documents before the credential check, so a bad file costs no model call.
+    from metis.wizard.adapters.cli.documents import (
+        copy_opening_documents,
+        read_opening_documents,
+    )
+
+    document_paths = documents or []
+    opening_documents = read_opening_documents(
+        document_paths,
+        # File names are plain text, so Rich must not read brackets in them as markup.
+        out=lambda line: console.print(line, markup=False, highlight=False),
+        confirm=_confirm if sys.stdin.isatty() else None,
+    )
+
     for env_file in _load_env():
         typer.echo(f"Read credentials from {env_file}")
 
@@ -333,6 +371,8 @@ def init(
     known_capability_ids, capability_confidence = read_capability_evidence(
         out=console.print
     )
+    # Keep the original bytes, so `resume` can put an opening file in the fixture folder.
+    copy_opening_documents(document_paths, out_dir / export_layout.DOCUMENTS)
     typer.echo(
         f"Resume with: metis wizard resume --out-dir {shlex.quote(str(out_dir))}"
     )
@@ -341,6 +381,7 @@ def init(
             description=description,
             known_capability_ids=known_capability_ids,
             capability_confidence=capability_confidence,
+            documents=opening_documents,
         ),
         interviewer=interviewer,
         matcher=_matcher(interviewer),
