@@ -14,6 +14,7 @@ from metis.wizard.contracts import (
     ChatRequest,
     ChatResponse,
     ChoiceResponse,
+    FormRequest,
     Patch,
     PatchOp,
     Perspective,
@@ -746,6 +747,11 @@ def test_the_final_continue_uses_full_specification_readiness() -> None:
             "Review the behaviour draft.",
         ),
         (
+            InterviewStep.PERSONAS,
+            InterviewStep.CRITERIA,
+            "Review the acceptance criteria.",
+        ),
+        (
             InterviewStep.SCENARIOS,
             InterviewStep.PERSONAS,
             "Review the personas.",
@@ -782,6 +788,48 @@ def test_every_visible_back_transition_restores_its_destination(
     assert state.specification == before_specification
     assert state.history == before_history
     assert interviewer.calls == []
+
+
+def test_back_from_behaviours_shows_the_target_review_form_with_no_model_call() -> None:
+    specification = research_assistant()
+    interviewer = ScriptedInterviewer()
+    driver = StepDriver(interviewer=interviewer)
+    state = driver_state(
+        specification=specification,
+        step=InterviewStep.BEHAVIOURS,
+        behaviours_confirmed=True,
+    )
+    request = driver.compose(state)
+
+    driver.handle(state, request, ChoiceResponse(selected=["back"]))
+
+    form = state.pending
+    assert isinstance(form, FormRequest)
+    assert state.step is InterviewStep.CLARIFY
+    assert form.title == "Understanding your target"
+    assert {field.id: field.value for field in form.fields} == {
+        "target.name": specification.target.name,
+        "target.users": specification.target.users,
+        "target.description": specification.target.description,
+        "target.detail": specification.target.detail,
+    }
+    assert not state.behaviours_confirmed
+    assert interviewer.calls == []
+
+
+def test_back_to_criteria_keeps_the_behaviour_confirmation() -> None:
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    state = driver_state(
+        specification=research_assistant(),
+        step=InterviewStep.PERSONAS,
+        behaviours_confirmed=True,
+    )
+    request = driver.compose(state)
+
+    driver.handle(state, request, ChoiceResponse(selected=["back"]))
+
+    assert state.step is InterviewStep.CRITERIA
+    assert state.behaviours_confirmed
 
 
 def test_a_recomposed_screen_uses_a_neutral_message() -> None:

@@ -469,3 +469,15 @@ def test_disclosure_values_are_shown_on_request() -> None:
     response = cli.render(screen, out=output.append, read=read)
     assert response.selected == ["continue"]
     assert "Limit: 3" in "\n".join(output)
+
+
+@pytest.mark.parametrize("screen", ["behaviours_screen", "personas_screen"])
+def test_back_is_a_numbered_choice_on_each_review_screen(screen: str) -> None:
+    from metis.wizard.application import screens
+    from tests.fixtures.wizard.specifications import research_assistant
+
+    request = getattr(screens, screen)(research_assistant(), "Review this.")
+    text, selectable = draw(request)
+
+    assert "back" in selectable
+    assert re.search(r"\d+\. ← Back", text)

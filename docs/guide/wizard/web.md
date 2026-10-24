@@ -56,6 +56,20 @@ The web client gets the opening text, Perspectives, capability catalogue, and do
 the API. It keeps the returned Interview state and sends the whole state with each answer. The API
 does not save the state.
 
+## Go back to an earlier step
+
+Each review step after Clarify shows **← Back**. Back opens the step before it with its current
+content.
+
+- Back from Behaviours shows a form with the Target name, users, description, and detail.
+- Continue with no change returns to the later step. The Wizard drafts nothing again.
+- If you change content that later content came from, the Wizard asks what to do with the later
+  content. You can keep it, regenerate it, or review it yourself.
+
+Clarify has no Back, because it is the first step. To correct the description, say so in your
+answer, for example "The target is for staff only." To change the Perspective, capabilities, or
+documents, select **New evaluation**. The earlier Interview stays in History.
+
 ## Review Criteria
 
 Expand **Grader details** to inspect the settings, or select **Edit assessment** to change them.

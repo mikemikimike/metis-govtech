@@ -666,6 +666,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Accept optional flat string metadata in model-proposed Persona and Scenario
   drafts and preserve it in saved Specifications. Guide generation to use supplied
   facts and omit unspecified metadata (#441).
+- **Back on every Interview step.** Behaviours, Criteria, Personas, and Scenarios each show
+  **← Back** in the CLI and the web client. Back from Behaviours opens a Target review form with
+  the current name, users, description, and detail, and makes no model call. A changed
+  description or detail asks the usual question about the current draft. With no change,
+  Continue returns to the later step and drafts nothing again (#551).
 - Support large supporting documents with shared limits of 500,000 characters per
   file and 1,000,000 total. Read YAML, JSON, and CSV text. Check the configured
   model context budget before each request without truncating input.

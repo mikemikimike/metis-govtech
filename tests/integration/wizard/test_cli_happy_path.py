@@ -39,9 +39,9 @@ def test_init_happy_path_writes_specification_and_review(
         "low",
         "answer",
         "answer",
-        "7",
+        "8",
         "14",
-        "1",
+        "2",
         "21",
     ]
 

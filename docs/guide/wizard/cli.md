@@ -67,6 +67,21 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 4. Answer the clarification questions.
 5. Review the Features, Behaviours, Criteria, Personas, Scenarios, and Test Cases that the Wizard drafts.
 
+## Go back to an earlier step
+
+Each review step after Clarify has a **← Back** choice. Select its number to open the step
+before it with its current content.
+
+- Back from Behaviours shows the Target name, users, description, and detail. Press Enter to
+  keep a value, or type a new value.
+- Continue with no change returns to the later step. The Wizard drafts nothing again.
+- If you change content that later content came from, the Wizard asks what to do with the later
+  content. You can keep it, regenerate it, or review it yourself.
+
+Clarify has no Back, because it is the first step. To correct the description, say so in your
+answer, for example "The target is for staff only." To change the capabilities, start again with
+`init --restart`.
+
 The CLI saves state after each accepted turn in
 `experiments/design/YYYYMMDD-HHMMSS-interview/inputs/interview_state.json`. The date and time are local to the
 machine when `init` starts. Use `--out-dir` to select an exact experiment root:
