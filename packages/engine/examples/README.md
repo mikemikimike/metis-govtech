@@ -10,8 +10,8 @@ Folder names say how the example runs:
 - `gen_1-{target}-{variant}`: a Python runner written for one target, such as
   `OrcaApiRunnerFactory`.
 - `gen_2-{http|browser}-{target}-{variant}`: the generic runner for that transport, driven
-  by a target binding file. Only `http` exists so far; `browser` is reserved for a future
-  runner.
+  by a target binding file. `http` calls the target's API (`HttpRunnerFactory`); `browser`
+  drives its web page (`BrowserRunnerFactory`). No `browser` example folder exists yet.
 
 The target is the system under test (`orca_api`, `agentic_eval_toyapp`), and the variant
 number tells apart different experiments with the same generation, transport, and target.
