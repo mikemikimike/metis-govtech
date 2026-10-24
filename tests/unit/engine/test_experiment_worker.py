@@ -1076,7 +1076,7 @@ async def test_task_execution_settings_reach_worker_and_failure_records(
     from metis.engine.simulation.experiment import expand_trial_plan
 
     document = Specification.load_file(
-        Path("packages/engine/examples/orca-api-simple1/specification.yaml")
+        Path("packages/engine/examples/gen_1-orca_api-1/specification.yaml")
     ).model_dump()
     task = document["tasks"][0]
     task.update(

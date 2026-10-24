@@ -28,11 +28,11 @@ These commands use the `simple` example, which is small enough for a quick first
 
 ```bash
 # Run end-to-end (Simulation TUI, then evaluation progress bar)
-metis engine run --input-dir packages/engine/examples/orca-api-simple1/
+metis engine run --input-dir packages/engine/examples/gen_1-orca_api-1/
 
 # Or run the phases separately, in this order. simulate prints the evaluate command.
 # The --experiment-dir value is the output directory that simulate created.
-metis engine simulate --input-dir packages/engine/examples/orca-api-simple1/
+metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/
 metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/
 
 # Resume an interrupted simulation. simulate prints this exact command;
@@ -41,24 +41,24 @@ metis engine simulate --resume --experiment-dir experiments/execute/orca-eval-20
 metis engine run --resume --experiment-dir experiments/execute/orca-eval-20260820-143000/
 
 # With the browser runner selected and its credentials set:
-HEADED=true metis engine simulate --input-dir packages/engine/examples/orca-api-simple1/
+HEADED=true metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/
 
 # Verbosity controls log detail, not progress displays.
-metis engine simulate --input-dir packages/engine/examples/orca-api-simple1/ -v    # INFO
-metis engine simulate --input-dir packages/engine/examples/orca-api-simple1/ -vv   # DEBUG
-metis engine simulate --input-dir packages/engine/examples/orca-api-simple1/ --quiet  # ERROR only
+metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ -v    # INFO
+metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ -vv   # DEBUG
+metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --quiet  # ERROR only
 
 # Disable the Simulation TUI (force linear simulation output)
-metis engine simulate --input-dir packages/engine/examples/orca-api-simple1/ --no-tui
+metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --no-tui
 
 # Structured log files (JSON lines)
-metis engine simulate --input-dir packages/engine/examples/orca-api-simple1/ --log-format json
+metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --log-format json
 
 # Override log directory (default: co-located with results)
-metis engine simulate --input-dir packages/engine/examples/orca-api-simple1/ --log-dir /tmp/my-logs
+metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --log-dir /tmp/my-logs
 
 # Concurrent simulation (2 parallel browser contexts)
-metis engine simulate --input-dir packages/engine/examples/orca-api-simple1/ --concurrency 2
+metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --concurrency 2
 
 # Custom Langfuse timeout for evaluation (default: 90s)
 metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/ --langfuse-timeout 120
@@ -96,7 +96,7 @@ my-experiment/
     └── data.csv
 ```
 
-See [`examples/orca-api-simple1/`](examples/orca-api-simple1/) for a working reference.
+See [`examples/gen_1-orca_api-1/`](examples/gen_1-orca_api-1/) for a working reference.
 
 Each execution produces output in `experiments/execute/<id>-<timestamp>/`. Reports appear after `evaluate` or `run`:
 
