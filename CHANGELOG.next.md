@@ -149,6 +149,57 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - `defaults.judge_model` in `specification.yaml`: the experiment's default judge model for
   model-based graders. It is omitted from the document when unset (#428).
 
+- **Choose the model and the gateway for each LLM role (#446).** New
+  `metis.core.model_settings` has one role table: interview, embeddings, user agent, runner
+  agent, and judge. Each role reads `<PREFIX>_MODEL`, `<PREFIX>_API_KEY`, and
+  `<PREFIX>_BASE_URL`. The key and the URL each fall back to `OPENAI_API_KEY` and
+  `OPENAI_BASE_URL`, and the runner agent first falls back to `USER_AGENT_*`, so a setup with
+  one gateway does not change. `EMBEDDING_MODEL` replaces the hardcoded embedding model in
+  the wizard and the testbed. `OPENAI_BASE_URL` is optional everywhere. Keys and URLs never go
+  in a Specification, a `repr`, an error, or an API response.
+  - One `DEFAULT_MODEL` variable sets the model of every chat role: Interview, user agent,
+    runner agent, and judge. A role variable wins over it. When it is unset, the chat roles use
+    `gpt-6-luna`, which is the one model name in the code. The embeddings role keeps its own
+    default, `text-embedding-3-large`.
+  - One `.env` search for `metis wizard`, `metis engine`, and the API: `METIS_ENV_FILE`, else
+    the first `.env` from the working directory up to the project root. Exported values win.
+    `metis-core` now depends on `python-dotenv`.
+  - The Specification records the models that affect scores: `defaults.user_agent_model`,
+    `defaults.runner_agent_model`, and `tasks[].user_agent_model`, beside
+    `defaults.judge_model`. Precedence is the component, then the experiment default, then the
+    environment, then `DEFAULT_MODEL`. Unset fields are not written, and
+    `specification.schema.json` is regenerated. `TrialConfig` records `user_agent_model` and
+    `runner_agent_model` for each trial.
+  - Each command checks only the roles that it calls, before its first model call:
+    `wizard init` and `resume` check the interview role; `engine simulate` checks
+    the user agent and, for a generic runner, the runner agent; `engine run` adds the judge, and
+    `engine evaluate` checks the judge, when a criterion uses a model-based grader. The error
+    names the variables, the `.env` path that was read, and `docs/guide/models.md`. When the keys
+    exist, each engine command prints the models that it uses and where each comes from, before
+    its first model call. The wizard CLI summary also shows the source and how to change a model.
+    The
+    embeddings role is optional: without its key, the Wizard warns, and each Criterion uses the
+    criterion judge.
+  - The engine resolves the simulation models when it builds each trial, not at import time.
+  - The API starts without model settings. New `GET /api/v1/models` returns the model, the
+    configured status, the score effect, and the missing variable names of each role. The
+    Interview routes return 503 `model_unavailable` until the interview role is configured. The
+    web client makes Send grey, with "Configure API keys to start interview", while the interview
+    role is not configured. A missing embeddings key shows a banner. The run roles show only in
+    the run settings step. That step comes after the last review and before the download, and it
+    writes the model names into the Specification, so the first ZIP holds them. The wizard CLI
+    lists the roles that the run needs after it writes the files.
+  - New user guide `docs/guide/models.md`: the roles, recommended models, how to choose the
+    user agent and judge models, variables, and Specification fields.
+  - Breaking: the commands no longer read `packages/wizard/.env`, `apps/api/.env`, or a `.env`
+    above the project root. `configure_interview_runtime` takes resolved `interview` and
+    `embeddings` role settings and no longer writes to `os.environ`. The engine
+    `user_agent.config` and `runners.config` modules are removed. The default embedding model is
+    now `text-embedding-3-large` in the wizard (was `gemini-embedding-001`) and the testbed (was
+    `gemini-embedding-2`). With no `JUDGE_MODEL` and no `DEFAULT_MODEL`, the judge now
+    uses `gpt-6-luna` (was `gemini-3.5-flash-lite`), and the Interview and user agent use
+    `gpt-6-luna` (was `gpt-5.6-luna`). See `MIGRATION.md`.
+
 #### Changed
 
 - **`TargetBinding` also binds a web page: `transport` is `http` or `browser` (#484).** A

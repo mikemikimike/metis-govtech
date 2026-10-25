@@ -14,6 +14,7 @@ import yaml
 from rich.console import Console
 from typer.testing import CliRunner
 
+from metis.core.model_settings import ROLES, ModelRole
 from metis.testbed.calculation import calculate_scores, score_directory
 from metis.testbed.cli import _print_behaviour_nn, app
 from metis.testbed.contracts import EvaluationRequest, WizardState
@@ -34,7 +35,7 @@ EVALS = Path(__file__).resolve().parents[3] / "packages/testbed/wizard/cases"
 
 
 class LocalEmbedder:
-    model = "gemini-embedding-2"
+    model = ROLES[ModelRole.EMBEDDINGS].own_default or ""
     endpoint_hash = "test-endpoint"
 
     def __init__(self):
@@ -363,13 +364,14 @@ def test_cli_embeds_missing_inputs_once_and_reuses_them(
 def test_gateway_sends_one_string_per_request(monkeypatch):
     monkeypatch.setenv("OPENAI_BASE_URL", "https://gateway.example/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "test")
+    monkeypatch.setenv("EMBEDDING_MODEL", "custom-embedding")
     client = MagicMock()
     client.embeddings.create.return_value.data = [MagicMock(embedding=[1.0, 0.0])]
     monkeypatch.setattr("metis.testbed.embeddings.OpenAI", lambda **_: client)
     provider = GatewayEmbedder()
     assert provider.embed("one behaviour") == [1.0, 0.0]
     client.embeddings.create.assert_called_once_with(
-        model="gemini-embedding-2", input="one behaviour"
+        model="custom-embedding", input="one behaviour"
     )
 
 

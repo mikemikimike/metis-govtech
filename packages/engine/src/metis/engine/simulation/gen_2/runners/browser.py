@@ -35,15 +35,14 @@ from ...artifacts import ArtifactLedger, ArtifactRejected
 from ...config import TrialRetryConfig
 from ...exceptions import TrialRecoverableError, TurnRecoverableError
 from ...llm_calls import LLMCallLog, create_completion
+from ...model_settings import llm_client, runner_agent_settings
 from ...transport_log import TransportLog
 from ..binding import TargetBindingError, load_target_binding
 from ..evidence import Pointer, resolve
 from ..runner import Runner
 from ..types import Observation, Reading
-from ..user_agent.config import USER_AGENT_API_KEY, USER_AGENT_BASE_URL
 from .browser_prompts import SYSTEM_PROMPT as BROWSER_SYSTEM_PROMPT
 from .browser_prompts import first_message
-from .config import RUNNER_AGENT_MODEL
 from .http import OpenSubmission, sent_chars
 from .prompts import NUDGE
 from .rules import ToolRefused
@@ -234,6 +233,8 @@ class BrowserRunner(Runner):
         self._llm_log = llm_log
         self._llm = llm
         self._owns_llm = False
+        self.agent_settings = runner_agent_settings()
+        """The runner agent role. ``setup`` resolves it from the trial's config."""
         self._storage_state = storage_state
         self._deadline = 0.0
         self._wait = 0.0
@@ -306,6 +307,9 @@ class BrowserRunner(Runner):
 
     async def setup(self, config: TrialConfig) -> None:
         """Open this trial's context from the logged-in state and the start page."""
+        self.agent_settings = runner_agent_settings(
+            config.runner_agent_model, user_agent_model=config.user_agent_model
+        )
         self._deadline = _now() + config.timeout_minutes * 60
         self._wait = config.response_wait_ms / 1000
         self.context = await self._browser.new_context(
@@ -445,9 +449,7 @@ class BrowserRunner(Runner):
     ) -> str | None:
         """Ask the LLM for tool calls until it reports. Returns why it stopped early."""
         if self._llm is None:
-            self._llm = AsyncOpenAI(
-                api_key=USER_AGENT_API_KEY, base_url=USER_AGENT_BASE_URL, max_retries=0
-            )
+            self._llm = llm_client(self.agent_settings)
             self._owns_llm = True
         opened = self.open_submission
         messages: list[Any] = [
@@ -486,7 +488,7 @@ class BrowserRunner(Runner):
                     self._llm,
                     self._llm_log,
                     component="runner_agent",
-                    model=RUNNER_AGENT_MODEL,
+                    model=self.agent_settings.model,
                     messages=sent,
                     tools=TOOLS,
                     tool_choice="required",
@@ -890,9 +892,16 @@ class BrowserRunnerFactory:
         login_dir: Path,
         browser: Any = None,
         llm: AsyncOpenAI | None = None,
+        user_agent_model: str | None = None,
+        runner_agent_model: str | None = None,
     ) -> None:
         self._binding = binding
         self._login_dir = login_dir
+        self._models = {
+            "user_agent_model": user_agent_model,
+            "runner_agent_model": runner_agent_model,
+        }
+        """The Specification defaults. The sign-in belongs to no trial, so it uses them."""
         """Where the sign-in's transport and LLM logs go: it belongs to no trial."""
         self._browser = browser
         """Replaced by a fake in tests; otherwise ``start`` launches Chromium."""
@@ -923,7 +932,13 @@ class BrowserRunnerFactory:
         binding = load_target_binding(
             inputs_dir, specification.target_binding, "browser"
         )
-        return cls(binding, login_dir=inputs_dir.parent / "logs" / "login")
+        defaults = specification.experiment.defaults
+        return cls(
+            binding,
+            login_dir=inputs_dir.parent / "logs" / "login",
+            user_agent_model=defaults.user_agent_model,
+            runner_agent_model=defaults.runner_agent_model,
+        )
 
     @property
     def retry_defaults(self) -> tuple[int, float]:
@@ -954,7 +969,9 @@ class BrowserRunnerFactory:
         )
         runner.use_ledger(ArtifactLedger(self._login_dir, self._login_dir))
         try:
-            await runner.setup(TrialConfig(persona="login", scenario="login"))
+            await runner.setup(
+                TrialConfig(persona="login", scenario="login", **self._models)
+            )
             observation = await runner.sign_in()
             if observation.reading.outcome != "done" or runner.has_password_field():
                 raise TargetBindingError(

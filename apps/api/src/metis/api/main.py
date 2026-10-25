@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from metis.api import __version__, core_version
 from metis.api.routes.graders import router as graders_router
+from metis.api.routes.models import router as models_router
 from metis.api.routes.wizard import ServiceError
 from metis.api.routes.wizard import router as wizard_router
 from metis.api.settings import (
@@ -49,9 +50,19 @@ _OPENAPI_TAGS = [
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Compose production collaborators before the app accepts requests."""
+    """Compose production collaborators before the app accepts requests.
+
+    Missing model settings do not stop the start. The app keeps the error, `GET /api/v1/models`
+    reports the missing roles, and each Interview route returns 503 `model_unavailable`.
+    """
     if getattr(app.state, "wizard_dependencies", None) is None:
-        app.state.wizard_dependencies = build_dependencies(Settings.from_env())
+        settings = Settings.from_env()
+        app.state.model_settings = settings
+        try:
+            app.state.wizard_dependencies = build_dependencies(settings)
+        except SettingsError as exc:
+            app.state.settings_error = str(exc)
+            logger.warning("api_model_settings_missing")
     yield
 
 
@@ -74,6 +85,7 @@ def create_app(interview_handler: InterviewHandler | None = None) -> FastAPI:
 
     app.include_router(wizard_router)
     app.include_router(graders_router)
+    app.include_router(models_router)
 
     @app.exception_handler(RequestValidationError)
     def _on_validation_error(

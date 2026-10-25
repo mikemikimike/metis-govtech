@@ -31,7 +31,7 @@ import type {
 } from "./transport/api";
 import { optionKey } from "./transport/api";
 import { NumberInput } from "./inputs";
-import { Button, cn, formatTrials, Mono, Panel } from "./ui";
+import { Button, cn, formatTrials, Mono, Panel, Tooltip } from "./ui";
 
 // What a block can send up. `null` from a resolved or read-only block.
 type Emit = (
@@ -902,6 +902,7 @@ export function Composer({
   leadingIcon = false,
   bare = false,
   sourceControl,
+  sendBlockedReason,
 }: {
   request: WizardRequest | undefined;
   busy: boolean;
@@ -927,6 +928,8 @@ export function Composer({
   // it should fill that column and match their width rather than re-centre itself narrower.
   bare?: boolean;
   sourceControl?: ReactNode;
+  // When set, Send stays grey and shows this text on hover and focus. The user can still type.
+  sendBlockedReason?: string;
 }) {
   const [localText, setLocalText] = useState(initialText);
   const text = value ?? localText;
@@ -940,12 +943,12 @@ export function Composer({
 
   const submit = () => {
     const trimmed = text.trim();
-    if (!trimmed || !enabled) return;
+    if (!trimmed || !enabled || sendBlockedReason) return;
     onSend(trimmed);
     if (value === undefined) setText("");
   };
 
-  const canSend = enabled && text.trim().length > 0;
+  const canSend = enabled && text.trim().length > 0 && !sendBlockedReason;
 
   // The box grows with what is being typed and only scrolls once it has run out of room. The
   // comment below the textarea has always claimed this; nothing implemented it, so `rows={3}` was
@@ -983,6 +986,14 @@ export function Composer({
     >
       <ArrowUp size={16} strokeWidth={1.75} aria-hidden />
     </button>
+  );
+  const send = sendBlockedReason ? (
+    // A disabled button gets no pointer events, so the tooltip listens on its wrapper.
+    <Tooltip label={sendBlockedReason} className="shrink-0">
+      {sendButton}
+    </Tooltip>
+  ) : (
+    sendButton
   );
 
   const textarea = (
@@ -1045,14 +1056,14 @@ export function Composer({
           </div>
           <div className="flex w-full items-center justify-between gap-2">
             {sourceControl}
-            {sendButton}
+            {send}
           </div>
         </>
       ) : (
         <>
           {leading}
           {textarea}
-          {sendButton}
+          {send}
         </>
       )}
     </div>

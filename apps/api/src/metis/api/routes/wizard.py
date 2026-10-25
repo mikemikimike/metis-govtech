@@ -36,6 +36,7 @@ from fastapi.openapi.models import Example
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
+from metis.api.settings import SettingsError
 from metis.wizard import (
     CompilationError,
     CompileResult,
@@ -273,9 +274,16 @@ def extract_document_text(
 
 
 def get_dependencies(request: Request) -> WizardDependencies:
-    """Return the startup-composed public Interview handler."""
+    """Return the startup-composed public Interview handler.
+
+    Raises ``SettingsError`` (503 `model_unavailable`) when the app started without the
+    interview settings.
+    """
     dependencies = getattr(request.app.state, "wizard_dependencies", None)
     if dependencies is None:
+        message = getattr(request.app.state, "settings_error", None)
+        if message is not None:
+            raise SettingsError(message)
         raise RuntimeError(
             "Wizard dependencies were not composed at application startup."
         )

@@ -122,6 +122,7 @@ test("blocks the opening form until configuration is ready and offers retry", ()
   let retries = 0;
   const openingProps = {
     busy: false,
+    canStart: true,
     description: "",
     perspective: "end_user" as const,
     onPerspective: () => undefined,
@@ -233,7 +234,10 @@ function openingHarness(
     perspective: Perspective,
     evidence: CapabilityEvidence,
   ) => void,
-  { busy = false }: { busy?: boolean } = {},
+  {
+    busy = false,
+    canStart = true,
+  }: { busy?: boolean; canStart?: boolean } = {},
 ): OpeningHarness {
   let control: OpeningControl | null = null;
   let perspective: Perspective = "end_user";
@@ -250,6 +254,7 @@ function openingHarness(
         configState: { status: "ready", config },
         onRetry: () => undefined,
         busy,
+        canStart,
         description,
         onDescription: (value) => {
           description = value;
@@ -563,6 +568,18 @@ test("the user can start with no capabilities and no confidence", () => {
     known_capability_ids: [],
     confidence: "low",
   });
+});
+
+test("the opening Send is grey and explains why while the interview key is missing", () => {
+  const blocked = openingHarness(testConfig(), undefined, {
+    canStart: false,
+  });
+  assert.equal(
+    composerOf(blocked.render()).props.sendBlockedReason,
+    "Configure API keys to start interview",
+  );
+  const ready = openingHarness(testConfig());
+  assert.equal(composerOf(ready.render()).props.sendBlockedReason, undefined);
 });
 
 test("the opening controls are inside the Composer box", () => {

@@ -14,6 +14,7 @@ import type {
   CapabilityConfidence,
   CapabilityEvidence,
   InterviewDocument,
+  ModelStatus,
   Perspective,
   UserResponse,
 } from "./transport/api";
@@ -21,6 +22,16 @@ import { api, TransportError, toSummary } from "./transport/api";
 import { Composer, Transcript } from "./Conversation";
 import { AddDocuments, DocumentTray } from "./DocumentTray";
 import { Done } from "./Done";
+import {
+  ModelBanner,
+  START_BLOCKED,
+  interviewReady,
+  RunSettings,
+  runModels,
+  runRoles,
+  stateForDownload,
+  type RunModels,
+} from "./RunSettings";
 import { SpecificationView, stepPosition } from "./SpecificationView";
 import { InterviewRail } from "./InterviewRail";
 import { Button, cn } from "./ui";
@@ -192,6 +203,11 @@ export function App() {
   const graderRequest = useRef<Promise<
     Awaited<ReturnType<typeof api.graders>>
   > | null>(null);
+  const [modelStatuses, setModelStatuses] = useState<ModelStatus[]>([]);
+  const [runModelDrafts, setRunModelDrafts] = useState<RunModels | null>(null);
+  // The Interview whose finish waits on the run settings step. The download starts when the
+  // user continues from that step.
+  const [runSettingsFor, setRunSettingsFor] = useState<string | null>(null);
 
   const view = useMemo(() => record && toPresentation(record), [record]);
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
@@ -213,7 +229,14 @@ export function App() {
 
   useEffect(() => {
     setShowGraders(false);
+    setRunModelDrafts(null);
   }, [record?.id]);
+
+  useEffect(() => {
+    // The banner is advice. A failed request shows no banner; the Interview routes still
+    // report missing settings themselves.
+    void api.models().then(setModelStatuses, () => setModelStatuses([]));
+  }, []);
 
   const nearFoot = useRef(true);
   const scrollInterview = useRef<string | null>(null);
@@ -555,19 +578,12 @@ export function App() {
         const result = await api.end(record.state);
         const next = applyEnd(record, result);
         await operations.save(next);
-        if (result.outcome === "done") {
-          try {
-            await packageAndDownload(next);
-          } catch (cause) {
-            operations.report(record.id, errorMessage(cause), () =>
-              downloadCurrent(next),
-            );
-          }
-        }
+        // The run settings step comes first, so the first ZIP holds the chosen models.
+        if (result.outcome === "done") setRunSettingsFor(next.id);
       },
       finish,
     );
-  }, [record, operations, packageAndDownload, downloadCurrent]);
+  }, [record, operations]);
 
   const remove = useCallback(
     async (id: string) => {
@@ -587,6 +603,29 @@ export function App() {
     },
     [operations, refreshList],
   );
+
+  // Save the model names, if the user changed any, then start the download. With no change,
+  // the record and the ZIP are the same as before the step.
+  const continueToDownload = useCallback(async () => {
+    if (!record) return;
+    let next = record;
+    await operations.run(record.id, async () => {
+      const state = stateForDownload(record.state, runModelDrafts);
+      if (state !== record.state) {
+        next = { ...record, updated_at: Date.now(), state };
+        await operations.save(next);
+      }
+      setRunSettingsFor(null);
+      setRunModelDrafts(null);
+      try {
+        await packageAndDownload(next);
+      } catch (cause) {
+        operations.report(record.id, errorMessage(cause), () =>
+          downloadCurrent(next),
+        );
+      }
+    });
+  }, [record, runModelDrafts, operations, packageAndDownload, downloadCurrent]);
 
   if (!loaded) return null;
   const showDocument = view !== null && !manualOpen;
@@ -614,6 +653,7 @@ export function App() {
         />
       )}
       <main className="flex min-w-0 flex-1 flex-col">
+        <ModelBanner statuses={modelStatuses} />
         {error && (
           <Banner
             message={error}
@@ -639,6 +679,7 @@ export function App() {
             configState={wizardConfig}
             onRetry={() => void loadWizardConfig()}
             busy={busy}
+            canStart={interviewReady(modelStatuses)}
             description={openingDescription}
             onDescription={setOpeningDescription}
             perspective={selectedPerspective}
@@ -704,7 +745,23 @@ export function App() {
                   onRespond={send}
                 />
                 {busy && <ThinkingLine message={workingStatus} />}
-                {view.done && <Done />}
+                {view.done && runSettingsFor === view.id ? (
+                  <RunSettings
+                    roles={runRoles(view.specification)}
+                    statuses={modelStatuses}
+                    values={runModelDrafts ?? runModels(view.specification)}
+                    busy={busy || operations.pendingSaves.has(view.id)}
+                    onChange={(role, value) => {
+                      setRunModelDrafts((current) => ({
+                        ...(current ?? runModels(view.specification)),
+                        [role]: value,
+                      }));
+                    }}
+                    onContinue={() => void continueToDownload()}
+                  />
+                ) : (
+                  view.done && <Done />
+                )}
               </div>
             </div>
             <div className="w-full">
@@ -775,6 +832,8 @@ export function App() {
 type OpeningScreenProps = {
   config: WizardConfig;
   busy: boolean;
+  // False while the interview role has no key. The start control stays grey and says why.
+  canStart: boolean;
   description: string;
   onDescription?: (value: string) => void;
   perspective: Perspective;
@@ -866,6 +925,7 @@ export function OpeningScreen(props: OpeningScreenProps) {
     openControl,
     onOpenControl,
     perspectiveSeen,
+    canStart,
   } = props;
   const currentPerspective = config.perspectives.find(
     (item) => item.id === perspective,
@@ -903,6 +963,7 @@ export function OpeningScreen(props: OpeningScreenProps) {
                 roomy
                 placeholder="A support bot for a retail bank…"
                 onSend={start}
+                sendBlockedReason={canStart ? undefined : START_BLOCKED}
                 sourceControl={
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     <AddDocuments

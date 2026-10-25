@@ -9,7 +9,6 @@ import pytest
 import typer
 
 from metis.wizard.adapters.cli import commands as cli
-from metis.wizard.adapters.llm.gateway import API_KEY_VAR, BASE_URL_VAR
 from metis.wizard.application import config
 from metis.wizard.application.compile import compile_experiment
 from metis.wizard.application.matching import CRITERION_JUDGE_FQN, EmbeddingMatcher
@@ -22,7 +21,7 @@ from tests.fixtures.wizard.specifications import research_assistant
 class StubInterviewer:
     """Stands in for the gateway. Serves both roles, as the real one does."""
 
-    def embed(self, texts: list[str], model: str = "") -> list[list[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         return [[1.0, 0.0] for _ in texts]
 
 
@@ -65,7 +64,7 @@ def test_resume_reports_the_pending_request_stage(
     (tmp_path / "inputs/interview_state.json").write_text(
         state.model_dump_json(), encoding="utf-8"
     )
-    monkeypatch.setattr(cli, "_load_env", list)
+    monkeypatch.setattr(cli, "_load_env", lambda: None)
     monkeypatch.setattr(cli, "_new_interviewer", StubInterviewer)
 
     def stop_after_heading(*_args, **_kwargs):
@@ -259,11 +258,11 @@ def test_both_commands_fail_before_any_call_without_credentials(
 ) -> None:
     from typer.testing import CliRunner
 
-    monkeypatch.delenv(BASE_URL_VAR, raising=False)
-    monkeypatch.delenv(API_KEY_VAR, raising=False)
+    for name in ("OPENAI_API_KEY", "INTERVIEW_API_KEY", "EMBEDDING_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
     # Isolate from any real `.env` in the project, which would otherwise supply exactly the
     # credentials this test is asserting the absence of.
-    monkeypatch.setattr(cli, "_load_env", list)
+    monkeypatch.setattr(cli, "_load_env", lambda: None)
     runner = CliRunner()
     from metis.wizard.bootstrap import create_cli_app
 
@@ -289,7 +288,8 @@ def test_both_commands_fail_before_any_call_without_credentials(
         result = runner.invoke(app, argv)
 
         assert result.exit_code == 1
-        assert BASE_URL_VAR in result.output
+        assert "INTERVIEW_API_KEY or OPENAI_API_KEY" in result.output
+        assert "docs/guide/models.md" in result.output
 
 
 # ── the init guard ───────────────────────────────────────────────────────────
@@ -327,17 +327,55 @@ def test_init_refuses_when_a_interview_already_exists(tmp_path) -> None:
 # ── reading .env ───────────────────────────────────────────────────────────
 
 
-def test_a_real_environment_variable_wins_over_a_dotenv_file(
+def test_init_shows_the_env_file_that_it_read(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from typer.testing import CliRunner
+
+    from metis.wizard.bootstrap import create_cli_app
+
+    env_file = tmp_path / "settings.env"
+    env_file.write_text("METIS_TEST_UNUSED=1\n")
+    monkeypatch.setenv("METIS_ENV_FILE", str(env_file))
+    for name in ("OPENAI_API_KEY", "INTERVIEW_API_KEY", "EMBEDDING_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+
+    result = CliRunner().invoke(
+        create_cli_app(),
+        ["init", "An assistant", "--out-dir", str(tmp_path / "out")],
+    )
+
+    assert result.exit_code == 1
+    assert f"Read settings from {env_file}" in result.output
+    assert f"Settings file read: {env_file}" in result.output
+
+
+def test_the_run_summary_shows_each_model_its_source_and_its_key_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A .env fills gaps; it does not override something exported deliberately."""
-    monkeypatch.setenv(BASE_URL_VAR, "https://exported.example")
+    for name in (
+        "OPENAI_API_KEY",
+        "USER_AGENT_API_KEY",
+        "JUDGE_API_KEY",
+        "JUDGE_MODEL",
+        "DEFAULT_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("JUDGE_API_KEY", "k")
+    specification = research_assistant()
+    specification.experiment.defaults.user_agent_model = "ua-model"
 
-    cli._load_env()
+    lines = cli._run_settings(specification)
 
-    import os
-
-    assert os.environ[BASE_URL_VAR] == "https://exported.example"
+    assert lines == [
+        "  User agent: ua-model from specification.yaml "
+        "(not configured: set USER_AGENT_API_KEY or OPENAI_API_KEY)",
+        "  Judge: gpt-6-luna from built-in default (configured)",
+    ]
+    specification.experiment.target_binding = "targets/app.yaml"
+    assert any(
+        line.startswith("  Runner agent: ") for line in cli._run_settings(specification)
+    )
 
 
 def test_export_can_resume_after_a_failed_specification_write(

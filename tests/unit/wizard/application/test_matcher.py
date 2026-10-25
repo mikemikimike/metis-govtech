@@ -42,3 +42,13 @@ def test_a_concrete_grader_with_valid_args_passes() -> None:
     validate_grader_args(
         "tests.unit.engine.graders_for_tests.FixedScoreGrader", {"score": 1.0}
     )
+
+
+def test_embeddings_warning_names_the_variables_when_the_key_is_missing() -> None:
+    from metis.wizard.application.matching import embeddings_warning
+
+    warning = embeddings_warning({"INTERVIEW_API_KEY": "k"})
+    assert warning is not None
+    assert "EMBEDDING_API_KEY or OPENAI_API_KEY" in warning
+    assert "criterion judge" in warning
+    assert embeddings_warning({"OPENAI_API_KEY": "k"}) is None

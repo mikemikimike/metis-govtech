@@ -123,6 +123,12 @@ class TrialConfig(BaseModel, extra="ignore"):
     timeout_minutes: int = 15
     response_wait_ms: int = 300000
     fixtures: list[str] = Field(default_factory=list)
+    user_agent_model: str | None = None
+    """The user agent model that produced this trial. ``None`` in a record written before
+    the engine recorded it."""
+    runner_agent_model: str | None = None
+    """The runner agent model of a generic runner. ``None`` when the runner has no runner
+    agent."""
 
 
 class TrialOutcome(BaseModel, extra="ignore"):

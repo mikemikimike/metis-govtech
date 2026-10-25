@@ -53,6 +53,9 @@ USER_AGENT_MODEL=your-simulation-model
 JUDGE_MODEL=your-grading-model
 ```
 
+Every METIS command reads this one file. A value that you export in the shell wins. Each model
+role can also have its own key and gateway. See `docs/guide/models.md` in the repository.
+
 In a clone, copy the example file to the repository root instead:
 
 ```bash

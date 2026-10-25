@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from .._fixture_artifacts import build_fixture_artifacts
 from ..artifacts import file_facts
 from ..llm_calls import LLMCallLog
+from ..model_settings import user_agent_settings
 from .orchestrator import Orchestrator
 from .user_agent.agent import UserAgent
 
@@ -47,7 +48,10 @@ def build_trial(
     """
     del fixtures_dir
     agent = UserAgent(
-        persona=persona, scenario=scenario, llm_log=LLMCallLog.for_trial(run_dir)
+        persona=persona,
+        scenario=scenario,
+        llm_log=LLMCallLog.for_trial(run_dir),
+        settings=user_agent_settings(trial_config.user_agent_model),
     )
     return Orchestrator(
         runner=runner,
@@ -69,11 +73,15 @@ async def resolve_fixture_descriptions(
     fixtures_dir: Path,
     experiment_root: Path,
     author_descriptions: dict[str, str],
+    *,
+    user_agent_model: str | None = None,
 ) -> dict[str, str]:
     """One description per distinct fixture: the author's, else its file facts.
 
-    No LLM is called. A fixture missing on disk is left out, as in gen_1.
+    No LLM is called, so ``user_agent_model`` is not used. A fixture missing on disk is
+    left out, as in gen_1.
     """
+    del user_agent_model
     artifacts = build_fixture_artifacts(
         sorted(set(fixture_names)), fixtures_dir, experiment_root, author_descriptions
     )

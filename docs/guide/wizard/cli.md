@@ -37,12 +37,18 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 
    | Variable | Required | Purpose |
    |---|---|---|
-   | `OPENAI_API_KEY` | Yes | API key for the Interview model |
-   | `OPENAI_BASE_URL` | Yes | Full OpenAI-compatible provider endpoint |
-   | `INTERVIEW_MODEL` | No | Interview model name; a provider default applies when unset |
+   | `OPENAI_API_KEY` | Yes | API key of the shared gateway. `INTERVIEW_API_KEY` and `EMBEDDING_API_KEY` override it for one role. |
+   | `OPENAI_BASE_URL` | No | Full OpenAI-compatible provider endpoint. Unset uses the default OpenAI endpoint. |
+   | `DEFAULT_MODEL` | No | Model of every chat role. Unset uses `gpt-6-luna`. |
+   | `INTERVIEW_MODEL` | No | Interview model name. Unset uses `DEFAULT_MODEL`. |
+   | `EMBEDDING_MODEL` | No | Embedding model for scorer matching. Unset uses `text-embedding-3-large`. Without an embeddings key, the CLI warns, and each Criterion uses the criterion judge. |
    | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | No | Tracing. Tracing is off unless all three are set. |
 
-   An environment variable has priority over the value in `.env`.
+   An environment variable has priority over the value in `.env`. The command reads one `.env`
+   file and prints its path. See the [model guide](../models.md) for the search and the
+   variables of each role. When the run ends, the CLI lists the models that the run needs, where
+   each one comes from, and whether its key is set. To change a model, set `USER_AGENT_MODEL` or
+   `JUDGE_MODEL` in `.env`, or edit `specification.yaml`.
 
 4. Verify the command:
 

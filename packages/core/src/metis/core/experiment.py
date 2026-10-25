@@ -29,6 +29,25 @@ def _require_relative(path: str) -> str:
 RelativePath = Annotated[str, AfterValidator(_require_relative)]
 """A path relative to ``specification.yaml``; ``..`` is allowed."""
 
+_OPTIONAL_MODELS = ("judge_model", "user_agent_model", "runner_agent_model")
+
+
+def omit_unset_models(data: dict[str, Any]) -> None:
+    """Remove unset model fields from a dumped Experiment or Specification, in place.
+
+    Existing specs then serialise unchanged. ``defaults`` goes when no model is set.
+    """
+    defaults = data.get("defaults")
+    if isinstance(defaults, dict):
+        for key in _OPTIONAL_MODELS:
+            if defaults.get(key) is None:
+                defaults.pop(key, None)
+        if not defaults:
+            data.pop("defaults")
+    for task in data.get("tasks") or []:
+        if isinstance(task, dict) and task.get("user_agent_model") is None:
+            task.pop("user_agent_model", None)
+
 
 class Persona(NamedNode[str]):
     """A user type whose id can differ from its display name."""
@@ -55,15 +74,19 @@ class Task(BaseModel, extra="forbid"):
     timeout_minutes: int = Field(default=15, gt=0, strict=True)
     response_wait_ms: int = Field(default=300000, gt=0, strict=True)
     max_run_retries: int | None = Field(default=None, ge=0, strict=True)
+    user_agent_model: str | None = Field(default=None, min_length=1)
+    """The user agent model of this Test Case."""
 
 
 class ExperimentDefaults(BaseModel, extra="forbid"):
     """Experiment-wide defaults that individual criteria can override."""
 
     judge_model: str | None = Field(default=None, min_length=1)
-    """The judge model for every model-based grader whose criterion does not set
-    ``grader_args.model``. When unset, the engine falls back to ``JUDGE_MODEL`` and then to its
-    package default."""
+    """The judge model of every model-based grader."""
+    user_agent_model: str | None = Field(default=None, min_length=1)
+    """The user agent model of every Test Case."""
+    runner_agent_model: str | None = Field(default=None, min_length=1)
+    """The runner agent model of the generic runners."""
 
 
 class Experiment(BaseModel):
@@ -83,12 +106,11 @@ class Experiment(BaseModel):
 
     @model_serializer(mode="wrap")
     def _omit_empty_defaults(self, handler: SerializerFunctionWrapHandler) -> Any:
-        """Leave ``defaults`` and ``target_binding`` out until set, so existing specs serialise
-        unchanged."""
+        """Leave unset models, ``defaults`` and ``target_binding`` out, so existing specs
+        serialise unchanged."""
         data = handler(self)
         if isinstance(data, dict):
-            if not self.defaults.model_dump(exclude_none=True):
-                data.pop("defaults", None)
+            omit_unset_models(data)
             if self.target_binding is None:
                 data.pop("target_binding", None)
         return data

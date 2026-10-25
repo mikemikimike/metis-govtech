@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 
     from rich.console import Console
 
+    from metis.wizard import Specification
     from metis.wizard.application.interviewer import Interviewer
 
 
@@ -82,6 +83,17 @@ def _new_interviewer(interview_id: str | None = None) -> Interviewer:
             return factory(interview_id)
         return factory(interview_id=interview_id)
     return factory()
+
+
+def _warn_without_embeddings() -> None:
+    """Say once that grader matching is off when the embeddings role has no key."""
+    import os
+
+    from metis.wizard.application.matching import embeddings_warning
+
+    warning = embeddings_warning(os.environ)
+    if warning is not None:
+        typer.echo(f"Warning: {warning}", err=True)
 
 
 def _matcher(interviewer: Interviewer) -> object:
@@ -240,6 +252,13 @@ def _write_outputs(state: InterviewState, out_dir: Path) -> None:
     typer.echo(
         f"Run with: metis engine run --input-dir {shlex.quote(str(out_dir / export_layout.OUTPUTS))}"
     )
+    typer.echo("\nModel settings for the run (see docs/guide/models.md):")
+    for line in _run_settings(specification):
+        typer.echo(line)
+    typer.echo(
+        "To change a model, set USER_AGENT_MODEL or JUDGE_MODEL in .env, "
+        "or edit specification.yaml."
+    )
     typer.echo(f"\n{format_trials(specification.trial_count())} when you run this.")
 
 
@@ -263,30 +282,50 @@ def _load(out_dir: Path) -> InterviewState:
     )
 
 
-def _load_env() -> list[Path]:
-    """Read `.env` files, searching only inside the project.
+def _load_env() -> Path | None:
+    """Read the one project `.env` (`metis.core.model_settings.load_env`).
 
-    `load_dotenv()` with no arguments walks *up* from the working directory until it finds a
-    file — which, run from this repo, walks past the repo entirely and loads `~/.env`. Reading
-    a credentials file from outside the project because nothing inside matched is not a
-    default worth having, so the search is an explicit list instead.
-
-    Existing environment variables win: a `.env` fills gaps, it does not override a variable
-    you exported deliberately.
-
-    Returns the files actually loaded, so a command can say where its credentials came from.
+    Exported values win: a `.env` fills gaps. Returns the file that was read, so a command can
+    say where its settings came from. Exits when `METIS_ENV_FILE` names a missing file.
     """
-    from dotenv import load_dotenv
+    from metis.core.model_settings import ModelSettingsError, load_env
 
-    package_root = Path(__file__).resolve().parents[3]  # .../packages/wizard
-    repo_root = package_root.parents[1]
+    try:
+        return load_env()
+    except ModelSettingsError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
-    loaded = []
-    for candidate in (Path.cwd() / ".env", package_root / ".env", repo_root / ".env"):
-        if candidate.is_file() and candidate not in loaded:
-            load_dotenv(candidate, override=False)
-            loaded.append(candidate)
-    return loaded
+
+def _run_settings(specification: Specification) -> list[str]:
+    """One line for each role that the run needs, with its model and status.
+
+    The wizard writes a Specification without the simulator and judge keys. This list says
+    which settings `metis engine run` needs. It shows variable names, never values.
+    """
+    import os
+
+    from metis.core.model_settings import ROLES, ModelRole, resolve_role
+
+    defaults = specification.experiment.defaults
+    models: dict[ModelRole, str | None] = {
+        ModelRole.USER_AGENT: defaults.user_agent_model,
+        ModelRole.JUDGE: defaults.judge_model,
+    }
+    if specification.experiment.target_binding is not None:
+        models[ModelRole.RUNNER_AGENT] = defaults.runner_agent_model
+    lines = []
+    for role, model in models.items():
+        settings = resolve_role(role, os.environ, model)
+        status = (
+            "configured"
+            if settings.configured
+            else f"not configured: set {' or '.join(ROLES[role].key_vars)}"
+        )
+        lines.append(
+            f"  {ROLES[role].label}: {settings.model} from {settings.source} ({status})"
+        )
+    return lines
 
 
 # ── commands ───────────────────────────────────────────────────────────────
@@ -355,8 +394,9 @@ def init(
         confirm=_confirm if sys.stdin.isatty() else None,
     )
 
-    for env_file in _load_env():
-        typer.echo(f"Read credentials from {env_file}")
+    env_file = _load_env()
+    if env_file is not None:
+        typer.echo(f"Read settings from {env_file}")
 
     try:
         # Checked before anything else happens, so a missing key costs nothing and is
@@ -365,6 +405,7 @@ def init(
     except InterviewerUnavailable as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
+    _warn_without_embeddings()
 
     from metis.wizard.adapters.cli.opening import read_capability_evidence
 
@@ -419,13 +460,16 @@ def resume(
         _write_outputs(state, out_dir)
         return
 
-    _load_env()
+    env_file = _load_env()
+    if env_file is not None:
+        typer.echo(f"Read settings from {env_file}")
 
     try:
         interviewer = _new_interviewer()
     except InterviewerUnavailable as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
+    _warn_without_embeddings()
 
     typer.echo(f"Resuming at the {state.pending.stage} step.")
 

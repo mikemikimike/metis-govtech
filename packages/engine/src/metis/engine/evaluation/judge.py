@@ -7,7 +7,7 @@ run, in this order:
 1. ``grader_args.model`` on the criterion
 2. the experiment's ``defaults.judge_model``
 3. the ``JUDGE_MODEL`` environment variable
-4. ``DEFAULT_JUDGE_MODEL``
+4. ``DEFAULT_MODEL``, else ``gpt-6-luna`` (``metis.core.model_settings.default_model``)
 
 and written into the args before they are validated, so ``self.args.model`` is always a ``str``
 inside ``grade()`` and every ``GraderRecord`` names the model that produced its results.
@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from openai import AsyncOpenAI
 
+from metis.core.model_settings import ModelRole, resolve_role
 from metis.library.grader import JudgeArgs, LLMSettings, criterion_judge_args
 
 if TYPE_CHECKING:
@@ -39,7 +40,6 @@ if TYPE_CHECKING:
 
     from metis.library.grader import GraderArgs
 
-DEFAULT_JUDGE_MODEL = "gemini-3.5-flash-lite"
 MAX_JUDGE_CONNECTIONS = 50
 """Grader LLM calls in flight at once, across every grader run. Matches the old per-grader
 semaphore of 50."""
@@ -68,9 +68,9 @@ def resolve_grader_args(
     resolved = criterion_judge_args(args_model, grader_args, description)
     if issubclass(args_model, JudgeArgs):
         if "model" not in resolved:
-            resolved["model"] = (
-                default_judge_model or env.get("JUDGE_MODEL") or DEFAULT_JUDGE_MODEL
-            )
+            resolved["model"] = resolve_role(
+                ModelRole.JUDGE, env, default_judge_model
+            ).model
         if "max_input_tokens" not in resolved and "JUDGE_MAX_INPUT_TOKENS" in env:
             resolved["max_input_tokens"] = env["JUDGE_MAX_INPUT_TOKENS"]
     return resolved

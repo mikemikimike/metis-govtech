@@ -1,8 +1,7 @@
-"""The generic HTTP runner's factory skeleton and the runner-agent model (#507)."""
+"""The generic HTTP runner's factory skeleton."""
 
 from __future__ import annotations
 
-import importlib
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -13,12 +12,9 @@ from metis.core.trials import TrialConfig
 from metis.engine.simulation import trial as seam
 from metis.engine.simulation.gen_2 import runner as gen_2_runner
 from metis.engine.simulation.gen_2.binding import TargetBindingError
-from metis.engine.simulation.gen_2.runners import config as runners_config
 from metis.engine.simulation.gen_2.runners.http import HttpRunnerFactory
-from metis.engine.simulation.gen_2.user_agent import config as user_agent_config
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
 
 _BINDING = """\
@@ -76,35 +72,3 @@ async def test_create_returns_a_gen_2_runner(inputs: Path, tmp_path: Path) -> No
     assert await runner.setup(TrialConfig(persona="p", scenario="s")) is None
     assert await runner.teardown() is None
     await factory.close()
-
-
-@pytest.fixture
-def reload_config(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    """Reload the settings modules after ``monkeypatch`` changes, and after the test."""
-
-    def reload() -> Any:
-        importlib.reload(user_agent_config)
-        return importlib.reload(runners_config)
-
-    yield reload
-    monkeypatch.undo()
-    reload()
-
-
-def test_the_runner_agent_model_falls_back_to_the_user_agents(
-    monkeypatch: pytest.MonkeyPatch, reload_config: Any
-) -> None:
-    monkeypatch.delenv("RUNNER_AGENT_MODEL", raising=False)
-    monkeypatch.setenv("USER_AGENT_MODEL", "ua-model")
-    assert reload_config().RUNNER_AGENT_MODEL == "ua-model"
-
-    monkeypatch.setenv("RUNNER_AGENT_MODEL", "")
-    assert reload_config().RUNNER_AGENT_MODEL == "ua-model"
-
-
-def test_the_runner_agent_model_is_its_own_when_set(
-    monkeypatch: pytest.MonkeyPatch, reload_config: Any
-) -> None:
-    monkeypatch.setenv("RUNNER_AGENT_MODEL", "ra-model")
-    monkeypatch.setenv("USER_AGENT_MODEL", "ua-model")
-    assert reload_config().RUNNER_AGENT_MODEL == "ra-model"

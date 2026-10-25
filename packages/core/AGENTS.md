@@ -4,7 +4,7 @@ See root [AGENTS.md](../../AGENTS.md) for monorepo-wide instructions.
 
 ## Package Purpose
 
-Core data models and abstractions for the METIS suite. Zero workspace dependencies — only Pydantic v2 + stdlib.
+Core data models and abstractions for the METIS suite. Zero workspace dependencies — only Pydantic v2, python-dotenv, and stdlib.
 
 ## Shared schemas
 
@@ -17,7 +17,7 @@ Private runtime models and API models stay in their owning packages. See the
 
 ## Package-Specific Notes
 
-- Dependencies: Pydantic v2, structlog, Rich (plus stdlib). Zero workspace dependencies.
+- Dependencies: Pydantic v2, structlog, Rich, python-dotenv (plus stdlib). Zero workspace dependencies.
 - Public logging API: `from metis.core.logging import get_logger, configure_logging`
 - Public console API: `from metis.core.console import console`
 
@@ -48,6 +48,10 @@ Private runtime models and API models stay in their owning packages. See the
 - `reporting.py`: `EvaluationResults` (`outputs/reports/results.json`), one `GraderRecord`
   per grader per session. It is version-guarded like `TrialRecord` and has no published
   schema file.
+- `model_settings.py`: the model and gateway of each LLM role (`ModelRole`, `ROLES`,
+  `resolve_role`, `missing_settings`, `check_roles`) and the one `.env` search (`load_env`).
+  Every command uses it. Keys and URLs come only from the environment; `RoleSettings` hides
+  them from `repr`, and an error names variables, never values. See `docs/guide/models.md`.
 - `trials.py`: `TrialRecord` (`outputs/trials/<trial>/record.json`) and the models it nests
   (`TrialConfig`, `TrialOutcome`, `TrialFailure`, `GraderRef`). The engine writes and resumes
   from it; the report reads it. Version-guarded by `_TRIAL_RECORD_VERSION`, no published

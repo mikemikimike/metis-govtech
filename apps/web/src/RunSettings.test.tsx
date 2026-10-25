@@ -1,0 +1,103 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { renderToStaticMarkup } from "react-dom/server";
+import {
+  ModelBanner,
+  START_BLOCKED,
+  interviewReady,
+  stateForDownload,
+  withRunModels,
+} from "./RunSettings";
+import type {
+  InterviewState,
+  ModelStatus,
+  Specification,
+} from "./transport/api";
+
+function status(
+  role: ModelStatus["role"],
+  configured: boolean,
+  missing_vars: string[] = [],
+): ModelStatus {
+  return {
+    role,
+    label: role,
+    model: `${role}-model`,
+    configured,
+    affects_scores: role !== "interview" && role !== "embeddings",
+    missing_vars,
+  };
+}
+
+const specification: Specification = {
+  schema_version: 1,
+  id: "test",
+  runner_factory_ref:
+    "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory",
+  target: { name: "T", users: "U", description: "D", detail: "" },
+  features: [],
+  personas: [],
+  scenarios: [],
+  tasks: [],
+};
+
+const state = {
+  specification,
+  behaviours_confirmed: true,
+  confirmed: true,
+  history: [],
+  user_typed: [],
+  issued_ids: [],
+  pending: null,
+} as unknown as InterviewState;
+
+test("only the Interview key blocks the start, and only embeddings get a banner", () => {
+  const banner = (statuses: ModelStatus[]) =>
+    renderToStaticMarkup(<ModelBanner statuses={statuses} />);
+  const noInterview = [
+    status("interview", false, ["INTERVIEW_API_KEY", "OPENAI_API_KEY"]),
+  ];
+  assert.equal(banner(noInterview), "");
+  assert.equal(interviewReady(noInterview), false);
+  assert.equal(START_BLOCKED, "Configure API keys to start interview");
+
+  const noEmbeddings = [status("interview", true), status("embeddings", false)];
+  assert.match(
+    banner(noEmbeddings),
+    /Set up embedding models to select optimal graders\./,
+  );
+  assert.equal(interviewReady(noEmbeddings), true);
+
+  const noRunKeys = [
+    status("interview", true),
+    status("user_agent", false),
+    status("judge", false),
+  ];
+  assert.equal(banner(noRunKeys), "");
+});
+
+test("the run settings step writes model names only into the experiment defaults", () => {
+  const next = withRunModels(state, {
+    user_agent: " ua-model ",
+    judge: "judge-model",
+  });
+  assert.deepEqual(next.specification.defaults, {
+    user_agent_model: "ua-model",
+    judge_model: "judge-model",
+  });
+  assert.deepEqual(
+    { ...next.specification, defaults: undefined },
+    { ...specification, defaults: undefined },
+  );
+  assert.deepEqual(withRunModels(next, { judge: "" }).specification.defaults, {
+    user_agent_model: "ua-model",
+  });
+});
+
+test("continuing with no change packages the same state as before the step", () => {
+  assert.equal(stateForDownload(state, null), state);
+  assert.deepEqual(
+    stateForDownload(state, { judge: "j" }).specification.defaults,
+    { judge_model: "j" },
+  );
+});

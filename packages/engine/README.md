@@ -21,6 +21,9 @@ cp packages/engine/.env.example .env
 #          LANGFUSE_BASE_URL, ORCA_API_URL, ORCA_API_KEY
 ```
 
+The [model guide](../../docs/guide/models.md) lists the model variables of each role and the
+Specification fields that record the models.
+
 ## Running
 
 These commands use the `simple` example, which is small enough for a quick first run (see its

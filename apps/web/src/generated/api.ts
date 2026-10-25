@@ -192,6 +192,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the model and status of each LLM role
+         * @description Return the model name and configured status of each role. No key or URL is returned.
+         */
+        get: operations["models_api_v1_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -584,6 +604,10 @@ export interface components {
         ExperimentDefaults: {
             /** Judge Model */
             judge_model?: string | null;
+            /** User Agent Model */
+            user_agent_model?: string | null;
+            /** Runner Agent Model */
+            runner_agent_model?: string | null;
         };
         /**
          * ExtractedDocument
@@ -942,6 +966,29 @@ export interface components {
          */
         MissingDataCode: "target_incomplete" | "behaviours_incomplete" | "no_measured_behaviour" | "criteria_incomplete" | "no_personas" | "no_scenarios" | "behaviour_uncovered" | "scenario_no_selected_behaviour" | "scenario_no_persona" | "scenario_unknown_reference" | "scenario_invalid_trials";
         /**
+         * ModelRole
+         * @description One LLM role in the METIS flow.
+         * @enum {string}
+         */
+        ModelRole: "interview" | "embeddings" | "user_agent" | "runner_agent" | "judge";
+        /**
+         * ModelStatus
+         * @description The status of one LLM role. It holds names only, never a key or a URL.
+         */
+        ModelStatus: {
+            role: components["schemas"]["ModelRole"];
+            /** Label */
+            label: string;
+            /** Model */
+            model: string;
+            /** Configured */
+            configured: boolean;
+            /** Affects Scores */
+            affects_scores: boolean;
+            /** Missing Vars */
+            missing_vars: string[];
+        };
+        /**
          * Option
          * @description Shared — deliberately unprefixed.
          *
@@ -1218,6 +1265,8 @@ export interface components {
             response_wait_ms: number;
             /** Max Run Retries */
             max_run_retries?: number | null;
+            /** User Agent Model */
+            user_agent_model?: string | null;
         };
         /** Turn */
         Turn: {
@@ -1681,6 +1730,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraderSummary"][];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+        };
+    };
+    models_api_v1_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelStatus"][];
                 };
             };
             /** @description Internal Server Error */

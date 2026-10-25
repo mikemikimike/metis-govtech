@@ -15,12 +15,11 @@ import yaml
 from openai import OpenAI
 from pydantic import BaseModel, Field, model_validator
 
+from metis.core.model_settings import ROLES, ModelRole, resolve_role
 from metis.core.specification import Specification
 
 if TYPE_CHECKING:
     from typing import Self
-
-DEFAULT_MODEL = "gemini-embedding-2"
 
 
 class BehaviourText(StrEnum):
@@ -140,21 +139,31 @@ class TextEmbedder(Protocol):
 
 
 class GatewayEmbedder:
-    """Create the API client only when a text is missing from the cache."""
+    """Create the API client only when a text is missing from the cache.
 
-    def __init__(self, model: str = DEFAULT_MODEL) -> None:
-        self.model = model
-        self.base_url = os.environ.get("OPENAI_BASE_URL", "").rstrip("/")
+    The model and the gateway are the embeddings role (`EMBEDDING_*`, then `OPENAI_*`).
+    """
+
+    def __init__(self) -> None:
+        self._settings = resolve_role(ModelRole.EMBEDDINGS, os.environ)
+        self.model = self._settings.model
+        self.base_url = (self._settings.base_url or "").rstrip("/")
         self.endpoint_hash = text_hash(self.base_url) if self.base_url else ""
         self._client: OpenAI | None = None
 
     def embed(self, text: str) -> list[float]:
         if self._client is None:
-            if not self.base_url or not os.environ.get("OPENAI_API_KEY"):
+            if not self._settings.configured:
+                names = " or ".join(ROLES[ModelRole.EMBEDDINGS].key_vars)
                 raise ValueError(
-                    "Missing embeddings require OPENAI_BASE_URL and OPENAI_API_KEY."
+                    f"Missing embeddings require {names}. See docs/guide/models.md."
                 )
-            self._client = OpenAI(base_url=self.base_url, timeout=60, max_retries=2)
+            self._client = OpenAI(
+                base_url=self.base_url or None,
+                api_key=self._settings.api_key,
+                timeout=60,
+                max_retries=2,
+            )
         # This gateway combines multiple texts into one vector for Gemini embedding 2.
         response = self._client.embeddings.create(model=self.model, input=text)
         if len(response.data) != 1:

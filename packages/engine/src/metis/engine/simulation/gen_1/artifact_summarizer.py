@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 from metis.core import Artifact, resolve_artifact_path
@@ -21,19 +20,15 @@ from metis.core.logging import get_logger
 from .._fixture_artifacts import build_fixture_artifacts
 from .._hashing import sha256_file
 from ..llm_calls import LLMCallLog, parse_completion
-from .user_agent.config import (
-    USER_AGENT_API_KEY,
-    USER_AGENT_BASE_URL,
-    USER_AGENT_MAX_TOKENS,
-    USER_AGENT_MODEL,
-    USER_AGENT_TEMPERATURE,
-)
+from ..model_settings import llm_client, sampling_options, user_agent_settings
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
 
     from openai.types.chat import ChatCompletionMessageParam
+
+    from metis.core.model_settings import RoleSettings
 
 logger = get_logger()
 
@@ -82,12 +77,11 @@ async def _summarize_via_llm(
     triggering_message: str,
     turn_number: int,
     llm_log: LLMCallLog,
+    settings: RoleSettings,
 ) -> tuple[str, str]:
     """Return ``(content_description, state_description)`` from the LLM."""
     # Retries go through parse_completion so each attempt is logged.
-    client = AsyncOpenAI(
-        api_key=USER_AGENT_API_KEY, base_url=USER_AGENT_BASE_URL, max_retries=0
-    )
+    client = llm_client(settings)
     user = (
         f"File name: {name}\n"
         f"Delivered on turn {turn_number}.\n"
@@ -98,19 +92,14 @@ async def _summarize_via_llm(
         {"role": "system", "content": _SUMMARIZER_SYSTEM},
         {"role": "user", "content": user},
     ]
-    options: dict[str, object] = {}
-    if USER_AGENT_MAX_TOKENS is not None:
-        options["max_tokens"] = USER_AGENT_MAX_TOKENS
-    if USER_AGENT_TEMPERATURE is not None:
-        options["temperature"] = USER_AGENT_TEMPERATURE
     response = await parse_completion(
         client,
         llm_log,
         component="artifact_summarizer",
-        model=USER_AGENT_MODEL,
+        model=settings.model,
         messages=messages,
         response_format=_SummaryOut,
-        **options,
+        **sampling_options(),
     )
     parsed = response.choices[0].message.parsed
     if parsed is None:
@@ -125,11 +114,14 @@ async def summarize_artifact(
     triggering_message: str,
     turn_number: int,
     llm_log: LLMCallLog,
+    settings: RoleSettings | None = None,
 ) -> None:
     """Enrich ``artifact`` in place. Never raises.
 
     :param llm_log: Where the summary call's rows go: the trial's log for a
         download, the experiment's for a fixture.
+    :param settings: The user agent role, which the summariser shares. Unset, it
+        resolves from the environment.
     """
     if artifact.state != "received":
         return
@@ -174,6 +166,7 @@ async def summarize_artifact(
             triggering_message=triggering_message,
             turn_number=turn_number,
             llm_log=llm_log,
+            settings=settings or user_agent_settings(),
         )
         artifact.content_description = content_desc
         artifact.state_description = state_desc
@@ -188,7 +181,11 @@ async def summarize_artifact(
 
 
 async def summarize_fixture_artifacts(
-    fixtures: list[Artifact], experiment_root: Path, *, llm_log: LLMCallLog
+    fixtures: list[Artifact],
+    experiment_root: Path,
+    *,
+    llm_log: LLMCallLog,
+    settings: RoleSettings | None = None,
 ) -> None:
     """Fill ``content_description`` for fixtures the author left undescribed.
 
@@ -207,6 +204,7 @@ async def summarize_fixture_artifacts(
             triggering_message="(staged fixture, uploaded by the user)",
             turn_number=0,
             llm_log=llm_log,
+            settings=settings,
         )
         artifact.state_description = None
 
@@ -216,8 +214,13 @@ async def resolve_fixture_descriptions(
     fixtures_dir: Path,
     experiment_root: Path,
     author_descriptions: dict[str, str],
+    *,
+    user_agent_model: str | None = None,
 ) -> dict[str, str]:
     """Resolve exactly one ``content_description`` per unique fixture, experiment-wide.
+
+    ``user_agent_model`` is the experiment's ``defaults.user_agent_model``. The summaries
+    run once for the experiment, so a Test Case model does not apply to them.
 
     A fixture's content is invariant across the scenarios that reference it, so
     it deserves a single description (spec §6). Author-supplied descriptions win;
@@ -233,7 +236,10 @@ async def resolve_fixture_descriptions(
         unique_names, fixtures_dir, experiment_root, author_descriptions
     )
     await summarize_fixture_artifacts(
-        artifacts, experiment_root, llm_log=LLMCallLog.for_experiment(experiment_root)
+        artifacts,
+        experiment_root,
+        llm_log=LLMCallLog.for_experiment(experiment_root),
+        settings=user_agent_settings(user_agent_model),
     )
     return {
         a.name: a.content_description

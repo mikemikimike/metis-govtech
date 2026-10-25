@@ -6,7 +6,6 @@ CLI adapter depend on protocols; this module supplies the PlatformAI implementat
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
 
 from metis.wizard.adapters.cli import commands
@@ -17,6 +16,7 @@ if TYPE_CHECKING:
 
     import typer
 
+    from metis.core.model_settings import RoleSettings
     from metis.wizard.application.interviewer import Interviewer
 
 
@@ -25,20 +25,20 @@ def platform_interviewer(interview_id: str | None = None) -> Interviewer:
     return GatewayInterviewer(interview_id=interview_id)
 
 
-def configure_interview_runtime(*, api_key: str, base_url: str, model: str) -> None:
+def configure_interview_runtime(
+    *, interview: RoleSettings, embeddings: RoleSettings
+) -> None:
     """Install the production Interviewer and matcher used by the public Interview function.
 
-    Provider construction stays in this composition root. Callers provide connection settings and
-    never need to import or operate the gateway, matcher, or driver objects.
+    Provider construction stays in this composition root. Callers give the resolved settings of
+    the interview and embeddings roles (`metis.core.model_settings.resolve_role`) and never
+    need to import or operate the gateway, matcher, or driver objects. The settings stay in
+    the objects. This function does not write them to the environment.
     """
-    os.environ["OPENAI_API_KEY"] = api_key
-    os.environ["OPENAI_BASE_URL"] = base_url
-    os.environ["INTERVIEW_MODEL"] = model
-
     from metis.wizard.application.matching import EmbeddingMatcher
     from metis.wizard.application.turn import configure_interview_dependencies
 
-    interviewer = GatewayInterviewer()
+    interviewer = GatewayInterviewer(interview=interview, embeddings=embeddings)
     configure_interview_dependencies(
         interviewer, EmbeddingMatcher(embedder=interviewer)
     )

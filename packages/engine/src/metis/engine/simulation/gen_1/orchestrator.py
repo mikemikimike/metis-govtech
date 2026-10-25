@@ -600,6 +600,7 @@ class Orchestrator:
                     triggering_message=current_message,
                     turn_number=turn_count,
                     llm_log=self._llm_log,
+                    settings=getattr(self._agent, "settings", None),
                 )
 
     def _build_record(

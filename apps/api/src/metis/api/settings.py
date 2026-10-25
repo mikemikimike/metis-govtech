@@ -5,16 +5,33 @@ user Specification, pending request, or Interview state — every lifecycle requ
 state in its body. `build_dependencies` is the one place that constructs the real gateway-backed
 interviewer and matcher; tests inject a scripted pair instead through the router's dependency
 override.
+
+The API starts when model settings are missing. Then `GET /api/v1/models` reports the missing
+roles, and each Interview route returns 503 `model_unavailable`.
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
+from metis.core.model_settings import (
+    ModelRole,
+    RoleSettings,
+    find_env_file,
+    format_missing_settings,
+    missing_settings,
+    resolve_role,
+)
 from metis.wizard import InterviewRequest, InterviewResult
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+API_ROLES = (ModelRole.INTERVIEW,)
+"""The roles that the API cannot run an Interview without. Embeddings are optional."""
 
 
 class SettingsError(RuntimeError):
@@ -23,36 +40,25 @@ class SettingsError(RuntimeError):
 
 @dataclass(frozen=True)
 class Settings:
-    """The three environment-backed settings the service needs to reach the model gateway."""
+    """The environment that the API reads its model settings from."""
 
-    api_key: str
-    base_url: str
-    interview_model: str
+    env: Mapping[str, str]
+    env_file: Path | None = None
 
     @classmethod
-    def from_env(cls) -> Settings:
-        """Read settings from the environment, naming any that are missing."""
-        api_key = os.environ.get("OPENAI_API_KEY", "")
-        base_url = os.environ.get("OPENAI_BASE_URL", "")
-        interview_model = os.environ.get("INTERVIEW_MODEL", "")
-        missing = [
-            name
-            for name, value in (
-                ("OPENAI_API_KEY", api_key),
-                ("OPENAI_BASE_URL", base_url),
-                ("INTERVIEW_MODEL", interview_model),
-            )
-            if not value
-        ]
-        if missing:
-            raise SettingsError(
-                f"The API needs {', '.join(missing)} in the environment."
-            )
-        return cls(
-            api_key=api_key,
-            base_url=base_url,
-            interview_model=interview_model,
-        )
+    def from_env(cls, env_file: Path | None = None) -> Settings:
+        """Take a copy of the process environment."""
+        return cls(env=dict(os.environ), env_file=env_file or find_env_file())
+
+    def role(self, role: ModelRole) -> RoleSettings:
+        return resolve_role(role, self.env)
+
+    def missing_message(self) -> str | None:
+        """The error text when the interview role has no key, else ``None``."""
+        missing = missing_settings(API_ROLES, self.env)
+        if not missing:
+            return None
+        return format_missing_settings("The METIS API", missing, self.env_file)
 
 
 InterviewHandler: TypeAlias = Callable[[InterviewRequest], InterviewResult]
@@ -68,23 +74,30 @@ class WizardDependencies:
 def build_dependencies(settings: Settings) -> WizardDependencies:
     """Compose the production interviewer and matcher from settings.
 
-    The wizard package owns provider construction. The API passes only normalized settings to the
-    public runtime configurator and keeps the public `handle_interview` function as its handler.
+    The wizard package owns provider construction. The API passes only the resolved role settings
+    to the public runtime configurator and keeps the public `handle_interview` function as its
+    handler.
+
+    Raises ``SettingsError`` when the interview role has no API key.
     """
+    message = settings.missing_message()
+    if message is not None:
+        raise SettingsError(message)
+
     from metis.wizard import configure_interview_runtime, handle_interview
 
     configure_interview_runtime(
-        api_key=settings.api_key,
-        base_url=settings.base_url,
-        model=settings.interview_model,
+        interview=settings.role(ModelRole.INTERVIEW),
+        embeddings=settings.role(ModelRole.EMBEDDINGS),
     )
     return WizardDependencies(interview_handler=handle_interview)
 
 
 __all__ = [
+    "API_ROLES",
+    "InterviewHandler",
     "Settings",
     "SettingsError",
-    "InterviewHandler",
     "WizardDependencies",
     "build_dependencies",
 ]

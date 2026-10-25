@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-from metis.engine.simulation.gen_1.user_agent import agent as agent_module
 from metis.engine.simulation.gen_1.user_agent.agent import (
     UserAgent,
     _render_artifacts,
@@ -145,9 +144,7 @@ class TestTheThreeStatesAreDistinguishable:
 
 @pytest.mark.asyncio
 async def test_opening_offers_fixture_upload_slots(monkeypatch) -> None:
-    # Avoid the AsyncOpenAI api_key requirement — the client is never called
-    # because we stub _call_llm.
-    monkeypatch.setattr(agent_module, "AsyncOpenAI", lambda **kw: object())
+    # The client is never called because we stub _call_llm.
     persona = Persona(id="p", description="a data analyst")
     scenario = Scenario(
         id="s",
@@ -172,8 +169,7 @@ async def test_opening_offers_fixture_upload_slots(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_generate_response_surfaces_problems(monkeypatch) -> None:
-    # Stub AsyncOpenAI so no api_key is required; _call_llm is stubbed too.
-    monkeypatch.setattr(agent_module, "AsyncOpenAI", lambda **kw: object())
+    # The client is never called because we stub _call_llm.
     persona = Persona(id="p", description="a data analyst")
     scenario = Scenario(
         id="s",

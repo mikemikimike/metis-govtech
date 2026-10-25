@@ -23,6 +23,7 @@ from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
 from ._fixture_artifacts import build_fixture_artifacts
 from .exceptions import TrialRecoverableError
 from .llm_calls import LLMCallLog
+from .model_settings import runner_agent_settings, user_agent_settings
 from .transport_log import TransportLog
 from .trial import create_trial, resolve_generation
 
@@ -58,6 +59,24 @@ __all__ = [
 ]
 
 logger = get_logger()
+
+
+def trial_models(
+    user_agent_model: str | None,
+    runner_agent_model: str | None,
+    *,
+    has_runner_agent: bool,
+) -> dict[str, str | None]:
+    """The resolved models that a ``TrialConfig`` records."""
+    user_agent = user_agent_settings(user_agent_model).model
+    return {
+        "user_agent_model": user_agent,
+        "runner_agent_model": runner_agent_settings(
+            runner_agent_model, user_agent_model=user_agent
+        ).model
+        if has_runner_agent
+        else None,
+    }
 
 
 def expand_trial_plan(
@@ -179,11 +198,13 @@ async def _execute_experiment_async(
     # builds; those builds never re-summarize.
     all_fixture_names = [name for task in specification.tasks for name in task.fixtures]
     experiment_root = output_dir if output_dir is not None else Path("results")
+    defaults = specification.experiment.defaults
     resolved_fixture_descriptions = await generation.resolve_fixture_descriptions(
         all_fixture_names,
         fixtures_dir,
         experiment_root,
         specification.fixture_content_descriptions,
+        user_agent_model=defaults.user_agent_model,
     )
 
     await runner_factory.start()
@@ -198,6 +219,8 @@ async def _execute_experiment_async(
                         worker_id=wid,
                         runner_factory=runner_factory,
                         generation=generation,
+                        default_user_agent_model=defaults.user_agent_model,
+                        runner_agent_model=defaults.runner_agent_model,
                         worker_trials=worker_trials,
                         experiment_root=experiment_root,
                         fixtures_dir=fixtures_dir,
@@ -262,8 +285,15 @@ async def _worker(
     tui_ctx: TUIContext | None = None,
     shutdown_event: threading.Event | None = None,
     generation: SimulatorGeneration | None = None,
+    default_user_agent_model: str | None = None,
+    runner_agent_model: str | None = None,
 ) -> list[TrialRecord]:
-    """One concurrent worker: creates a fresh runner per trial for isolation."""
+    """One concurrent worker: creates a fresh runner per trial for isolation.
+
+    Each trial's ``TrialConfig`` records the models that produce it: the user agent model
+    (Task, then experiment default, then environment, then ``DEFAULT_MODEL``) and, for a
+    generic runner, the runner agent model.
+    """
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(worker=f"w{worker_id}")
 
@@ -425,6 +455,12 @@ async def _worker(
                     timeout_minutes=scenario.timeout_minutes,
                     response_wait_ms=scenario.response_wait_ms,
                     fixtures=scenario.fixtures,
+                    **trial_models(
+                        scenario.user_agent_model or default_user_agent_model,
+                        runner_agent_model,
+                        has_runner_agent=generation is not None
+                        and generation.has_runner_agent,
+                    ),
                 )
                 try:
                     trial = create_trial(

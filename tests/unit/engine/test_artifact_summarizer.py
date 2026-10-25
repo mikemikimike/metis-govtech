@@ -22,7 +22,7 @@ async def test_digest_is_sha256_of_bytes(tmp_path: Path, monkeypatch) -> None:
     payload = b"a,b\n1,2\n"
     f.write_bytes(payload)
 
-    async def _fake(text, *, name, triggering_message, turn_number, llm_log):
+    async def _fake(text, *, name, triggering_message, turn_number, llm_log, **_):
         return ("2 rows x 2 cols", f"delivered at turn {turn_number}")
 
     monkeypatch.setattr(summ, "_summarize_via_llm", _fake)
@@ -46,7 +46,7 @@ async def test_fact_rich_description_from_stubbed_llm(
     f = tmp_path / "sales.csv"
     f.write_text("region,total\nnorth,100\nsouth,200\n")
 
-    async def _fake(text, *, name, triggering_message, turn_number, llm_log):
+    async def _fake(text, *, name, triggering_message, turn_number, llm_log, **_):
         assert "region,total" in text  # the file content reaches the LLM
         return ("2 data rows; totals north=100 south=200", "delivered at turn 2")
 
@@ -165,7 +165,7 @@ async def test_summarize_fixtures_skips_described_and_fills_gaps(
     calls: list[str] = []
 
     async def fake_summarize(
-        artifact, *, experiment_root, triggering_message, turn_number, llm_log
+        artifact, *, experiment_root, triggering_message, turn_number, llm_log, **_
     ):
         calls.append(artifact.name)
         artifact.content_description = "auto"
@@ -200,7 +200,7 @@ async def test_resolve_fixture_descriptions_summarizes_each_unique_once(
     calls: list[str] = []
 
     async def fake_summarize(
-        artifact, *, experiment_root, triggering_message, turn_number, llm_log
+        artifact, *, experiment_root, triggering_message, turn_number, llm_log, **_
     ):
         calls.append(artifact.name)
         artifact.content_description = f"auto:{artifact.name}"

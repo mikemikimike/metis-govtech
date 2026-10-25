@@ -18,9 +18,11 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
    cp apps/api/.env.example .env
    ```
 
-2. Set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `INTERVIEW_MODEL`. The API does not start when one
-   of them is missing. `INTERVIEW_MODEL` has no default here, which is different from the CLI.
-   `JUDGE_MODEL` and `USER_AGENT_MODEL` are Engine settings. The API does not use them.
+2. Set `OPENAI_API_KEY`, and `OPENAI_BASE_URL` when you do not use the default OpenAI endpoint.
+   `INTERVIEW_MODEL` and `EMBEDDING_MODEL` are optional. The API starts when a setting is missing.
+   Without an interview key, Send is grey and shows "Configure API keys to start interview".
+   Without an embeddings key, a banner says "Set up embedding models to select optimal graders",
+   and the Interview still runs. See the [model guide](../models.md).
 3. Install the full workspace, or install the API and web projects separately:
 
    ```bash
@@ -106,11 +108,18 @@ Document facts:
 1. Answer each Interview screen.
 2. Review the final Personas, Scenarios, and Test Cases.
 3. Select **Continue** on the final review screen to complete the Interview.
-4. Select **Download specification** to download `YYYYMMDD-HHMMSS-interview.zip`.
+4. On the **Run settings** step, type the user agent, runner agent, and judge model names, or leave
+   a field empty to use the environment. These models affect scores, so the specification records
+   them. The step takes model names only. Keys stay in `.env`. See the
+   [model guide](../models.md).
+5. Select **Continue and download**. The browser downloads `YYYYMMDD-HHMMSS-interview.zip`, with
+   the models that you set. If you change no field, the download is the same as without the step.
+
+To download the specification again later, select **Download specification** in the document pane.
 
 To finish early, select **Skip interview and download specification**. The Wizard checks whether
 the specification is ready. It can ask for more information or a document review before it
-completes the Interview.
+completes the Interview. Then the **Run settings** step comes before the download.
 
 The archive contains:
 

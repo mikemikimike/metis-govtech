@@ -10,20 +10,15 @@ from openai import APIError, AsyncOpenAI
 from metis.core.logging import get_logger
 
 from ...llm_calls import parse_completion
+from ...model_settings import llm_client, sampling_options, user_agent_settings
 from ..types import UserAgentOutput
-from .config import (
-    USER_AGENT_API_KEY,
-    USER_AGENT_BASE_URL,
-    USER_AGENT_MAX_TOKENS,
-    USER_AGENT_MODEL,
-    USER_AGENT_TEMPERATURE,
-)
 from .prompts import FIRST_TURN, OBSERVATION, STATE, SYSTEM_PROMPT
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessageParam
 
     from metis.core import Artifact
+    from metis.core.model_settings import RoleSettings
 
     from ...llm_calls import LLMCallLog
     from ...types import Persona, Scenario
@@ -85,16 +80,17 @@ class UserAgent:
         *,
         llm_log: LLMCallLog,
         client: AsyncOpenAI | None = None,
+        settings: RoleSettings | None = None,
     ) -> None:
         """
         :param llm_log: The trial's LLM-call log; every attempt at every call appends a row.
         :param client: Replaces the default client. It must have ``max_retries=0``,
             because retries happen in ``parse_completion`` where each one is logged.
+        :param settings: The user agent role. Unset, it resolves from the environment.
         """
         self._llm_log = llm_log
-        self._client = client or AsyncOpenAI(
-            api_key=USER_AGENT_API_KEY, base_url=USER_AGENT_BASE_URL, max_retries=0
-        )
+        self.settings = settings or user_agent_settings()
+        self._client = client or llm_client(self.settings)
         self._system = SYSTEM_PROMPT.format(
             persona_description=persona.description,
             scenario_description=scenario.description,
@@ -150,17 +146,13 @@ class UserAgent:
     async def _call(
         self, messages: list[ChatCompletionMessageParam]
     ) -> UserAgentOutput:
-        options: dict[str, object] = {}
-        if USER_AGENT_MAX_TOKENS is not None:
-            options["max_tokens"] = USER_AGENT_MAX_TOKENS
-        if USER_AGENT_TEMPERATURE is not None:
-            options["temperature"] = USER_AGENT_TEMPERATURE
+        options = sampling_options()
         try:
             response = await parse_completion(
                 self._client,
                 self._llm_log,
                 component="user_agent",
-                model=USER_AGENT_MODEL,
+                model=self.settings.model,
                 messages=messages,
                 response_format=UserAgentOutput,
                 **options,

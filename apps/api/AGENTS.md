@@ -25,6 +25,7 @@ something, it belongs in the returned `InterviewState`, not on the app.
 src/metis/api/
 ├── main.py            the app composition root: /health, routers, and error handlers
 ├── routes/graders.py  read-only installed grader catalogue route
+├── routes/models.py   read-only model role status route
 ├── routes/wizard.py   client config, Interview lifecycle, compile, and package routes
 ├── settings.py        environment-backed settings and the production dependency composition
 ├── cli.py             the `metis-api` executable (Uvicorn on metis.api.main:app)
@@ -39,6 +40,11 @@ fixture validation, or compilation rule lives here.
 `GET /api/v1/graders` is a stateless catalogue route owned by `routes/graders.py`. It reads stable
 `GraderSummary` values from the public wizard facade only. It does not read Interview state or write
 files.
+
+`GET /api/v1/models` returns the model name, the configured status, the score effect, and the
+missing variable names of each LLM role. It never returns a key or a URL. The API starts when model
+settings are missing. Then each Interview route returns 503 `model_unavailable`, with the missing
+variables, the `.env` path, and the model guide path in the message.
 
 `GET /api/v1/wizard/config` returns package-owned opening copy, working status, and perspective
 definitions from the public wizard facade. The API transports this text but does not own or copy it.
@@ -63,9 +69,11 @@ through the engine gate. Do not repeat every driver example.
 
 - The client implementation guide is `docs/guide/wizard/api.md`. Keep its state loop and examples
   aligned with the OpenAPI document when the HTTP contract changes.
-- The API uses the same `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `INTERVIEW_MODEL` names as the
-  wizard. `JUDGE_MODEL` and `USER_AGENT_MODEL` belong to the engine. For monorepo development, keep
-  one active `.env` at the repository root; `apps/api/.env.example` is the API-specific template.
+- The API resolves the interview and embeddings roles through `metis.core.model_settings`, with the
+  same variable names as the wizard and the engine. `cli.py` reads the one `.env` that core finds.
+  For monorepo development, keep one active `.env` at the repository root;
+  `apps/api/.env.example` is the API-specific template. See
+  [the model guide](../../docs/guide/models.md).
 - Build the image from the repository root: `docker build -f apps/api/Dockerfile -t metis-api .`.
   METIS is one uv workspace with a single lockfile, so the build needs the workspace root and the
   path-dependency members.
