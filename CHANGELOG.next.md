@@ -723,7 +723,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   completed Interview has a **Connect target** action. In the CLI, the mode is the first question.
   The API adds `POST /api/v1/wizard/connection/check` and `POST /api/v1/wizard/connection`. The
   check reaches the target only for an API that listens on this computer, and
-  `METIS_API_CONNECTION_CHECK=1` or `0` overrides this. `make run-api` listens on `127.0.0.1`. The
+  `METIS_API_CONNECTION_CHECK=1` or `0` overrides this. The API never expands a `${NAME}` variable
+  into a URL that it requests, so a URL that names a variable is reported as not checked. `make
+  run-api` listens on `127.0.0.1`. `init --mode run` with no terminal needs `--binding`. The
   API 422 response and binding errors never repeat an input value. `httpx` is a direct dependency
   (#283).
 

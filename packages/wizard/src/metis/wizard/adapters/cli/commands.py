@@ -431,6 +431,7 @@ def init(
             err=True,
         )
         raise typer.Exit(1)
+    _require_binding_without_terminal(mode, binding)
 
     # Read the documents before the credential check, so a bad file costs no model call.
     from metis.wizard.adapters.cli.documents import (
@@ -493,6 +494,22 @@ def init(
     _write_outputs(state, out_dir, connection_skipped=connection_skipped)
 
 
+def _terminal() -> bool:
+    """Whether a user can answer questions about the target connection."""
+    return sys.stdin.isatty()
+
+
+def _require_binding_without_terminal(mode: Mode | None, binding: Path | None) -> None:
+    """Stop run mode early when there is no terminal to ask for the binding values."""
+    if mode is Mode.RUN and binding is None and not _terminal():
+        typer.echo(
+            "Error: run mode needs a target binding, and there is no terminal to ask for "
+            "it. Pass --binding PATH.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
 def _read_connection(
     mode: Mode | None, binding: Path | None
 ) -> tuple[TargetConnection | None, bool]:
@@ -507,7 +524,7 @@ def _read_connection(
         read_target_connection,
     )
 
-    terminal = sys.stdin.isatty()
+    terminal = _terminal()
     if mode is None:
         if binding is not None:
             mode = Mode.RUN
@@ -517,7 +534,8 @@ def _read_connection(
             mode = Mode.SPEC
     if mode is Mode.SPEC:
         return None, False
-    if binding is None and terminal:
+    _require_binding_without_terminal(mode, binding)
+    if binding is None:
         binding = read_binding_source(out=console.print)
     values = None
     if binding is not None:
@@ -534,7 +552,7 @@ def _read_connection(
         out=console.print,
         values=values,
         # a binding file with no terminal is checked once; nothing is asked
-        interactive=terminal or binding is None,
+        interactive=terminal,
     )
     return connection, connection is None
 

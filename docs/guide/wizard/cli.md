@@ -149,6 +149,7 @@ valid, fix them. To continue without a binding, run with `--mode spec`.
 
 Without `--mode`, a terminal asks for the mode. When no terminal is available, the mode is
 `spec`. With `--binding` and no terminal, the CLI checks the file once and asks nothing.
+`--mode run` with no terminal and no `--binding` stops with exit code 1 before the Interview starts.
 
 To add or replace the binding later, run:
 

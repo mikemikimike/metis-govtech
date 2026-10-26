@@ -126,12 +126,19 @@ def scripted_cli(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
 
 
 def test_init_in_run_mode_writes_a_checked_binding_and_no_secret(
-    tmp_path: Path, scripted_cli, export_clock, caplog: pytest.LogCaptureFixture
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scripted_cli,
+    export_clock,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    # the answers come on piped input; the CLI asks them as it does in a terminal
+    monkeypatch.setattr(commands, "_terminal", lambda: True)
     root = tmp_path / "run"
-    # HTTP; the target name; the OpenAPI URL; the credential variable; no secret header;
-    # one forbidden call; the default submissions; verify TLS; no notes.
+    # fill in the fields; HTTP; the target name; the OpenAPI URL; the credential variable;
+    # no secret header; one forbidden call; the default submissions; verify TLS; no notes.
     connection_answers = [
+        "1",
         "1",
         "Policy assistant",
         "${APP_URL}/openapi.json",
@@ -174,11 +181,14 @@ def test_init_in_run_mode_writes_a_checked_binding_and_no_secret(
 
 
 def test_an_invalid_binding_is_fixed_before_the_interview_starts(
-    tmp_path: Path, scripted_cli, export_clock
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scripted_cli, export_clock
 ) -> None:
+    # the answers come on piped input; the CLI asks them as it does in a terminal
+    monkeypatch.setattr(commands, "_terminal", lambda: True)
     root = tmp_path / "fix"
-    # HTTP with no target name, which is not valid; then the same fields with a name.
-    invalid = ["1", "", "${APP_URL}/openapi.json", "", "", "", "", "", ""]
+    # fill in the fields: HTTP with no target name, which is not valid; then the same fields
+    # with a name.
+    invalid = ["1", "1", "", "${APP_URL}/openapi.json", "", "", "", "", "", ""]
     fixed = ["1", "Policy assistant", "", "", "", "", "", "", ""]
     answers = [*invalid, *fixed, "c", *_CAPABILITY_ANSWERS, *_INTERVIEW_ANSWERS]
 

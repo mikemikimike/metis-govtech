@@ -324,6 +324,27 @@ def test_init_refuses_when_a_interview_already_exists(tmp_path) -> None:
     assert (tmp_path / "inputs/interview_state.json").read_text() == original
 
 
+def test_run_mode_without_a_terminal_or_a_binding_stops_before_any_question(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    from typer.testing import CliRunner
+
+    from metis.wizard.bootstrap import create_cli_app
+
+    monkeypatch.setattr(cli, "_terminal", lambda: False)
+    monkeypatch.setattr(cli, "_load_env", lambda: None)
+
+    result = CliRunner().invoke(
+        create_cli_app(),
+        ["init", "A research assistant", "--out-dir", str(tmp_path), "--mode", "run"],
+    )
+
+    assert result.exit_code == 1
+    assert "--binding" in result.output
+    assert not isinstance(result.exception, EOFError)
+    assert not (tmp_path / "inputs").exists()
+
+
 # ── reading .env ───────────────────────────────────────────────────────────
 
 

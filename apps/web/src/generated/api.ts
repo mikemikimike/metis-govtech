@@ -162,8 +162,13 @@ export interface paths {
          * Check a target binding
          * @description Validate binding values and return field errors as `loc` and `msg` only.
          *
-         *     The API reaches the target only when its operator sets `METIS_API_CONNECTION_CHECK=1`.
-         *     Otherwise `live` is false and `status` is `unchecked`.
+         *     By default, the API reaches the target only when it listens on this computer (`127.0.0.1`,
+         *     `localhost`, or `::1`). `METIS_API_CONNECTION_CHECK=1` or `0` overrides this. When the check
+         *     is off, `live` is false and `status` is `unchecked`.
+         *
+         *     The API never puts a value from its own environment into a URL that it requests. A URL that
+         *     names a `${NAME}` variable is not requested, and its probe tells the user to check it with
+         *     `metis wizard connect`.
          */
         post: operations["check_target_connection_api_v1_wizard_connection_check_post"];
         delete?: never;

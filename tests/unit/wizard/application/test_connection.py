@@ -178,6 +178,46 @@ def test_a_missing_variable_is_named_and_stops_the_request() -> None:
     assert factory.requests == []
 
 
+@pytest.mark.parametrize(
+    ("data", "probe"),
+    [(http_binding(), "spec_url"), (browser_binding(), "start_url")],
+)
+def test_without_expansion_a_url_that_names_a_variable_is_not_requested(
+    data, probe
+) -> None:
+    factory = mock_client_factory(_no_network)
+
+    result = check_connection(
+        data,
+        live=True,
+        expand_variables=False,
+        environ=ENVIRON,
+        client_factory=factory,
+    )
+
+    probes = {item.name: item for item in result.probes}
+    assert factory.requests == []
+    assert probes["APP_URL"].message == "set"
+    assert not probes[probe].ok
+    assert "names APP_URL" in probes[probe].message
+    assert result.status is ConnectionStatus.UNCHECKED
+
+
+def test_without_expansion_a_url_with_no_variable_is_requested() -> None:
+    factory = mock_client_factory(lambda _: httpx.Response(200, json=OPENAPI_DOCUMENT))
+
+    result = check_connection(
+        http_binding(spec_url="https://app.example/openapi.json"),
+        live=True,
+        expand_variables=False,
+        environ=ENVIRON,
+        client_factory=factory,
+    )
+
+    assert result.status is ConnectionStatus.CHECKED
+    assert str(factory.requests[0].url) == "https://app.example/openapi.json"
+
+
 @pytest.mark.parametrize(("status", "ok"), [(200, True), (302, True), (404, False)])
 def test_the_live_browser_check_loads_the_start_page(status: int, ok: bool) -> None:
     factory = mock_client_factory(lambda _: httpx.Response(status))

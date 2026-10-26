@@ -51,6 +51,11 @@ def connection_check_from_env() -> bool:
     An API that listens only on this computer runs for one user, who owns its `.env`, so the
     check is on. A server that other people can reach keeps it off, because it would fetch any
     URL that a user types. ``METIS_API_CONNECTION_CHECK`` overrides both.
+
+    The check never expands a `${NAME}` variable into a URL, so it cannot send a server secret
+    to a client's host. It still sends requests to any other URL that a client gives, including
+    an internal address that only the API host can reach. Turn it on for a shared server only
+    when that is acceptable.
     """
     flag = os.environ.get(CONNECTION_CHECK_ENV, "").strip()
     if flag in ("0", "1"):
