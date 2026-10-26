@@ -671,11 +671,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   model context budget before each request without truncating input.
 
 - **Opening documents in the CLI.** `metis wizard init` accepts `--document PATH` (`-d`), once
-  for each file. The CLI uses the same file types, limits, extraction, and error messages as the
-  web client, and shows `Read`, `Not read`, or `Could not read` for each file before any model
+  for each file. The CLI uses the same file types, limits, and extraction as the web client,
+  and shows `Read`, `Not read`, or `Could not read` for each file before any model
   call. On a terminal, the user can keep a file that could not be read by name only. A run with no
   terminal stops with exit code 1. `init` keeps a copy of the files in `inputs/documents/`, and
-  the export copies each file that a Test Case uses into `outputs/fixtures/` (#554).
+  the export copies each file that a Test Case uses into `outputs/fixtures/`. The export removes
+  the files that it copied before and that no Test Case uses now. When a Test Case uses a file
+  that is not in `inputs/documents/`, the CLI shows `Add NAME to <out-dir>/outputs/fixtures before
+  you run` (#554).
 
 - **Opening documents.** Flat Interview start requests can carry files as `{name, text?}`. The
   wizard keeps the opening description and document context in client-held state, with supported

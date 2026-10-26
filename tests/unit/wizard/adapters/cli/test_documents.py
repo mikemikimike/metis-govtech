@@ -1,7 +1,6 @@
 """Opening documents on the CLI.
 
-The CLI reads opening files with the same extraction code, limits, and error messages as the
-API. These tests drive `init` through the real Typer app with no model call.
+The CLI reads opening files with the same extraction code and limits as the API. These tests drive `init` through the real Typer app with no model call.
 """
 
 from __future__ import annotations
@@ -161,3 +160,71 @@ def test_a_test_case_gets_the_bytes_of_the_opening_document_that_it_uses(
         "notes.txt"
     ]
     assert (out_dir / "outputs/fixtures/notes.txt").read_bytes() == notes.read_bytes()
+
+
+def test_a_restart_with_new_documents_removes_the_old_copies_from_the_package(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    started: list[InterviewStartRequest],
+) -> None:
+    used: list[str] = ["old.txt"]
+
+    def finish(request, **_kwargs) -> InterviewState:
+        specification = research_assistant()
+        for task in specification.tasks:
+            task.fixtures = list(used) if task.fixtures else []
+        return InterviewState(
+            specification=specification, context=interview_context(), confirmed=True
+        )
+
+    monkeypatch.setattr(cli, "_drive", finish)
+    old = tmp_path / "old.txt"
+    old.write_text("The old policy.", encoding="utf-8")
+    new = tmp_path / "new.txt"
+    new.write_text("The new policy.", encoding="utf-8")
+    out_dir = tmp_path / "eval"
+    fixtures = out_dir / "outputs/fixtures"
+
+    assert _init(out_dir, old).exit_code == 0
+    # A file that the user adds has bytes of its own, so the export keeps it.
+    (fixtures / "manual.csv").write_text("id\n1\n", encoding="utf-8")
+    used[:] = ["new.txt"]
+    result = CliRunner().invoke(
+        create_cli_app(),
+        ["init", "A research assistant", "--out-dir", str(out_dir), "--restart"]
+        + ["--document", str(new)],
+        input="\nlow\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert sorted(path.name for path in fixtures.iterdir()) == [
+        "manual.csv",
+        "new.txt",
+    ]
+
+
+def test_the_export_names_a_used_file_that_is_not_an_opening_document(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    started: list[InterviewStartRequest],
+) -> None:
+    specification = research_assistant()
+    for task in specification.tasks:
+        task.fixtures = ["records.csv"] if task.fixtures else []
+    monkeypatch.setattr(
+        cli,
+        "_drive",
+        lambda request, **_kwargs: InterviewState(
+            specification=specification, context=interview_context(), confirmed=True
+        ),
+    )
+    out_dir = tmp_path / "eval"
+
+    result = _init(out_dir)
+
+    assert result.exit_code == 0, result.output
+    fixtures = out_dir / "outputs/fixtures"
+    assert f"Add records.csv to {fixtures} before you run." in " ".join(
+        result.output.split()
+    )
+    assert list(fixtures.iterdir()) == []

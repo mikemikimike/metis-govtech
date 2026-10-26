@@ -85,7 +85,7 @@ metis wizard init "<description>" --document policy.pdf --document diagram.png
 ```
 
 The CLI checks the files before it asks for capabilities or calls the model. It uses the same file
-types, limits, and error messages as the web client. It shows one line for each file:
+types, limits, and text reader as the web client. It shows one line for each file:
 
 | Line | Meaning |
 |---|---|
@@ -130,6 +130,10 @@ When the Interview is complete, the CLI retains its final state and writes this 
 
 When a Test Case uses a file that is not in `inputs/documents/`, the CLI names the file. Put
 that file in `outputs/fixtures/` before you run the Experiment.
+
+The CLI removes a file from `outputs/fixtures/` when the file is a copy of a document in
+`inputs/documents/` and no Test Case uses it. A copy has the same name and the same bytes as the
+document. Other files in `outputs/fixtures/` stay there.
 
 The CLI publishes `outputs/specification.yaml` after the other export files are saved.
 Its presence marks a completed export. `resume` reports completion even though the final state

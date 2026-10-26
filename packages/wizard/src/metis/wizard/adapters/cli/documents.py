@@ -8,6 +8,7 @@ file type with no text reader (an image, for example) goes to the Interview by n
 
 from __future__ import annotations
 
+import filecmp
 import shutil
 from contextlib import ExitStack
 from pathlib import PurePath
@@ -31,7 +32,10 @@ from metis.wizard.contracts.documents import (
     InterviewDocument,
     validate_interview_documents,
 )
-from metis.wizard.domain.documents import EXTRACTION_DOCUMENT_EXTENSIONS
+from metis.wizard.domain.documents import (
+    EXTRACTION_DOCUMENT_EXTENSIONS,
+    fixture_name_identity,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -102,17 +106,22 @@ def read_opening_documents(
         _stop(str(exc))
 
 
-def copy_opening_documents(paths: Sequence[Path], root: Path) -> None:
+def copy_opening_documents(
+    paths: Sequence[Path], documents_root: Path, fixtures_root: Path
+) -> None:
     """Replace the experiment's copy of the opening files with the original bytes.
 
     `resume` cannot see the source paths, so `init` keeps a copy. A Task can then use an
-    opening file as a fixture after the source file moves.
+    opening file as a fixture after the source file moves. The fixture files that an earlier
+    export copied from the old opening files go too, so that a restart with new files does not
+    keep them in the package.
     """
-    shutil.rmtree(root, ignore_errors=True)
+    _remove_published_copies(documents_root, fixtures_root, keep=())
+    shutil.rmtree(documents_root, ignore_errors=True)
     if not paths:
         return
     with ExitStack() as stack:
-        FixtureLibrary(root).upload(
+        FixtureLibrary(documents_root).upload(
             [
                 (normalize_upload_name(path.name), stack.enter_context(path.open("rb")))
                 for path in paths
@@ -125,15 +134,18 @@ def publish_task_fixtures(
 ) -> list[str]:
     """Copy each opening file that a Task uses into the fixture folder.
 
-    The package contains only the files that a Test Case uses. A file that the user put in the
-    fixture folder stays there. The return value lists each used name that has no file, so
-    that the user can add that file before a run.
+    The package contains only the files that a Test Case uses. The export removes a copy of an
+    opening file that no Test Case uses. A file that the user put in the fixture folder stays
+    there. The return value lists each used name that has no file, so that the user can add
+    that file before a run.
     """
+    used = list(dict.fromkeys(name for names in task_fixtures for name in names))
     fixtures_root.mkdir(parents=True, exist_ok=True)
+    _remove_published_copies(documents_root, fixtures_root, keep=used)
     originals = FixtureLibrary(documents_root)
     published = FixtureLibrary(fixtures_root)
     missing: list[str] = []
-    for name in dict.fromkeys(name for names in task_fixtures for name in names):
+    for name in used:
         try:
             source = originals.path_for(name)
         except FixtureError:
@@ -144,6 +156,27 @@ def publish_task_fixtures(
             continue
         shutil.copyfile(source, fixtures_root / source.name)
     return missing
+
+
+def _remove_published_copies(
+    documents_root: Path, fixtures_root: Path, keep: Sequence[str]
+) -> None:
+    """Remove each fixture file that is a copy of an opening file, except the kept names.
+
+    Only the export copies opening files into the fixture folder. A fixture file with the name
+    and the bytes of an opening file is that copy. A user file has other bytes, so it stays.
+    """
+    kept = {fixture_name_identity(name) for name in keep}
+    for item in FixtureLibrary(documents_root).list():
+        if fixture_name_identity(item.name) in kept:
+            continue
+        copy = fixtures_root / item.name
+        if (
+            copy.is_file()
+            and not copy.is_symlink()
+            and filecmp.cmp(documents_root / item.name, copy, shallow=False)
+        ):
+            copy.unlink()
 
 
 def _extension(name: str) -> str:

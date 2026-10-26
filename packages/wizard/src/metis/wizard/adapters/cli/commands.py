@@ -372,7 +372,11 @@ def init(
         out=console.print
     )
     # Keep the original bytes, so `resume` can put an opening file in the fixture folder.
-    copy_opening_documents(document_paths, out_dir / export_layout.DOCUMENTS)
+    copy_opening_documents(
+        document_paths,
+        out_dir / export_layout.DOCUMENTS,
+        out_dir / export_layout.FIXTURES,
+    )
     typer.echo(
         f"Resume with: metis wizard resume --out-dir {shlex.quote(str(out_dir))}"
     )
