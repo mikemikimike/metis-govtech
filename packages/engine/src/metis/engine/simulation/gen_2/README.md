@@ -90,7 +90,7 @@ change these:
 - `advice` (`limits`, `notes`) is for the agent only. Code does not check it. Put in it
   what the specification cannot say, such as "the first chat call starts the session".
 
-The example, `packages/engine/examples/orca-api-http-simple1/orca-api.yaml`:
+The example, `packages/engine/examples/gen_2-http-orca_api-1/orca-api.yaml`:
 
 ```yaml
 # yaml-language-server: $schema=../../../core/schemas/target-binding.schema.json

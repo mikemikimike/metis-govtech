@@ -262,7 +262,7 @@ tasks:
 
 The full converted file is
 `packages/testbed/wizard/cases/orca/outputs/specification.yaml`. The smaller
-`packages/engine/examples/orca-api-simple1/` example is a quick first run.
+`packages/engine/examples/gen_1-orca_api-1/` example is a quick first run.
 
 
 ### metis-wizard

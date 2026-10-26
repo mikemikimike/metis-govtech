@@ -273,7 +273,7 @@ class TestExampleExperiment:
         / "packages"
         / "engine"
         / "examples"
-        / "orca-api-simple1"
+        / "gen_1-orca_api-1"
         / "specification.yaml"
     )
 
