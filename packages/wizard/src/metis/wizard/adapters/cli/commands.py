@@ -2,9 +2,9 @@
 
 Thin on purpose. The interview state is client-held, so the CLI keeps it in a JSON file and is
 just another door over `handle_interview`: send a concrete lifecycle request, render the pending
-screen, and send the answer back. `init` starts from the user's description and ARC capability
-evidence; `resume` reloads the saved state and answers its pending screen. The corridor both run
-is the same loop.
+screen, and send the answer back. `init` starts from the user's description, given as an argument
+or typed at the opening question, and ARC capability evidence; `resume` reloads the saved state
+and answers its pending screen. The corridor both run is the same loop.
 """
 
 from __future__ import annotations
@@ -13,10 +13,12 @@ import inspect
 import shlex
 import sys
 import tempfile
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
 import typer
+import yaml
 
 from metis.core.console import console
 from metis.wizard import (
@@ -27,11 +29,13 @@ from metis.wizard import (
     InterviewState,
     InterviewStep,
     InterviewTurnRequest,
+    TargetConnection,
     __version__,
     compile_specification,
     core_version,
     derive_stage,
     handle_interview,
+    set_connection,
 )
 from metis.wizard.application import export_layout
 from metis.wizard.application.trials import format_trials
@@ -41,10 +45,20 @@ if TYPE_CHECKING:
 
     from rich.console import Console
 
+    from metis.wizard import Specification
     from metis.wizard.application.interviewer import Interviewer
 
 
 app = typer.Typer(help="Generate METIS evaluation configurations.")
+
+
+class Mode(StrEnum):
+    """`spec` writes a Specification only. `run` also connects the target."""
+
+    SPEC = "spec"
+    RUN = "run"
+
+
 _interviewer_factory: Callable[..., Interviewer] | None = None
 
 
@@ -82,6 +96,17 @@ def _new_interviewer(interview_id: str | None = None) -> Interviewer:
             return factory(interview_id)
         return factory(interview_id=interview_id)
     return factory()
+
+
+def _warn_without_embeddings() -> None:
+    """Say once that grader matching is off when the embeddings role has no key."""
+    import os
+
+    from metis.wizard.application.matching import embeddings_warning
+
+    warning = embeddings_warning(os.environ)
+    if warning is not None:
+        typer.echo(f"Warning: {warning}", err=True)
 
 
 def _matcher(interviewer: Interviewer) -> object:
@@ -186,6 +211,10 @@ def _retry_confirmed(failure: InterviewFailure) -> bool:
     return typer.confirm(f"{failure.message} Try again?", default=True)
 
 
+def _confirm(prompt: str) -> bool:
+    return typer.confirm(prompt, default=False)
+
+
 def _fail(failure: InterviewFailure) -> NoReturn:
     """Report an Interview failure and stop. Any structured gaps are listed under the message."""
     typer.echo(f"Error: {failure.message}", err=True)
@@ -194,20 +223,43 @@ def _fail(failure: InterviewFailure) -> NoReturn:
     raise typer.Exit(1)
 
 
-def _write_outputs(state: InterviewState, out_dir: Path) -> None:
-    """Save the final state and review, then publish the completed Specification."""
+def _write_outputs(
+    state: InterviewState, out_dir: Path, *, connection_skipped: bool = False
+) -> None:
+    """Save the final state, review, and binding, then publish the completed Specification."""
     from metis.wizard.application.compile import render_review
+    from metis.wizard.application.connection import (
+        binding_yaml,
+        connected_specification,
+    )
     from metis.wizard.application.turn import experiment_id
 
-    specification = state.specification
+    connection = state.context.connection
+    specification = connected_specification(state.specification, connection)
     compiled = compile_specification(specification)
-    review = render_review(specification, experiment_id(specification))
+    review = render_review(
+        specification,
+        experiment_id(specification),
+        connection=connection,
+        connection_skipped=connection_skipped,
+    )
 
     _save(state, out_dir)
-    (out_dir / export_layout.FIXTURES).mkdir(parents=True, exist_ok=True)
+    from metis.wizard.adapters.cli.documents import publish_task_fixtures
+
+    missing_fixtures = publish_task_fixtures(
+        [task.fixtures for task in specification.tasks],
+        out_dir / export_layout.DOCUMENTS,
+        out_dir / export_layout.FIXTURES,
+    )
     specification_path = out_dir / export_layout.SPECIFICATION
     review_path = out_dir / export_layout.REVIEW
     review_path.write_text(review, encoding="utf-8")
+    binding_path = out_dir / export_layout.TARGET_BINDING
+    if connection is not None:
+        binding_path.write_text(binding_yaml(connection), encoding="utf-8")
+    else:
+        binding_path.unlink(missing_ok=True)
     # Publish the completion marker only after every other file is saved.
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", dir=specification_path.parent, delete=False
@@ -222,8 +274,22 @@ def _write_outputs(state: InterviewState, out_dir: Path) -> None:
 
     typer.echo(f"\nWrote {specification_path}")
     typer.echo(f"Wrote {review_path}")
+    for name in missing_fixtures:
+        typer.echo(
+            f"Add {name} to {out_dir / export_layout.FIXTURES} before you run. "
+            "A Test Case uses this file."
+        )
+    if connection is not None:
+        typer.echo(f"Wrote {binding_path}")
     typer.echo(
         f"Run with: metis engine run --input-dir {shlex.quote(str(out_dir / export_layout.OUTPUTS))}"
+    )
+    typer.echo("\nModel settings for the run (see docs/guide/models.md):")
+    for line in _run_settings(specification):
+        typer.echo(line)
+    typer.echo(
+        "To change a model, set USER_AGENT_MODEL or JUDGE_MODEL in .env, "
+        "or edit specification.yaml."
     )
     typer.echo(f"\n{format_trials(specification.trial_count())} when you run this.")
 
@@ -248,30 +314,59 @@ def _load(out_dir: Path) -> InterviewState:
     )
 
 
-def _load_env() -> list[Path]:
-    """Read `.env` files, searching only inside the project.
+def _load_env() -> Path | None:
+    """Read the one project `.env` (`metis.core.model_settings.load_env`).
 
-    `load_dotenv()` with no arguments walks *up* from the working directory until it finds a
-    file — which, run from this repo, walks past the repo entirely and loads `~/.env`. Reading
-    a credentials file from outside the project because nothing inside matched is not a
-    default worth having, so the search is an explicit list instead.
-
-    Existing environment variables win: a `.env` fills gaps, it does not override a variable
-    you exported deliberately.
-
-    Returns the files actually loaded, so a command can say where its credentials came from.
+    Exported values win: a `.env` fills gaps. Returns the file that was read, so a command can
+    say where its settings came from. Exits when `METIS_ENV_FILE` names a missing file.
     """
-    from dotenv import load_dotenv
+    from metis.core.model_settings import ModelSettingsError, load_env
 
-    package_root = Path(__file__).resolve().parents[3]  # .../packages/wizard
-    repo_root = package_root.parents[1]
+    try:
+        return load_env()
+    except ModelSettingsError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(1) from exc
 
-    loaded = []
-    for candidate in (Path.cwd() / ".env", package_root / ".env", repo_root / ".env"):
-        if candidate.is_file() and candidate not in loaded:
-            load_dotenv(candidate, override=False)
-            loaded.append(candidate)
-    return loaded
+
+def _run_settings(specification: Specification) -> list[str]:
+    """One line for each role that the run needs, with its model and status.
+
+    The wizard writes a Specification without the simulator and judge keys. This list says
+    which settings `metis engine run` needs. It shows variable names, never values.
+    """
+    import os
+
+    from metis.core.model_settings import ROLES, ModelRole, resolve_role
+
+    defaults = specification.experiment.defaults
+    user_agent = resolve_role(
+        ModelRole.USER_AGENT, os.environ, defaults.user_agent_model
+    )
+    run_roles = [user_agent]
+    if specification.experiment.target_binding is not None:
+        # As in the engine, the runner agent defaults to the user agent model of the run.
+        run_roles.append(
+            resolve_role(
+                ModelRole.RUNNER_AGENT,
+                os.environ,
+                defaults.runner_agent_model,
+                default=user_agent.model,
+            )
+        )
+    run_roles.append(resolve_role(ModelRole.JUDGE, os.environ, defaults.judge_model))
+    lines = []
+    for settings in run_roles:
+        role = settings.role
+        status = (
+            "configured"
+            if settings.configured
+            else f"not configured: set {' or '.join(ROLES[role].key_vars)}"
+        )
+        lines.append(
+            f"  {ROLES[role].label}: {settings.model} from {settings.source} ({status})"
+        )
+    return lines
 
 
 # ── commands ───────────────────────────────────────────────────────────────
@@ -279,8 +374,10 @@ def _load_env() -> list[Path]:
 
 @app.command()
 def init(
-    description: str = typer.Argument(
-        ..., help="A raw description of the target or agent to evaluate."
+    description: str | None = typer.Argument(
+        None,
+        help="A raw description of the target or agent to evaluate. "
+        "Without it, the wizard asks for one.",
     ),
     out_dir: Path | None = typer.Option(
         None,
@@ -291,6 +388,26 @@ def init(
         False,
         "--restart",
         help="Discard an interview already in progress and start over.",
+    ),
+    documents: list[Path] | None = typer.Option(
+        None,
+        "--document",
+        "-d",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="A file for the Interview to read. Repeat the option to add more files.",
+    ),
+    mode: Mode | None = typer.Option(
+        None,
+        "--mode",
+        help="spec: write a Specification only. run: also connect the target. "
+        "A terminal asks when this is not given; otherwise the mode is spec.",
+    ),
+    binding: Path | None = typer.Option(
+        None,
+        "--binding",
+        help="A target binding YAML file to check and use. Implies --mode run.",
     ),
 ) -> None:
     """Start a new interview."""
@@ -312,13 +429,30 @@ def init(
         typer.echo(
             f"Error: an interview is already in progress at {state_path}.\n\n"
             f"  metis wizard resume --out-dir {shlex.quote(str(out_dir))}\n"
-            f"  metis wizard init <description> --out-dir {shlex.quote(str(out_dir))} --restart",
+            f"  metis wizard init --out-dir {shlex.quote(str(out_dir))} --restart",
             err=True,
         )
         raise typer.Exit(1)
+    _require_description_without_terminal(description)
+    _require_binding_without_terminal(mode, binding)
 
-    for env_file in _load_env():
-        typer.echo(f"Read credentials from {env_file}")
+    # Read the documents before the credential check, so a bad file costs no model call.
+    from metis.wizard.adapters.cli.documents import (
+        copy_opening_documents,
+        read_opening_documents,
+    )
+
+    document_paths = documents or []
+    opening_documents = read_opening_documents(
+        document_paths,
+        # File names are plain text, so Rich must not read brackets in them as markup.
+        out=lambda line: console.print(line, markup=False, highlight=False),
+        confirm=_confirm if sys.stdin.isatty() else None,
+    )
+
+    env_file = _load_env()
+    if env_file is not None:
+        typer.echo(f"Read settings from {env_file}")
 
     try:
         # Checked before anything else happens, so a missing key costs nothing and is
@@ -327,11 +461,28 @@ def init(
     except InterviewerUnavailable as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
+    _warn_without_embeddings()
 
-    from metis.wizard.adapters.cli.opening import read_capability_evidence
+    from metis.wizard.adapters.cli.opening import (
+        read_capability_evidence,
+        read_description,
+    )
+
+    if description is None:
+        description = read_description(out=console.print)
+
+    # The mode comes next, so a user who wants to run evals sees how to connect the target
+    # before the Interview questions.
+    connection, connection_skipped = _read_connection(mode, binding)
 
     known_capability_ids, capability_confidence = read_capability_evidence(
         out=console.print
+    )
+    # Keep the original bytes, so `resume` can put an opening file in the fixture folder.
+    copy_opening_documents(
+        document_paths,
+        out_dir / export_layout.DOCUMENTS,
+        out_dir / export_layout.FIXTURES,
     )
     typer.echo(
         f"Resume with: metis wizard resume --out-dir {shlex.quote(str(out_dir))}"
@@ -341,13 +492,89 @@ def init(
             description=description,
             known_capability_ids=known_capability_ids,
             capability_confidence=capability_confidence,
+            documents=opening_documents,
+            connection=connection,
         ),
         interviewer=interviewer,
         matcher=_matcher(interviewer),
         out_dir=out_dir,
         console=console,
     )
-    _write_outputs(state, out_dir)
+    _write_outputs(state, out_dir, connection_skipped=connection_skipped)
+
+
+def _terminal() -> bool:
+    """Whether a user can answer the questions that `init` asks."""
+    return sys.stdin.isatty()
+
+
+def _require_description_without_terminal(description: str | None) -> None:
+    """Stop early when there is no description and no terminal to ask for it."""
+    if description is None and not _terminal():
+        typer.echo(
+            "Error: no description given, and there is no terminal to ask for it. Pass the "
+            'description of the target as an argument: metis wizard init "<description>".',
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
+def _require_binding_without_terminal(mode: Mode | None, binding: Path | None) -> None:
+    """Stop run mode early when there is no terminal to ask for the binding values."""
+    if mode is Mode.RUN and binding is None and not _terminal():
+        typer.echo(
+            "Error: run mode needs a target binding, and there is no terminal to ask for "
+            "it. Pass --binding PATH.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+
+def _read_connection(
+    mode: Mode | None, binding: Path | None
+) -> tuple[TargetConnection | None, bool]:
+    """Read the target connection for `init`. Returns it and whether run mode got no binding.
+
+    With no `--mode`, a terminal asks for the mode; with no terminal, the mode is spec-only.
+    """
+    from metis.wizard.adapters.cli.connection import (
+        load_binding_file,
+        read_binding_source,
+        read_mode,
+        read_target_connection,
+    )
+
+    terminal = _terminal()
+    if mode is None:
+        if binding is not None:
+            mode = Mode.RUN
+        elif terminal:
+            mode = Mode(read_mode(out=console.print))
+        else:
+            mode = Mode.SPEC
+    if mode is Mode.SPEC:
+        return None, False
+    _require_binding_without_terminal(mode, binding)
+    if binding is None:
+        binding = read_binding_source(out=console.print)
+    values = None
+    if binding is not None:
+        try:
+            values = load_binding_file(binding)
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            # name the file only: the YAML error can quote a line of the file
+            typer.echo(
+                f"Error: cannot read the target binding {binding} ({type(exc).__name__}).",
+                err=True,
+            )
+            raise typer.Exit(1) from None
+    connection = read_target_connection(
+        out=console.print,
+        values=values,
+        # a binding file with no terminal is checked once; nothing is asked
+        interactive=terminal,
+    )
+    return connection, connection is None
 
 
 @app.command()
@@ -374,13 +601,16 @@ def resume(
         _write_outputs(state, out_dir)
         return
 
-    _load_env()
+    env_file = _load_env()
+    if env_file is not None:
+        typer.echo(f"Read settings from {env_file}")
 
     try:
         interviewer = _new_interviewer()
     except InterviewerUnavailable as exc:
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(1) from exc
+    _warn_without_embeddings()
 
     typer.echo(f"Resuming at the {state.pending.stage} step.")
 
@@ -402,3 +632,47 @@ def resume(
         console=console,
     )
     _write_outputs(state, out_dir)
+
+
+@app.command()
+def connect(
+    out_dir: Path = typer.Option(
+        ...,
+        "--out-dir",
+        help="The experiment root holding inputs/interview_state.json.",
+    ),
+    binding: Path | None = typer.Option(
+        None,
+        "--binding",
+        help="A target binding YAML file to check and use. Without it, the CLI asks.",
+    ),
+) -> None:
+    """Add or replace the target connection of an Interview.
+
+    A completed export is written again with the binding. An Interview in progress keeps the
+    connection, and `resume` writes the binding when the Interview is complete.
+    """
+    path = _state_path(out_dir)
+    if not path.is_file():
+        typer.echo(f"Error: no interview at {path}.", err=True)
+        raise typer.Exit(1)
+    complete = (out_dir / export_layout.SPECIFICATION).is_file()
+    state = _load(out_dir)
+
+    env_file = _load_env()
+    if env_file is not None:
+        typer.echo(f"Read variables from {env_file}")
+    connection, _ = _read_connection(Mode.RUN, binding)
+    if connection is None:
+        typer.echo("Error: no valid target binding. Nothing was changed.", err=True)
+        raise typer.Exit(1)
+
+    state = set_connection(state, connection)
+    if complete:
+        _write_outputs(state, out_dir)
+    else:
+        _save(state, out_dir)
+        typer.echo(
+            "Saved the connection. Resume with: "
+            f"metis wizard resume --out-dir {shlex.quote(str(out_dir))}"
+        )

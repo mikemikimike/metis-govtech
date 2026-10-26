@@ -21,15 +21,18 @@ import pytest
 import yaml
 
 from metis.wizard import (
+    ConnectionTransport,
     InterviewState,
     Specification,
     SpecificationFixture,
     package_specification,
+    set_connection,
 )
 from metis.wizard.application.compile import (
     write_experiment,
     write_review,
 )
+from tests.fixtures.wizard.connections import connection
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.specifications import CITATION_GRADER, research_assistant
 
@@ -157,3 +160,52 @@ def test_the_specification_package_passes_the_engine_input_gate(
         "short-recovery": ["metis.library.graders.demo.DemoTraceBudgetGrader"],
     }
     _validate_inputs(extracted / "outputs")
+
+
+@pytest.mark.parametrize("transport", [None, *ConnectionTransport])
+def test_the_engine_builds_the_runner_factory_that_a_download_names(
+    transport: ConnectionTransport | None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run-mode download loads into the gen_2 factory; a spec-only one keeps the Orca default.
+
+    The engine copies `outputs/` to the experiment's `inputs/`, so the factory reads the
+    binding from there. No request reaches a target: the factory only loads the binding.
+    """
+    from metis.engine.cli import _validate_inputs
+    from metis.engine.simulation.runner_resolver import resolve_runner_factory
+    from metis.engine.simulation.types import Specification as EngineSpecification
+
+    for name, value in (
+        ("APP_URL", "https://app.example"),
+        ("APP_KEY", "key"),
+        ("APP_USER", "alice"),
+        ("APP_PASSWORD", "password"),
+    ):
+        monkeypatch.setenv(name, value)
+    state = InterviewState(
+        specification=research_assistant(), context=interview_context()
+    )
+    if transport is not None:
+        state = set_connection(state, connection(transport))
+    archive = package_specification(
+        state,
+        [
+            SpecificationFixture(name, io.BytesIO(b"fixture"))
+            for name in {n for task in state.specification.tasks for n in task.fixtures}
+        ],
+    )
+    with zipfile.ZipFile(io.BytesIO(archive.content)) as specification:
+        specification.extractall(tmp_path)
+    outputs = tmp_path / archive.filename.removesuffix(".zip") / "outputs"
+    _validate_inputs(outputs)
+
+    loaded = EngineSpecification.load_file(outputs / "specification.yaml")
+    factory_cls = resolve_runner_factory(loaded.runner_factory_ref)
+    if transport is None:
+        assert factory_cls.__name__ == "OrcaApiRunnerFactory"
+        assert loaded.target_binding is None
+        return
+    factory = factory_cls.from_specification(loaded, outputs)
+    assert factory.binding.binding.transport == transport.value

@@ -7,37 +7,53 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import {
-  ArrowLeft,
-  Check,
-  Code2,
-  ClipboardCheck,
-  PanelLeft,
-  PanelRight,
-  ShieldCheck,
-  UserRound,
-  X,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { PanelLeft, PanelRight, Puzzle, X } from "lucide-react";
 import type {
   InterviewSummary,
   LocalInterviewRecord,
-  CapabilityCategoryDefinition,
   CapabilityConfidence,
   CapabilityEvidence,
-  CapabilityId,
   InterviewDocument,
+  ModelStatus,
   Perspective,
-  PerspectiveDefinition,
   UserResponse,
+  ConnectionCheckResult,
+  TargetConnection,
 } from "./transport/api";
 import { api, TransportError, toSummary } from "./transport/api";
 import { Composer, Transcript } from "./Conversation";
+import { ConnectionForm } from "./ConnectionStep";
+import {
+  bindingFromDraft,
+  emptyConnectionDraft,
+  startConnection,
+  type ConnectionDraft,
+  type ConnectionMode,
+} from "./connection";
 import { AddDocuments, DocumentTray } from "./DocumentTray";
 import { Done } from "./Done";
+import {
+  ModelBanner,
+  START_BLOCKED,
+  interviewReady,
+  RunSettings,
+  runModels,
+  runRoles,
+  stateForDownload,
+  type RunModels,
+} from "./RunSettings";
 import { SpecificationView, stepPosition } from "./SpecificationView";
 import { InterviewRail } from "./InterviewRail";
-import { Button, Tooltip, cn } from "./ui";
+import { Button, cn } from "./ui";
+import {
+  CapabilityConfidencePicker,
+  CapabilityPicker,
+  DEFAULT_PERSPECTIVE,
+  FooterChip,
+  PERSPECTIVE_ICONS,
+  PerspectivePicker,
+  UnderBoxSurface,
+} from "./OpeningControls";
 import {
   InterviewRepository,
   emptyRecord,
@@ -63,7 +79,7 @@ const DOCUMENT_WIDTH_MAX = 60;
 
 const repository = new InterviewRepository();
 type WizardConfig = Awaited<ReturnType<typeof api.config>>;
-type OpeningPhase = "describe" | "capabilities";
+export type OpeningControl = "perspective" | "capabilities";
 type OpeningDocumentRead =
   | { status: "reading" | "not_read" | "kept" }
   | { status: "read"; text: string }
@@ -101,22 +117,16 @@ async function extractOpeningDocuments(
   return document.text;
 }
 
+// Capabilities are optional. With no confidence, the selection may be incomplete, which is what
+// "low" tells the Interview.
 export function completeCapabilityEvidence(
   draft: CapabilityEvidenceDraft,
-): CapabilityEvidence | null {
-  if (draft.confidence === null) return null;
+): CapabilityEvidence {
   return {
     known_capability_ids: draft.known_capability_ids,
-    confidence: draft.confidence,
+    confidence: draft.confidence ?? "low",
   };
 }
-
-const PERSPECTIVE_ICONS: Record<Perspective, LucideIcon> = {
-  end_user: UserRound,
-  engineer: Code2,
-  compliance: ClipboardCheck,
-  security: ShieldCheck,
-};
 
 export function conversationScrollRevision(
   interviewId: string | null,
@@ -170,8 +180,12 @@ export function App() {
     status: "loading",
   });
   const [selectedPerspective, setSelectedPerspective] =
-    useState<Perspective>("end_user");
-  const [openingPhase, setOpeningPhase] = useState<OpeningPhase>("describe");
+    useState<Perspective>(DEFAULT_PERSPECTIVE);
+  const [openingControl, setOpeningControl] = useState<OpeningControl | null>(
+    null,
+  );
+  // The default Perspective stays marked until the user first opens the Perspective control.
+  const [perspectiveSeen, setPerspectiveSeen] = useState(false);
   const [openingDescription, setOpeningDescription] = useState("");
   const [openingDocuments, setOpeningDocuments] = useState<File[]>([]);
   // An extraction response belongs only to the opening session that requested it.
@@ -182,6 +196,12 @@ export function App() {
   >({});
   const [capabilityEvidence, setCapabilityEvidence] =
     useState<CapabilityEvidenceDraft>(emptyCapabilityEvidence);
+  // The opening owns the connection in run mode. "add" is the Done pane's Connect target.
+  const [connectionStep, setConnectionStep] = useState<"add" | null>(null);
+  const [connectionDraft, setConnectionDraft] =
+    useState<ConnectionDraft>(emptyConnectionDraft);
+  const [connectionResult, setConnectionResult] =
+    useState<ConnectionCheckResult | null>(null);
 
   const [loadingRecord, setLoadingRecord] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -199,6 +219,11 @@ export function App() {
   const graderRequest = useRef<Promise<
     Awaited<ReturnType<typeof api.graders>>
   > | null>(null);
+  const [modelStatuses, setModelStatuses] = useState<ModelStatus[]>([]);
+  const [runModelDrafts, setRunModelDrafts] = useState<RunModels | null>(null);
+  // The Interview whose finish waits on the run settings step. The download starts when the
+  // user continues from that step.
+  const [runSettingsFor, setRunSettingsFor] = useState<string | null>(null);
 
   const view = useMemo(() => record && toPresentation(record), [record]);
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
@@ -220,7 +245,14 @@ export function App() {
 
   useEffect(() => {
     setShowGraders(false);
+    setRunModelDrafts(null);
   }, [record?.id]);
+
+  useEffect(() => {
+    // The banner is advice. A failed request shows no banner; the Interview routes still
+    // report missing settings themselves.
+    void api.models().then(setModelStatuses, () => setModelStatuses([]));
+  }, []);
 
   const nearFoot = useRef(true);
   const scrollInterview = useRef<string | null>(null);
@@ -260,6 +292,7 @@ export function App() {
       destinationRef.current = entry;
       setDestination(entry);
       setManualOpen(false);
+      setConnectionStep(null);
       setRecord(null);
       setLoadingRecord(entry.destination.kind === "interview");
       void (async () => {
@@ -313,12 +346,16 @@ export function App() {
   const startNew = useCallback(() => {
     openingGeneration.current += 1;
     navigation.current?.go({ kind: "new" });
-    setOpeningPhase("describe");
+    setOpeningControl(null);
+    setPerspectiveSeen(false);
     setOpeningDescription("");
     setOpeningDocuments([]);
     setDocumentTrayOpen(false);
     setOpeningDocumentReads({});
     setCapabilityEvidence(emptyCapabilityEvidence());
+    setConnectionStep(null);
+    setConnectionDraft(emptyConnectionDraft());
+    setConnectionResult(null);
   }, []);
 
   const addOpeningDocuments = useCallback(
@@ -420,13 +457,10 @@ export function App() {
     async (
       description: string,
       perspective: Perspective,
-      evidence: CapabilityEvidence | null,
+      evidence: CapabilityEvidence,
+      connection: TargetConnection | null = null,
     ) => {
       if (busy) return;
-      if (evidence === null) {
-        setError("Choose Low, Medium, or High confidence before you start.");
-        return;
-      }
       const origin = destinationRef.current?.entry;
       const localId = crypto.randomUUID();
       await operations.run(operationKey, async () => {
@@ -442,7 +476,8 @@ export function App() {
           return status === "reading" || status === "failed";
         });
         if (unresolved.length > 0) {
-          setOpeningPhase("describe");
+          setConnectionStep(null);
+          setOpeningControl(null);
           setDocumentTrayOpen(true);
           setError(
             "Wait for files to finish reading. For a file that could not be read, choose Keep without reading or remove it.",
@@ -456,7 +491,8 @@ export function App() {
           );
         }, 0);
         if (limits && totalText > limits.max_text_characters_total) {
-          setOpeningPhase("describe");
+          setConnectionStep(null);
+          setOpeningControl(null);
           setDocumentTrayOpen(true);
           setError(
             `Document text is above ${limits.max_text_characters_total.toLocaleString()} characters. Remove a file or keep it without reading.`,
@@ -475,6 +511,7 @@ export function App() {
           evidence,
           perspective,
           documents,
+          connection,
         );
         const started = emptyRecord(
           localId,
@@ -565,19 +602,71 @@ export function App() {
         const result = await api.end(record.state);
         const next = applyEnd(record, result);
         await operations.save(next);
-        if (result.outcome === "done") {
-          try {
-            await packageAndDownload(next);
-          } catch (cause) {
-            operations.report(record.id, errorMessage(cause), () =>
-              downloadCurrent(next),
-            );
-          }
-        }
+        // The run settings step comes first, so the first ZIP holds the chosen models.
+        if (result.outcome === "done") setRunSettingsFor(next.id);
       },
       finish,
     );
-  }, [record, operations, packageAndDownload, downloadCurrent]);
+  }, [record, operations]);
+
+  // Check the binding. In the opening, Send starts the Interview only with a valid binding. On
+  // the Done pane, Save adds it to the finished Interview.
+  const connectionKey =
+    connectionStep === "add" && record ? record.id : operationKey;
+  const checkDraft = useCallback(async () => {
+    const result = await api.checkConnection(bindingFromDraft(connectionDraft));
+    setConnectionResult(result);
+    return result;
+  }, [connectionDraft]);
+  const beginOpening = useCallback(
+    async (
+      description: string,
+      perspective: Perspective,
+      evidence: CapabilityEvidence,
+    ) => {
+      if (connectionDraft.mode === "spec") {
+        void beginWithMessage(description, perspective, evidence, null);
+        return;
+      }
+      // Reuse the last test when no field changed since; a field change clears the result.
+      let connection: TargetConnection | null = null;
+      await operations.run(operationKey, async () => {
+        connection = startConnection(
+          connectionDraft,
+          connectionResult ?? (await checkDraft()),
+        );
+      });
+      // On an invalid binding, the connection card under the box shows the marked fields.
+      if (connection)
+        void beginWithMessage(description, perspective, evidence, connection);
+    },
+    [
+      connectionDraft,
+      connectionResult,
+      beginWithMessage,
+      operations,
+      operationKey,
+      checkDraft,
+    ],
+  );
+  const saveConnection = useCallback(async () => {
+    if (!record) return;
+    await operations.run(record.id, async () => {
+      const connection = startConnection(
+        connectionDraft,
+        connectionResult ?? (await checkDraft()),
+      );
+      if (!connection) return;
+      const state = await api.setConnection(record.state, connection);
+      await operations.save({ ...record, state });
+      setConnectionStep(null);
+    });
+  }, [record, operations, connectionDraft, connectionResult, checkDraft]);
+  const openAddConnection = useCallback(() => {
+    setConnectionDraft({ ...emptyConnectionDraft(), mode: "run" });
+    setConnectionResult(null);
+    setConnectionStep("add");
+  }, []);
 
   const remove = useCallback(
     async (id: string) => {
@@ -597,6 +686,29 @@ export function App() {
     },
     [operations, refreshList],
   );
+
+  // Save the model names, if the user changed any, then start the download. With no change,
+  // the record and the ZIP are the same as before the step.
+  const continueToDownload = useCallback(async () => {
+    if (!record) return;
+    let next = record;
+    await operations.run(record.id, async () => {
+      const state = stateForDownload(record.state, runModelDrafts);
+      if (state !== record.state) {
+        next = { ...record, updated_at: Date.now(), state };
+        await operations.save(next);
+      }
+      setRunSettingsFor(null);
+      setRunModelDrafts(null);
+      try {
+        await packageAndDownload(next);
+      } catch (cause) {
+        operations.report(record.id, errorMessage(cause), () =>
+          downloadCurrent(next),
+        );
+      }
+    });
+  }, [record, runModelDrafts, operations, packageAndDownload, downloadCurrent]);
 
   if (!loaded) return null;
   const showDocument = view !== null && !manualOpen;
@@ -624,6 +736,7 @@ export function App() {
         />
       )}
       <main className="flex min-w-0 flex-1 flex-col">
+        <ModelBanner statuses={modelStatuses} />
         {error && (
           <Banner
             message={error}
@@ -635,6 +748,23 @@ export function App() {
         )}
         {manualOpen ? (
           <ManualForm onBack={() => setManualOpen(false)} />
+        ) : connectionStep === "add" && view !== null ? (
+          <AddConnection
+            draft={connectionDraft}
+            onDraft={(next) => {
+              setConnectionDraft(next);
+              setConnectionResult(null);
+            }}
+            result={connectionResult}
+            busy={busy || operations.active.has(connectionKey)}
+            onTest={() =>
+              void operations.run(connectionKey, async () => {
+                await checkDraft();
+              })
+            }
+            onSave={() => void saveConnection()}
+            onCancel={() => setConnectionStep(null)}
+          />
         ) : view === null && destination?.destination.kind === "interview" ? (
           <div className="m-auto flex flex-col gap-4 p-8" role="status">
             <p>
@@ -649,19 +779,17 @@ export function App() {
             configState={wizardConfig}
             onRetry={() => void loadWizardConfig()}
             busy={busy}
-            phase={openingPhase}
+            canStart={interviewReady(modelStatuses)}
             description={openingDescription}
             onDescription={setOpeningDescription}
             perspective={selectedPerspective}
             onPerspective={setSelectedPerspective}
-            onContinue={(description) => {
-              setOpeningDescription(description);
-              setOpeningPhase("capabilities");
-            }}
-            onBack={() => setOpeningPhase("describe")}
             documents={openingDocuments}
             documentTrayOpen={documentTrayOpen}
-            onDocumentTrayOpen={setDocumentTrayOpen}
+            onDocumentTrayOpen={(open) => {
+              if (open) setOpeningControl(null);
+              setDocumentTrayOpen(open);
+            }}
             documentReads={openingDocumentReads}
             onAddDocuments={addOpeningDocuments}
             onRemoveDocument={removeOpeningDocument}
@@ -669,9 +797,27 @@ export function App() {
             capabilityEvidence={capabilityEvidence}
             onCapabilityEvidence={setCapabilityEvidence}
             onBegin={(description, perspective, evidence) =>
-              void beginWithMessage(description, perspective, evidence)
+              void beginOpening(description, perspective, evidence)
+            }
+            connectionDraft={connectionDraft}
+            onConnectionDraft={(next) => {
+              setConnectionDraft(next);
+              setConnectionResult(null);
+            }}
+            connectionResult={connectionResult}
+            onTestConnection={() =>
+              void operations.run(operationKey, async () => {
+                await checkDraft();
+              })
             }
             onManualOpen={() => setManualOpen(true)}
+            openControl={openingControl}
+            onOpenControl={(control) => {
+              if (control === "perspective") setPerspectiveSeen(true);
+              if (control !== null) setDocumentTrayOpen(false);
+              setOpeningControl(control);
+            }}
+            perspectiveSeen={perspectiveSeen}
           />
         ) : (
           <>
@@ -710,7 +856,28 @@ export function App() {
                   onRespond={send}
                 />
                 {busy && <ThinkingLine message={workingStatus} />}
-                {view.done && <Done />}
+                {view.done && runSettingsFor === view.id ? (
+                  <RunSettings
+                    roles={runRoles(view.specification)}
+                    statuses={modelStatuses}
+                    values={runModelDrafts ?? runModels(view.specification)}
+                    busy={busy || operations.pendingSaves.has(view.id)}
+                    onChange={(role, value) => {
+                      setRunModelDrafts((current) => ({
+                        ...(current ?? runModels(view.specification)),
+                        [role]: value,
+                      }));
+                    }}
+                    onContinue={() => void continueToDownload()}
+                  />
+                ) : (
+                  view.done && (
+                    <Done
+                      connection={record?.state.context.connection ?? null}
+                      onConnect={openAddConnection}
+                    />
+                  )
+                )}
               </div>
             </div>
             <div className="w-full">
@@ -781,13 +948,12 @@ export function App() {
 type OpeningScreenProps = {
   config: WizardConfig;
   busy: boolean;
-  phase: OpeningPhase;
+  // False while the interview role has no key. The start control stays grey and says why.
+  canStart: boolean;
   description: string;
   onDescription?: (value: string) => void;
   perspective: Perspective;
   onPerspective: (perspective: Perspective) => void;
-  onContinue: (description: string) => void;
-  onBack: () => void;
   documents: File[];
   documentTrayOpen: boolean;
   onDocumentTrayOpen: (open: boolean) => void;
@@ -798,10 +964,19 @@ type OpeningScreenProps = {
   capabilityEvidence: CapabilityEvidenceDraft;
   onCapabilityEvidence: (evidence: CapabilityEvidenceDraft) => void;
   onManualOpen: () => void;
+  openControl: OpeningControl | null;
+  onOpenControl: (control: OpeningControl | null) => void;
+  // False until the user first opens the Perspective control. Until then, the default is marked.
+  perspectiveSeen: boolean;
+  // "Build Spec only" or "Build Spec and Run Evals". Run mode shows the connection form.
+  connectionDraft: ConnectionDraft;
+  onConnectionDraft: (draft: ConnectionDraft) => void;
+  connectionResult: ConnectionCheckResult | null;
+  onTestConnection: () => void;
   onBegin: (
     description: string,
     perspective: Perspective,
-    evidence: CapabilityEvidence | null,
+    evidence: CapabilityEvidence,
   ) => void;
 };
 
@@ -853,154 +1028,310 @@ export function OpeningConfigurationState({
   );
 }
 
-export function OpeningScreen({
-  config,
+const MODE_LABELS: Record<ConnectionMode, string> = {
+  spec: "Build Spec only",
+  run: "Build Spec and Run Evals",
+};
+
+// The mode is a choice about the whole session, so it sits above the box, apart from the chips
+// that give the Interview its context.
+export function ModePicker({
+  mode,
+  disabled,
+  onSelect,
+}: {
+  mode: ConnectionMode;
+  disabled: boolean;
+  onSelect: (mode: ConnectionMode) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Mode"
+      className="inline-flex self-center rounded-lg border border-border bg-card p-0.5"
+    >
+      {(["spec", "run"] as const).map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="radio"
+          aria-checked={mode === id}
+          disabled={disabled}
+          onClick={() => onSelect(id)}
+          className={cn(
+            "rounded-md px-3.5 py-1.5 text-sm transition-colors duration-150",
+            mode === id
+              ? "bg-accent/10 font-medium text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+            "disabled:cursor-not-allowed disabled:opacity-45",
+          )}
+        >
+          {MODE_LABELS[id]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// "Connect target" on the Done pane: the same form, with Save and Cancel.
+function AddConnection({
+  draft,
+  onDraft,
+  result,
   busy,
-  phase,
-  description,
-  onDescription,
-  perspective,
-  onPerspective,
-  onContinue,
-  onBack,
-  documents,
-  documentTrayOpen,
-  onDocumentTrayOpen,
-  documentReads,
-  onAddDocuments,
-  onRemoveDocument,
-  onKeepDocumentUnread,
-  capabilityEvidence,
-  onCapabilityEvidence,
-  onManualOpen,
-  onBegin,
-}: OpeningScreenProps) {
+  onTest,
+  onSave,
+  onCancel,
+}: {
+  draft: ConnectionDraft;
+  onDraft: (draft: ConnectionDraft) => void;
+  result: ConnectionCheckResult | null;
+  busy: boolean;
+  onTest: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
   return (
     <div className="quiet-scrollbar flex flex-1 overflow-y-auto px-6 py-10">
-      <div
-        key={phase}
-        className={cn(
-          "animate-enter-opening-step mx-auto flex w-full max-w-3xl flex-col",
-          phase === "describe" ? "my-auto gap-8" : "gap-6",
-        )}
-      >
-        {phase === "describe" ? (
-          <>
-            <h1 className="text-center text-2xl font-semibold text-foreground">
-              {config.opening_question}
-            </h1>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col">
-                <div className="relative z-10">
-                  <Composer
-                    request={undefined}
-                    busy={busy}
-                    alwaysEnabled
-                    leadingIcon
-                    bare
-                    initialText={description}
-                    value={description}
-                    onValueChange={onDescription}
-                    roomy
-                    placeholder="Describe your target and attached documents…"
-                    onSend={onContinue}
-                    sourceControl={
-                      <div className="flex items-center gap-2">
-                        <AddDocuments
-                          onOpen={() => onDocumentTrayOpen(!documentTrayOpen)}
-                          disabled={busy}
-                          expanded={documentTrayOpen}
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <h1 className="text-2xl font-semibold text-foreground">
+          Connect the target
+        </h1>
+        <ConnectionForm
+          draft={draft}
+          onDraft={onDraft}
+          result={result}
+          busy={busy}
+          onTest={onTest}
+        />
+        <div className="flex justify-end gap-2">
+          <Button type="button" disabled={busy} onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            disabled={busy}
+            onClick={onSave}
+          >
+            Save connection
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The opening is one view. The description box holds the setup controls along its bottom edge:
+// documents, the Perspective, the capabilities, and the mode. Each control opens a panel under the
+// box. Enter and Send both start the Interview. In run mode, Send first checks the binding.
+export function OpeningScreen(props: OpeningScreenProps) {
+  const {
+    config,
+    busy,
+    description,
+    onDescription,
+    perspective,
+    documents,
+    documentTrayOpen,
+    onDocumentTrayOpen,
+    capabilityEvidence,
+    onCapabilityEvidence,
+    openControl,
+    onOpenControl,
+    perspectiveSeen,
+    canStart,
+    connectionDraft,
+    onConnectionDraft,
+    connectionResult,
+    onTestConnection,
+  } = props;
+  const currentPerspective = config.perspectives.find(
+    (item) => item.id === perspective,
+  );
+  const PerspectiveIcon = PERSPECTIVE_ICONS[perspective];
+  const perspectiveOpen = openControl === "perspective";
+  const capabilitiesOpen = openControl === "capabilities";
+  const runMode = connectionDraft.mode === "run";
+  const start = (text: string) => {
+    onDescription?.(text);
+    props.onBegin(
+      text,
+      perspective,
+      completeCapabilityEvidence(capabilityEvidence),
+    );
+  };
+
+  return (
+    <div className="quiet-scrollbar flex flex-1 overflow-y-auto px-6 py-10 max-sm:px-4">
+      <div className="animate-enter-opening-step mx-auto my-auto flex w-full max-w-3xl flex-col gap-8">
+        <h1 className="text-center text-2xl font-semibold text-foreground">
+          {config.opening_question}
+        </h1>
+        <ModePicker
+          mode={connectionDraft.mode}
+          disabled={busy}
+          onSelect={(mode) => onConnectionDraft({ ...connectionDraft, mode })}
+        />
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col">
+            <div className="relative z-10">
+              <Composer
+                request={undefined}
+                busy={busy}
+                alwaysEnabled
+                leadingIcon
+                bare
+                initialText={description}
+                value={description}
+                onValueChange={onDescription}
+                roomy
+                placeholder="A support bot for a retail bank…"
+                onSend={start}
+                sendBlockedReason={canStart ? undefined : START_BLOCKED}
+                sourceControl={
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <AddDocuments
+                      onOpen={() => onDocumentTrayOpen(!documentTrayOpen)}
+                      disabled={busy}
+                      expanded={documentTrayOpen}
+                    />
+                    {documents.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onDocumentTrayOpen(true)}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {documents.length}{" "}
+                        {documents.length === 1 ? "document" : "documents"}
+                      </button>
+                    )}
+                    <FooterChip
+                      ariaLabel={`Perspective: ${currentPerspective?.label ?? perspective}`}
+                      value={currentPerspective?.label ?? perspective}
+                      icon={
+                        <PerspectiveIcon
+                          size={15}
+                          strokeWidth={1.75}
+                          aria-hidden
+                          className="shrink-0 text-muted-foreground"
                         />
-                        {documents.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => onDocumentTrayOpen(true)}
-                            className="text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            {documents.length}{" "}
-                            {documents.length === 1 ? "document" : "documents"}
-                          </button>
-                        )}
-                      </div>
-                    }
+                      }
+                      expanded={perspectiveOpen}
+                      controls="opening-perspective"
+                      marked={!perspectiveSeen}
+                      disabled={busy}
+                      onClick={() =>
+                        onOpenControl(perspectiveOpen ? null : "perspective")
+                      }
+                    />
+                    <FooterChip
+                      value="Capabilities"
+                      icon={
+                        <Puzzle
+                          size={15}
+                          strokeWidth={1.75}
+                          aria-hidden
+                          className="shrink-0 text-muted-foreground"
+                        />
+                      }
+                      expanded={capabilitiesOpen}
+                      controls="opening-capabilities"
+                      disabled={busy}
+                      onClick={() =>
+                        onOpenControl(capabilitiesOpen ? null : "capabilities")
+                      }
+                    />
+                  </div>
+                }
+              />
+            </div>
+            {documentTrayOpen && (
+              <DocumentTray onClose={() => onDocumentTrayOpen(false)}>
+                <InitialDocumentPicker
+                  config={config}
+                  documents={documents}
+                  documentReads={props.documentReads}
+                  disabled={busy}
+                  onAdd={props.onAddDocuments}
+                  onRemove={props.onRemoveDocument}
+                  onKeepWithoutReading={props.onKeepDocumentUnread}
+                />
+              </DocumentTray>
+            )}
+            {perspectiveOpen && (
+              <UnderBoxSurface
+                id="opening-perspective"
+                label="Perspective"
+                onClose={() => onOpenControl(null)}
+              >
+                {/* Equal side space keeps the cards clear of the close button and centred. */}
+                <div className="px-6">
+                  <PerspectivePicker
+                    perspectives={config.perspectives}
+                    selected={perspective}
+                    onSelect={props.onPerspective}
+                    disabled={busy}
                   />
                 </div>
-                {documentTrayOpen && (
-                  <DocumentTray onClose={() => onDocumentTrayOpen(false)}>
-                    <InitialDocumentPicker
-                      config={config}
-                      documents={documents}
-                      documentReads={documentReads}
-                      disabled={busy}
-                      onAdd={onAddDocuments}
-                      onRemove={onRemoveDocument}
-                      onKeepWithoutReading={onKeepDocumentUnread}
-                    />
-                  </DocumentTray>
-                )}
-              </div>
-              <PerspectivePicker
-                perspectives={config.perspectives}
-                selected={perspective}
-                onSelect={onPerspective}
-              />
-              <ManualAuthoringEntry onOpen={onManualOpen} />
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-1">
-                <h1 className="text-2xl font-semibold text-foreground">
-                  What can the target do?
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  Select the capabilities you know are present.
-                </p>
-              </div>
-              <Button type="button" variant="ghost" onClick={onBack}>
-                <ArrowLeft size={15} strokeWidth={1.75} aria-hidden />
-                Edit target
-              </Button>
-            </div>
-            <div className="flex flex-col gap-4">
-              <CapabilityPicker
-                categories={config.capability_categories}
-                selected={capabilityEvidence.known_capability_ids}
-                onChange={(knownCapabilityIds) =>
-                  onCapabilityEvidence({
-                    ...capabilityEvidence,
-                    known_capability_ids: knownCapabilityIds,
-                  })
-                }
-                disabled={busy}
-                hideLegend
-              />
-              <CapabilityConfidencePicker
-                selected={capabilityEvidence.confidence}
-                onSelect={(confidence) =>
-                  onCapabilityEvidence({ ...capabilityEvidence, confidence })
-                }
-                disabled={busy}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="primary"
-              className="self-end px-4 py-2"
-              disabled={busy || capabilityEvidence.confidence === null}
-              onClick={() =>
-                onBegin(
-                  description,
-                  perspective,
-                  completeCapabilityEvidence(capabilityEvidence),
-                )
-              }
-            >
-              {busy ? "Starting…" : "Start interview"}
-            </Button>
-          </>
-        )}
+              </UnderBoxSurface>
+            )}
+            {capabilitiesOpen && (
+              <UnderBoxSurface
+                id="opening-capabilities"
+                label="Capabilities"
+                onClose={() => onOpenControl(null)}
+                sheet
+              >
+                <CapabilityPicker
+                  categories={config.capability_categories}
+                  selected={capabilityEvidence.known_capability_ids}
+                  onChange={(knownCapabilityIds) =>
+                    onCapabilityEvidence({
+                      ...capabilityEvidence,
+                      known_capability_ids: knownCapabilityIds,
+                    })
+                  }
+                  disabled={busy}
+                  hideLegend
+                />
+                {/* On a small screen, the confidence row stays at the foot of the sheet. */}
+                <div className="max-sm:sticky max-sm:-bottom-4 max-sm:-mx-4 max-sm:bg-card max-sm:px-4 max-sm:pb-4 max-sm:pt-2">
+                  <CapabilityConfidencePicker
+                    selected={capabilityEvidence.confidence}
+                    onSelect={(confidence) =>
+                      onCapabilityEvidence({
+                        ...capabilityEvidence,
+                        confidence,
+                      })
+                    }
+                    disabled={busy}
+                  />
+                </div>
+              </UnderBoxSurface>
+            )}
+            {runMode && (
+              // Run mode needs the binding, so this card stays open and is not a footer panel.
+              <section
+                id="opening-connection"
+                aria-label="Target connection"
+                className="animate-open-under-box relative z-0 mx-auto -mt-4 flex w-[95%] flex-col gap-3 rounded-2xl border border-border bg-card px-5 pb-5 pt-9"
+              >
+                <h2 className="text-sm font-medium text-foreground">
+                  Target connection
+                </h2>
+                <ConnectionForm
+                  draft={connectionDraft}
+                  onDraft={onConnectionDraft}
+                  result={connectionResult}
+                  busy={busy}
+                  onTest={onTestConnection}
+                />
+              </section>
+            )}
+          </div>
+          <ManualAuthoringEntry onOpen={props.onManualOpen} />
+        </div>
       </div>
     </div>
   );
@@ -1128,241 +1459,6 @@ export function InitialDocumentPicker({
         <p>File size: {limits.max_initial_bytes / 1_000_000} MB total.</p>
       </div>
     </div>
-  );
-}
-
-export function CapabilityPicker({
-  categories,
-  selected,
-  onChange,
-  disabled = false,
-  hideLegend = false,
-}: {
-  categories: CapabilityCategoryDefinition[];
-  selected: CapabilityId[];
-  onChange: (capabilities: CapabilityId[]) => void;
-  disabled?: boolean;
-  hideLegend?: boolean;
-}) {
-  const toggle = (id: CapabilityId) =>
-    onChange(
-      selected.includes(id)
-        ? selected.filter((value) => value !== id)
-        : [...selected, id],
-    );
-
-  return (
-    <fieldset className="flex flex-col gap-3">
-      <legend
-        className={cn(
-          "text-sm font-medium text-foreground",
-          hideLegend && "sr-only",
-        )}
-      >
-        What can the target do?
-      </legend>
-      <div className="grid items-start gap-4 md:grid-cols-3">
-        {categories.map((category) => (
-          <div
-            key={category.id}
-            className="overflow-hidden rounded-lg border border-border bg-card"
-          >
-            <div className="flex items-center justify-between border-b border-border bg-muted/45 px-4 py-3">
-              <h2 className="text-sm font-semibold text-foreground">
-                {category.name}
-              </h2>
-              <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                {
-                  category.capabilities.filter((capability) =>
-                    selected.includes(capability.id),
-                  ).length
-                }
-                /{category.capabilities.length}
-              </span>
-            </div>
-            <div className="flex flex-col">
-              {category.capabilities.map((capability) => {
-                const active = selected.includes(capability.id);
-                return (
-                  <Tooltip
-                    key={capability.id}
-                    label={capability.description}
-                    className="w-full border-t border-border first:border-t-0"
-                  >
-                    <button
-                      type="button"
-                      role="checkbox"
-                      aria-checked={active}
-                      aria-label={`${capability.name}: ${capability.description}`}
-                      disabled={disabled}
-                      onClick={() => toggle(capability.id)}
-                      className={cn(
-                        "flex min-h-12 w-full items-center gap-3 px-4 py-3 text-left",
-                        "transition-colors duration-150",
-                        active
-                          ? "bg-accent/10 text-foreground"
-                          : "bg-card text-card-foreground hover:bg-muted",
-                        "disabled:cursor-not-allowed disabled:opacity-45",
-                      )}
-                    >
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border",
-                          active
-                            ? "border-accent bg-accent text-accent-foreground"
-                            : "border-input bg-background",
-                        )}
-                      >
-                        {active && <Check size={14} strokeWidth={2.25} />}
-                      </span>
-                      <span className="text-sm font-medium">
-                        {capability.name}
-                      </span>
-                    </button>
-                  </Tooltip>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-
-export function CapabilityConfidencePicker({
-  selected,
-  onSelect,
-  disabled = false,
-}: {
-  selected: CapabilityConfidence | null;
-  onSelect: (confidence: CapabilityConfidence) => void;
-  disabled?: boolean;
-}) {
-  const options: Array<{
-    id: CapabilityConfidence;
-    label: string;
-  }> = [
-    { id: "low", label: "Low" },
-    { id: "medium", label: "Medium" },
-    { id: "high", label: "High" },
-  ];
-  return (
-    <fieldset className="rounded-lg border border-border bg-card px-4 py-3">
-      <legend className="sr-only">
-        How confident are you in this selection?
-      </legend>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <span aria-hidden className="text-sm font-medium text-foreground">
-          How confident are you in this selection?
-        </span>
-        <div
-          role="radiogroup"
-          aria-label="How confident are you in this selection?"
-          aria-required="true"
-          className="flex flex-wrap gap-2"
-        >
-          {options.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              role="radio"
-              aria-checked={selected === option.id}
-              disabled={disabled}
-              onClick={() => onSelect(option.id)}
-              className={cn(
-                "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors duration-150",
-                selected === option.id
-                  ? "border-accent bg-accent/10 text-foreground"
-                  : "border-border bg-card text-card-foreground hover:border-accent/40 hover:bg-muted",
-                "disabled:cursor-not-allowed disabled:opacity-45",
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "flex h-4 w-4 items-center justify-center rounded-full border",
-                  selected === option.id
-                    ? "border-accent"
-                    : "border-muted-foreground/60",
-                )}
-              >
-                {selected === option.id && (
-                  <span className="h-2 w-2 rounded-full bg-accent" />
-                )}
-              </span>
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </fieldset>
-  );
-}
-
-export function PerspectivePicker({
-  perspectives,
-  selected,
-  onSelect,
-}: {
-  perspectives: PerspectiveDefinition[];
-  selected: Perspective;
-  onSelect: (perspective: Perspective) => void;
-}) {
-  return (
-    <fieldset className="flex min-w-0 flex-col gap-2">
-      <legend className="text-sm text-muted-foreground">
-        Who is this evaluation for?
-      </legend>
-      <div
-        role="radiogroup"
-        aria-label="Who is this evaluation for?"
-        className="flex flex-col gap-2"
-      >
-        {perspectives.map((perspective) => {
-          const Icon = PERSPECTIVE_ICONS[perspective.id];
-          const active = perspective.id === selected;
-          return (
-            <button
-              key={perspective.id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              aria-label={`${perspective.label}: ${perspective.question}`}
-              onClick={() => onSelect(perspective.id)}
-              className={cn(
-                "group relative flex w-full items-center gap-3 overflow-hidden rounded-lg border px-4 py-3 text-left",
-                "transition-colors duration-200",
-                active
-                  ? "border-accent bg-accent/10 text-foreground"
-                  : "border-border bg-card text-card-foreground hover:border-accent/40 hover:bg-accent/10",
-              )}
-            >
-              <Icon
-                size={18}
-                strokeWidth={1.75}
-                aria-hidden
-                className={cn(
-                  "shrink-0 transition-colors duration-200",
-                  active
-                    ? "text-accent"
-                    : "text-muted-foreground group-hover:text-accent group-focus-visible:text-accent",
-                )}
-              />
-              <span className="relative block h-5 min-w-0 flex-1">
-                <span className="absolute inset-0 flex items-center truncate text-sm font-medium leading-5 transition-all duration-200 group-hover:-translate-y-full group-hover:opacity-0 group-focus-visible:-translate-y-full group-focus-visible:opacity-0">
-                  {perspective.label}
-                </span>
-                <span className="absolute inset-0 flex translate-y-full items-center truncate text-xs leading-5 text-muted-foreground opacity-0 transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
-                  {perspective.question}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </fieldset>
   );
 }
 

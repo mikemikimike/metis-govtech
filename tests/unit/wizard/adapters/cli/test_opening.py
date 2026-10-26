@@ -1,6 +1,10 @@
 """The CLI interview-opening fields."""
 
-from metis.wizard.adapters.cli.opening import read_capability_evidence
+from metis.wizard.adapters.cli.opening import (
+    read_capability_evidence,
+    read_description,
+)
+from metis.wizard.application.config import load_config
 
 
 def test_capability_input_shows_the_catalogue_and_reads_selection_and_confidence() -> (
@@ -30,3 +34,35 @@ def test_capability_input_shows_the_catalogue_and_reads_selection_and_confidence
             "System Management",
         )
     )
+
+
+def test_run_mode_takes_the_binding_from_the_cli_or_from_a_file(tmp_path) -> None:
+    from metis.wizard.adapters.cli.connection import read_binding_source
+
+    def ask(*answers: str):
+        replies = iter(answers)
+        return read_binding_source(
+            out=lambda _line: None, read=lambda _p: next(replies)
+        )
+
+    assert ask("") is None
+    binding = tmp_path / "binding.yaml"
+    binding.write_text("schema_version: 1\n")
+    assert ask("2", str(tmp_path / "absent.yaml"), str(binding)) == binding
+
+
+def test_description_input_asks_the_opening_question_until_it_gets_an_answer() -> None:
+    replies = iter(["   ", "  A research assistant that cites sources.  "])
+    asked: list[str] = []
+    out: list[str] = []
+
+    def read(prompt: str) -> str:
+        asked.append(prompt)
+        return next(replies)
+
+    description = read_description(out=out.append, read=read)
+
+    assert description == "A research assistant that cites sources."
+    assert len(asked) == 2
+    assert all(load_config().opening_question in prompt for prompt in asked)
+    assert out == ["  Enter a description of the target."]

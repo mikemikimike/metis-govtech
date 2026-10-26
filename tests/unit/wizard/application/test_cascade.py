@@ -272,3 +272,56 @@ def _result_editing_eb1():
     from metis.wizard.contracts import StepResult
 
     return StepResult(message="Reworded.", patches=[edit(EB1_DESCRIPTION)])
+
+
+# ── the Target review form after Back ──────────────────────────────────────
+
+
+def _submit_target_review(
+    changes: dict[str, str], *, stored_description: str | None = None
+) -> tuple[DriverState, StepDriver]:
+    from metis.wizard.application import screens
+    from metis.wizard.contracts import FormResponse
+
+    state = a_state(step=InterviewStep.CLARIFY)
+    if stored_description is not None:
+        state.specification.target.description = stored_description
+    driver = StepDriver(interviewer=ScriptedInterviewer())
+    form = screens.target_review_form(state.specification)
+    values = {field.id: field.value for field in form.fields}
+    values.update(changes)
+    driver.handle(state, form, FormResponse(values=values))
+    return state, driver
+
+
+def test_a_target_description_edit_on_review_asks_the_tree_question() -> None:
+    state, driver = _submit_target_review(
+        {"target.description": "An agent that drafts policy briefs."}
+    )
+
+    assert [question.kind for question in driver.pending_questions] == ["tree"]
+    assert state.specification.target.description == (
+        "An agent that drafts policy briefs."
+    )
+    assert state.specification.features  # kept until the user answers
+    assert state.step is InterviewStep.BEHAVIOURS
+
+
+def test_a_target_name_edit_or_no_edit_on_review_asks_nothing() -> None:
+    renamed, renamed_driver = _submit_target_review({"target.name": "Librarian"})
+    unchanged, unchanged_driver = _submit_target_review({})
+
+    assert renamed_driver.pending_questions == []
+    assert renamed.specification.target.name == "Librarian"
+    assert unchanged_driver.pending_questions == []
+    assert unchanged.specification == research_assistant()
+    assert unchanged.step is InterviewStep.BEHAVIOURS
+
+
+def test_a_stored_value_with_surrounding_whitespace_is_unchanged_on_review() -> None:
+    stored = research_assistant().target.description + "  \n"
+    state, driver = _submit_target_review({}, stored_description=stored)
+
+    assert driver.pending_questions == []
+    assert state.specification.target.description == stored
+    assert state.step is InterviewStep.BEHAVIOURS

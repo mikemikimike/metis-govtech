@@ -107,8 +107,7 @@ forbidden_calls:
 ```
 
 To try a binding, set the variables it names and run the experiment as usual. The runner
-agent uses `RUNNER_AGENT_MODEL` (falling back to `USER_AGENT_MODEL`) with the same
-`OPENAI_API_KEY` and `OPENAI_BASE_URL` as the user agent.
+agent is its own model role. See the [model guide](../../../../../../../docs/guide/models.md).
 
 ## The browser runner, for an app with only a web page
 

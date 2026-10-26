@@ -62,14 +62,10 @@ Every simulation LLM call goes through `llm_calls.parse_completion`, which write
 
 ## Environment variables
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `OPENAI_API_KEY` | Yes | API key for the user agent LLM |
-| `OPENAI_BASE_URL` | No | Endpoint override; unset → default OpenAI endpoint |
-| `USER_AGENT_MODEL` | No | User-agent model name (default: `gpt-5.6-luna`) |
-| `USER_AGENT_MAX_TOKENS` | No | Max output tokens per turn (unset/empty → parameter omitted, provider default applies) |
-| `USER_AGENT_TEMPERATURE` | No | Sampling temperature (unset/empty → parameter omitted, provider default applies) |
-| `RUNNER_AGENT_MODEL` | No | gen_2 runner-agent model name (unset/empty → `USER_AGENT_MODEL`) |
+The user agent and the runner agent are model roles. `model_settings.py` resolves them when a
+trial is built, through `metis.core.model_settings`. The
+[model guide](../../../../../../docs/guide/models.md) lists their variables, the fallback, and the
+precedence of the Specification fields. Each `TrialConfig` records the models of its trial.
 
 Runner-specific variables (e.g. `ORCA_URL`, `ORCA_API_URL`, `ORCA_API_KEY`) are documented in each runner's module docstring. Judge/evaluation variables (`JUDGE_API_KEY`, `JUDGE_BASE_URL`, `JUDGE_MODEL`) are documented in the [evaluation README](../evaluation/README.md).
 

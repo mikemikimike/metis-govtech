@@ -34,6 +34,7 @@ from metis.wizard.application.compile import (
     compile_experiment,
     to_yaml,
 )
+from metis.wizard.application.connection import binding_yaml, connected_specification
 from metis.wizard.application.driver import DriverState, StepDriver
 from metis.wizard.application.interviewer import (
     InterviewContextBudgetError,
@@ -255,6 +256,7 @@ def _start(
                 ),
                 opening_description=request.description,
                 documents=request.documents,
+                connection=request.connection,
             ),
             history=[Turn(role="user", text=request.description)],
             issued_ids=collect_specification_ids(specification),
@@ -517,9 +519,17 @@ def package_specification(
     source: Specification | InterviewState,
     fixtures: Iterable[SpecificationFixture],
 ) -> SpecificationArchive:
-    """Compile a manual Specification or final Interview state into a portable export."""
-    specification = (
-        source.specification if isinstance(source, InterviewState) else source
+    """Compile a manual Specification or final Interview state into a portable export.
+
+    An Interview with a target connection exports `target-binding.yaml` next to
+    `specification.yaml`, which then names the gen_2 runner and the binding file.
+    """
+    connection = (
+        source.context.connection if isinstance(source, InterviewState) else None
+    )
+    specification = connected_specification(
+        source.specification if isinstance(source, InterviewState) else source,
+        connection,
     )
     gaps = specification_readiness(specification)
     if gaps:
@@ -533,6 +543,7 @@ def package_specification(
         interview_state_json=source.model_dump_json()
         if isinstance(source, InterviewState)
         else None,
+        target_binding_yaml=binding_yaml(connection) if connection else None,
     )
 
 

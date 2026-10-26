@@ -16,10 +16,13 @@ Evaluation engine for METIS — simulation harness, trace extraction, and grader
 make install                    # installs workspace dependencies
 
 # Configure environment
-cp packages/engine/.env.example .env
+cp .env.example .env
 # Fill in: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, OPENAI_API_KEY,
 #          LANGFUSE_BASE_URL, ORCA_API_URL, ORCA_API_KEY
 ```
+
+The [model guide](../../docs/guide/models.md) lists the model variables of each role and the
+Specification fields that record the models.
 
 ## Running
 

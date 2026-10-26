@@ -208,3 +208,25 @@ def test_schema_version_is_required_and_pinned(version):
 def test_invalid_values_rejected(overrides):
     with pytest.raises(ValidationError):
         TargetBinding.model_validate(_minimal(**overrides))
+
+
+@pytest.mark.parametrize(
+    ("note", "secrets", "named"),
+    [
+        ("Type {{secret:APP_PASSWORD}}.", ["APP_USER"], "APP_PASSWORD"),
+        ("Type {{secret:APP_USER}}.", [], "APP_USER"),
+    ],
+)
+def test_login_note_placeholder_must_be_listed_in_secrets(note, secrets, named):
+    with pytest.raises(ValidationError) as error:
+        TargetBinding.model_validate(_browser(login={"note": note, "secrets": secrets}))
+    assert f"does not list {named}" in str(error.value)
+
+
+def test_login_note_placeholder_that_is_not_a_name_is_rejected_without_echo():
+    with pytest.raises(ValidationError) as error:
+        TargetBinding.model_validate(
+            _browser(login={"note": "Type {{secret:hunter2-password}}.", "secrets": []})
+        )
+    assert "hunter2-password" not in str(error.value)
+    assert "not an environment variable name" in str(error.value)

@@ -80,7 +80,7 @@ run:
 	@printf "  make run-web    # Web dev server\n"
 
 run-api:
-	PORT=8001 uv run metis-api
+	HOST=127.0.0.1 PORT=8001 uv run metis-api
 
 run-web:
 	cd apps/web && npm run dev

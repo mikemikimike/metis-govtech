@@ -597,7 +597,6 @@ def test_every_session_is_fetched_with_its_artifacts_and_timeout(
 def test_code_graders_need_no_judge_credentials(monkeypatch, tmp_path: Path) -> None:
     for name in ("JUDGE_API_KEY", "OPENAI_API_KEY"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(cli, "load_dotenv", lambda: None)
     output = _write_experiment_dir(tmp_path)
     _write_record(output)
     _patch_evaluation(monkeypatch)
@@ -613,7 +612,6 @@ def test_model_based_grader_without_credentials_fails_before_any_fetch(
 ) -> None:
     for name in ("JUDGE_API_KEY", "OPENAI_API_KEY"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(cli, "load_dotenv", lambda: None)
     fqn = f"{GRADERS}.EchoJudgeGrader"
     output = _write_experiment_dir(tmp_path, content=_spec_with(fqn))
     _write_judge_record(output, fqn)
@@ -623,16 +621,17 @@ def test_model_based_grader_without_credentials_fails_before_any_fetch(
 
     assert result.exit_code == 1
     assert "AC-1-1" in result.output
-    assert (
-        "JUDGE_API_KEY" in _compact(result.output) or "JUDGE_API_KEY" in result.output
-    )
+    output = _compact(result.output)
+    assert "JUDGE_API_KEY or OPENAI_API_KEY" in " ".join(result.output.split())
+    assert "metisengineevaluate" in output
+    assert "docs/guide/models.md" in output
+    assert "Settingsfileread:" in output
     assert calls == []
 
 
 def test_judge_model_comes_from_the_spec_defaults(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("JUDGE_API_KEY", "test-key")
     monkeypatch.setenv("JUDGE_MODEL", "from-env")
-    monkeypatch.setattr(cli, "load_dotenv", lambda: None)
     fqn = f"{GRADERS}.EchoJudgeGrader"
     output = _write_experiment_dir(
         tmp_path,

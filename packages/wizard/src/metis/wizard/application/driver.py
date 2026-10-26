@@ -73,11 +73,13 @@ _NEXT_STEP = {
     InterviewStep.SCENARIOS: InterviewStep.DONE,
 }
 
-# Only these screens expose Back. Keeping the map explicit makes the door's visible
-# navigation contract inspectable and avoids implying that hidden or terminal steps can go
-# back through this handler.
+# Each review screen after Clarify shows Back, and this map tells where it goes. The map is
+# explicit so that the door's navigation contract is easy to inspect. Clarify and DONE are not
+# keys: Clarify is the first step, and DONE shows no screen.
 _PREVIOUS_STEP = {
+    InterviewStep.BEHAVIOURS: InterviewStep.CLARIFY,
     InterviewStep.CRITERIA: InterviewStep.BEHAVIOURS,
+    InterviewStep.PERSONAS: InterviewStep.CRITERIA,
     InterviewStep.SCENARIOS: InterviewStep.PERSONAS,
 }
 
@@ -423,6 +425,11 @@ class StepDriver:
         values = getattr(response, "values", {}) or {}
         specification = state.specification
 
+        if state.step is InterviewStep.CLARIFY and screens.is_target_review_form(
+            request
+        ):
+            return self._review_target(state, request, values)
+
         if state.step is InterviewStep.BEHAVIOURS and request.target is None:
             completion = screens.target_completion_form(specification)
             if completion is not None and request.fields == completion.fields:
@@ -508,6 +515,46 @@ class StepDriver:
                 issued_ids=state.issued_ids,
                 user_typed=state.user_typed,
             )
+
+    def _review_target(
+        self, state: DriverState, request: FormRequest, values: dict[str, Any]
+    ) -> None:
+        """Apply the changed Target fields, then return to the Behaviour review.
+
+        Only a changed field becomes a patch. Values are compared without surrounding whitespace,
+        so a stored value with a trailing newline is unchanged. A blank required field keeps its
+        current value.
+        An edit that affects derived content asks the usual cascade question in this turn, so
+        no drafted content is discarded with no question. With no change, nothing is drafted
+        again.
+        """
+        target = state.specification.target
+        patches = []
+        for form_field in request.fields:
+            value = values.get(form_field.id)
+            if not isinstance(value, str):
+                continue
+            value = value.strip()
+            current = getattr(target, form_field.id.split(".", 1)[1]) or ""
+            if value == current.strip() or (form_field.required and not value):
+                continue
+            patches.append(
+                Patch(
+                    op=PatchOp.SET,
+                    path=form_field.id,
+                    value=value,
+                    origin=PatchOrigin.WIZARD,
+                )
+            )
+        before = state.specification.model_copy(deep=True)
+        outcome = apply(
+            state.specification,
+            patches,
+            issued_ids=state.issued_ids,
+            user_typed=state.user_typed,
+        )
+        self.pending_questions += cascade.questions_for(before, outcome.applied)
+        state.step = InterviewStep.BEHAVIOURS
 
     def _add_typed_behaviour(
         self, state: DriverState, feature_id: str, values: dict[str, Any]
@@ -671,11 +718,17 @@ class StepDriver:
 
         if "back" in actions:
             destination = _PREVIOUS_STEP.get(state.step, state.step)
-            # Back to Behaviour review reopens the measurement-scope decision, so its earlier
-            # confirmation no longer holds and must be earned again with Continue.
-            if destination is InterviewStep.BEHAVIOURS:
+            # Back to Clarify or Behaviours reopens the measurement-scope decision, so its
+            # earlier confirmation no longer holds and must be earned again with Continue.
+            if destination in (InterviewStep.CLARIFY, InterviewStep.BEHAVIOURS):
                 state.behaviours_confirmed = False
             state.step = destination
+            if destination is InterviewStep.CLARIFY:
+                # The Clarify chat is a model call. Back shows the Target fields as a form
+                # instead, so going back costs nothing and asks no new question.
+                form = screens.target_review_form(state.specification)
+                screens.stamp_step(form, destination)
+                state.pending = form
             return
 
         # The three criteria-card actions and the screen-level chat all dispatch on the action

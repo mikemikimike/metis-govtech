@@ -41,15 +41,19 @@ The interface guides give the exact files or archive that each interface produce
 
 ## Interview flow
 
-1. Describe the target. In the web client and the API, you can also add documents.
-2. Select the evaluation Perspective (who the evaluation is for, such as an end user or an
+1. Choose the mode: build a Specification only, or build it and run evals. To run evals, connect
+   the target. See [Connect the target](#connect-the-target).
+2. Describe the target. You can also add documents.
+3. Select the evaluation Perspective (who the evaluation is for, such as an end user or an
    engineer). Web and API only. The CLI always uses End user.
-3. Select the known ARC capabilities and a confidence value.
-4. Answer clarification questions.
-5. Review the Behaviours to measure and their Criteria.
-6. Review the Personas, Scenarios, and Test Cases.
-7. Finish and validate the specification.
-8. Compile or package the result.
+4. Select the known ARC capabilities and a confidence value. You can select no capabilities. The
+   CLI and the API need a confidence value. In the web client, the confidence is optional, and
+   with no value the web client sends Low.
+5. Answer clarification questions.
+6. Review the Behaviours to measure and their Criteria.
+7. Review the Personas, Scenarios, and Test Cases.
+8. Finish and validate the specification.
+9. Compile or package the result.
 
 Other paths:
 
@@ -58,8 +62,49 @@ Other paths:
 - The web client has a manual path for a user who already knows the Experiment to run. It does
   not use the Interview. See [Write the Experiment directly](wizard/web.md#write-the-experiment-directly).
 
-The Wizard saves the description, Perspective, capabilities, and documents in the Interview state.
-This context is separate from the Specification.
+The Wizard saves the description, Perspective, capabilities, documents, and target connection in
+the Interview state. This context is separate from the Specification.
+
+## Connect the target
+
+The Engine must reach the target to run an evaluation. A **target binding** tells it how. For
+example, a binding for a research assistant with a REST API names the OpenAPI document URL and
+the environment variable that holds the API key. The binding is separate from the Target Profile:
+the Profile states what METIS evaluates, and the binding states how METIS reaches the target.
+
+1. Choose **HTTP API** for a target with an OpenAPI document, or **Browser** for a target with
+   only a web page.
+2. Enter the values that the target cannot supply:
+   - HTTP: the target name, the OpenAPI URL, and the API key variable. Under **More options**:
+     secret headers, refused calls, message calls, TLS verification, and runner notes.
+   - Browser: the target name, the start page URL, and the sign-in steps with `{{secret:NAME}}`
+     placeholders. Under **More options**: the sign-in variables and runner notes.
+3. Select **Test connection** in the web client. The CLI tests the binding after the fields.
+   Then choose test again, fix the values, or continue.
+
+Each secret field takes the **name** of an environment variable, never its value. Set each value
+in `.env` or in the environment before you run the Engine. Write `${NAME}` in a URL to read a
+variable, for example `${APP_URL}/openapi.json`. The Wizard does not repeat a value in an error.
+
+The test has two parts:
+
+- It always checks the fields. They must have the correct shape, each `{{secret:NAME}}` must be in
+  the sign-in variables, and a URL must not hold a user name or password.
+- Where it can read your `.env`, it also reports each named variable as set or not set. For HTTP,
+  it fetches the OpenAPI document, shows its title and endpoint count, and checks that the API
+  server answers. For a browser, it loads the start page. The CLI always does this. The web
+  client does this when the API runs on your computer.
+
+The test sends no call to an API endpoint, so it cannot change your data. It does not test your
+key or the browser sign-in. Only the Engine can, because it needs your secret values.
+
+Run mode needs valid fields. If the fields are not valid, fix them, or choose Build Spec only. If
+the fields are valid but the target does not answer, you can still continue. `review.md` then says
+that the binding was not tested.
+
+A download with a binding has `outputs/target-binding.yaml` next to `outputs/specification.yaml`.
+The Specification names the gen_2 runner in `runner_factory_ref` and the file in `target_binding`.
+The binding file starts with a comment that lists the variables to set.
 
 ## ARC capability catalogue
 

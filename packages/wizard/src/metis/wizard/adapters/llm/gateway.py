@@ -1,7 +1,9 @@
 """The real interviewer, over the PlatformAI gateway.
 
-The gateway is OpenAI-compatible, so the client is `OpenAI` with a `base_url` — and it serves
-both chat and embeddings on one endpoint and key, which is why the matcher is not a second
+The gateway is OpenAI-compatible, so the client is `OpenAI` with a `base_url`. The interview
+and the embeddings are two model roles (`metis.core.model_settings`). Each has its own model,
+key and URL, and both fall back to the shared `OPENAI_API_KEY` and `OPENAI_BASE_URL`. When the
+two roles share one gateway, one client serves both, which is why the matcher is not a second
 integration.
 
 The client is imported from `langfuse.openai`, Langfuse's drop-in for the OpenAI client.
@@ -38,6 +40,14 @@ from langfuse import get_client, observe
 from openai import APIError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
+from metis.core.model_settings import (
+    ROLES,
+    ModelRole,
+    RoleSettings,
+    find_env_file,
+    format_missing_settings,
+    resolve_role,
+)
 from metis.core.profile import CriterionDescription
 from metis.library.grader import CriterionJudgeArgs, GraderArgs, JudgeArgs
 from metis.wizard.application import prompts
@@ -56,16 +66,11 @@ from metis.wizard.domain.applier import PatchValueError, validate_model_patches
 from metis.wizard.domain.patch import PatchOp
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
+    from pathlib import Path
 
     from metis.wizard.contracts.interview_state import InterviewContext, Turn
     from metis.wizard.domain.specification import Criterion, Specification
-
-BASE_URL_VAR = "OPENAI_BASE_URL"
-API_KEY_VAR = "OPENAI_API_KEY"
-MODEL_VAR = "INTERVIEW_MODEL"
-
-DEFAULT_MODEL = "gpt-5.6-luna"
 
 ATTEMPTS = 3
 
@@ -80,25 +85,50 @@ class ModelOutputError(InterviewerOutputError):
     """Three attempts, all of them malformed."""
 
 
-def check_credentials() -> None:
-    """Fail before any model call when the environment is not set up.
+def check_credentials(
+    command: str = "metis wizard",
+    env: Mapping[str, str] | None = None,
+    env_file: Path | None = None,
+    *,
+    interview: RoleSettings | None = None,
+) -> None:
+    """Fail before any model call when the interview role has no API key.
 
-    Named variables rather than a generic "not configured": the fix is to export something,
-    so the message should say what.
+    ``interview`` is the resolved interview role; without it, the role resolves from ``env``.
+    Embeddings are optional, so only the interview role can stop the start. The message names
+    the variables, the `.env` file that was read, and the model guide. The base URL is optional,
+    as in the engine.
     """
-    missing = [v for v in (BASE_URL_VAR, API_KEY_VAR) if not os.environ.get(v)]
-    if missing:
-        raise CredentialsMissing(
-            f"The wizard needs {' and '.join(missing)} in the environment to reach the "
-            f"model gateway. Set {'them' if len(missing) > 1 else 'it'} and try again."
-        )
+    env = os.environ if env is None else env
+    settings = interview or resolve_role(ModelRole.INTERVIEW, env)
+    if not settings.configured:
+        missing = {settings.role: ROLES[settings.role].key_vars}
+        path = env_file if env_file is not None else find_env_file(env=env)
+        raise CredentialsMissing(format_missing_settings(command, missing, path))
+
+
+def _client(settings: RoleSettings) -> Any:
+    # The drop-in traces every call; unconfigured it is a quiet no-op. The OpenAI client
+    # does not connect on construction, so this stays offline until a call is made.
+    from langfuse.openai import OpenAI
+
+    # The base URL is the full OpenAI-compatible endpoint; the client uses it as given.
+    return OpenAI(
+        base_url=settings.base_url.rstrip("/") if settings.base_url else None,
+        api_key=settings.api_key,
+    )
 
 
 @dataclass
 class GatewayInterviewer:
     """Structured-output calls against the gateway."""
 
-    model: str = field(default_factory=lambda: os.environ.get(MODEL_VAR, DEFAULT_MODEL))
+    interview: RoleSettings = field(
+        default_factory=lambda: resolve_role(ModelRole.INTERVIEW, os.environ)
+    )
+    embeddings: RoleSettings = field(
+        default_factory=lambda: resolve_role(ModelRole.EMBEDDINGS, os.environ)
+    )
     context_tokens: int = field(
         default_factory=lambda: int(
             os.environ.get("INTERVIEW_CONTEXT_TOKENS", "128000")
@@ -108,24 +138,32 @@ class GatewayInterviewer:
         default_factory=lambda: int(os.environ.get("INTERVIEW_OUTPUT_TOKENS", "16384"))
     )
     _client: Any = None
+    _embedding_client: Any = None
     interview_id: str | None = None
 
     def __post_init__(self) -> None:
-        check_credentials()
+        if self._client is None:
+            # A missing key costs no model call: the check runs before any client exists.
+            check_credentials(interview=self.interview)
         if not 0 < self.output_tokens < self.context_tokens:
             raise ValueError(
                 "INTERVIEW_OUTPUT_TOKENS must be positive and below INTERVIEW_CONTEXT_TOKENS."
             )
         if self._client is None:
-            # The drop-in traces every call; unconfigured it is a quiet no-op. The OpenAI client
-            # does not connect on construction, so this stays offline until a call is made.
-            from langfuse.openai import OpenAI
-
-            # OPENAI_BASE_URL is the full OpenAI-compatible endpoint; the client uses it as given.
-            self._client = OpenAI(
-                base_url=os.environ[BASE_URL_VAR].rstrip("/"),
-                api_key=os.environ[API_KEY_VAR],
+            self._client = _client(self.interview)
+        if self._embedding_client is None and self.embeddings.configured:
+            same_gateway = (self.embeddings.api_key, self.embeddings.base_url) == (
+                self.interview.api_key,
+                self.interview.base_url,
             )
+            self._embedding_client = (
+                self._client if same_gateway else _client(self.embeddings)
+            )
+
+    @property
+    def model(self) -> str:
+        """The interview model."""
+        return self.interview.model
 
     # ── the retry loop ─────────────────────────────────────────────────────
 
@@ -339,7 +377,10 @@ class GatewayInterviewer:
                     if previous
                     else None,
                     "specification": specification.model_dump(mode="json"),
-                    "context": context.model_dump(mode="json") if context else None,
+                    # the target connection is never sent to the model or to tracing
+                    "context": context.model_dump(mode="json", exclude={"connection"})
+                    if context
+                    else None,
                     "grader": grader.__doc__,
                     "uses_criterion_description": issubclass(
                         grader.args_model, CriterionJudgeArgs
@@ -450,8 +491,12 @@ class GatewayInterviewer:
 
     # ── embeddings, for the matcher ────────────────────────────────────────
 
-    def embed(
-        self, texts: list[str], model: str = "gemini-embedding-001"
-    ) -> list[list[float]]:
-        response = self._client.embeddings.create(model=model, input=texts)
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        # With no embeddings key there is no client. The matcher catches this error and uses
+        # the criterion judge.
+        if self._embedding_client is None:
+            raise InterviewerUnavailable("The embeddings role has no API key.")
+        response = self._embedding_client.embeddings.create(
+            model=self.embeddings.model, input=texts
+        )
         return [item.embedding for item in response.data]

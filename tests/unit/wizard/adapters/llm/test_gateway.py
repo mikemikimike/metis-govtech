@@ -7,17 +7,19 @@ import httpx
 import pytest
 from openai import APIConnectionError
 
+from metis.core.model_settings import MODEL_GUIDE, ModelRole, resolve_role
 from metis.wizard.adapters.llm.gateway import (
-    API_KEY_VAR,
     ATTEMPTS,
-    BASE_URL_VAR,
     CredentialsMissing,
     GatewayInterviewer,
     ModelOutputError,
     check_credentials,
 )
 from metis.wizard.application import prompts
-from metis.wizard.application.interviewer import InterviewerOutputError
+from metis.wizard.application.interviewer import (
+    InterviewerOutputError,
+    InterviewerUnavailable,
+)
 from metis.wizard.contracts import (
     ClarifyResult,
     InterviewDocument,
@@ -68,34 +70,96 @@ def simple_prompt(name: prompts.ModelCall = "clarify") -> prompts.ModelPrompt:
     return prompts.ModelPrompt(name=name, system="s", user="u")
 
 
+_ROLE_VARS = (
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "INTERVIEW_API_KEY",
+    "INTERVIEW_BASE_URL",
+    "INTERVIEW_MODEL",
+    "EMBEDDING_API_KEY",
+    "EMBEDDING_BASE_URL",
+    "EMBEDDING_MODEL",
+)
+
+
 @pytest.fixture(autouse=True)
 def _credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(BASE_URL_VAR, "https://gateway.example")
-    monkeypatch.setenv(API_KEY_VAR, "key")
+    for name in _ROLE_VARS:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://gateway.example")
+    monkeypatch.setenv("OPENAI_API_KEY", "key")
 
 
 # ── credentials ────────────────────────────────────────────────────────────
 
 
-def test_missing_credentials_are_named(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The fix is to export something, so the message says what."""
-    monkeypatch.delenv(BASE_URL_VAR)
-    monkeypatch.delenv(API_KEY_VAR)
+def test_missing_credentials_name_variables_and_guide(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fix is to export something, so the message says what and where to read more."""
+    monkeypatch.delenv("OPENAI_API_KEY")
 
     with pytest.raises(CredentialsMissing) as exc:
         check_credentials()
 
-    assert BASE_URL_VAR in str(exc.value)
-    assert API_KEY_VAR in str(exc.value)
+    message = str(exc.value)
+    assert "INTERVIEW_API_KEY or OPENAI_API_KEY" in message
+    assert MODEL_GUIDE in message
+    assert "https://gateway.example" not in message
 
 
 def test_credentials_are_checked_before_any_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv(API_KEY_VAR)
+    monkeypatch.delenv("OPENAI_API_KEY")
 
     with pytest.raises(CredentialsMissing):
         GatewayInterviewer()
+
+
+def test_embeddings_are_optional_and_use_the_embedding_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Embeddings only match graders. Without a key, embed fails and the matcher falls back."""
+    monkeypatch.delenv("OPENAI_API_KEY")
+    monkeypatch.setenv("INTERVIEW_API_KEY", "key")
+    check_credentials()
+    with pytest.raises(InterviewerUnavailable):
+        GatewayInterviewer().embed(["a criterion"])
+
+    monkeypatch.setenv("OPENAI_API_KEY", "key")
+    monkeypatch.setenv("EMBEDDING_MODEL", "custom-embedding")
+    sent: dict[str, object] = {}
+
+    class Embeddings:
+        def create(self, **kwargs):
+            sent.update(kwargs)
+            return type(
+                "Response", (), {"data": [type("Item", (), {"embedding": [1.0]})()]}
+            )()
+
+    client = type("Client", (), {"embeddings": Embeddings()})()
+    gateway = GatewayInterviewer(_client=client)
+
+    assert gateway.embed(["text"]) == [[1.0]]
+    assert sent == {"model": "custom-embedding", "input": ["text"]}
+
+
+def test_each_role_uses_its_own_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EMBEDDING_BASE_URL", "https://embeddings.example")
+    built: list[dict[str, object]] = []
+
+    import langfuse.openai
+
+    monkeypatch.setattr(
+        langfuse.openai, "OpenAI", lambda **kwargs: built.append(kwargs) or kwargs
+    )
+    gateway = GatewayInterviewer(
+        interview=resolve_role(ModelRole.INTERVIEW, {"OPENAI_API_KEY": "k"}),
+    )
+
+    assert gateway.model == "gpt-6-luna"
+    assert [b["base_url"] for b in built] == [None, "https://embeddings.example"]
 
 
 def test_gateway_connection_failure_is_a_retryable_interviewer_error() -> None:

@@ -212,6 +212,13 @@ of the library.
 
 ## Package-Specific Notes
 
+The wizard calls two model roles: the interview and the embeddings. `adapters/llm/gateway.py`
+resolves both through `metis.core.model_settings` (`INTERVIEW_*`, `EMBEDDING_*`, then `OPENAI_*`).
+`OPENAI_BASE_URL` is optional. `configure_interview_runtime` takes the resolved settings and never
+writes them to `os.environ`. `init` and `resume` read the one `.env` that core finds and check both
+roles before the first model call. After the files are written, the CLI lists the roles that the run
+needs, with model and status. See [the model guide](../../docs/guide/models.md).
+
 The grader catalogue now reads from **metis-library** (`metis.library.graders.*`), so
 `application/matching/library_catalogue.py` is back on the DAG. It enumerates the classes
 re-exported flat from `metis.library.graders.__init__` and emits canonical FQNs

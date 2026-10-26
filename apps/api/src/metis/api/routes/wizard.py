@@ -36,13 +36,17 @@ from fastapi.openapi.models import Example
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
+from metis.api.settings import SettingsError
 from metis.wizard import (
     CompilationError,
     CompileResult,
+    ConnectionCheckRequest,
+    ConnectionCheckResult,
     DocumentExtractionError,
     DocumentExtractionErrorCode,
     DocumentExtractionResult,
     InterviewConfig,
+    InterviewConnectionRequest,
     InterviewEndRequest,
     InterviewErrorCode,
     InterviewFailure,
@@ -54,10 +58,12 @@ from metis.wizard import (
     Specification,
     SpecificationError,
     SpecificationFixture,
+    check_connection,
     compile_specification,
     extract_documents,
     interview_client_config,
     package_specification,
+    set_connection,
 )
 
 if TYPE_CHECKING:
@@ -273,9 +279,16 @@ def extract_document_text(
 
 
 def get_dependencies(request: Request) -> WizardDependencies:
-    """Return the startup-composed public Interview handler."""
+    """Return the startup-composed public Interview handler.
+
+    Raises ``SettingsError`` (503 `model_unavailable`) when the app started without the
+    interview settings.
+    """
     dependencies = getattr(request.app.state, "wizard_dependencies", None)
     if dependencies is None:
+        message = getattr(request.app.state, "settings_error", None)
+        if message is not None:
+            raise SettingsError(message)
         raise RuntimeError(
             "Wizard dependencies were not composed at application startup."
         )
@@ -465,6 +478,45 @@ def end(
     """
     result = dependencies.interview_handler(body)
     return _result_response(result)
+
+
+@router.post(
+    "/connection/check",
+    summary="Check a target binding",
+    response_model=ConnectionCheckResult,
+    responses={422: {"model": ServiceError}, 500: {"model": ServiceError}},
+)
+def check_target_connection(
+    body: ConnectionCheckRequest,
+    dependencies: WizardDependencies = Depends(get_dependencies),
+) -> ConnectionCheckResult:
+    """Validate binding values and return field errors as `loc` and `msg` only.
+
+    By default, the API reaches the target only when it listens on this computer (`127.0.0.1`,
+    `localhost`, or `::1`). `METIS_API_CONNECTION_CHECK=1` or `0` overrides this. When the check
+    is off, `live` is false and `status` is `unchecked`.
+
+    The API never puts a value from its own environment into a URL that it requests. A URL that
+    names a `${NAME}` variable is not requested, and its probe tells the user to check it with
+    `metis wizard connect`.
+    """
+    return check_connection(
+        body.binding, live=dependencies.connection_check, expand_variables=False
+    )
+
+
+@router.post(
+    "/connection",
+    summary="Set or remove the target connection on Interview state",
+    response_model=InterviewState,
+    responses={422: {"model": ServiceError}, 500: {"model": ServiceError}},
+)
+def update_target_connection(body: InterviewConnectionRequest) -> InterviewState:
+    """Return the state with the connection set, or removed when `connection` is null.
+
+    This changes no Specification content and calls no model. Save the returned state.
+    """
+    return set_connection(body.state, body.connection)
 
 
 def _result_response(result: InterviewResult) -> JSONResponse:

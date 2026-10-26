@@ -12,7 +12,6 @@ from httpcore._backends.mock import AsyncMockBackend
 from pydantic import Field
 
 from metis.engine.evaluation.judge import (
-    DEFAULT_JUDGE_MODEL,
     JudgeGateway,
     build_llm_settings,
     resolve_grader_args,
@@ -58,11 +57,12 @@ class TestModelResolution:
     def test_3_env_beats_package_default(self) -> None:
         assert _resolve({}, env={"JUDGE_MODEL": "from-env"})["model"] == "from-env"
 
-    def test_4_package_default_last(self) -> None:
-        assert _resolve({})["model"] == DEFAULT_JUDGE_MODEL == "gemini-3.5-flash-lite"
+    def test_4_the_default_model_is_last(self) -> None:
+        assert _resolve({}, env={"DEFAULT_MODEL": "team"})["model"] == "team"
+        assert _resolve({})["model"] == "gpt-6-luna"
 
     def test_empty_env_var_counts_as_unset(self) -> None:
-        assert _resolve({}, env={"JUDGE_MODEL": ""})["model"] == DEFAULT_JUDGE_MODEL
+        assert _resolve({}, env={"JUDGE_MODEL": ""})["model"] == "gpt-6-luna"
 
     def test_explicit_empty_model_is_kept_for_validation_to_reject(self) -> None:
         assert _resolve({"model": ""}, default="from-spec")["model"] == ""

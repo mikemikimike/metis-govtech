@@ -13,7 +13,7 @@ from metis.wizard import (
 )
 
 
-def test_the_route_table_is_exactly_health_interview_lifecycle_compile_and_package(
+def test_the_route_table_is_exactly_health_catalogues_interview_lifecycle_compile_and_package(
     client: TestClient,
 ) -> None:
     paths = client.get("/openapi.json").json()["paths"]
@@ -21,7 +21,10 @@ def test_the_route_table_is_exactly_health_interview_lifecycle_compile_and_packa
     assert set(paths) == {
         "/health",
         "/api/v1/graders",
+        "/api/v1/models",
         "/api/v1/wizard/config",
+        "/api/v1/wizard/connection",
+        "/api/v1/wizard/connection/check",
         "/api/v1/wizard/documents/extract",
         "/api/v1/wizard/package",
         "/api/v1/wizard/interview/start",

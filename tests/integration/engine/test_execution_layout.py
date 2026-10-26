@@ -133,6 +133,8 @@ def _exercise(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str) -> N
         (input_dir / "specification.yaml").write_text(yaml.safe_dump(document))
 
     monkeypatch.setattr(cli, "_find_project_root", lambda: tmp_path)
+    (tmp_path / ".env").write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
+    monkeypatch.setenv("METIS_ENV_FILE", str(tmp_path / ".env"))
     monkeypatch.setattr(gen_1_trial, "UserAgent", ScriptedUser)
     _patch_evaluation(monkeypatch, traces=1)
     runner = CliRunner()

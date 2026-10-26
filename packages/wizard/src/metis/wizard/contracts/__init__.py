@@ -11,6 +11,15 @@ from metis.wizard.contracts.config import (
     InterviewConfigDocumentLimits,
     PerspectiveDefinition,
 )
+from metis.wizard.contracts.connection import (
+    ConnectionCheckRequest,
+    ConnectionCheckResult,
+    ConnectionFieldError,
+    ConnectionProbe,
+    ConnectionStatus,
+    ConnectionTransport,
+    TargetConnection,
+)
 from metis.wizard.contracts.conversation import (
     AnyCard,
     AnyCardComponent,
@@ -71,6 +80,7 @@ from metis.wizard.contracts.output import (
 )
 from metis.wizard.contracts.turn import (
     CompileResult,
+    InterviewConnectionRequest,
     InterviewEndRequest,
     InterviewErrorCode,
     InterviewFailure,
@@ -125,6 +135,12 @@ __all__ = [
     "ChoiceRequest",
     "ChoiceResponse",
     "ClarifyResult",
+    "ConnectionCheckRequest",
+    "ConnectionCheckResult",
+    "ConnectionFieldError",
+    "ConnectionProbe",
+    "ConnectionStatus",
+    "ConnectionTransport",
     "Criterion",
     "CriterionDraft",
     "FormField",
@@ -148,6 +164,7 @@ __all__ = [
     "Persona",
     "PersonaDraft",
     "Target",
+    "TargetConnection",
     "Specification",
     "NamedNode",
     "CompileResult",
@@ -165,6 +182,7 @@ __all__ = [
     "Feature",
     "FeatureDraft",
     "Turn",
+    "InterviewConnectionRequest",
     "InterviewEndRequest",
     "InterviewErrorCode",
     "InterviewFailure",

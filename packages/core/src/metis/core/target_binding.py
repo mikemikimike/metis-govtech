@@ -9,6 +9,7 @@ only when sending.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -20,6 +21,9 @@ from pydantic import (
 )
 
 _TARGET_BINDING_VERSION = 1
+
+_ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
+_SECRET_PLACEHOLDER = re.compile(r"\{\{secret:([^{}]*)\}\}")
 
 EnvName = Annotated[str, StringConstraints(pattern=r"^[A-Z_][A-Z0-9_]*$")]
 """The name of an environment variable, never its value."""
@@ -100,6 +104,24 @@ class Login(_BindingModel):
         default_factory=list,
         description="The environment variables holding the secrets the note types.",
     )
+
+    @model_validator(mode="after")
+    def _placeholders_are_listed(self) -> Login:
+        # the engine types only the secrets it read, so a placeholder for a name that is not
+        # listed would reach the page as literal text. A placeholder that is not a variable
+        # name may hold a pasted secret, so the message names only valid variable names.
+        for name in _SECRET_PLACEHOLDER.findall(self.note):
+            if not _ENV_NAME.fullmatch(name):
+                raise ValueError(
+                    "login.note has a {{secret:...}} placeholder that is not an "
+                    "environment variable name"
+                )
+            if name not in self.secrets:
+                raise ValueError(
+                    f"login.note uses {{{{secret:{name}}}}}, but login.secrets "
+                    f"does not list {name}"
+                )
+        return self
 
 
 _HTTP_ONLY = (

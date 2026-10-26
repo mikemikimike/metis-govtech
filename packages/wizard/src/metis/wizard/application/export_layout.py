@@ -7,7 +7,9 @@ from typing import Literal
 INPUTS = PurePosixPath("inputs")
 OUTPUTS = PurePosixPath("outputs")
 INTERVIEW_STATE = INPUTS / "interview_state.json"
+DOCUMENTS = INPUTS / "documents"
 SPECIFICATION = OUTPUTS / "specification.yaml"
+TARGET_BINDING = OUTPUTS / "target-binding.yaml"
 FIXTURES = OUTPUTS / "fixtures"
 REVIEW = OUTPUTS / "review.md"
 

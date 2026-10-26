@@ -18,7 +18,7 @@ from .gen_2.trial import resolve_fixture_descriptions as gen_2_descriptions
 
 if TYPE_CHECKING:
     import threading
-    from collections.abc import Awaitable, Callable, Iterable
+    from collections.abc import Awaitable, Callable
     from pathlib import Path
 
     from metis.core import Artifact
@@ -47,10 +47,13 @@ class SimulatorGeneration:
 
     build_trial: Callable[..., Trial]
     """Build one attempt's trial around a runner (the keyword arguments of ``create_trial``)."""
-    resolve_fixture_descriptions: Callable[
-        [Iterable[str], Path, Path, dict[str, str]], Awaitable[dict[str, str]]
-    ]
-    """Resolve one description per fixture, once per experiment, before workers start."""
+    resolve_fixture_descriptions: Callable[..., Awaitable[dict[str, str]]]
+    """Resolve one description per fixture, once per experiment, before workers start.
+
+    It also takes the keyword ``user_agent_model``: the experiment default, for a generation
+    whose descriptions call the user agent model."""
+    has_runner_agent: bool = False
+    """True when the generation's runners have a runner agent, so a trial records its model."""
 
 
 _GENERATIONS: dict[str, SimulatorGeneration] = {
@@ -61,6 +64,7 @@ _GENERATIONS: dict[str, SimulatorGeneration] = {
     "gen_2": SimulatorGeneration(
         build_trial=build_gen_2_trial,
         resolve_fixture_descriptions=gen_2_descriptions,
+        has_runner_agent=True,
     ),
 }
 

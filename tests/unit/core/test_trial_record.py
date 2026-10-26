@@ -44,6 +44,17 @@ class TestTrialRecordExtension:
         assert record.attempt_number == 1
         assert record.max_allowed_attempts == 1
         assert record.prior_failures == []
+        assert record.config.user_agent_model is None
+        assert record.config.runner_agent_model is None
+
+    def test_config_records_the_simulation_models(self) -> None:
+        from metis.core.trials import TrialConfig
+
+        config = TrialConfig(
+            persona="p", scenario="s", user_agent_model="ua", runner_agent_model="ra"
+        )
+        restored = TrialConfig.model_validate_json(config.model_dump_json())
+        assert (restored.user_agent_model, restored.runner_agent_model) == ("ua", "ra")
 
     def test_legacy_conversation_key_is_ignored(self) -> None:
         """A record written before #461 still carries `conversation`, with

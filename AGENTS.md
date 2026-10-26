@@ -72,7 +72,7 @@ insights ───────────────► core
 ```
 
 Key invariants:
-- `core` has zero workspace dependencies (Pydantic + structlog + Rich + stdlib)
+- `core` has zero workspace dependencies (Pydantic + structlog + Rich + python-dotenv + stdlib)
 - `library` depends only on `core`
 - `wizard` and `engine` depend on `core` + `library` but NOT on each other
 - `insights` depends only on `core`
