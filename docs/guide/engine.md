@@ -43,7 +43,7 @@ make install-extras-playwright
 Copy the example environment file and fill in your credentials:
 
 ```bash
-cp packages/engine/.env.example .env
+cp .env.example .env
 ```
 
 Set Langfuse and OpenAI credentials, plus the credentials for your selected Orca runner:

@@ -13,7 +13,7 @@ Install and start the API from the repository root:
 
 ```bash
 make install-api
-cp apps/api/.env.example .env
+cp .env.example .env
 make run-api
 ```
 

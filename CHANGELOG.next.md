@@ -166,7 +166,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
     default, `text-embedding-3-large`.
   - One `.env` search for `metis wizard`, `metis engine`, and the API: `METIS_ENV_FILE`, else
     the first `.env` from the working directory up to the project root. Exported values win.
-    `metis-core` now depends on `python-dotenv`.
+    `metis-core` now depends on `python-dotenv`. One `.env.example` at the repository root
+    lists the variables of every command. It replaces the `.env.example` files in
+    `apps/api`, `packages/engine`, `packages/testbed`, and `packages/wizard`.
   - The Specification records the models that affect scores: `defaults.user_agent_model`,
     `defaults.runner_agent_model`, and `tasks[].user_agent_model`, beside
     `defaults.judge_model`. Precedence is the component, then the experiment default, then the

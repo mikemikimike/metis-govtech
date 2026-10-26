@@ -12,10 +12,10 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 
 ## Start the web client
 
-1. From the repository root, copy the API environment template:
+1. From the repository root, copy the environment template:
 
    ```bash
-   cp apps/api/.env.example .env
+   cp .env.example .env
    ```
 
 2. Set `OPENAI_API_KEY`, and `OPENAI_BASE_URL` when you do not use the default OpenAI endpoint.

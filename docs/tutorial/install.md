@@ -59,7 +59,7 @@ role can also have its own key and gateway. See `docs/guide/models.md` in the re
 In a clone, copy the example file to the repository root instead:
 
 ```bash
-cp packages/wizard/.env.example .env
+cp .env.example .env
 ```
 
 ## 4. Install the browser tools (optional)

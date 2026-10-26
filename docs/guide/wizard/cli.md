@@ -30,7 +30,7 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 2. Copy the example environment file:
 
    ```bash
-   cp packages/wizard/.env.example .env
+   cp .env.example .env
    ```
 
 3. Add your provider values:

@@ -71,8 +71,8 @@ through the engine gate. Do not repeat every driver example.
   aligned with the OpenAPI document when the HTTP contract changes.
 - The API resolves the interview and embeddings roles through `metis.core.model_settings`, with the
   same variable names as the wizard and the engine. `cli.py` reads the one `.env` that core finds.
-  For monorepo development, keep one active `.env` at the repository root;
-  `apps/api/.env.example` is the API-specific template. See
+  For monorepo development, keep one active `.env` at the repository root. Copy it from the
+  root `.env.example`. See
   [the model guide](../../docs/guide/models.md).
 - Build the image from the repository root: `docker build -f apps/api/Dockerfile -t metis-api .`.
   METIS is one uv workspace with a single lockfile, so the build needs the workspace root and the
