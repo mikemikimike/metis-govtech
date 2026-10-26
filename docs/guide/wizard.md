@@ -44,7 +44,9 @@ The interface guides give the exact files or archive that each interface produce
 1. Describe the target. You can also add documents.
 2. Select the evaluation Perspective (who the evaluation is for, such as an end user or an
    engineer). Web and API only. The CLI always uses End user.
-3. Select the known ARC capabilities and a confidence value.
+3. Select the known ARC capabilities and a confidence value. You can select no capabilities. The
+   CLI and the API need a confidence value. In the web client, the confidence is optional, and
+   with no value the web client sends Low.
 4. Answer clarification questions.
 5. Review the Behaviours to measure and their Criteria.
 6. Review the Personas, Scenarios, and Test Cases.

@@ -8,19 +8,21 @@ import {
   type ReactNode,
 } from "react";
 import {
-  CapabilityConfidencePicker,
-  CapabilityPicker,
   conversationScrollRevision,
   InitialDocumentPicker,
   OpeningConfigurationState,
   OpeningRoute,
   OpeningScreen,
-  PerspectivePicker,
   type CapabilityEvidenceDraft,
   type OpeningControl,
 } from "./App";
 import { AddDocuments } from "./DocumentTray";
-import { FooterChip } from "./OpeningControls";
+import {
+  CapabilityConfidencePicker,
+  CapabilityPicker,
+  FooterChip,
+  PerspectivePicker,
+} from "./OpeningControls";
 import { Composer, FixtureField, Transcript } from "./Conversation";
 import { InterviewRail } from "./InterviewRail";
 import {
@@ -231,6 +233,7 @@ function openingHarness(
     perspective: Perspective,
     evidence: CapabilityEvidence,
   ) => void,
+  { busy = false }: { busy?: boolean } = {},
 ): OpeningHarness {
   let control: OpeningControl | null = null;
   let perspective: Perspective = "end_user";
@@ -246,7 +249,7 @@ function openingHarness(
       const route = OpeningRoute({
         configState: { status: "ready", config },
         onRetry: () => undefined,
-        busy: false,
+        busy,
         description,
         onDescription: (value) => {
           description = value;
@@ -383,6 +386,145 @@ test("the Perspective panel shows each question as text and keeps radio semantic
   );
   (security.props.onClick as () => void)();
   assert.equal(opening.perspective, "security");
+});
+
+// A stand-in for the key event: the radio group holds focusable radios, and focus is recorded.
+function keyDown(key: string, focused: number[], count: number) {
+  const radios = Array.from({ length: count }, (_, index) => ({
+    focus: () => focused.push(index),
+  }));
+  let prevented = false;
+  return {
+    event: {
+      key,
+      preventDefault: () => {
+        prevented = true;
+      },
+      currentTarget: {
+        closest: () => ({ querySelectorAll: () => radios }),
+      },
+    },
+    get prevented() {
+      return prevented;
+    },
+  };
+}
+
+function radiosOf(picker: ReactNode): TestElement[] {
+  return findElements(picker, (element) => element.props.role === "radio");
+}
+
+test("the arrow keys move the Perspective selection and focus, and wrap at each end", () => {
+  const perspectives = testConfig().perspectives;
+  const press = (selected: Perspective, key: string) => {
+    const chosen: Perspective[] = [];
+    const focused: number[] = [];
+    const radio = radiosOf(
+      PerspectivePicker({
+        perspectives,
+        selected,
+        onSelect: (id) => chosen.push(id),
+      }),
+    ).find((element) => element.props["aria-checked"] === true);
+    assert.ok(radio);
+    const stroke = keyDown(key, focused, perspectives.length);
+    (radio.props.onKeyDown as (event: unknown) => void)(stroke.event);
+    return { chosen, focused, prevented: stroke.prevented };
+  };
+
+  assert.deepEqual(press("end_user", "ArrowDown"), {
+    chosen: ["security"],
+    focused: [1],
+    prevented: true,
+  });
+  assert.deepEqual(press("end_user", "ArrowUp"), {
+    chosen: ["security"],
+    focused: [1],
+    prevented: true,
+  });
+  assert.deepEqual(press("security", "ArrowRight"), {
+    chosen: ["end_user"],
+    focused: [0],
+    prevented: true,
+  });
+  assert.deepEqual(press("security", "ArrowLeft"), {
+    chosen: ["end_user"],
+    focused: [0],
+    prevented: true,
+  });
+  // Other keys keep their default behaviour.
+  assert.deepEqual(press("end_user", "Tab"), {
+    chosen: [],
+    focused: [],
+    prevented: false,
+  });
+});
+
+test("the arrow keys select a confidence from none, and the first radio takes the tab stop", () => {
+  const press = (selected: "low" | "medium" | "high" | null, key: string) => {
+    const chosen: string[] = [];
+    const focused: number[] = [];
+    const radios = radiosOf(
+      CapabilityConfidencePicker({
+        selected,
+        onSelect: (id) => chosen.push(id),
+      }),
+    );
+    const radio = radios.find((element) => element.props.tabIndex === 0);
+    assert.ok(radio);
+    (radio.props.onKeyDown as (event: unknown) => void)(
+      keyDown(key, focused, radios.length).event,
+    );
+    return { tabStops: radios.map((r) => r.props.tabIndex), chosen, focused };
+  };
+
+  assert.deepEqual(press(null, "ArrowRight"), {
+    tabStops: [0, -1, -1],
+    chosen: ["low"],
+    focused: [0],
+  });
+  assert.deepEqual(press(null, "ArrowLeft"), {
+    tabStops: [0, -1, -1],
+    chosen: ["high"],
+    focused: [2],
+  });
+  assert.deepEqual(press("high", "ArrowDown"), {
+    tabStops: [-1, -1, 0],
+    chosen: ["low"],
+    focused: [0],
+  });
+  assert.deepEqual(press("medium", "ArrowUp"), {
+    tabStops: [-1, 0, -1],
+    chosen: ["low"],
+    focused: [0],
+  });
+});
+
+test("the opening controls are disabled while the start request runs", () => {
+  const opening = openingHarness(testConfig(), undefined, { busy: true });
+  assert.equal(
+    chip(opening.render(), "opening-perspective").props.disabled,
+    true,
+  );
+  assert.equal(
+    chip(opening.render(), "opening-capabilities").props.disabled,
+    true,
+  );
+
+  // A Perspective panel that is already open keeps its radios disabled.
+  (chip(opening.render(), "opening-perspective").props.onClick as () => void)();
+  const pickerElement = findElement(
+    opening.render(),
+    (element) => element.type === PerspectivePicker,
+  );
+  assert.equal(pickerElement.props.disabled, true);
+  const radios = radiosOf(
+    PerspectivePicker(
+      pickerElement.props as React.ComponentProps<typeof PerspectivePicker>,
+    ),
+  );
+  assert.ok(radios.length > 0);
+  assert.ok(radios.every((radio) => radio.props.disabled === true));
 });
 
 test("the capability chip shows only its label, with no count", () => {

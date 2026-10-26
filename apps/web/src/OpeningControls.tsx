@@ -179,10 +179,12 @@ export function PerspectivePicker({
   perspectives,
   selected,
   onSelect,
+  disabled = false,
 }: {
   perspectives: PerspectiveDefinition[];
   selected: Perspective;
   onSelect: (perspective: Perspective) => void;
+  disabled?: boolean;
 }) {
   const ids = perspectives.map((perspective) => perspective.id);
   return (
@@ -201,6 +203,7 @@ export function PerspectivePicker({
             role="radio"
             aria-checked={active}
             tabIndex={active ? 0 : -1}
+            disabled={disabled}
             onClick={() => onSelect(perspective.id)}
             onKeyDown={(event) => moveRadio(event, ids, selected, onSelect)}
             className={cn(
@@ -208,6 +211,7 @@ export function PerspectivePicker({
               active
                 ? "border-accent bg-accent/10"
                 : "border-transparent hover:bg-muted",
+              "disabled:cursor-not-allowed disabled:opacity-45",
             )}
           >
             <Icon

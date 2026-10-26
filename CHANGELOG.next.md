@@ -908,7 +908,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   necessary. The **Capabilities** control opens the capabilities and the confidence in a panel
   under the box, or in a full-width sheet on a small screen. Each capability group is one column,
   so the panel needs no scroll. The capabilities and the confidence are optional. With no
-  confidence, the web client sends Low. The opening has less text: the placeholder is an example
+  confidence, the web client sends Low. In the Perspective and confidence choices, the arrow keys
+  move the selection and the focus. The opening has less text: the placeholder is an example
   description, the panels have no title, and the manual entry is one line (#555).
 
 - Show Criterion descriptions with expandable Grader details and typed edit fields (#490).

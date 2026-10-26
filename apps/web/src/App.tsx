@@ -33,12 +33,6 @@ import {
   PerspectivePicker,
   UnderBoxSurface,
 } from "./OpeningControls";
-
-export {
-  CapabilityConfidencePicker,
-  CapabilityPicker,
-  PerspectivePicker,
-} from "./OpeningControls";
 import {
   InterviewRepository,
   emptyRecord,
@@ -910,7 +904,6 @@ export function OpeningScreen(props: OpeningScreenProps) {
                 placeholder="A support bot for a retail bank…"
                 onSend={start}
                 sourceControl={
-                  // Keep room in this row for later setup controls.
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     <AddDocuments
                       onOpen={() => onDocumentTrayOpen(!documentTrayOpen)}
@@ -992,6 +985,7 @@ export function OpeningScreen(props: OpeningScreenProps) {
                     perspectives={config.perspectives}
                     selected={perspective}
                     onSelect={props.onPerspective}
+                    disabled={busy}
                   />
                 </div>
               </UnderBoxSurface>
