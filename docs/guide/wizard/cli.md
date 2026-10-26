@@ -73,7 +73,8 @@ Each review step after Clarify has a **← Back** choice. Select its number to o
 before it with its current content.
 
 - Back from Behaviours shows the Target name, users, description, and detail. Press Enter to
-  keep a value, or type a new value.
+  keep a value, or type a new value. A required field that you leave empty keeps its current
+  value.
 - Continue with no change returns to the later step. The Wizard drafts nothing again.
 - If you change content that later content came from, the Wizard asks what to do with the later
   content. You can keep it, regenerate it, or review it yourself.

@@ -521,7 +521,9 @@ class StepDriver:
     ) -> None:
         """Apply the changed Target fields, then return to the Behaviour review.
 
-        Only a changed field becomes a patch. A blank required field keeps its current value.
+        Only a changed field becomes a patch. Values are compared without surrounding whitespace,
+        so a stored value with a trailing newline is unchanged. A blank required field keeps its
+        current value.
         An edit that affects derived content asks the usual cascade question in this turn, so
         no drafted content is discarded with no question. With no change, nothing is drafted
         again.
@@ -533,8 +535,8 @@ class StepDriver:
             if not isinstance(value, str):
                 continue
             value = value.strip()
-            current = getattr(target, form_field.id.split(".", 1)[1])
-            if value == current or (form_field.required and not value):
+            current = getattr(target, form_field.id.split(".", 1)[1]) or ""
+            if value == current.strip() or (form_field.required and not value):
                 continue
             patches.append(
                 Patch(

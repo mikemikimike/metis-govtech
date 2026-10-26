@@ -277,11 +277,15 @@ def _result_editing_eb1():
 # ── the Target review form after Back ──────────────────────────────────────
 
 
-def _submit_target_review(changes: dict[str, str]) -> tuple[DriverState, StepDriver]:
+def _submit_target_review(
+    changes: dict[str, str], *, stored_description: str | None = None
+) -> tuple[DriverState, StepDriver]:
     from metis.wizard.application import screens
     from metis.wizard.contracts import FormResponse
 
     state = a_state(step=InterviewStep.CLARIFY)
+    if stored_description is not None:
+        state.specification.target.description = stored_description
     driver = StepDriver(interviewer=ScriptedInterviewer())
     form = screens.target_review_form(state.specification)
     values = {field.id: field.value for field in form.fields}
@@ -312,3 +316,12 @@ def test_a_target_name_edit_or_no_edit_on_review_asks_nothing() -> None:
     assert unchanged_driver.pending_questions == []
     assert unchanged.specification == research_assistant()
     assert unchanged.step is InterviewStep.BEHAVIOURS
+
+
+def test_a_stored_value_with_surrounding_whitespace_is_unchanged_on_review() -> None:
+    stored = research_assistant().target.description + "  \n"
+    state, driver = _submit_target_review({}, stored_description=stored)
+
+    assert driver.pending_questions == []
+    assert state.specification.target.description == stored
+    assert state.step is InterviewStep.BEHAVIOURS
