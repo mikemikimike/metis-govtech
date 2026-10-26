@@ -96,6 +96,8 @@ See the user guides for usage instructions:
   [`packages/engine/README.md`](packages/engine/README.md))
 - [`docs/guide/wizard.md`](docs/guide/wizard.md) — Wizard CLI, web, and API
 - [`docs/guide/insights.md`](docs/guide/insights.md) — `metis insights report`, which builds the report from evaluation results
+- [`docs/guide/models.md`](docs/guide/models.md) — the model and gateway of each LLM role, and the
+  one `.env` file that every command reads
 
 ## Development
 

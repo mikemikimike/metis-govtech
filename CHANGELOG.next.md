@@ -69,6 +69,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   Session and Trace move there from the main table, and Trace now states that its
   record is a group of observations. No code changes (#439).
 
+- New user guide `docs/guide/models.md`: the LLM roles, recommended models, how to choose
+  the user agent and judge models, variables, and Specification fields (#446).
+
 #### Changed
 
 - Use `AGENTS.md` as the agent instruction file. Remove the root and Wizard
@@ -149,6 +152,30 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - `defaults.judge_model` in `specification.yaml`: the experiment's default judge model for
   model-based graders. It is omitted from the document when unset (#428).
 
+- **Choose the model and the gateway for each LLM role (#446).** New
+  `metis.core.model_settings` has one role table: interview, embeddings, user agent, runner
+  agent, and judge. Each role reads `<PREFIX>_MODEL`, `<PREFIX>_API_KEY`, and
+  `<PREFIX>_BASE_URL`. The key and the URL each fall back to `OPENAI_API_KEY` and
+  `OPENAI_BASE_URL`, and the runner agent first falls back to `USER_AGENT_*`, so a setup with
+  one gateway does not change. `EMBEDDING_MODEL` replaces the hardcoded embedding model in
+  the wizard and the testbed. `OPENAI_BASE_URL` is optional everywhere. Keys and URLs never go
+  in a Specification, a `repr`, an error, or an API response.
+  - One `DEFAULT_MODEL` variable sets the model of every chat role: Interview, user agent,
+    runner agent, and judge. A role variable wins over it. When it is unset, the chat roles use
+    `gpt-6-luna`, which is the one model name in the code. The embeddings role keeps its own
+    default, `text-embedding-3-large`.
+  - One `.env` search for `metis wizard`, `metis engine`, and the API: `METIS_ENV_FILE`, else
+    the first `.env` from the working directory up to the project root. Exported values win.
+    `metis-core` now depends on `python-dotenv`. One `.env.example` at the repository root
+    lists the variables of every command. It replaces the `.env.example` files in
+    `apps/api`, `packages/engine`, `packages/testbed`, and `packages/wizard`.
+  - The Specification records the models that affect scores: `defaults.user_agent_model`,
+    `defaults.runner_agent_model`, and `tasks[].user_agent_model`, beside
+    `defaults.judge_model`. Precedence is the component, then the experiment default, then the
+    environment, then `DEFAULT_MODEL`. Unset fields are not written, and
+    `specification.schema.json` is regenerated. `TrialConfig` records `user_agent_model` and
+    `runner_agent_model` for each trial.
+
 #### Changed
 
 - **`TargetBinding` also binds a web page: `transport` is `http` or `browser` (#484).** A
@@ -160,6 +187,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `login`. Every existing HTTP binding stays valid, and `target-binding.schema.json` is
   regenerated. The published schema cannot express the per-transport rule, so only the
   model and the engine loader enforce it.
+
+- `TargetBinding` requires each `{{secret:NAME}}` placeholder in `login.note` to name a
+  variable in `login.secrets`. The error never repeats a placeholder that is not a variable
+  name (#283).
 
 #### Breaking
 
@@ -432,6 +463,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   is, and the runner agent's model is `RUNNER_AGENT_MODEL`, falling back to
   `USER_AGENT_MODEL`.
 
+- **Each engine command checks and names its models before its first model call (#446).**
+  `engine simulate` checks the user agent and, for a generic runner, the runner agent;
+  `engine run` adds the judge, and `engine evaluate` checks the judge, when a criterion uses a
+  model-based grader. The error names the variables, the `.env` path that was read, and
+  `docs/guide/models.md`. When the keys exist, each command prints the models that it uses and
+  where each comes from. The simulation models resolve when the engine builds each trial, not
+  at import time.
+
 #### Changed
 
 - **`packages/engine/examples/` holds only the `orca-api-simple1/` example.** The complete Orca
@@ -566,6 +605,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   per-turn error notices is now blamed on the evaluation runner unless its outcome names a
   source (#461).
 
+- The engine reads the one project `.env` (#446). It no longer reads `packages/engine/.env`
+  or a `.env` above the project root. The `user_agent.config` and `runners.config` modules are
+  removed; use `metis.engine.simulation.model_settings`. With no role variable and no
+  `DEFAULT_MODEL`, the judge now uses `gpt-6-luna` (was `gemini-3.5-flash-lite`), and the user
+  agent uses `gpt-6-luna` (was `gpt-5.6-luna`). A judge change changes scores. See
+  `MIGRATION.md`.
+
 ### metis-insights
 
 #### Added
@@ -652,9 +698,36 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   in the normal Wizard run summary and saved case results.
   Document commands, metrics, and example CLI tables in the Wizard suite README.
 
+#### Breaking
+
+- The default embedding model is now `text-embedding-3-large` (was `gemini-embedding-2`).
+  Set `EMBEDDING_MODEL=gemini-embedding-2` to keep existing embedding caches (#446).
+
 ### metis-wizard
 
 #### Added
+
+- **Target connection with a gen_2 target binding.** At the start, the Wizard asks for **Build
+  Spec only** or **Build Spec and Run Evals**. In run mode, the user selects HTTP API or Browser
+  and enters the binding values. Secret fields take environment-variable names only. Every client
+  validates the binding with `TargetBinding` and refuses a URL with a user name or password. The
+  CLI also reports each named variable as set or not set and fetches the OpenAPI document or loads
+  the start page and checks that the API server answers. The user can test again, fix the values,
+  or continue. Run mode needs valid fields. A run-mode download has `outputs/target-binding.yaml`,
+  and `specification.yaml` names the gen_2 runner and the binding. A spec-only download is the
+  same as before. The connection travels in the optional `InterviewContext.connection` and in
+  `InterviewStartRequest.connection`. Prompts and the model never read it. `metis wizard init`
+  takes `--mode spec|run` and `--binding PATH`, and the new `metis wizard connect` command adds a
+  binding later. In the web client, the mode is a toggle above the opening box, and run mode shows
+  a Target connection card under the box. Send starts the Interview only with a valid binding. The
+  completed Interview has a **Connect target** action. In the CLI, the mode is the first question.
+  The API adds `POST /api/v1/wizard/connection/check` and `POST /api/v1/wizard/connection`. The
+  check reaches the target only for an API that listens on this computer, and
+  `METIS_API_CONNECTION_CHECK=1` or `0` overrides this. The API never expands a `${NAME}` variable
+  into a URL that it requests, so a URL that names a variable is reported as not checked. `make
+  run-api` listens on `127.0.0.1`. `init --mode run` with no terminal needs `--binding`. The
+  API 422 response and binding errors never repeat an input value. `httpx` is a direct dependency
+  (#283).
 
 - The matcher selects `CriterionJudgeGrader` when no specific grader is similar enough, when
   the catalogue has no specific grader, or when the embedding provider fails. A rematch keeps
@@ -666,9 +739,24 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Accept optional flat string metadata in model-proposed Persona and Scenario
   drafts and preserve it in saved Specifications. Guide generation to use supplied
   facts and omit unspecified metadata (#441).
+- **Back on every Interview step.** Behaviours, Criteria, Personas, and Scenarios each show
+  **← Back** in the CLI and the web client. Back from Behaviours opens a Target review form with
+  the current name, users, description, and detail, and makes no model call. A changed
+  description or detail asks the usual question about the current draft. With no change,
+  Continue returns to the later step and drafts nothing again (#551).
 - Support large supporting documents with shared limits of 500,000 characters per
   file and 1,000,000 total. Read YAML, JSON, and CSV text. Check the configured
   model context budget before each request without truncating input.
+
+- **Opening documents in the CLI.** `metis wizard init` accepts `--document PATH` (`-d`), once
+  for each file. The CLI uses the same file types, limits, and extraction as the web client,
+  and shows `Read`, `Not read`, or `Could not read` for each file before any model
+  call. On a terminal, the user can keep a file that could not be read by name only. A run with no
+  terminal stops with exit code 1. `init` keeps a copy of the files in `inputs/documents/`, and
+  the export copies each file that a Test Case uses into `outputs/fixtures/`. The export removes
+  the files that it copied before and that no Test Case uses now. When a Test Case uses a file
+  that is not in `inputs/documents/`, the CLI shows `Add NAME to <out-dir>/outputs/fixtures before
+  you run` (#554).
 
 - **Opening documents.** Flat Interview start requests can carry files as `{name, text?}`. The
   wizard keeps the opening description and document context in client-held state, with supported
@@ -681,6 +769,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `capability_confidence`, records them in required client-held Interview context, and uses the
   confidence to guide Clarify and Behaviours probing. Every model call receives a synthesized
   catalogue background; the values do not enter `Specification`.
+
+- **`metis wizard init` asks for the description.** `init` asks the package opening question in
+  the terminal and asks again after an empty answer. The completed-export and
+  Interview-in-progress checks run first, and the restart command in the in-progress error is
+  `metis wizard init --out-dir <dir> --restart`. When stdin is not a terminal, `init` fails with a
+  clear error and does not wait for input (#547).
 
 - Interview opening now offers End user, Engineer, Compliance, and Security perspectives. The
   selected perspective travels in client-held Interview context and guides the language and depth
@@ -701,6 +795,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - **Standardized wizard specification nodes.** Features, behaviours, criteria, personas, and scenarios use
   explicit `name` and `description` fields;
   behaviour selection is `measured`; and Product uses `description`.
+
+- **The wizard checks only the Interview key (#446).** `wizard init` and `resume` check the
+  interview role before the first model call. The embeddings role is optional: without its
+  key, the Wizard warns, and each Criterion uses the criterion judge. After it writes the
+  files, the wizard CLI lists the roles that the run needs, with each model, its source, and
+  how to change it.
 
 #### Fixed
 
@@ -801,6 +901,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   FQN `metis.library.metrics.default.CriterionGEvalMetric` →
   `metis.library.graders.default.CriterionGEvalGrader` (#415).
 
+- The wizard reads the one project `.env` (#446). It no longer reads `packages/wizard/.env`.
+  `configure_interview_runtime` takes resolved `interview` and `embeddings` role settings and
+  no longer writes to `os.environ`. The default embedding model is now
+  `text-embedding-3-large` (was `gemini-embedding-001`), so grader matches can change. With no
+  `INTERVIEW_MODEL` and no `DEFAULT_MODEL`, the Interview uses `gpt-6-luna` (was
+  `gpt-5.6-luna`). See `MIGRATION.md`.
+
 ### metis-api
 
 #### Added
@@ -832,6 +939,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `INTERVIEW_MODEL`, matching the wizard and engine provider configuration, and can load one root
   `.env` for local development.
 
+- **Model status route (#446).** The API starts without model settings. New
+  `GET /api/v1/models` returns the model, its source, the configured status, the score effect,
+  and the missing variable names of each role. The runner agent model follows the user agent
+  model, as in the engine. The Interview routes return 503 `model_unavailable` until the
+  interview role is configured.
+
 #### Changed
 
 - Package exports accept either final Interview state or a manual Specification. ZIP files use the shared export layout and expose the Wizard-owned filename in `Content-Disposition`; manual exports include an empty `inputs/` folder (#453).
@@ -851,6 +964,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Rename `GET /api/v1/metrics` to `GET /api/v1/graders`, and its response model
   `MetricSummary` to `GraderSummary` (#415).
+
+- The API reads the one project `.env` (#446). It no longer reads `apps/api/.env`. A health
+  check no longer fails when a key is missing; check `GET /api/v1/models`. See `MIGRATION.md`.
 
 ### metis-web
 
@@ -884,7 +1000,25 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   record (#395). When a field is not complete, **Download specification** marks each
   field that needs a change, shows what to change, and moves the focus to the first one.
 
+- **Model settings in the browser (#446).** Send is grey, with "Configure API keys to start
+  interview", while the interview role is not configured. A missing embeddings key shows a
+  banner. The run roles show only in the run settings step. That step comes after the last
+  review and before the download, and it writes the model names into the Specification, so the
+  first ZIP holds them. An empty runner agent field shows the model that the run uses: the
+  typed user agent model, unless `RUNNER_AGENT_MODEL` is set.
+
 #### Changed
+
+- **Opening setup in the chat box.** The Perspective and capability controls are now in the bottom
+  row of the opening box, next to the documents button. The separate capability screen and its
+  **Edit target** button are removed. The Perspective control marks End user as the default until
+  the user opens it. Its panel shows the question of each Perspective as text, so hover is not
+  necessary. The **Capabilities** control opens the capabilities and the confidence in a panel
+  under the box, or in a full-width sheet on a small screen. Each capability group is one column,
+  so the panel needs no scroll. The capabilities and the confidence are optional. With no
+  confidence, the web client sends Low. In the Perspective and confidence choices, the arrow keys
+  move the selection and the focus. The opening has less text: the placeholder is an example
+  description, the panels have no title, and the manual entry is one line (#555).
 
 - Show Criterion descriptions with expandable Grader details and typed edit fields (#490).
 

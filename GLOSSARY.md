@@ -1,6 +1,7 @@
 | Term | Definition |
 |------|------------|
 | Target | The agentic system under evaluation, considered at a specific version or configuration. |
+| Target binding | A short file that tells the engine how to reach a **target** through the generic HTTP or browser runner. It names environment variables and holds no secret value. It is separate from the **profile**, which states what is evaluated. |
 | Profile | The context and requirements for a **target**: its **features**, **expected behaviours**, and **criteria**, including the selected **graders** and their settings. |
 | Specification | The evaluation document containing a **profile** and the configuration needed to conduct an **experiment**. |
 | Interview | The wizard's guided process that builds a **specification** by asking the user a sequence of questions. |

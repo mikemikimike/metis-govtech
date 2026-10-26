@@ -9,7 +9,13 @@ from fastapi import UploadFile
 from fastapi.testclient import TestClient
 
 from metis.api.routes.wizard import package as package_route
-from metis.wizard import InterviewState, compile_specification
+from metis.wizard import (
+    ConnectionTransport,
+    InterviewState,
+    compile_specification,
+    set_connection,
+)
+from tests.fixtures.wizard.connections import PLANTED_SECRET, connection
 from tests.fixtures.wizard.context import interview_context
 from tests.fixtures.wizard.specifications import research_assistant
 
@@ -235,3 +241,51 @@ def test_package_requires_one_valid_source(
     response = client.post("/api/v1/wizard/package", data=fields)
     assert response.status_code == 400
     assert response.json()["code"] == "validation_error"
+
+
+@pytest.mark.parametrize("transport", [None, *ConnectionTransport])
+def test_an_interview_export_writes_the_binding_only_in_run_mode(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    transport: ConnectionTransport | None,
+) -> None:
+    # a secret in the environment must not reach the archive
+    monkeypatch.setenv("APP_KEY", PLANTED_SECRET)
+    state = InterviewState(
+        specification=research_assistant(),
+        context=interview_context(),
+        confirmed=True,
+    )
+    if transport is not None:
+        state = set_connection(state, connection(transport))
+
+    response = client.post(
+        "/api/v1/wizard/package",
+        data={"state": state.model_dump_json()},
+        files=[("files", ("policy.pdf", b"policy bytes", "application/pdf"))],
+    )
+
+    assert response.status_code == 200
+    root = "20261016-223045-interview"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        names = set(archive.namelist())
+        specification = yaml.safe_load(
+            archive.read(f"{root}/outputs/specification.yaml")
+        )
+        if transport is None:
+            assert f"{root}/outputs/target-binding.yaml" not in names
+            assert "target_binding" not in specification
+            assert specification["runner_factory_ref"] == (
+                "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
+            )
+        else:
+            binding = yaml.safe_load(
+                archive.read(f"{root}/outputs/target-binding.yaml")
+            )
+            assert binding["transport"] == transport.value
+            assert specification["target_binding"] == "target-binding.yaml"
+            assert specification["runner_factory_ref"].startswith(
+                "metis.engine.simulation.gen_2.runners."
+            )
+        for name in names:
+            assert PLANTED_SECRET.encode() not in archive.read(name)

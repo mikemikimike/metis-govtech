@@ -12,15 +12,17 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 
 ## Start the web client
 
-1. From the repository root, copy the API environment template:
+1. From the repository root, copy the environment template:
 
    ```bash
-   cp apps/api/.env.example .env
+   cp .env.example .env
    ```
 
-2. Set `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `INTERVIEW_MODEL`. The API does not start when one
-   of them is missing. `INTERVIEW_MODEL` has no default here, which is different from the CLI.
-   `JUDGE_MODEL` and `USER_AGENT_MODEL` are Engine settings. The API does not use them.
+2. Set `OPENAI_API_KEY`, and `OPENAI_BASE_URL` when you do not use the default OpenAI endpoint.
+   `INTERVIEW_MODEL` and `EMBEDDING_MODEL` are optional. The API starts when a setting is missing.
+   Without an interview key, Send is grey and shows "Configure API keys to start interview".
+   Without an embeddings key, a banner says "Set up embedding models to select optimal graders",
+   and the Interview still runs. See the [model guide](../models.md).
 3. Install the full workspace, or install the API and web projects separately:
 
    ```bash
@@ -46,15 +48,61 @@ forwards `/api` requests to that address.
 
 ## Start a guided Interview
 
+Above the opening box, choose the mode: **Build Spec only**, or **Build Spec and Run Evals**. The
+bottom row of the box has the documents button, the Perspective control, and **Capabilities**.
+
 1. Enter a description of the target.
-2. Select who the evaluation is for. Hover over or focus a Perspective to see its guiding question.
-3. Select all ARC capabilities that you know the target has. The list can be empty.
-4. Select Low, Medium, or High confidence. The value states how complete the full selection is.
-5. Select **Start interview**. This sends all opening values in one request.
+2. Select who the evaluation is for. The Perspective control shows the current Perspective. End
+   user is the default, and the control marks it until you open the control. The panel under the
+   box shows the guiding question of each Perspective.
+3. Optional: select **Capabilities**. The ARC capabilities show in three columns, one for each
+   group. Select each capability that you know the target has. On a small screen, the
+   capabilities open in a full-width sheet.
+4. Optional: under **Confidence**, select Low, Medium, or High. The value states how complete the
+   selection is. With no confidence, the Wizard uses Low, because the selection may be
+   incomplete.
+5. The default mode is Build Spec only. In Build Spec and Run Evals, enter the target binding in
+   the **Target connection** card under the box. See [Connect the target](#connect-the-target).
+6. Select Send, or press Enter. In run mode, the Wizard first checks the binding. It starts the
+   Interview only when the binding is valid. This sends all opening values in one request.
 
 The web client gets the opening text, Perspectives, capability catalogue, and document limits from
 the API. It keeps the returned Interview state and sends the whole state with each answer. The API
 does not save the state.
+
+## Go back to an earlier step
+
+Each review step after Clarify shows **← Back**. Back opens the step before it with its current
+content.
+
+- Back from Behaviours shows a form with the Target name, users, description, and detail. A
+  required field that you leave empty keeps its current value.
+- Continue with no change returns to the later step. The Wizard drafts nothing again.
+- If you change content that later content came from, the Wizard asks what to do with the later
+  content. You can keep it, regenerate it, or review it yourself.
+
+Clarify has no Back, because it is the first step. To correct the description, say so in your
+answer, for example "The target is for staff only." To change the Perspective, capabilities, or
+documents, select **New evaluation**. The earlier Interview stays in History.
+
+## Connect the target
+
+In run mode, select **HTTP API** or **Browser**, and enter the required fields. **More options**
+holds the optional fields. Each secret field takes the name of an environment variable, never its
+value. See [Connect the target](../wizard.md#connect-the-target) for the fields.
+
+Select **Test connection** at the bottom of the card. Each check shows with ✓ or ✗. Send uses the
+last test. If you change a field after the test, Send tests the binding again. If the fields are
+not valid, Send marks them and does not start the Interview. Fix the fields, or choose **Build
+Spec only**.
+
+The API reads your `.env` and reaches the target only when it runs on your computer
+(`make run-api` listens on `127.0.0.1`). An API that other people can reach checks the fields
+only, because it would fetch any URL that a user types. Then the card says "This server checks
+the fields only". An operator can set `METIS_API_CONNECTION_CHECK=1` or `0` to choose.
+
+To add a binding to a finished Interview, select **Connect target** in the completed message. The
+next download includes the binding.
 
 ## Review Criteria
 
@@ -82,11 +130,18 @@ Document facts:
 1. Answer each Interview screen.
 2. Review the final Personas, Scenarios, and Test Cases.
 3. Select **Continue** on the final review screen to complete the Interview.
-4. Select **Download specification** to download `YYYYMMDD-HHMMSS-interview.zip`.
+4. On the **Run settings** step, type the user agent, runner agent, and judge model names, or leave
+   a field empty to use the environment. These models affect scores, so the specification records
+   them. The step takes model names only. Keys stay in `.env`. See the
+   [model guide](../models.md).
+5. Select **Continue and download**. The browser downloads `YYYYMMDD-HHMMSS-interview.zip`, with
+   the models that you set. If you change no field, the download is the same as without the step.
+
+To download the specification again later, select **Download specification** in the document pane.
 
 To finish early, select **Skip interview and download specification**. The Wizard checks whether
 the specification is ready. It can ask for more information or a document review before it
-completes the Interview.
+completes the Interview. Then the **Run settings** step comes before the download.
 
 The archive contains:
 
@@ -96,6 +151,7 @@ YYYYMMDD-HHMMSS-interview/
 │   └── interview_state.json
 └── outputs/
     ├── specification.yaml
+    ├── target-binding.yaml   (run mode only)
     └── fixtures/
 ```
 

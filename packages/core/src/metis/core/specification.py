@@ -28,6 +28,7 @@ from metis.core.experiment import (
     RelativePath,
     Scenario,
     Task,
+    omit_unset_models,
 )
 from metis.core.profile import Behaviour, Criterion, Feature, Target, TargetProfile
 
@@ -122,8 +123,7 @@ class Specification(BaseModel):
             exclude_none=info.exclude_none,
             exclude_defaults=info.exclude_defaults,
         )
-        if not self.experiment.defaults.model_dump(exclude_none=True):
-            dumped.pop("defaults", None)
+        omit_unset_models(dumped)
         if self.experiment.target_binding is None:
             dumped.pop("target_binding", None)
         return dumped

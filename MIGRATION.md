@@ -57,6 +57,43 @@ artifact manifest paths and trial log links to their new locations. Move the who
 execution under `experiments/execute/` if desired. These changes are not automatic.
 The CLI rejects the earlier root-level trial and report layout.
 
+### Model settings and the `.env` file (#446)
+
+All commands read one `.env` file. `metis wizard`, `metis engine`, and the API read
+`METIS_ENV_FILE` when it is set. Else they read the first `.env` from the working directory up to
+the project root (`.git` or the workspace `pyproject.toml`). Exported values still win.
+
+**What to change:**
+
+- Move a `.env` from `packages/wizard/`, `packages/engine/`, or `apps/api/` to the repository root,
+  or set `METIS_ENV_FILE` to its path. The engine no longer reads a `.env` above the project root.
+- `OPENAI_BASE_URL` is now optional in the wizard and the API. `INTERVIEW_MODEL` is optional in the
+  API.
+- One `DEFAULT_MODEL` variable now sets the model of every chat role: Interview, user agent, runner
+  agent, and judge. When neither the role variable nor `DEFAULT_MODEL` is set, these roles use
+  `gpt-6-luna`. Before, the Interview and user agent used `gpt-5.6-luna`, and the judge used
+  `gemini-3.5-flash-lite`. A judge change changes scores. To keep the old models, set
+  `INTERVIEW_MODEL=gpt-5.6-luna`, `USER_AGENT_MODEL=gpt-5.6-luna`, and
+  `JUDGE_MODEL=gemini-3.5-flash-lite`, or set `defaults.judge_model` in `specification.yaml`.
+- The API now starts without model settings. A health check no longer fails when a key is
+  missing. Check `GET /api/v1/models`, or expect 503 `model_unavailable` from the Interview routes.
+- The wizard matcher and the testbed now use `EMBEDDING_MODEL`, default `text-embedding-3-large`. The wizard
+  used `gemini-embedding-001`, and the testbed used `gemini-embedding-2`. Different embedding
+  models give different similarity scores, so grader matches can change. Set
+  `EMBEDDING_MODEL=gemini-embedding-001` to keep the old wizard matches, or
+  `EMBEDDING_MODEL=gemini-embedding-2` to keep existing testbed embedding caches.
+- Callers of `metis.wizard.configure_interview_runtime` pass
+  `interview=resolve_role(ModelRole.INTERVIEW, env)` and
+  `embeddings=resolve_role(ModelRole.EMBEDDINGS, env)` from `metis.core.model_settings`. The
+  function no longer writes to `os.environ`.
+- Code that imported `USER_AGENT_MODEL`, `USER_AGENT_API_KEY`, `USER_AGENT_BASE_URL`, or
+  `RUNNER_AGENT_MODEL` from the engine `user_agent.config` or `runners.config` modules uses
+  `metis.engine.simulation.model_settings` (`user_agent_settings`, `runner_agent_settings`).
+  The settings now resolve when a trial is built.
+- To record the simulation models, set `defaults.user_agent_model`,
+  `defaults.runner_agent_model`, or `tasks[].user_agent_model` in `specification.yaml`. Existing
+  specifications stay valid. See `docs/guide/models.md`.
+
 ### Shared specification (core, engine, wizard, API, and web)
 
 Use `metis.core.profile.ProductProfile` for Product context, Features, Behaviours,

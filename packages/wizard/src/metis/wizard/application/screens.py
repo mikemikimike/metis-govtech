@@ -161,6 +161,46 @@ def target_completion_form(specification: Specification) -> FormRequest | None:
     )
 
 
+TARGET_REVIEW_FIELDS = (
+    ("target.name", "Target name", False, True),
+    ("target.users", "Target users", True, False),
+    ("target.description", "Target description", True, True),
+    ("target.detail", "Target detail", True, False),
+)
+
+
+def target_review_form(specification: Specification) -> FormRequest:
+    """Show the Target fields with their current values, for Back from Behaviours.
+
+    This form replaces the Clarify chat when the user goes back. It costs no model call, and
+    Continue with no change returns to the Behaviour review with all content kept.
+    """
+    target = specification.target
+    return FormRequest(
+        prompt=(
+            "Review the target details. Change a field, or keep it as it is, "
+            "then continue to the behaviour review."
+        ),
+        fields=[
+            FormField(
+                id=field_id,
+                label=label,
+                multiline=multiline,
+                required=required,
+                value=getattr(target, field_id.split(".", 1)[1]),
+            )
+            for field_id, label, multiline, required in TARGET_REVIEW_FIELDS
+        ],
+    )
+
+
+def is_target_review_form(request: FormRequest) -> bool:
+    """True when a form holds exactly the Target review fields."""
+    return [field.id for field in request.fields] == [
+        field_id for field_id, *_ in TARGET_REVIEW_FIELDS
+    ]
+
+
 def behaviours_screen(specification: Specification, message: str) -> ChoiceRequest:
     """Review and measurement selection in one screen.
 
@@ -204,6 +244,7 @@ def behaviours_screen(specification: Specification, message: str) -> ChoiceReque
         cards=cards,
         multi=True,
         options=[
+            Option(id=OptionId(action="back"), label="← Back"),
             Option(id=OptionId(action="chat"), label="Chat about it"),
             *[
                 Option(
@@ -363,11 +404,14 @@ def personas_screen(specification: Specification, message: str) -> ChoiceRequest
         prompt=message,
         cards=cards,
         multi=False,
-        options=_three_replies(
-            "Looks right",
-            "Add one",
-            accept_enabled=_ready_through(specification, InterviewStep.PERSONAS),
-        ),
+        options=[
+            Option(id=OptionId(action="back"), label="← Back"),
+            *_three_replies(
+                "Looks right",
+                "Add one",
+                accept_enabled=_ready_through(specification, InterviewStep.PERSONAS),
+            ),
+        ],
         instruction=FEEDBACK_INSTRUCTION,
     )
 

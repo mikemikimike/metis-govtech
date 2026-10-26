@@ -19,22 +19,45 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from pydantic import ValidationError
 
+from metis.core.model_settings import MODEL_GUIDE, ModelRole, missing_settings
 from metis.library.grader import Grader, JudgeArgs, criterion_judge_args
 from metis.wizard.application.matching.library_catalogue import library_catalogue
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from metis.wizard.contracts.grader_spec import GraderSpec
     from metis.wizard.domain.specification import Criterion, Specification
 
 # The grader the matcher selects when no specific grader fits a criterion.
 CRITERION_JUDGE_FQN = "metis.library.graders.CriterionJudgeGrader"
 
+EMBEDDINGS_WARNING = (
+    "Embeddings: no key is set ({names}). The Interview runs, but each Criterion uses the "
+    "criterion judge, because the Wizard cannot match it to a library grader. See {guide}."
+)
+
+
+def embeddings_warning(env: Mapping[str, str]) -> str | None:
+    """The warning text when the embeddings role has no key, else ``None``.
+
+    Embeddings only match Criteria to library graders. Without them the matcher uses the
+    criterion judge, so a missing key is a warning and never stops the Interview.
+    """
+    missing = missing_settings((ModelRole.EMBEDDINGS,), env)
+    if not missing:
+        return None
+    return EMBEDDINGS_WARNING.format(
+        names=" or ".join(missing[ModelRole.EMBEDDINGS]), guide=MODEL_GUIDE
+    )
+
+
 # TODO: Validate this threshold with the evals testbed once more graders are available.
 DEFAULT_THRESHOLD = 0.62
 
 
 class Embedder(Protocol):
-    def embed(self, texts: list[str], model: str = "") -> list[list[float]]: ...
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
 
 
 def cosine(a: list[float], b: list[float]) -> float:

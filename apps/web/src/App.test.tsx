@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import {
   Children,
@@ -7,19 +8,32 @@ import {
   type ReactNode,
 } from "react";
 import {
-  CapabilityConfidencePicker,
-  CapabilityPicker,
   conversationScrollRevision,
   InitialDocumentPicker,
   OpeningConfigurationState,
   OpeningRoute,
+  ModePicker,
   OpeningScreen,
-  PerspectivePicker,
   type CapabilityEvidenceDraft,
+  type OpeningControl,
 } from "./App";
+import { AddDocuments } from "./DocumentTray";
+import {
+  CapabilityConfidencePicker,
+  CapabilityPicker,
+  FooterChip,
+  PerspectivePicker,
+} from "./OpeningControls";
 import { Composer, FixtureField, Transcript } from "./Conversation";
+import { ConnectionForm } from "./ConnectionStep";
+import { emptyConnectionDraft, type ConnectionDraft } from "./connection";
 import { InterviewRail } from "./InterviewRail";
-import { api, type InterviewState, type Perspective } from "./transport/api";
+import {
+  api,
+  type CapabilityEvidence,
+  type InterviewState,
+  type Perspective,
+} from "./transport/api";
 
 const originalFetch = globalThis.fetch;
 
@@ -111,12 +125,14 @@ test("blocks the opening form until configuration is ready and offers retry", ()
   let retries = 0;
   const openingProps = {
     busy: false,
-    phase: "describe" as const,
+    canStart: true,
+    connectionDraft: emptyConnectionDraft(),
+    onConnectionDraft: () => undefined,
+    connectionResult: null,
+    onTestConnection: () => undefined,
     description: "",
     perspective: "end_user" as const,
     onPerspective: () => undefined,
-    onContinue: () => undefined,
-    onBack: () => undefined,
     documents: [],
     documentTrayOpen: false,
     onDocumentTrayOpen: () => undefined,
@@ -130,6 +146,9 @@ test("blocks the opening form until configuration is ready and offers retry", ()
       confidence: null,
     } satisfies CapabilityEvidenceDraft,
     onCapabilityEvidence: () => undefined,
+    openControl: null,
+    onOpenControl: () => undefined,
+    perspectiveSeen: false,
     onBegin: () => undefined,
   };
 
@@ -170,6 +189,425 @@ test("blocks the opening form until configuration is ready and offers retry", ()
   assert.equal(retries, 1);
 });
 
+const openingConfigBody = {
+  opening_question: "What are you building?",
+  working_status: "Working…",
+  perspectives: [
+    {
+      id: "end_user",
+      label: "End user",
+      question: "Does it help the person who uses it?",
+    },
+    {
+      id: "security",
+      label: "Security",
+      question: "Does it resist misuse?",
+    },
+  ],
+  capability_categories: [
+    {
+      id: "cognitive",
+      name: "Cognitive",
+      capabilities: [
+        {
+          id: "tool_use",
+          name: "Tool Use",
+          description: "Selects and sequences suitable tools for a feature.",
+        },
+      ],
+    },
+  ],
+};
+
+type OpeningHarness = {
+  render: () => ReactElement;
+  readonly control: OpeningControl | null;
+  readonly perspective: Perspective;
+  readonly perspectiveSeen: boolean;
+  readonly evidence: CapabilityEvidenceDraft;
+  readonly description: string;
+  readonly begins: Array<{
+    description: string;
+    perspective: Perspective;
+    evidence: CapabilityEvidence;
+  }>;
+};
+
+// Holds the opening state the way App does, and renders OpeningScreen as a plain element tree.
+function openingHarness(
+  config: React.ComponentProps<typeof OpeningScreen>["config"],
+  onBegin?: (
+    description: string,
+    perspective: Perspective,
+    evidence: CapabilityEvidence,
+  ) => void,
+  {
+    busy = false,
+    canStart = true,
+  }: { busy?: boolean; canStart?: boolean } = {},
+): OpeningHarness {
+  let control: OpeningControl | null = null;
+  let perspective: Perspective = "end_user";
+  let perspectiveSeen = false;
+  let description = "";
+  let evidence: CapabilityEvidenceDraft = {
+    known_capability_ids: [],
+    confidence: null,
+  };
+  const begins: OpeningHarness["begins"] = [];
+  return {
+    render: () => {
+      const route = OpeningRoute({
+        configState: { status: "ready", config },
+        onRetry: () => undefined,
+        busy,
+        canStart,
+        connectionDraft: emptyConnectionDraft(),
+        onConnectionDraft: () => undefined,
+        connectionResult: null,
+        onTestConnection: () => undefined,
+        description,
+        onDescription: (value) => {
+          description = value;
+        },
+        perspective,
+        onPerspective: (next) => {
+          perspective = next;
+        },
+        documents: [],
+        documentTrayOpen: false,
+        onDocumentTrayOpen: () => undefined,
+        documentReads: {},
+        onAddDocuments: () => undefined,
+        onRemoveDocument: () => undefined,
+        onKeepDocumentUnread: () => undefined,
+        onManualOpen: () => undefined,
+        capabilityEvidence: evidence,
+        onCapabilityEvidence: (next) => {
+          evidence = next;
+        },
+        openControl: control,
+        onOpenControl: (next) => {
+          if (next === "perspective") perspectiveSeen = true;
+          control = next;
+        },
+        perspectiveSeen,
+        onBegin: (text, selected, startEvidence) => {
+          begins.push({
+            description: text,
+            perspective: selected,
+            evidence: startEvidence,
+          });
+          onBegin?.(text, selected, startEvidence);
+        },
+      });
+      return OpeningScreen(
+        route.props as React.ComponentProps<typeof OpeningScreen>,
+      );
+    },
+    get control() {
+      return control;
+    },
+    get perspective() {
+      return perspective;
+    },
+    get perspectiveSeen() {
+      return perspectiveSeen;
+    },
+    get evidence() {
+      return evidence;
+    },
+    get description() {
+      return description;
+    },
+    begins,
+  };
+}
+
+const testConfig = () =>
+  openingConfigBody as React.ComponentProps<typeof OpeningScreen>["config"];
+
+function composerOf(opening: ReactElement): TestElement {
+  return findElement(opening, (element) => element.type === Composer);
+}
+
+// The footer controls are passed to the Composer, so they are found in its footer slot.
+function chip(opening: ReactElement, controls: string): TestElement {
+  const element = findElement(
+    composerOf(opening).props.sourceControl as ReactNode,
+    (item) => item.type === FooterChip && item.props.controls === controls,
+  );
+  return FooterChip(
+    element.props as React.ComponentProps<typeof FooterChip>,
+  ) as TestElement;
+}
+
+test("the opening box marks End user as the default until the user opens the Perspective control", () => {
+  const opening = openingHarness(testConfig());
+  const perspective = chip(opening.render(), "opening-perspective");
+
+  assert.equal(perspective.props["aria-label"], "Perspective: End user");
+  assert.match(String(perspective.props.className), /perspective-default/);
+
+  (perspective.props.onClick as () => void)();
+  assert.equal(opening.control, "perspective");
+  assert.equal(opening.perspectiveSeen, true);
+
+  const reopened = chip(opening.render(), "opening-perspective");
+  assert.doesNotMatch(String(reopened.props.className), /perspective-default/);
+  assert.equal(reopened.props["aria-expanded"], true);
+});
+
+test("the default marker has a one-shot animation and none with reduced motion", () => {
+  // npm test runs in apps/web; the bundled test does not sit next to its source.
+  const css = readFileSync("src/globals.css", "utf8");
+  const rule = /\.perspective-default\s*{[^}]*animation:\s*[^;]*;/.exec(css);
+  assert.ok(rule, "The default marker has an animation.");
+  assert.doesNotMatch(rule[0], /infinite/);
+  assert.match(
+    css,
+    /@media \(prefers-reduced-motion: reduce\)\s*{[^@]*\.perspective-default\s*{\s*animation:\s*none/,
+  );
+});
+
+test("the Perspective panel shows each question as text and keeps radio semantics", () => {
+  const opening = openingHarness(testConfig());
+  (chip(opening.render(), "opening-perspective").props.onClick as () => void)();
+  const pickerElement = findElement(
+    opening.render(),
+    (element) => element.type === PerspectivePicker,
+  );
+  const picker = PerspectivePicker(
+    pickerElement.props as React.ComponentProps<typeof PerspectivePicker>,
+  );
+  const radios = findElements(
+    picker,
+    (element) => element.props.role === "radio",
+  );
+  assert.deepEqual(
+    radios.map((radio) => radio.props["aria-checked"]),
+    [true, false],
+  );
+  assert.deepEqual(
+    radios.map((radio) => radio.props.tabIndex),
+    [0, -1],
+  );
+  const security = radios[1];
+  assert.ok(security);
+  findElement(
+    security,
+    (element) =>
+      element.type === "span" &&
+      element.props.children === "Does it resist misuse?",
+  );
+  (security.props.onClick as () => void)();
+  assert.equal(opening.perspective, "security");
+});
+
+// A stand-in for the key event: the radio group holds focusable radios, and focus is recorded.
+function keyDown(key: string, focused: number[], count: number) {
+  const radios = Array.from({ length: count }, (_, index) => ({
+    focus: () => focused.push(index),
+  }));
+  let prevented = false;
+  return {
+    event: {
+      key,
+      preventDefault: () => {
+        prevented = true;
+      },
+      currentTarget: {
+        closest: () => ({ querySelectorAll: () => radios }),
+      },
+    },
+    get prevented() {
+      return prevented;
+    },
+  };
+}
+
+function radiosOf(picker: ReactNode): TestElement[] {
+  return findElements(picker, (element) => element.props.role === "radio");
+}
+
+test("the arrow keys move the Perspective selection and focus, and wrap at each end", () => {
+  const perspectives = testConfig().perspectives;
+  const press = (selected: Perspective, key: string) => {
+    const chosen: Perspective[] = [];
+    const focused: number[] = [];
+    const radio = radiosOf(
+      PerspectivePicker({
+        perspectives,
+        selected,
+        onSelect: (id) => chosen.push(id),
+      }),
+    ).find((element) => element.props["aria-checked"] === true);
+    assert.ok(radio);
+    const stroke = keyDown(key, focused, perspectives.length);
+    (radio.props.onKeyDown as (event: unknown) => void)(stroke.event);
+    return { chosen, focused, prevented: stroke.prevented };
+  };
+
+  assert.deepEqual(press("end_user", "ArrowDown"), {
+    chosen: ["security"],
+    focused: [1],
+    prevented: true,
+  });
+  assert.deepEqual(press("end_user", "ArrowUp"), {
+    chosen: ["security"],
+    focused: [1],
+    prevented: true,
+  });
+  assert.deepEqual(press("security", "ArrowRight"), {
+    chosen: ["end_user"],
+    focused: [0],
+    prevented: true,
+  });
+  assert.deepEqual(press("security", "ArrowLeft"), {
+    chosen: ["end_user"],
+    focused: [0],
+    prevented: true,
+  });
+  // Other keys keep their default behaviour.
+  assert.deepEqual(press("end_user", "Tab"), {
+    chosen: [],
+    focused: [],
+    prevented: false,
+  });
+});
+
+test("the arrow keys select a confidence from none, and the first radio takes the tab stop", () => {
+  const press = (selected: "low" | "medium" | "high" | null, key: string) => {
+    const chosen: string[] = [];
+    const focused: number[] = [];
+    const radios = radiosOf(
+      CapabilityConfidencePicker({
+        selected,
+        onSelect: (id) => chosen.push(id),
+      }),
+    );
+    const radio = radios.find((element) => element.props.tabIndex === 0);
+    assert.ok(radio);
+    (radio.props.onKeyDown as (event: unknown) => void)(
+      keyDown(key, focused, radios.length).event,
+    );
+    return { tabStops: radios.map((r) => r.props.tabIndex), chosen, focused };
+  };
+
+  assert.deepEqual(press(null, "ArrowRight"), {
+    tabStops: [0, -1, -1],
+    chosen: ["low"],
+    focused: [0],
+  });
+  assert.deepEqual(press(null, "ArrowLeft"), {
+    tabStops: [0, -1, -1],
+    chosen: ["high"],
+    focused: [2],
+  });
+  assert.deepEqual(press("high", "ArrowDown"), {
+    tabStops: [-1, -1, 0],
+    chosen: ["low"],
+    focused: [0],
+  });
+  assert.deepEqual(press("medium", "ArrowUp"), {
+    tabStops: [-1, 0, -1],
+    chosen: ["low"],
+    focused: [0],
+  });
+});
+
+test("the opening controls are disabled while the start request runs", () => {
+  const opening = openingHarness(testConfig(), undefined, { busy: true });
+  assert.equal(
+    chip(opening.render(), "opening-perspective").props.disabled,
+    true,
+  );
+  assert.equal(
+    chip(opening.render(), "opening-capabilities").props.disabled,
+    true,
+  );
+
+  // A Perspective panel that is already open keeps its radios disabled.
+  (chip(opening.render(), "opening-perspective").props.onClick as () => void)();
+  const pickerElement = findElement(
+    opening.render(),
+    (element) => element.type === PerspectivePicker,
+  );
+  assert.equal(pickerElement.props.disabled, true);
+  const radios = radiosOf(
+    PerspectivePicker(
+      pickerElement.props as React.ComponentProps<typeof PerspectivePicker>,
+    ),
+  );
+  assert.ok(radios.length > 0);
+  assert.ok(radios.every((radio) => radio.props.disabled === true));
+});
+
+test("the capability chip shows only its label, with no count", () => {
+  const opening = openingHarness(testConfig());
+  const label = (rendered: ReturnType<typeof opening.render>) => {
+    const spans = findElements(
+      chip(rendered, "opening-capabilities"),
+      (element) => element.type === "span",
+    );
+    assert.equal(spans.length, 1);
+    assert.equal(spans[0]?.props.children, "Capabilities");
+  };
+  label(opening.render());
+
+  const capabilities = findElement(
+    (() => {
+      (
+        chip(opening.render(), "opening-capabilities").props
+          .onClick as () => void
+      )();
+      return opening.render();
+    })(),
+    (element) => element.type === CapabilityPicker,
+  );
+  (capabilities.props.onChange as (ids: string[]) => void)(["tool_use"]);
+  label(opening.render());
+});
+
+test("the user can start with no capabilities and no confidence", () => {
+  const opening = openingHarness(testConfig());
+  (composerOf(opening.render()).props.onSend as (text: string) => void)(
+    "A support assistant",
+  );
+  // With no confidence, the selection may be incomplete, which is what "low" tells the Interview.
+  assert.deepEqual(opening.begins.at(-1)?.evidence, {
+    known_capability_ids: [],
+    confidence: "low",
+  });
+});
+
+test("the opening Send is grey and explains why while the interview key is missing", () => {
+  const blocked = openingHarness(testConfig(), undefined, {
+    canStart: false,
+  });
+  assert.equal(
+    composerOf(blocked.render()).props.sendBlockedReason,
+    "Configure API keys to start interview",
+  );
+  const ready = openingHarness(testConfig());
+  assert.equal(composerOf(ready.render()).props.sendBlockedReason, undefined);
+});
+
+test("the opening controls are inside the Composer box", () => {
+  const opening = openingHarness(testConfig());
+  const footer = composerOf(opening.render()).props.sourceControl as ReactNode;
+  const controls = findElements(
+    footer,
+    (element) => element.type === FooterChip || element.type === AddDocuments,
+  );
+  assert.deepEqual(
+    controls.map((element) =>
+      element.type === AddDocuments ? "documents" : element.props.controls,
+    ),
+    ["documents", "opening-perspective", "opening-capabilities"],
+  );
+});
+
 test("loads opening choices and sends complete start evidence on begin", async () => {
   const calls: Array<{ path: string; body?: unknown }> = [];
   globalThis.fetch = async (input, init) => {
@@ -179,39 +617,10 @@ test("loads opening choices and sends complete start evidence on begin", async (
       body: init?.body ? JSON.parse(String(init.body)) : undefined,
     });
     if (path.endsWith("/config")) {
-      return new Response(
-        JSON.stringify({
-          opening_question: "What are you building?",
-          working_status: "Working…",
-          perspectives: [
-            {
-              id: "end_user",
-              label: "End user",
-              question: "Does it help the person who uses it?",
-            },
-            {
-              id: "security",
-              label: "Security",
-              question: "Does it resist misuse?",
-            },
-          ],
-          capability_categories: [
-            {
-              id: "cognitive",
-              name: "Cognitive",
-              capabilities: [
-                {
-                  id: "tool_use",
-                  name: "Tool Use",
-                  description:
-                    "Selects and sequences suitable tools for a feature.",
-                },
-              ],
-            },
-          ],
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
+      return new Response(JSON.stringify(openingConfigBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
     if (path.endsWith("/start")) {
       return new Response(
@@ -229,157 +638,40 @@ test("loads opening choices and sends complete start evidence on begin", async (
   };
 
   const config = await api.config();
-  let selected: Perspective = "end_user";
-  let phase: "describe" | "capabilities" = "describe";
-  let description = "";
-  let evidence: CapabilityEvidenceDraft = {
-    known_capability_ids: [],
-    confidence: null,
-  };
   let startRequest: Promise<unknown> | undefined;
-  const renderOpening = () => {
-    const route = OpeningRoute({
-      configState: { status: "ready", config },
-      onRetry: () => undefined,
-      busy: false,
-      phase,
-      description,
-      perspective: selected,
-      onPerspective: (perspective) => {
-        selected = perspective;
-      },
-      onContinue: (nextDescription) => {
-        description = nextDescription;
-        phase = "capabilities";
-      },
-      onBack: () => {
-        phase = "describe";
-      },
-      documents: [],
-      documentTrayOpen: false,
-      onDocumentTrayOpen: () => undefined,
-      documentReads: {},
-      onAddDocuments: () => undefined,
-      onRemoveDocument: () => undefined,
-      onKeepDocumentUnread: () => undefined,
-      onManualOpen: () => undefined,
-      capabilityEvidence: evidence,
-      onCapabilityEvidence: (next) => {
-        evidence = next;
-      },
-      onBegin: (description, perspective, selectedEvidence) => {
-        if (selectedEvidence === null) {
-          throw new Error(
-            "The interaction must select confidence before start.",
-          );
-        }
-        startRequest = api.start(description, selectedEvidence, perspective);
-      },
-    });
-    return OpeningScreen(
-      route.props as React.ComponentProps<typeof OpeningScreen>,
-    );
-  };
+  const opening = openingHarness(
+    config,
+    (description, perspective, evidence) => {
+      startRequest = api.start(description, evidence, perspective);
+    },
+  );
 
-  let opening = renderOpening();
-  const pickerElement = findElement(
-    opening,
+  (chip(opening.render(), "opening-perspective").props.onClick as () => void)();
+  const picker = findElement(
+    opening.render(),
     (element) => element.type === PerspectivePicker,
   );
-  const picker = PerspectivePicker(
-    pickerElement.props as React.ComponentProps<typeof PerspectivePicker>,
-  );
-  const security = findElement(
-    picker,
-    (element) =>
-      element.type === "button" &&
-      element.props["aria-label"] === "Security: Does it resist misuse?",
-  );
-  const hoverQuestion = findElement(
-    security,
-    (element) =>
-      element.type === "span" &&
-      element.props.children === "Does it resist misuse?",
-  );
+  (picker.props.onSelect as (perspective: Perspective) => void)("security");
 
-  assert.match(
-    String(hoverQuestion.props.className),
-    /group-hover:translate-y-0/,
-  );
-  (security.props.onClick as () => void)();
-  assert.equal(selected, "security");
-
-  opening = renderOpening();
-  const composer = findElement(opening, (element) => element.type === Composer);
-  (composer.props.onSend as (description: string) => void)(
-    "A support assistant",
-  );
-  assert.equal(phase, "capabilities");
-
-  opening = renderOpening();
-  const editTarget = findElement(opening, (element) =>
-    Children.toArray(element.props.children as ReactNode).includes(
-      "Edit target",
-    ),
-  );
-  (editTarget.props.onClick as () => void)();
-  assert.equal(phase, "describe");
-  opening = renderOpening();
-  const restoredComposer = findElement(
-    opening,
-    (element) => element.type === Composer,
-  );
-  assert.equal(restoredComposer.props.initialText, "A support assistant");
-  (restoredComposer.props.onSend as (description: string) => void)(description);
-
-  opening = renderOpening();
-  const capabilityElement = findElement(
-    opening,
+  (
+    chip(opening.render(), "opening-capabilities").props.onClick as () => void
+  )();
+  const capabilities = findElement(
+    opening.render(),
     (element) => element.type === CapabilityPicker,
   );
-  const capabilityPicker = CapabilityPicker(
-    capabilityElement.props as React.ComponentProps<typeof CapabilityPicker>,
-  );
-  const toolUse = findElement(
-    capabilityPicker,
-    (element) =>
-      element.type === "button" &&
-      element.props["aria-label"] ===
-        "Tool Use: Selects and sequences suitable tools for a feature.",
-  );
-  assert.equal(toolUse.props.role, "checkbox");
-  assert.equal(toolUse.props["aria-checked"], false);
-  (toolUse.props.onClick as () => void)();
-  assert.deepEqual(evidence.known_capability_ids, ["tool_use"]);
-
-  opening = renderOpening();
-  const confidenceElement = findElement(
-    opening,
+  (capabilities.props.onChange as (ids: string[]) => void)(["tool_use"]);
+  const confidence = findElement(
+    opening.render(),
     (element) => element.type === CapabilityConfidencePicker,
   );
-  const confidencePicker = CapabilityConfidencePicker(
-    confidenceElement.props as React.ComponentProps<
-      typeof CapabilityConfidencePicker
-    >,
-  );
-  const medium = findElement(
-    confidencePicker,
-    (element) =>
-      element.type === "button" &&
-      Children.toArray(element.props.children as ReactNode).includes("Medium"),
-  );
-  (medium.props.onClick as () => void)();
-  assert.equal(evidence.confidence, "medium");
+  (confidence.props.onSelect as (value: "medium") => void)("medium");
 
-  opening = renderOpening();
-  const start = findElement(
-    opening,
-    (element) => element.props.children === "Start interview",
-  );
-  assert.equal(start.props.disabled, false);
-  (start.props.onClick as () => void)();
+  const composer = composerOf(opening.render());
+  (composer.props.onSend as (text: string) => void)("A support assistant");
   await startRequest;
 
+  assert.equal(opening.description, "A support assistant");
   assert.deepEqual(calls, [
     { path: "/api/v1/wizard/config", body: undefined },
     {
@@ -555,4 +847,72 @@ test("failed reply feedback routes retry through its Interview", () => {
   );
   (retry.props.onClick as () => void)();
   assert.equal(retries, 1);
+});
+
+test("the mode toggle above the box shows the connection card only in run mode", () => {
+  const config = {
+    opening_question: "What are you building?",
+    working_status: "Working…",
+    perspectives: [],
+    capability_categories: [],
+  } as unknown as React.ComponentProps<typeof OpeningScreen>["config"];
+  let draft: ConnectionDraft = emptyConnectionDraft();
+  let control: React.ComponentProps<typeof OpeningScreen>["openControl"] = null;
+  const render = () =>
+    OpeningScreen({
+      config,
+      busy: false,
+      canStart: true,
+      description: "A support assistant",
+      perspective: "end_user",
+      onPerspective: () => undefined,
+      documents: [],
+      documentTrayOpen: false,
+      onDocumentTrayOpen: () => undefined,
+      documentReads: {},
+      onAddDocuments: () => undefined,
+      onRemoveDocument: () => undefined,
+      onKeepDocumentUnread: () => undefined,
+      capabilityEvidence: { known_capability_ids: [], confidence: null },
+      onCapabilityEvidence: () => undefined,
+      onManualOpen: () => undefined,
+      openControl: control,
+      onOpenControl: (next) => {
+        control = next;
+      },
+      perspectiveSeen: true,
+      connectionDraft: draft,
+      onConnectionDraft: (next) => {
+        draft = next;
+      },
+      connectionResult: null,
+      onTestConnection: () => undefined,
+      onBegin: () => undefined,
+    });
+  const toggle = () => {
+    const picker = findElement(
+      render(),
+      (element) => element.type === ModePicker,
+    );
+    return ModePicker(picker.props as React.ComponentProps<typeof ModePicker>);
+  };
+  const option = (label: string) =>
+    findElement(
+      toggle(),
+      (element) =>
+        element.props.role === "radio" && element.props.children === label,
+    );
+  const card = () =>
+    findElements(
+      render(),
+      (element) => element.props.id === "opening-connection",
+    );
+
+  assert.equal(option("Build Spec only").props["aria-checked"], true);
+  assert.equal(card().length, 0);
+
+  (option("Build Spec and Run Evals").props.onClick as () => void)();
+  assert.equal(draft.mode, "run");
+  findElement(card()[0], (element) => element.type === ConnectionForm);
+  assert.equal(control, null);
 });

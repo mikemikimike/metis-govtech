@@ -43,7 +43,7 @@ make install-extras-playwright
 Copy the example environment file and fill in your credentials:
 
 ```bash
-cp packages/engine/.env.example .env
+cp .env.example .env
 ```
 
 Set Langfuse and OpenAI credentials, plus the credentials for your selected Orca runner:
@@ -51,8 +51,7 @@ Set Langfuse and OpenAI credentials, plus the credentials for your selected Orca
 | Group | Variables | Purpose |
 |-------|-----------|---------|
 | Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Trace storage and retrieval |
-| OpenAI | `OPENAI_API_KEY` | Powers the simulated user agent, and model-based graders unless `JUDGE_*` is set |
-| Judge | `JUDGE_API_KEY`, `JUDGE_BASE_URL` | Optional gateway for grader LLM calls; falls back to `OPENAI_*` |
+| Models | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | The shared gateway of the user agent, the runner agent, and the judge. Each role can have its own model and gateway. See the [model guide](models.md). |
 | Orca API runner | `ORCA_API_URL`, `ORCA_API_KEY` | Target URL and API key for the example experiment |
 | Orca browser runner | `ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD` | Target URL and login credentials when selecting the browser runner |
 
@@ -60,12 +59,14 @@ Optional tuning variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `USER_AGENT_MODEL` | `gpt-5.6-luna` | Model used for the simulated user persona |
 | `USER_AGENT_MAX_TOKENS` | _(unset)_ | Max tokens per user agent response; unset/empty → parameter omitted, provider default applies. Set explicitly (e.g. `4096`) for reasoning models where chain-of-thought tokens count against the limit |
 | `USER_AGENT_TEMPERATURE` | _(unset)_ | Sampling temperature for the user agent; unset/empty → parameter omitted, provider default applies |
-| `JUDGE_MODEL` | `gemini-3.5-flash-lite` | Judge model when neither the criterion nor `defaults.judge_model` sets one |
 | `JUDGE_MAX_INPUT_TOKENS` | `128000` | Largest estimated judge request when the criterion does not set `grader_args.max_input_tokens`. The grader records a larger request as errored and makes no model call. An invalid value logs a warning and uses the default |
 | `HEADED` | `false` | Set to `true` to show the browser window |
+
+The [model guide](models.md) lists the model variables of each role, their fallback, and the
+Specification fields that record the models. `simulate`, `run`, and `evaluate` check the roles
+that they call before the first model call.
 
 ### Verify Installation
 

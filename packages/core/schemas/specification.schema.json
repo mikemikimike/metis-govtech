@@ -92,6 +92,32 @@
           ],
           "default": null,
           "title": "Judge Model"
+        },
+        "user_agent_model": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Agent Model"
+        },
+        "runner_agent_model": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Runner Agent Model"
         }
       },
       "title": "ExperimentDefaults",
@@ -283,6 +309,19 @@
           ],
           "default": null,
           "title": "Max Run Retries"
+        },
+        "user_agent_model": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Agent Model"
         }
       },
       "required": [

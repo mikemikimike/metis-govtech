@@ -76,6 +76,8 @@ class Scenario(BaseModel):
     timeout_minutes: int = 15
     response_wait_ms: int = 300000
     max_trial_retries: int | None = None
+    user_agent_model: str | None = None
+    """The Task's ``user_agent_model``. ``None`` takes the experiment default."""
 
     @model_validator(mode="after")
     def _check_unique_fixtures(self) -> Self:
@@ -170,6 +172,7 @@ class Specification(CoreSpecification):
             timeout_minutes=task.timeout_minutes,
             response_wait_ms=task.response_wait_ms,
             max_trial_retries=task.max_run_retries,
+            user_agent_model=task.user_agent_model,
             fixtures=task.fixtures,
             grader_refs=refs,
         )

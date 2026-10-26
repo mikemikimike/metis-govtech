@@ -4,7 +4,10 @@ The names exported here are the headless package facade. Doors and providers liv
 internal modules so moving them does not change the imports used by callers.
 """
 
+from __future__ import annotations
+
 from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING
 
 from metis.core import Status
 from metis.core import __version__ as core_version
@@ -31,6 +34,7 @@ from metis.wizard.application.config import (
     interview_client_config,
     working_status,
 )
+from metis.wizard.application.connection import check_connection, set_connection
 from metis.wizard.application.interviewer import InterviewerUnavailable
 from metis.wizard.application.matching.library_catalogue import (
     library_catalogue as _library_catalogue,
@@ -49,6 +53,12 @@ from metis.wizard.contracts import (
     ChoiceRequest,
     ChoiceResponse,
     CompileResult,
+    ConnectionCheckRequest,
+    ConnectionCheckResult,
+    ConnectionFieldError,
+    ConnectionProbe,
+    ConnectionStatus,
+    ConnectionTransport,
     DocumentExtractionErrorCode,
     DocumentExtractionResult,
     ExtractedDocument,
@@ -56,6 +66,7 @@ from metis.wizard.contracts import (
     FormResponse,
     InterviewConfig,
     InterviewConfigDocumentLimits,
+    InterviewConnectionRequest,
     InterviewContext,
     InterviewDocument,
     InterviewEndRequest,
@@ -72,18 +83,24 @@ from metis.wizard.contracts import (
     Perspective,
     PerspectiveDefinition,
     Specification,
+    TargetConnection,
     UserResponse,
     WizardRequest,
 )
 from metis.wizard.contracts.grader_spec import GraderSummary
 from metis.wizard.domain.permissions import InterviewStep
 
+if TYPE_CHECKING:
+    from metis.core.model_settings import RoleSettings
 
-def configure_interview_runtime(*, api_key: str, base_url: str, model: str) -> None:
+
+def configure_interview_runtime(
+    *, interview: RoleSettings, embeddings: RoleSettings
+) -> None:
     """Configure the production collaborators used by :func:`handle_interview`."""
     from metis.wizard.bootstrap import configure_interview_runtime
 
-    configure_interview_runtime(api_key=api_key, base_url=base_url, model=model)
+    configure_interview_runtime(interview=interview, embeddings=embeddings)
 
 
 def grader_catalogue() -> list[GraderSummary]:
@@ -120,10 +137,17 @@ __all__ = [
     "CapabilityId",
     "CompilationError",
     "CompileResult",
+    "ConnectionCheckRequest",
+    "ConnectionCheckResult",
+    "ConnectionFieldError",
+    "ConnectionProbe",
+    "ConnectionStatus",
+    "ConnectionTransport",
     "ChoiceRequest",
     "ChoiceResponse",
     "FormRequest",
     "FormResponse",
+    "InterviewConnectionRequest",
     "InterviewEndRequest",
     "InterviewContext",
     "InterviewDocument",
@@ -154,9 +178,11 @@ __all__ = [
     "SpecificationFixture",
     "SpecificationError",
     "Status",
+    "TargetConnection",
     "UserResponse",
     "WizardRequest",
     "__version__",
+    "check_connection",
     "compile_experiment",
     "compile_specification",
     "configure_interview_runtime",
@@ -168,6 +194,7 @@ __all__ = [
     "grader_catalogue",
     "package_specification",
     "render_review",
+    "set_connection",
     "write_experiment",
     "write_review",
     "working_status",

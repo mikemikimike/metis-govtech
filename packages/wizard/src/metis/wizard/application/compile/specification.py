@@ -99,8 +99,12 @@ def build_specification_archive(
     fixtures: Iterable[SpecificationFixture],
     *,
     interview_state_json: str | None = None,
+    target_binding_yaml: str | None = None,
 ) -> SpecificationArchive:
     """Build a complete specification ZIP from request-scoped fixture streams.
+
+    `target_binding_yaml` is written next to `specification.yaml` when the export has a target
+    connection.
 
     The caller owns the input streams. This function validates every filename before it reads any
     body, reads at most one bounded chunk beyond the total fixture limit, and never writes a fixture
@@ -141,6 +145,10 @@ def build_specification_archive(
                     f"{root}/{export_layout.INTERVIEW_STATE}", interview_state_json
                 )
             archive.writestr(f"{root}/{export_layout.SPECIFICATION}", to_yaml(document))
+            if target_binding_yaml is not None:
+                archive.writestr(
+                    f"{root}/{export_layout.TARGET_BINDING}", target_binding_yaml
+                )
             archive.writestr(f"{root}/{export_layout.FIXTURES}/", b"")
             for name in sorted(normalized):
                 archive.writestr(

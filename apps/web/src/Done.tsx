@@ -1,10 +1,17 @@
 // The end of the interview, marked in the conversation. Download remains available from the
-// completed Specification pane.
+// completed Specification pane. "Connect target" adds or replaces the target binding.
 
 import { PartyPopper } from "lucide-react";
-import { Panel } from "./ui";
+import type { TargetConnection } from "./transport/api";
+import { Button, Panel } from "./ui";
 
-export function Done() {
+export function Done({
+  connection = null,
+  onConnect,
+}: {
+  connection?: TargetConnection | null;
+  onConnect?: () => void;
+}) {
   return (
     // Reaching the end is a state worth marking, but not with a coloured left-rule — that reads
     // as generated chrome and breaks the borders-not-accents rule. The panel stays a plain
@@ -16,8 +23,16 @@ export function Done() {
         Your specification is ready
       </h2>
       <p className="text-sm text-muted-foreground">
-        Download the complete specification ZIP.
+        Download the complete specification ZIP.{" "}
+        {connection
+          ? `It includes the ${connection.transport === "http" ? "HTTP" : "browser"} target binding${connection.status === "checked" ? "" : ", which was not checked"}.`
+          : "It has no target binding, so the Engine uses the default runner."}
       </p>
+      {onConnect && (
+        <Button type="button" className="self-start" onClick={onConnect}>
+          {connection ? "Change target connection" : "Connect target"}
+        </Button>
+      )}
     </Panel>
   );
 }

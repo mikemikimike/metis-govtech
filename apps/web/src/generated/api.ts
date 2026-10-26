@@ -149,6 +149,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/wizard/connection/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a target binding
+         * @description Validate binding values and return field errors as `loc` and `msg` only.
+         *
+         *     By default, the API reaches the target only when it listens on this computer (`127.0.0.1`,
+         *     `localhost`, or `::1`). `METIS_API_CONNECTION_CHECK=1` or `0` overrides this. When the check
+         *     is off, `live` is false and `status` is `unchecked`.
+         *
+         *     The API never puts a value from its own environment into a URL that it requests. A URL that
+         *     names a `${NAME}` variable is not requested, and its probe tells the user to check it with
+         *     `metis wizard connect`.
+         */
+        post: operations["check_target_connection_api_v1_wizard_connection_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/wizard/connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set or remove the target connection on Interview state
+         * @description Return the state with the connection set, or removed when `connection` is null.
+         *
+         *     This changes no Specification content and calls no model. Save the returned state.
+         */
+        post: operations["update_target_connection_api_v1_wizard_connection_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/wizard/compile": {
         parameters: {
             query?: never;
@@ -192,10 +242,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the model and status of each LLM role
+         * @description Return the model name and configured status of each role. No key or URL is returned.
+         */
+        get: operations["models_api_v1_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * Advice
+         * @description Advice for the runner agent. Code does not check these fields.
+         */
+        Advice: {
+            limits?: components["schemas"]["Limits"] | null;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+        };
+        /**
+         * Auth
+         * @description How the engine authenticates every request. The runner agent never sees it.
+         */
+        Auth: {
+            /**
+             * Scheme
+             * @description Use the security scheme the API specification declares.
+             * @default from_spec
+             * @constant
+             */
+            scheme: "from_spec";
+            /**
+             * Secret Env
+             * @description The environment variable holding the credential.
+             */
+            secret_env: string;
+        };
         /** Behaviour */
         Behaviour: {
             /** Id */
@@ -498,6 +598,75 @@ export interface components {
             "specification.yaml": string;
             specification: components["schemas"]["Specification"];
         };
+        /**
+         * ConnectionCheckRequest
+         * @description Binding values to check.
+         *
+         *     The values are a plain mapping, so a binding that does not validate comes back as field
+         *     errors in a normal result and not as a request failure.
+         */
+        ConnectionCheckRequest: {
+            /** Binding */
+            binding: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * ConnectionCheckResult
+         * @description The result of a connection check.
+         *
+         *     `binding` is the validated binding, or `None` when `errors` is not empty. `live` is true
+         *     when the Wizard also checked the environment and reached the target; `probes` holds those
+         *     results. `status` is `checked` only when the live checks ran and all passed.
+         */
+        ConnectionCheckResult: {
+            binding?: components["schemas"]["TargetBinding"] | null;
+            /** Errors */
+            errors?: components["schemas"]["ConnectionFieldError"][];
+            /**
+             * Live
+             * @default false
+             */
+            live: boolean;
+            /** Probes */
+            probes?: components["schemas"]["ConnectionProbe"][];
+            /** @default unchecked */
+            status: components["schemas"]["ConnectionStatus"];
+        };
+        /**
+         * ConnectionFieldError
+         * @description One binding field that failed validation. It never holds the rejected value.
+         */
+        ConnectionFieldError: {
+            /** Loc */
+            loc: (string | number)[];
+            /** Msg */
+            msg: string;
+        };
+        /**
+         * ConnectionProbe
+         * @description One live check: a named environment variable or a request to the target.
+         */
+        ConnectionProbe: {
+            /** Name */
+            name: string;
+            /** Ok */
+            ok: boolean;
+            /** Message */
+            message: string;
+        };
+        /**
+         * ConnectionStatus
+         * @description Whether the Wizard reached the target with this binding.
+         * @enum {string}
+         */
+        ConnectionStatus: "checked" | "unchecked";
+        /**
+         * ConnectionTransport
+         * @description How the engine reaches the target.
+         * @enum {string}
+         */
+        ConnectionTransport: "http" | "browser";
         /** Criterion */
         Criterion: {
             /** Id */
@@ -584,6 +753,10 @@ export interface components {
         ExperimentDefaults: {
             /** Judge Model */
             judge_model?: string | null;
+            /** User Agent Model */
+            user_agent_model?: string | null;
+            /** Runner Agent Model */
+            runner_agent_model?: string | null;
         };
         /**
          * ExtractedDocument
@@ -783,6 +956,16 @@ export interface components {
             extraction_extensions?: string[];
         };
         /**
+         * InterviewConnectionRequest
+         * @description Set the target connection on client-held state, or remove it with `None`.
+         *
+         *     This is not an Interview operation: it changes no Specification content and calls no model.
+         */
+        InterviewConnectionRequest: {
+            state: components["schemas"]["InterviewState"];
+            connection?: components["schemas"]["TargetConnection"] | null;
+        };
+        /**
          * InterviewContext
          * @description User-owned context that travels with an Interview but is not Specification data.
          */
@@ -797,6 +980,7 @@ export interface components {
             opening_description: string;
             /** Documents */
             documents?: components["schemas"]["InterviewDocument"][];
+            connection?: components["schemas"]["TargetConnection"] | null;
         };
         /**
          * InterviewDocument
@@ -857,6 +1041,7 @@ export interface components {
             capability_confidence: components["schemas"]["CapabilityConfidence"];
             /** Documents */
             documents?: components["schemas"]["InterviewDocument"][];
+            connection?: components["schemas"]["TargetConnection"] | null;
         };
         /**
          * InterviewState
@@ -924,6 +1109,37 @@ export interface components {
             response: components["schemas"]["ChatResponse"] | components["schemas"]["ChoiceResponse"] | components["schemas"]["FormResponse"];
         };
         /**
+         * Limits
+         * @description The target's rate limits, as the runner agent should pace itself.
+         */
+        Limits: {
+            /** Submit Per Minute */
+            submit_per_minute?: number | null;
+            /** Read Per Minute */
+            read_per_minute?: number | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
+         * Login
+         * @description How the runner agent signs in to a web app before the first trial.
+         */
+        Login: {
+            /**
+             * Note
+             * @description The sign-in steps in plain words. Write `{{secret:NAME}}` where a secret is typed; the engine fills it in and logs `***`.
+             */
+            note: string;
+            /**
+             * Secrets
+             * @description The environment variables holding the secrets the note types.
+             */
+            secrets?: string[];
+        };
+        /**
          * MissingData
          * @description One structured reason a Specification is not yet runnable.
          */
@@ -941,6 +1157,31 @@ export interface components {
          * @enum {string}
          */
         MissingDataCode: "target_incomplete" | "behaviours_incomplete" | "no_measured_behaviour" | "criteria_incomplete" | "no_personas" | "no_scenarios" | "behaviour_uncovered" | "scenario_no_selected_behaviour" | "scenario_no_persona" | "scenario_unknown_reference" | "scenario_invalid_trials";
+        /**
+         * ModelRole
+         * @description One LLM role in the METIS flow.
+         * @enum {string}
+         */
+        ModelRole: "interview" | "embeddings" | "user_agent" | "runner_agent" | "judge";
+        /**
+         * ModelStatus
+         * @description The status of one LLM role. It holds names only, never a key or a URL.
+         */
+        ModelStatus: {
+            role: components["schemas"]["ModelRole"];
+            /** Label */
+            label: string;
+            /** Model */
+            model: string;
+            /** Source */
+            source: string;
+            /** Configured */
+            configured: boolean;
+            /** Affects Scores */
+            affects_scores: boolean;
+            /** Missing Vars */
+            missing_vars: string[];
+        };
         /**
          * Option
          * @description Shared — deliberately unprefixed.
@@ -1097,6 +1338,21 @@ export interface components {
             trials: number;
         };
         /**
+         * SecretHeader
+         * @description A header the engine adds, from an environment variable, to matching requests.
+         */
+        SecretHeader: {
+            /** Match */
+            match: string;
+            /** Header */
+            header: string;
+            /**
+             * Env
+             * @description The environment variable holding the value.
+             */
+            env: string;
+        };
+        /**
          * ServiceError
          * @description The stable error body for compile and validation failures.
          *
@@ -1173,6 +1429,84 @@ export interface components {
             detail: string;
         };
         /**
+         * TargetBinding
+         * @description A hand-written binding of one app to the generic HTTP or browser runner.
+         *
+         *     An ``http`` binding needs ``spec_url``. A ``browser`` binding needs ``start_url`` and
+         *     may add ``login``. Each transport rejects the other's fields.
+         */
+        TargetBinding: {
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: 1;
+            identity: components["schemas"]["TargetIdentity"];
+            /**
+             * Transport
+             * @enum {string}
+             */
+            transport: "http" | "browser";
+            /**
+             * Spec Url
+             * @description Where to fetch the app's OpenAPI specification; required for `http`. `${NAME}` references are expanded from the environment by the engine.
+             */
+            spec_url?: string | null;
+            /**
+             * Start Url
+             * @description The page the browser opens first; required for `browser`. `${NAME}` references are expanded from the environment by the engine.
+             */
+            start_url?: string | null;
+            login?: components["schemas"]["Login"] | null;
+            /**
+             * Tls Verify
+             * @default true
+             */
+            tls_verify: boolean;
+            auth?: components["schemas"]["Auth"] | null;
+            /**
+             * Secret Headers
+             * @description Headers the engine adds to matching requests; never shown to the runner agent.
+             */
+            secret_headers?: components["schemas"]["SecretHeader"][];
+            /**
+             * Submissions
+             * @description Endpoints whose calls send the user's message. Empty means the engine's default rule: any POST, PUT or PATCH with a JSON body.
+             */
+            submissions?: string[];
+            /**
+             * Forbidden Calls
+             * @description Calls the engine refuses to send.
+             */
+            forbidden_calls?: string[];
+            /**
+             * Preflight Reads
+             * @description Paths the engine reads before a trial; a failure is a warning only.
+             */
+            preflight_reads?: string[];
+            advice?: components["schemas"]["Advice"];
+        };
+        /**
+         * TargetConnection
+         * @description A valid target binding and the result of the last connection check.
+         */
+        TargetConnection: {
+            transport: components["schemas"]["ConnectionTransport"];
+            binding: components["schemas"]["TargetBinding"];
+            /** @default unchecked */
+            status: components["schemas"]["ConnectionStatus"];
+        };
+        /**
+         * TargetIdentity
+         * @description Which app this binding is for.
+         */
+        TargetIdentity: {
+            /** Name */
+            name: string;
+            /** Version */
+            version?: string | null;
+        };
+        /**
          * TargetProfile
          * @description The target context and requirements that an evaluation measures.
          */
@@ -1218,6 +1552,8 @@ export interface components {
             response_wait_ms: number;
             /** Max Run Retries */
             max_run_retries?: number | null;
+            /** User Agent Model */
+            user_agent_model?: string | null;
         };
         /** Turn */
         Turn: {
@@ -1614,6 +1950,90 @@ export interface operations {
             };
         };
     };
+    check_target_connection_api_v1_wizard_connection_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionCheckResult"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+        };
+    };
+    update_target_connection_api_v1_wizard_connection_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterviewConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewState"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+        };
+    };
     compile__api_v1_wizard_compile_post: {
         parameters: {
             query?: never;
@@ -1681,6 +2101,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraderSummary"][];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceError"];
+                };
+            };
+        };
+    };
+    models_api_v1_models_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelStatus"][];
                 };
             };
             /** @description Internal Server Error */

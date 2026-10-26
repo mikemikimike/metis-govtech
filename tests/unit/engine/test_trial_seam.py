@@ -20,6 +20,7 @@ from metis.engine.simulation.experiment import (
 )
 from metis.engine.simulation.gen_1 import trial as gen_1_trial
 from metis.engine.simulation.llm_calls import LLMCallLog
+from metis.engine.simulation.model_settings import user_agent_settings
 from metis.engine.simulation.trial import create_trial
 from metis.engine.simulation.types import Persona, Scenario
 
@@ -44,9 +45,14 @@ class _Factory:
 
 
 def _specification(scenario: Scenario, persona: Persona) -> Any:
-    """The three attributes the experiment reads before workers start."""
+    """The attributes the experiment reads before workers start."""
+    from metis.core.experiment import ExperimentDefaults
+
     return SimpleNamespace(
-        scenarios=[scenario], tasks=[], fixture_content_descriptions={}
+        scenarios=[scenario],
+        tasks=[],
+        fixture_content_descriptions={},
+        experiment=SimpleNamespace(defaults=ExperimentDefaults()),
     )
 
 
@@ -134,6 +140,7 @@ def test_factory_without_generation_gets_gen_1_trial(
         "persona": persona,
         "scenario": scenario,
         "llm_log": LLMCallLog.for_trial(tmp_path),
+        "settings": user_agent_settings(),
     }
     assert set(built["orch"]) == {
         "runner",

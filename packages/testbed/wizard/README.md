@@ -53,8 +53,9 @@ exits with status `1` if any case fails or remains incomplete.
 
 ### Metrics
 
-The scorer uses `gemini-embedding-2` vectors to measure text similarity and match
-generated items to reference items. Matching is one-to-one and does not depend on
+The scorer uses the vectors of the embeddings role (`EMBEDDING_MODEL`, see
+[the model guide](../../../docs/guide/models.md)) to measure text similarity and match
+generated items to reference items. A cache made with a different model is embedded again. Matching is one-to-one and does not depend on
 item IDs or order.
 
 | Metric | Compared information |

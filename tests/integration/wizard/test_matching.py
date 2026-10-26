@@ -25,7 +25,7 @@ class FakeEmbedder:
         self.fails = fails
         self.calls = 0
 
-    def embed(self, texts: list[str], model: str = "") -> list[list[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         self.calls += 1
         if self.fails:
             raise RuntimeError("embedding provider unavailable")

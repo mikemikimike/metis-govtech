@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from metis.wizard.application.trials import format_trials
 
 if TYPE_CHECKING:
+    from metis.wizard.contracts.connection import TargetConnection
     from metis.wizard.domain.specification import Behaviour, Criterion, Specification
 
 
@@ -32,7 +33,56 @@ def _behaviour_lines(behaviour: Behaviour) -> list[str]:
     return lines
 
 
-def render_review(specification: Specification, experiment_id: str) -> str:
+def _connection_lines(
+    connection: TargetConnection | None, connection_skipped: bool
+) -> list[str]:
+    """The target connection section. It is empty in spec-only mode."""
+    from metis.wizard.application.connection import (
+        TARGET_BINDING_FILE,
+        optional_variables,
+        required_variables,
+    )
+    from metis.wizard.contracts.connection import ConnectionStatus
+
+    if connection is None:
+        if not connection_skipped:
+            return []
+        return [
+            "## Target connection",
+            "",
+            "The target binding was not valid, so this export uses the default runner. To add "
+            "a binding, run `metis wizard connect --out-dir <experiment root>`.",
+            "",
+        ]
+    required = required_variables(connection.binding)
+    optional = optional_variables(connection.binding)
+    lines = [
+        "## Target connection",
+        "",
+        f"- Transport: {connection.transport.value}",
+        f"- Binding: `{TARGET_BINDING_FILE}`",
+        "- Status: "
+        + (
+            "checked against the target"
+            if connection.status is ConnectionStatus.CHECKED
+            else "not checked against the target"
+        ),
+    ]
+    if required:
+        lines.append(f"- Set before a run: {', '.join(f'`{n}`' for n in required)}")
+    if optional:
+        lines.append(f"- Optional: {', '.join(f'`{n}`' for n in optional)}")
+    return [*lines, ""]
+
+
+def render_review(
+    specification: Specification,
+    experiment_id: str,
+    *,
+    connection: TargetConnection | None = None,
+    connection_skipped: bool = False,
+) -> str:
+    """Render the review. A run-mode export adds a target connection section."""
     target = specification.target
     out: list[str] = [
         f"# {target.name} — evaluation review",
@@ -92,6 +142,7 @@ def render_review(specification: Specification, experiment_id: str) -> str:
         format_trials(specification.trial_count()),
         "",
     ]
+    out += _connection_lines(connection, connection_skipped)
 
     not_measured = [
         b

@@ -32,13 +32,12 @@ from ...artifacts import ArtifactRejected
 from ...config import TrialRetryConfig
 from ...exceptions import TurnRecoverableError
 from ...llm_calls import LLMCallLog, create_completion
+from ...model_settings import llm_client, runner_agent_settings
 from ...transport_log import LoggingTransport, TransportLog
 from ..binding import TargetBindingError, load_target_binding
 from ..evidence import Pointer, PointerError, resolve
 from ..runner import Runner
 from ..types import Observation, Reading
-from ..user_agent.config import USER_AGENT_API_KEY, USER_AGENT_BASE_URL
-from .config import RUNNER_AGENT_MODEL
 from .prompts import NUDGE, SYSTEM_PROMPT, first_message
 from .rules import SUBMIT_METHODS, ToolRefused, check_call, check_headers, matches
 from .spans import Spans
@@ -109,6 +108,8 @@ class HttpRunner(Runner):
         self._llm_log = llm_log
         self._llm = llm
         self._owns_llm = False
+        self.agent_settings = runner_agent_settings()
+        """The runner agent role. ``setup`` resolves it from the trial's config."""
         self._base = ""
         self._deadline = 0.0
         self._wait = 0.0
@@ -147,6 +148,9 @@ class HttpRunner(Runner):
 
     async def setup(self, config: TrialConfig) -> None:
         """Fetch and log the specification, once, and work out the server URL."""
+        self.agent_settings = runner_agent_settings(
+            config.runner_agent_model, user_agent_model=config.user_agent_model
+        )
         self._deadline = _now() + config.timeout_minutes * 60
         self._wait = config.response_wait_ms / 1000
         url = self._binding.spec_url
@@ -543,9 +547,7 @@ class HttpRunner(Runner):
     ) -> str | None:
         """Ask the LLM for tool calls until it reports. Returns why it stopped early."""
         if self._llm is None:
-            self._llm = AsyncOpenAI(
-                api_key=USER_AGENT_API_KEY, base_url=USER_AGENT_BASE_URL, max_retries=0
-            )
+            self._llm = llm_client(self.agent_settings)
             self._owns_llm = True
         messages: list[Any] = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -564,7 +566,7 @@ class HttpRunner(Runner):
                     self._llm,
                     self._llm_log,
                     component="runner_agent",
-                    model=RUNNER_AGENT_MODEL,
+                    model=self.agent_settings.model,
                     messages=sent,
                     tools=TOOLS,
                     tool_choice="required",

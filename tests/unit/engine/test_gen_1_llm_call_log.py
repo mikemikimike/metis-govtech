@@ -12,11 +12,11 @@ from typing import Any
 import pytest
 
 from metis.core.trials import TrialConfig
+from metis.engine.simulation import model_settings as simulation_model_settings
 from metis.engine.simulation.experiment import TrialPlanItem, _worker, trial_folder_name
 from metis.engine.simulation.gen_1 import artifact_summarizer
 from metis.engine.simulation.gen_1 import trial as gen_1_trial
 from metis.engine.simulation.gen_1.trial import build_trial
-from metis.engine.simulation.gen_1.user_agent import agent as agent_module
 from metis.engine.simulation.llm_calls import LLMCallLog, LLMCallRecord
 from metis.engine.simulation.runner import Runner
 from metis.engine.simulation.types import (
@@ -80,8 +80,7 @@ class _OneFileRunner(Runner):
 @pytest.fixture(autouse=True)
 def fake_openai(monkeypatch: pytest.MonkeyPatch) -> None:
     _FakeOpenAI.user_agent_calls = 0
-    monkeypatch.setattr(agent_module, "AsyncOpenAI", _FakeOpenAI)
-    monkeypatch.setattr(artifact_summarizer, "AsyncOpenAI", _FakeOpenAI)
+    monkeypatch.setattr(simulation_model_settings, "AsyncOpenAI", _FakeOpenAI)
 
 
 def _rows(path: Path) -> list[dict[str, Any]]:

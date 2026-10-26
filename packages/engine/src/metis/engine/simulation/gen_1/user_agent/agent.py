@@ -5,12 +5,13 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from openai import APIError, AsyncOpenAI
+from openai import APIError
 from pydantic import BaseModel
 
 from metis.core.logging import get_logger
 
 from ...llm_calls import parse_completion
+from ...model_settings import llm_client, sampling_options, user_agent_settings
 from ..types import (
     ActionResult,
     ActionSlot,
@@ -18,13 +19,6 @@ from ..types import (
     Observation,
     UserAgentInput,
     UserAgentOutput,
-)
-from .config import (
-    USER_AGENT_API_KEY,
-    USER_AGENT_BASE_URL,
-    USER_AGENT_MAX_TOKENS,
-    USER_AGENT_MODEL,
-    USER_AGENT_TEMPERATURE,
 )
 from .prompts import (
     OPENING_TURN_PROMPT,
@@ -34,6 +28,8 @@ from .prompts import (
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessageParam
+
+    from metis.core.model_settings import RoleSettings
 
     from ...llm_calls import LLMCallLog
     from ...types import Persona, Scenario
@@ -206,7 +202,12 @@ class UserAgent:
     """Simulates a user persona interacting with an AI assistant."""
 
     def __init__(
-        self, persona: Persona, scenario: Scenario, *, llm_log: LLMCallLog
+        self,
+        persona: Persona,
+        scenario: Scenario,
+        *,
+        llm_log: LLMCallLog,
+        settings: RoleSettings | None = None,
     ) -> None:
         """Initialize with persona definition and scenario description.
 
@@ -214,7 +215,9 @@ class UserAgent:
         :param scenario: The experiment scenario defining the goal.
         :param llm_log: The trial's LLM-call log; every attempt at every call
             appends a row.
+        :param settings: The user agent role. Unset, it resolves from the environment.
         """
+        self.settings = settings or user_agent_settings()
         self.persona = persona
         self.scenario = scenario
         self.conversation_history: list[HistoryEntry] = []
@@ -226,11 +229,7 @@ class UserAgent:
         self._artifacts: dict[str, Artifact] = {}
         self._llm_log = llm_log
         # Retries go through parse_completion so each attempt is logged.
-        self.client = AsyncOpenAI(
-            api_key=USER_AGENT_API_KEY,
-            base_url=USER_AGENT_BASE_URL,
-            max_retries=0,
-        )
+        self.client = llm_client(self.settings)
         self._system_prompt = self._build_system_prompt()
 
     async def generate_opening(self) -> UserAgentOutput:
@@ -238,7 +237,7 @@ class UserAgent:
         logger.info(
             "[user_agent] Generating opening message (persona=%s, model=%s)...",
             self.persona.id,
-            USER_AGENT_MODEL,
+            self.settings.model,
         )
         opening_slots = [
             ActionSlot(id=name, kind="file_upload", label=f"Attach file '{name}'")
@@ -430,25 +429,20 @@ class UserAgent:
         schema, so no manual JSON parsing or retries are needed.
         """
         messages = self._build_messages(user_prompt)
+        options = sampling_options()
         logger.debug(
-            "[user_agent] Calling LLM: model=%s, messages=%d, max_tokens=%s, temp=%s",
-            USER_AGENT_MODEL,
+            "[user_agent] Calling LLM: model=%s, messages=%d, options=%s",
+            self.settings.model,
             len(messages),
-            USER_AGENT_MAX_TOKENS,
-            USER_AGENT_TEMPERATURE,
+            options,
         )
 
         try:
-            options: dict[str, object] = {}
-            if USER_AGENT_MAX_TOKENS is not None:
-                options["max_tokens"] = USER_AGENT_MAX_TOKENS
-            if USER_AGENT_TEMPERATURE is not None:
-                options["temperature"] = USER_AGENT_TEMPERATURE
             response = await parse_completion(
                 self.client,
                 self._llm_log,
                 component="user_agent",
-                model=USER_AGENT_MODEL,
+                model=self.settings.model,
                 messages=messages,
                 response_format=UserAgentOutput,
                 **options,

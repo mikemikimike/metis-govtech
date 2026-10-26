@@ -622,3 +622,59 @@ def test_end_completes_missing_target_fields_from_evidence() -> None:
     assert isinstance(result, InterviewSuccess)
     assert result.outcome == "done"
     assert result.state.specification.target.name == "Billing support"
+
+
+def _review_state(step: InterviewStep) -> InterviewState:
+    """A ready Specification whose pending request is the review screen at `step`."""
+    from metis.wizard.application.driver import StepDriver
+
+    working = DriverState(
+        step=step,
+        specification=research_assistant(),
+        context=interview_context(),
+        behaviours_confirmed=step is not InterviewStep.BEHAVIOURS,
+    )
+    pending = StepDriver(interviewer=ScriptedInterviewer()).compose(working)
+    pending.request_id = "req-review"
+    pending.stage = step
+    return InterviewState(
+        specification=working.specification,
+        context=working.context,
+        behaviours_confirmed=working.behaviours_confirmed,
+        pending=pending,
+    )
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        InterviewStep.BEHAVIOURS,
+        InterviewStep.CRITERIA,
+        InterviewStep.PERSONAS,
+        InterviewStep.SCENARIOS,
+    ],
+)
+def test_back_then_continue_with_no_edit_returns_to_the_later_step(
+    step: InterviewStep,
+) -> None:
+    state = _review_state(step)
+    interviewer = ScriptedInterviewer()
+
+    back = _turn(state, ChoiceResponse(selected=["back"]), interviewer=interviewer)
+    assert isinstance(back, InterviewSuccess)
+    earlier = back.state.pending
+    assert earlier is not None
+    if isinstance(earlier, FormRequest):
+        response = FormResponse(
+            values={field.id: field.value for field in earlier.fields}
+        )
+    else:
+        primary = next(option for option in earlier.options if option.primary)
+        response = ChoiceResponse(selected=[str(primary.id)])
+    later = _turn(back.state, response, interviewer=interviewer)
+
+    assert isinstance(later, InterviewSuccess)
+    assert later.state.pending is not None
+    assert later.state.pending.stage is step
+    assert later.state.specification == state.specification
+    assert interviewer.calls == []

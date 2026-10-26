@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import typer
-from dotenv import load_dotenv
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskID, TextColumn
 
 from metis.core import execution_layout
@@ -41,6 +40,7 @@ from metis.engine.tui import (
 if TYPE_CHECKING:
     import types as _types
 
+    from metis.core.model_settings import ModelRole
     from metis.core.reporting import GraderRecord
     from metis.core.traces import Trace
     from metis.core.trials import TrialRecord
@@ -72,6 +72,68 @@ def _find_project_root() -> Path:
         if (parent / "pyproject.toml").exists():
             return parent
     return current
+
+
+def _load_env() -> Path | None:
+    """Read the one project `.env` (`metis.core.model_settings.load_env`). Exported values win.
+
+    Returns the file that was read, so a missing-settings error can name it.
+    """
+    from metis.core.model_settings import ModelSettingsError, load_env
+
+    try:
+        return load_env()
+    except ModelSettingsError as exc:
+        console.print(f"Error: {exc}", style="bold red", markup=False)
+        raise typer.Exit(code=1) from None
+
+
+def _check_model_roles(
+    command: str, roles: list[ModelRole], env_file: Path | None
+) -> None:
+    """Stop before any client exists when a role that ``command`` calls has no API key."""
+    from metis.core.model_settings import ModelSettingsError, check_roles
+
+    try:
+        check_roles(f"metis engine {command}", roles, os.environ, env_file)
+    except ModelSettingsError as exc:
+        console.print(f"Error: {exc}", style="bold red", markup=False)
+        raise typer.Exit(code=1) from None
+
+
+def _simulation_roles(runner_factory_ref: str) -> list[ModelRole]:
+    """The user agent, and the runner agent when the factory's runners have one."""
+    from metis.core.model_settings import ModelRole
+    from metis.engine.simulation.runner_resolver import resolve_runner_factory
+    from metis.engine.simulation.trial import _GENERATIONS
+
+    factory_cls = resolve_runner_factory(runner_factory_ref)
+    generation = _GENERATIONS.get(getattr(factory_cls, "generation", "gen_1"))
+    roles = [ModelRole.USER_AGENT]
+    if generation is not None and generation.has_runner_agent:
+        roles.append(ModelRole.RUNNER_AGENT)
+    return roles
+
+
+def _needs_judge(specification: Specification) -> bool:
+    """True when a criterion that a Task runs uses a model-based grader."""
+    from metis.engine.evaluation import GraderSetupError, build_grader
+    from metis.library.grader import JudgeArgs
+
+    criteria_by_id = {c.id: c for b in specification.behaviours() for c in b.criteria}
+    for scenario in specification.resolved_tasks():
+        for ref in scenario.grader_refs:
+            try:
+                grader = build_grader(
+                    criteria_by_id[ref.criterion_id],
+                    default_judge_model=specification.experiment.defaults.judge_model,
+                    env=os.environ,
+                )
+            except GraderSetupError:
+                continue
+            if isinstance(grader.args, JudgeArgs):
+                return True
+    return False
 
 
 def _validate_inputs(input_dir: Path) -> None:
@@ -496,6 +558,64 @@ def _classify_resume_trials(
     return redo, completed
 
 
+def _check_simulation_settings(
+    command: str, specification: Specification, env_file: Path | None
+) -> None:
+    """Check the roles that ``command`` calls, before any client exists.
+
+    ``simulate`` checks the user agent, and the runner agent of a generic runner. ``run``
+    also checks the judge when a criterion uses a model-based grader.
+    """
+    from metis.core.model_settings import ModelRole
+
+    roles = _simulation_roles(specification.runner_factory_ref)
+    if command == "run" and _needs_judge(specification):
+        roles.append(ModelRole.JUDGE)
+    _check_model_roles(command, roles, env_file)
+    console.print(_models_line(specification, roles), markup=False)
+
+
+def _models_line(specification: Specification, roles: list[ModelRole]) -> str:
+    """The models that a run uses, and where each comes from. Shown before any model call.
+
+    It shows the experiment-level model of each role. A Test Case or a Criterion can set its
+    own model in ``specification.yaml``, so the line also counts those.
+    """
+    from metis.core.model_settings import ModelRole, describe_models, resolve_role
+    from metis.engine.simulation.model_settings import (
+        runner_agent_settings,
+        user_agent_settings,
+    )
+
+    defaults = specification.experiment.defaults
+    user_agent = user_agent_settings(defaults.user_agent_model)
+    by_role = {
+        ModelRole.USER_AGENT: user_agent,
+        ModelRole.RUNNER_AGENT: runner_agent_settings(
+            defaults.runner_agent_model, user_agent_model=user_agent.model
+        ),
+        ModelRole.JUDGE: resolve_role(
+            ModelRole.JUDGE, os.environ, defaults.judge_model
+        ),
+    }
+    line = describe_models(by_role[role] for role in roles)
+    own_tasks = sum(1 for task in specification.tasks if task.user_agent_model)
+    own_criteria = sum(
+        1
+        for behaviour in specification.behaviours()
+        for criterion in behaviour.criteria
+        if criterion.grader_args.get("model")
+    )
+    extras = []
+    if own_tasks:
+        extras.append(f"{own_tasks} Test Case(s) set their own user agent model")
+    if own_criteria and ModelRole.JUDGE in roles:
+        extras.append(f"{own_criteria} Criterion(s) set their own judge model")
+    if extras:
+        line += ". " + "; ".join(extras) + " in specification.yaml"
+    return line
+
+
 def _run_simulation(
     input_dir: Path | None,
     experiment_dir: Path | None,
@@ -513,7 +633,7 @@ def _run_simulation(
     target = _resolve_simulation_target(
         input_dir, experiment_dir, resume=resume, command=command
     )
-    load_dotenv()
+    env_file = _load_env()
     use_tui = not no_tui and sys.stderr.isatty()
     log_level = _resolve_log_level(verbose, quiet)
 
@@ -534,10 +654,12 @@ def _run_simulation(
         specification = Specification.load_file(
             experiment_dir / execution_layout.SPECIFICATION
         )
+        _check_simulation_settings(command, specification, env_file)
         fixtures_dir = experiment_dir / execution_layout.FIXTURES
     else:
         _validate_inputs(target)
         specification = Specification.load_file(target / "specification.yaml")
+        _check_simulation_settings(command, specification, env_file)
         suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
         experiment_dir = (
             project_root / execution_layout.EXECUTIONS / f"{specification.id}-{suffix}"
@@ -837,7 +959,7 @@ def _run_evaluation(
     quiet: bool,
 ) -> EvaluationOutcome:
     """Evaluate records in an existing experiment directory."""
-    load_dotenv()
+    env_file = _load_env()
     log_level = _resolve_log_level(verbose, quiet)
     _configure_process_logging(log_level)
     evaluation_log = EvaluationLogger(experiment_dir / execution_layout.LOGS)
@@ -868,6 +990,7 @@ def _run_evaluation(
             records,
             evaluation_log=evaluation_log,
             langfuse_timeout=langfuse_timeout,
+            env_file=env_file,
         )
     )
 
@@ -879,6 +1002,7 @@ async def _evaluate_records(
     *,
     evaluation_log: EvaluationLogger,
     langfuse_timeout: int,
+    env_file: Path | None = None,
 ) -> EvaluationOutcome:
     """Grade every trial record's session and write one GraderRecord per grader per session.
 
@@ -917,15 +1041,31 @@ async def _evaluate_records(
         cid for cid, g in graders.items() if isinstance(g.args, JudgeArgs)
     )
     if needs_llm and gateway is None:
+        from metis.core.model_settings import (
+            ModelRole,
+            format_missing_settings,
+            missing_settings,
+        )
+
         console.print(
             "Error: criteria "
             + ", ".join(needs_llm)
-            + " use a model-based grader, but no judge API key is set. "
-            "Set JUDGE_API_KEY (or OPENAI_API_KEY) in .env.",
+            + " use a model-based grader.\n"
+            + format_missing_settings(
+                "metis engine evaluate",
+                missing_settings([ModelRole.JUDGE], os.environ),
+                env_file,
+            ),
             style="bold red",
             markup=False,
         )
         raise EvaluationInputError("no judge API key for model-based graders")
+    if needs_llm:
+        # The graders hold their resolved model, so this names exactly what will run.
+        judge_models = sorted(
+            {g.args.model for g in graders.values() if isinstance(g.args, JudgeArgs)}
+        )
+        console.print(f"Models: Judge {', '.join(judge_models)}", markup=False)
     llm = (
         build_llm_settings(gateway)
         if gateway is not None and needs_llm

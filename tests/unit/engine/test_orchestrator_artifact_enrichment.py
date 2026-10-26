@@ -62,7 +62,7 @@ async def test_orchestrator_summarizes_downloads(monkeypatch, tmp_path: Path) ->
     seen: list[tuple[str, int]] = []
 
     async def _fake_summarize(
-        artifact, *, experiment_root, triggering_message, turn_number, llm_log
+        artifact, *, experiment_root, triggering_message, turn_number, llm_log, **_
     ):
         seen.append((triggering_message, turn_number))
         artifact.content_description = "3 rows x 2 cols"
@@ -127,7 +127,7 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
     calls: list[str] = []
 
     async def spy_summarize(
-        artifact, *, experiment_root, triggering_message, turn_number, llm_log
+        artifact, *, experiment_root, triggering_message, turn_number, llm_log, **_
     ):
         calls.append(artifact.name)
 
@@ -171,7 +171,7 @@ async def test_target_artifact_still_stamped_and_summarized(
     calls: list[str] = []
 
     async def spy_summarize(
-        artifact, *, experiment_root, triggering_message, turn_number, llm_log
+        artifact, *, experiment_root, triggering_message, turn_number, llm_log, **_
     ):
         calls.append(artifact.name)
 
@@ -222,7 +222,7 @@ async def test_fixture_external_id_survives_the_registry_swap(
     orch = _fixture_swap_orchestrator(tmp_path, registry)
 
     async def spy_summarize(
-        artifact, *, experiment_root, triggering_message, turn_number, llm_log
+        artifact, *, experiment_root, triggering_message, turn_number, llm_log, **_
     ):
         raise AssertionError("fixtures must not be summarized")
 
@@ -257,7 +257,7 @@ async def test_a_later_echo_without_an_id_does_not_blank_the_id(
     orch = _fixture_swap_orchestrator(tmp_path, registry)
 
     async def spy_summarize(
-        artifact, *, experiment_root, triggering_message, turn_number, llm_log
+        artifact, *, experiment_root, triggering_message, turn_number, llm_log, **_
     ):
         raise AssertionError("fixtures must not be summarized")
 
