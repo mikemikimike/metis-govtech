@@ -308,15 +308,24 @@ def _run_settings(specification: Specification) -> list[str]:
     from metis.core.model_settings import ROLES, ModelRole, resolve_role
 
     defaults = specification.experiment.defaults
-    models: dict[ModelRole, str | None] = {
-        ModelRole.USER_AGENT: defaults.user_agent_model,
-        ModelRole.JUDGE: defaults.judge_model,
-    }
+    user_agent = resolve_role(
+        ModelRole.USER_AGENT, os.environ, defaults.user_agent_model
+    )
+    run_roles = [user_agent]
     if specification.experiment.target_binding is not None:
-        models[ModelRole.RUNNER_AGENT] = defaults.runner_agent_model
+        # As in the engine, the runner agent defaults to the user agent model of the run.
+        run_roles.append(
+            resolve_role(
+                ModelRole.RUNNER_AGENT,
+                os.environ,
+                defaults.runner_agent_model,
+                default=user_agent.model,
+            )
+        )
+    run_roles.append(resolve_role(ModelRole.JUDGE, os.environ, defaults.judge_model))
     lines = []
-    for role, model in models.items():
-        settings = resolve_role(role, os.environ, model)
+    for settings in run_roles:
+        role = settings.role
         status = (
             "configured"
             if settings.configured

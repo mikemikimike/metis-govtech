@@ -19,8 +19,8 @@ make run-api
 
 Set `OPENAI_API_KEY` in `.env`, and `OPENAI_BASE_URL` when you do not use the default OpenAI
 endpoint. See the [model guide](../models.md) for the variables of each role. The API starts when a
-setting is missing. `GET /api/v1/models` returns the model name and the configured status of each
-role, never a key or a URL. Until the interview role is configured, the Interview routes return
+setting is missing. `GET /api/v1/models` returns the model name, its source, and the configured
+status of each role, never a key or a URL. Until the interview role is configured, the Interview routes return
 503 `model_unavailable`. Without an embeddings key, the Interview runs, and each Criterion uses the
 criterion judge. The examples use `http://localhost:8001` and require `curl`
 and `jq`.

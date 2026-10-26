@@ -69,6 +69,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   Session and Trace move there from the main table, and Trace now states that its
   record is a group of observations. No code changes (#439).
 
+- New user guide `docs/guide/models.md`: the LLM roles, recommended models, how to choose
+  the user agent and judge models, variables, and Specification fields (#446).
+
 #### Changed
 
 - Use `AGENTS.md` as the agent instruction file. Remove the root and Wizard
@@ -170,35 +173,6 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
     environment, then `DEFAULT_MODEL`. Unset fields are not written, and
     `specification.schema.json` is regenerated. `TrialConfig` records `user_agent_model` and
     `runner_agent_model` for each trial.
-  - Each command checks only the roles that it calls, before its first model call:
-    `wizard init` and `resume` check the interview role; `engine simulate` checks
-    the user agent and, for a generic runner, the runner agent; `engine run` adds the judge, and
-    `engine evaluate` checks the judge, when a criterion uses a model-based grader. The error
-    names the variables, the `.env` path that was read, and `docs/guide/models.md`. When the keys
-    exist, each engine command prints the models that it uses and where each comes from, before
-    its first model call. The wizard CLI summary also shows the source and how to change a model.
-    The
-    embeddings role is optional: without its key, the Wizard warns, and each Criterion uses the
-    criterion judge.
-  - The engine resolves the simulation models when it builds each trial, not at import time.
-  - The API starts without model settings. New `GET /api/v1/models` returns the model, the
-    configured status, the score effect, and the missing variable names of each role. The
-    Interview routes return 503 `model_unavailable` until the interview role is configured. The
-    web client makes Send grey, with "Configure API keys to start interview", while the interview
-    role is not configured. A missing embeddings key shows a banner. The run roles show only in
-    the run settings step. That step comes after the last review and before the download, and it
-    writes the model names into the Specification, so the first ZIP holds them. The wizard CLI
-    lists the roles that the run needs after it writes the files.
-  - New user guide `docs/guide/models.md`: the roles, recommended models, how to choose the
-    user agent and judge models, variables, and Specification fields.
-  - Breaking: the commands no longer read `packages/wizard/.env`, `apps/api/.env`, or a `.env`
-    above the project root. `configure_interview_runtime` takes resolved `interview` and
-    `embeddings` role settings and no longer writes to `os.environ`. The engine
-    `user_agent.config` and `runners.config` modules are removed. The default embedding model is
-    now `text-embedding-3-large` in the wizard (was `gemini-embedding-001`) and the testbed (was
-    `gemini-embedding-2`). With no `JUDGE_MODEL` and no `DEFAULT_MODEL`, the judge now
-    uses `gpt-6-luna` (was `gemini-3.5-flash-lite`), and the Interview and user agent use
-    `gpt-6-luna` (was `gpt-5.6-luna`). See `MIGRATION.md`.
 
 #### Changed
 
@@ -483,6 +457,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   is, and the runner agent's model is `RUNNER_AGENT_MODEL`, falling back to
   `USER_AGENT_MODEL`.
 
+- **Each engine command checks and names its models before its first model call (#446).**
+  `engine simulate` checks the user agent and, for a generic runner, the runner agent;
+  `engine run` adds the judge, and `engine evaluate` checks the judge, when a criterion uses a
+  model-based grader. The error names the variables, the `.env` path that was read, and
+  `docs/guide/models.md`. When the keys exist, each command prints the models that it uses and
+  where each comes from. The simulation models resolve when the engine builds each trial, not
+  at import time.
+
 #### Changed
 
 - **`packages/engine/examples/` holds only the `orca-api-simple1/` example.** The complete Orca
@@ -617,6 +599,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   per-turn error notices is now blamed on the evaluation runner unless its outcome names a
   source (#461).
 
+- The engine reads the one project `.env` (#446). It no longer reads `packages/engine/.env`
+  or a `.env` above the project root. The `user_agent.config` and `runners.config` modules are
+  removed; use `metis.engine.simulation.model_settings`. With no role variable and no
+  `DEFAULT_MODEL`, the judge now uses `gpt-6-luna` (was `gemini-3.5-flash-lite`), and the user
+  agent uses `gpt-6-luna` (was `gpt-5.6-luna`). A judge change changes scores. See
+  `MIGRATION.md`.
+
 ### metis-insights
 
 #### Added
@@ -703,6 +692,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   in the normal Wizard run summary and saved case results.
   Document commands, metrics, and example CLI tables in the Wizard suite README.
 
+#### Breaking
+
+- The default embedding model is now `text-embedding-3-large` (was `gemini-embedding-2`).
+  Set `EMBEDDING_MODEL=gemini-embedding-2` to keep existing embedding caches (#446).
+
 ### metis-wizard
 
 #### Added
@@ -767,6 +761,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - **Standardized wizard specification nodes.** Features, behaviours, criteria, personas, and scenarios use
   explicit `name` and `description` fields;
   behaviour selection is `measured`; and Product uses `description`.
+
+- **The wizard checks only the Interview key (#446).** `wizard init` and `resume` check the
+  interview role before the first model call. The embeddings role is optional: without its
+  key, the Wizard warns, and each Criterion uses the criterion judge. After it writes the
+  files, the wizard CLI lists the roles that the run needs, with each model, its source, and
+  how to change it.
 
 #### Fixed
 
@@ -867,6 +867,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   FQN `metis.library.metrics.default.CriterionGEvalMetric` →
   `metis.library.graders.default.CriterionGEvalGrader` (#415).
 
+- The wizard reads the one project `.env` (#446). It no longer reads `packages/wizard/.env`.
+  `configure_interview_runtime` takes resolved `interview` and `embeddings` role settings and
+  no longer writes to `os.environ`. The default embedding model is now
+  `text-embedding-3-large` (was `gemini-embedding-001`), so grader matches can change. With no
+  `INTERVIEW_MODEL` and no `DEFAULT_MODEL`, the Interview uses `gpt-6-luna` (was
+  `gpt-5.6-luna`). See `MIGRATION.md`.
+
 ### metis-api
 
 #### Added
@@ -898,6 +905,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `INTERVIEW_MODEL`, matching the wizard and engine provider configuration, and can load one root
   `.env` for local development.
 
+- **Model status route (#446).** The API starts without model settings. New
+  `GET /api/v1/models` returns the model, its source, the configured status, the score effect,
+  and the missing variable names of each role. The runner agent model follows the user agent
+  model, as in the engine. The Interview routes return 503 `model_unavailable` until the
+  interview role is configured.
+
 #### Changed
 
 - Package exports accept either final Interview state or a manual Specification. ZIP files use the shared export layout and expose the Wizard-owned filename in `Content-Disposition`; manual exports include an empty `inputs/` folder (#453).
@@ -917,6 +930,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Rename `GET /api/v1/metrics` to `GET /api/v1/graders`, and its response model
   `MetricSummary` to `GraderSummary` (#415).
+
+- The API reads the one project `.env` (#446). It no longer reads `apps/api/.env`. A health
+  check no longer fails when a key is missing; check `GET /api/v1/models`. See `MIGRATION.md`.
 
 ### metis-web
 
@@ -949,6 +965,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   with `specification.yaml` and fixtures through the existing API, without an Interview
   record (#395). When a field is not complete, **Download specification** marks each
   field that needs a change, shows what to change, and moves the focus to the first one.
+
+- **Model settings in the browser (#446).** Send is grey, with "Configure API keys to start
+  interview", while the interview role is not configured. A missing embeddings key shows a
+  banner. The run roles show only in the run settings step. That step comes after the last
+  review and before the download, and it writes the model names into the Specification, so the
+  first ZIP holds them. An empty runner agent field shows the model that the run uses: the
+  typed user agent model, unless `RUNNER_AGENT_MODEL` is set.
 
 #### Changed
 

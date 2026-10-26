@@ -87,14 +87,14 @@ class JudgeGateway:
     def from_env(cls, env: Mapping[str, str]) -> JudgeGateway | None:
         """The gateway, or ``None`` when no API key is set.
 
-        ``JUDGE_*`` wins over ``OPENAI_*`` key by key, so a judge-only base URL can sit beside
-        a shared ``OPENAI_API_KEY``. Empty values count as unset.
+        The judge role resolves through ``resolve_role``: ``JUDGE_*`` wins over ``OPENAI_*`` key
+        by key, so a judge-only base URL can sit beside a shared ``OPENAI_API_KEY``. Empty values
+        count as unset.
         """
-        api_key = env.get("JUDGE_API_KEY") or env.get("OPENAI_API_KEY")
-        if not api_key:
+        settings = resolve_role(ModelRole.JUDGE, env)
+        if settings.api_key is None:
             return None
-        base_url = env.get("JUDGE_BASE_URL") or env.get("OPENAI_BASE_URL") or None
-        return cls(api_key=api_key, base_url=base_url)
+        return cls(api_key=settings.api_key, base_url=settings.base_url)
 
 
 def build_llm_settings(

@@ -372,9 +372,13 @@ def test_the_run_summary_shows_each_model_its_source_and_its_key_status(
         "(not configured: set USER_AGENT_API_KEY or OPENAI_API_KEY)",
         "  Judge: gpt-6-luna from built-in default (configured)",
     ]
+    # As in the engine, the runner agent follows the user agent model of the run.
+    monkeypatch.delenv("RUNNER_AGENT_MODEL", raising=False)
+    monkeypatch.delenv("RUNNER_AGENT_API_KEY", raising=False)
     specification.experiment.target_binding = "targets/app.yaml"
-    assert any(
-        line.startswith("  Runner agent: ") for line in cli._run_settings(specification)
+    assert cli._run_settings(specification)[1] == (
+        "  Runner agent: ua-model from user agent model (not configured: set "
+        "RUNNER_AGENT_API_KEY or USER_AGENT_API_KEY or OPENAI_API_KEY)"
     )
 
 

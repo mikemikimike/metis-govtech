@@ -41,6 +41,28 @@ const ROLE_HELP: Record<RunModelRole, string> = {
 
 // The roles that a run of this Specification calls. The runner agent runs only for a generic
 // runner, which a target binding selects.
+/**
+ * The model that a run uses when the field of `role` stays empty. It matches the engine: the
+ * runner agent uses `RUNNER_AGENT_MODEL` when it is set, else the user agent model of the run,
+ * so its placeholder follows the typed user agent value.
+ */
+export function placeholderModel(
+  role: RunModelRole,
+  statuses: readonly ModelStatus[],
+  values: RunModels,
+): string {
+  const byRole = new Map(statuses.map((status) => [status.role, status]));
+  const status = byRole.get(role);
+  if (role === "runner_agent" && status?.source === "user agent model") {
+    return (
+      values.user_agent?.trim() ||
+      byRole.get("user_agent")?.model ||
+      status.model
+    );
+  }
+  return status?.model ?? "";
+}
+
 export function runRoles(specification: Specification): RunModelRole[] {
   return specification.target_binding
     ? ["user_agent", "runner_agent", "judge"]
@@ -163,7 +185,7 @@ export function RunSettings({
               id={id}
               className="rounded-md border border-border bg-background px-3 py-1.5 text-sm"
               value={values[role] ?? ""}
-              placeholder={status?.model ?? ""}
+              placeholder={placeholderModel(role, statuses, values)}
               disabled={busy}
               onChange={(event) => onChange(role, event.currentTarget.value)}
             />

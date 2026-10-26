@@ -5,6 +5,7 @@ import {
   ModelBanner,
   START_BLOCKED,
   interviewReady,
+  placeholderModel,
   stateForDownload,
   withRunModels,
 } from "./RunSettings";
@@ -23,6 +24,7 @@ function status(
     role,
     label: role,
     model: `${role}-model`,
+    source: `${role.toUpperCase()}_MODEL`,
     configured,
     affects_scores: role !== "interview" && role !== "embeddings",
     missing_vars,
@@ -99,5 +101,33 @@ test("continuing with no change packages the same state as before the step", () 
   assert.deepEqual(
     stateForDownload(state, { judge: "j" }).specification.defaults,
     { judge_model: "j" },
+  );
+});
+
+test("the runner agent placeholder follows the user agent model, as the engine does", () => {
+  const statuses: ModelStatus[] = [
+    { ...status("user_agent", true), model: "env-ua" },
+    {
+      ...status("runner_agent", true),
+      model: "env-ua",
+      source: "user agent model",
+    },
+  ];
+  assert.equal(placeholderModel("runner_agent", statuses, {}), "env-ua");
+  assert.equal(
+    placeholderModel("runner_agent", statuses, { user_agent: " typed-ua " }),
+    "typed-ua",
+  );
+  const ownModel: ModelStatus[] = [
+    statuses[0],
+    { ...status("runner_agent", true), model: "env-ra" },
+  ];
+  assert.equal(
+    placeholderModel("runner_agent", ownModel, { user_agent: "typed-ua" }),
+    "env-ra",
+  );
+  assert.equal(
+    placeholderModel("user_agent", statuses, { user_agent: "typed-ua" }),
+    "env-ua",
   );
 });

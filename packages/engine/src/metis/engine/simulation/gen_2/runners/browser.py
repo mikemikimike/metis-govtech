@@ -897,12 +897,12 @@ class BrowserRunnerFactory:
     ) -> None:
         self._binding = binding
         self._login_dir = login_dir
+        """Where the sign-in's transport and LLM logs go: it belongs to no trial."""
         self._models = {
             "user_agent_model": user_agent_model,
             "runner_agent_model": runner_agent_model,
         }
         """The Specification defaults. The sign-in belongs to no trial, so it uses them."""
-        """Where the sign-in's transport and LLM logs go: it belongs to no trial."""
         self._browser = browser
         """Replaced by a fake in tests; otherwise ``start`` launches Chromium."""
         self._llm = llm

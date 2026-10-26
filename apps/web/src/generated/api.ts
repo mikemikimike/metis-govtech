@@ -981,6 +981,8 @@ export interface components {
             label: string;
             /** Model */
             model: string;
+            /** Source */
+            source: string;
             /** Configured */
             configured: boolean;
             /** Affects Scores */

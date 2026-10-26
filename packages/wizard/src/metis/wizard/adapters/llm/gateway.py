@@ -46,7 +46,6 @@ from metis.core.model_settings import (
     RoleSettings,
     find_env_file,
     format_missing_settings,
-    missing_settings,
     resolve_role,
 )
 from metis.core.profile import CriterionDescription
@@ -73,10 +72,6 @@ if TYPE_CHECKING:
     from metis.wizard.contracts.interview_state import InterviewContext, Turn
     from metis.wizard.domain.specification import Criterion, Specification
 
-WIZARD_ROLES = (ModelRole.INTERVIEW,)
-"""The roles that the Interview cannot run without."""
-
-
 ATTEMPTS = 3
 
 T = TypeVar("T", bound=BaseModel)
@@ -94,15 +89,20 @@ def check_credentials(
     command: str = "metis wizard",
     env: Mapping[str, str] | None = None,
     env_file: Path | None = None,
+    *,
+    interview: RoleSettings | None = None,
 ) -> None:
     """Fail before any model call when the interview role has no API key.
 
-    The message names the variables, the `.env` file that was read, and the model guide. The
-    base URL is optional, as in the engine.
+    ``interview`` is the resolved interview role; without it, the role resolves from ``env``.
+    Embeddings are optional, so only the interview role can stop the start. The message names
+    the variables, the `.env` file that was read, and the model guide. The base URL is optional,
+    as in the engine.
     """
     env = os.environ if env is None else env
-    missing = missing_settings(WIZARD_ROLES, env)
-    if missing:
+    settings = interview or resolve_role(ModelRole.INTERVIEW, env)
+    if not settings.configured:
+        missing = {settings.role: ROLES[settings.role].key_vars}
         path = env_file if env_file is not None else find_env_file(env=env)
         raise CredentialsMissing(format_missing_settings(command, missing, path))
 
@@ -144,16 +144,7 @@ class GatewayInterviewer:
     def __post_init__(self) -> None:
         if self._client is None:
             # A missing key costs no model call: the check runs before any client exists.
-            # Embeddings are optional, so only the interview role can stop the start.
-            missing = {
-                settings.role: ROLES[settings.role].key_vars
-                for settings in (self.interview,)
-                if not settings.configured
-            }
-            if missing:
-                raise CredentialsMissing(
-                    format_missing_settings("metis wizard", missing, find_env_file())
-                )
+            check_credentials(interview=self.interview)
         if not 0 < self.output_tokens < self.context_tokens:
             raise ValueError(
                 "INTERVIEW_OUTPUT_TOKENS must be positive and below INTERVIEW_CONTEXT_TOKENS."

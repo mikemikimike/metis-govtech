@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypeAlias
 
 from metis.core.model_settings import (
@@ -40,9 +40,12 @@ class SettingsError(RuntimeError):
 
 @dataclass(frozen=True)
 class Settings:
-    """The environment that the API reads its model settings from."""
+    """The environment that the API reads its model settings from.
 
-    env: Mapping[str, str]
+    ``env`` is a copy of the process environment, so it holds keys. ``repr`` leaves it out.
+    """
+
+    env: Mapping[str, str] = field(repr=False)
     env_file: Path | None = None
 
     @classmethod
@@ -51,6 +54,12 @@ class Settings:
         return cls(env=dict(os.environ), env_file=env_file or find_env_file())
 
     def role(self, role: ModelRole) -> RoleSettings:
+        """The settings of ``role``. As in the engine, the runner agent defaults to the user
+        agent model."""
+        if role is ModelRole.RUNNER_AGENT:
+            return resolve_role(
+                role, self.env, default=self.role(ModelRole.USER_AGENT).model
+            )
         return resolve_role(role, self.env)
 
     def missing_message(self) -> str | None:

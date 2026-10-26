@@ -6,7 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from metis.api.main import create_app
+from metis.api.routes.models import model_statuses
 from metis.api.settings import Settings, SettingsError, build_dependencies
+from metis.core.model_settings import ModelRole
 
 _ROLE_KEYS = (
     "OPENAI_API_KEY",
@@ -71,7 +73,25 @@ def test_models_reports_each_role_and_its_missing_variables_without_secrets(
         "role": "judge",
         "label": "Judge",
         "model": "judge-model",
+        "source": "JUDGE_MODEL",
         "configured": False,
         "affects_scores": True,
         "missing_vars": ["JUDGE_API_KEY", "OPENAI_API_KEY"],
     }
+
+
+def test_the_settings_repr_shows_no_environment_value() -> None:
+    settings = Settings(env={"OPENAI_API_KEY": "sk-secret"})
+
+    assert "sk-secret" not in repr(settings)
+
+
+def test_the_runner_agent_follows_the_user_agent_model_as_in_the_engine() -> None:
+    settings = Settings(env={"USER_AGENT_MODEL": "ua-model", "DEFAULT_MODEL": "other"})
+
+    assert settings.role(ModelRole.RUNNER_AGENT).model == "ua-model"
+    rows = {row.role: row for row in model_statuses(settings)}
+    assert rows[ModelRole.RUNNER_AGENT].model == "ua-model"
+    assert rows[ModelRole.RUNNER_AGENT].source == "user agent model"
+    explicit = Settings(env={"USER_AGENT_MODEL": "ua", "RUNNER_AGENT_MODEL": "ra"})
+    assert explicit.role(ModelRole.RUNNER_AGENT).model == "ra"

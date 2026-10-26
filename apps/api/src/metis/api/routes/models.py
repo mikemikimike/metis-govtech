@@ -22,6 +22,9 @@ class ModelStatus(BaseModel):
     role: ModelRole
     label: str
     model: str
+    source: str
+    """Where the model came from: a variable name, ``user agent model``, or ``built-in
+    default``. It never holds a key or a URL."""
     configured: bool
     affects_scores: bool
     missing_vars: list[str]
@@ -31,11 +34,13 @@ class ModelStatus(BaseModel):
 def model_statuses(settings: Settings) -> list[ModelStatus]:
     """One status for each role, in the order of the flow."""
     missing = missing_settings(ROLES, settings.env)
+    resolved = {role: settings.role(role) for role in ROLES}
     return [
         ModelStatus(
             role=role,
             label=spec.label,
-            model=settings.role(role).model,
+            model=resolved[role].model,
+            source=resolved[role].source,
             configured=role not in missing,
             affects_scores=spec.affects_scores,
             missing_vars=list(missing.get(role, ())),
