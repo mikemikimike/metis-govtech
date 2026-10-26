@@ -488,5 +488,6 @@ The primary user-facing CLI is the unified `metis` command, which composes sub-p
 Per-package standalone commands (e.g., `metis-engine`, `metis-wizard`) MUST also be available for CI or isolated installs.
 
 `metis wizard init` collects the description, a capability selection (including an explicit blank
-selection), and one required confidence value before it sends `InterviewStartRequest`. This input
-does not add a step or confirmation lock.
+selection), and one required confidence value before it sends `InterviewStartRequest`. It asks
+for the description with the package opening question. This input does not add a step or
+confirmation lock.

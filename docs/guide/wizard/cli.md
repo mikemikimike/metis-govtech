@@ -60,20 +60,22 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 
 ## Start an Interview
 
-1. Give the Wizard a plain description of the target:
+1. Start the Interview:
 
    ```bash
-   metis wizard init "A research assistant that answers questions from internal documents and cites each source."
+   metis wizard init
    ```
 
-2. Choose the mode: `1` to build a Specification only, or `2` to build it and run evals. In run
+2. The Wizard asks you to describe the target. Give a plain description, for example
+   "A research assistant that answers questions from internal documents and cites each source."
+3. Choose the mode: `1` to build a Specification only, or `2` to build it and run evals. In run
    mode, enter the target binding values. See [Connect the target](#connect-the-target).
-3. The CLI shows the fixed ARC capability catalogue. Select known capabilities by number, name, or
+4. The CLI shows the fixed ARC capability catalogue. Select known capabilities by number, name, or
    ID, separated by commas. Enter a blank line when you know none.
-4. Enter one confidence value: `low`, `medium`, or `high`. The value states how complete the full
+5. Enter one confidence value: `low`, `medium`, or `high`. The value states how complete the full
    selection is.
-5. Answer the clarification questions.
-6. Review the Features, Behaviours, Criteria, Personas, Scenarios, and Test Cases that the Wizard drafts.
+6. Answer the clarification questions.
+7. Review the Features, Behaviours, Criteria, Personas, Scenarios, and Test Cases that the Wizard drafts.
 
 ## Go back to an earlier step
 
@@ -96,7 +98,7 @@ The CLI saves state after each accepted turn in
 machine when `init` starts. Use `--out-dir` to select an exact experiment root:
 
 ```bash
-metis wizard init "<description>" --out-dir my-eval
+metis wizard init --out-dir my-eval
 ```
 
 ## Add documents
@@ -105,7 +107,7 @@ Give `init` one `--document` option (short form `-d`) for each file. The Intervi
 of each file, in the same way as the web client and the API:
 
 ```bash
-metis wizard init "<description>" --document policy.pdf --document diagram.png
+metis wizard init --document policy.pdf --document diagram.png
 ```
 
 The CLI checks the files before it asks for capabilities or calls the model. It uses the same file
@@ -169,7 +171,7 @@ prints the complete resume command when an Interview starts.
 | To | Command |
 |---|---|
 | Resume a saved Interview | `metis wizard resume --out-dir my-eval` |
-| Discard the Interview in progress and start again | `metis wizard init "<description>" --out-dir my-eval --restart` |
+| Discard the Interview in progress and start again | `metis wizard init --out-dir my-eval --restart` |
 
 Without `--restart`, `init` does not overwrite an Interview in progress. It directs you to
 `resume`.

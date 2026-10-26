@@ -15,6 +15,16 @@ Printer = Callable[[str], None]
 Reader = Callable[[str], str]
 
 
+def read_description(*, out: Printer, read: Reader = input) -> str:
+    """Ask the package opening question until the user gives a description."""
+    question = load_config().opening_question
+    while True:
+        description = read(f"\n{question}\n> ").strip()
+        if description:
+            return description
+        out("  Enter a description of the target.")
+
+
 def read_capability_evidence(
     *, out: Printer, read: Reader = input
 ) -> tuple[list[CapabilityId], CapabilityConfidence]:

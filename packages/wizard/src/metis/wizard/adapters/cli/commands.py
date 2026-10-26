@@ -2,9 +2,9 @@
 
 Thin on purpose. The interview state is client-held, so the CLI keeps it in a JSON file and is
 just another door over `handle_interview`: send a concrete lifecycle request, render the pending
-screen, and send the answer back. `init` starts from the user's description and ARC capability
-evidence; `resume` reloads the saved state and answers its pending screen. The corridor both run
-is the same loop.
+screen, and send the answer back. `init` starts from the user's description, given as an argument
+or typed at the opening question, and ARC capability evidence; `resume` reloads the saved state
+and answers its pending screen. The corridor both run is the same loop.
 """
 
 from __future__ import annotations
@@ -374,8 +374,10 @@ def _run_settings(specification: Specification) -> list[str]:
 
 @app.command()
 def init(
-    description: str = typer.Argument(
-        ..., help="A raw description of the target or agent to evaluate."
+    description: str | None = typer.Argument(
+        None,
+        help="A raw description of the target or agent to evaluate. "
+        "Without it, the wizard asks for one.",
     ),
     out_dir: Path | None = typer.Option(
         None,
@@ -427,10 +429,11 @@ def init(
         typer.echo(
             f"Error: an interview is already in progress at {state_path}.\n\n"
             f"  metis wizard resume --out-dir {shlex.quote(str(out_dir))}\n"
-            f"  metis wizard init <description> --out-dir {shlex.quote(str(out_dir))} --restart",
+            f"  metis wizard init --out-dir {shlex.quote(str(out_dir))} --restart",
             err=True,
         )
         raise typer.Exit(1)
+    _require_description_without_terminal(description)
     _require_binding_without_terminal(mode, binding)
 
     # Read the documents before the credential check, so a bad file costs no model call.
@@ -460,11 +463,17 @@ def init(
         raise typer.Exit(1) from exc
     _warn_without_embeddings()
 
-    # The mode comes first, so a user who wants to run evals sees how to connect the target
+    from metis.wizard.adapters.cli.opening import (
+        read_capability_evidence,
+        read_description,
+    )
+
+    if description is None:
+        description = read_description(out=console.print)
+
+    # The mode comes next, so a user who wants to run evals sees how to connect the target
     # before the Interview questions.
     connection, connection_skipped = _read_connection(mode, binding)
-
-    from metis.wizard.adapters.cli.opening import read_capability_evidence
 
     known_capability_ids, capability_confidence = read_capability_evidence(
         out=console.print
@@ -495,8 +504,19 @@ def init(
 
 
 def _terminal() -> bool:
-    """Whether a user can answer questions about the target connection."""
+    """Whether a user can answer the questions that `init` asks."""
     return sys.stdin.isatty()
+
+
+def _require_description_without_terminal(description: str | None) -> None:
+    """Stop early when there is no description and no terminal to ask for it."""
+    if description is None and not _terminal():
+        typer.echo(
+            "Error: no description given, and there is no terminal to ask for it. Pass the "
+            'description of the target as an argument: metis wizard init "<description>".',
+            err=True,
+        )
+        raise typer.Exit(1)
 
 
 def _require_binding_without_terminal(mode: Mode | None, binding: Path | None) -> None:

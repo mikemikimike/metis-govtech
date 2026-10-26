@@ -770,6 +770,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   confidence to guide Clarify and Behaviours probing. Every model call receives a synthesized
   catalogue background; the values do not enter `Specification`.
 
+- **`metis wizard init` asks for the description.** `init` asks the package opening question in
+  the terminal and asks again after an empty answer. The completed-export and
+  Interview-in-progress checks run first, and the restart command in the in-progress error is
+  `metis wizard init --out-dir <dir> --restart`. When stdin is not a terminal, `init` fails with a
+  clear error and does not wait for input (#547).
+
 - Interview opening now offers End user, Engineer, Compliance, and Security perspectives. The
   selected perspective travels in client-held Interview context and guides the language and depth
   of model responses, with specific guidance for Clarify and Behaviours. Labels and questions are

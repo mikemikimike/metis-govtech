@@ -5,6 +5,8 @@ CLI door wired a matcher onto its turns. That gap is exactly the kind a unit tes
 part worked, and the assembly was wrong. These tests assert the assembly the CLI door builds.
 """
 
+import io
+
 import pytest
 import typer
 
@@ -298,8 +300,8 @@ def test_both_commands_fail_before_any_call_without_credentials(
 def test_init_refuses_when_a_interview_already_exists(tmp_path) -> None:
     """A re-run of `init` reports the collision rather than overwriting an interview.
 
-    The check reads the filesystem only and runs before the interviewer is built, so it fires
-    even with no credentials — which is what makes it a safe guard rather than a lucky one.
+    The check reads the filesystem only and runs before the interviewer is built or the
+    description is asked for, so it fires even with no credentials and no description.
     """
     from typer.testing import CliRunner
 
@@ -309,17 +311,15 @@ def test_init_refuses_when_a_interview_already_exists(tmp_path) -> None:
     (tmp_path / "inputs").mkdir(exist_ok=True)
     (tmp_path / "inputs/interview_state.json").write_text(original)
 
-    result = CliRunner().invoke(
-        create_cli_app(),
-        ["init", "A research assistant", "--out-dir", str(tmp_path)],
-    )
+    result = CliRunner().invoke(create_cli_app(), ["init", "--out-dir", str(tmp_path)])
 
     assert result.exit_code == 1
     assert "already in progress" in result.output
     assert str(tmp_path / "inputs/interview_state.json") in result.output
-    # both ways forward are named
+    # both ways forward are named, and neither needs a description
     assert "resume" in result.output
     assert "--restart" in result.output
+    assert "<description>" not in result.output
     # and the existing interview is untouched
     assert (tmp_path / "inputs/interview_state.json").read_text() == original
 
@@ -343,6 +343,91 @@ def test_run_mode_without_a_terminal_or_a_binding_stops_before_any_question(
     assert "--binding" in result.output
     assert not isinstance(result.exception, EOFError)
     assert not (tmp_path / "inputs").exists()
+
+
+def _fail_on_call(*_args, **_kwargs):
+    raise AssertionError("init went past the missing-input check")
+
+
+def test_init_without_a_description_fails_when_no_one_can_answer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """A piped run has no terminal to answer the opening question, so it stops before any check
+    that needs credentials."""
+    from typer.testing import CliRunner
+
+    from metis.wizard.adapters.cli import opening
+    from metis.wizard.bootstrap import create_cli_app
+
+    monkeypatch.setattr(cli, "_terminal", lambda: False)
+    monkeypatch.setattr(cli, "_load_env", lambda: None)
+    monkeypatch.setattr(cli, "_new_interviewer", _fail_on_call)
+    monkeypatch.setattr(opening, "read_description", _fail_on_call)
+
+    result = CliRunner().invoke(create_cli_app(), ["init", "--out-dir", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert "no description given" in result.output
+    assert "as an argument" in result.output
+    assert not (tmp_path / "inputs/interview_state.json").exists()
+
+
+class _Terminal(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+@pytest.mark.parametrize(
+    ("argument", "typed", "expected"),
+    [
+        (
+            None,
+            "\nA research assistant that cites sources.\n",
+            "A research assistant that cites sources.",
+        ),
+        ("A research assistant", "", "A research assistant"),
+    ],
+    ids=["asked", "argument"],
+)
+def test_init_starts_the_interview_from_the_given_or_typed_description(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path,
+    argument: str | None,
+    typed: str,
+    expected: str,
+) -> None:
+    """Without an argument, a terminal user answers the opening question; with one, nothing is asked."""
+    from metis.wizard.adapters.cli import opening
+
+    monkeypatch.setattr("sys.stdin", _Terminal(typed))
+    monkeypatch.setattr(cli, "_load_env", lambda: None)
+    monkeypatch.setattr(cli, "_new_interviewer", StubInterviewer)
+    monkeypatch.setattr(cli, "_warn_without_embeddings", lambda: None)
+    monkeypatch.setattr(
+        opening, "read_capability_evidence", lambda **_kwargs: ([], "low")
+    )
+    started: list[object] = []
+
+    def capture_start(request, **_kwargs):
+        started.append(request)
+        raise typer.Exit(0)
+
+    monkeypatch.setattr(cli, "_drive", capture_start)
+
+    with pytest.raises(typer.Exit):
+        cli.init(
+            description=argument,
+            out_dir=tmp_path,
+            restart=False,
+            documents=None,
+            mode=cli.Mode.SPEC,
+            binding=None,
+        )
+
+    assert [request.description for request in started] == [expected]  # type: ignore[attr-defined]
+    asked = config.load_config().opening_question in capsys.readouterr().out
+    assert asked is (argument is None)
 
 
 # ── reading .env ───────────────────────────────────────────────────────────
