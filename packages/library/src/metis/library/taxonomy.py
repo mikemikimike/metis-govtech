@@ -242,6 +242,7 @@ class ReferenceType(StrEnum):
     HUMAN_PREFERENCE = (  # Requires previously supplied human labels or rankings.
         "human_preference"
     )
+    AVAILABLE_TOOLS = "available_tools"
 
 
 class JudgmentForm(StrEnum):

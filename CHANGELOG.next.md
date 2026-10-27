@@ -192,6 +192,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   variable in `login.secrets`. The error never repeats a placeholder that is not a variable
   name (#283).
 
+- `GraderResult` and `RecordedResult` carry an optional `scope` string identifying the
+  graded unit (`"turn:3"`, `"item:item_1"`, `"artifact:report.txt"`, `"session"`, or
+  `"aggregate"`). Existing graders that omit `scope` are unaffected. The engine
+  orchestrator preserves `scope` through the threshold rule.
+
 #### Breaking
 
 - Each Criterion states one assessment rule and owns its Grader configuration (#490).
@@ -207,6 +212,46 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-library
 
 #### Added
+
+- Fourteen Task and Output Quality graders covering every attribute in the
+  sub-dimension: `TaskSuccessGrader`, `OutputCorrectnessGrader`,
+  `FactualAccuracyGrader`, `RequiredComponentCompletenessGrader`,
+  `TaskConstraintAdherenceGrader`, `FormatSchemaComplianceGrader`,
+  `ClaimSupportByEvidenceGrader`, `EvidenceSourceSuitabilityGrader`,
+  `InputInterpretationAccuracyGrader`, `SpeechRecognitionAccuracyGrader`,
+  `LanguageIdentificationAccuracyGrader`, `ContentFidelityGrader`,
+  `SpokenContentFidelityGrader`, and `AttributionAccuracyGrader`.
+  Each is an LLM judge with typed arguments, a specific taxonomy Measure,
+  session scope, and the binary judgment form. Checklist graders
+  (`RequiredComponentCompletenessGrader`, `TaskConstraintAdherenceGrader`,
+  `EvidenceSourceSuitabilityGrader`) use stable-ID-based per-item assessment
+  with exact coverage validation and fractional scoring.
+  `RequiredComponentCompletenessGrader` and `TaskConstraintAdherenceGrader`
+  enforce `threshold=1.0` (all items must pass).
+
+- Sixteen Execution and Decision Quality graders covering every attribute in the
+  sub-dimension: `PlanningQualityGrader`, `ActionChoiceAppropriatenessGrader`,
+  `ToolChoiceAppropriatenessGrader`, `ToolArgumentCorrectnessGrader`,
+  `UseOfObservedStateGrader`, `StateTrackingGrader`,
+  `UseOfPriorInformationGrader`, `ErrorDetectionGrader`, `ErrorRecoveryGrader`,
+  `AdaptationToChangedConditionsGrader`, `StoppingAppropriatenessGrader`,
+  `AvoidingUnproductiveRepetitionGrader`,
+  `AppropriateHandlingOfCapabilityLimitsGrader`, `OutcomeVerificationGrader`,
+  `ReasoningValidityGrader`, and `CoordinationQualityGrader`. Each assesses
+  full session trajectories with tool results included and uses the binary
+  LLM judgment form at session scope.
+  `FormatSchemaComplianceGrader` validates JSON output deterministically
+  with `jsonschema` before optional LLM assessment of prose rules.
+  All graders use typed evidence selectors (`LastResponseSelector`,
+  `TraceResponseSelector`, `ObservationResponseSelector`, `ArtifactSelector`,
+  `SessionSelector`) for explicit evidence targeting. Artifact content
+  extraction supports txt, md, json, csv, tsv, pdf, docx, xlsx, and pptx.
+  Shared evidence selection, artifact extraction, and structured judge-call
+  helpers live at `metis.library.graders`, alongside trace preprocessing
+  patterns that limit selected response evidence to its turn and prior context.
+  Speech graders use transcript-only evidence with provenance tracking.
+  `AttributionAccuracyGrader` distinguishes required and optional citations.
+  Missing required evidence produces errored results, not skipped (#447).
 
 - Criterion fallback judge for interview criteria with no specific grader match. The judge
   uses the current criterion description, returns a binary session score, and records skipped
@@ -234,6 +279,25 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   an LLM assessment with no measure mapping. DemoTraceBudget demonstrates a deterministic
   task-constraint check. Both return one binary session result and declare fixed
   capabilities. The taxonomy does not add generic method selection or runtime routing.
+
+#### Changed
+
+- Checklist graders (`RequiredComponentCompletenessGrader`, `TaskConstraintAdherenceGrader`,
+  `EvidenceSourceSuitabilityGrader`) return per-item results alongside an aggregate score.
+  Insufficient evidence for one item produces an errored result for that item without
+  suppressing scores for other items. The aggregate covers only scoreable items and
+  reports coverage.
+
+- `CriterionJudgeGrader` reads traces through `metis.core.trace_processing` and the
+  shared `judge_call` helper instead of serializing raw observations. The session
+  transcript now uses the shared `render_transcript` format.
+
+- All graders set `scope` on their returned results for downstream scope identification.
+  Shared evidence extraction and judge call helpers are re-exported from
+  `metis.library.extraction` and `metis.library.judge_call`. Per-turn, per-artifact,
+  and per-tool-call evidence resolution helpers and an `aggregate_scored()` helper
+  for equal-weight mean scores with coverage reporting are available for graders
+  that assess independent units.
 
 #### Breaking
 

@@ -118,6 +118,14 @@
           ],
           "default": null,
           "title": "Runner Agent Model"
+        },
+        "tools_available": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tools Available",
+          "type": "array"
         }
       },
       "title": "ExperimentDefaults",

@@ -215,6 +215,10 @@ class GradingInput(BaseModel, frozen=True):
     ``()`` when the run produced none. Not tied to individual traces (see issue #428, "Open
     questions and known gaps")."""
 
+    tools_available: tuple[str, ...] = ()
+    """Descriptions of every tool available to the target during this session.
+    Populated by the engine from ``defaults.tools_available`` in the specification."""
+
 
 _SESSION_TRACES_VERSION = 1
 _SESSION_TRACES_SOURCE = "langfuse-observations-v2"

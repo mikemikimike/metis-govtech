@@ -145,8 +145,15 @@ def _record(result: GraderResult, threshold: float) -> RecordedResult:
     if result.status == "scored":
         assert result.score is not None  # guaranteed by GraderResult's validator
         outcome = "passed" if result.score >= threshold else "failed"
-        return RecordedResult(outcome=outcome, score=result.score, reason=result.reason)
-    return RecordedResult(outcome=result.status, reason=result.reason)
+        return RecordedResult(
+            outcome=outcome,
+            score=result.score,
+            reason=result.reason,
+            scope=result.scope,
+        )
+    return RecordedResult(
+        outcome=result.status, reason=result.reason, scope=result.scope
+    )
 
 
 async def _run_one(

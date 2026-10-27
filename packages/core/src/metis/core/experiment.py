@@ -88,6 +88,31 @@ class ExperimentDefaults(BaseModel, extra="forbid"):
     runner_agent_model: str | None = Field(default=None, min_length=1)
     """The runner agent model of the generic runners."""
 
+    tools_available: tuple[str, ...] = Field(default=(), exclude=True)
+    """Descriptions of every tool available to the target.  When set, the engine passes
+    them to graders on ``GradingInput.tools_available`` so graders that declare
+    ``ReferenceType.AVAILABLE_TOOLS`` can reference the actual tool catalogue.
+
+    In ``specification.yaml``, set ``defaults.tools_available`` as a list of strings::
+
+        defaults:
+          tools_available:
+            - "search_database: Searches the product database by query"
+            - "send_email: Sends an email to a specified address"
+
+    The wizard does not yet produce this field automatically — set it manually when
+    configuring graders that need it (e.g. ``ToolChoiceAppropriatenessGrader``).
+
+    Excluded from default serialization so existing specifications stay unchanged.
+    Serialized explicitly by ``_include_tools`` when non-empty."""
+
+    @model_serializer(mode="wrap")
+    def _include_tools(self, handler: SerializerFunctionWrapHandler) -> Any:
+        data = handler(self)
+        if isinstance(data, dict) and self.tools_available:
+            data["tools_available"] = list(self.tools_available)
+        return data
+
 
 class Experiment(BaseModel):
     """The Test Cases and settings used to execute an evaluation."""

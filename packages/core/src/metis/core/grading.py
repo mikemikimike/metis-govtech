@@ -25,6 +25,10 @@ class GraderResult(BaseModel):
     score: float | None = Field(default=None, ge=0, le=1)
     """In [0, 1] when ``status`` is ``"scored"``; always ``None`` otherwise."""
     reason: str
+    scope: str | None = None
+    """Identifies the graded unit, e.g. ``"turn:3"``, ``"item:item_1"``,
+    ``"artifact:report.txt"``, ``"session"``, or ``"aggregate"``.  ``None`` when
+    the grader does not set it (backward compatible)."""
 
     @model_validator(mode="after")
     def _score_matches_status(self) -> Self:
@@ -52,6 +56,8 @@ class RecordedResult(BaseModel):
     score: float | None = Field(default=None, ge=0, le=1)
     """Set for passed and failed; ``None`` for skipped and errored."""
     reason: str
+    scope: str | None = None
+    """Carried through from ``GraderResult.scope``."""
 
     @model_validator(mode="after")
     def _score_matches_outcome(self) -> Self:
