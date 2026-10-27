@@ -63,9 +63,10 @@ def test_description_input_asks_the_opening_question_until_it_gets_an_answer() -
     description = read_description(out=out.append, read=read)
 
     assert description == "A research assistant that cites sources."
-    assert len(asked) == 2
-    assert all(load_config().opening_question in prompt for prompt in asked)
-    assert out == ["  Enter a description of the target."]
+    assert asked == ["> ", "> "]
+    # the question is the body of the step header, shown once above the prompt
+    assert load_config().opening_question in out[0]
+    assert out[1:] == ["  Enter a description of the target."]
 
 
 def test_skipping_capability_evidence_does_not_ask_for_confidence() -> None:

@@ -174,7 +174,16 @@ class StepDriver:
         standing at criteria inherits the criteria header, which is what keeps it anchored.
         """
         request = self._compose(state)
-        screens.stamp_step(request, state.step)
+        # The missing Target fields finish Clarify, so their form keeps the Clarify header. The
+        # Behaviours header comes with the review, after the fields are filled in.
+        step = (
+            InterviewStep.CLARIFY
+            if state.step is InterviewStep.BEHAVIOURS
+            and isinstance(request, FormRequest)
+            and request == screens.target_completion_form(state.specification)
+            else state.step
+        )
+        screens.stamp_step(request, step)
         return request
 
     def _compose(self, state: DriverState) -> AnyRequest:

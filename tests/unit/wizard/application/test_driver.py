@@ -96,9 +96,12 @@ def test_a_model_that_never_stops_is_stopped() -> None:
     history = after_opening(*(f"q{i}" for i in range(clarify_turn_cap())))
     state = empty_state(history=history)
 
-    driver.compose(state)
+    request = driver.compose(state)
 
     assert state.step is InterviewStep.BEHAVIOURS
+    # the form for the missing Target fields still belongs to Clarify, so it keeps that header
+    assert isinstance(request, FormRequest)
+    assert request.title == "Understanding your target"
 
 
 def test_below_the_cap_it_keeps_asking() -> None:

@@ -52,6 +52,28 @@ def test_the_spinner_uses_the_package_status_copy_for_the_pending_stage() -> Non
     ) == config.status_for(InterviewStep.CRITERIA)
 
 
+@pytest.mark.parametrize("terminal", [True, False], ids=["terminal", "redirected"])
+def test_the_working_line_is_dim_spaced_and_leaves_nothing_behind(
+    terminal: bool,
+) -> None:
+    from rich.console import Console
+
+    screen = io.StringIO()
+    console = Console(file=screen, force_terminal=terminal, width=80)
+
+    with cli._working(console, "Understanding your agent…"):
+        pass
+
+    drawn = screen.getvalue()
+    if not terminal:
+        assert drawn == ""
+        return
+    assert "\n\x1b[2m" in drawn  # a blank line, then the dim spinner line
+    assert "\x1b[2mUnderstanding your agent…" in drawn
+    # at the end, the cursor goes up over both lines and erases them
+    assert drawn.endswith("\x1b[1A\x1b[2K\x1b[1A\x1b[2K")
+
+
 def test_resume_reports_the_pending_request_stage(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:

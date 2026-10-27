@@ -19,6 +19,8 @@ dependencies = [
     "openai>=1.40",
     # The target connection check fetches the OpenAPI document or the start page.
     "httpx>=0.27",
+    # The terminal choice screens read arrow keys, Space, Enter, and Esc.
+    "prompt_toolkit>=3.0",
     # Langfuse's `langfuse.openai` drop-in traces every model call; imported in the gateway. A
     # base dependency, not an extra: the wrapper imports at start and, with no LANGFUSE_* config,
     # disables itself and sends nothing. Server target v3.153.0 uses the Python SDK v3 line.

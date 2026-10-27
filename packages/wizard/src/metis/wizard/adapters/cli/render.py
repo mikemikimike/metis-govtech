@@ -12,6 +12,7 @@ it never composes a sentence about the domain.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from metis.wizard.application.trials import format_trials
 from metis.wizard.contracts.conversation import (
@@ -20,6 +21,7 @@ from metis.wizard.contracts.conversation import (
     AnyResponse,
     Card,
     CardComponentType,
+    CardDetails,
     CardNumberField,
     CardUploadField,
     ChatRequest,
@@ -31,8 +33,19 @@ from metis.wizard.contracts.conversation import (
     FormResponse,
     Option,
     ReviewSection,
+    Warning,
     card_components,
 )
+
+if TYPE_CHECKING:
+    from metis.wizard.adapters.cli.keys import (
+        Choice,
+        Details,
+        Item,
+        KeyPrompter,
+        Line,
+        ReviewRow,
+    )
 
 Printer = Callable[[str], None]
 Reader = Callable[[str], str]
@@ -399,6 +412,27 @@ def _field_keys(request: ChoiceRequest) -> list[str]:
     return keys
 
 
+def _warning_line(warning: Warning) -> str:
+    """A warning as text: red for one that blocks, orange for advice.
+
+    Rich renders the colour only to a terminal, so a redirected run gets plain text.
+    """
+    from rich.console import Console
+    from rich.text import Text
+
+    label = "STOP" if warning.blocking else "note"
+    console = Console()
+    with console.capture() as capture:
+        console.print(
+            Text(
+                f"{label}  {warning.text}",
+                style="red" if warning.blocking else "dark_orange",
+            ),
+            soft_wrap=True,
+        )
+    return capture.get().rstrip("\n")
+
+
 def _draw(
     request: ChoiceRequest,
     out: Printer,
@@ -459,7 +493,7 @@ def _draw(
         open_top(top_id)
 
     for warning in request.warnings:
-        out(f"\n{'STOP' if warning.blocking else 'note'}  {warning.text}")
+        out(f"\n{_warning_line(warning)}")
         for option in warning.options:
             out(_choice_line(option, selectable, indent="      "))
 
@@ -693,12 +727,288 @@ def _discard_buffered_input(read: Reader) -> None:
         return
 
 
+# ── key mode ─────────────────────────────────────────────────────────────────
+#
+# In a terminal, a choice screen is one grouped list. Each item is one row. Space flips its
+# checkbox here, Right opens its closed details, and Tab moves to the feedback line under it. The keys
+# offer only select, details, feedback, Back, and Continue: the item actions (add, edit, delete,
+# chips, and fields) stay in the text menu and the web, where a form fits them. The request
+# decides everything: a row comes from a section, a card, a warning option, or a screen option,
+# and a row with `columns` is a table row.
+
+
+def _lines_of(
+    components: list[AnyCardComponent], *, muted: bool
+) -> tuple[list[Line], list[Details]]:
+    """Split the components of a card into its text and its details. Options and fields are
+    item actions, which the keys do not offer."""
+    from metis.wizard.adapters.cli.keys import Details, Line
+
+    lines: list[Line] = []
+    details: list[Details] = []
+
+    def text_of(component: AnyCardComponent, tone: bool) -> list[Line]:
+        if component.type is not CardComponentType.TEXT:
+            return []
+        text = (
+            f"{component.label}: {component.text}"
+            if component.label
+            else component.text
+        )
+        return [Line(text, "muted" if tone else "plain")]
+
+    def walk(group: CardDetails, depth: int, quiet: bool) -> None:
+        quiet = quiet or group.muted
+        inner: list[Line] = []
+        nested: list[CardDetails] = []
+        for part in group.components:
+            if isinstance(part, CardDetails):
+                nested.append(part)
+            else:
+                inner.extend(text_of(part, quiet))
+        details.append(Details(group.title, tuple(inner), group.expanded, depth))
+        for part in nested:
+            walk(part, depth + 1, quiet)
+
+    for component in components:
+        match component:
+            case CardDetails():
+                walk(component, 0, muted)
+            case _:
+                lines.extend(text_of(component, True))
+    return lines, details
+
+
+def _action(option: Option) -> Choice[str]:
+    from metis.wizard.adapters.cli.keys import Choice
+
+    mark = _checkbox(option.selected)
+    return Choice(
+        str(option.id),
+        f"{mark}{option.label}",
+        detail=option.hint or "",
+        enabled=option.enabled,
+    )
+
+
+def _card_item(card: Card, indent: int) -> Item[str]:
+    from metis.wizard.adapters.cli.keys import Item, Line
+
+    toggle = _toggle_of(card.options)
+    if toggle is not None and not toggle.enabled:
+        toggle = None
+    lines, details = _lines_of(list(card.components), muted=False)
+    if card.note:
+        lines.append(Line(card.note))
+    label = card.title
+    if card.show_id and card.id != card.title:
+        label = f"{label}  ({card.id})"
+    return Item(
+        label,
+        toggle=str(toggle.id) if toggle is not None else None,
+        selected=bool(toggle.selected) if toggle is not None else False,
+        lines=tuple(lines),
+        details=tuple(details),
+        cells=tuple(column.summary for column in card.columns),
+        indent=indent,
+    )
+
+
+def _option_item(option: Option, *, indent: int = 0, count: bool = False) -> Item[str]:
+    from metis.wizard.adapters.cli.keys import Item
+
+    return Item(
+        option.label,
+        action=str(option.id),
+        enabled=option.enabled,
+        indent=indent,
+        count=count,
+    )
+
+
+def _review_rows(request: ChoiceRequest) -> list[ReviewRow[str]]:
+    """The screen as review rows, in the order of the text menu."""
+    from metis.wizard.adapters.cli.keys import (
+        Divider,
+        Heading,
+        Item,
+        Note,
+        TableHeader,
+        Title,
+    )
+
+    rows: list[ReviewRow[str]] = []
+    tops = {s.id: s for s in request.sections if s.parent is None}
+    groups = {s.id: s for s in request.sections if s.parent}
+    drawn: set[str] = set()
+
+    def heading(section: ReviewSection, indent: int) -> None:
+        if section.id in drawn:
+            return
+        drawn.add(section.id)
+        rows.append(Heading(("  " * indent) + section.title))
+
+    def open_top(top_id: str | None) -> None:
+        if top_id in tops:
+            heading(tops[top_id], 0)
+            for group in groups.values():
+                if group.parent == top_id and not any(
+                    card.section_id == group.id for card in request.cards
+                ):
+                    heading(group, 1)
+
+    for card in request.cards:
+        group = groups.get(card.section_id or "")
+        open_top(group.parent if group else card.profile_section_id)
+        if group is not None:
+            heading(group, 1)
+        indent = 2 if group is not None else 1
+        previous = rows[-1] if rows else None
+        if card.columns and not (isinstance(previous, Item) and previous.cells):
+            rows.append(TableHeader(tuple(column.title for column in card.columns)))
+        rows.append(_card_item(card, indent))
+    for top_id in tops:
+        open_top(top_id)
+
+    for warning in request.warnings:
+        label = "STOP" if warning.blocking else "note"
+        tone = "stop" if warning.blocking else "warning"
+        rows.append(Note(f"{label}  {warning.text}", tone=tone))
+        rows.extend(_option_item(o, indent=1) for o in warning.options)
+    if request.footer:
+        rows.append(Title(request.footer))
+    if request.instruction:
+        rows.append(Note(request.instruction))
+    if rows and request.options:
+        rows.append(Divider())
+    rows.extend(_option_item(o, count=o.primary) for o in request.options)
+    return rows
+
+
+def _key_review(
+    request: ChoiceRequest, prompter: KeyPrompter, out: Printer
+) -> AnyResponse:
+    """Read a choice screen with keys. Only the toggles that changed are sent, because each
+    tick flips its current value in the package."""
+    from metis.wizard.adapters.cli.keys import Review
+
+    back = next(
+        (str(o.id) for o in request.options if o.enabled and o.id.action == "back"),
+        None,
+    )
+    # Enter on an item that has no action of its own sends Continue (the primary option).
+    default = next(
+        (str(o.id) for o in request.options if o.enabled and o.primary), None
+    )
+    review = Review(
+        _review_rows(request),
+        back=back,
+        default=default,
+        feedback=request.feedback_placeholder is not None,
+    )
+    answer = prompter.review(review, placeholder=request.feedback_placeholder or "")
+    if answer.feedback is not None:
+        return ChoiceResponse(feedback=answer.feedback)
+    if answer.changed:
+        return ChoiceResponse(selected=list(answer.changed))
+    assert answer.action is not None
+    return ChoiceResponse(selected=[answer.action])
+
+
+def _free(
+    field: FormField, values: dict[str, str], used: list[dict[str, str]], value: str
+) -> bool:
+    """False when this value would complete a combination that an item already uses."""
+    for combination in used:
+        if combination.get(field.id) != value:
+            continue
+        others = {k: v for k, v in combination.items() if k != field.id}
+        if others and all(values.get(k) == v for k, v in others.items()):
+            return False
+    return True
+
+
+def _key_form(
+    request: FormRequest, prompter: KeyPrompter, out: Printer, read: Reader
+) -> AnyResponse:
+    """Read a form with keys. Esc in a cancellable form returns without saving. In a form that
+    offers Back, Esc on the first field goes back; Esc on a later field asks the one before."""
+    from metis.wizard.adapters.cli.keys import BACK, Choice
+
+    can_go_back = request.stage is not None and request.stage != "clarify"
+    if request.cancellable:
+        out("Press Esc to return without saving.")
+    values: dict[str, str] = {}
+    index = 0
+    while index < len(request.fields):
+        field = request.fields[index]
+        escape = request.cancellable or can_go_back or index > 0
+        if field.help:
+            out(field.help)
+        value: object
+        if field.multiple and not field.choices:
+            out(f"{field.label}: (none available)")
+            value = field.value
+        elif field.multiple:
+            current = set(filter(None, field.value.split(",")))
+            choices = [
+                Choice(
+                    c.value, c.label, detail=c.hint or "", selected=c.value in current
+                )
+                for c in field.choices
+            ]
+            out(field.label)
+            value = prompter.choose_many(choices, name=field.label, back=escape)
+            if value is not BACK:
+                assert isinstance(value, list)
+                if field.required and not value:
+                    out("  Select at least one.")
+                    continue
+                value = ",".join(value)
+        elif field.choices:
+            choices = [
+                Choice(
+                    c.value,
+                    c.label,
+                    detail=c.hint or "",
+                    enabled=_free(field, values, request.used_combinations, c.value),
+                )
+                for c in field.choices
+            ]
+            if not field.required:
+                choices.append(Choice("", "None"))
+            out(field.label)
+            value = prompter.choose(
+                choices, name=field.label, default=field.value, back=escape
+            )
+        elif field.input_type == "pairs":
+            value = _read_form_pairs(field, read, out)
+        else:
+            value = prompter.text(
+                field.label, field.value, back=escape, placeholder=field.placeholder
+            )
+            if value is not BACK and field.required and not str(value).strip():
+                out("  This field is required.")
+                continue
+        if value is BACK:
+            if request.cancellable:
+                return FormResponse(cancelled=True)
+            if index == 0:
+                return ChoiceResponse(selected=["back"])
+            index -= 1
+            continue
+        values[field.id] = str(value)
+        index += 1
+    return FormResponse(values=values)
+
+
 def render(
     request: AnyRequest,
     *,
     out: Printer = print,
     read: Reader = input,
     show_header: bool = True,
+    prompter: KeyPrompter | None = None,
 ) -> AnyResponse:
     """Draw a request, collect input, return the matching response.
 
@@ -724,7 +1034,12 @@ def render(
         return ChatResponse(text=text)
 
     if isinstance(request, FormRequest):
+        if prompter is not None:
+            return _key_form(request, prompter, out, read)
         return _read_form(request, read, out)
+
+    if prompter is not None:
+        return _key_review(request, prompter, out)
 
     editable: dict[str, CardNumberField | CardUploadField] = {}
     selectable = _draw(request, out, editable)

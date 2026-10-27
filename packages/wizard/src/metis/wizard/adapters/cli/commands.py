@@ -13,9 +13,10 @@ import inspect
 import shlex
 import sys
 import tempfile
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import typer
 import yaml
@@ -29,6 +30,7 @@ from metis.wizard import (
     InterviewState,
     InterviewStep,
     InterviewTurnRequest,
+    Perspective,
     TargetConnection,
     __version__,
     compile_specification,
@@ -44,8 +46,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rich.console import Console
+    from rich.live import Live
 
     from metis.wizard import Specification
+    from metis.wizard.adapters.cli.keys import KeyPrompter
     from metis.wizard.application.interviewer import Interviewer
 
 
@@ -166,10 +170,11 @@ def _drive(
     """
     from metis.wizard.adapters.cli.render import render
 
+    prompter = _key_prompter()
     last_step: int | None = None
     while True:
         state = None if isinstance(request, InterviewStartRequest) else request.state
-        with console.status(_busy_message(state), spinner="dots"):
+        with _working(console, _busy_message(state)):
             result = handle_interview(
                 request,
                 interviewer=interviewer,
@@ -193,11 +198,33 @@ def _drive(
             raise RuntimeError(
                 "An awaiting Interview result must include a pending request."
             )
-        response = render(pending, show_header=pending.step != last_step)
+        response = render(
+            pending, show_header=pending.step != last_step, prompter=prompter
+        )
         last_step = pending.step
         request = InterviewTurnRequest(
             state=state, request_id=pending.request_id or "", response=response
         )
+
+
+def _working(console: Console, message: str) -> Live:
+    """A dim spinner line with one blank line above it, so it reads as its own phase.
+
+    Both lines go away when the call ends, so the next screen starts with its own spacing. A
+    console that is not a terminal draws nothing, as `Console.status` does.
+    """
+    from rich.console import Group
+    from rich.live import Live
+    from rich.spinner import Spinner
+    from rich.text import Text
+
+    spinner = Spinner("dots", Text(message, style="dim"), style="dim")
+    return Live(
+        Group(Text(""), spinner),
+        console=console,
+        transient=True,
+        refresh_per_second=12.5,
+    )
 
 
 def _retry_confirmed(failure: InterviewFailure) -> bool:
@@ -212,7 +239,10 @@ def _retry_confirmed(failure: InterviewFailure) -> bool:
 
 
 def _confirm(prompt: str) -> bool:
-    return typer.confirm(prompt, default=False)
+    prompter = _key_prompter()
+    if prompter is None:
+        return typer.confirm(prompt, default=False)
+    return prompter.confirm(prompt, False) is True
 
 
 def _fail(failure: InterviewFailure) -> NoReturn:
@@ -470,19 +500,19 @@ def init(
     from metis.wizard.adapters.cli.opening import (
         read_capability_evidence,
         read_description,
-        read_perspective,
+        welcome,
     )
 
+    console.print(welcome())
     if description is None:
         description = read_description(out=console.print)
-    perspective = read_perspective(out=console.print)
 
-    # The mode comes next, so a user who wants to run evals sees how to connect the target
-    # before the Interview questions.
-    connection, connection_skipped = _read_connection(mode, binding)
+    # The Perspective and the mode come next, so a user who wants to run evals sees how to
+    # connect the target before the Interview questions.
+    opening = _read_opening(mode, binding, perspective=True)
 
     known_capability_ids, capability_confidence = read_capability_evidence(
-        out=console.print
+        out=console.print, prompter=_key_prompter()
     )
     # Keep the original bytes, so `resume` can put an opening file in the fixture folder.
     copy_opening_documents(
@@ -496,23 +526,34 @@ def init(
     state = _drive(
         InterviewStartRequest(
             description=description,
-            perspective=perspective,
+            perspective=opening.perspective,
             known_capability_ids=known_capability_ids,
             capability_confidence=capability_confidence,
             documents=opening_documents,
-            connection=connection,
+            connection=opening.connection,
         ),
         interviewer=interviewer,
         matcher=_matcher(interviewer),
         out_dir=out_dir,
         console=console,
     )
-    _write_outputs(state, out_dir, connection_skipped=connection_skipped)
+    _write_outputs(state, out_dir, connection_skipped=opening.connection_skipped)
 
 
 def _terminal() -> bool:
     """Whether a user can answer the questions that `init` asks."""
     return sys.stdin.isatty()
+
+
+def _key_prompter() -> KeyPrompter | None:
+    """The key input for this run, or `None` for typed text.
+
+    A run reads keys only when stdin and stdout are a terminal. Redirected input, a pipe, or a
+    test runner keeps the typed text input.
+    """
+    from metis.wizard.adapters.cli.keys import KeyPrompter, key_input_available
+
+    return KeyPrompter() if key_input_available() else None
 
 
 def _require_description_without_terminal(description: str | None) -> None:
@@ -537,12 +578,24 @@ def _require_binding_without_terminal(mode: Mode | None, binding: Path | None) -
         raise typer.Exit(1)
 
 
-def _read_connection(
-    mode: Mode | None, binding: Path | None
-) -> tuple[TargetConnection | None, bool]:
-    """Read the target connection for `init`. Returns it and whether run mode got no binding.
+@dataclass(frozen=True)
+class _Opening:
+    """The answers before the Interview. `connection_skipped` is run mode with no binding."""
+
+    perspective: Perspective
+    connection: TargetConnection | None
+    connection_skipped: bool
+
+
+def _read_opening(
+    mode: Mode | None, binding: Path | None, *, perspective: bool
+) -> _Opening:
+    """Read the Perspective, when `perspective` asks for it, then the target connection.
 
     With no `--mode`, a terminal asks for the mode; with no terminal, the mode is spec-only.
+    The questions are steps. In key mode, Esc on the mode asks the Perspective again, Esc on
+    the binding source asks the mode again, and Esc on the transport asks the binding source
+    again. Each question keeps the answer already given.
     """
     from metis.wizard.adapters.cli.connection import (
         load_binding_file,
@@ -550,38 +603,84 @@ def _read_connection(
         read_mode,
         read_target_connection,
     )
+    from metis.wizard.adapters.cli.keys import BACK, Step, walk
+    from metis.wizard.adapters.cli.opening import read_perspective
 
     terminal = _terminal()
-    if mode is None:
-        if binding is not None:
-            mode = Mode.RUN
-        elif terminal:
-            mode = Mode(read_mode(out=console.print))
-        else:
-            mode = Mode.SPEC
-    if mode is Mode.SPEC:
-        return None, False
+    prompter = _key_prompter()
+    out = console.print
+    if mode is None and binding is not None:
+        mode = Mode.RUN
+    if mode is None and not terminal:
+        mode = Mode.SPEC
     _require_binding_without_terminal(mode, binding)
-    if binding is None:
-        binding = read_binding_source(out=console.print)
-    values = None
-    if binding is not None:
-        try:
-            values = load_binding_file(binding)
-        except (OSError, ValueError, yaml.YAMLError) as exc:
-            # name the file only: the YAML error can quote a line of the file
-            typer.echo(
-                f"Error: cannot read the target binding {binding} ({type(exc).__name__}).",
-                err=True,
-            )
-            raise typer.Exit(1) from None
-    connection = read_target_connection(
-        out=console.print,
-        values=values,
-        # a binding file with no terminal is checked once; nothing is asked
-        interactive=terminal,
+
+    answers: dict[str, Any] = {
+        "perspective": Perspective.END_USER,
+        "mode": mode,
+        "binding": binding,
+    }
+    draft: dict[str, Any] = {}
+
+    def ask_perspective(answers: dict[str, Any], back: bool) -> Any:
+        return read_perspective(
+            out=out, prompter=prompter, default=answers["perspective"], back=back
+        )
+
+    def ask_mode(answers: dict[str, Any], back: bool) -> Any:
+        default = answers["mode"] or Mode.SPEC
+        value = read_mode(out=out, prompter=prompter, default=default.value, back=back)
+        return value if value is BACK else Mode(value)
+
+    def ask_source(answers: dict[str, Any], back: bool) -> Any:
+        return read_binding_source(
+            out=out, prompter=prompter, back=back, default=answers["binding"]
+        )
+
+    def ask_connection(answers: dict[str, Any], back: bool) -> Any:
+        values = None
+        if answers["binding"] is not None:
+            values = _load_binding(load_binding_file, answers["binding"])
+        return read_target_connection(
+            out=out,
+            prompter=prompter,
+            values=values,
+            # a binding file with no terminal is checked once; nothing is asked
+            interactive=terminal,
+            back=back and values is None,
+            draft=draft,
+        )
+
+    def is_run(answers: dict[str, Any]) -> bool:
+        return answers["mode"] is Mode.RUN
+
+    walk(
+        [
+            Step("perspective", ask_perspective, lambda _answers: perspective),
+            Step("mode", ask_mode, lambda _answers: mode is None),
+            Step("binding", ask_source, lambda a: is_run(a) and binding is None),
+            Step("connection", ask_connection, is_run),
+        ],
+        answers,
     )
-    return connection, connection is None
+    if not is_run(answers):
+        return _Opening(answers["perspective"], None, False)
+    connection = answers["connection"]
+    return _Opening(answers["perspective"], connection, connection is None)
+
+
+def _load_binding(
+    load: Callable[[Path], dict[str, Any]], binding: Path
+) -> dict[str, Any]:
+    try:
+        return load(binding)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        # name the file only: the YAML error can quote a line of the file
+        typer.echo(
+            f"Error: cannot read the target binding {binding} ({type(exc).__name__}).",
+            err=True,
+        )
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -624,7 +723,7 @@ def resume(
     # The saved state already holds the screen the interview stopped on; answer that first, then
     # hand the resulting Interview request to the same corridor `init` runs.
     request = state.pending
-    response = render(request, show_header=True)
+    response = render(request, show_header=True, prompter=_key_prompter())
     interview_request = InterviewTurnRequest(
         state=state,
         request_id=request.request_id or "",
@@ -669,7 +768,7 @@ def connect(
     env_file = _load_env()
     if env_file is not None:
         typer.echo(f"Read variables from {env_file}")
-    connection, _ = _read_connection(Mode.RUN, binding)
+    connection = _read_opening(Mode.RUN, binding, perspective=False).connection
     if connection is None:
         typer.echo("Error: no valid target binding. Nothing was changed.", err=True)
         raise typer.Exit(1)

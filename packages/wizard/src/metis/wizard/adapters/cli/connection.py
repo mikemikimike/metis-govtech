@@ -11,6 +11,16 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 
+from metis.wizard.adapters.cli.keys import (
+    BACK,
+    Choice,
+    Nav,
+    Prompter,
+    Step,
+    TextPrompter,
+    Typed,
+    walk,
+)
 from metis.wizard.application.connection import check_connection
 from metis.wizard.contracts.connection import (
     ConnectionCheckResult,
@@ -53,40 +63,71 @@ def rule() -> str:
     return capture.get().rstrip("\n")
 
 
-def read_mode(*, out: Printer, read: Reader = input) -> Mode:
-    """Ask whether to make a Specification only, or also connect a target to run it."""
+def _ask(prompter: Prompter | None, out: Printer, read: Reader) -> Prompter:
+    return prompter if prompter is not None else TextPrompter(out, read)
+
+
+def read_mode(
+    *,
+    out: Printer,
+    read: Reader = input,
+    prompter: Prompter | None = None,
+    default: Mode = "spec",
+    back: bool = False,
+) -> Mode | Nav:
+    """Ask whether to make a Specification only, or also connect a target to run it.
+
+    Esc returns `BACK` when `back` allows it.
+    """
     out(panel("Mode", "What do you want to do?"))
-    out("  1. Build Spec only")
-    out("  2. Build Spec and Run Evals (connect the target)")
-    while True:
-        raw = read("Mode (1 or 2, blank for 1): ").strip().casefold()
-        if raw in ("", "1", "spec"):
-            return "spec"
-        if raw in ("2", "run"):
-            return "run"
-        out("  Enter 1 or 2.")
+    choices: list[Choice[Mode]] = [
+        Choice("spec", "Build Spec only", aliases=("spec",)),
+        Choice(
+            "run", "Build Spec and Run Evals (connect the target)", aliases=("run",)
+        ),
+    ]
+    return _ask(prompter, out, read).choose(
+        choices, name="Mode", default=default, back=back
+    )
 
 
-def read_binding_source(*, out: Printer, read: Reader = input) -> Path | None:
-    """Ask how to give the binding: in the CLI, or as a file path. Returns the path, if any."""
+def read_binding_source(
+    *,
+    out: Printer,
+    read: Reader = input,
+    prompter: Prompter | None = None,
+    back: bool = False,
+    default: Path | None = None,
+) -> Path | None | Nav:
+    """Ask how to give the binding: in the CLI, or as a file path. Returns the path, if any.
+
+    Esc on the file path asks the binding source again. Esc on the binding source returns
+    `BACK` when `back` allows it.
+    """
     from pathlib import Path
 
-    out("\nHow do you want to give the target binding?")
-    out("  1. Fill in the fields here")
-    out("  2. Give the path to a binding YAML file")
+    ask = _ask(prompter, out, read)
+    choices = [
+        Choice("fields", "Fill in the fields here"),
+        Choice("file", "Give the path to a binding YAML file"),
+    ]
+    source = "fields" if default is None else "file"
     while True:
-        raw = read("Binding (1 or 2, blank for 1): ").strip().casefold()
-        if raw in ("", "1"):
+        out("\nHow do you want to give the target binding?")
+        source = ask.choose(choices, name="Binding", default=source, back=back)
+        if source is BACK:
+            return BACK
+        if source == "fields":
             return None
-        if raw == "2":
-            break
-        out("  Enter 1 or 2.")
-    while True:
-        raw = read("Binding file path: ").strip()
-        path = Path(raw).expanduser()
-        if raw and path.is_file():
-            return path
-        out("  No file at that path. Enter the path to a binding YAML file.")
+        while True:
+            raw = ask.text("Binding file path", str(default or ""), back=True)
+            if raw is BACK:
+                break
+            assert isinstance(raw, str)
+            path = Path(raw).expanduser()
+            if raw and path.is_file():
+                return path
+            out("  No file at that path. Enter the path to a binding YAML file.")
 
 
 def load_binding_file(path: Path) -> dict[str, Any]:
@@ -101,11 +142,14 @@ def read_target_connection(
     *,
     out: Printer,
     read: Reader = input,
+    prompter: Prompter | None = None,
     values: Mapping[str, Any] | None = None,
     interactive: bool = True,
+    back: bool = False,
+    draft: dict[str, Any] | None = None,
     environ: Mapping[str, str] | None = None,
     client_factory: Callable[[bool], httpx.Client] | None = None,
-) -> TargetConnection | None:
+) -> TargetConnection | None | Nav:
     """Read and test binding values until the binding is valid and the user continues.
 
     Run mode needs a valid binding, so there is no skip. A failed live test (for example the
@@ -113,10 +157,21 @@ def read_target_connection(
 
     :param values: Binding values to test first, for example from `--binding`.
     :param interactive: When false, test `values` once and ask nothing.
-    :returns: The connection, or `None` when `values` is not valid and nothing can be asked.
+    :param back: Whether Esc on the first question returns `BACK`.
+    :param draft: The answers to the binding fields. The caller keeps it, so the fields keep
+        the answers when the user comes back to them.
+    :returns: The connection, `None` when `values` is not valid and nothing can be asked, or
+        `BACK`.
     """
+    ask = _ask(prompter, out, read)
     out(panel("Target connection", _SECRET_NOTE))
-    data = dict(values) if values is not None else _read_values(out=out, read=read)
+    if values is not None:
+        data = dict(values)
+    else:
+        first = _read_values(ask, out, {} if draft is None else draft, back=back)
+        if first is BACK:
+            return BACK
+        data = first
     while True:
         result = check_connection(
             data, live=True, environ=environ, client_factory=client_factory
@@ -127,13 +182,16 @@ def read_target_connection(
             return result.connection()
         if result.binding is None:
             out("Fix the values. To continue without a binding, run with --mode spec.")
-            data = _read_values(out=out, read=read, current=data)
+            data = _fix(ask, out, data)
             continue
-        choice = _choose(
-            out=out,
-            read=read,
-            prompt="[t]est again, [f]ix the values, or [c]ontinue",
-            choices={"t": "test", "f": "fix", "c": "continue"},
+        choice = ask.choose(
+            _NEXT,
+            name="Next",
+            default="continue",
+            typed=Typed(
+                "[t]est again, [f]ix the values, or [c]ontinue",
+                "  Enter one of: t, f, c.",
+            ),
         )
         if choice == "continue":
             if result.status is not ConnectionStatus.CHECKED:
@@ -142,15 +200,21 @@ def read_target_connection(
                 )
             return result.connection()
         if choice == "fix":
-            data = _read_values(out=out, read=read, current=data)
+            data = _fix(ask, out, data)
 
 
-def _choose(*, out: Printer, read: Reader, prompt: str, choices: dict[str, str]) -> str:
-    while True:
-        raw = read(f"{prompt}: ").strip().casefold()[:1]
-        if raw in choices:
-            return choices[raw]
-        out(f"  Enter one of: {', '.join(choices)}.")
+_NEXT = [
+    Choice("test", "Test again", aliases=("t",)),
+    Choice("fix", "Fix the values", aliases=("f",)),
+    Choice("continue", "Continue", aliases=("c",)),
+]
+
+
+def _fix(ask: Prompter, out: Printer, data: Mapping[str, Any]) -> dict[str, Any]:
+    """Ask the binding fields again, with the current values as defaults."""
+    fixed = _read_values(ask, out, _answers(data))
+    assert fixed is not BACK
+    return fixed
 
 
 def _show(result: ConnectionCheckResult, out: Printer) -> None:
@@ -168,127 +232,215 @@ def _show(result: ConnectionCheckResult, out: Printer) -> None:
 
 
 # ── binding values ────────────────────────────────────────────────────────
+#
+# The binding fields are a list of steps over one dict of answers, keyed by step name. Esc on
+# a field asks the field before it again; Esc on the transport leaves the list.
+
+
+def _is_http(answers: dict[str, Any]) -> bool:
+    return answers.get("transport") == "http"
+
+
+def _is_browser(answers: dict[str, Any]) -> bool:
+    return answers.get("transport") == "browser"
+
+
+def _field(
+    ask: Prompter, name: str, label: str
+) -> Callable[[dict[str, Any], bool], Any]:
+    return lambda answers, back: ask.text(label, answers.get(name) or "", back=back)
+
+
+def _list_field(
+    ask: Prompter, name: str, label: str
+) -> Callable[[dict[str, Any], bool], Any]:
+    def run(answers: dict[str, Any], back: bool) -> list[str] | Nav:
+        raw = ask.text(label, ", ".join(answers.get(name) or []), back=back)
+        if raw is BACK:
+            return BACK
+        assert isinstance(raw, str)
+        return [item.strip() for item in raw.split(",") if item.strip()]
+
+    return run
+
+
+def _binding_steps(ask: Prompter, out: Printer) -> list[Step]:
+    def transport(answers: dict[str, Any], back: bool) -> Any:
+        out("\nHow does METIS reach the target?")
+        choices = [
+            Choice(
+                "http",
+                "HTTP API (the target has an OpenAPI document)",
+                aliases=("http",),
+            ),
+            Choice(
+                "browser",
+                "Browser (the target has only a web page)",
+                aliases=("browser",),
+            ),
+        ]
+        default = answers.get("transport") or "http"
+        return ask.choose(choices, name="Transport", default=default, back=back)
+
+    def tls(answers: dict[str, Any], back: bool) -> Any:
+        default = answers.get("tls_verify", True)
+        return ask.confirm("Verify the TLS certificate?", default, back=back)
+
+    def headers(answers: dict[str, Any], back: bool) -> Any:
+        return _read_secret_headers(ask, out, answers.get("headers") or [], back)
+
+    def with_note(answers: dict[str, Any]) -> bool:
+        return _is_browser(answers) and bool(answers.get("login_note"))
+
+    return [
+        Step("transport", transport),
+        Step("name", _field(ask, "name", "Target name")),
+        Step(
+            "spec_url",
+            _field(ask, "spec_url", "OpenAPI document URL (${NAME} reads a variable)"),
+            _is_http,
+        ),
+        Step(
+            "secret_env",
+            _field(
+                ask,
+                "secret_env",
+                "Environment variable that holds the API credential (blank for none)",
+            ),
+            _is_http,
+        ),
+        Step("headers", headers, _is_http),
+        Step(
+            "forbidden",
+            _list_field(
+                ask,
+                "forbidden",
+                "Calls the engine must refuse, as METHOD /path (comma-separated)",
+            ),
+            _is_http,
+        ),
+        Step(
+            "submissions",
+            _list_field(
+                ask,
+                "submissions",
+                "Calls that send the user's message (comma-separated; blank for any POST, PUT, or PATCH)",
+            ),
+            _is_http,
+        ),
+        Step("tls_verify", tls, _is_http),
+        Step(
+            "start_url",
+            _field(ask, "start_url", "Start page URL (${NAME} reads a variable)"),
+            _is_browser,
+        ),
+        Step(
+            "login_note",
+            _field(
+                ask,
+                "login_note",
+                "Sign-in steps, with {{secret:NAME}} where a secret is typed (blank for none)",
+            ),
+            _is_browser,
+        ),
+        Step(
+            "login_secrets",
+            _list_field(
+                ask,
+                "login_secrets",
+                "Environment variables that the sign-in types (comma-separated)",
+            ),
+            with_note,
+        ),
+        Step(
+            "notes", _field(ask, "notes", "Notes for the runner agent (blank for none)")
+        ),
+    ]
 
 
 def _read_values(
-    *, out: Printer, read: Reader, current: Mapping[str, Any] | None = None
-) -> dict[str, Any]:
+    ask: Prompter, out: Printer, answers: dict[str, Any], *, back: bool = False
+) -> dict[str, Any] | Nav:
     """Ask for the values that the target cannot supply. Enter keeps the current value."""
-    current = current or {}
-    out("\nHow does METIS reach the target?")
-    out("  1. HTTP API (the target has an OpenAPI document)")
-    out("  2. Browser (the target has only a web page)")
-    default = "2" if current.get("transport") == "browser" else "1"
-    while True:
-        raw = read(f"Transport (1 or 2, blank for {default}): ").strip().casefold()
-        raw = raw or default
-        if raw in ("1", "http"):
-            transport = "http"
-            break
-        if raw in ("2", "browser"):
-            transport = "browser"
-            break
-        out("  Enter 1 or 2.")
-    identity = current.get("identity") or {}
-    advice = current.get("advice") or {}
-    name = _ask(read, "Target name", identity.get("name"))
+    if not walk(_binding_steps(ask, out), answers, back=back):
+        return BACK
+    return _binding(answers)
+
+
+def _binding(answers: dict[str, Any]) -> dict[str, Any]:
+    """The binding values from the answers to the steps that apply."""
     data: dict[str, Any] = {
         "schema_version": 1,
-        "identity": {"name": name},
-        "transport": transport,
+        "identity": {"name": answers.get("name", "")},
+        "transport": answers["transport"],
     }
-    if transport == "http":
-        data["spec_url"] = _ask(
-            read,
-            "OpenAPI document URL (${NAME} reads a variable)",
-            current.get("spec_url"),
-        )
-        auth = current.get("auth") or {}
-        secret_env = _ask(
-            read,
-            "Environment variable that holds the API credential (blank for none)",
-            auth.get("secret_env"),
-        )
-        if secret_env:
-            data["auth"] = {"secret_env": secret_env}
-        headers = _read_secret_headers(out, read, current.get("secret_headers") or [])
-        if headers:
-            data["secret_headers"] = headers
-        forbidden = _ask_list(
-            read,
-            "Calls the engine must refuse, as METHOD /path (comma-separated)",
-            current.get("forbidden_calls"),
-        )
-        if forbidden:
-            data["forbidden_calls"] = forbidden
-        submissions = _ask_list(
-            read,
-            "Calls that send the user's message (comma-separated; blank for any POST, PUT, or PATCH)",
-            current.get("submissions"),
-        )
-        if submissions:
-            data["submissions"] = submissions
-        tls = _ask(
-            read,
-            "Verify the TLS certificate? (y/n)",
-            "n" if current.get("tls_verify") is False else "y",
-        )
-        if tls.casefold().startswith("n"):
+    if _is_http(answers):
+        data["spec_url"] = answers.get("spec_url", "")
+        if answers.get("secret_env"):
+            data["auth"] = {"secret_env": answers["secret_env"]}
+        for key, name in (
+            ("secret_headers", "headers"),
+            ("forbidden_calls", "forbidden"),
+            ("submissions", "submissions"),
+        ):
+            if answers.get(name):
+                data[key] = answers[name]
+        if answers.get("tls_verify") is False:
             data["tls_verify"] = False
     else:
-        data["start_url"] = _ask(
-            read, "Start page URL (${NAME} reads a variable)", current.get("start_url")
-        )
-        login = current.get("login") or {}
-        note = _ask(
-            read,
-            "Sign-in steps, with {{secret:NAME}} where a secret is typed (blank for none)",
-            login.get("note"),
-        )
-        if note:
+        data["start_url"] = answers.get("start_url", "")
+        if answers.get("login_note"):
             data["login"] = {
-                "note": note,
-                "secrets": _ask_list(
-                    read,
-                    "Environment variables that the sign-in types (comma-separated)",
-                    login.get("secrets"),
-                ),
+                "note": answers["login_note"],
+                "secrets": answers.get("login_secrets") or [],
             }
-    notes = _ask(
-        read, "Notes for the runner agent (blank for none)", advice.get("notes")
-    )
-    if notes:
-        data["advice"] = {"notes": notes}
+    if answers.get("notes"):
+        data["advice"] = {"notes": answers["notes"]}
     return data
 
 
-def _ask(read: Reader, label: str, current: object = None) -> str:
-    shown = f" [{current}]" if current else ""
-    raw = read(f"{label}{shown}: ").strip()
-    return raw or (str(current) if current else "")
-
-
-def _ask_list(read: Reader, label: str, current: object = None) -> list[str]:
-    joined = ", ".join(current) if isinstance(current, list) else ""
-    raw = _ask(read, label, joined or None)
-    return [item.strip() for item in raw.split(",") if item.strip()]
+def _answers(data: Mapping[str, Any]) -> dict[str, Any]:
+    """The step answers that give these binding values, used as defaults for a fix."""
+    identity = data.get("identity") or {}
+    auth = data.get("auth") or {}
+    login = data.get("login") or {}
+    advice = data.get("advice") or {}
+    return {
+        "transport": "browser" if data.get("transport") == "browser" else "http",
+        "name": identity.get("name"),
+        "spec_url": data.get("spec_url"),
+        "secret_env": auth.get("secret_env"),
+        "headers": data.get("secret_headers") or [],
+        "forbidden": data.get("forbidden_calls"),
+        "submissions": data.get("submissions"),
+        "tls_verify": data.get("tls_verify") is not False,
+        "start_url": data.get("start_url"),
+        "login_note": login.get("note"),
+        "login_secrets": login.get("secrets"),
+        "notes": advice.get("notes"),
+    }
 
 
 def _read_secret_headers(
-    out: Printer, read: Reader, current: list[dict[str, Any]]
-) -> list[dict[str, str]]:
+    ask: Prompter, out: Printer, current: list[dict[str, Any]], back: bool
+) -> list[dict[str, Any]] | Nav:
     if current:
         out(f"  {len(current)} secret header(s) are set.")
-        keep = read("Keep them? (y/n, blank for y): ").strip().casefold()
-        if not keep.startswith("n"):
+        keep = ask.confirm("Keep them?", True, back=back)
+        if keep is BACK:
+            return BACK
+        if keep:
             return current
-    headers: list[dict[str, str]] = []
+    headers: list[dict[str, Any]] = []
     out(
         "Secret headers: one per line as METHOD /path HEADER ENV_NAME, "
         "for example `POST /chat X-Api-Key APP_KEY`. Blank to finish."
     )
     while True:
-        raw = read("Secret header: ").strip()
+        raw = ask.text("Secret header", back=back)
+        if raw is BACK:
+            return BACK
+        assert isinstance(raw, str)
         if not raw:
             return headers
         parts = raw.split()
@@ -301,6 +453,7 @@ def _read_secret_headers(
 
 __all__ = [
     "load_binding_file",
+    "read_binding_source",
     "read_mode",
     "read_target_connection",
 ]

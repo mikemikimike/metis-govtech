@@ -59,6 +59,10 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 
 ## Start an Interview
 
+The steps below give the typed text menus, which the CLI uses when input or output is redirected.
+In an interactive terminal, each question is a list that you answer with the arrow keys, Space,
+Enter, Esc, and Tab. See [Use the keys in a terminal](#use-the-keys-in-a-terminal).
+
 1. Start the Interview:
 
    ```bash
@@ -115,6 +119,58 @@ Enter `/feedback` to give a written change request for the review. The chat can 
 Behaviours and set Trials when you ask it to. Clear corrections update the content automatically.
 Form-written content and unrelated selections are preserved. Enter `/cancel` in a form field to
 return without saving, or `/back` to close the form and go to the step before.
+
+## Use the keys in a terminal
+
+When the CLI runs in an interactive terminal, each question is a list that you move through with
+the arrow keys. A grey hint line under the list shows only the keys that the highlighted row
+accepts, for example `Esc back | ↑↓ move | Space select | Enter Continue | Tab feedback`.
+When the input or the output is redirected, or `TERM` is `dumb`, the CLI uses the typed text
+menus that the sections above describe.
+
+### Opening questions
+
+`init` starts with a welcome box, which has a double cyan border and a centred title. Each opening question has its own header panel, in the same
+style as the Interview steps: Your product, Perspective, Mode, and Capabilities. The Perspective list shows the guiding question of the highlighted Perspective. Press Enter to
+choose. Then the mode, the binding source, and the binding fields come in turn. Press Esc to go
+to the question before, with the answer that you gave kept. For example, Esc on the mode asks
+the Perspective again. In the capability list, press Space to select a capability, then Enter on
+**Continue**, or Enter on **Skip** to leave the capabilities unspecified. Esc on the confidence
+asks the capabilities again with your selection kept.
+
+### Review screens
+
+Each review is one list. Each item is one row under its heading, with its text in grey under it.
+The keys select, open details, give feedback, go back, and continue.
+
+- Press Space on a row with a checkbox to select or clear it. The total beside **Continue**
+  changes at once. Press Enter to send the changes. Only the rows that you changed are sent.
+- Press Enter with no changes to continue.
+- Press the right arrow to open the details of a row, for example the Grader of a Criterion.
+  Press the left arrow to close them. The hint shows `→ details` only for a row that has them.
+- The **Feedback** line is under **Back** and **Continue**, with an example in grey. Press Tab to
+  write in it, and the list stays on the screen while you type. Press Enter to send it, or Esc
+  or Tab to return to the list. Use feedback to add, change, or delete an item, for example
+  "Delete the second criterion of EB-1".
+- Press Esc on the list to go back to the step before.
+
+The keys do not add, edit, or delete items. To change an item with a typed form, use the web
+client, or run the CLI with redirected input, which shows the numbered **Add**, **Edit**, and
+**Delete** actions.
+
+The Test Case review is a table with Persona, Scenario, Behaviours, Trials, and Files columns.
+Press Space to include or clear a Test Case. To change its Behaviours, Trials, or Files, give
+feedback. When the terminal is too narrow for all the columns, each row takes two lines: Persona
+and Scenario on the first, and the other columns in grey under them.
+
+### Forms
+
+A form opens when the Wizard asks for missing details. A dropdown is a list, and a field that takes several values is a list of checkboxes. A text field
+shows its current value, so Enter keeps it. A choice that would make a Persona and Scenario pair
+that another Test Case uses is shown as unavailable. In a form that you can cancel, Esc returns
+without saving. In a form that you cannot cancel, for example the form that asks for missing
+Target details, Esc on a later field asks the field before, and Esc on the first field goes back
+to the step before.
 
 ## Go back to an earlier step
 

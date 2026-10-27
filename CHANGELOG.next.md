@@ -755,6 +755,21 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   file and 1,000,000 total. Read YAML, JSON, and CSV text. Check the configured
   model context budget before each request without truncating input.
 
+- **Keys in the CLI.** In an interactive terminal, every question is a list that the arrow keys
+  move through, with a grey hint line that shows only the keys that the highlighted row accepts,
+  separated by " | ". `init` starts with a welcome box, and each opening question has its own
+  header. The opening questions are steps: Esc asks the question before again and keeps its
+  answer. Each review is one grouped list with one row for each item. The keys select, open
+  details, give feedback, go back, and continue: Space selects or clears a checkbox and sends
+  only the changed rows, Enter with no changes continues, the right arrow opens closed details,
+  and Tab moves to a feedback line under Back and Continue, with the list kept on the screen.
+  Add, edit, and delete stay in the typed text menus and the web client. Test Cases draw as a
+  table that fits the terminal width, and a narrow terminal shows each row on two lines. Forms
+  use lists, and a choice that would repeat a used Persona and Scenario pair is unavailable. Esc
+  cancels a form that can be cancelled. A warning that does not block is orange, and a blocking
+  one is red. The working line is dim, with a blank line above it. A redirected run keeps the
+  typed text menus. `prompt_toolkit` is a new dependency (#556).
+
 - **Opening documents in the CLI.** `metis wizard init` accepts `--document PATH` (`-d`), once
   for each file. The CLI uses the same file types, limits, and extraction as the web client,
   and shows `Read`, `Not read`, or `Could not read` for each file before any model
@@ -821,7 +836,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   missing product name or description. The user can supply these details and continue when the
   model has not supplied them. Best-effort completion fills missing Target fields
   from the supplied evidence before it drafts the evaluation. Readiness validation
-  still reports any remaining gaps.
+  still reports any remaining gaps. This form keeps the "Understanding your target" header,
+  because it finishes that step. The "Features / Expected Behaviours" header comes with the
+  review (#556).
 
 #### Changed
 
