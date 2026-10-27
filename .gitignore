@@ -21,7 +21,6 @@ node_modules/
 .pytest_cache/
 .coverage
 htmlcov/
-scripts/
 
 # IDE
 .idea/
