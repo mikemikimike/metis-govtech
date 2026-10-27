@@ -14,7 +14,8 @@ over a clearly stated intent. It stays bounded — an address no step owns is wr
 
 **Some addresses are unwritable by the model at any step.** `measured` is the user's only real
 decision, and `num_trials` and `fixtures` are the user's to set, so none of them appears in any
-entry.
+entry. A chat that answers the user's own message may still set `measured` and `num_trials`:
+the driver marks those patches as the user's, so no drafting call can reach them.
 
 Bundled model values are protected at the structured-output boundary: strict draft models reject
 persisted ids, defaults, authorship and matcher-owned fields before a domain object exists.
@@ -32,6 +33,7 @@ class InterviewStep(StrEnum):
     CRITERIA = "criteria"
     PERSONAS = "personas"
     SCENARIOS = "scenarios"
+    TEST_CASES = "test_cases"
     DONE = "done"
 
 
@@ -70,12 +72,16 @@ StepPermissions: dict[InterviewStep, list[str]] = {
         "personas[*]",
         "personas[*].name",
         "personas[*].description",
+        "personas[*].metadata",
     ],
     InterviewStep.SCENARIOS: [
         "scenarios",
         "scenarios[*]",
         "scenarios[*].name",
         "scenarios[*].description",
+        "scenarios[*].metadata",
+    ],
+    InterviewStep.TEST_CASES: [
         "tasks",
         "tasks[*]",
         "tasks[*].scenario_ref",

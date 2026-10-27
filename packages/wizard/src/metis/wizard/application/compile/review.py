@@ -104,7 +104,7 @@ def render_review(
 
     out += ["## What should be true", ""]
     for feature in specification.features:
-        out += [f"### {feature.id} · {feature.name}", ""]
+        out += [f"### {feature.id}: {feature.name}", ""]
         if feature.description:
             out += [feature.description, ""]
         for behaviour in feature.behaviours:

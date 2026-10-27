@@ -1,8 +1,8 @@
 """The shared Specification-readiness rules.
 
-Stage derivation, the Scenario screen gate, best-effort finish and compile preflight all ask about
-the same Specification. The complete collector owns the objective gaps; the Scenario helper owns the
-engine-facing Scenario rules. Keeping both here stops the application from growing several
+Stage derivation, the Scenario and Test Case gates, best-effort finish and compile preflight all
+ask about the same Specification. The complete collector owns the objective gaps; the Scenario
+helper owns the engine-facing Scenario and Test Case rules. Keeping both here stops the application from growing several
 slightly different definitions of "ready".
 
 The result is a list of `MissingData` — the same structured shape a turn returns to a caller —
@@ -15,12 +15,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from metis.wizard.contracts.turn import MissingData, MissingDataCode
+from metis.wizard.domain.nodes import duplicate_test_cases
 from metis.wizard.domain.permissions import InterviewStep
 
 if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
+
     from metis.wizard.domain.specification import Specification
 
-# The engine schema bounds a scenario's trial count; the Scenario screen's stepper enforces the
+# The engine schema bounds a scenario's trial count; the Test Case screen's stepper enforces the
 # same range door-side. Kept here so the screen and the readiness check cannot disagree on it.
 TRIALS_MIN = 1
 TRIALS_MAX = 20
@@ -36,11 +39,15 @@ def missing_criteria_paths(specification: Specification) -> frozenset[str]:
     )
 
 
-def scenario_readiness(specification: Specification) -> list[MissingData]:
-    """Every reason the Scenario list is not yet runnable, in user-facing order.
+def scenario_readiness(
+    specification: Specification, excluded: AbstractSet[str] = frozenset()
+) -> list[MissingData]:
+    """Every reason the Scenarios and selected Test Cases are not yet runnable, in order.
 
-    Order mirrors how a person reads the screen: the behaviours left uncovered first, then each
-    scenario's own faults. An empty list means the Specification passes the Scenario gate.
+    A missing Scenario is a gap of the Scenario review. Every other gap belongs to the Test
+    Case review. `excluded` holds the Test Cases that the user cleared. They do not run, so
+    they neither cover a Behaviour nor block Continue with their own faults. An empty list
+    means the Specification passes both gates.
     """
     gaps: list[MissingData] = []
 
@@ -50,36 +57,52 @@ def scenario_readiness(specification: Specification) -> list[MissingData]:
                 MissingDataCode.NO_SCENARIOS,
                 None,
                 "There are no scenarios yet.",
+                stage=InterviewStep.SCENARIOS,
+            )
+        )
+        return gaps
+
+    tasks = [task for task in specification.tasks if task.id not in excluded]
+    if not tasks:
+        gaps.append(
+            _gap(
+                MissingDataCode.NO_SELECTED_TEST_CASE,
+                None,
+                "Select at least one Test Case.",
             )
         )
         return gaps
 
     persona_ids = {persona.id for persona in specification.personas}
+    measured = {b.id for b in specification.measured_behaviours()}
 
-    # A measured behaviour no scenario exercises is measured on nothing.
-    for behaviour in specification.uncovered():
-        gaps.append(
-            _gap(
-                MissingDataCode.BEHAVIOUR_UNCOVERED,
-                behaviour.id,
-                f"{behaviour.id} is covered by no scenario.",
-            )
-        )
-
-    for scenario in specification.scenarios:
-        if not any(t.scenario_ref == scenario.id for t in specification.tasks):
+    # A measured behaviour no selected Test Case exercises is measured on nothing.
+    covered = {
+        ref
+        for task in tasks
+        if task.persona_ref in persona_ids and specification.scenario(task.scenario_ref)
+        for ref in task.behaviour_refs
+    }
+    for behaviour in specification.measured_behaviours():
+        if behaviour.id not in covered:
             gaps.append(
                 _gap(
-                    MissingDataCode.SCENARIO_NO_PERSONA,
-                    scenario.id,
-                    f"{scenario.id} needs a Task.",
+                    MissingDataCode.BEHAVIOUR_UNCOVERED,
+                    behaviour.id,
+                    f"{behaviour.id} is covered by no selected Test Case.",
                 )
             )
-    for task in specification.tasks:
-        if not task.behaviour_refs or not all(
-            any(b.id == ref for b in specification.measured_behaviours())
-            for ref in task.behaviour_refs
-        ):
+
+    for later, earlier in duplicate_test_cases(specification, tasks):
+        gaps.append(
+            _gap(
+                MissingDataCode.SCENARIO_DUPLICATE_PAIR,
+                later,
+                f"{later} uses the same Persona and Scenario as {earlier}.",
+            )
+        )
+    for task in tasks:
+        if not task.behaviour_refs or not set(task.behaviour_refs) <= measured:
             gaps.append(
                 _gap(
                     MissingDataCode.SCENARIO_NO_SELECTED_BEHAVIOUR,
@@ -111,7 +134,9 @@ def scenario_readiness(specification: Specification) -> list[MissingData]:
     return gaps
 
 
-def specification_readiness(specification: Specification) -> list[MissingData]:
+def specification_readiness(
+    specification: Specification, excluded: AbstractSet[str] = frozenset()
+) -> list[MissingData]:
     """Return all objective gaps before a Specification can produce a runnable experiment."""
     gaps: list[MissingData] = []
     if not specification.target.name or not specification.target.description:
@@ -160,14 +185,35 @@ def specification_readiness(specification: Specification) -> list[MissingData]:
             )
         )
 
-    gaps.extend(scenario_readiness(specification))
+    gaps.extend(scenario_readiness(specification, excluded))
     return gaps
 
 
-def _gap(code: MissingDataCode, subject: str | None, message: str) -> MissingData:
+def _gap(
+    code: MissingDataCode,
+    subject: str | None,
+    message: str,
+    *,
+    stage: InterviewStep = InterviewStep.TEST_CASES,
+) -> MissingData:
     return MissingData(
         code=code,
-        stage=InterviewStep.SCENARIOS,
+        stage=stage,
         subject=subject,
         message=message,
     )
+
+
+def selected_specification(
+    specification: Specification, excluded: AbstractSet[str]
+) -> Specification:
+    """A copy with only the selected Test Cases: what compile and export use.
+
+    A Scenario that no selected Test Case uses is left out too, because the engine runs each
+    Scenario through its Test Cases.
+    """
+    copy = specification.model_copy(deep=True)
+    copy.tasks = [task for task in copy.tasks if task.id not in excluded]
+    used = {task.scenario_ref for task in copy.tasks}
+    copy.scenarios = [scenario for scenario in copy.scenarios if scenario.id in used]
+    return copy

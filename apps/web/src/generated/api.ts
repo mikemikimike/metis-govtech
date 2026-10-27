@@ -314,15 +314,13 @@ export interface components {
         };
         /**
          * BehaviourCard
-         * @description The behaviours and criteria steps. On behaviours it carries the measurement tick — review
-         *     and the "which do we measure" ask are one screen — and at criteria its components are its
-         *     criteria and its options are scoped to its behaviour.
+         * @description The standard card: a Behaviour, a Persona or a Scenario.
          *
-         *     `selected` keeps the base's `bool | None`: a bool on both steps, reflecting the measured
-         *     state a checkbox draws. A door draws no box only for `None`, which no live Behaviour card
+         *     On Behaviours it carries the measurement tick, so review and the "which do we measure" ask
+         *     are one screen. At Criteria its components are its Criteria and it has no checkbox.
          *     now sets.
          */
-        BehaviourCard: {
+        "BehaviourCard-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -332,12 +330,68 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+            /** Profile Section Id */
+            profile_section_id?: ("behaviours" | "personas" | "scenarios" | "test-cases") | null;
             /** Section */
             section?: string | null;
+            /** Section Id */
+            section_id?: string | null;
             /** Selected */
             selected?: boolean | null;
+            /**
+             * Show Id
+             * @default true
+             */
+            show_id: boolean;
             /** Components */
-            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDisclosure"])[];
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDetails-Input"])[];
+            /** Columns */
+            columns?: components["schemas"]["CardColumn-Input"][];
+            /** Options */
+            options?: components["schemas"]["Option"][];
+            /** Note */
+            note?: string | null;
+            /**
+             * Blocking
+             * @default false
+             */
+            blocking: boolean;
+        };
+        /**
+         * BehaviourCard
+         * @description The standard card: a Behaviour, a Persona or a Scenario.
+         *
+         *     On Behaviours it carries the measurement tick, so review and the "which do we measure" ask
+         *     are one screen. At Criteria its components are its Criteria and it has no checkbox.
+         *     now sets.
+         */
+        "BehaviourCard-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "standard";
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Profile Section Id */
+            profile_section_id?: ("behaviours" | "personas" | "scenarios" | "test-cases") | null;
+            /** Section */
+            section?: string | null;
+            /** Section Id */
+            section_id?: string | null;
+            /** Selected */
+            selected?: boolean | null;
+            /**
+             * Show Id
+             * @default true
+             */
+            show_id: boolean;
+            /** Components */
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDetails-Output"])[];
+            /** Columns */
+            columns?: components["schemas"]["CardColumn-Output"][];
             /** Options */
             options?: components["schemas"]["Option"][];
             /** Note */
@@ -411,17 +465,71 @@ export interface components {
          * @enum {string}
          */
         CapabilityId: "planning_goal_management" | "agent_delegation" | "tool_use" | "multimodal_understanding_generation" | "official_communication" | "business_transactions" | "internet_search_access" | "computer_use" | "other_programmatic_interfaces" | "code_execution" | "file_data_management" | "system_management";
-        /** CardDisclosure */
-        CardDisclosure: {
+        /** CardColumn */
+        "CardColumn-Input": {
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Components */
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDetails-Input"])[];
+        };
+        /** CardColumn */
+        "CardColumn-Output": {
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+            /** Components */
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDetails-Output"])[];
+        };
+        /** CardDetails */
+        "CardDetails-Input": {
             /** Label */
             label?: string | null;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "disclosure";
-            /** Items */
-            items?: components["schemas"]["CardText"][];
+            type: "details";
+            /** Title */
+            title: string;
+            /** Components */
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDetails-Input"])[];
+            /**
+             * Expanded
+             * @default false
+             */
+            expanded: boolean;
+        };
+        /** CardDetails */
+        "CardDetails-Output": {
+            /** Label */
+            label?: string | null;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "details";
+            /** Title */
+            title: string;
+            /** Components */
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDetails-Output"])[];
+            /**
+             * Expanded
+             * @default false
+             */
+            expanded: boolean;
         };
         /**
          * CardDivider
@@ -430,6 +538,11 @@ export interface components {
         CardDivider: {
             /** Label */
             label?: string | null;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -440,6 +553,11 @@ export interface components {
         CardNumberField: {
             /** Label */
             label?: string | null;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -464,6 +582,11 @@ export interface components {
             /** Label */
             label?: string | null;
             /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
+            /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
@@ -476,6 +599,11 @@ export interface components {
             /** Label */
             label?: string | null;
             /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
+            /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
@@ -487,6 +615,11 @@ export interface components {
         CardUploadField: {
             /** Label */
             label?: string | null;
+            /**
+             * Muted
+             * @default false
+             */
+            muted: boolean;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -524,6 +657,8 @@ export interface components {
             multiline: boolean;
             /** Target */
             target?: string | null;
+            /** Target Label */
+            target_label?: string | null;
             /**
              * Answer
              * @default
@@ -541,7 +676,7 @@ export interface components {
             text: string;
         };
         /** ChoiceRequest */
-        ChoiceRequest: {
+        "ChoiceRequest-Input": {
             /** Prompt */
             prompt: string;
             /** Title */
@@ -559,15 +694,66 @@ export interface components {
              * @enum {string}
              */
             type: "choice";
+            /** Profile Section Id */
+            profile_section_id?: ("behaviours" | "personas" | "scenarios" | "test-cases") | null;
+            /** Feedback Placeholder */
+            feedback_placeholder?: string | null;
+            /** Feedback Answer */
+            feedback_answer?: string;
             /** Options */
             options?: components["schemas"]["Option"][];
+            /** Sections */
+            sections?: components["schemas"]["ReviewSection"][];
             /**
              * Multi
              * @default false
              */
             multi: boolean;
             /** Cards */
-            cards?: (components["schemas"]["BehaviourCard"] | components["schemas"]["ScenarioCard"])[];
+            cards?: (components["schemas"]["BehaviourCard-Input"] | components["schemas"]["ScenarioCard-Input"])[];
+            /** Warnings */
+            warnings?: components["schemas"]["Warning"][];
+            /** Footer */
+            footer?: string | null;
+            /** Instruction */
+            instruction?: string | null;
+        };
+        /** ChoiceRequest */
+        "ChoiceRequest-Output": {
+            /** Prompt */
+            prompt: string;
+            /** Title */
+            title?: string | null;
+            /** Step */
+            step?: number | null;
+            /** Steps */
+            steps?: number | null;
+            /** @default pending */
+            state: components["schemas"]["WizardRequestState"];
+            request_id: string;
+            stage: components["schemas"]["InterviewStep"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "choice";
+            /** Profile Section Id */
+            profile_section_id?: ("behaviours" | "personas" | "scenarios" | "test-cases") | null;
+            /** Feedback Placeholder */
+            feedback_placeholder?: string | null;
+            /** Feedback Answer */
+            feedback_answer?: string;
+            /** Options */
+            options?: components["schemas"]["Option"][];
+            /** Sections */
+            sections?: components["schemas"]["ReviewSection"][];
+            /**
+             * Multi
+             * @default false
+             */
+            multi: boolean;
+            /** Cards */
+            cards?: (components["schemas"]["BehaviourCard-Output"] | components["schemas"]["ScenarioCard-Output"])[];
             /** Warnings */
             warnings?: components["schemas"]["Warning"][];
             /** Footer */
@@ -577,6 +763,8 @@ export interface components {
         };
         /** ChoiceResponse */
         ChoiceResponse: {
+            /** Feedback */
+            feedback?: string;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -780,6 +968,20 @@ export interface components {
             behaviours?: components["schemas"]["Behaviour"][];
         };
         /**
+         * FormChoice
+         * @description One entry of a dropdown: the door shows `label` and sends `value`.
+         *
+         *     The split lets a form send an id ("P-2") while the user reads a name.
+         */
+        FormChoice: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+            /** Hint */
+            hint?: string | null;
+        };
+        /**
          * FormField
          * @description A typed control whose submitted value is transported as text.
          */
@@ -803,7 +1005,7 @@ export interface components {
              * @default string
              * @enum {string}
              */
-            input_type: "string" | "integer" | "number" | "boolean";
+            input_type: "string" | "integer" | "number" | "boolean" | "pairs";
             /**
              * Value
              * @default
@@ -815,7 +1017,12 @@ export interface components {
              */
             required: boolean;
             /** Choices */
-            choices?: string[];
+            choices?: components["schemas"]["FormChoice"][];
+            /**
+             * Multiple
+             * @default false
+             */
+            multiple: boolean;
             /**
              * Help
              * @default
@@ -823,6 +1030,8 @@ export interface components {
             help: string;
             /** Group */
             group?: string | null;
+            /** Column */
+            column?: string | null;
         };
         /** FormRequest */
         FormRequest: {
@@ -839,12 +1048,31 @@ export interface components {
             request_id: string;
             stage: components["schemas"]["InterviewStep"];
             /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose?: "add" | "edit";
+            /**
+             * Cancellable
+             * @default false
+             */
+            cancellable: boolean;
+            /**
+             * Submit Label
+             * @default Save
+             */
+            submit_label: string;
+            /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             type: "form";
             /** Fields */
             fields: components["schemas"]["FormField"][];
+            /** Used Combinations */
+            used_combinations?: {
+                [key: string]: string;
+            }[];
             /** Target */
             target?: string | null;
             /** Answer */
@@ -854,6 +1082,11 @@ export interface components {
         };
         /** FormResponse */
         FormResponse: {
+            /**
+             * Cancelled
+             * @default false
+             */
+            cancelled: boolean;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -962,7 +1195,7 @@ export interface components {
          *     This is not an Interview operation: it changes no Specification content and calls no model.
          */
         InterviewConnectionRequest: {
-            state: components["schemas"]["InterviewState"];
+            state: components["schemas"]["InterviewState-Input"];
             connection?: components["schemas"]["TargetConnection"] | null;
         };
         /**
@@ -972,7 +1205,7 @@ export interface components {
         InterviewContext: {
             /** @default end_user */
             perspective: components["schemas"]["Perspective"];
-            capability_evidence: components["schemas"]["CapabilityEvidence"];
+            capability_evidence?: components["schemas"]["CapabilityEvidence"] | null;
             /**
              * Opening Description
              * @default
@@ -997,7 +1230,7 @@ export interface components {
          * @description Run best-effort completion for the supplied client-held state.
          */
         InterviewEndRequest: {
-            state: components["schemas"]["InterviewState"];
+            state: components["schemas"]["InterviewState-Input"];
         };
         /**
          * InterviewErrorCode
@@ -1020,10 +1253,10 @@ export interface components {
             message: string;
             /** Retryable */
             retryable: boolean;
-            state?: components["schemas"]["InterviewState"] | null;
+            state?: components["schemas"]["InterviewState-Output"] | null;
             /** Missing */
             missing?: components["schemas"]["MissingData"][];
-            diagnostic_state?: components["schemas"]["InterviewState"] | null;
+            diagnostic_state?: components["schemas"]["InterviewState-Output"] | null;
             /** Diagnostic Message */
             diagnostic_message?: string | null;
         };
@@ -1037,8 +1270,8 @@ export interface components {
             /** @default end_user */
             perspective: components["schemas"]["Perspective"];
             /** Known Capability Ids */
-            known_capability_ids: components["schemas"]["CapabilityId"][];
-            capability_confidence: components["schemas"]["CapabilityConfidence"];
+            known_capability_ids?: components["schemas"]["CapabilityId"][] | null;
+            capability_confidence?: components["schemas"]["CapabilityConfidence"] | null;
             /** Documents */
             documents?: components["schemas"]["InterviewDocument"][];
             connection?: components["schemas"]["TargetConnection"] | null;
@@ -1050,7 +1283,7 @@ export interface components {
          *     There is no `id`, `step`, resolved-request transcript, or file method. The pending request is
          *     the only structured request, and it carries its own stage; the stage is not duplicated here.
          */
-        InterviewState: {
+        "InterviewState-Input": {
             specification: components["schemas"]["Specification"];
             context: components["schemas"]["InterviewContext"];
             /**
@@ -1065,18 +1298,59 @@ export interface components {
             confirmed: boolean;
             /** History */
             history?: components["schemas"]["Turn"][];
+            /** Step Messages */
+            step_messages?: {
+                [key: string]: string;
+            };
             /** User Typed */
             user_typed?: string[];
+            /** Excluded Tasks */
+            excluded_tasks?: string[];
             /** Issued Ids */
             issued_ids?: string[];
             /** Pending */
-            pending?: (components["schemas"]["ChatRequest"] | components["schemas"]["ChoiceRequest"] | components["schemas"]["FormRequest"]) | null;
+            pending?: (components["schemas"]["ChatRequest"] | components["schemas"]["ChoiceRequest-Input"] | components["schemas"]["FormRequest"]) | null;
+        };
+        /**
+         * InterviewState
+         * @description One client-held value, serialized to JSON between turns.
+         *
+         *     There is no `id`, `step`, resolved-request transcript, or file method. The pending request is
+         *     the only structured request, and it carries its own stage; the stage is not duplicated here.
+         */
+        "InterviewState-Output": {
+            specification: components["schemas"]["Specification"];
+            context: components["schemas"]["InterviewContext"];
+            /**
+             * Behaviours Confirmed
+             * @default false
+             */
+            behaviours_confirmed: boolean;
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /** History */
+            history?: components["schemas"]["Turn"][];
+            /** Step Messages */
+            step_messages?: {
+                [key: string]: string;
+            };
+            /** User Typed */
+            user_typed?: string[];
+            /** Excluded Tasks */
+            excluded_tasks?: string[];
+            /** Issued Ids */
+            issued_ids?: string[];
+            /** Pending */
+            pending?: (components["schemas"]["ChatRequest"] | components["schemas"]["ChoiceRequest-Output"] | components["schemas"]["FormRequest"]) | null;
         };
         /**
          * InterviewStep
          * @enum {string}
          */
-        InterviewStep: "clarify" | "behaviours" | "criteria" | "personas" | "scenarios" | "done";
+        InterviewStep: "clarify" | "behaviours" | "criteria" | "personas" | "scenarios" | "test_cases" | "done";
         /**
          * InterviewSuccess
          * @description A successful start, turn, or end operation.
@@ -1087,7 +1361,7 @@ export interface components {
              * @enum {string}
              */
             type: "success";
-            state: components["schemas"]["InterviewState"];
+            state: components["schemas"]["InterviewState-Output"];
             stage: components["schemas"]["InterviewStep"];
             /** Missing */
             missing?: components["schemas"]["MissingData"][];
@@ -1102,7 +1376,7 @@ export interface components {
          * @description Answer the one pending request with its typed response.
          */
         InterviewTurnRequest: {
-            state: components["schemas"]["InterviewState"];
+            state: components["schemas"]["InterviewState-Input"];
             /** Request Id */
             request_id: string;
             /** Response */
@@ -1156,7 +1430,7 @@ export interface components {
          * @description Stable codes for gaps that stop a Specification from being runnable.
          * @enum {string}
          */
-        MissingDataCode: "target_incomplete" | "behaviours_incomplete" | "no_measured_behaviour" | "criteria_incomplete" | "no_personas" | "no_scenarios" | "behaviour_uncovered" | "scenario_no_selected_behaviour" | "scenario_no_persona" | "scenario_unknown_reference" | "scenario_invalid_trials";
+        MissingDataCode: "target_incomplete" | "behaviours_incomplete" | "no_measured_behaviour" | "criteria_incomplete" | "no_personas" | "no_scenarios" | "behaviour_uncovered" | "scenario_no_selected_behaviour" | "no_selected_test_case" | "scenario_unknown_reference" | "scenario_duplicate_pair" | "scenario_invalid_trials";
         /**
          * ModelRole
          * @description One LLM role in the METIS flow.
@@ -1193,6 +1467,12 @@ export interface components {
             id: components["schemas"]["OptionId"];
             /** Label */
             label: string;
+            /** Icon */
+            icon?: ("pencil" | "plus" | "trash") | null;
+            /** Hint */
+            hint?: string | null;
+            /** Confirm */
+            confirm?: string | null;
             patch?: components["schemas"]["Patch"] | null;
             /** Selected */
             selected?: boolean | null;
@@ -1290,6 +1570,26 @@ export interface components {
             question: string;
         };
         /**
+         * ReviewSection
+         * @description A heading on a review screen, with the actions that belong to it.
+         *
+         *     Headings live on the request, not on a card, so a section with no cards can still offer
+         *     its "+". There are two levels. A Profile section heading has `parent` None and its `id` is
+         *     a Profile section id ("personas"). A group heading inside it, such as a Feature, has
+         *     `parent` set to that Profile section id, and the cards under it carry its `id` in
+         *     `Card.section_id`.
+         */
+        ReviewSection: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Parent */
+            parent?: ("behaviours" | "personas" | "scenarios" | "test-cases") | null;
+            /** Options */
+            options?: components["schemas"]["Option"][];
+        };
+        /**
          * Scenario
          * @description The situation in which Tasks evaluate the target.
          */
@@ -1307,9 +1607,12 @@ export interface components {
         };
         /**
          * ScenarioCard
-         * @description The scenarios step. Components start with description, then Covers, Run as, Trials, Files.
+         * @description One Test Case row: Persona, Scenario, Behaviours, Trials and Files columns.
+         *
+         *     `selected` is True when the Test Case is included in the evaluation. Its `tick` option
+         *     changes that.
          */
-        ScenarioCard: {
+        "ScenarioCard-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -1319,12 +1622,69 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+            /** Profile Section Id */
+            profile_section_id?: ("behaviours" | "personas" | "scenarios" | "test-cases") | null;
             /** Section */
             section?: string | null;
+            /** Section Id */
+            section_id?: string | null;
             /** Selected */
-            selected?: null;
+            selected?: boolean | null;
+            /**
+             * Show Id
+             * @default true
+             */
+            show_id: boolean;
             /** Components */
-            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDisclosure"])[];
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDetails-Input"])[];
+            /** Columns */
+            columns?: components["schemas"]["CardColumn-Input"][];
+            /** Options */
+            options?: components["schemas"]["Option"][];
+            /** Note */
+            note?: string | null;
+            /**
+             * Blocking
+             * @default false
+             */
+            blocking: boolean;
+            /** Trials */
+            trials: number;
+        };
+        /**
+         * ScenarioCard
+         * @description One Test Case row: Persona, Scenario, Behaviours, Trials and Files columns.
+         *
+         *     `selected` is True when the Test Case is included in the evaluation. Its `tick` option
+         *     changes that.
+         */
+        "ScenarioCard-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "scenario";
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Profile Section Id */
+            profile_section_id?: ("behaviours" | "personas" | "scenarios" | "test-cases") | null;
+            /** Section */
+            section?: string | null;
+            /** Section Id */
+            section_id?: string | null;
+            /** Selected */
+            selected?: boolean | null;
+            /**
+             * Show Id
+             * @default true
+             */
+            show_id: boolean;
+            /** Components */
+            components?: (components["schemas"]["CardText"] | components["schemas"]["CardOptionGroup"] | components["schemas"]["CardNumberField"] | components["schemas"]["CardUploadField"] | components["schemas"]["CardDivider"] | components["schemas"]["CardDetails-Output"])[];
+            /** Columns */
+            columns?: components["schemas"]["CardColumn-Output"][];
             /** Options */
             options?: components["schemas"]["Option"][];
             /** Note */
@@ -2011,7 +2371,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InterviewState"];
+                    "application/json": components["schemas"]["InterviewState-Output"];
                 };
             };
             /** @description Unprocessable Entity */

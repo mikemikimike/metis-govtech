@@ -153,6 +153,7 @@ export function RunSettings({
   busy,
   onChange,
   onContinue,
+  onBack,
 }: {
   roles: readonly RunModelRole[];
   statuses: readonly ModelStatus[];
@@ -160,6 +161,8 @@ export function RunSettings({
   busy: boolean;
   onChange: (role: RunModelRole, value: string) => void;
   onContinue: () => void;
+  // Reopens the last review of the Interview.
+  onBack?: () => void;
 }) {
   const byRole = new Map(statuses.map((status) => [status.role, status]));
   return (
@@ -199,7 +202,12 @@ export function RunSettings({
           </div>
         );
       })}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        {onBack && (
+          <Button disabled={busy} onClick={onBack}>
+            ← Back
+          </Button>
+        )}
         <Button variant="primary" disabled={busy} onClick={onContinue}>
           Continue and download
         </Button>

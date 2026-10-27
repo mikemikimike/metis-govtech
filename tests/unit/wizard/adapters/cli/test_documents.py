@@ -48,7 +48,7 @@ def _init(out_dir: Path, *documents: Path):
     for path in documents:
         arguments += ["--document", str(path)]
     # A blank capability selection, then the confidence.
-    return CliRunner().invoke(create_cli_app(), arguments, input="\nlow\n")
+    return CliRunner().invoke(create_cli_app(), arguments, input="end_user\n\nlow\n")
 
 
 def test_a_readable_document_goes_to_the_interview_with_its_text(
@@ -193,7 +193,7 @@ def test_a_restart_with_new_documents_removes_the_old_copies_from_the_package(
         create_cli_app(),
         ["init", "A research assistant", "--out-dir", str(out_dir), "--restart"]
         + ["--document", str(new)],
-        input="\nlow\n",
+        input="end_user\n\nlow\n",
     )
 
     assert result.exit_code == 0, result.output

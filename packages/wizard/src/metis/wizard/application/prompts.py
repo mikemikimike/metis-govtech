@@ -40,8 +40,8 @@ ModelCall: TypeAlias = Literal[
     "criteria",
     "personas",
     "scenarios",
+    "test_cases",
     "chat",
-    "suggest_criterion",
 ]
 
 _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
@@ -62,8 +62,8 @@ _MODEL_CALL_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "criteria": frozenset({"specification"}),
     "personas": frozenset({"specification"}),
     "scenarios": frozenset({"specification"}),
+    "test_cases": frozenset({"specification"}),
     "chat": frozenset({"specification", "step", "text", "scope"}),
-    "suggest_criterion": frozenset({"specification", "behaviour_id"}),
 }
 _SYSTEM_PLACEHOLDERS = frozenset(
     {
@@ -74,6 +74,8 @@ _SYSTEM_PLACEHOLDERS = frozenset(
         "opening_description",
         "documents",
         "available_fixtures",
+        "perspective_guidance",
+        "capability_evidence",
     }
 )
 
@@ -216,6 +218,8 @@ def _system_message(
             "primer": primer(),
             "arc_catalogue": arc_catalogue(),
             "perspective": _perspective_id(context),
+            "perspective_guidance": _perspective(context),
+            "capability_evidence": _capability_evidence(context),
             "opening_description": json.dumps(
                 context.opening_description if context else "",
                 ensure_ascii=False,
@@ -281,8 +285,8 @@ def arc_catalogue() -> str:
 
 def _capability_evidence(context: InterviewContext | None) -> str:
     """Describe the user's capability evidence without treating omissions as negatives."""
-    if context is None:
-        raise PromptCatalogError("capability evidence is required for this model call.")
+    if context is None or context.capability_evidence is None:
+        return "Capability evidence: unspecified. Infer abilities only from target evidence. Do not infer absence or invent confidence."
     evidence = context.capability_evidence
     selected = ", ".join(item.value for item in evidence.known_capability_ids) or "none"
     guidance = {
@@ -413,6 +417,16 @@ def scenarios(
     )
 
 
+def test_cases(
+    specification: Specification, context: InterviewContext | None = None
+) -> ModelPrompt:
+    return _compose(
+        "test_cases",
+        {"specification": _specification(specification)},
+        context=context,
+    )
+
+
 def chat(
     specification: Specification,
     step: str,
@@ -434,18 +448,6 @@ def chat(
     )
 
 
-def suggest_criterion(
-    specification: Specification,
-    behaviour_id: str,
-    context: InterviewContext | None = None,
-) -> ModelPrompt:
-    return _compose(
-        "suggest_criterion",
-        {"specification": _specification(specification), "behaviour_id": behaviour_id},
-        context=context,
-    )
-
-
 __all__ = [
     "ModelCall",
     "ModelPrompt",
@@ -463,5 +465,5 @@ __all__ = [
     "personas",
     "primer",
     "scenarios",
-    "suggest_criterion",
+    "test_cases",
 ]

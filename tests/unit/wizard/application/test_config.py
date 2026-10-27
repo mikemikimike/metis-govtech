@@ -23,6 +23,7 @@ _EXPECTED_STATUSES = {
     "criteria": "Writing testable criteria…",
     "personas": "Designing evaluator personas…",
     "scenarios": "Building coverage scenarios…",
+    "test_cases": "Matching personas to scenarios…",
     "done": "Finishing up…",
 }
 _EXPECTED_WORKING_STATUS = "Working on your Interview…"

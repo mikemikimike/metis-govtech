@@ -312,7 +312,7 @@ def _server_url(document: Mapping[str, Any], url: str) -> str:
 
 
 def _summary(document: Mapping[str, Any]) -> str:
-    """For example `OpenAPI document: Billing API 2.0 · 14 endpoints`."""
+    """For example `OpenAPI document: Billing API 2.0, 14 endpoints`."""
     info = document.get("info") if isinstance(document.get("info"), dict) else {}
     title = str(info.get("title") or "untitled API")
     version = f" {info['version']}" if info.get("version") else ""
@@ -324,7 +324,7 @@ def _summary(document: Mapping[str, Any]) -> str:
         if method.lower() in _HTTP_METHODS
     )
     noun = "endpoint" if count == 1 else "endpoints"
-    return f"OpenAPI document: {title}{version} · {count} {noun}"
+    return f"OpenAPI document: {title}{version}, {count} {noun}"
 
 
 _HTTP_METHODS = frozenset({"get", "put", "post", "delete", "options", "head", "patch"})

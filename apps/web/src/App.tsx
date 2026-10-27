@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
 } from "react";
 import { PanelLeft, PanelRight, Puzzle, X } from "lucide-react";
 import type {
@@ -21,7 +22,14 @@ import type {
   TargetConnection,
 } from "./transport/api";
 import { api, TransportError, toSummary } from "./transport/api";
-import { Composer, Transcript } from "./Conversation";
+import {
+  ActiveReview,
+  Composer,
+  placeForm,
+  reviewParts,
+  ReviewSectionActions,
+  Transcript,
+} from "./Conversation";
 import { ConnectionForm } from "./ConnectionStep";
 import {
   bindingFromDraft,
@@ -44,6 +52,7 @@ import {
 } from "./RunSettings";
 import { SpecificationView, stepPosition } from "./SpecificationView";
 import { InterviewRail } from "./InterviewRail";
+import { PaneDivider, useChatWidth } from "./pane-divider";
 import { Button, cn } from "./ui";
 import {
   CapabilityConfidencePicker,
@@ -68,14 +77,15 @@ import {
 import { specificationHasCriteria } from "./graders";
 import { downloadArchive } from "./download";
 import { ManualAuthoringEntry, ManualForm } from "./ManualForm";
-import { applyEnd, startTranscript, toPresentation } from "./wizard/transcript";
+import {
+  activeReview,
+  applyEnd,
+  startTranscript,
+  toPresentation,
+} from "./wizard/transcript";
 
 import { TabNavigation, type TabEntry } from "./wizard/navigation";
 import { InterviewOperations, pendingEntry } from "./wizard/operations";
-
-const DOCUMENT_WIDTH_DEFAULT = 42;
-const DOCUMENT_WIDTH_MIN = 24;
-const DOCUMENT_WIDTH_MAX = 60;
 
 const repository = new InterviewRepository();
 type WizardConfig = Awaited<ReturnType<typeof api.config>>;
@@ -117,11 +127,14 @@ async function extractOpeningDocuments(
   return document.text;
 }
 
-// Capabilities are optional. With no confidence, the selection may be incomplete, which is what
+// Capabilities are optional. An untouched picker sends no evidence, so the Interview treats
+// capabilities as unspecified. A selection with no confidence may be incomplete, which is what
 // "low" tells the Interview.
 export function completeCapabilityEvidence(
   draft: CapabilityEvidenceDraft,
-): CapabilityEvidence {
+): CapabilityEvidence | null {
+  if (draft.known_capability_ids.length === 0 && draft.confidence === null)
+    return null;
   return {
     known_capability_ids: draft.known_capability_ids,
     confidence: draft.confidence ?? "low",
@@ -174,7 +187,7 @@ export function App() {
   const drafts = useRef(new Map<string, string>());
   const [, setDraftRevision] = useState(0);
   const formDrafts = useRef(new Map<string, Record<string, string>>());
-  const draftKey = `${record?.id ?? "new"}:${record?.state.pending?.request_id ?? ""}`;
+  const draftKey = `${record?.id ?? "new"}:${record?.state.pending?.type === "choice" && record.state.pending.feedback_placeholder ? `feedback-${record.state.pending.stage}` : (record?.state.pending?.request_id ?? "")}`;
   const [workingStatus, setWorkingStatus] = useState("Working…");
   const [wizardConfig, setWizardConfig] = useState<WizardConfigState>({
     status: "loading",
@@ -206,9 +219,20 @@ export function App() {
   const [loadingRecord, setLoadingRecord] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [railOpen, setRailOpen] = useState(true);
-  const [specificationOpen, setSpecificationOpen] = useState(true);
+  const [chatWidth, setChatWidth] = useChatWidth();
+  const panesRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const narrow = window.matchMedia("(max-width: 767px)");
+    const closePanels = () => {
+      if (narrow.matches) {
+        setRailOpen(false);
+      }
+    };
+    closePanels();
+    narrow.addEventListener("change", closePanels);
+    return () => narrow.removeEventListener("change", closePanels);
+  }, []);
   const [manualOpen, setManualOpen] = useState(false);
-  const [documentWidth, setDocumentWidth] = useState(DOCUMENT_WIDTH_DEFAULT);
   const [showGraders, setShowGraders] = useState(false);
   const [graderCatalogue, setGraderCatalogue] = useState<Awaited<
     ReturnType<typeof api.graders>
@@ -226,14 +250,49 @@ export function App() {
   const [runSettingsFor, setRunSettingsFor] = useState<string | null>(null);
 
   const view = useMemo(() => record && toPresentation(record), [record]);
+  const review = view && !view.done ? activeReview(view.requests) : null;
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
   const conversationRevision = conversationScrollRevision(
     view?.id ?? null,
     view?.requests.length ?? 0,
     view?.done ?? false,
-    String(record?.submission_revision ?? 0),
+    `${record?.submission_revision ?? 0}:${record ? (pendingEntry(record)?.status ?? "") : ""}`,
   );
   const pending = record?.state.pending ?? undefined;
+  // The composer keeps one draft per review step, so a draft typed while a form is open stays
+  // when the form closes.
+  // A pending form that an item of the live review opened. The Profile draws it in place.
+  const profileForm =
+    review && pending?.type === "form" && placeForm(review, pending)
+      ? pending
+      : null;
+  const failedEntry = record && profileForm ? pendingEntry(record) : undefined;
+  const profileFailure =
+    record && failedEntry?.status === "failed" && failedEntry.failure
+      ? {
+          message: failedEntry.failure.message,
+          onRetry: failedEntry.failure.retryable
+            ? () => void operations.retry(record)
+            : undefined,
+          onEdit:
+            failedEntry.failure.kind !== "storage"
+              ? () => {
+                  const response = failedEntry.response;
+                  if (response?.type === "form")
+                    formDrafts.current.set(draftKey, response.values ?? {});
+                  void operations.edit(record);
+                }
+              : undefined,
+        }
+      : null;
+  const replyBusy =
+    busy ||
+    (record !== null &&
+      (operations.pendingSaves.has(record.id) ||
+        ["sending", "failed"].includes(pendingEntry(record)?.status ?? "")));
+  const composerKey = review
+    ? `${record?.id ?? "new"}:feedback-${review.stage}`
+    : draftKey;
   const graderByFqn = useMemo(
     () =>
       new Map((graderCatalogue ?? []).map((grader) => [grader.fqn, grader])),
@@ -258,6 +317,8 @@ export function App() {
   const scrollInterview = useRef<string | null>(null);
   useLayoutEffect(() => {
     const container = conversationScrollRef.current;
+    // New content in the conversation (a reply, the working line, a failure with Retry) scrolls into
+    // view when the user was at the foot, on review steps too.
     if (container && (nearFoot.current || scrollInterview.current !== view?.id))
       container.scrollTop = container.scrollHeight;
     scrollInterview.current = view?.id ?? null;
@@ -457,7 +518,7 @@ export function App() {
     async (
       description: string,
       perspective: Perspective,
-      evidence: CapabilityEvidence,
+      evidence: CapabilityEvidence | null,
       connection: TargetConnection | null = null,
     ) => {
       if (busy) return;
@@ -586,13 +647,53 @@ export function App() {
       if (!record) return;
       const key = `${record.id}:${record.state.pending?.request_id ?? ""}`;
       await operations.send(record, response, files, removedFixtures, () => {
-        drafts.current.delete(key);
+        if (response.type === "chat") drafts.current.delete(draftKey);
+        if (response.type === "choice" && response.feedback)
+          drafts.current.delete(composerKey);
         formDrafts.current.delete(key);
         setDraftRevision((value) => value + 1);
       });
     },
-    [operations, record],
+    [operations, record, draftKey, composerKey],
   );
+
+  // Typed text goes to the pending request. A review takes it as feedback. The package accepts only
+  // a form response while a form is open, so text typed then first cancels the form and then goes
+  // to the review that the package sends back. The text stays in the composer until the feedback
+  // itself is accepted: if the cancel fails, the user retries it and then sends the same text.
+  const sendText = useCallback(
+    async (text: string) => {
+      if (!record) return;
+      if (pending?.type === "chat") return send({ type: "chat", text });
+      if (pending?.type === "choice")
+        return send({ type: "choice", feedback: text });
+      if (pending?.type !== "form" || !pending.cancellable) return;
+      await send({ type: "form", cancelled: true, values: {} });
+      const latest = operations.latest.get(record.id);
+      const next = latest?.state.pending;
+      if (!latest || next?.type !== "choice" || !next.feedback_placeholder)
+        return;
+      await operations.send(
+        latest,
+        { type: "choice", feedback: text },
+        [],
+        [],
+        () => {
+          drafts.current.delete(composerKey);
+          setDraftRevision((value) => value + 1);
+        },
+      );
+    },
+    [record, pending, send, operations, composerKey],
+  );
+
+  // Back from Run settings or Done reopens the last review of the completed Interview.
+  const backFromDone = useCallback(async () => {
+    if (!record) return;
+    setRunSettingsFor(null);
+    setRunModelDrafts(null);
+    await operations.reopen(record);
+  }, [record, operations]);
 
   const finish = useCallback(async () => {
     if (!record || operations.pendingSaves.has(record.id)) return;
@@ -622,7 +723,7 @@ export function App() {
     async (
       description: string,
       perspective: Perspective,
-      evidence: CapabilityEvidence,
+      evidence: CapabilityEvidence | null,
     ) => {
       if (connectionDraft.mode === "spec") {
         void beginWithMessage(description, perspective, evidence, null);
@@ -711,10 +812,9 @@ export function App() {
   }, [record, runModelDrafts, operations, packageAndDownload, downloadCurrent]);
 
   if (!loaded) return null;
-  const showDocument = view !== null && !manualOpen;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
+    <div className="flex h-full w-full overflow-hidden">
       {railOpen ? (
         <InterviewRail
           interviews={interviews}
@@ -820,21 +920,25 @@ export function App() {
             perspectiveSeen={perspectiveSeen}
           />
         ) : (
-          <>
-            <div
-              key={view.id}
-              ref={conversationScrollRef}
-              onScroll={(event) => {
-                const element = event.currentTarget;
-                nearFoot.current =
-                  element.scrollHeight -
-                    element.scrollTop -
-                    element.clientHeight <
-                  100;
-              }}
-              className="quiet-scrollbar animate-enter-conversation flex-1 overflow-y-auto py-10"
-            >
-              <div className="mx-auto flex w-4/5 flex-col gap-8">
+          <div
+            ref={panesRef}
+            className="flex min-h-0 flex-1 flex-col md:flex-row"
+            style={{ "--chat-width": `${chatWidth}%` } as CSSProperties}
+          >
+            <div className="flex h-[35vh] min-h-40 min-w-0 shrink-0 flex-col md:h-auto md:min-h-0 md:w-[var(--chat-width)]">
+              <div
+                key={view.id}
+                ref={conversationScrollRef}
+                onScroll={(event) => {
+                  const element = event.currentTarget;
+                  nearFoot.current =
+                    element.scrollHeight -
+                      element.scrollTop -
+                      element.clientHeight <
+                    100;
+                }}
+                className="quiet-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-8"
+              >
                 <Transcript
                   requests={view.requests}
                   entries={record?.transcript}
@@ -848,12 +952,15 @@ export function App() {
                     const response = pendingEntry(record)?.response;
                     if (response?.type === "chat")
                       drafts.current.set(draftKey, response.text);
+                    if (response?.type === "choice" && response.feedback)
+                      drafts.current.set(composerKey, response.feedback);
                     if (response?.type === "form")
                       formDrafts.current.set(draftKey, response.values ?? {});
                     void operations.edit(record);
                   }}
                   busy={busy}
                   onRespond={send}
+                  profileForm={profileForm?.request_id ?? null}
                 />
                 {busy && <ThinkingLine message={workingStatus} />}
                 {view.done && runSettingsFor === view.id ? (
@@ -869,52 +976,49 @@ export function App() {
                       }));
                     }}
                     onContinue={() => void continueToDownload()}
+                    onBack={() => void backFromDone()}
                   />
                 ) : (
                   view.done && (
                     <Done
                       connection={record?.state.context.connection ?? null}
                       onConnect={openAddConnection}
+                      busy={replyBusy}
+                      onBack={() => void backFromDone()}
                     />
                   )
                 )}
               </div>
-            </div>
-            <div className="w-full">
               <Composer
-                key={draftKey}
-                request={pending}
-                value={drafts.current.get(draftKey) ?? ""}
+                key={composerKey}
+                request={review ?? pending}
+                value={drafts.current.get(composerKey) ?? ""}
                 onValueChange={(value) => {
-                  drafts.current.set(draftKey, value);
+                  drafts.current.set(composerKey, value);
                   setDraftRevision((revision) => revision + 1);
                 }}
-                busy={
-                  busy ||
-                  operations.pendingSaves.has(view.id) ||
-                  (record !== null &&
-                    ["sending", "failed"].includes(
-                      pendingEntry(record)?.status ?? "",
-                    ))
+                busy={replyBusy}
+                sendBlockedReason={
+                  review && pending?.type === "form" && !pending.cancellable
+                    ? "Save the form first"
+                    : undefined
                 }
-                onSend={(text) => void send({ type: "chat", text })}
+                onSend={(text) => void sendText(text)}
               />
             </div>
-          </>
-        )}
-      </main>
-      {showDocument &&
-        view &&
-        (specificationOpen ? (
-          <>
-            <ResizeHandle width={documentWidth} onWidth={setDocumentWidth} />
+            <PaneDivider
+              rowRef={panesRef}
+              width={chatWidth}
+              onWidth={setChatWidth}
+            />
             <aside
-              style={{ width: `${documentWidth}%` }}
-              className="min-w-[20rem] shrink-0 border-l border-border bg-muted"
+              className="min-h-0 min-w-0 flex-1 bg-muted"
+              aria-label="Profile"
             >
               <SpecificationView
                 key={view.id}
                 specification={view.specification}
+                excludedTasks={record?.state.excluded_tasks}
                 position={stepPosition(view.requests)}
                 interviewStep={view.stage}
                 busy={busy || operations.pendingSaves.has(view.id)}
@@ -925,22 +1029,42 @@ export function App() {
                   graderState === "idle" || graderState === "loading"
                 }
                 gradersError={graderState === "error"}
-                onCollapse={() => setSpecificationOpen(false)}
                 done={view.done}
                 onFinish={() => void finish()}
                 onDownload={() => {
                   if (record) void downloadCurrent(record);
                 }}
+                activeSections={review ? reviewParts(review) : []}
+                renderReview={(part) =>
+                  review && (
+                    <ActiveReview
+                      key={`${view.id}:${part}`}
+                      request={review}
+                      part={part}
+                      busy={replyBusy}
+                      onRespond={send}
+                      form={profileForm}
+                      formFailure={profileFailure}
+                      formDrafts={formDrafts.current}
+                      draftPrefix={view.id}
+                    />
+                  )
+                }
+                renderSectionActions={(part) =>
+                  review && (
+                    <ReviewSectionActions
+                      request={review}
+                      part={part}
+                      busy={replyBusy}
+                      onRespond={send}
+                    />
+                  )
+                }
               />
             </aside>
-          </>
-        ) : (
-          <EdgeStrip
-            side="right"
-            label="Show document"
-            onClick={() => setSpecificationOpen(true)}
-          />
-        ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
@@ -976,7 +1100,7 @@ type OpeningScreenProps = {
   onBegin: (
     description: string,
     perspective: Perspective,
-    evidence: CapabilityEvidence,
+    evidence: CapabilityEvidence | null,
   ) => void;
 };
 
@@ -1048,6 +1172,8 @@ export function ModePicker({
     <div
       role="radiogroup"
       aria-label="Mode"
+      // The selected option's corners follow the border: its radius is the outer radius less
+      // the padding (16px - 2px).
       className="inline-flex self-center rounded-lg border border-border bg-card p-0.5"
     >
       {(["spec", "run"] as const).map((id) => (
@@ -1059,7 +1185,7 @@ export function ModePicker({
           disabled={disabled}
           onClick={() => onSelect(id)}
           className={cn(
-            "rounded-md px-3.5 py-1.5 text-sm transition-colors duration-150",
+            "rounded-[14px] px-3.5 py-1.5 text-sm transition-colors duration-150",
             mode === id
               ? "bg-accent/10 font-medium text-foreground"
               : "text-muted-foreground hover:text-foreground",
@@ -1462,49 +1588,6 @@ export function InitialDocumentPicker({
   );
 }
 
-function ResizeHandle({
-  width,
-  onWidth,
-}: {
-  width: number;
-  onWidth: (width: number) => void;
-}) {
-  const clamp = (value: number) =>
-    Math.min(DOCUMENT_WIDTH_MAX, Math.max(DOCUMENT_WIDTH_MIN, value));
-  return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize document"
-      aria-valuenow={Math.round(width)}
-      aria-valuemin={DOCUMENT_WIDTH_MIN}
-      aria-valuemax={DOCUMENT_WIDTH_MAX}
-      tabIndex={0}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        const move = (next: PointerEvent) =>
-          onWidth(
-            clamp(
-              ((window.innerWidth - next.clientX) / window.innerWidth) * 100,
-            ),
-          );
-        const stop = () => {
-          window.removeEventListener("pointermove", move);
-          window.removeEventListener("pointerup", stop);
-        };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", stop);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowLeft") onWidth(clamp(width + 2));
-        else if (event.key === "ArrowRight") onWidth(clamp(width - 2));
-        else return;
-        event.preventDefault();
-      }}
-      className="w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-accent/40"
-    />
-  );
-}
 function EdgeStrip({
   side,
   label,
@@ -1534,7 +1617,7 @@ function ThinkingLine({ message }: { message: string }) {
   return (
     <div
       aria-live="polite"
-      className="flex items-center gap-2 text-sm font-medium text-accent"
+      className="my-4 flex items-center gap-2 py-2 text-sm font-medium text-accent"
     >
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
       {message}

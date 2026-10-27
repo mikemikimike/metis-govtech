@@ -6,6 +6,8 @@ serialize it to JSON and send it back on the next turn. These tests fix that val
 field set, and that a pending screen rehydrates as its own concrete subclass across a round trip.
 """
 
+import json
+
 import pytest
 
 from metis.wizard.contracts import (
@@ -40,7 +42,7 @@ def test_pending_state_requires_request_identity_and_stage() -> None:
             context=interview_context(),
             pending=ChoiceRequest(
                 prompt="Do these look right?",
-                options=[Option(id=OptionId(action="accept"), label="Looks right")],
+                options=[Option(id=OptionId(action="continue"), label="Continue")],
                 stage=InterviewStep.BEHAVIOURS,
             ),
         )
@@ -78,18 +80,21 @@ def test_the_state_carries_only_client_held_control_data() -> None:
         "behaviours_confirmed",
         "confirmed",
         "history",
+        "step_messages",
+        "excluded_tasks",
         "user_typed",
         "issued_ids",
         "pending",
     }
 
 
-def test_context_and_capability_evidence_are_required() -> None:
+def test_context_preserves_optional_capability_evidence() -> None:
     with pytest.raises(ValueError, match="context"):
         InterviewState(specification=research_assistant())
 
-    with pytest.raises(ValueError, match="capability_evidence"):
-        InterviewContext(perspective=Perspective.END_USER)
+    assert (
+        InterviewContext(perspective=Perspective.END_USER).capability_evidence is None
+    )
 
     with pytest.raises(ValueError, match="must not contain duplicates"):
         CapabilityEvidence(
@@ -149,7 +154,7 @@ def test_a_pending_choice_screen_rehydrates_as_its_subclass() -> None:
         context=interview_context(),
         pending=ChoiceRequest(
             prompt="Do these look right?",
-            options=[Option(id=OptionId(action="accept"), label="Looks right")],
+            options=[Option(id=OptionId(action="continue"), label="Continue")],
             request_id="req-1",
             stage=InterviewStep.BEHAVIOURS,
         ),
@@ -158,8 +163,8 @@ def test_a_pending_choice_screen_rehydrates_as_its_subclass() -> None:
     loaded = _roundtrip(state)
 
     assert isinstance(loaded.pending, ChoiceRequest)
-    assert loaded.pending.options[0].label == "Looks right"
-    assert loaded.pending.options[0].id.action == "accept"
+    assert loaded.pending.options[0].label == "Continue"
+    assert loaded.pending.options[0].id.action == "continue"
 
 
 def test_a_targeted_follow_up_keeps_its_target_across_the_wire() -> None:
@@ -194,3 +199,45 @@ def test_a_targeted_follow_up_keeps_its_target_across_the_wire() -> None:
         assert type(loaded.pending) is type(request)
         assert loaded.pending is not None
         assert loaded.pending.target == "EB-2"
+
+
+def test_a_saved_review_with_an_older_component_shape_still_loads() -> None:
+    """A `disclosure` component from an older saved Interview loads as `details`, the same as
+    the browser storage upgrade does."""
+    data = json.loads(
+        InterviewState(
+            specification=research_assistant(), context=interview_context()
+        ).model_dump_json()
+    )
+    data["pending"] = {
+        "type": "choice",
+        "prompt": "Review",
+        "request_id": "req-1",
+        "stage": "criteria",
+        "options": [],
+        "cards": [
+            {
+                "kind": "standard",
+                "id": "EB-1",
+                "title": "Cite",
+                "components": [
+                    {
+                        "type": "disclosure",
+                        "label": "Grader",
+                        "items": [{"type": "text", "text": "a"}],
+                    }
+                ],
+            }
+        ],
+    }
+
+    loaded = InterviewState.model_validate(data)
+
+    (details,) = loaded.pending.cards[0].components  # type: ignore[union-attr]
+    assert (details.type, details.title, details.muted, details.expanded) == (
+        "details",
+        "Grader",
+        True,
+        False,
+    )
+    assert details.components[0].text == "a"  # type: ignore[union-attr]

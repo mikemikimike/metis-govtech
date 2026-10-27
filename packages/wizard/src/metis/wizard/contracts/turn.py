@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from metis.wizard.contracts.capabilities import CapabilityId
 from metis.wizard.contracts.connection import TargetConnection
@@ -31,8 +31,8 @@ class InterviewStartRequest(BaseModel):
 
     description: str
     perspective: Perspective = Perspective.END_USER
-    known_capability_ids: list[CapabilityId]
-    capability_confidence: CapabilityConfidence
+    known_capability_ids: list[CapabilityId] | None = None
+    capability_confidence: CapabilityConfidence | None = None
     documents: list[InterviewDocument] = Field(default_factory=list)
     # The target connection for run mode. Omit it for spec-only mode.
     connection: TargetConnection | None = Field(
@@ -49,11 +49,19 @@ class InterviewStartRequest(BaseModel):
     @field_validator("known_capability_ids")
     @classmethod
     def _reject_duplicate_capabilities(
-        cls, value: list[CapabilityId]
-    ) -> list[CapabilityId]:
-        if len(value) != len(set(value)):
+        cls, value: list[CapabilityId] | None
+    ) -> list[CapabilityId] | None:
+        if value is not None and len(value) != len(set(value)):
             raise ValueError("known_capability_ids must not contain duplicates")
         return value
+
+    @model_validator(mode="after")
+    def _paired_capability_evidence(self) -> InterviewStartRequest:
+        if (self.known_capability_ids is None) != (self.capability_confidence is None):
+            raise ValueError(
+                "Supply known_capability_ids and capability_confidence together, or omit both"
+            )
+        return self
 
     @field_validator("documents")
     @classmethod
@@ -120,8 +128,9 @@ class MissingDataCode(StrEnum):
     NO_SCENARIOS = "no_scenarios"
     BEHAVIOUR_UNCOVERED = "behaviour_uncovered"
     SCENARIO_NO_SELECTED_BEHAVIOUR = "scenario_no_selected_behaviour"
-    SCENARIO_NO_PERSONA = "scenario_no_persona"
+    NO_SELECTED_TEST_CASE = "no_selected_test_case"
     SCENARIO_UNKNOWN_REFERENCE = "scenario_unknown_reference"
+    SCENARIO_DUPLICATE_PAIR = "scenario_duplicate_pair"
     SCENARIO_INVALID_TRIALS = "scenario_invalid_trials"
 
 

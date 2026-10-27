@@ -40,17 +40,18 @@ def test_init_happy_path_writes_specification_and_review(
     )
     arguments = ["--out-dir", str(root)] if explicit else []
     app = create_cli_app(ScriptedInterviewer)
-    # Two model questions, keep every behaviour measured and continue,
-    # continue through criteria, accept personas, then continue through scenarios.
+    # Two model questions, then Continue on each of the five reviews.
     answers = [
+        "engineer",
         "",
         "low",
         "answer",
         "answer",
-        "8",
-        "14",
-        "2",
-        "21",
+        "continue",
+        "continue",
+        "continue",
+        "continue",
+        "continue",
     ]
 
     result = CliRunner().invoke(
@@ -105,9 +106,17 @@ def test_init_happy_path_writes_specification_and_review(
     assert Specification.load(specification_path).trial_count() > 0
 
 
-# Two model questions, keep every behaviour measured and continue, continue through criteria,
-# accept personas, then continue through scenarios.
-_INTERVIEW_ANSWERS = ["answer", "answer", "8", "14", "2", "21"]
+# Two model questions, then Continue on each of the five reviews.
+_INTERVIEW_ANSWERS = [
+    "answer",
+    "answer",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+    "continue",
+]
+_PERSPECTIVE_ANSWERS = ["engineer"]
 _CAPABILITY_ANSWERS = ["", "low"]
 
 
@@ -149,7 +158,13 @@ def test_init_in_run_mode_writes_a_checked_binding_and_no_secret(
         "",
         "",
     ]
-    answers = [*connection_answers, "c", *_CAPABILITY_ANSWERS, *_INTERVIEW_ANSWERS]
+    answers = [
+        *_PERSPECTIVE_ANSWERS,
+        *connection_answers,
+        "c",
+        *_CAPABILITY_ANSWERS,
+        *_INTERVIEW_ANSWERS,
+    ]
 
     result = CliRunner().invoke(
         scripted_cli,
@@ -190,7 +205,14 @@ def test_an_invalid_binding_is_fixed_before_the_interview_starts(
     # with a name.
     invalid = ["1", "1", "", "${APP_URL}/openapi.json", "", "", "", "", "", ""]
     fixed = ["1", "Policy assistant", "", "", "", "", "", "", ""]
-    answers = [*invalid, *fixed, "c", *_CAPABILITY_ANSWERS, *_INTERVIEW_ANSWERS]
+    answers = [
+        *_PERSPECTIVE_ANSWERS,
+        *invalid,
+        *fixed,
+        "c",
+        *_CAPABILITY_ANSWERS,
+        *_INTERVIEW_ANSWERS,
+    ]
 
     result = CliRunner().invoke(
         scripted_cli,
@@ -209,7 +231,7 @@ def test_connect_adds_a_binding_to_a_spec_only_export(
     tmp_path: Path, scripted_cli, export_clock
 ) -> None:
     root = tmp_path / "spec"
-    answers = [*_CAPABILITY_ANSWERS, *_INTERVIEW_ANSWERS]
+    answers = [*_PERSPECTIVE_ANSWERS, *_CAPABILITY_ANSWERS, *_INTERVIEW_ANSWERS]
     built = CliRunner().invoke(
         scripted_cli,
         ["init", "A research assistant", "--out-dir", str(root), "--mode", "spec"],

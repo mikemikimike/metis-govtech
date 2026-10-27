@@ -54,17 +54,10 @@ class TaskDraft(_StrictDraft):
     fixtures: list[str] = Field(default_factory=list)
 
 
-class ScenarioTaskDraft(_StrictDraft):
-    persona_ref: str
-    behaviour_refs: list[str]
-    fixtures: list[str] = Field(default_factory=list)
-
-
 class ScenarioDraft(_StrictDraft):
     name: str
     description: str
     metadata: dict[str, str] = Field(default_factory=dict)
-    tasks: list[ScenarioTaskDraft] = Field(default_factory=list)
 
 
 _DRAFT_TYPES = (
@@ -117,7 +110,6 @@ def _legacy_value(path: str, value: Any) -> Any:
             name=value["name"],
             description=value["description"],
             metadata=value.get("metadata", {}),
-            tasks=value.get("tasks", []),
         )
     if field == "tasks":
         return TaskDraft.model_validate(value)

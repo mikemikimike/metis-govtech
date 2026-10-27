@@ -8,9 +8,14 @@ import { Button, Panel } from "./ui";
 export function Done({
   connection = null,
   onConnect,
+  onBack,
+  busy = false,
 }: {
   connection?: TargetConnection | null;
   onConnect?: () => void;
+  // Reopens the last review of the Interview.
+  onBack?: () => void;
+  busy?: boolean;
 }) {
   return (
     // Reaching the end is a state worth marking, but not with a coloured left-rule — that reads
@@ -28,11 +33,18 @@ export function Done({
           ? `It includes the ${connection.transport === "http" ? "HTTP" : "browser"} target binding${connection.status === "checked" ? "" : ", which was not checked"}.`
           : "It has no target binding, so the Engine uses the default runner."}
       </p>
-      {onConnect && (
-        <Button type="button" className="self-start" onClick={onConnect}>
-          {connection ? "Change target connection" : "Connect target"}
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {onBack && (
+          <Button type="button" disabled={busy} onClick={onBack}>
+            ← Back
+          </Button>
+        )}
+        {onConnect && (
+          <Button type="button" onClick={onConnect}>
+            {connection ? "Change target connection" : "Connect target"}
+          </Button>
+        )}
+      </div>
     </Panel>
   );
 }

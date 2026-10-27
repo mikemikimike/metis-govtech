@@ -89,6 +89,14 @@ class Interviewer(Protocol):
         """The whole covering set, in one call."""
         ...
 
+    def draft_test_cases(
+        self,
+        specification: Specification,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
+        """Test Cases for each Scenario that has none: its Personas and Behaviours."""
+        ...
+
     def chat(
         self,
         specification: Specification,
@@ -98,18 +106,4 @@ class Interviewer(Protocol):
         context: InterviewContext | None = None,
     ) -> StepResult:
         """A free-text exchange, answered with suggested edits as chips."""
-        ...
-
-    def suggest_criterion(
-        self,
-        specification: Specification,
-        behaviour_id: str,
-        context: InterviewContext | None = None,
-    ) -> StepResult:
-        """Exactly one new criterion for the named behaviour, as a single add patch.
-
-        The bounded "Suggest one for me" op. `behaviour_id` names which behaviour to extend —
-        the driver refuses a result that is anything other than one add under that behaviour's
-        own criteria, so this is a suggestion, not an open licence to edit the tree.
-        """
         ...

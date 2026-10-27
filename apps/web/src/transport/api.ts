@@ -9,6 +9,8 @@ type RequiredFields<T, K extends keyof T> = Omit<T, K> & {
   [P in K]-?: T[P];
 };
 type Present<T> = Exclude<T, undefined | null>;
+// A field with a server default. The server always sends it; a hand-written value may omit it.
+type Defaulted<T, K extends keyof T> = Omit<T, K> & { [P in K]?: T[P] };
 type JsonResponse<O, Status extends PropertyKey = 200> = O extends {
   responses: infer Responses;
 }
@@ -62,51 +64,70 @@ export function optionKey(id: OptionId): string {
   return [id.action, id.target, id.via].filter(Boolean).join(":");
 }
 export type Option = Schema["Option"];
-export type CardText = Schema["CardText"];
-export type CardOptionGroup = RequiredFields<
-  Schema["CardOptionGroup"],
-  "options"
+export type CardText = Defaulted<Schema["CardText"], "muted">;
+export type CardOptionGroup = Defaulted<
+  RequiredFields<Schema["CardOptionGroup"], "options">,
+  "muted"
 >;
-export type CardNumberField = Schema["CardNumberField"];
-export type CardUploadField = RequiredFields<
-  Schema["CardUploadField"],
-  "value"
+export type CardNumberField = Defaulted<Schema["CardNumberField"], "muted">;
+export type CardUploadField = Defaulted<
+  RequiredFields<Schema["CardUploadField"], "value">,
+  "muted"
 >;
-export type CardDivider = Schema["CardDivider"];
-export type CardDisclosure = RequiredFields<Schema["CardDisclosure"], "items">;
+export type CardDivider = Defaulted<Schema["CardDivider"], "muted">;
+export type CardDetails = Defaulted<
+  Omit<Schema["CardDetails-Input"], "components">,
+  "muted"
+> & {
+  components: CardComponent[];
+};
+export type CardColumn = Omit<Schema["CardColumn-Input"], "components"> & {
+  components: CardComponent[];
+};
 export type CardComponent =
   | CardText
   | CardOptionGroup
   | CardNumberField
   | CardUploadField
   | CardDivider
-  | CardDisclosure;
-export type Card = Omit<Schema["BehaviourCard"], "components" | "options"> & {
-  components: CardComponent[];
-  options: Option[];
-};
-export type ScenarioCard = Omit<
-  Schema["ScenarioCard"],
-  "components" | "options"
+  | CardDetails;
+export type Card = Defaulted<
+  Omit<Schema["BehaviourCard-Input"], "components" | "options" | "columns">,
+  "show_id"
 > & {
   components: CardComponent[];
   options: Option[];
+  columns?: CardColumn[];
+};
+export type ScenarioCard = Defaulted<
+  Omit<Schema["ScenarioCard-Input"], "components" | "options" | "columns">,
+  "show_id"
+> & {
+  components: CardComponent[];
+  options: Option[];
+  columns?: CardColumn[];
 };
 export type AnyCard = Card | ScenarioCard;
 export type WarningSource = Schema["WarningSource"];
 export type Warning = RequiredFields<Schema["Warning"], "options">;
 
 export type ChatRequest = Schema["ChatRequest"];
+export type ReviewSection = RequiredFields<Schema["ReviewSection"], "options">;
 export type ChoiceRequest = Omit<
-  Schema["ChoiceRequest"],
-  "options" | "cards" | "warnings"
+  Schema["ChoiceRequest-Input"],
+  "options" | "cards" | "warnings" | "sections"
 > & {
   options: Option[];
   cards: AnyCard[];
   warnings: Warning[];
+  sections?: ReviewSection[];
 };
-export type FormField = Schema["FormField"];
-export type FormRequest = RequiredFields<Schema["FormRequest"], "answer">;
+export type FormChoice = Schema["FormChoice"];
+export type FormField = Defaulted<Schema["FormField"], "multiple">;
+export type FormRequest = Defaulted<
+  Omit<RequiredFields<Schema["FormRequest"], "answer">, "fields">,
+  "submit_label" | "used_combinations"
+> & { fields: FormField[] };
 export type WizardRequest = ChatRequest | ChoiceRequest | FormRequest;
 export type AnyRequest = WizardRequest;
 export type UserResponse =
@@ -138,7 +159,7 @@ export type Specification = Omit<
 };
 export type Turn = Schema["Turn"];
 export type InterviewState = RequiredFields<
-  Omit<Schema["InterviewState"], "specification" | "pending">,
+  Omit<Schema["InterviewState-Input"], "specification" | "pending">,
   "history" | "user_typed" | "issued_ids"
 > & { specification: Specification; pending: WizardRequest | null };
 export type MissingData = Schema["MissingData"];
@@ -195,11 +216,9 @@ export interface PackageFile {
 }
 
 type GeneratedCardComponent = Present<
-  Schema["BehaviourCard"]["components"]
+  Schema["BehaviourCard-Input"]["components"]
 >[number];
 function normalizeComponent(component: GeneratedCardComponent): CardComponent {
-  if (component.type === "disclosure")
-    return { ...component, items: component.items ?? [] };
   if (component.type === "options")
     return { ...component, options: component.options ?? [] };
   if (component.type === "upload")
@@ -208,27 +227,44 @@ function normalizeComponent(component: GeneratedCardComponent): CardComponent {
       value: component.value ?? [],
       available: component.available ?? [],
     };
+  if (component.type === "details")
+    return {
+      ...component,
+      components: (component.components ?? []).map(normalizeComponent),
+    };
   return component;
 }
 
 function normalizeCard(
-  card: Schema["BehaviourCard"] | Schema["ScenarioCard"],
+  card: Schema["BehaviourCard-Input"] | Schema["ScenarioCard-Input"],
 ): AnyCard {
   return {
     ...card,
     components: (card.components ?? []).map(normalizeComponent),
     options: card.options ?? [],
+    ...(card.columns
+      ? {
+          columns: card.columns.map((column) => ({
+            ...column,
+            components: (column.components ?? []).map(normalizeComponent),
+          })),
+        }
+      : {}),
   } as AnyCard;
 }
 
 function normalizeRequest(
-  request: NonNullable<Schema["InterviewState"]["pending"]>,
+  request: NonNullable<Schema["InterviewState-Input"]["pending"]>,
 ): WizardRequest {
   if (request.type === "choice")
     return {
       ...request,
       options: request.options ?? [],
       cards: (request.cards ?? []).map(normalizeCard),
+      sections: (request.sections ?? []).map((section) => ({
+        ...section,
+        options: section.options ?? [],
+      })),
       warnings: (request.warnings ?? []).map((warning) => ({
         ...warning,
         options: warning.options ?? [],
@@ -266,7 +302,7 @@ function normalizeSpecification(
   };
 }
 
-function normalizeState(state: Schema["InterviewState"]): InterviewState {
+function normalizeState(state: Schema["InterviewState-Input"]): InterviewState {
   return {
     ...state,
     specification: normalizeSpecification(state.specification),
@@ -276,6 +312,12 @@ function normalizeState(state: Schema["InterviewState"]): InterviewState {
     issued_ids: state.issued_ids ?? [],
     pending: state.pending ? normalizeRequest(state.pending) : null,
   };
+}
+
+// The browser state omits some server-defaulted fields (`muted`, `submit_label`). The server
+// fills each default, so the browser value is a valid request body.
+function wireState(state: InterviewState): TurnRequest["state"] {
+  return state as TurnRequest["state"];
 }
 
 type WireInterviewResult = StartResponse | TurnResponse | EndResponse;
@@ -441,7 +483,7 @@ function result(resultValue: WireInterviewResult): InterviewSuccess {
 export const api = {
   start: async (
     description: string,
-    capabilityEvidence: CapabilityEvidence,
+    capabilityEvidence: CapabilityEvidence | null,
     perspective: Perspective = "end_user",
     documents: InterviewDocument[] = [],
     connection: TargetConnection | null = null,
@@ -449,8 +491,12 @@ export const api = {
     const body: StartRequest = {
       description,
       perspective,
-      known_capability_ids: capabilityEvidence.known_capability_ids,
-      capability_confidence: capabilityEvidence.confidence,
+      ...(capabilityEvidence
+        ? {
+            known_capability_ids: capabilityEvidence.known_capability_ids,
+            capability_confidence: capabilityEvidence.confidence,
+          }
+        : {}),
       documents,
       // spec-only mode sends no connection, so its request is unchanged
       ...(connection ? { connection } : {}),
@@ -467,7 +513,7 @@ export const api = {
     request_id: string,
     response: UserResponse,
   ) => {
-    const body: TurnRequest = { state, request_id, response };
+    const body: TurnRequest = { state: wireState(state), request_id, response };
     return result(
       await call<TurnResponse>("/api/v1/wizard/interview/turn", {
         ...JSON_POST,
@@ -476,7 +522,7 @@ export const api = {
     );
   },
   end: async (state: InterviewState) => {
-    const body: EndRequest = { state };
+    const body: EndRequest = { state: wireState(state) };
     return result(
       await call<EndResponse>("/api/v1/wizard/interview/end", {
         ...JSON_POST,
@@ -500,7 +546,7 @@ export const api = {
     state: InterviewState,
     connection: TargetConnection | null,
   ) => {
-    const body: ConnectionRequest = { state, connection };
+    const body: ConnectionRequest = { state: wireState(state), connection };
     return normalizeState(
       await call<ConnectionResponse>("/api/v1/wizard/connection", {
         ...JSON_POST,

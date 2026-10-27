@@ -1,27 +1,4 @@
-// The document view. This is the component in the door that reads `Specification` and knows
-// its shape — features hold behaviours hold criteria; personas and scenarios are flat lists. The
-// conversation stays shape-only so this can hold all of the interview's domain knowledge in one
-// place. Presentation remains read-only; the conversation owns every Specification mutation.
-//
-// It is read-only where it counts: no control here changes the specification — every edit still
-// originates in the conversation. The only controls are presentation: disclosures that fold a
-// feature open or closed, and a control to collapse the whole pane — both view state, not document
-// state.
-//
-// The pane is scaffold first and document second. Every section it will ever hold is drawn from
-// the first turn, blank ones as ruled placeholders, so the shape of what the interview produces is
-// visible before any of it exists and the boundary between written and unwritten reads as the
-// interview's frontier. This is also where the interview's progress is expressed — the segmented
-// bar above the sheet, and the rules of the section being written — because the document and the interview are
-// the same five stages in the same order, and a second stepper in the conversation would be a
-// second drawing of what is already on screen.
-//
-// It is a live mirror of the specification the package built, drawn fresh each time the payload arrives.
-// It holds no persistent change history and no whole-specification diff. Each target value remembers
-// only the string it last received while mounted, which is enough to mark an arrival or correction;
-// once that reveal has finished, the text looks like content that arrived ten turns ago.
-
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type {
   Behaviour,
   GraderSpec,
@@ -31,7 +8,12 @@ import type {
 } from "./transport/api";
 import { PanelRight } from "lucide-react";
 import { RevealText } from "./RevealText";
-import { Button, Chevron, Chip, cn, formatTrials, Mono } from "./ui";
+import {
+  KeepInPlaceContext,
+  useKeepAnchor,
+  useKeepInPlace,
+} from "./keep-in-place";
+import { Button, Chip, cn, Disclosure, formatTrials, Mono } from "./ui";
 
 // ── where the interview has got to ───────────────────────────────────────────
 
@@ -76,17 +58,20 @@ export function stepPosition(requests: WizardRequest[]): StepPosition | null {
 //
 // Clarify now writes the Target section on every useful answer, so it follows the same rule as the
 // later drafting steps instead of being a special case.
-type WritingTarget = "target" | "behaviours" | "personas" | "scenarios";
+type WritingTarget =
+  "target" | "behaviours" | "personas" | "scenarios" | "test-cases";
 
 const WRITING_TARGET: Record<string, WritingTarget> = {
   clarify: "target",
   behaviours: "behaviours",
   criteria: "personas",
   personas: "scenarios",
+  scenarios: "test-cases",
 };
 
 export function SpecificationView({
   specification,
+  excludedTasks = [],
   position,
   interviewStep,
   busy,
@@ -99,8 +84,19 @@ export function SpecificationView({
   onFinish,
   onDownload,
   done,
+  activeSections = [],
+  renderReview,
+  renderSectionActions,
 }: {
+  // The Profile sections that the live review fills, in order.
+  activeSections?: readonly string[];
+  // The live review for one of those sections, drawn in place of its document content.
+  renderReview?: (section: string) => ReactNode;
+  // Actions for a Profile section heading, such as "+ Add a Persona".
+  renderSectionActions?: (section: string) => ReactNode;
   specification: Specification;
+  // Test Cases that the user cleared; they are shown, but they do not count or run.
+  excludedTasks?: readonly string[];
   position?: StepPosition | null;
   interviewStep?: string;
   busy?: boolean;
@@ -115,6 +111,46 @@ export function SpecificationView({
   onFinish?: () => void;
   onDownload?: () => void;
 }) {
+  const excluded = new Set(excludedTasks);
+  const selectedTasks = specification.tasks.filter(
+    (task) => !excluded.has(task.id),
+  );
+  const activeSection = activeSections[0] ?? null;
+  const activeKey = activeSections.join(" ");
+  const activeRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const keepInPlace = useKeepInPlace(sheetRef, Boolean(busy));
+  // When a review opens on a section, bring its top into view once. A review already in view does
+  // not move, and later size changes inside the sheet never scroll it: the user's place is theirs.
+  useLayoutEffect(() => {
+    const sheet = sheetRef.current;
+    const active = activeRef.current;
+    if (!sheet || !active || !activeSection) return;
+    const spacer = sheet.querySelector<HTMLElement>("[data-keep-spacer]");
+    if (spacer) spacer.style.height = "0px";
+    const top =
+      active.getBoundingClientRect().top - sheet.getBoundingClientRect().top;
+    if (top >= 0 && top < sheet.clientHeight - 64) return;
+    sheet.scrollTop += top - 64;
+  }, [activeKey]);
+  const reviewing = (section: string) => activeSections.includes(section);
+  // The first reviewed section carries the ref that the one-time scroll above measures.
+  const currentReview = (section: string) => (
+    <div
+      ref={section === activeSection ? activeRef : undefined}
+      className="scroll-mt-16"
+    >
+      {renderReview?.(section)}
+    </div>
+  );
+  const actions = (section: string) =>
+    reviewing(section) ? renderSectionActions?.(section) : undefined;
+  const mode = (section: string): SectionMode =>
+    activeSections.length === 0
+      ? "idle"
+      : reviewing(section)
+        ? "current"
+        : "frozen";
   const { target } = specification;
   const { features } = specification;
   const writing =
@@ -135,13 +171,9 @@ export function SpecificationView({
   // not draft, which is exactly what the blank should report.)
   const selecting = interviewStep === "behaviours";
 
-  const behaviourCount = features.reduce(
-    (total, feature) => total + feature.behaviours.length,
-    0,
-  );
-
   return (
-    <div className="flex h-full flex-col p-4">
+    <div className="flex h-full min-h-0 flex-col p-4">
+      <h1 className="mb-3 text-xl font-semibold">Profile</h1>
       {/* The strip above the sheet carries the pane's chrome — things that belong to the pane, not
           to the document. Progress sits on the left as six segments, one per interview step,
           filling left to right; the collapse control sits at the right. Both are outside the sheet
@@ -170,66 +202,71 @@ export function SpecificationView({
         </div>
       )}
 
-      {/* The document is a produced artifact, not an editable field, and it reads that way: a white
-          sheet floating on the grey pane, carrying a single soft shadow. That shadow is the one
-          exception the house style grants — depth is a border everywhere else — because "this is a
-          finished page" is exactly what a sheet-with-shadow says and a border cannot. Nothing here
-          is an input; the shadow's job is to say so. */}
       {/* The sheet, not the pane, is the scroll container. Section headings stick to the top of
           the document as you scroll past them, and sticking is measured from the scrollport's
           edge — so the sheet has to be the thing that scrolls, or the headings would pin to the
           pane and float free of the page they belong to. The sheet's own padding moves inside,
           onto the content wrapper, leaving the scrollport's edge flush with the sheet's edge for
           the headings to meet. */}
-      <div className="quiet-scrollbar flex-1 overflow-y-auto overflow-x-hidden rounded-[12px] bg-card text-sm text-card-foreground shadow-sm">
-        <div className="flex flex-col gap-8 px-5 pb-5">
-          {/* The header carries only the pane's grader controls, pinned to the right. It draws
+      <div
+        ref={sheetRef}
+        className="quiet-scrollbar flex-1 overflow-y-auto overflow-x-hidden rounded-[12px] bg-card text-sm text-card-foreground shadow-sm"
+      >
+        <KeepInPlaceContext.Provider value={keepInPlace}>
+          <div className="flex flex-col gap-8 px-5 pb-5">
+            {/* The header carries only the pane's grader controls, pinned to the right. It draws
               nothing until there is a control to hold, so an early document opens straight onto
               Target rather than onto an empty strip. */}
-          {(hasCriteria || gradersError) && (
-            <header className="flex flex-wrap items-center justify-end gap-2 pt-5">
-              {hasCriteria && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  active={showGraders}
-                  disabled={!gradersAvailable}
-                  aria-pressed={showGraders}
-                  title={
-                    gradersError ? "Grader details unavailable" : "Show graders"
-                  }
-                  onClick={() => onShowGradersChange(!showGraders)}
-                  className="px-2 py-1 text-xs"
-                >
-                  Show graders
-                </Button>
-              )}
-              {gradersError && (
-                <span role="alert" className="text-xs text-destructive">
-                  Grader details unavailable
-                </span>
-              )}
-            </header>
-          )}
+            {!reviewing("behaviours") && (hasCriteria || gradersError) && (
+              <header className="flex flex-wrap items-center justify-end gap-2 pt-5">
+                {hasCriteria && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    active={showGraders}
+                    disabled={!gradersAvailable}
+                    aria-pressed={showGraders}
+                    title={
+                      gradersError
+                        ? "Grader details unavailable"
+                        : "Show graders"
+                    }
+                    onClick={() => onShowGradersChange(!showGraders)}
+                    className="px-2 py-1 text-xs"
+                  >
+                    Show graders
+                  </Button>
+                )}
+                {gradersError && (
+                  <span role="alert" className="text-xs text-destructive">
+                    Grader details unavailable
+                  </span>
+                )}
+              </header>
+            )}
 
-          <Section title="Target" writing={writing === "target"}>
-            <div className="flex flex-col gap-4">
-              <TargetField label="Name" value={target.name} />
-              <TargetField
-                label="Description"
-                value={target.description}
-                preserveLines
-              />
-              <TargetField label="Users" value={target.users} preserveLines />
-              <TargetField
-                label="Details"
-                value={target.detail}
-                preserveLines
-              />
-            </div>
-          </Section>
+            <Section
+              title="Target"
+              writing={writing === "target"}
+              mode={mode("target")}
+            >
+              <div className="flex flex-col gap-4">
+                <TargetField label="Name" value={target.name} />
+                <TargetField
+                  label="Description"
+                  value={target.description}
+                  preserveLines
+                />
+                <TargetField label="Users" value={target.users} preserveLines />
+                <TargetField
+                  label="Details"
+                  value={target.detail}
+                  preserveLines
+                />
+              </div>
+            </Section>
 
-          {/* Sections run in the order the interview fills them, and every one of them is drawn
+            {/* Sections run in the order the interview fills them, and every one of them is drawn
             whether or not it holds anything yet.
 
             Each heading is the package's own name for the step that fills it — "Behaviours",
@@ -237,128 +274,97 @@ export function SpecificationView({
             sheet reads as the interview's output section by section. They are entity names, all
             three of the same kind; "What should be true" was a sentence sitting between two nouns,
             which is what made it read as the odd one out. */}
-          <Section
-            title="Behaviours"
-            count={behaviourCount}
-            writing={writing === "behaviours"}
-          >
-            {features.length > 0 ? (
-              // Groups are set well apart from one another, so the section reads as a handful of
-              // named groups rather than one long run of behaviours. The gap is the largest inside
-              // the sheet: it is the boundary the eye chunks the list on.
-              <div className="flex flex-col gap-6">
-                {features.map((feature) => (
-                  <FeatureView
-                    key={feature.id}
-                    feature={feature}
-                    selecting={selecting}
-                    showGraders={showGraders}
-                    graderByFqn={graderByFqn}
-                  />
-                ))}
-              </div>
-            ) : (
-              <Placeholder boxed />
-            )}
-          </Section>
-
-          <Section
-            title="Personas"
-            count={specification.personas.length}
-            writing={writing === "personas"}
-          >
-            {specification.personas.length > 0 ? (
-              // Each persona leads with its name and is anchored by a marker at the left edge, so a
-              // run of them is countable at a glance rather than read to be counted. The two were
-              // previously the same weight — a muted id above a full-strength paragraph — which put
-              // the emphasis on the description and let three personas run together into one block.
-              // The name now carries the foreground and the description recedes behind it. The
-              // description stays whole: a persona is judged on what it says, not on its name.
-              <ul className="flex flex-col gap-4">
-                {specification.personas.map((p) => (
-                  <li key={p.id} className="animate-arrive flex gap-3">
-                    <span
-                      aria-hidden
-                      className="mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full bg-border"
+            <Section
+              title="Features / Expected Behaviours"
+              actions={actions("behaviours")}
+              mode={mode("behaviours")}
+              writing={writing === "behaviours"}
+            >
+              {reviewing("behaviours") ? (
+                currentReview("behaviours")
+              ) : features.length > 0 ? (
+                // Groups are set well apart from one another, so the section reads as a handful of
+                // named groups rather than one long run of behaviours. The gap is the largest inside
+                // the sheet: it is the boundary the eye chunks the list on.
+                <div className="flex flex-col gap-6">
+                  {features.map((feature) => (
+                    <FeatureView
+                      key={feature.id}
+                      feature={feature}
+                      selecting={selecting}
+                      showGraders={showGraders}
+                      graderByFqn={graderByFqn}
                     />
-                    <div className="flex min-w-0 flex-col gap-0.5">
-                      <Mono className="text-foreground">{p.name}</Mono>
-                      <span className="text-muted-foreground">
-                        {p.description}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <Placeholder boxed />
-            )}
-          </Section>
-
-          <Section
-            title="Test Cases"
-            count={specification.tasks.length}
-            writing={writing === "scenarios"}
-          >
-            {specification.scenarios.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                <ul className="flex flex-col gap-4">
-                  {specification.tasks.map((task) => (
-                    <li
-                      key={task.id}
-                      className="animate-arrive flex flex-col gap-2"
-                    >
-                      <h3 className="font-medium text-foreground">{task.id}</h3>
-                      <p>
-                        {
-                          specification.scenarios.find(
-                            (s) => s.id === task.scenario_ref,
-                          )?.description
-                        }
-                      </p>
-                      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-xs">
-                        <ScenarioRow label="Scenario">
-                          <Chip>
-                            {specification.scenarios.find(
-                              (s) => s.id === task.scenario_ref,
-                            )?.name ?? task.scenario_ref}
-                          </Chip>
-                        </ScenarioRow>
-                        <ScenarioRow label="Persona">
-                          <Chip>{task.persona_ref}</Chip>
-                        </ScenarioRow>
-                        <ScenarioRow label="Behaviours">
-                          {task.behaviour_refs.map((ref) => (
-                            <Chip key={ref}>{ref}</Chip>
-                          ))}
-                        </ScenarioRow>
-                        <ScenarioRow label="Trials">
-                          {formatTrials(task.num_trials)}
-                        </ScenarioRow>
-                        <ScenarioRow label="Files">
-                          {task.fixtures.map((file) => (
-                            <Chip key={file}>{file}</Chip>
-                          ))}
-                        </ScenarioRow>
-                      </div>
-                    </li>
                   ))}
-                </ul>
-                <div className="flex justify-end border-t border-border pt-2 text-sm text-muted-foreground">
-                  Total:{" "}
-                  {formatTrials(
-                    specification.tasks.reduce(
-                      (total, task) => total + task.num_trials,
-                      0,
-                    ),
-                  )}
                 </div>
-              </div>
-            ) : (
-              <Placeholder boxed />
-            )}
-          </Section>
-        </div>
+              ) : (
+                <Placeholder boxed />
+              )}
+            </Section>
+
+            <Section
+              title="Personas"
+              actions={actions("personas")}
+              mode={mode("personas")}
+              writing={writing === "personas"}
+            >
+              {reviewing("personas") ? (
+                currentReview("personas")
+              ) : specification.personas.length > 0 ? (
+                <ItemList items={specification.personas} />
+              ) : (
+                <Placeholder boxed />
+              )}
+            </Section>
+
+            <Section
+              title="Scenarios"
+              actions={actions("scenarios")}
+              mode={mode("scenarios")}
+              writing={writing === "scenarios"}
+            >
+              {reviewing("scenarios") ? (
+                currentReview("scenarios")
+              ) : specification.scenarios.length > 0 ? (
+                <ItemList items={specification.scenarios} />
+              ) : (
+                <Placeholder boxed />
+              )}
+            </Section>
+
+            <Section
+              title="Test Cases"
+              actions={actions("test-cases")}
+              mode={mode("test-cases")}
+              writing={writing === "test-cases"}
+            >
+              {reviewing("test-cases") ? (
+                currentReview("test-cases")
+              ) : specification.tasks.length > 0 ? (
+                <div>
+                  <TestCaseTable
+                    specification={specification}
+                    excluded={excluded}
+                  />
+                  <p className="mt-3 text-right text-muted-foreground">
+                    {selectedTasks.length} of {specification.tasks.length} Test
+                    Cases selected,{" "}
+                    {formatTrials(
+                      selectedTasks.reduce(
+                        (total, task) => total + task.num_trials,
+                        0,
+                      ),
+                    )}
+                  </p>
+                </div>
+              ) : (
+                <Placeholder boxed />
+              )}
+            </Section>
+          </div>
+          {/* Holds the scroll position when a change near the end makes the content shorter. */}
+          <div data-keep-spacer aria-hidden />
+        </KeepInPlaceContext.Provider>
       </div>
 
       <SpecificationFooter
@@ -512,28 +518,55 @@ function ProgressSegments({
 // text in the pane — `text-xs` in muted grey — which put the three names that give the document
 // its structure *below* the content they contain in the visual order. Sections read as unclear
 // for exactly that reason: the hierarchy was inverted. The heading now carries foreground weight
-// at a size above the body, a count of what it holds, and a rule closing it off.
+// at a size above the body, and a rule closing it off.
 //
 // It also sticks. Scrolling through a long Behaviours run, the heading stays until the next
 // section pushes it out, so the answer to "what am I looking at" is never off-screen. The
 // negative inline margin lets it span the sheet's padding and cover the content passing beneath,
 // which is what a sticky heading over an opaque page has to do.
+// While a review is open, the sections it fills are `current` and the other written sections are
+// `frozen`. A current section gets a teal rule at the left of its heading and a "Now reviewing"
+// label, so the user always sees where they work. A frozen section looks the same as an idle
+// one; it only has no actions. With no review open, every section is `idle`.
+type SectionMode = "idle" | "current" | "frozen";
+
 function Section({
   title,
-  count,
   writing = false,
+  actions,
+  mode = "idle",
   children,
 }: {
   title: string;
-  count?: number;
   writing?: boolean;
+  actions?: ReactNode;
+  mode?: SectionMode;
   children: React.ReactNode;
 }) {
+  const current = mode === "current";
   return (
-    <section className={cn("flex flex-col gap-3", writing && "is-writing")}>
-      <div className="sticky top-0 z-10 -mx-5 flex items-baseline justify-between gap-3 border-b border-border bg-card px-5 pb-2 pt-4">
-        <h2 className="min-w-0 text-base font-semibold tracking-tight text-foreground">
-          {title}
+    <section
+      aria-current={current ? "step" : undefined}
+      className={cn("flex flex-col gap-3", writing && "is-writing")}
+    >
+      <div className="sticky top-0 z-10 -mx-5 flex min-h-12 items-end justify-between gap-3 border-b border-border bg-card px-5 pb-2 pt-4">
+        <h2
+          className={cn(
+            "flex min-w-0 items-center gap-2 text-base font-semibold tracking-tight text-foreground",
+          )}
+        >
+          {current && (
+            <span
+              aria-hidden
+              className="h-4 w-1 shrink-0 rounded-full bg-accent"
+            />
+          )}
+          <span className="min-w-0 truncate">{title}</span>
+          {current && (
+            <span className="shrink-0 text-xs font-medium text-accent">
+              Now reviewing
+            </span>
+          )}
         </h2>
         <div className="flex shrink-0 items-center gap-2">
           {writing && (
@@ -542,12 +575,10 @@ function Section({
               className="section-writing-marker h-1.5 w-1.5 rounded-full bg-accent"
             />
           )}
-          {count != null && count > 0 && (
-            <Mono className="tabular-nums">{count}</Mono>
-          )}
+          {actions}
         </div>
       </div>
-      {children}
+      <div className="flex flex-col gap-3">{children}</div>
     </section>
   );
 }
@@ -580,26 +611,155 @@ function TargetField({
   );
 }
 
-// One of a scenario's three columns: a label, then whatever the column holds, wrapping within its
-// own width. The label sits above rather than beside its contents — beside, it would consume a
-// fixed slice of an already narrow column and leave the chips almost no room to sit side by side.
-// One labelled line of a scenario's metadata. It draws two cells straight into the parent grid — a
-// label in the fixed left column and its values in the flexible right one — so that every row's
-// label shares one edge and every row's values share another, no matter which row is longest. The
-// label sits at the top of a wrapping value cell (`items-start`) rather than centred, so a row that
-// wraps to two lines keeps its label pinned to the first.
-function ScenarioRow({
-  label,
-  children,
+// Personas and Scenarios: each item leads with its name, with its description quieter below it,
+// and a marker at the left edge so a run of them is countable at a glance. Metadata is secondary,
+// so it sits in a closed, quiet Disclosure.
+function ItemList({
+  items,
 }: {
-  label: string;
-  children: React.ReactNode;
+  items: readonly {
+    id: string;
+    name: string;
+    description: string;
+    metadata?: Record<string, string> | null;
+  }[];
 }) {
   return (
-    <>
-      <span className="pt-0.5 font-medium text-muted-foreground">{label}</span>
-      <div className="flex flex-wrap items-start gap-1.5">{children}</div>
-    </>
+    <ul className="flex flex-col gap-4">
+      {items.map((item) => {
+        const metadata = Object.entries(item.metadata ?? {});
+        return (
+          <li key={item.id} className="animate-arrive flex gap-3">
+            <span
+              aria-hidden
+              className="mt-[0.4rem] h-1.5 w-1.5 shrink-0 rounded-full bg-border"
+            />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <Mono className="text-foreground">{item.name}</Mono>
+              <span className="text-muted-foreground">{item.description}</span>
+              {metadata.length > 0 && (
+                <Disclosure tone="muted" summary="More information">
+                  <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+                    {metadata.map(([key, value]) => (
+                      <div key={key} className="contents">
+                        <dt className="font-medium">{key}</dt>
+                        <dd className="whitespace-pre-wrap">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </Disclosure>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// The Test Cases as a compact table: Persona, Scenario, the Behaviours each one covers (id chips,
+// with the Behaviour's name and description on hover), its trials, and its files. Fixed column
+// widths keep long names from pushing the trials off the narrow pane; a name that does not fit is
+// cut, with the full name on hover.
+function TestCaseTable({
+  specification,
+  excluded,
+}: {
+  specification: Specification;
+  excluded: ReadonlySet<string>;
+}) {
+  const behaviours = new Map(
+    specification.features.flatMap((feature) =>
+      feature.behaviours.map((behaviour) => [behaviour.id, behaviour] as const),
+    ),
+  );
+  return (
+    <table className="w-full table-fixed border-collapse text-left text-sm">
+      <colgroup>
+        <col className="w-[22%]" />
+        <col className="w-[22%]" />
+        <col />
+        <col className="w-14" />
+        <col className="w-[18%]" />
+      </colgroup>
+      <thead>
+        <tr className="border-b border-border text-xs text-muted-foreground">
+          <th className="px-2 py-2 font-medium">Persona</th>
+          <th className="px-2 py-2 font-medium">Scenario</th>
+          <th className="px-2 py-2 font-medium">Behaviours</th>
+          <th className="px-2 py-2 text-right font-medium">Trials</th>
+          <th className="px-2 py-2 font-medium">Files</th>
+        </tr>
+      </thead>
+      <tbody>
+        {specification.tasks.map((task) => {
+          const persona = specification.personas.find(
+            (item) => item.id === task.persona_ref,
+          );
+          const scenario = specification.scenarios.find(
+            (item) => item.id === task.scenario_ref,
+          );
+          const personaName = persona?.name ?? task.persona_ref;
+          const scenarioName = scenario?.name ?? task.scenario_ref;
+          return (
+            <tr
+              key={task.id}
+              data-keep-anchor={`task-${task.id}`}
+              className={cn(
+                "border-b border-border align-top",
+                excluded.has(task.id) && "text-muted-foreground",
+              )}
+            >
+              <td className="px-2 py-1.5">
+                <span title={personaName} className="block truncate">
+                  {personaName}
+                </span>
+              </td>
+              <td className="px-2 py-1.5">
+                <span title={scenarioName} className="block truncate">
+                  {scenarioName}
+                </span>
+              </td>
+              <td className="px-2 py-1.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-1">
+                  {task.behaviour_refs.map((ref) => {
+                    const behaviour = behaviours.get(ref);
+                    return (
+                      <span
+                        key={ref}
+                        title={
+                          behaviour
+                            ? `${behaviour.name}: ${behaviour.description}`
+                            : ref
+                        }
+                      >
+                        <Chip>{ref}</Chip>
+                      </span>
+                    );
+                  })}
+                </div>
+              </td>
+              <td className="px-2 py-1.5 text-right tabular-nums">
+                {task.num_trials}
+              </td>
+              <td className="px-2 py-1.5">
+                {task.fixtures.length > 0 ? (
+                  <div className="flex min-w-0 flex-col gap-0.5 text-xs">
+                    {task.fixtures.map((file) => (
+                      <span key={file} title={file} className="truncate">
+                        {file}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">None</span>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
@@ -618,63 +778,49 @@ function FeatureView({
   showGraders: boolean;
   graderByFqn: ReadonlyMap<string, GraderSpec>;
 }) {
+  // The open state lives here, so this component re-renders on a toggle and its keep-in-place
+  // effect holds the header still while the content below it changes.
   const [open, setOpen] = useState(true);
-  // How much of this feature is actually being measured. A bare total said the feature holds two
-  // behaviours; it did not say that only one of them was ticked, which was left to the dormant
-  // rows' opacity alone — easy to miss, and the fraction is the number that decides whether the
-  // specification is thorough enough. New Behaviour rows start selected, and the fraction changes as
-  // the user clears or restores them.
+  const keep = useKeepAnchor();
+  // How much of this feature is measured, for screen readers.
   const measured = feature.behaviours.filter((b) => b.measured).length;
   return (
-    <div className="animate-arrive flex flex-col">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-label={`${feature.name}, ${measured} of ${feature.behaviours.length} measured`}
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded py-1 text-left transition-colors hover:text-accent"
-      >
-        <Chevron
-          dir={open ? "down" : "right"}
-          className="text-muted-foreground transition-transform"
-        />
-        <span className="min-w-0 flex-1 font-medium text-foreground">
-          {feature.name}
+    <Disclosure
+      className="animate-arrive"
+      open={open}
+      onOpenChange={(next) => {
+        keep(`feature-${feature.id}`);
+        setOpen(next);
+      }}
+      headerClassName="py-1"
+      indent={false}
+      label={`${feature.name}, ${measured} of ${feature.behaviours.length} measured`}
+      summary={
+        <span
+          data-keep-anchor={`feature-${feature.id}`}
+          className="flex min-w-0 items-center gap-2"
+        >
+          <span className="min-w-0 flex-1 font-medium">{feature.name}</span>
         </span>
-        {/* The fraction goes teal the moment anything in this feature is actually being measured,
-            and stays grey while none of it is. That makes "this feature contributes nothing to the
-            run" a thing you see rather than a thing you compute, and it scans down the list: the
-            grey chips are the gaps. Teal is the right colour for it because this is a live state
-            and not a label — the same reason the open interview in the rail carries it. */}
-        <span aria-hidden className="shrink-0">
-          <Chip tone={measured > 0 ? "accent" : "neutral"}>
-            {measured}/{feature.behaviours.length}
-          </Chip>
-        </span>
-      </button>
-      {open && (
-        // Behaviours within a group are spaced apart too — a behaviour with its criteria
-        // below it must read as one unit set off from the next behaviour, not run flush
-        // into it. The gap is smaller than the between-group gap so the hierarchy still reads:
-        // groups first, behaviours within them second.
-        <div className="ml-1.5 mt-1 border-l border-border pb-1 pl-3">
-          <p className="mb-3 whitespace-pre-wrap text-sm text-muted-foreground">
-            {feature.description}
-          </p>
-          <ul className="flex flex-col gap-4">
-            {feature.behaviours.map((b) => (
-              <BehaviourView
-                key={b.id}
-                behaviour={b}
-                selecting={selecting}
-                showGraders={showGraders}
-                graderByFqn={graderByFqn}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+      }
+    >
+      <div className="ml-1.5 mt-1 border-l border-border pb-1 pl-3">
+        <p className="mb-3 whitespace-pre-wrap text-sm text-muted-foreground">
+          {feature.description}
+        </p>
+        <ul className="flex flex-col gap-4">
+          {feature.behaviours.map((b) => (
+            <BehaviourView
+              key={b.id}
+              behaviour={b}
+              selecting={selecting}
+              showGraders={showGraders}
+              graderByFqn={graderByFqn}
+            />
+          ))}
+        </ul>
+      </div>
+    </Disclosure>
   );
 }
 
@@ -718,13 +864,9 @@ function BehaviourView({
         dormant && "opacity-45",
       )}
     >
-      {/* The id goes teal on a behaviour that is actually being measured, and stays grey
-          otherwise. This is the positive half of the "which of these count" signal: dimming the
-          dormant rows says which ones are *out*, but nothing said which are *in*, so the teal
-          `2/5` on the group named a count with no way to see which two it was. Teal is right here
-          for the same reason the fraction carries it — being measured is a live selected state,
-          not a label — and the ids already form a straight column to read down, so the counted
-          ones light up as a scannable set. */}
+      {/* The id goes teal on a behaviour that is measured, and stays grey otherwise. Dimming
+          the dormant rows says which ones are out; the teal ids say which are in, and they form
+          a straight column to read down. */}
       <Mono
         tone={behaviour.measured ? "accent" : "muted"}
         className={cn(
@@ -752,29 +894,28 @@ function BehaviourView({
                 className="animate-arrive flex flex-col gap-1 [&:not(:first-child)]:border-t [&:not(:first-child)]:border-border [&:not(:first-child)]:pt-3"
               >
                 <p className="text-foreground">{c.description}</p>
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-muted-foreground">
-                    Grader details
-                  </summary>
-                  <p>{c.name}</p>
-                  <p>{grader?.name ?? c.grader_fqn ?? "Not selected"}</p>
-                  {!grader && c.grader_fqn && (
-                    <p className="text-muted-foreground">
-                      Unlisted settings use the grader defaults.
-                    </p>
-                  )}
-                  <dl>
-                    {Object.entries({
-                      ...grader?.default_args,
-                      ...c.grader_args,
-                    }).map(([key, value]) => (
-                      <div key={key}>
-                        <dt>{key}</dt>
-                        <dd>{JSON.stringify(value)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </details>
+                <Disclosure tone="muted" summary="Grader details">
+                  <div className="mt-1 flex flex-col gap-0.5">
+                    <p>{c.name}</p>
+                    <p>{grader?.name ?? c.grader_fqn ?? "Not selected"}</p>
+                    {!grader && c.grader_fqn && (
+                      <p>Unlisted settings use the grader defaults.</p>
+                    )}
+                    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+                      {Object.entries({
+                        ...grader?.default_args,
+                        ...c.grader_args,
+                      }).map(([key, value]) => (
+                        <div key={key} className="contents">
+                          <dt>{key}</dt>
+                          <dd className="break-words font-mono">
+                            {JSON.stringify(value)}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                </Disclosure>
                 {showGraders && grader && (
                   <Mono className="block break-words rounded border border-border bg-muted px-2 py-1 leading-relaxed">
                     <span className="block text-foreground">{grader.name}</span>

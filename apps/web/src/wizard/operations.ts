@@ -221,6 +221,16 @@ export class InterviewOperations {
       }
     });
   }
+  // Back from a completed Interview. It has no pending request, so the turn carries an empty
+  // request id; the package reopens the last review and clears the final confirmation.
+  async reopen(record: LocalInterviewRecord): Promise<void> {
+    if (record.state.pending || this.pendingSaves.has(record.id)) return;
+    await this.run(record.id, async () => {
+      const response: UserResponse = { type: "choice", selected: ["back"] };
+      const result = await api.respond(record.state, "", response);
+      await this.save(applyTurn(record, result, response));
+    });
+  }
   async edit(record: LocalInterviewRecord): Promise<void> {
     if (this.pendingSaves.has(record.id)) return;
     await this.run(record.id, async () => {

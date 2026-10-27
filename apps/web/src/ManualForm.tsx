@@ -12,7 +12,7 @@ import {
   ACCEPTED_FIXTURE_EXTENSIONS,
   validateFixtureSelection,
 } from "./fixture-policy";
-import { NumberInput } from "./inputs";
+import { Field, NumberInput, SelectInput, TextArea, TextInput } from "./fields";
 import {
   emptyManualExperiment,
   emptyManualPersona,
@@ -820,48 +820,42 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
                     label="Persona"
                     error={errorFor(`task.${index}.persona`)}
                   >
-                    <select
-                      aria-invalid={Boolean(errorFor(`task.${index}.persona`))}
-                      ref={(element) => {
+                    <SelectInput
+                      invalid={Boolean(errorFor(`task.${index}.persona`))}
+                      selectRef={(element) => {
                         taskPersonaRefs.current[index] = element;
                       }}
-                      aria-label={`${itemLabel}, Persona`}
+                      ariaLabel={`${itemLabel}, Persona`}
                       value={task.persona_ref}
-                      onChange={(event) =>
-                        updateTask(index, { persona_ref: event.target.value })
+                      placeholder="Select a Persona"
+                      choices={personaIds.map((id) => ({
+                        value: id,
+                        label: id,
+                      }))}
+                      onChange={(persona_ref) =>
+                        updateTask(index, { persona_ref })
                       }
-                      className={selectClass}
-                    >
-                      <option value="">Select a Persona</option>
-                      {personaIds.map((id) => (
-                        <option key={id} value={id}>
-                          {id}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </Field>
                   <Field
                     label="Scenario"
                     error={errorFor(`task.${index}.scenario`)}
                   >
-                    <select
-                      aria-invalid={Boolean(errorFor(`task.${index}.scenario`))}
-                      aria-label={`${itemLabel}, Scenario`}
+                    <SelectInput
+                      invalid={Boolean(errorFor(`task.${index}.scenario`))}
+                      ariaLabel={`${itemLabel}, Scenario`}
                       value={task.scenario_ref}
-                      onChange={(event) =>
-                        updateTask(index, { scenario_ref: event.target.value })
-                      }
-                      className={selectClass}
-                    >
-                      <option value="">Select a Scenario</option>
-                      {experiment.scenarios
+                      placeholder="Select a Scenario"
+                      choices={experiment.scenarios
                         .filter((s) => s.id.trim())
-                        .map((s) => (
-                          <option key={s.id} value={s.id.trim()}>
-                            {s.id.trim()}
-                          </option>
-                        ))}
-                    </select>
+                        .map((s) => ({
+                          value: s.id.trim(),
+                          label: s.id.trim(),
+                        }))}
+                      onChange={(scenario_ref) =>
+                        updateTask(index, { scenario_ref })
+                      }
+                    />
                   </Field>
                   <Field
                     label="Trials"
@@ -1012,89 +1006,6 @@ function SectionHeading({
       </div>
       {action}
     </div>
-  );
-}
-
-const selectClass =
-  "rounded-lg border border-input bg-background px-3 py-2 text-sm aria-[invalid=true]:border-destructive";
-
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex min-w-0 flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      {children}
-      {error && <span className="text-xs text-destructive">{error}</span>}
-    </label>
-  );
-}
-
-function TextInput({
-  id,
-  inputRef,
-  ariaLabel,
-  value,
-  placeholder,
-  spellCheck,
-  invalid = false,
-  onChange,
-}: {
-  id?: string;
-  inputRef?: (element: HTMLInputElement | null) => void;
-  ariaLabel?: string;
-  value: string;
-  placeholder: string;
-  spellCheck?: boolean;
-  invalid?: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <input
-      id={id}
-      ref={inputRef}
-      aria-label={ariaLabel}
-      aria-invalid={invalid}
-      value={value}
-      placeholder={placeholder}
-      spellCheck={spellCheck}
-      onChange={(event) => onChange(event.target.value)}
-      className="h-10 rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground aria-[invalid=true]:border-destructive"
-    />
-  );
-}
-
-function TextArea({
-  id,
-  ariaLabel,
-  value,
-  placeholder,
-  invalid = false,
-  onChange,
-}: {
-  id?: string;
-  ariaLabel?: string;
-  value: string;
-  placeholder: string;
-  invalid?: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <textarea
-      id={id}
-      aria-label={ariaLabel}
-      aria-invalid={invalid}
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onChange(event.target.value)}
-      className="min-h-24 resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground aria-[invalid=true]:border-destructive"
-    />
   );
 }
 

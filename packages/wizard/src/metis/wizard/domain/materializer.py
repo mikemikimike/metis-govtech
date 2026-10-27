@@ -162,23 +162,8 @@ def add_scenario(
         description=draft.description,
         metadata=draft.metadata,
     )
-    # Build every Task before changing the Specification, so invalid drafts are atomic.
-    tasks = [
-        _task(
-            specification,
-            item,
-            scenario.id,
-            issued_ids | {scenario.id} | {t.id for t in specification.tasks},
-            allowed_fixture_names,
-            offset=i,
-        )
-        for i, item in enumerate(draft.tasks)
-    ]
     _record(issued_ids, user_typed, scenario.id, origin)
     specification.scenarios.append(scenario)
-    for task in tasks:
-        _record(issued_ids, user_typed, task.id, origin)
-        specification.tasks.append(task)
     return scenario
 
 

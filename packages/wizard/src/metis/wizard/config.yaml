@@ -1,7 +1,7 @@
 settings:
   clarify_turn_cap: 5
 
-opening_question: "Tell me about your target — what it does and who it's for."
+opening_question: "Tell me about your product. What does it do, and who uses it?"
 
 perspectives:
   - id: end_user
@@ -24,4 +24,5 @@ statuses:
   criteria: "Writing testable criteria…"
   personas: "Designing evaluator personas…"
   scenarios: "Building coverage scenarios…"
+  test_cases: "Matching personas to scenarios…"
   done: "Finishing up…"

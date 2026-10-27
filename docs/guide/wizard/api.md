@@ -77,6 +77,67 @@ list to the start request. The opening document list cannot change after start.
 
 Keep each original file. If a Scenario uses it, send the original bytes to `/package`.
 
+## Review controls
+
+A Choice request carries `sections`. Each `ReviewSection` has an `id`, a finished `title`, a
+`parent`, and `options`. A section with `parent: null` is a Profile section heading, and its `id`
+is a Profile section ID (`behaviours`, `personas`, `scenarios`, or `test-cases`). A section with a
+`parent` is a group heading inside it, such as a Feature. A section with no cards still shows its
+options. Each card has `profile_section_id`, which tells which Profile section holds it, and
+`section_id`, which names its group heading. `profile_section_id` on the request identifies the
+active review. Nested `details` components contain expandable content. `muted: true` on a component
+marks supporting detail, such as Grader settings. Table `columns` contain finished cell text.
+Render supplied controls and preserve their IDs.
+
+Review options use one action set. The `target` of each option is an ID, and the package finds what
+the ID names:
+
+| `action` | `target` | Result |
+|---|---|---|
+| `add` | A parent ID, or `features`, `personas`, `scenarios`, `tasks` | Opens a typed form for a new child |
+| `edit` | An item ID | Opens a typed form with the current values |
+| `remove` | An item ID | Removes the item and its dependants |
+| `tick`, `cover` | An item ID | Applies the patch on the option |
+| `back`, `continue` | None | Moves between steps |
+
+`Option.hint` is finished supporting text for a short label, such as a Behaviour description for
+the chip `EB-1`. `Card.show_id` is false when the item ID only repeats the name, as on Persona and
+Scenario cards. `Option.icon` is `pencil`, `plus`, `trash`, or null. `Option.label` is complete text, such as
+"Delete Answer quality". Show it as the tooltip or in place of the icon. When `Option.confirm` is
+set, show its text and send the option only after the user confirms. A card has a checkbox
+(`selected` is not null) only when one of its options toggles it.
+
+A Choice request with `feedback_placeholder` accepts `{"type": "choice", "feedback": "..."}`.
+Send this with the pending request ID. Feedback cannot accompany selections or field values.
+Corrections apply in one turn. Keep the review visible while the response is pending. A
+correction from feedback can also set a Behaviour's `measured` flag and a Task's `num_trials`.
+
+A Form request has prefilled `fields[].value` and a finished `submit_label`. An edit form has
+`purpose: "edit"`. Save uses the submitted text. Only a field with `required: true` must be
+nonblank. A rejected required field keeps the pending form unchanged for correction. A field with
+`choices` is a dropdown: show each `FormChoice.label` and send its `value`. A field with
+`multiple: true` takes several choices; send the values as one comma-separated text.
+`FormField.column` names the table column of the cell that the field edits, so a door can edit a
+row in place.
+`used_combinations` lists value sets that other items use, such as
+`{"persona": "P-1", "scenario": "S-1"}`. Disable a choice that would complete one. The package
+checks again and keeps the form open with a warning when a pair is in use.
+
+A Form request with `cancellable: true` accepts a normal turn with response
+`{"type": "form", "cancelled": true, "values": {}}`. Use the pending request ID. Cancellation returns
+to review without changing the Specification. Cancellation with nonempty values is rejected.
+
+A Test Case row is a `ScenarioCard`. Its `selected` value is true when the Test Case is included
+in the evaluation, and its `tick` option changes that. The selection is in
+`InterviewState.excluded_tasks`. Readiness, the totals, and `/package` use only the selected
+Test Cases. A Scenario that no selected Test Case uses is left out of the package.
+
+Back is accepted while a Form request is pending at any step after Clarify. Send
+`{"type": "choice", "selected": ["back"]}` with the form's request ID. The form closes with no
+change, and the step before opens. A completed Interview has no pending request. Send the same
+Back response with `request_id: ""` to reopen the Test Case review. This clears `confirmed`, and
+Continue completes the Interview again.
+
 ## Start an Interview
 
 `POST /interview/start` creates the first state and pending screen.
@@ -84,10 +145,17 @@ Keep each original file. If a Scenario uses it, send the original bytes to `/pac
 | Request field | Required | Description |
 |---|---|---|
 | `description` | Yes | Description of the target. |
-| `known_capability_ids` | Yes | Capability IDs from `/config`. The list can be empty. |
-| `capability_confidence` | Yes | `low`, `medium`, or `high`. |
+| `known_capability_ids` | No | Capability IDs from `/config`. The list can be empty. |
+| `capability_confidence` | No | `low`, `medium`, or `high`. |
 | `perspective` | No | Defaults to `end_user`; other values come from `/config`. |
 | `documents` | No | Output from `/documents/extract`, or document names without text. |
+
+Supply `known_capability_ids` and `capability_confidence` together, or omit both. Both can also
+be null. Omitted evidence is stored as `state.context.capability_evidence: null`. It means
+unspecified. It does not mean an empty selection or low confidence. IDs and confidence are
+validated when supplied. Perspective and supplied capability context guide each model call.
+
+A minimal start request is `{"description": "A research assistant that cites its sources."}`.
 
 Example request:
 
@@ -397,5 +465,5 @@ you need the complete conversation; Interview state contains only recent history
 
 Keep the `specification` returned by `/compile` when the request contains new Tasks
 with blank IDs. Submit that Specification on later edits and to `/package`. Task IDs
-are assigned by the backend. Keep them when editing a Task. Copying a Task requires a
-new ID. `specification.yaml` is the only YAML file in the archive.
+are assigned by the backend. Keep them when editing a Task. A Task is unique by its Persona and
+Scenario pair. `specification.yaml` is the only YAML file in the archive.

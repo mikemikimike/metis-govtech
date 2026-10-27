@@ -232,10 +232,14 @@ def _write_outputs(
         binding_yaml,
         connected_specification,
     )
+    from metis.wizard.application.readiness import selected_specification
     from metis.wizard.application.turn import experiment_id
 
     connection = state.context.connection
-    specification = connected_specification(state.specification, connection)
+    # Export only the Test Cases that the user kept selected.
+    specification = connected_specification(
+        selected_specification(state.specification, state.excluded_tasks), connection
+    )
     compiled = compile_specification(specification)
     review = render_review(
         specification,
@@ -466,10 +470,12 @@ def init(
     from metis.wizard.adapters.cli.opening import (
         read_capability_evidence,
         read_description,
+        read_perspective,
     )
 
     if description is None:
         description = read_description(out=console.print)
+    perspective = read_perspective(out=console.print)
 
     # The mode comes next, so a user who wants to run evals sees how to connect the target
     # before the Interview questions.
@@ -490,6 +496,7 @@ def init(
     state = _drive(
         InterviewStartRequest(
             description=description,
+            perspective=perspective,
             known_capability_ids=known_capability_ids,
             capability_confidence=capability_confidence,
             documents=opening_documents,

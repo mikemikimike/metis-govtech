@@ -17,6 +17,7 @@ const INTERVIEW_STEPS: readonly InterviewStep[] = [
   "criteria",
   "personas",
   "scenarios",
+  "test_cases",
   "done",
 ];
 
@@ -86,7 +87,13 @@ function validState(value: unknown): value is InterviewState {
   const context = state.context;
   if (!context || typeof context !== "object") return false;
   const evidence = context.capability_evidence;
-  if (!evidence || typeof evidence !== "object") return false;
+  if (
+    evidence != null &&
+    (typeof evidence !== "object" ||
+      !Array.isArray(evidence.known_capability_ids) ||
+      typeof evidence.confidence !== "string")
+  )
+    return false;
   return (
     !!state.specification &&
     typeof state.specification === "object" &&
@@ -108,8 +115,6 @@ function validState(value: unknown): value is InterviewState {
     Array.isArray(state.history) &&
     Array.isArray(state.user_typed) &&
     Array.isArray(state.issued_ids) &&
-    Array.isArray(evidence.known_capability_ids) &&
-    typeof evidence.confidence === "string" &&
     (state.pending === null ||
       (typeof state.pending === "object" && state.pending !== null))
   );
@@ -255,6 +260,57 @@ function currentRecord(
 
 const memory = new Map<string, LocalInterviewRecord>();
 
+// Two request shapes changed in this storage version. A `disclosure` component (a label and text
+// items) is now a `details` component, and a form choice is now `{value, label}`. Both convert
+// without loss, in the transcript and in the pending request. The conversion runs on each read
+// and changes nothing in a record that already has the new shapes.
+function reviewShape(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(reviewShape);
+  if (!storedObject(value)) return value;
+  if (value.type === "disclosure")
+    return {
+      type: "details",
+      title: typeof value.label === "string" ? value.label : "Details",
+      muted: true,
+      expanded: false,
+      components: Array.isArray(value.items) ? value.items : [],
+    };
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      key === "choices" && Array.isArray(entry)
+        ? entry.map((choice) =>
+            typeof choice === "string"
+              ? { value: choice, label: choice }
+              : choice,
+          )
+        : key === "value" || key === "text"
+          ? entry
+          : reviewShape(entry),
+    ]),
+  );
+}
+
+function reviewRecord(value: unknown): unknown {
+  if (!storedObject(value) || value.storage_version !== STORAGE_VERSION)
+    return value;
+  const state = storedObject(value.state) ? value.state : undefined;
+  return {
+    ...value,
+    // Only the request objects change. Entries keep their outbound files (Blobs) as they are.
+    transcript: Array.isArray(value.transcript)
+      ? value.transcript.map((entry) =>
+          storedObject(entry) && entry.kind === "interaction"
+            ? { ...entry, request: reviewShape(entry.request) }
+            : entry,
+        )
+      : value.transcript,
+    ...(state
+      ? { state: { ...state, pending: reviewShape(state.pending) } }
+      : {}),
+  };
+}
+
 export class InterviewRepository {
   private problemsValue: LocalStorageProblem[] = [];
 
@@ -263,7 +319,7 @@ export class InterviewRepository {
   }
 
   async list(): Promise<LocalInterviewRecord[]> {
-    const rows = await this.allRaw();
+    const rows = (await this.allRaw()).map(reviewRecord);
     const healthy: LocalInterviewRecord[] = [];
     this.problemsValue = [];
     for (const row of rows) {
@@ -281,7 +337,7 @@ export class InterviewRepository {
   }
 
   async read(id: string): Promise<LocalInterviewRecord | undefined> {
-    const row = await this.raw(id);
+    const row = reviewRecord(await this.raw(id));
     if (row === undefined) return undefined;
     if (!validRecord(row)) {
       this.problemsValue = [{ id, message: unreadableMessage(row) }];
@@ -456,8 +512,12 @@ export function removeUnreferencedFixtures(
   record: LocalInterviewRecord,
   names: readonly string[],
 ): LocalInterviewRecord {
+  // A Test Case that the user cleared does not run, so its files are not packaged.
+  const excluded = new Set(record.state.excluded_tasks ?? []);
   const references = new Set(
-    record.state.specification.tasks.flatMap((scenario) => scenario.fixtures),
+    record.state.specification.tasks
+      .filter((task) => !excluded.has(task.id))
+      .flatMap((task) => task.fixtures),
   );
   const removable = new Set(names.filter((name) => !references.has(name)));
   const openingDocuments = new Set(
@@ -479,8 +539,12 @@ export function removeUnreferencedFixtures(
 export function fixturesForSpecification(
   record: LocalInterviewRecord,
 ): LocalFixture[] {
+  // A Test Case that the user cleared does not run, so its files are not packaged.
+  const excluded = new Set(record.state.excluded_tasks ?? []);
   const references = new Set(
-    record.state.specification.tasks.flatMap((scenario) => scenario.fixtures),
+    record.state.specification.tasks
+      .filter((task) => !excluded.has(task.id))
+      .flatMap((task) => task.fixtures),
   );
   return record.fixtures.filter((fixture) => references.has(fixture.name));
 }

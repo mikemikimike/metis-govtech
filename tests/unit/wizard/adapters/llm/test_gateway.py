@@ -22,7 +22,6 @@ from metis.wizard.application.interviewer import (
 )
 from metis.wizard.contracts import (
     ClarifyResult,
-    InterviewDocument,
     Specification,
     Target,
 )
@@ -307,7 +306,7 @@ def test_raw_scenario_fields_are_rejected_before_specification_materialization()
                 {
                     "op": "add",
                     "path": "scenarios",
-                    "value": {"name": "A scenario", "description": "x", "tasks": []},
+                    "value": {"name": "A scenario", "description": "x"},
                 }
             ],
         }
@@ -419,46 +418,6 @@ def test_model_schema_has_no_persisted_or_runtime_fields() -> None:
         "origin",
         "options",
     }
-
-
-def test_raw_scenario_fixtures_are_retried_until_they_match_the_context() -> None:
-    from tests.fixtures.wizard.specifications import research_assistant
-
-    specification = research_assistant()
-    context = interview_context()
-    context.documents = [InterviewDocument(name="policy.md")]
-    bad = json.dumps(
-        {
-            "message": "Attach the file.",
-            "patches": [
-                {
-                    "op": "add",
-                    "path": "scenarios",
-                    "value": {
-                        "name": "Use the policy",
-                        "description": "Ask about a policy rule.",
-                        "tasks": [
-                            {
-                                "persona_ref": "impatient-executive",
-                                "behaviour_refs": ["EB-1"],
-                                "fixtures": ["unknown.csv"],
-                            }
-                        ],
-                    },
-                }
-            ],
-        }
-    )
-    good = bad.replace("unknown.csv", "policy.md")
-    model, completions = interviewer([bad, good])
-
-    result = model.draft_scenarios(specification, context=context)
-
-    assert len(completions.calls) == 2
-    assert result.patches[0].value.tasks[0].fixtures == ["policy.md"]
-    retry = completions.calls[1]["messages"]
-    assert retry[2]["content"] == bad
-    assert "unknown.csv" in retry[3]["content"]
 
 
 def test_model_origin_is_not_part_of_provider_schema() -> None:
@@ -681,14 +640,6 @@ def test_each_semantic_call_sends_one_complete_named_prompt() -> None:
             lambda: prompts.chat(
                 specification, "criteria", "edit", "EB-1", context=context
             ),
-            StepResult(message="", patches=[]).model_dump_json(),
-        ),
-        (
-            "suggest_criterion",
-            lambda model: model.suggest_criterion(
-                specification, "EB-1", context=context
-            ),
-            lambda: prompts.suggest_criterion(specification, "EB-1", context=context),
             StepResult(message="", patches=[]).model_dump_json(),
         ),
     ]

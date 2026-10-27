@@ -2,9 +2,8 @@
 
 import pytest
 
-from metis.wizard.application import cascade
 from metis.wizard.contracts import Patch, PatchOp, PatchOrigin
-from metis.wizard.domain import materializer, paths
+from metis.wizard.domain import cascade, materializer, paths
 from metis.wizard.domain.applier import apply, sanitise
 from metis.wizard.domain.permissions import InterviewStep, StepPermissions, owner_of
 from tests.fixtures.wizard.specifications import research_assistant
@@ -107,17 +106,7 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
                 StepResultPatch(
                     op=PatchOp.ADD,
                     path="scenarios",
-                    value=ScenarioDraft(
-                        name="Exercise",
-                        description="exercise it",
-                        tasks=[
-                            {
-                                "persona_ref": "impatient-executive-2",
-                                "behaviour_refs": [],
-                                "fixtures": ["policy.md"],
-                            }
-                        ],
-                    ),
+                    value=ScenarioDraft(name="Exercise", description="exercise it"),
                 ),
             ]
         ),
@@ -130,8 +119,6 @@ def test_strict_model_drafts_materialize_ids_and_scenario_defaults() -> None:
     assert specification.features[-1].behaviours[0].measured is True
     assert specification.personas[-1].id == "impatient-executive-2"
     assert specification.scenarios[-1].id == "S-3"
-    assert specification.tasks[-1].num_trials == 3
-    assert specification.tasks[-1].fixtures == ["policy.md"]
 
 
 def test_model_whole_entity_set_is_refused() -> None:
@@ -141,7 +128,7 @@ def test_model_whole_entity_set_is_refused() -> None:
     patch_value = Patch(
         op=PatchOp.SET,
         path="scenarios[S-1]",
-        value=ScenarioDraft(name="Replacement", description="replacement", tasks=[]),
+        value=ScenarioDraft(name="Replacement", description="replacement"),
     )
     result = apply(specification, sanitise([patch_value]))
     assert result.applied == []
@@ -180,61 +167,6 @@ def test_rejecting_a_grader_write_points_at_rewording() -> None:
 # object inside. Every user-owned field below is reachable that way without the path ever
 # naming it. These are the same three rules as above, tested at the shape the model actually
 # sends rather than the targeted SET it rarely does.
-
-
-def test_an_unavailable_scenario_fixture_rejects_only_its_patch() -> None:
-    """A strict draft cannot turn a model-proposed filename into an uploaded fixture."""
-    from metis.wizard.contracts import ScenarioDraft
-
-    specification = research_assistant()
-
-    result = apply(
-        specification,
-        [
-            patch(
-                "scenarios",
-                ScenarioDraft(
-                    name="Spreadsheet analysis",
-                    description="Ask for an analysis of an uploaded spreadsheet",
-                    tasks=[
-                        {
-                            "persona_ref": "impatient-executive",
-                            "behaviour_refs": ["EB-1"],
-                            "fixtures": ["malformed_dataset.csv"],
-                        }
-                    ],
-                ),
-                op=PatchOp.ADD,
-            ),
-            patch(
-                "scenarios",
-                ScenarioDraft(
-                    name="Use the policy",
-                    description="Ask a question covered by policy.md.",
-                    tasks=[
-                        {
-                            "persona_ref": "impatient-executive",
-                            "behaviour_refs": ["EB-1"],
-                            "fixtures": ["policy.md"],
-                        }
-                    ],
-                ),
-                op=PatchOp.ADD,
-            ),
-        ],
-        allowed_fixture_names={"policy.md"},
-    )
-
-    assert len(result.applied) == 1
-    assert len(result.rejected) == 1
-    assert all(
-        scenario.name != "Spreadsheet analysis" for scenario in specification.scenarios
-    )
-    scenario = specification.scenario("S-3")
-    assert scenario is not None
-    assert next(
-        t for t in specification.tasks if t.scenario_ref == scenario.id
-    ).fixtures == ["policy.md"]
 
 
 def test_a_model_cannot_change_fixtures_on_an_existing_scenario() -> None:
@@ -637,17 +569,7 @@ def test_materializer_uses_dot_free_ids_for_every_specification_node() -> None:
     )
     scenario = materializer.add_scenario(
         specification,
-        ScenarioDraft(
-            name="Review",
-            description="Review the answer.",
-            tasks=[
-                {
-                    "persona_ref": persona.id,
-                    "behaviour_refs": [],
-                    "fixtures": [],
-                }
-            ],
-        ),
+        ScenarioDraft(name="Review", description="Review the answer."),
         PatchOrigin.MODEL,
         issued_ids=issued,
         user_typed=typed,
@@ -709,7 +631,7 @@ def test_tree_regeneration_does_not_reuse_removed_ids() -> None:
     issued = collect_specification_ids(specification)
     cascade.clear_for_regeneration(
         specification,
-        cascade.Question(text="", subject="target.description", kind="tree"),
+        cascade.Impact(subject="target.description", kind="tree"),
         set(),
     )
     assert specification.features == [] and specification.scenarios == []
@@ -775,7 +697,7 @@ def test_stale_user_authorship_does_not_protect_a_new_id() -> None:
     assert fresh.id == "AC-3-2"
     cascade.clear_for_regeneration(
         specification,
-        cascade.Question(text="", subject="EB-3", kind="criteria"),
+        cascade.Impact(subject="EB-3", kind="criteria"),
         user_typed,
     )
     assert behaviour.criteria == []

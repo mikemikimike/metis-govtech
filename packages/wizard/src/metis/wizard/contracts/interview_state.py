@@ -17,7 +17,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from metis.wizard.contracts.capabilities import CapabilityId
 from metis.wizard.contracts.connection import TargetConnection
@@ -30,6 +30,7 @@ from metis.wizard.contracts.documents import (
 # `specification` is a Pydantic field, so `Specification` must be a runtime import — Pydantic
 # resolves the annotation at runtime and a TYPE_CHECKING-only import leaves InterviewState
 # "not fully defined". See AGENTS.md — Coding Conventions.
+from metis.wizard.domain.permissions import InterviewStep
 from metis.wizard.domain.specification import Specification
 
 # The most recent clarification turns kept for model context. Older turns are trimmed after each
@@ -82,7 +83,7 @@ class InterviewContext(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
     perspective: Perspective = Perspective.END_USER
-    capability_evidence: CapabilityEvidence
+    capability_evidence: CapabilityEvidence | None = None
     opening_description: str = ""
     documents: list[InterviewDocument] = Field(default_factory=list)
     # How the engine reaches the target, in run mode. It is None in spec-only mode and is then
@@ -121,16 +122,33 @@ class InterviewState(BaseModel):
     # change to the Behaviour list or its measured selection clears it. There is deliberately no
     # `criteria_confirmed` or `personas_confirmed`; only the measured scope needs an explicit lock.
     behaviours_confirmed: bool = False
-    # The final lock, set only by Continue on a ready Scenario screen or a successful finish. Any
+    # The final lock, set only by Continue on a ready Test Case screen or a successful finish. Any
     # accepted Specification mutation clears it, so an earlier approval can never sign off new content.
     confirmed: bool = False
     history: list[Turn] = Field(default_factory=list, max_length=HISTORY_LIMIT)
+    # The latest drafting or chat message for each review step. A screen shows it when the user
+    # comes back to that step, in place of the neutral default prompt.
+    step_messages: dict[InterviewStep, str] = Field(default_factory=dict)
     # These sets belong to the interview, not to the portable Specification artifact.
     user_typed: set[str] = Field(default_factory=set)
+    # Test Cases that the user cleared on the Test Case review. They stay in the Specification
+    # for editing, but readiness, the totals and the export ignore them. This is Interview
+    # state, so the shared Specification schema does not change.
+    excluded_tasks: set[str] = Field(default_factory=set)
     issued_ids: set[str] = Field(default_factory=set)
     # The one live screen, or None between the finish and a fresh start. It carries its own
     # `request_id` and `stage`; the state stores neither separately.
     pending: AnyRequest | None = None
+
+    @field_validator("pending", mode="before")
+    @classmethod
+    def _load_older_review_shapes(cls, value: object) -> object:
+        """Read a saved pending request from before the current component shapes.
+
+        A `disclosure` component (a label and text items) is now a `details` component. The
+        rule is the same as the browser storage upgrade, so a saved Interview resumes in both.
+        """
+        return _review_shape(value)
 
     @model_validator(mode="after")
     def _current_form_format(self) -> InterviewState:
@@ -151,3 +169,25 @@ class InterviewState(BaseModel):
             if self.pending.stage is None:
                 raise ValueError("pending.stage is required")
         return self
+
+
+def _review_shape(value: object) -> object:
+    if isinstance(value, list):
+        return [_review_shape(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    if value.get("type") == "disclosure":
+        label = value.get("label")
+        items = value.get("items")
+        return {
+            "type": "details",
+            "title": label if isinstance(label, str) else "Details",
+            "muted": True,
+            "expanded": False,
+            "components": items if isinstance(items, list) else [],
+        }
+    # Free text and field values are content, not request shapes.
+    return {
+        key: entry if key in ("value", "text") else _review_shape(entry)
+        for key, entry in value.items()
+    }

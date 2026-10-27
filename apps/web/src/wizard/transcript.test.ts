@@ -7,8 +7,10 @@ import type {
 } from "../transport/api.ts";
 import { emptyRecord } from "../storage/repository.ts";
 import {
+  activeReview,
   applyEnd,
   applyTurn,
+  groupTranscript,
   startTranscript,
   toPresentation,
 } from "./transcript.ts";
@@ -211,6 +213,7 @@ test("choice and form receipts keep the offered fields and selections", () => {
   };
   const formRequest = {
     type: "form" as const,
+    cancellable: false,
     prompt: "Name the behaviour",
     title: "Behaviours",
     step: 2,
@@ -281,14 +284,14 @@ test("choice and form receipts keep the offered fields and selections", () => {
   const afterForm = applyTurn(
     formRecord,
     success({ ...state, pending: null, confirmed: true }),
-    { type: "form", values: { name: "Reviewer" } },
+    { type: "form", cancelled: false, values: { name: "Reviewer" } },
   );
   const answeredForm = afterForm.transcript.find(
     (entry) => entry.kind === "interaction" && entry.request_id === "form-1",
   );
   assert.deepEqual(
     answeredForm?.kind === "interaction" ? answeredForm.response : undefined,
-    { type: "form", values: { name: "Reviewer" } },
+    { type: "form", cancelled: false, values: { name: "Reviewer" } },
   );
 });
 
@@ -304,4 +307,148 @@ test("replaying a response does not duplicate a request ID", () => {
   const once = applyTurn(record, success(nextState), response);
   const twice = applyTurn(once, success(nextState), response);
   assert.deepEqual(twice.transcript, once.transcript);
+});
+
+test("review projection retains context during correction and follows request stage", () => {
+  const review: ChoiceRequest = {
+    type: "choice",
+    prompt: "Select",
+    title: "Review",
+    stage: "behaviours",
+    request_id: "review-1",
+    profile_section_id: "behaviours",
+    state: "resolved",
+    options: [],
+    warnings: [],
+    multi: true,
+    cards: [
+      {
+        kind: "standard",
+        id: "item-1",
+        blocking: false,
+        title: "Cite sources",
+        section_id: "group-1",
+        section: "Research",
+        selected: true,
+        components: [],
+        options: [],
+      },
+    ],
+  };
+  const chat = {
+    ...pending,
+    stage: "behaviours" as const,
+    target: "item-1",
+    target_label: "Cite sources",
+  };
+  assert.equal(activeReview([review, chat]), review);
+  const updated = {
+    ...review,
+    request_id: "review-2",
+    state: "pending" as const,
+  };
+  assert.equal(activeReview([review, chat, updated]), updated);
+  assert.equal(activeReview([review, { ...chat, stage: "criteria" }]), null);
+  assert.equal(activeReview([]), null);
+});
+
+test("the transcript folds clicks into one actions group and keeps words visible", () => {
+  const choice = (
+    request_id: string,
+    extra: Partial<ChoiceRequest> = {},
+  ): ChoiceRequest => ({
+    type: "choice",
+    prompt: "Review the Behaviours.",
+    stage: "behaviours",
+    request_id,
+    state: "resolved",
+    profile_section_id: "behaviours",
+    options: [],
+    warnings: [],
+    multi: true,
+    cards: [],
+    ...extra,
+  });
+  const form = {
+    type: "form" as const,
+    prompt: "Edit Cite sources.",
+    state: "resolved" as const,
+    request_id: "edit",
+    stage: "behaviours" as const,
+    purpose: "edit" as const,
+    cancellable: true,
+    fields: [],
+    answer: {},
+  };
+  const items = groupTranscript([
+    { ...pending, state: "resolved", answer: "A research assistant" },
+    choice("review-1"),
+    choice("review-2"),
+    form,
+    choice("review-3"),
+    choice("review-4", { feedback_answer: "Add a Behaviour for tone." }),
+    choice("pick", {
+      profile_section_id: null,
+      prompt: "Pick one.",
+      state: "pending",
+    }),
+  ]);
+  assert.deepEqual(items, [
+    { kind: "request", index: 0 },
+    { kind: "request", index: 1 },
+    { kind: "actions", indices: [2, 3, 4] },
+    { kind: "request", index: 5 },
+    { kind: "request", index: 6 },
+  ]);
+});
+
+test("a review that waits behind a send keeps its own option state", () => {
+  const option = (action: string, extra = {}) => ({
+    id: { action, target: "P-1" },
+    label: action,
+    primary: false,
+    enabled: true,
+    ...extra,
+  });
+  const review: ChoiceRequest = {
+    type: "choice",
+    prompt: "Review the Personas.",
+    stage: "personas",
+    request_id: "review-1",
+    state: "pending",
+    profile_section_id: "personas",
+    options: [],
+    warnings: [],
+    multi: false,
+    cards: [
+      {
+        kind: "standard",
+        id: "P-1",
+        blocking: false,
+        title: "Careful reviewer",
+        components: [],
+        options: [option("edit", { icon: "pencil" }), option("remove")],
+      },
+    ],
+  };
+  const record = emptyRecord(
+    "sending",
+    { ...state, pending: review },
+    "personas",
+    [
+      {
+        kind: "interaction",
+        request_id: "review-1",
+        request: review,
+        status: "sending",
+        response: { type: "choice", selected: ["edit:P-1"] },
+        outbound: { files: [], removedFixtures: [], attempt: 1 },
+      },
+    ],
+  );
+  const shown = activeReview(toPresentation(record).requests);
+  assert.deepEqual(
+    shown?.cards[0]?.options.map((item) => item.selected),
+    [undefined, undefined],
+  );
 });

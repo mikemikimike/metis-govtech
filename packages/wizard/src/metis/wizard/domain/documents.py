@@ -71,6 +71,9 @@ def normalize_fixture_name(name: str) -> str:
         for char in normalized
     ):
         raise ValueError("Fixture names cannot contain control characters.")
+    # A comma separates file names in a multiple-choice form value, so a name cannot hold one.
+    if "," in normalized:
+        raise ValueError("Fixture names cannot contain a comma. Rename the file.")
     if any(char in _WINDOWS_PUNCTUATION for char in normalized):
         raise ValueError("Fixture names contain characters that are not portable.")
     if normalized.endswith((".", " ")):

@@ -48,6 +48,7 @@ def test_the_whole_flow_walks_to_done() -> None:
         "draft_criteria",
         "draft_personas",
         "draft_scenarios",
+        "draft_test_cases",
     } <= set(interviewer.calls)
 
 

@@ -16,6 +16,7 @@ from metis.wizard.contracts import (
     ChoiceRequest,
     Option,
     OptionId,
+    ReviewSection,
     ScenarioCard,
     Warning,
 )
@@ -40,11 +41,17 @@ def a_screen(**overrides) -> ChoiceRequest:
             BehaviourCard(
                 id="EB-1",
                 section="Answer quality",
+                section_id="F-1",
                 title="Cites a source",
                 selected=True,
                 components=[CardText(text="Given x, when y, then z")],
                 options=[
-                    Option(id=OptionId(action="chat", target="EB-1"), label="Chat")
+                    Option(
+                        id=OptionId(action="tick", target="EB-1"),
+                        label="Measure",
+                        selected=True,
+                    ),
+                    Option(id=OptionId(action="chat", target="EB-1"), label="Chat"),
                 ],
             ),
             ScenarioCard(
@@ -78,6 +85,31 @@ def a_screen(**overrides) -> ChoiceRequest:
         warnings=[
             Warning(text="EB-4 is covered by no scenario.", blocking=True),
             Warning(text="EB-2 has no acceptance criteria yet.", blocking=False),
+        ],
+        sections=[
+            ReviewSection(
+                id="F-1",
+                title="Answer quality",
+                parent="behaviours",
+                options=[
+                    Option(
+                        id=OptionId(action="add", target="F-1"),
+                        label="Add one to Answer quality",
+                        icon="plus",
+                    )
+                ],
+            ),
+            ReviewSection(
+                id="empty",
+                title="Nothing yet",
+                options=[
+                    Option(
+                        id=OptionId(action="add", target="empty"),
+                        label="Add the first one",
+                        icon="plus",
+                    )
+                ],
+            ),
         ],
         footer="Total: 9 trials",
         options=[
@@ -127,31 +159,38 @@ def test_both_card_kinds_go_through_one_path() -> None:
 def test_selection_state_and_components_draw() -> None:
     """One authoritative check that a screen's pieces render as the layout intends.
 
-    Covers the section heading and its underline, card checkbox and indent, the chip's
-    target-without-verb tag, the stepper bounds, filenames, and that a screen-level
-    reply carries no `(target)`. Kept as one test because these are all one behaviour — "the
+    Covers the section heading, its count and underline, the item block (number, checkbox,
+    title, id, indented text), the chip's target-without-verb tag, the stepper bounds,
+    filenames, the `Actions:` line, and that a screen-level reply carries no `(target)`. Kept as one test because these are all one behaviour — "the
     door draws a screen" — not separate contracts.
     """
-    text, _ = draw(a_screen())
+    text, selectable = draw(a_screen())
     section = "Answer quality"
 
     # The heading is finished text the door does not interpret, underlined to its own width so
-    # a feature stands apart from the behaviours nested under it.
-    assert f"{section}\n{'─' * len(section)}" in text
+    # a group stands apart from the items nested under it. Its selected count sits beside it.
+    assert f"{section}   1 of 1 selected\n{'─' * len(section)}" in text
 
-    assert "  [x] Cites a source" in text  # card checkbox, indented under its section
-    assert "• Cites a source" not in text  # a checkbox already marks it — no bullet too
+    # One item reads as one block: the number of its checkbox, the box, the title, its id, and
+    # its text indented under it. The toggle is chosen by that number, not drawn again.
+    assert "  2. [x] Cites a source  (EB-1)\n       Given x, when y, then z" in text
+    assert selectable["tick:EB-1"].label == "Measure"
+    assert "Measure" not in text
 
     # The chip shows the item it applies to, without the `cover` verb: the number selects and
-    # the verb is machinery the user never types. Selection still keys on the full id (below).
+    # the verb is machinery the user never types.
     assert "[x] Cites a source  (S-1:EB-1)" in text
     assert "(cover:" not in text
 
     assert "3   [1–20]" in text  # stepper with its bounds
     assert "a.pdf" in text  # filenames
-    assert "measured by:" not in text
 
     assert "← Back" in text and "(back)" not in text  # a reply applies to nothing
+
+    # Icons are not drawn: icon actions sit on one `Actions:` line under their owner, and a
+    # section with no cards still shows its heading and its actions.
+    assert "  Actions: 1. Add one\n" in text
+    assert "Nothing yet" in text and "Add the first one" in text
 
 
 def test_a_checkbox_less_card_gets_a_bullet_and_indent() -> None:
@@ -229,13 +268,21 @@ def test_a_multi_select_screen_accepts_several() -> None:
     assert set(response.selected) == {"back", "chat:EB-1"}
 
 
+def _number(label: str, request: ChoiceRequest) -> str:
+    """The number the door printed in front of `label`."""
+    text, _ = draw(request)
+    line = next(line for line in text.splitlines() if f". {label}" in line)
+    return line.strip().split(".", 1)[0]
+
+
 def test_numbered_choices_are_shown_and_selectable() -> None:
     prompts: list[str] = []
+    number = _number("Chat", a_screen(multi=False))
 
     response = cli.render(
         a_screen(multi=False),
         out=lambda _: None,
-        read=lambda prompt: prompts.append(prompt) or "1",
+        read=lambda prompt: prompts.append(prompt) or number,
     )
 
     assert response.selected == ["chat:EB-1"]
@@ -270,8 +317,9 @@ def test_a_field_cannot_be_combined_with_an_option() -> None:
 
 
 def test_multi_select_accepts_comma_separated_numbers() -> None:
+    numbers = f"{_number('Chat', a_screen())},{_number('← Back', a_screen())}"
     response = cli.render(
-        a_screen(multi=True), out=lambda _: None, read=lambda _: "1,3"
+        a_screen(multi=True), out=lambda _: None, read=lambda _: numbers
     )
 
     assert response.selected == ["chat:EB-1", "back"]
@@ -438,37 +486,118 @@ def test_the_header_is_drawn_once_and_only_when_the_step_changes() -> None:
     assert body.lstrip().startswith(a_screen().prompt)
 
 
-def test_disclosure_values_are_shown_on_request() -> None:
-    from metis.wizard.contracts.conversation import CardDisclosure
+def test_a_confirm_option_asks_first_and_a_dropdown_sends_the_value() -> None:
+    from metis.wizard.contracts import FormChoice, FormField, FormRequest
+    from metis.wizard.domain.permissions import InterviewStep
 
-    screen = ChoiceRequest(
-        prompt="Review",
-        cards=[
-            BehaviourCard(
-                id="row",
-                title="Check",
-                components=[
-                    CardText(text="The session stays within its budget."),
-                    CardDisclosure(
-                        label="Details", items=[CardText(label="Limit", text="3")]
-                    ),
+    screen = a_screen(
+        multi=False,
+        options=[
+            Option(
+                id=OptionId(action="remove", target="EB-1"),
+                label="Delete Cites a source",
+                icon="trash",
+                confirm="Delete Cites a source? This also deletes 2 Criteria.",
+            )
+        ],
+    )
+    replies = iter(["remove:EB-1", "n", "remove:EB-1", "y"])
+    out: list[str] = []
+    response = cli.render(screen, out=out.append, read=lambda _: next(replies))
+    assert response.selected == ["remove:EB-1"]
+    assert sum("This also deletes 2 Criteria." in line for line in out) == 2
+    assert any("Nothing was changed." in line for line in out)
+
+    form = FormRequest(
+        prompt="Pair them.",
+        stage=InterviewStep.SCENARIOS,
+        fields=[
+            FormField(
+                id="persona",
+                label="Persona",
+                choices=[
+                    FormChoice(value="P-1", label="Careful reviewer"),
+                    FormChoice(value="P-2", label="Impatient executive"),
                 ],
             )
         ],
-        options=[Option(id=OptionId(action="continue"), label="Continue")],
     )
-    output = []
-    answers = iter(["details", "continue"])
+    out = []
+    replies = iter(["7", "/help", "2"])  # only a listed number is a value
+    response = cli.render(form, out=out.append, read=lambda _: next(replies))
+    assert response.values == {"persona": "P-2"}
+    assert "  2. Impatient executive" in out
+    # Back is offered in any form after the first step, and closes it.
+    back = cli.render(form, out=lambda _: None, read=lambda _: "/back")
+    assert back.selected == ["back"]
 
-    def read(prompt):
-        answer = next(answers)
-        if answer == "details":
-            assert "Limit: 3" not in "\n".join(output)
-        return answer
 
-    response = cli.render(screen, out=output.append, read=read)
-    assert response.selected == ["continue"]
-    assert "Limit: 3" in "\n".join(output)
+def test_a_multiple_choice_field_takes_listed_numbers_and_shows_hints() -> None:
+    from metis.wizard.contracts import FormChoice, FormField, FormRequest
+
+    form = FormRequest(
+        prompt="Edit it.",
+        fields=[
+            FormField(
+                id="behaviours",
+                label="Behaviours",
+                multiple=True,
+                required=True,
+                value="EB-1",
+                choices=[
+                    FormChoice(value="EB-1", label="EB-1", hint="Cites sources"),
+                    FormChoice(value="EB-2", label="EB-2", hint="Keeps it short"),
+                ],
+            ),
+            FormField(id="files", label="Files", multiple=True, value="a.pdf"),
+        ],
+    )
+    out: list[str] = []
+    replies = iter(["1,9", "2,1,2", "-"])
+    response = cli.render(form, out=out.append, read=lambda _: next(replies))
+    assert response.values == {"behaviours": "EB-2,EB-1", "files": ""}
+    assert "  2. EB-2 — Keeps it short" in out
+    assert "  (none available)" in out
+
+
+def test_a_form_asks_again_for_a_required_field_and_clears_an_optional_one() -> None:
+    """Enter keeps the current value. A required field is asked again until it has text, so
+    the package never refuses the answer. "-" clears an optional field."""
+    from metis.wizard.contracts import FormField, FormRequest
+
+    form = FormRequest(
+        prompt="Edit it.",
+        fields=[
+            FormField(id="name", label="Name", required=True),
+            FormField(id="note", label="Note", value="old"),
+            FormField(id="tag", label="Tag", value="kept"),
+        ],
+    )
+    out: list[str] = []
+    replies = iter(["", " ", "New name", "-", ""])
+    response = cli.render(form, out=out.append, read=lambda _: next(replies))
+    assert response.values == {"name": "New name", "note": "", "tag": "kept"}
+    assert out.count("  This field is required.") == 2
+
+
+def test_cancellable_form_returns_without_sending_draft_values() -> None:
+    from metis.wizard.contracts import FormField, FormRequest
+
+    replies = iter(["Draft name", "/cancel"])
+    response = cli.render(
+        FormRequest(
+            prompt="Write a check",
+            cancellable=True,
+            fields=[
+                FormField(id="name", label="Name"),
+                FormField(id="description", label="Assessment"),
+            ],
+        ),
+        out=lambda _: None,
+        read=lambda _: next(replies),
+    )
+    assert response.cancelled
+    assert response.values == {}
 
 
 @pytest.mark.parametrize("screen", ["behaviours_screen", "personas_screen"])

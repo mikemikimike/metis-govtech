@@ -5,8 +5,7 @@ need the API server.
 
 - It saves the Interview state after each turn. You can close the terminal and resume later.
 - It accepts documents when the Interview starts. See [Add documents](#add-documents).
-- It always uses the End user Perspective. Use the web client or the API for the Engineer,
-  Compliance, or Security Perspective.
+- It offers End user, Engineer, Compliance, and Security Perspectives.
 
 See the [Wizard overview](../wizard.md) for the shared Interview flow and output concepts.
 
@@ -68,14 +67,54 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
 
 2. The Wizard asks you to describe the target. Give a plain description, for example
    "A research assistant that answers questions from internal documents and cites each source."
-3. Choose the mode: `1` to build a Specification only, or `2` to build it and run evals. In run
+   You can also give the description as an argument. Then the Wizard does not ask for it:
+
+   ```bash
+   metis wizard init "A research assistant that cites each source."
+   ```
+
+3. Select a Perspective. Read its guiding question to choose the point of view.
+4. Choose the mode: `1` to build a Specification only, or `2` to build it and run evals. In run
    mode, enter the target binding values. See [Connect the target](#connect-the-target).
-4. The CLI shows the fixed ARC capability catalogue. Select known capabilities by number, name, or
-   ID, separated by commas. Enter a blank line when you know none.
-5. Enter one confidence value: `low`, `medium`, or `high`. The value states how complete the full
-   selection is.
-6. Answer the clarification questions.
-7. Review the Features, Behaviours, Criteria, Personas, Scenarios, and Test Cases that the Wizard drafts.
+5. The CLI shows the fixed ARC capability catalogue. Select known capabilities by number, name, or
+   ID, separated by commas. Enter a blank line when you know none. Enter `skip` to omit
+   capability evidence. Skipped evidence stays unspecified.
+6. If you supply capabilities, enter one confidence value: `low`, `medium`, or `high`. The value
+   states how complete the full selection is.
+7. Answer the clarification questions.
+8. Review the Features, Behaviours, Criteria, Personas, Scenarios, and Test Cases that the Wizard drafts.
+
+Behaviour review groups items by Feature and shows selected counts. Select by number or by the
+shown action key. Every review step moves on with **Continue**.
+
+Each item has three actions with complete labels. **Add** (for example "Add a Behaviour to
+Answer quality") opens a form under a heading. **Edit** opens a form with the current text.
+**Delete** removes the item. The Wizard uses the exact text that you type in a form. When a
+deletion also removes other items, the CLI names them and asks `Continue? [y/N]` first. For
+example, a Feature takes its Behaviours and their Criteria, and a Persona takes its Test Cases.
+
+The Wizard drafts the Scenarios. For each Scenario it picks the Personas that it runs with,
+usually one or two, and the Behaviours that it really tests. It makes one selected Test Case
+for each Persona pick, covering the picked Behaviours. A Behaviour that no selected Test Case
+covers is named on the review. A Persona or Scenario that you add with a
+form gets no Test Case by itself: add one with **Add a Test Case** or ask in the chat. A Test
+Case that you delete does not come back. Select **Include** on a Test Case to clear
+or select it. Only selected Test Cases count in the total and go into `specification.yaml`.
+
+A Test Case form shows numbered Personas, Scenarios, Behaviours, and Files. Type a number to
+choose. For Behaviours and Files, type several numbers separated by commas. Each Persona and
+Scenario pair can have one Test Case only. Persona and Scenario forms have a **More information**
+field for details such as a role or an opening request. Type one detail per line as
+`name: value`, for example `Role: Policy analyst`, then a blank line to finish.
+
+In a form field, press Enter to keep the current value. Enter `-` to clear an optional field. A
+required field asks again until you type a value. In **More information**, a blank first line
+keeps the current details, and `-` removes them all.
+
+Enter `/feedback` to give a written change request for the review. The chat can also select
+Behaviours and set Trials when you ask it to. Clear corrections update the content automatically.
+Form-written content and unrelated selections are preserved. Enter `/cancel` in a form field to
+return without saving, or `/back` to close the form and go to the step before.
 
 ## Go back to an earlier step
 
@@ -85,9 +124,14 @@ before it with its current content.
 - Back from Behaviours shows the Target name, users, description, and detail. Press Enter to
   keep a value, or type a new value. A required field that you leave empty keeps its current
   value.
-- Continue with no change returns to the later step. The Wizard drafts nothing again.
-- If you change content that later content came from, the Wizard asks what to do with the later
-  content. You can keep it, regenerate it, or review it yourself.
+- Continue with no change returns to the later step. The Wizard drafts nothing again. Enter
+  `/cancel` in the Target form to return to Behaviours with no change.
+- If you change which Behaviours are selected, Continue updates the Test Cases to match. A Test
+  Case drops a Behaviour that is no longer selected. A Test Case left with none covers all
+  selected Behaviours. A newly selected Behaviour gets Criteria, but no Test Case covers it
+  yet: the Test Case review names it, and you choose its Test Cases with a chip or the chat.
+- If you change content that later content came from, the Wizard updates the later content
+  automatically. It keeps form-written content and unrelated selections.
 
 Clarify has no Back, because it is the first step. To correct the description, say so in your
 answer, for example "The target is for staff only." To change the capabilities, start again with

@@ -25,7 +25,6 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from metis.core.logging import get_logger
-from metis.wizard.application import cascade
 from metis.wizard.application.compile import (
     CompilationError,
     SpecificationArchive,
@@ -35,16 +34,25 @@ from metis.wizard.application.compile import (
     to_yaml,
 )
 from metis.wizard.application.connection import binding_yaml, connected_specification
-from metis.wizard.application.driver import DriverState, StepDriver
+from metis.wizard.application.driver import (
+    AFTER_BEHAVIOURS,
+    PREVIOUS_STEP,
+    DriverState,
+    StepDriver,
+)
 from metis.wizard.application.interviewer import (
     InterviewContextBudgetError,
     InterviewerOutputError,
     InterviewerUnavailable,
 )
-from metis.wizard.application.readiness import specification_readiness
+from metis.wizard.application.readiness import (
+    selected_specification,
+    specification_readiness,
+)
 from metis.wizard.contracts.conversation import (
     ChatRequest,
     ChatResponse,
+    ChoiceRequest,
     ChoiceResponse,
     FormRequest,
     FormResponse,
@@ -109,11 +117,11 @@ def derive_stage(state: InterviewState) -> InterviewStep:
 
     Read top to bottom: a missing target needs clarification; a Behaviour list that is empty,
     measures nothing, or has not been confirmed needs the Behaviour review; a measured Behaviour
-    with no criteria needs the Criteria review; no personas needs the Persona review; a Scenario
-    set that is not runnable, or a review not yet confirmed, needs the Scenario review. Everything
-    satisfied is DONE.
+    with no criteria needs the Criteria review; no personas needs the Persona review; no
+    Scenarios needs the Scenario review; a Test Case set that is not runnable, or a review not
+    yet confirmed, needs the Test Case review. Everything satisfied is DONE.
     """
-    gaps = specification_readiness(state.specification)
+    gaps = specification_readiness(state.specification, state.excluded_tasks)
 
     if any(gap.stage is InterviewStep.CLARIFY for gap in gaps):
         return InterviewStep.CLARIFY
@@ -130,8 +138,14 @@ def derive_stage(state: InterviewState) -> InterviewStep:
     if any(gap.stage is InterviewStep.PERSONAS for gap in gaps):
         return InterviewStep.PERSONAS
 
-    if any(gap.stage is InterviewStep.SCENARIOS for gap in gaps) or not state.confirmed:
+    if any(gap.stage is InterviewStep.SCENARIOS for gap in gaps):
         return InterviewStep.SCENARIOS
+
+    if (
+        any(gap.stage is InterviewStep.TEST_CASES for gap in gaps)
+        or not state.confirmed
+    ):
+        return InterviewStep.TEST_CASES
 
     return InterviewStep.DONE
 
@@ -169,7 +183,10 @@ def handle_interview(
         return _start(request, interviewer, resolved_matcher)
 
     state = request.state
-    if isinstance(request, InterviewTurnRequest):
+    reopen = isinstance(request, InterviewTurnRequest) and _is_back_from_done(
+        request, state
+    )
+    if isinstance(request, InterviewTurnRequest) and not reopen:
         rejection = _validate_respond(request, state)
         if rejection is not None:
             return rejection
@@ -205,9 +222,29 @@ def handle_interview(
     if isinstance(request, InterviewEndRequest):
         return _finish(working, state, interviewer, resolved_matcher)
 
+    if reopen:
+        # Back from a completed Interview reopens its last review. Nothing in the
+        # Specification changes, and the final lock must be earned again with Continue.
+        working.step = InterviewStep.TEST_CASES
+        working.confirmed = False
+        try:
+            working.pending = driver.compose(working)
+            if driver.model_error is not None:
+                raise driver.model_error
+        except InterviewerOutputError as exc:
+            return _model_unavailable(state, exc, working)
+        except Exception as exc:
+            return _internal_error(state, exc)
+        return _awaiting(working)
+
     try:
         if isinstance(request.response, ChatResponse):
             working.history.append(Turn(role="user", text=request.response.text))
+        if isinstance(request.response, ChoiceResponse) and request.response.feedback:
+            working.history.append(Turn(role="user", text=request.response.feedback))
+        # Bound the history now. A failure below projects this working state as its
+        # diagnostic, and the state model refuses a history longer than the limit.
+        working.history = working.history[-HISTORY_LIMIT:]
         _apply_response(working, driver, request.response)
         if driver.model_error is not None:
             raise driver.model_error
@@ -216,9 +253,9 @@ def handle_interview(
     except Exception as exc:
         return _internal_error(state, exc)
 
-    _reconcile_locks(working, before)
+    _reconcile_locks(working, before, answered_at=_effective_stage(state))
 
-    # Continue on a ready Scenario review advanced the driver to DONE; finalize it.
+    # Continue on a ready Test Case review advanced the driver to DONE; finalize it.
     if working.step is InterviewStep.DONE:
         return _finalize(working, state)
 
@@ -253,7 +290,10 @@ def _start(
                 capability_evidence=CapabilityEvidence(
                     known_capability_ids=request.known_capability_ids,
                     confidence=request.capability_confidence,
-                ),
+                )
+                if request.known_capability_ids is not None
+                and request.capability_confidence is not None
+                else None,
                 opening_description=request.description,
                 documents=request.documents,
                 connection=request.connection,
@@ -287,15 +327,6 @@ def _apply_response(
     ):  # _validate_respond guarantees a pending request; narrow for the type
         return
 
-    # A cascade question was composed last turn; this turn's fresh driver has no memory of it, so
-    # rebuild it, reseed the driver, and answer it directly — bypassing the driver's own routing,
-    # which keys on an exact request match the stamped id would now defeat.
-    question = cascade.question_from_request(pending, working.specification)
-    if question is not None:
-        driver.pending_questions = [question]
-        driver._answer_question(working, response)  # noqa: SLF001 — reseeded above
-        return
-
     driver.handle(working, pending, response)
 
 
@@ -307,8 +338,8 @@ def _finish(
 ) -> InterviewResult:
     """Drive the remaining stages to DONE without asking, then check the Specification is runnable.
 
-    Best-effort: each stage is composed (which drafts any missing content) and its Continue or
-    accept is clicked. Clarification is abandoned rather than continued. A held Scenario gate — a
+    Best-effort: each stage is composed (which drafts any missing content) and its Continue is
+    clicked. Clarification is abandoned rather than continued. A held Test Case gate — a
     set the readiness check still rejects — stops the drive and returns `completion_failed` with
     the gaps, leaving the caller's original state untouched.
     """
@@ -350,7 +381,7 @@ def _finish(
         advance = [
             key
             for key, option in offered.items()
-            if option.id.action in ("continue", "accept") and option.enabled
+            if option.id.action == "continue" and option.enabled
         ]
         if not advance:
             break  # a gate is holding this stage; a best-effort pass cannot force it
@@ -365,12 +396,12 @@ def _finish(
             return _model_unavailable(original, driver.model_error, working)
 
     working.pending = None
-    gaps = _completion_gaps(working.specification)
+    gaps = _completion_gaps(working)
     if working.step is InterviewStep.DONE and not gaps:
         if not original.confirmed and working.context.documents:
             # Early fixture names and model suggestions are proposals. Even a complete
-            # Specification must pass through the existing Scenario review before it is confirmed.
-            working.step = InterviewStep.SCENARIOS
+            # Specification must pass through the Test Case review before it is confirmed.
+            working.step = InterviewStep.TEST_CASES
             try:
                 working.pending = driver.compose(working)
             except InterviewerOutputError as exc:
@@ -395,8 +426,8 @@ def _finish(
 
 def _finalize(working: DriverState, original: InterviewState) -> InterviewResult:
     """Seal an interview that Continue drove to DONE, verifying the Specification is runnable."""
-    gaps = _completion_gaps(working.specification)
-    if gaps:  # the Scenario gate should have blocked Continue; refuse rather than emit a bad set
+    gaps = _completion_gaps(working)
+    if gaps:  # the Test Case gate should have blocked Continue; refuse rather than emit a bad set
         return InterviewFailure(
             code=InterviewErrorCode.COMPLETION_FAILED,
             message="This evaluation is not runnable yet.",
@@ -404,7 +435,9 @@ def _finalize(working: DriverState, original: InterviewState) -> InterviewResult
             state=original,
             missing=gaps,
         )
+    # A completed Interview holds both locks, so it always derives DONE.
     working.confirmed = True
+    working.behaviours_confirmed = True
     working.pending = None
     return _done(working)
 
@@ -433,24 +466,60 @@ def _validate_respond(
             "This answer is for a different or older request.",
             state,
         )
-    if request.response.type != pending.type:
+    response = request.response
+    if isinstance(pending, FormRequest) and _is_bare_back(response):
+        # Back while a form is open closes the form and goes back in one turn. The form's
+        # own stage must have an earlier step; the first step offers no Back.
+        if pending.stage not in PREVIOUS_STEP:
+            return _not_offered(state)
+        return None
+    if response.type != pending.type:
         return _reject(
             InterviewErrorCode.RESPONSE_TYPE_MISMATCH,
             "This answer does not match the kind of request that is pending.",
             state,
         )
 
-    response = request.response
     if isinstance(response, ChoiceResponse):
+        if response.feedback and (
+            not isinstance(pending, ChoiceRequest)
+            or not pending.feedback_placeholder
+            or not response.feedback.strip()
+            or response.selected
+            or response.values
+        ):
+            return _not_offered(state)
         offered = options_of(pending)
         editable = editable_fields_of(pending)
         for key in response.selected:
             if key not in offered:
                 return _not_offered(state)
+
         for key in response.values:
             if key not in editable:
                 return _not_offered(state)
     elif isinstance(response, FormResponse):
+        if (
+            isinstance(pending, FormRequest)
+            and not response.cancelled
+            and any(
+                field.required and not response.values.get(field.id, "").strip()
+                for field in pending.fields
+            )
+        ):
+            # Only a required field must be non-blank. An optional field, such as
+            # metadata, may be sent empty.
+            return _reject(
+                InterviewErrorCode.RESPONSE_NOT_OFFERED,
+                "Fill in every required field. Your content was not changed.",
+                state,
+            )
+        if response.cancelled and (
+            not isinstance(pending, FormRequest)
+            or not pending.cancellable
+            or response.values
+        ):
+            return _not_offered(state)
         fields = (
             {field.id for field in pending.fields}
             if isinstance(pending, FormRequest)
@@ -463,16 +532,45 @@ def _validate_respond(
     return None
 
 
-def _reconcile_locks(working: DriverState, before: Specification) -> None:
+def _is_bare_back(response: AnyResponse) -> bool:
+    return (
+        isinstance(response, ChoiceResponse)
+        and response.selected == ["back"]
+        and not response.values
+        and not response.feedback
+    )
+
+
+def _is_back_from_done(request: InterviewTurnRequest, state: InterviewState) -> bool:
+    """True for Back sent to a completed Interview, which has no pending request.
+
+    There is no request to bind, so `request_id` is not checked. Send an empty string.
+    """
+    return state.pending is None and state.confirmed and _is_bare_back(request.response)
+
+
+def _reconcile_locks(
+    working: DriverState,
+    before: Specification,
+    *,
+    answered_at: InterviewStep = InterviewStep.BEHAVIOURS,
+) -> None:
     """Clear the confirmation locks that an accepted mutation invalidates.
 
     Any change to the Specification clears the final `confirmed` lock, so an earlier sign-off can never
     cover new content. A change to the measurement scope itself — the Feature or Behaviour set, or a
     measured flag — also clears `behaviours_confirmed`, so re-scoping demands a fresh Continue.
+
+    The exception is a scope change that the user made on a later review (a pen at Criteria, or
+    chat feedback at Scenarios). The user made that change in view, and the turn already drafts
+    any missing Criteria and updates Test Case coverage. Clearing the lock there would send a
+    later Continue back to Behaviours, or leave a completed Interview that derives Behaviours.
     """
     if working.specification == before:
         return
     working.confirmed = False
+    if answered_at in AFTER_BEHAVIOURS:
+        return
     if _scope_signature(working.specification) != _scope_signature(before):
         working.behaviours_confirmed = False
 
@@ -527,8 +625,11 @@ def package_specification(
     connection = (
         source.context.connection if isinstance(source, InterviewState) else None
     )
+    # An Interview exports only the Test Cases that the user kept selected.
     specification = connected_specification(
-        source.specification if isinstance(source, InterviewState) else source,
+        selected_specification(source.specification, source.excluded_tasks)
+        if isinstance(source, InterviewState)
+        else source,
         connection,
     )
     gaps = specification_readiness(specification)
@@ -603,7 +704,7 @@ def _awaiting(working: DriverState) -> InterviewSuccess:
     return InterviewSuccess(
         state=client,
         stage=_effective_stage(client),
-        missing=_completion_gaps(client.specification),
+        missing=_completion_gaps(client),
         outcome="awaiting_response",
     )
 
@@ -668,9 +769,9 @@ def _internal_error(state: InterviewState | None, exc: Exception) -> InterviewFa
     )
 
 
-def _completion_gaps(specification: Specification) -> list[MissingData]:
+def _completion_gaps(state: InterviewState) -> list[MissingData]:
     """Return all missing prerequisites before a result may claim `done`."""
-    return specification_readiness(specification)
+    return specification_readiness(state.specification, state.excluded_tasks)
 
 
 __all__ = [

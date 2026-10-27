@@ -6,6 +6,7 @@ import {
   addFixtures,
   InterviewRepository,
   emptyRecord,
+  fixturesForSpecification,
   removeUnreferencedFixtures,
 } from "./repository.ts";
 
@@ -175,7 +176,12 @@ test("migrates saved Interviews with their description and fixture bytes", async
 
 test("local repository creates, orders, reads and deletes browser records", async () => {
   const repository = new InterviewRepository();
-  const first = emptyRecord("storage-test-a", state, "clarify", []);
+  const first = emptyRecord(
+    "storage-test-a",
+    { ...state, context: { ...state.context, capability_evidence: null } },
+    "clarify",
+    [],
+  );
   await repository.put(first);
   await new Promise((resolve) => setTimeout(resolve, 1));
   const second = {
@@ -189,6 +195,11 @@ test("local repository creates, orders, reads and deletes browser records", asyn
     ["storage-test-b", "storage-test-a"],
   );
   assert.equal((await repository.read("storage-test-a"))?.storage_version, 6);
+  assert.equal(
+    (await repository.read("storage-test-a"))?.state.context
+      .capability_evidence,
+    null,
+  );
   await repository.delete("storage-test-a");
   assert.equal(await repository.read("storage-test-a"), undefined);
   await repository.delete("storage-test-b");
@@ -213,8 +224,11 @@ test("isolates unsupported and corrupt records while keeping healthy records", a
       });
       tx.objectStore("interviews").put({
         ...healthy,
-        id: "missing-capability-evidence",
-        state: { ...state, context: { perspective: "end_user" } },
+        id: "invalid-capability-evidence",
+        state: {
+          ...state,
+          context: { ...state.context, capability_evidence: {} },
+        },
       });
       for (const [id, references] of [
         ["invalid-task-references", [42]],
@@ -404,6 +418,42 @@ test("removing a fixture reference keeps a Blob used by another scenario", () =>
   assert.equal(noLongerUsed.fixtures.length, 0);
 });
 
+test("only the files of selected Test Cases are packaged", () => {
+  const task = (id: string, file: string) => ({
+    id,
+    scenario_ref: "S-1",
+    persona_ref: id === "TC-001" ? "P-1" : "P-2",
+    behaviour_refs: [],
+    fixtures: [file],
+    num_trials: 1,
+    max_turns: 20,
+    timeout_minutes: 15,
+    response_wait_ms: 300000,
+    max_run_retries: null,
+  });
+  const record = addFixtures(
+    emptyRecord(
+      "selected-files",
+      {
+        ...state,
+        specification: {
+          ...state.specification,
+          tasks: [task("TC-001", "kept.txt"), task("TC-002", "cleared.txt")],
+        },
+        excluded_tasks: ["TC-002"],
+      },
+      "scenarios",
+      [],
+    ),
+    [new File(["a"], "kept.txt"), new File(["b"], "cleared.txt")],
+  );
+
+  assert.deepEqual(
+    fixturesForSpecification(record).map((file) => file.name),
+    ["kept.txt"],
+  );
+});
+
 test("preserves unreadable assessment records and gives a restart action", async () => {
   const repository = new InterviewRepository();
   const record = emptyRecord("old-assessment", state, "criteria", []);
@@ -475,4 +525,75 @@ test("preserves unreadable assessment records and gives a restart action", async
     assert.deepEqual(raw, expected);
   }
   database.close();
+});
+
+test("reads saved review details and form choices in the current shapes", async () => {
+  const repository = new InterviewRepository();
+  const review = {
+    type: "choice",
+    prompt: "Review",
+    state: "pending",
+    request_id: "review",
+    stage: "criteria",
+    options: [],
+    warnings: [],
+    multi: false,
+    cards: [
+      {
+        kind: "standard",
+        id: "EB-1",
+        title: "Cite sources",
+        options: [],
+        components: [
+          {
+            type: "disclosure",
+            label: "Grader details",
+            items: [{ type: "text", text: "Judge" }],
+          },
+        ],
+      },
+    ],
+  };
+  const form = {
+    type: "form",
+    prompt: "Edit",
+    state: "resolved",
+    request_id: "form",
+    stage: "criteria",
+    fields: [{ id: "mode", label: "Mode", choices: ["strict"] }],
+    answer: {},
+  };
+  const record = emptyRecord(
+    "older-shapes",
+    { ...state, pending: review as never },
+    "criteria",
+    [
+      {
+        kind: "interaction",
+        request_id: "form",
+        request: form as never,
+        status: "answered",
+      },
+    ],
+  );
+  await repository.put(record);
+  const read = await repository.read("older-shapes");
+  const pending = read?.state.pending;
+  assert.deepEqual(
+    pending?.type === "choice" ? pending.cards[0]?.components[0] : undefined,
+    {
+      type: "details",
+      title: "Grader details",
+      muted: true,
+      expanded: false,
+      components: [{ type: "text", text: "Judge" }],
+    },
+  );
+  const entry = read?.transcript[0];
+  const fields =
+    entry?.kind === "interaction" && entry.request.type === "form"
+      ? entry.request.fields
+      : [];
+  assert.deepEqual(fields[0]?.choices, [{ value: "strict", label: "strict" }]);
+  await repository.delete("older-shapes");
 });

@@ -229,7 +229,7 @@ type OpeningHarness = {
   readonly begins: Array<{
     description: string;
     perspective: Perspective;
-    evidence: CapabilityEvidence;
+    evidence: CapabilityEvidence | null;
   }>;
 };
 
@@ -239,7 +239,7 @@ function openingHarness(
   onBegin?: (
     description: string,
     perspective: Perspective,
-    evidence: CapabilityEvidence,
+    evidence: CapabilityEvidence | null,
   ) => void,
   {
     busy = false,
@@ -569,14 +569,27 @@ test("the capability chip shows only its label, with no count", () => {
   label(opening.render());
 });
 
-test("the user can start with no capabilities and no confidence", () => {
+test("untouched capabilities start as unspecified, and a selection with no confidence is low", () => {
   const opening = openingHarness(testConfig());
-  (composerOf(opening.render()).props.onSend as (text: string) => void)(
-    "A support assistant",
+  const send = () =>
+    (composerOf(opening.render()).props.onSend as (text: string) => void)(
+      "A support assistant",
+    );
+  send();
+  assert.equal(opening.begins.at(-1)?.evidence, null);
+
+  (
+    chip(opening.render(), "opening-capabilities").props.onClick as () => void
+  )();
+  const capabilities = findElement(
+    opening.render(),
+    (element) => element.type === CapabilityPicker,
   );
-  // With no confidence, the selection may be incomplete, which is what "low" tells the Interview.
+  (capabilities.props.onChange as (ids: string[]) => void)(["tool_use"]);
+  send();
+  // A selection with no confidence may be incomplete, which is what "low" tells the Interview.
   assert.deepEqual(opening.begins.at(-1)?.evidence, {
-    known_capability_ids: [],
+    known_capability_ids: ["tool_use"],
     confidence: "low",
   });
 });

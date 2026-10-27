@@ -66,3 +66,10 @@ def test_description_input_asks_the_opening_question_until_it_gets_an_answer() -
     assert len(asked) == 2
     assert all(load_config().opening_question in prompt for prompt in asked)
     assert out == ["  Enter a description of the target."]
+
+
+def test_skipping_capability_evidence_does_not_ask_for_confidence() -> None:
+    assert read_capability_evidence(out=lambda _: None, read=lambda _: "skip") == (
+        None,
+        None,
+    )

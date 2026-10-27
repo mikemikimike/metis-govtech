@@ -118,6 +118,16 @@
     border-color: hsl(var(--border));
   }
 
+  /* The app fills the window and only its panels scroll. Without this, focus on a field low
+     in a panel (an inline edit, a dialog button) can scroll the page itself, which pushes the
+     whole app up and leaves blank space under it. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));

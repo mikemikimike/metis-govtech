@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from metis.wizard.application.config import load_config
-from metis.wizard.contracts.interview_state import CapabilityConfidence
+from metis.wizard.contracts.interview_state import CapabilityConfidence, Perspective
 
 if TYPE_CHECKING:
     from metis.wizard.contracts.capabilities import CapabilityId
@@ -27,7 +27,7 @@ def read_description(*, out: Printer, read: Reader = input) -> str:
 
 def read_capability_evidence(
     *, out: Printer, read: Reader = input
-) -> tuple[list[CapabilityId], CapabilityConfidence]:
+) -> tuple[list[CapabilityId] | None, CapabilityConfidence | None]:
     """Show the capability catalogue and read the required opening evidence."""
     categories = load_config().capability_categories
     choices: list[tuple[CapabilityId, str]] = []
@@ -51,8 +51,10 @@ def read_capability_evidence(
     }
     while True:
         raw = read(
-            "\nKnown capabilities (comma-separated numbers or names; blank for none): "
+            "\nKnown capabilities (comma-separated numbers or names; blank for none; skip to omit): "
         ).strip()
+        if raw.casefold() == "skip":
+            return None, None
         if not raw:
             selected: list[CapabilityId] = []
             break
@@ -90,3 +92,16 @@ def read_capability_evidence(
             out("  Enter low, medium, or high.")
             continue
         return selected, confidence
+
+
+def read_perspective(*, out: Printer, read: Reader = input) -> Perspective:
+    choices = load_config().perspectives
+    out("Which Perspective should guide this evaluation?")
+    for index, choice in enumerate(choices, 1):
+        out(f"  {index}. {choice.label}: {choice.question}")
+    while True:
+        raw = read("Perspective (number or name): ").strip().casefold()
+        for index, choice in enumerate(choices, 1):
+            if raw in {str(index), choice.id.value, choice.label.casefold()}:
+                return choice.id
+        out("Choose one of the Perspectives shown above.")

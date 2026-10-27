@@ -19,7 +19,15 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    StrictStr,
+    field_validator,
+    model_validator,
+)
 
 # `Option.patch` and `WizardRequest.stage` are Pydantic fields, so `Patch` and `InterviewStep`
 # must be runtime imports — Pydantic resolves the annotation at runtime and a TYPE_CHECKING-only
@@ -40,8 +48,10 @@ class OptionId(BaseModel):
     second reference the chip toggles need: ("cover", "S-1", via="EB-4") is "S-1 covers EB-4".
     """
 
-    action: str  # "chat" · "tick" · "cover" · "continue"
-    target: str | None = None  # "EB-1" · "S-1"
+    # "tick" · "cover" · "add" · "edit" · "remove" · "back" · "continue"
+    action: str
+    # "EB-1" · "S-1" · a collection key such as "personas" for a screen-level add
+    target: str | None = None
     via: str | None = None  # "EB-4" · "P-2"
 
     def __str__(self) -> str:  # doors use the action and references as the option key
@@ -59,11 +69,32 @@ class Option(BaseModel):
     """
 
     id: OptionId
+    # Finished text that names the action and its item ("Delete Source citations"). A door
+    # that draws `icon` uses `label` as the tooltip; a door that ignores it shows the label.
     label: str
+    icon: Literal["pencil", "plus", "trash"] | None = None
+    # Finished supporting text for a short label, such as a Behaviour description for the
+    # chip "EB-1". A door may show it on hover or after the label.
+    hint: str | None = None
+    # The question a door asks before it sends this option. The package sets it on a
+    # destructive option and names what goes with the item, so the user decides with the
+    # full effect in view. None means the door sends the option at once.
+    confirm: str | None = None
     patch: Patch | None = None  # chips and ticks carry their own patch — no model call
     selected: bool | None = None  # a toggleable chip when set, a plain button when None
     primary: bool = False  # a hint — the door decides what emphasis means
     enabled: bool = True  # a disabled Continue is still shown, marked unavailable
+
+
+class FormChoice(BaseModel):
+    """One entry of a dropdown: the door shows `label` and sends `value`.
+
+    The split lets a form send an id ("P-2") while the user reads a name.
+    """
+
+    value: str
+    label: str
+    hint: str | None = None  # finished supporting text, such as a Behaviour description
 
 
 class FormField(BaseModel):
@@ -73,12 +104,31 @@ class FormField(BaseModel):
     label: str
     placeholder: str = ""
     multiline: bool = True
-    input_type: Literal["string", "integer", "number", "boolean"] = "string"
+    # `pairs` is a list of labelled details. Its value is JSON text: a list of
+    # `[label, value]` lists, for example `[["Role", "Policy analyst"]]`.
+    input_type: Literal["string", "integer", "number", "boolean", "pairs"] = "string"
     value: str = ""
+    # The turn refuses a blank value only for a required field.
     required: bool = False
-    choices: list[str] = Field(default_factory=list)
+    choices: list[FormChoice] = Field(default_factory=list)
+    # Several values may be chosen. The value is then a comma-separated list of values.
+    multiple: bool = False
     help: str = ""
     group: str | None = None
+    # The `CardColumn.title` of the cell that this field edits, when the form edits a table row
+    # in place. A door places each field by this title and needs no domain knowledge.
+    column: str | None = None
+
+    @field_validator("choices", mode="before")
+    @classmethod
+    def _load_plain_choices(cls, value: object) -> object:
+        """Read a saved list of plain strings, where each value is also its label."""
+        if isinstance(value, list):
+            return [
+                {"value": item, "label": item} if isinstance(item, str) else item
+                for item in value
+            ]
+        return value
 
 
 # ── what a card is made of ─────────────────────────────────────────────────
@@ -90,7 +140,7 @@ class CardComponentType(StrEnum):
     NUMBER = "number"
     UPLOAD = "upload"
     DIVIDER = "divider"
-    DISCLOSURE = "disclosure"
+    DETAILS = "details"
 
 
 class CardComponent(BaseModel):
@@ -103,16 +153,14 @@ class CardComponent(BaseModel):
     """
 
     label: str | None = None  # "Covers" · "Run as" · "Trials" · "Files"
+    # A presentation hint for supporting detail, such as Grader settings. A door may draw it
+    # smaller or in a quieter colour. It changes nothing about what the component does.
+    muted: bool = False
 
 
 class CardText(CardComponent):
     type: Literal[CardComponentType.TEXT] = CardComponentType.TEXT
     text: str
-
-
-class CardDisclosure(CardComponent):
-    type: Literal[CardComponentType.DISCLOSURE] = CardComponentType.DISCLOSURE
-    items: list[CardText] = Field(default_factory=list)
 
 
 class CardOptionGroup(CardComponent):
@@ -149,6 +197,19 @@ class CardDivider(CardComponent):
     type: Literal[CardComponentType.DIVIDER] = CardComponentType.DIVIDER
 
 
+class CardDetails(CardComponent):
+    type: Literal[CardComponentType.DETAILS] = CardComponentType.DETAILS
+    title: str
+    components: list[AnyCardComponent] = Field(default_factory=list)
+    expanded: bool = False
+
+
+class CardColumn(BaseModel):
+    title: str
+    summary: str
+    components: list[AnyCardComponent] = Field(default_factory=list)
+
+
 CardFieldValue: TypeAlias = StrictInt | list[StrictStr]
 
 
@@ -158,12 +219,16 @@ AnyCardComponent: TypeAlias = Annotated[
     | CardNumberField
     | CardUploadField
     | CardDivider
-    | CardDisclosure,
+    | CardDetails,
     Field(discriminator="type"),
 ]
 
 
 # ── cards ──────────────────────────────────────────────────────────────────
+
+ProfileSectionId: TypeAlias = Literal[
+    "behaviours", "personas", "scenarios", "test-cases"
+]
 
 
 class Card(BaseModel):
@@ -179,42 +244,78 @@ class Card(BaseModel):
     kind: str = "standard"
     id: str  # package bookkeeping — never comes back in a response
     title: str
+    # The Profile section that holds this card, so a door can place it when one screen
+    # shows more than one section (Scenarios and Test Cases).
+    profile_section_id: ProfileSectionId | None = None
     section: str | None = (
         None  # "Answer quality" — a feature's bare name, a heading above this card
     )
+    # The `ReviewSection.id` of the group heading above this card, when it has one.
+    section_id: str | None = None
     selected: bool | None = None  # a checkbox when set; none when None
+    # Show the item id beside the title. False where the id only repeats the name, such as a
+    # Persona id made from its name.
+    show_id: bool = True
     components: list[AnyCardComponent] = Field(default_factory=list)
+    columns: list[CardColumn] = Field(default_factory=list)
     options: list[Option] = Field(default_factory=list)  # actions scoped to this card
     note: str | None = None  # an empty-state message — "not selected, no actions"
     blocking: bool = False  # this card is why Continue is disabled
 
+    @model_validator(mode="after")
+    def _checkbox_needs_a_toggle(self) -> Card:
+        # A checkbox that no option can change is a dead control. The card draws one only
+        # when one of its own options toggles it. A saved card from an older screen loads
+        # with the box removed.
+        if self.selected is not None and not any(
+            option.selected is not None for option in self.options
+        ):
+            self.selected = None
+        return self
+
 
 class BehaviourCard(Card):
-    """The behaviours and criteria steps. On behaviours it carries the measurement tick — review
-    and the "which do we measure" ask are one screen — and at criteria its components are its
-    criteria and its options are scoped to its behaviour.
+    """The standard card: a Behaviour, a Persona or a Scenario.
 
-    `selected` keeps the base's `bool | None`: a bool on both steps, reflecting the measured
-    state a checkbox draws. A door draws no box only for `None`, which no live Behaviour card
+    On Behaviours it carries the measurement tick, so review and the "which do we measure" ask
+    are one screen. At Criteria its components are its Criteria and it has no checkbox.
     now sets."""
 
     kind: Literal["standard"] = "standard"  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
 class ScenarioCard(Card):
-    """The scenarios step. Components start with description, then Covers, Run as, Trials, Files."""
+    """One Test Case row: Persona, Scenario, Behaviours, Trials and Files columns.
+
+    `selected` is True when the Test Case is included in the evaluation. Its `tick` option
+    changes that.
+    """
 
     kind: Literal["scenario"] = "scenario"  # pyright: ignore[reportIncompatibleVariableOverride]
     # The value is carried as data so both doors can state the unit at the point they draw it.
     trials: int
-    # Narrowed deliberately: a scenario never has a tick. See BehaviourCard for why the ignore.
-    selected: None = None  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
 AnyCard: TypeAlias = Annotated[
     BehaviourCard | ScenarioCard,
     Field(discriminator="kind"),
 ]
+
+
+class ReviewSection(BaseModel):
+    """A heading on a review screen, with the actions that belong to it.
+
+    Headings live on the request, not on a card, so a section with no cards can still offer
+    its "+". There are two levels. A Profile section heading has `parent` None and its `id` is
+    a Profile section id ("personas"). A group heading inside it, such as a Feature, has
+    `parent` set to that Profile section id, and the cards under it carry its `id` in
+    `Card.section_id`.
+    """
+
+    id: str
+    title: str
+    parent: ProfileSectionId | None = None
+    options: list[Option] = Field(default_factory=list)
 
 
 # ── warnings ───────────────────────────────────────────────────────────────
@@ -339,6 +440,7 @@ class ChatRequest(WizardRequest):
     # widen. Optional with an empty default, so a screen-level chat carries nothing and an
     # older version-2 interview validates without a format bump.
     target: str | None = None
+    target_label: str | None = None
     # What the user typed, stamped on when the request resolves. A choice records what was
     # picked by marking the chosen `Option.selected`; a chat has no option to mark, so the
     # reply is recorded here instead — the same principle that the request answers for itself,
@@ -349,7 +451,13 @@ class ChatRequest(WizardRequest):
 
 class ChoiceRequest(WizardRequest):
     type: Literal[InteractionType.CHOICE] = InteractionType.CHOICE
-    options: list[Option] = Field(default_factory=list)  # replies, Continue, Back
+    profile_section_id: ProfileSectionId | None = None
+    # Finished text for the chat box. Its presence also tells the door that this review
+    # accepts free-text feedback in `ChoiceResponse.feedback`.
+    feedback_placeholder: str | None = None
+    feedback_answer: str = Field(default_factory=str)
+    options: list[Option] = Field(default_factory=list)  # Back and Continue
+    sections: list[ReviewSection] = Field(default_factory=list)
     multi: bool = False  # may several be sent together?
     cards: list[AnyCard] = Field(
         default_factory=list
@@ -360,8 +468,15 @@ class ChoiceRequest(WizardRequest):
 
 
 class FormRequest(WizardRequest):
+    purpose: Literal["add", "edit"] = Field(default_factory=lambda: "add")
+    cancellable: bool = False
+    submit_label: str = "Save"  # finished text for the submit button
     type: Literal[InteractionType.FORM] = InteractionType.FORM
     fields: list[FormField]
+    # Value combinations that the package refuses because an item already uses them, each a
+    # map of field id to value: [{"persona": "P-1", "scenario": "S-1"}]. A door can disable a
+    # choice that would complete one. The package checks again when the form comes back.
+    used_combinations: list[dict[str, str]] = Field(default_factory=list)
     # Which parent this form writes into, when a per-card action raised it — an opaque id such
     # as "F-1" or "EB-1". Both doors carry it unchanged. The package reads it back so a manual
     # child stays under the parent whose card offered the action, including across a reload.
@@ -397,13 +512,16 @@ def options_of(request: AnyRequest) -> dict[str, Option]:
 
     for option in request.options:
         add(option)
+    for section in request.sections:
+        for option in section.options:
+            add(option)
     for warning in request.warnings:
         for option in warning.options:
             add(option)
     for card in request.cards:
         for option in card.options:
             add(option)
-        for component in card.components:
+        for component in card_components(card):
             if isinstance(component, CardOptionGroup):
                 for option in component.options:
                     add(option)
@@ -423,7 +541,7 @@ def editable_fields_of(
         return found
 
     for card in request.cards:
-        for component in card.components:
+        for component in card_components(card):
             if isinstance(component, (CardNumberField, CardUploadField)):
                 found[str(component.id)] = component
     return found
@@ -443,12 +561,14 @@ class ChatResponse(UserResponse):
 
 
 class ChoiceResponse(UserResponse):
+    feedback: str = Field(default_factory=str)
     type: Literal[InteractionType.CHOICE] = InteractionType.CHOICE
     selected: list[str] = Field(default_factory=list)  # option ids, whatever they were
     values: dict[str, CardFieldValue] = Field(default_factory=dict)
 
 
 class FormResponse(UserResponse):
+    cancelled: bool = False
     type: Literal[InteractionType.FORM] = InteractionType.FORM
     values: dict[str, str] = Field(default_factory=dict)  # field id → what was typed
 
@@ -458,7 +578,18 @@ AnyResponse: TypeAlias = Annotated[
     Field(discriminator="type"),
 ]
 
-# Requests and responses pair by name and by value: ChatRequest ↔ ChatResponse,
-# ChoiceRequest ↔ ChoiceResponse, FormRequest ↔ FormResponse. One enum value each, nothing
-# left over — and nothing carries both `selected` and `text`, which is what forces a screen
-# to offer either cards or a text box, never both.
+
+def card_components(card: Card) -> list[AnyCardComponent]:
+    """Visit every supplied component, including expanded controls and table cells."""
+
+    def walk(components: list[AnyCardComponent]) -> list[AnyCardComponent]:
+        found: list[AnyCardComponent] = []
+        for component in components:
+            found.append(component)
+            if isinstance(component, CardDetails):
+                found.extend(walk(component.components))
+        return found
+
+    return walk(card.components) + [
+        component for column in card.columns for component in walk(column.components)
+    ]

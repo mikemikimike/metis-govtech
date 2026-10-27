@@ -463,6 +463,15 @@ class GatewayInterviewer:
             prompts.scenarios(specification, context), specification, context
         )
 
+    def draft_test_cases(
+        self,
+        specification: Specification,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
+        return self._step(
+            prompts.test_cases(specification, context), specification, context
+        )
+
     def chat(
         self,
         specification: Specification,
@@ -473,18 +482,6 @@ class GatewayInterviewer:
     ) -> StepResult:
         return self._step(
             prompts.chat(specification, step, text, target, context),
-            specification,
-            context,
-        )
-
-    def suggest_criterion(
-        self,
-        specification: Specification,
-        behaviour_id: str,
-        context: InterviewContext | None = None,
-    ) -> StepResult:
-        return self._step(
-            prompts.suggest_criterion(specification, behaviour_id, context),
             specification,
             context,
         )

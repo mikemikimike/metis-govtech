@@ -33,7 +33,7 @@ def _state_pending_at(stage: InterviewStep) -> InterviewState:
         prompt="Do these look right?",
         stage=stage,
         request_id="req-1",
-        options=[Option(id=OptionId(action="accept"), label="Looks right")],
+        options=[Option(id=OptionId(action="continue"), label="Continue")],
     )
     return InterviewState(
         specification=research_assistant(), context=interview_context(), pending=request
@@ -382,10 +382,10 @@ class _Terminal(io.StringIO):
     [
         (
             None,
-            "\nA research assistant that cites sources.\n",
+            "\nA research assistant that cites sources.\nsecurity\n",
             "A research assistant that cites sources.",
         ),
-        ("A research assistant", "", "A research assistant"),
+        ("A research assistant", "security\n", "A research assistant"),
     ],
     ids=["asked", "argument"],
 )
@@ -397,7 +397,8 @@ def test_init_starts_the_interview_from_the_given_or_typed_description(
     typed: str,
     expected: str,
 ) -> None:
-    """Without an argument, a terminal user answers the opening question; with one, nothing is asked."""
+    """Without an argument, a terminal user answers the opening question; with one, only the
+    Perspective is asked."""
     from metis.wizard.adapters.cli import opening
 
     monkeypatch.setattr("sys.stdin", _Terminal(typed))
@@ -426,6 +427,7 @@ def test_init_starts_the_interview_from_the_given_or_typed_description(
         )
 
     assert [request.description for request in started] == [expected]  # type: ignore[attr-defined]
+    assert started[0].perspective.value == "security"  # type: ignore[attr-defined]
     asked = config.load_config().opening_question in capsys.readouterr().out
     assert asked is (argument is None)
 

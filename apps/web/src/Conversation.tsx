@@ -1,16 +1,7 @@
-// The conversation. Every block here is drawn from request `type` and `CardComponentType`
-// alone — there is not one domain word in this file, and there must never be. A behaviour, a
-// persona and a scenario all arrive as `Card`; the door draws a card. What each card *means* is
-// in its `title`, `section` and `label`s, which the package composed.
-//
-// One rule governs the text box, and it is the whole of the "greyed on strict screens"
-// behaviour: the box is live only when the screen actually offers a way to talk to it — a
-// chat request, or a choice screen carrying a `chat` action. Prioritise and criteria carry
-// no such action, so the box greys itself with no step name written down anywhere here.
-
-import { ArrowUp, PencilSparkles } from "lucide-react";
+import { ArrowUp, PencilSparkles, Upload } from "lucide-react";
 import {
   createContext,
+  Fragment,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -21,7 +12,9 @@ import type { ReactNode } from "react";
 import type {
   TranscriptEntry,
   AnyCard,
+  CardColumn,
   CardComponent,
+  ReviewSection,
   ChoiceRequest,
   FormRequest,
   Option,
@@ -30,8 +23,32 @@ import type {
   WizardRequest,
 } from "./transport/api";
 import { optionKey } from "./transport/api";
-import { NumberInput } from "./inputs";
-import { Button, cn, formatTrials, Mono, Panel, Tooltip } from "./ui";
+import {
+  Field,
+  NumberInput,
+  SelectInput,
+  TextArea,
+  TextInput,
+  MultiChoice,
+  PairsInput,
+  type FieldDensity,
+  type SelectChoice,
+} from "./fields";
+import { useKeepAnchor } from "./keep-in-place";
+import {
+  Button,
+  cn,
+  ConfirmDialog,
+  Disclosure,
+  DisclosureButton,
+  formatTrials,
+  IconAction,
+  Mono,
+  Panel,
+  SelectBox,
+  Tooltip,
+} from "./ui";
+import { groupTranscript } from "./wizard/transcript";
 
 // What a block can send up. `null` from a resolved or read-only block.
 type Emit = (
@@ -57,63 +74,83 @@ export function Transcript({
   onEdit,
   busy,
   onRespond,
+  profileForm = null,
 }: {
   requests: WizardRequest[];
   entries?: TranscriptEntry[];
   formDrafts?: Map<string, Record<string, string>>;
   draftPrefix?: string;
+  // The request id of a pending form that the Profile draws, with its send status and any
+  // failure. The conversation draws none of it, so the form is never on screen twice.
+  profileForm?: string | null;
   onRetry?: () => void;
   onEdit?: () => void;
   busy: boolean;
   onRespond: Emit;
 }) {
+  const items = groupTranscript(requests, entries);
+  const block = (i: number) => {
+    const request = requests[i];
+    const entry = entries?.[i];
+    const failed = entry?.kind === "interaction" && entry.status === "failed";
+    const inProfile = profileForm != null && request.request_id === profileForm;
+    return (
+      <div key={request.request_id ?? i}>
+        {!inProfile && (
+          <RequestBlock request={request} busy={busy} onRespond={onRespond} />
+        )}
+        {failed && !inProfile && (
+          <div role="alert" className="mt-2 flex items-center gap-3">
+            <p>{entry.failure?.message}</p>
+            {entry.failure?.retryable && (
+              <Button disabled={busy} onClick={onRetry}>
+                Retry
+              </Button>
+            )}
+            {entry.failure?.kind !== "storage" && (
+              <Button disabled={busy} onClick={onEdit}>
+                Edit reply
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
   return (
     <FormDraftContext.Provider
       value={formDrafts ? { values: formDrafts, prefix: draftPrefix } : null}
     >
       <div className="flex flex-col gap-8">
-        {requests.map((request, i) => {
-          // A light rule ahead of the first block of each new step, so consecutive steps do not
-          // read as one unbroken scroll. The boundary is the per-request `step` changing between
-          // adjacent blocks — the package stamps it; the door only notices when it moves. Not the
-          // interview's current step, which cannot mark the joins between already-resolved blocks in
-          // the scrollback. The first block starts no divider (nothing precedes it), and a request
-          // with no `step` never introduces one, so the rule degrades to nothing on older interviews.
-          const prevStep = requests[i - 1]?.step ?? null;
+        {items.map((item, n) => {
+          const first = item.kind === "request" ? item.index : item.indices[0];
+          const previous = items[n - 1];
+          const before =
+            previous?.kind === "request"
+              ? previous.index
+              : previous?.indices.at(-1);
+          // A light rule ahead of the first item of each new step. The package stamps `step` on
+          // each request; the door only notices when it changes between adjacent items.
+          const step = requests[first]?.step;
           const startsStep =
-            request.step != null && i > 0 && request.step !== prevStep;
-          const entry = entries?.[i];
-          const failed =
-            entry?.kind === "interaction" && entry.status === "failed";
+            step != null &&
+            before !== undefined &&
+            step !== requests[before]?.step;
           return (
             <div
-              key={request.request_id ?? i}
+              key={requests[first]?.request_id ?? first}
               className={cn(startsStep && "border-t border-border pt-8")}
             >
-              <RequestBlock
-                request={request}
-                busy={busy}
-                onRespond={onRespond}
-              />
-              {entry?.kind === "interaction" && entry.status === "sending" && (
-                <p role="status" className="mt-2 text-sm text-muted-foreground">
-                  Sending…
-                </p>
-              )}
-              {failed && (
-                <div role="alert" className="mt-2 flex items-center gap-3">
-                  <p>{entry.failure?.message}</p>
-                  {entry.failure?.retryable && (
-                    <Button disabled={busy} onClick={onRetry}>
-                      Retry
-                    </Button>
-                  )}
-                  {entry.failure?.kind !== "storage" && (
-                    <Button disabled={busy} onClick={onEdit}>
-                      Edit reply
-                    </Button>
-                  )}
-                </div>
+              {item.kind === "request" ? (
+                block(item.index)
+              ) : (
+                <Disclosure
+                  tone="muted"
+                  summary={`${item.indices.length} ${item.indices.length === 1 ? "action" : "actions"}`}
+                  contentClassName="mt-3 flex flex-col gap-6"
+                >
+                  {item.indices.map(block)}
+                </Disclosure>
               )}
             </div>
           );
@@ -184,6 +221,10 @@ function RequestBody({
         />
       );
     case "choice":
+      if (request.profile_section_id)
+        return request.feedback_answer ? (
+          <UserSaid text={request.feedback_answer} />
+        ) : null;
       return (
         <ChoiceBlock
           request={request}
@@ -254,12 +295,19 @@ function ChoiceBlock({
                     {card.section}
                   </p>
                 )}
-                <CardBlock
-                  card={card}
-                  disabled={disabled}
-                  onPick={(k) => send([k])}
-                  onFieldChange={sendField}
-                />
+                <Panel
+                  className={cn(
+                    "overflow-hidden",
+                    card.blocking && "border-destructive/60",
+                  )}
+                >
+                  <CardBlock
+                    card={card}
+                    disabled={disabled}
+                    onPick={(k) => send([k])}
+                    onFieldChange={sendField}
+                  />
+                </Panel>
               </div>
             );
           })}
@@ -270,11 +318,6 @@ function ChoiceBlock({
         <p className="text-right text-muted-foreground">{request.footer}</p>
       )}
 
-      {/* Screen-level actions — every one the screen offers, including "Chat about it". A
-          choice screen edits the specification, so it owns the only live controls: the composer is
-          disabled while it is up (see `acceptsChat`). Choosing "Chat about it" makes the driver
-          swap this screen for a chat request, and that is what hands editing to the text box —
-          one editor at a time, never the buttons and the box together. */}
       {!resolved && (
         <div className="flex flex-wrap gap-2">
           {request.options.map((o) => (
@@ -291,140 +334,1178 @@ function ChoiceBlock({
   );
 }
 
-// A screen-level button. `selected` on a screen option is rare, but honoured: a checkbox
-// list on the measurement review screen sends its own action per row and Continue commits.
-function ActionButton({
-  option,
+// The live review, drawn in the Profile in place of the section it reviews. Cards that share a
+// `section_id` form one group under a header. When every card has columns, the review is a table.
+export interface FormFailure {
+  message: string;
+  onRetry?: () => void;
+  onEdit?: () => void;
+}
+
+// The Profile sections that one review fills, in order. A review names them with its top-level
+// `sections`; an older review names one through `profile_section_id`.
+export function reviewParts(request: ChoiceRequest): string[] {
+  const parts = (request.sections ?? [])
+    .filter((section) => section.parent == null)
+    .map((section) => section.id);
+  if (parts.length > 0) return parts;
+  return request.profile_section_id ? [request.profile_section_id] : [];
+}
+
+function partOf(request: ChoiceRequest, card: AnyCard): string {
+  return card.profile_section_id ?? request.profile_section_id ?? "";
+}
+
+function componentOptions(components: readonly CardComponent[]): Option[] {
+  return components.flatMap((component) =>
+    component.type === "options"
+      ? component.options
+      : component.type === "details"
+        ? componentOptions(component.components)
+        : [],
+  );
+}
+
+const hasColumns = (card: AnyCard) => (card.columns ?? []).length > 0;
+
+// Where a pending form goes in the Profile. The form belongs to the item that offered the option
+// that opened it: the option's action is the form's purpose and its target is the form's target.
+// An edit of a card or a group heading takes the item's place; any other form opens below its
+// item, or at the end of its group or Profile section. A form that no item offered (the Target
+// review) has no place here, and the conversation draws it.
+export interface FormPlace {
+  part: string;
+  owner: string;
+  // "nested": the form edits a row inside the owner card (a Criterion inside its Behaviour);
+  // `item` is the id that the row's option names.
+  mode: "inline" | "below" | "end" | "nested" | "row";
+  item?: string;
+}
+
+export function placeForm(
+  review: ChoiceRequest,
+  form: FormRequest,
+): FormPlace | null {
+  if (!form.target) return null;
+  const purpose = form.purpose ?? "add";
+  const offers = (option: Option) =>
+    option.id.action === purpose && option.id.target === form.target;
+  for (const section of review.sections ?? []) {
+    if (!section.options.some(offers)) continue;
+    if (section.parent == null)
+      return { part: section.id, owner: section.id, mode: "end" };
+    return {
+      part: section.parent,
+      owner: section.id,
+      mode: purpose === "edit" ? "inline" : "end",
+    };
+  }
+  for (const card of review.cards) {
+    const part = partOf(review, card);
+    if (card.options.some(offers))
+      return {
+        part,
+        owner: card.id,
+        mode:
+          purpose !== "edit" ? "below" : hasColumns(card) ? "row" : "inline",
+      };
+    if (componentOptions(card.components).some(offers))
+      return {
+        part,
+        owner: card.id,
+        mode: purpose === "edit" ? "nested" : "below",
+        item: form.target,
+      };
+  }
+  return null;
+}
+
+// The actions on a Profile section heading, such as "+ Add a Persona". The Profile draws them in
+// its own sticky heading.
+export function ReviewSectionActions({
+  request,
+  part,
+  busy,
+  onRespond,
+}: {
+  request: ChoiceRequest;
+  part: string;
+  busy: boolean;
+  onRespond: Emit;
+}) {
+  const keep = useKeepAnchor();
+  const section = (request.sections ?? []).find(
+    (item) => item.id === part && item.parent == null,
+  );
+  if (!section || section.options.length === 0) return null;
+  return (
+    <div data-keep-anchor={`part-${part}`} className="flex items-center gap-1">
+      <OptionControls
+        options={section.options}
+        disabled={busy || request.state !== "pending"}
+        onPick={(key) => {
+          keep([`part-${part}`, "review-footer"], "send");
+          onRespond({ type: "choice", selected: [key] });
+        }}
+      />
+    </div>
+  );
+}
+
+// One Profile section of the live review, drawn in place of that section of the document. A
+// review that fills several sections is drawn once per section: the first one carries the
+// title, instruction and warnings, and the last one carries Back and Continue.
+export function ActiveReview({
+  request,
+  part,
+  busy,
+  onRespond,
+  form,
+  formFailure = null,
+  formDrafts,
+  draftPrefix = "",
+}: {
+  request: ChoiceRequest;
+  // The Profile section to draw. Omit it to draw the whole review.
+  part?: string;
+  busy: boolean;
+  onRespond: Emit;
+  // The pending form, when the user opened one from this review. `placeForm` decides where it
+  // goes. While it is open the review waits, and only Back stays available on the review.
+  form?: FormRequest | null;
+  // Why the last save of `form` failed, with the actions that recover it.
+  formFailure?: FormFailure | null;
+  formDrafts?: Map<string, Record<string, string>>;
+  draftPrefix?: string;
+}) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const keep = useKeepAnchor();
+  const disabled = busy || request.state !== "pending";
+  const parts = reviewParts(request);
+  const current = part ?? parts[0] ?? "";
+  const first = part == null || current === parts[0];
+  const last = part == null || current === parts.at(-1);
+  const inPart = (card: AnyCard) =>
+    part == null || partOf(request, card) === part;
+  const cards = request.cards.filter(inPart);
+  // Every action keeps its item in place: the package composes the review again, and the item
+  // the user clicked must stay where it was when the new review renders.
+  // The anchors that hold the sheet still after an action on `owner`, best first. A deleted card
+  // is gone when the new review renders, so its neighbours and its group follow it; a Profile
+  // section falls back to its last card, then to the footer.
+  const anchorsFor = (owner: string): string[] => {
+    const i = cards.findIndex((card) => card.id === owner);
+    if (i >= 0)
+      return [
+        owner,
+        cards[i + 1]?.id,
+        cards[i - 1]?.id,
+        cards[i].section_id ?? undefined,
+        "review-footer",
+      ].filter((id): id is string => id != null);
+    if (owner === current)
+      return [cards.at(-1)?.id, "review-footer"].filter(
+        (id): id is string => id != null,
+      );
+    return [owner, "review-footer"];
+  };
+  const respondFrom =
+    (anchor: string): Emit =>
+    (response, files, removed) => {
+      keep(anchorsFor(anchor), "send");
+      onRespond(response, files, removed);
+    };
+  const pickFrom = (anchor: string) => (key: string) =>
+    respondFrom(anchor)({ type: "choice", selected: [key] });
+  const fieldFrom =
+    (anchor: string) =>
+    (
+      key: string,
+      value: CardFieldValue,
+      files?: readonly File[],
+      removed?: readonly string[],
+    ) =>
+      respondFrom(anchor)(
+        { type: "choice", values: { [key]: value } },
+        files,
+        removed,
+      );
+  const place = form ? placeForm(request, form) : null;
+  // The package keeps a refused form open and puts the reason before its prompt. The first
+  // prompt of a form for one target is its normal text; a later, different prompt is a notice.
+  const firstPrompt = useRef(new Map<string, string>());
+  if (!form) firstPrompt.current.clear();
+  else {
+    const key = `${form.purpose}:${form.target}`;
+    if (!firstPrompt.current.has(key))
+      firstPrompt.current.set(key, form.prompt);
+  }
+  const refused =
+    form &&
+    form.prompt !== firstPrompt.current.get(`${form.purpose}:${form.target}`)
+      ? form.prompt
+      : null;
+  const notice: ReactNode =
+    formFailure != null ? (
+      <span className="flex flex-wrap items-center gap-2">
+        <span>{formFailure.message}</span>
+        {formFailure.onRetry && (
+          <Button
+            type="button"
+            className="px-2 py-0.5 text-xs"
+            onClick={formFailure.onRetry}
+          >
+            Retry
+          </Button>
+        )}
+        {formFailure.onEdit && (
+          <Button
+            type="button"
+            className="px-2 py-0.5 text-xs"
+            onClick={formFailure.onEdit}
+          >
+            Edit
+          </Button>
+        )}
+      </span>
+    ) : (
+      refused
+    );
+  // After an inline edit closes, the focus goes back to the item's pencil.
+  const lastInline = useRef<string | null>(null);
+  const inlineOwner =
+    form &&
+    (place?.mode === "inline" ||
+      place?.mode === "nested" ||
+      place?.mode === "row")
+      ? (place.item ?? place.owner)
+      : null;
+  useEffect(() => {
+    const previous = lastInline.current;
+    lastInline.current = inlineOwner;
+    if (!previous || inlineOwner) return;
+    const pencil = document.querySelector<HTMLElement>(
+      `[data-keep-anchor="${CSS.escape(previous)}"] button:has(svg.lucide-pencil)`,
+    );
+    pencil?.focus({ preventScroll: true });
+  }, [inlineOwner]);
+  const here = place && (part == null || place.part === current) ? place : null;
+  // The form opened from `owner` in the given mode, or nothing.
+  const formAt = (owner: string, mode: FormPlace["mode"]) =>
+    form && here?.owner === owner && here.mode === mode ? form : null;
+  const formPanel = (owner: string, request: FormRequest) => (
+    <div
+      key={`form-${owner}`}
+      data-keep-anchor={`form-${owner}`}
+      className="flex flex-col gap-3 bg-muted/40 px-4 py-3"
+    >
+      {request.prompt && (
+        <p
+          role={refused ? "alert" : undefined}
+          className={cn("text-sm", refused && "text-destructive")}
+        >
+          {request.prompt}
+        </p>
+      )}
+      {formFailure && (
+        <div role="alert" className="text-sm text-destructive">
+          {notice}
+        </div>
+      )}
+      <PendingForm
+        request={request}
+        busy={busy}
+        onRespond={respondFrom(owner)}
+      />
+    </div>
+  );
+
+  // Groups: the headings of this section in the package's order, then any card that names no
+  // heading as its own group.
+  const headings = (request.sections ?? []).filter(
+    (section) =>
+      section.parent != null && (part == null || section.parent === part),
+  );
+  const groups: { id: string; heading?: ReviewSection; cards: AnyCard[] }[] =
+    headings.map((heading) => ({
+      id: heading.id,
+      heading,
+      cards: cards.filter((card) => card.section_id === heading.id),
+    }));
+  for (const card of cards) {
+    if (groups.some((group) => group.cards.includes(card))) continue;
+    const key = card.section_id ?? card.id;
+    const group = groups.find((item) => item.id === key);
+    if (group) group.cards.push(card);
+    else groups.push({ id: key, cards: [card] });
+  }
+  const table = cards.length > 0 && cards.every(hasColumns);
+  const endForm = formAt(current, "end");
+
+  return (
+    <FormDraftContext.Provider
+      value={formDrafts ? { values: formDrafts, prefix: draftPrefix } : null}
+    >
+      <section
+        aria-label={first ? (request.title ?? "Review") : current}
+        className="flex flex-col gap-4"
+      >
+        {first && (
+          <>
+            {/* The Profile section heading already names the step, so the review shows only
+                its instruction. */}
+            <p className="text-sm text-muted-foreground">
+              {request.instruction}
+            </p>
+            {request.warnings.map((warning, i) => (
+              <WarningBlock
+                key={i}
+                warning={warning}
+                disabled={disabled}
+                onPick={pickFrom("review-footer")}
+              />
+            ))}
+          </>
+        )}
+        {table ? (
+          <ReviewTable
+            cards={cards}
+            disabled={disabled}
+            pickFrom={pickFrom}
+            fieldFrom={fieldFrom}
+            rowForm={(id) => {
+              const edit = formAt(id, "row");
+              return edit
+                ? { request: edit, busy, notice, onRespond: respondFrom(id) }
+                : null;
+            }}
+            formRow={(id) => {
+              const below = formAt(id, "below");
+              return below && formPanel(id, below);
+            }}
+          />
+        ) : (
+          groups.map(({ id, heading, cards }) => {
+            const open = !collapsed.has(id);
+            const title = heading?.title ?? cards[0]?.section;
+            const editing = formAt(id, "inline");
+            const groupEnd = formAt(id, "end");
+            const header = title && (
+              <div
+                data-keep-anchor={id}
+                className="flex items-start gap-2 px-4 py-3"
+              >
+                {editing ? (
+                  <div className="flex min-w-0 flex-1 items-start gap-2">
+                    <DisclosureButton
+                      open={open}
+                      label={title}
+                      onClick={() => toggleGroup(id)}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <InlineEdit
+                        request={editing}
+                        busy={busy}
+                        notice={notice}
+                        onRespond={respondFrom(id)}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <DisclosureButton
+                      open={open}
+                      grow
+                      onClick={() => toggleGroup(id)}
+                    >
+                      <span className="font-semibold">{title}</span>
+                    </DisclosureButton>
+                    <OptionControls
+                      options={heading?.options ?? []}
+                      disabled={disabled}
+                      onPick={pickFrom(id)}
+                    />
+                  </>
+                )}
+              </div>
+            );
+            const body = [
+              ...cards.flatMap((card) => {
+                const below = formAt(card.id, "below");
+                const inline = formAt(card.id, "inline");
+                const nested = formAt(card.id, "nested");
+                return [
+                  <CardBlock
+                    key={card.id}
+                    card={card}
+                    disabled={disabled}
+                    onPick={pickFrom(card.id)}
+                    onFieldChange={fieldFrom(card.id)}
+                    editing={
+                      inline
+                        ? {
+                            request: inline,
+                            busy,
+                            notice,
+                            onRespond: respondFrom(card.id),
+                          }
+                        : undefined
+                    }
+                    rowEdit={
+                      nested
+                        ? {
+                            request: nested,
+                            busy,
+                            notice,
+                            onRespond: respondFrom(card.id),
+                          }
+                        : undefined
+                    }
+                  />,
+                  ...(below ? [formPanel(card.id, below)] : []),
+                ];
+              }),
+              ...(groupEnd ? [formPanel(id, groupEnd)] : []),
+            ];
+            return (
+              <section
+                key={id}
+                className="overflow-hidden rounded-xl border border-border bg-card"
+              >
+                {header}
+                <div
+                  hidden={!open}
+                  className={cn(
+                    "divide-y divide-border",
+                    header && body.length > 0 && "border-t border-border",
+                  )}
+                >
+                  {body}
+                </div>
+              </section>
+            );
+          })
+        )}
+        {endForm && (
+          <section className="overflow-hidden rounded-xl border border-border bg-card">
+            {formPanel(current, endForm)}
+          </section>
+        )}
+        {last && (
+          <div
+            data-keep-anchor="review-footer"
+            className="flex flex-wrap items-center gap-2 pt-1"
+          >
+            <span className="mr-auto text-sm">{request.footer}</span>
+            {request.options.map((option) => (
+              <ActionButton
+                key={optionKey(option.id)}
+                option={option}
+                // Back stays available while a form is open: the package closes the form and
+                // goes back in one turn.
+                disabled={
+                  busy ||
+                  (request.state !== "pending" &&
+                    !(form && option.id.action === "back"))
+                }
+                onPick={pickFrom("review-footer")}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </FormDraftContext.Provider>
+  );
+
+  function toggleGroup(id: string) {
+    keep(id);
+    setCollapsed((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+}
+
+// A review whose cards all carry columns: one table row per card. The row's checkbox is the
+// card's tick option (selected = included). Each cell draws its column by shape: plain text, a
+// chip group, a number field, or an upload field. The pencil turns the row into its edit form:
+// each form field goes into the cell of the column it names, and Save and Cancel take the place
+// of the row actions.
+function ReviewTable({
+  cards,
+  disabled,
+  pickFrom,
+  fieldFrom,
+  rowForm,
+  formRow,
+}: {
+  cards: AnyCard[];
+  disabled: boolean;
+  pickFrom: (anchor: string) => (key: string) => void;
+  fieldFrom: (anchor: string) => FieldChange;
+  // The edit form of a row, when the user opened one, and how it answers.
+  rowForm?: (id: string) => RowEdit | null;
+  // Any other form opened from a row, drawn in a full-width row below it.
+  formRow?: (id: string) => ReactNode;
+}) {
+  const columns = cards[0]?.columns ?? [];
+  const kinds = columns.map((column) => columnKind(column));
+  const ticks = cards.some((card) => tickOf(card));
+  // The chip column is wide enough for two small id chips per line, and the Files column for its
+  // icon and short names. The text columns (Persona, Scenario) share all the rest, so names get
+  // the most room on every width.
+  const widths = kinds.map((kind) =>
+    kind === "number"
+      ? "w-12"
+      : kind === "upload"
+        ? "w-[14%]"
+        : kind === "chips"
+          ? "w-[6rem]"
+          : undefined,
+  );
+  const span = columns.length + (ticks ? 1 : 0) + 1;
+  return (
+    <table className="w-full table-fixed border-collapse text-left text-sm">
+      <colgroup>
+        {ticks && <col className="w-8" />}
+        {widths.map((width, i) => (
+          <col key={i} className={width} />
+        ))}
+        <col className="w-14" />
+      </colgroup>
+      <thead>
+        <tr className="border-b border-border text-xs text-muted-foreground">
+          {ticks && (
+            <th className="py-2 pl-2">
+              <span className="sr-only">Include</span>
+            </th>
+          )}
+          {columns.map((column, i) => (
+            <th
+              key={column.title}
+              className={cn(
+                "truncate px-2 py-2 font-medium",
+                kinds[i] === "number" && "text-right",
+              )}
+            >
+              {column.title}
+            </th>
+          ))}
+          <th className="py-2 pr-2">
+            <span className="sr-only">Actions</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {cards.map((card) => {
+          const tick = tickOf(card);
+          const edit = rowForm?.(card.id) ?? null;
+          const icons = card.options.filter(
+            (option) => option.icon && option !== tick,
+          );
+          const below = formRow?.(card.id);
+          return (
+            <Fragment key={card.id}>
+              {edit ? (
+                <RowEditor
+                  card={card}
+                  columns={columns}
+                  kinds={kinds}
+                  tick={tick}
+                  edit={edit}
+                  onPick={pickFrom(card.id)}
+                />
+              ) : (
+                <tr
+                  data-keep-anchor={card.id}
+                  className={cn(
+                    "border-b border-border align-top",
+                    tick && !isSelected(card, tick) && "text-muted-foreground",
+                  )}
+                >
+                  {ticks && (
+                    <td className="py-1.5 pl-2">
+                      {tick && (
+                        <span className="flex h-7 items-center">
+                          <SelectBox
+                            label={`Include ${card.title}`}
+                            checked={isSelected(card, tick)}
+                            disabled={disabled}
+                            onChange={() =>
+                              pickFrom(card.id)(optionKey(tick.id))
+                            }
+                          />
+                        </span>
+                      )}
+                    </td>
+                  )}
+                  {card.columns?.map((column, i) => (
+                    <td
+                      key={column.title}
+                      className={cn(
+                        "px-2 py-1.5",
+                        kinds[i] === "number" && "text-right tabular-nums",
+                      )}
+                    >
+                      <ColumnCell
+                        column={column}
+                        disabled={disabled}
+                        onPick={pickFrom(card.id)}
+                        onFieldChange={fieldFrom(card.id)}
+                      />
+                    </td>
+                  ))}
+                  <td className="py-1.5 pr-2">
+                    <div className="flex justify-end gap-1">
+                      <OptionControls
+                        options={icons}
+                        disabled={disabled}
+                        onPick={pickFrom(card.id)}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {below && (
+                <tr className="border-b border-border">
+                  <td colSpan={span} className="p-0">
+                    {below}
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// A table row in edit mode. A form cannot wrap table cells, so the form element sits in the
+// actions cell and each control in the other cells joins it through its `form` attribute. A field that names no column
+// goes into the first cell.
+function RowEditor({
+  card,
+  columns,
+  kinds,
+  tick,
+  edit,
+  onPick,
+}: {
+  card: AnyCard;
+  columns: readonly CardColumn[];
+  kinds: readonly ColumnKind[];
+  tick?: Option;
+  edit: RowEdit;
+  onPick: (key: string) => void;
+}) {
+  const { values, setValue } = useFormDraft(edit.request);
+  const formId = `row-edit-${card.id}`;
+  // Files the user uploads while the row is open. Each one becomes a selected choice of the
+  // multi-choice field in the upload column, and the files go with the Save.
+  const [uploads, setUploads] = useState<File[]>([]);
+  const uploadColumn = columns.find((_, i) => kinds[i] === "upload")?.title;
+  const fields = edit.request.fields.map((field) =>
+    field.multiple && uploadColumn != null && field.column === uploadColumn
+      ? {
+          ...field,
+          choices: [
+            ...(field.choices ?? []),
+            ...uploads
+              .filter(
+                (file) =>
+                  !(field.choices ?? []).some(
+                    (choice) => choice.value === file.name,
+                  ),
+              )
+              .map((file) => ({ value: file.name, label: file.name })),
+          ],
+        }
+      : field,
+  );
+  const uploadField = fields.find(
+    (field) =>
+      field.multiple && uploadColumn != null && field.column === uploadColumn,
+  );
+  const addUploads = (files: File[]) => {
+    if (!uploadField || files.length === 0) return;
+    setUploads((current) => [
+      ...current.filter(
+        (item) => !files.some((file) => file.name === item.name),
+      ),
+      ...files,
+    ]);
+    const chosen = (values[uploadField.id] ?? "").split(",").filter(Boolean);
+    for (const file of files)
+      if (!chosen.includes(file.name)) chosen.push(file.name);
+    setValue(uploadField.id, chosen.join(","));
+  };
+  const used = edit.request.used_combinations ?? [];
+  const cellOf = (field: FormFieldSpec) => {
+    const named = columns.findIndex((column) => column.title === field.column);
+    return named >= 0 ? named : 0;
+  };
+  const busy = edit.busy;
+  return (
+    <>
+      <tr
+        data-keep-anchor={card.id}
+        className="bg-muted/40 align-top"
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && edit.request.cancellable && !busy) {
+            e.preventDefault();
+            cancelForm(edit.onRespond);
+          }
+        }}
+      >
+        {tick && (
+          <td className="py-1.5 pl-2">
+            <span className="flex h-8 items-center">
+              <SelectBox
+                label={`Include ${card.title}`}
+                checked={isSelected(card, tick)}
+                disabled
+                onChange={() => onPick(optionKey(tick.id))}
+              />
+            </span>
+          </td>
+        )}
+        {columns.map((column, i) => (
+          <td
+            key={column.title}
+            className={cn("px-1 py-1.5", kinds[i] === "number" && "text-right")}
+          >
+            {/* The Files cell puts the upload icon first and the files on its right, the same
+                as the read-only row. */}
+            <div
+              className={cn(
+                "flex min-w-0 gap-1",
+                uploadField && column.title === uploadColumn
+                  ? "flex-row items-start"
+                  : "flex-col",
+              )}
+            >
+              {uploadField && column.title === uploadColumn && (
+                <UploadButton
+                  label={`Upload ${column.title}`}
+                  disabled={busy}
+                  iconOnly
+                  onFiles={addUploads}
+                />
+              )}
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                {fields
+                  .filter((field) => cellOf(field) === i)
+                  .map((field) => (
+                    <FormFieldControl
+                      key={field.id}
+                      field={field}
+                      value={values[field.id] ?? ""}
+                      values={values}
+                      used={used}
+                      fields={fields}
+                      disabled={busy}
+                      density="inline"
+                      hideLabel
+                      form={formId}
+                      onChange={(value) => setValue(field.id, value)}
+                    />
+                  ))}
+              </div>
+            </div>
+          </td>
+        ))}
+        <td className="py-1.5 pr-2 align-top">
+          <form
+            id={formId}
+            aria-label={edit.request.prompt || "Edit"}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (busy) return;
+              const chosen = uploadField
+                ? (values[uploadField.id] ?? "").split(",")
+                : [];
+              edit.onRespond(
+                { type: "form", cancelled: false, values },
+                uploads.filter((file) => chosen.includes(file.name)),
+              );
+            }}
+            className="flex flex-col items-end gap-1"
+          >
+            <FormActions
+              request={edit.request}
+              disabled={busy}
+              values={values}
+              compact
+              vertical
+              onCancel={() => cancelForm(edit.onRespond)}
+            />
+          </form>
+        </td>
+      </tr>
+      <tr className="border-b border-border bg-muted/40">
+        <td colSpan={columns.length + (tick ? 1 : 0) + 1} className="px-2 pb-2">
+          {edit.notice ? (
+            <div role="alert" className="text-xs text-destructive">
+              {edit.notice}
+            </div>
+          ) : (
+            <span className="sr-only">{edit.request.prompt}</span>
+          )}
+        </td>
+      </tr>
+    </>
+  );
+}
+
+// The tick option of a card: the one option that carries a `selected` flag and no icon.
+function tickOf(card: AnyCard): Option | undefined {
+  return card.options.find(
+    (option) => typeof option.selected === "boolean" && !option.icon,
+  );
+}
+
+function isSelected(card: AnyCard, tick: Option): boolean {
+  return card.selected ?? tick.selected === true;
+}
+
+type ColumnKind = "text" | "number" | "chips" | "upload" | "rich";
+
+function columnKind(column: CardColumn): ColumnKind {
+  const components = column.components ?? [];
+  if (components.length === 0) return "text";
+  if (components.some((component) => component.type === "number"))
+    return "number";
+  if (components.some((component) => component.type === "upload"))
+    return "upload";
+  if (components.every((component) => component.type === "options"))
+    return "chips";
+  return "rich";
+}
+
+// One table cell. A column with no components is its summary as plain text, cut to one line with
+// the full text on hover. A chip group draws every chip; a chip's hint is its hover text. A
+// number field draws as a narrow field, and an upload field as its file names and an upload
+// button.
+function ColumnCell({
+  column,
+  disabled,
+  onPick,
+  onFieldChange,
+}: {
+  column: CardColumn;
+  disabled: boolean;
+  onPick: (key: string) => void;
+  onFieldChange: FieldChange;
+}) {
+  const kind = columnKind(column);
+  if (kind === "text" || kind === "rich")
+    return (
+      <span title={column.summary} className="block min-w-0 truncate">
+        {column.summary}
+      </span>
+    );
+  if (kind === "chips") {
+    const options = column.components.flatMap((component) =>
+      component.type === "options" ? component.options : [],
+    );
+    if (options.length === 0)
+      return <span className="text-xs text-muted-foreground">None</span>;
+    return (
+      <div className="flex min-w-0 flex-wrap items-center gap-0.5">
+        {options.map((option) => {
+          const on = option.selected === true;
+          return (
+            // A plain button, not `Button`: the shared button's padding and text size are too
+            // large for an id chip in a table cell.
+            <button
+              key={optionKey(option.id)}
+              type="button"
+              disabled={disabled || !option.enabled}
+              title={option.hint ?? option.label}
+              aria-pressed={on}
+              className={cn(
+                "rounded border px-1 py-px font-mono text-[10px] leading-tight tracking-tight transition-colors duration-150",
+                "disabled:cursor-not-allowed disabled:opacity-45",
+                on
+                  ? "border-accent bg-accent/12 text-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted",
+              )}
+              onClick={() => onPick(optionKey(option.id))}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  return (
+    <div
+      className={cn(
+        "flex min-w-0 flex-1 flex-col gap-1",
+        kind === "number" && "items-end",
+      )}
+    >
+      {column.components.map((component, i) => (
+        <ComponentBlock
+          key={i}
+          component={component}
+          disabled={disabled}
+          density="inline"
+          onPick={onPick}
+          onFieldChange={onFieldChange}
+          bare
+        />
+      ))}
+    </div>
+  );
+}
+
+// The options of one item or header. An option with an icon is a square icon action; any other
+// option is a button with its label.
+function OptionControls({
+  options,
   disabled,
   onPick,
 }: {
-  option: Option;
+  options: readonly Option[];
   disabled: boolean;
   onPick: (key: string) => void;
 }) {
   return (
+    <>
+      {options.map((option) => (
+        <ActionButton
+          key={optionKey(option.id)}
+          option={option}
+          disabled={disabled}
+          onPick={onPick}
+        />
+      ))}
+    </>
+  );
+}
+
+// One option. Every option that the client sends goes through here, so an option with `confirm`
+// always asks first: the dialog shows the package's text, and the option is sent only when the
+// user agrees. `selected` on a screen option is rare, but honoured as the toggled look.
+function ActionButton({
+  option,
+  disabled,
+  onPick,
+  variant,
+  className,
+}: {
+  option: Option;
+  disabled: boolean;
+  onPick: (key: string) => void;
+  variant?: "primary" | "secondary" | "ghost";
+  className?: string;
+}) {
+  const [asking, setAsking] = useState(false);
+  const key = optionKey(option.id);
+  const off = disabled || !option.enabled;
+  // A recomposed review or a send in progress closes the question: it asked about a state that
+  // may be gone.
+  useEffect(() => setAsking(false), [option, off]);
+  const choose = () => (option.confirm ? setAsking(true) : onPick(key));
+  const control = option.icon ? (
+    <IconAction
+      icon={option.icon}
+      label={option.label}
+      disabled={disabled || !option.enabled}
+      onClick={choose}
+    />
+  ) : (
     <Button
-      variant={option.primary ? "primary" : "secondary"}
+      variant={variant ?? (option.primary ? "primary" : "secondary")}
       active={option.selected === true}
       disabled={disabled || !option.enabled}
-      onClick={() => onPick(optionKey(option.id))}
+      className={className}
+      onClick={choose}
     >
       {option.label}
     </Button>
   );
+  return (
+    <>
+      {control}
+      {asking && option.confirm && (
+        <ConfirmDialog
+          text={option.confirm}
+          confirmLabel={option.icon === "trash" ? "Delete" : option.label}
+          onCancel={() => setAsking(false)}
+          onConfirm={() => {
+            setAsking(false);
+            if (!off) onPick(key);
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 // ── cards ─────────────────────────────────────────────────────────────────────
+
+interface RowEdit {
+  request: FormRequest;
+  busy: boolean;
+  notice?: ReactNode;
+  onRespond: Emit;
+}
+
+type FieldChange = (
+  key: string,
+  value: CardFieldValue,
+  files?: readonly File[],
+  removedFixtures?: readonly string[],
+) => void;
 
 function CardBlock({
   card,
   disabled,
   onPick,
   onFieldChange,
+  editing,
+  rowEdit,
 }: {
   card: AnyCard;
   disabled: boolean;
   onPick: (key: string) => void;
-  onFieldChange: (
-    key: string,
-    value: CardFieldValue,
-    files?: readonly File[],
-    removedFixtures?: readonly string[],
-  ) => void;
+  onFieldChange: FieldChange;
+  // A pending edit of a row inside this card (a Criterion). The row it names takes the form.
+  rowEdit?: RowEdit;
+  // The pending edit form for this card. The checkbox and the id stay; the form's fields take
+  // the title and body positions, and Save and Cancel take the place of the card's actions.
+  editing?: {
+    request: FormRequest;
+    busy: boolean;
+    notice?: ReactNode;
+    onRespond: Emit;
+  };
 }) {
-  // Three cases, decided by the package, not the door:
-  //   • `selected == null` — no box at all. The behaviours review sends this: it lists the drafted
-  //     behaviours and only asks for a nod to continue, so a checkbox would imply a decision the
-  //     user has not been asked to make yet. The measurement choice is part of this screen.
-  //   • `selected` set AND a real `tick` option present — an interactive checkbox. Only the
-  //     composes that option (with a patch). We drive the box from the option and send *its* key,
-  //     so the tick matches an option server-side and the recomposed screen reflects the flip.
-  //   • `selected` set but no `tick` option — a read-only marker. Criteria sends this to show which
-  //     behaviours are covered; it is display-only, exactly as the CLI draws `[x]`/`[ ]`.
-  // (Inventing a `tick:<id>` key from `selected` alone used to match nothing on the read-only
-  // screens, which is the flicker-and-revert bug this replaced.)
-  const tick = card.options.find((o) => o.id.action === "tick");
-  const showBox = card.selected !== null && card.selected !== undefined;
-  const checked = tick?.selected ?? card.selected ?? false;
-  // The tick lives in the checkbox now; keep it out of the action-button row below so it is not
-  // drawn twice.
-  const actions = card.options.filter((o) => o.id.action !== "tick");
-  // The section heading is drawn by the caller, once per group; a card renders only its panel.
+  // The checkbox is the card's tick option, the one option that carries `selected`. A card with
+  // no tick option draws no box: a box that cannot change would only look broken.
+  const tick = tickOf(card);
+  const box = tick && (
+    <SelectBox
+      id={`review-${card.id}`}
+      label={card.title}
+      // `card.selected` is the item's own state. The tick option's flag is only a copy, and a
+      // receipt overwrites it with "was this option the answer".
+      checked={card.selected ?? tick.selected === true}
+      disabled={disabled}
+      onChange={() => onPick(optionKey(tick.id))}
+    />
+  );
+  // The id shows only when it carries meaning to the user (a Behaviour id that other rows name).
+  const id =
+    card.show_id !== false ? (
+      <Mono className="shrink-0 whitespace-nowrap">{card.id}</Mono>
+    ) : null;
+  const actions = card.options.filter((o) => o !== tick);
+  const icons = actions.filter((o) => o.icon);
+  const buttons = actions.filter((o) => !o.icon);
   return (
-    <Panel className={cn("p-3", card.blocking && "border-destructive/60")}>
-      <div className="flex items-start gap-3">
-        {showBox && (
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4 accent-[hsl(var(--accent))]"
-            checked={checked}
-            // Read-only when the screen offers no toggle for this card: the box then reports
-            // state rather than accepting a click that would post a key matching no option.
-            disabled={disabled || !tick}
-            onChange={tick ? () => onPick(optionKey(tick.id)) : undefined}
-            aria-label={card.title}
-          />
-        )}
-        <div className="flex flex-1 flex-col gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-medium text-foreground">{card.title}</span>
-            {/* The id keeps its own gutter: it never shrinks and never wraps, so a short
-                  identifier like EB-1 or F-1 reads on one line however long the title runs. */}
-            <Mono className="shrink-0 whitespace-nowrap">{card.id}</Mono>
-          </div>
-
-          {card.components.map((component, i) => (
-            <ComponentBlock
-              key={i}
-              component={component}
-              trialCount={"trials" in card ? card.trials : undefined}
-              disabled={disabled}
-              onPick={onPick}
-              onFieldChange={onFieldChange}
-            />
-          ))}
-
-          {card.note && (
-            <p className="text-sm text-muted-foreground">{card.note}</p>
-          )}
-
-          {/* Actions scoped to this card — "chat", "add a scenario", "remove". The tick, if any, is
-                the checkbox above, so it is filtered out here. */}
-          {actions.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-1">
-              {actions.map((o) => (
-                <ActionButton
-                  key={optionKey(o.id)}
-                  option={o}
+    <div
+      data-keep-anchor={card.id}
+      className={cn("px-4 py-3", card.blocking && "bg-destructive/5")}
+    >
+      {editing ? (
+        <InlineEdit
+          request={editing.request}
+          busy={editing.busy}
+          notice={editing.notice}
+          onRespond={editing.onRespond}
+          leading={box ?? undefined}
+          trailing={id ?? undefined}
+        />
+      ) : (
+        <div className="flex items-start gap-3">
+          {box && <div className="flex h-6 items-center">{box}</div>}
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex min-h-6 items-center justify-between gap-3">
+              <label
+                htmlFor={box ? `review-${card.id}` : undefined}
+                className="min-w-0 font-medium text-foreground"
+              >
+                {card.title}
+              </label>
+              <div className="flex shrink-0 items-center gap-1">
+                {id}
+                <OptionControls
+                  options={icons}
                   disabled={disabled}
                   onPick={onPick}
                 />
-              ))}
+              </div>
             </div>
-          )}
+
+            {card.components.map((component, i) => (
+              <ComponentBlock
+                key={i}
+                component={component}
+                trialCount={"trials" in card ? card.trials : undefined}
+                disabled={disabled}
+                onPick={onPick}
+                onFieldChange={onFieldChange}
+                rowEdit={rowEdit}
+                nested
+              />
+            ))}
+
+            {card.note && (
+              <p className="text-sm text-muted-foreground">{card.note}</p>
+            )}
+
+            {buttons.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <OptionControls
+                  options={buttons}
+                  disabled={disabled}
+                  onPick={onPick}
+                />
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    </Panel>
+      )}
+    </div>
   );
+}
+
+// The package marks supporting detail (grader settings, extra metadata) as `muted`; the client
+// draws it quiet: small grey text.
+function quiet(component: CardComponent) {
+  return component.muted === true;
 }
 
 function ComponentBlock({
   component,
   trialCount,
   disabled,
+  density = "form",
+  bare = false,
+  nested = false,
+  rowEdit,
   onPick,
   onFieldChange,
 }: {
   component: CardComponent;
   trialCount?: number;
   disabled: boolean;
+  density?: FieldDensity;
+  // Drawn inside a card, where an open, non-muted details block is one row of the card.
+  nested?: boolean;
+  rowEdit?: RowEdit;
+  // Draw the value only, with no label column and no trial count: a table cell has its label in
+  // the column heading.
+  bare?: boolean;
   onPick: (key: string) => void;
-  onFieldChange: (
-    key: string,
-    value: CardFieldValue,
-    files?: readonly File[],
-    removedFixtures?: readonly string[],
-  ) => void;
+  onFieldChange: FieldChange;
 }) {
   // The value alone, unlabelled. `FormRow` decides where the label goes: a labelled component
   // reads as a form field (label in a left column, value at the right), an unlabelled one runs
@@ -433,56 +1514,123 @@ function ComponentBlock({
   // without the door ever learning it is a scenario.
   const value = (() => {
     switch (component.type) {
-      case "disclosure":
+      case "details": {
+        // A row inside a card: an open details block that is not muted (a Criterion). Its
+        // icon-only option group moves to the end of its title line, the same place as the
+        // card's own actions, and an edit that one of those options opened takes the row.
+        const row = nested && component.expanded && !quiet(component);
+        const iconGroup = (child: CardComponent) =>
+          child.type === "options" &&
+          child.options.length > 0 &&
+          child.options.every((option) => option.icon);
+        const actions = row
+          ? component.components.flatMap((child) =>
+              iconGroup(child) && child.type === "options" ? child.options : [],
+            )
+          : [];
+        const children = row
+          ? component.components.filter((child) => !iconGroup(child))
+          : component.components;
+        const item = actions.find((option) => option.id.target)?.id.target;
+        const editHere =
+          row &&
+          rowEdit != null &&
+          actions.some(
+            (option) =>
+              option.id.action === (rowEdit.request.purpose ?? "add") &&
+              option.id.target === rowEdit.request.target,
+          );
+        if (editHere)
+          return (
+            <div
+              data-keep-anchor={item}
+              className="rounded-md bg-muted/50 px-3 py-2"
+            >
+              <InlineEdit
+                request={rowEdit.request}
+                busy={rowEdit.busy}
+                notice={rowEdit.notice}
+                onRespond={rowEdit.onRespond}
+              />
+            </div>
+          );
         return (
-          <details className="w-full text-sm">
-            <summary className="cursor-pointer text-muted-foreground">
-              {component.label ?? "Details"}
-            </summary>
-            <dl className="mt-2 space-y-2">
-              {component.items.map((item, i) => (
-                <div key={i}>
-                  <dt className="text-muted-foreground">{item.label}</dt>
-                  <dd className="whitespace-pre-wrap break-words">
-                    {item.text}
-                  </dd>
-                </div>
+          <div
+            data-keep-anchor={row ? item : undefined}
+            className={cn(row && "rounded-md bg-muted/50 px-3 py-2")}
+          >
+            <Disclosure
+              summary={
+                <span className={cn(!quiet(component) && "font-medium")}>
+                  {component.title}
+                </span>
+              }
+              trailing={
+                actions.length > 0 ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <OptionControls
+                      options={actions}
+                      disabled={disabled}
+                      onPick={onPick}
+                    />
+                  </div>
+                ) : undefined
+              }
+              defaultOpen={component.expanded}
+              tone={quiet(component) ? "muted" : "default"}
+              contentClassName="mt-1.5 flex flex-col gap-1.5"
+            >
+              {children.map((child, i) => (
+                <ComponentBlock
+                  key={i}
+                  component={child}
+                  disabled={disabled}
+                  density={quiet(component) ? "inline" : density}
+                  onPick={onPick}
+                  onFieldChange={onFieldChange}
+                />
               ))}
-            </dl>
-          </details>
+            </Disclosure>
+          </div>
         );
+      }
       case "text":
         return (
-          <p className="whitespace-pre-wrap text-sm text-foreground">
+          <p
+            className={cn(
+              "whitespace-pre-wrap",
+              density === "inline" || quiet(component) ? "text-xs" : "text-sm",
+              quiet(component) && "text-muted-foreground",
+            )}
+          >
             {component.text}
           </p>
         );
 
       case "options":
-        // A chip row. Each chip carries its own `selected`, so it toggles in place and posts
-        // its action on click — a "F-1 covers EB-4" reference is one such chip.
+        // A chip row. Each chip carries its own `selected`, so it toggles in place and posts its
+        // action on click. An option with an icon is an icon action, the same as on a card.
         return (
-          <div className="flex w-full flex-wrap gap-1.5">
+          <div className="flex w-full flex-wrap items-center gap-1.5">
             {component.options.map((o) => (
-              <Button
+              <ActionButton
                 key={optionKey(o.id)}
+                option={o}
                 variant="ghost"
-                active={o.selected === true}
-                disabled={disabled || !o.enabled}
+                disabled={disabled}
                 className="px-2 py-0.5 text-xs"
-                onClick={() => onPick(optionKey(o.id))}
-              >
-                {o.label}
-              </Button>
+                onPick={onPick}
+              />
             ))}
           </div>
         );
 
       case "number":
-        return trialCount === undefined ? (
+        return trialCount === undefined || bare ? (
           <NumberCardField
             component={component}
             disabled={disabled}
+            density={density}
             onCommit={(value) => onFieldChange(optionKey(component.id), value)}
           />
         ) : (
@@ -505,6 +1653,7 @@ function ComponentBlock({
           <FixtureField
             component={component}
             disabled={disabled}
+            compact={bare}
             onChange={(names, files, removedFixtures) =>
               onFieldChange(
                 optionKey(component.id),
@@ -526,19 +1675,61 @@ function ComponentBlock({
 
   // A divider owns the whole row — it carries no label, so it skips FormRow's label/value split
   // and rules straight across.
-  if (component.type === "divider" || component.type === "disclosure")
-    return value;
+  if (component.type === "divider" || bare) return value;
 
   return <FormRow label={component.label}>{value}</FormRow>;
+}
+
+// A small "Upload" button that opens the file picker. The file input is the label's own, so the
+// button works with the keyboard and a screen reader.
+function UploadButton({
+  label,
+  disabled,
+  iconOnly = false,
+  onFiles,
+}: {
+  label: string;
+  disabled: boolean;
+  // A table cell shows the icon alone; its label stays as hover text and for screen readers.
+  iconOnly?: boolean;
+  onFiles: (files: File[]) => void;
+}) {
+  return (
+    <label
+      title={iconOnly ? label : undefined}
+      className={cn(
+        "inline-flex h-7 w-fit shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-within:ring-1 focus-within:ring-accent",
+        disabled && "pointer-events-none opacity-45",
+      )}
+    >
+      <Upload size={14} strokeWidth={1.75} aria-hidden />
+      {!iconOnly && <span>Upload</span>}
+      <input
+        type="file"
+        multiple
+        disabled={disabled}
+        className="sr-only"
+        aria-label={label}
+        onChange={(event) => {
+          onFiles([...(event.currentTarget.files ?? [])]);
+          event.currentTarget.value = "";
+        }}
+      />
+    </label>
+  );
 }
 
 export function FixtureField({
   component,
   disabled,
+  compact = false,
   onChange,
 }: {
   component: Extract<CardComponent, { type: "upload" }>;
   disabled: boolean;
+  // A table cell: the file names, each with a remove button, and a small upload button. Early
+  // files that are not attached yet are offered as "+ name" chips.
+  compact?: boolean;
   onChange: (
     names: string[],
     files: readonly File[],
@@ -559,6 +1750,64 @@ export function FixtureField({
     const removed = names.filter((item) => !next.includes(item));
     onChange(next, [], removed);
   };
+
+  const upload = (files: File[]) => {
+    if (files.length === 0) return;
+    const next = [...component.value];
+    for (const file of files) {
+      if (!next.includes(file.name)) next.push(file.name);
+    }
+    onChange(next, files, []);
+  };
+
+  if (compact) {
+    const offered = available.filter((name) => !names.includes(name));
+    // The upload icon comes first; the file names follow on its right and wrap onto more lines
+    // when the cell is narrow, so a long name is never cut.
+    return (
+      <div className="flex min-w-0 items-start gap-1">
+        <UploadButton
+          label={component.label ? `Upload ${component.label}` : "Upload files"}
+          disabled={disabled}
+          iconOnly
+          onFiles={upload}
+        />
+        {(names.length > 0 || offered.length > 0) && (
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5 pt-1">
+            {names.map((name) => (
+              <span
+                key={name}
+                className="flex min-w-0 items-start gap-1 text-xs"
+              >
+                <span className="min-w-0 break-all">{name}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${name}`}
+                  disabled={disabled}
+                  onClick={() => remove(name)}
+                  className="shrink-0 leading-none text-muted-foreground hover:text-foreground disabled:opacity-40"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {offered.map((name) => (
+              <button
+                key={name}
+                type="button"
+                title={`Attach ${name}`}
+                disabled={disabled}
+                onClick={() => toggle(name, true)}
+                className="min-w-0 break-all text-left text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+              >
+                + {name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -607,13 +1856,7 @@ export function FixtureField({
         multiple
         disabled={disabled}
         onChange={(event) => {
-          const files = [...(event.currentTarget.files ?? [])];
-          if (files.length === 0) return;
-          const next = [...component.value];
-          for (const file of files) {
-            if (!next.includes(file.name)) next.push(file.name);
-          }
-          onChange(next, files, []);
+          upload([...(event.currentTarget.files ?? [])]);
           event.currentTarget.value = "";
         }}
         className="block w-full min-w-0 text-xs text-muted-foreground file:mr-2 file:rounded-md file:border-0 file:bg-background file:px-2 file:py-1 file:text-xs file:font-medium file:text-foreground hover:file:bg-muted"
@@ -625,10 +1868,12 @@ export function FixtureField({
 function NumberCardField({
   component,
   disabled,
+  density = "form",
   onCommit,
 }: {
   component: Extract<CardComponent, { type: "number" }>;
   disabled: boolean;
+  density?: FieldDensity;
   onCommit: (value: number) => void;
 }) {
   const [draft, setDraft] = useState(component.value);
@@ -648,6 +1893,8 @@ function NumberCardField({
       min={component.min}
       max={component.max}
       disabled={disabled}
+      density={density}
+      ariaLabel={component.label ?? undefined}
       onChange={setDraft}
       onCommit={commit}
     />
@@ -668,7 +1915,9 @@ function FormRow({
   if (!label) return <>{children}</>;
   return (
     <div className="flex items-baseline gap-4">
-      <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">
+      {/* A fixed column keeps the values on one edge. A long label, such as a detail name with
+          no spaces, wraps inside the column and never runs into its value. */}
+      <span className="w-32 shrink-0 text-xs font-medium text-muted-foreground [overflow-wrap:anywhere]">
         {label}
       </span>
       {/* The value column: content left-aligned to a common edge just right of the label, so a
@@ -725,6 +1974,318 @@ function WarningBlock({
 
 // ── form ─────────────────────────────────────────────────────────────────────
 
+// The values of one pending form. The draft survives a remount through the shared draft map,
+// so a form that moves between the conversation and an inline edit keeps what the user typed.
+export function useFormDraft(request: FormRequest) {
+  const drafts = useContext(FormDraftContext);
+  const key = `${drafts?.prefix}:${request.request_id}`;
+  const [values, updateValues] = useState<Record<string, string>>(
+    () =>
+      drafts?.values.get(key) ??
+      Object.fromEntries(
+        request.fields.map((field) => [field.id, field.value ?? ""]),
+      ),
+  );
+  const setValue = (id: string, value: string) => {
+    const next = { ...values, [id]: value };
+    drafts?.values.set(key, next);
+    updateValues(next);
+  };
+  return { values, setValue };
+}
+
+type FormFieldSpec = FormRequest["fields"][number];
+
+type Combinations = readonly Record<string, string>[];
+
+// The used combinations that this choice would make, with the other fields of that combination
+// at their current values. The choice stays available: the user can change the other field
+// next. Save waits while the whole set of values repeats a used combination, and the package
+// checks again when the form comes back.
+function usedWith(
+  fieldId: string,
+  value: string,
+  values: Record<string, string>,
+  used: Combinations,
+): Record<string, string> | undefined {
+  return used.find(
+    (combination) =>
+      combination[fieldId] === value &&
+      Object.entries(combination).every(
+        ([id, wanted]) => id === fieldId || values[id] === wanted,
+      ),
+  );
+}
+
+// The label of a value in another field of the form, for the "already paired with" note.
+function choiceLabel(
+  fields: readonly FormFieldSpec[],
+  id: string,
+  value: string,
+): string {
+  const field = fields.find((item) => item.id === id);
+  return (
+    field?.choices?.find((choice) => choice.value === value)?.label ?? value
+  );
+}
+
+function selectChoices(
+  field: FormFieldSpec,
+  values: Record<string, string> = {},
+  used: Combinations = [],
+  fields: readonly FormFieldSpec[] = [],
+): SelectChoice[] | null {
+  if (field.choices?.length)
+    return field.choices.map((choice) => {
+      const pair = usedWith(field.id, choice.value, values, used);
+      const others = Object.entries(pair ?? {})
+        .filter(([id]) => id !== field.id)
+        .map(([id, value]) => choiceLabel(fields, id, value));
+      return {
+        value: choice.value,
+        hint: choice.hint,
+        label:
+          pair && values[field.id] !== choice.value
+            ? `${choice.label} (already paired with ${others.join(", ")})`
+            : choice.label,
+      };
+    });
+  // A multi-choice field with no choices yet (Files before any upload) is still a choice field.
+  if (field.multiple === true) return [];
+  if (field.input_type === "boolean")
+    return [
+      { value: "true", label: "true" },
+      { value: "false", label: "false" },
+    ];
+  return null;
+}
+
+// One form field, drawn from its shape alone: a choice list is a select, a multiline field is a
+// text area, everything else is a text or number input.
+export function FormFieldControl({
+  field,
+  value,
+  disabled,
+  density = "form",
+  hideLabel = false,
+  autoFocus,
+  values = {},
+  used = [],
+  fields = [],
+  form,
+  onChange,
+}: {
+  field: FormFieldSpec;
+  value: string;
+  disabled: boolean;
+  // The id of the form element, when the control is outside it (a table cell).
+  form?: string;
+  density?: FieldDensity;
+  hideLabel?: boolean;
+  autoFocus?: boolean;
+  // The whole form's values and its used combinations, for choices that would repeat a pair.
+  values?: Record<string, string>;
+  used?: Combinations;
+  // All the fields of the form, for the names in an "already paired with" note.
+  fields?: readonly FormFieldSpec[];
+  onChange: (value: string) => void;
+}) {
+  const choices = selectChoices(field, values, used, fields);
+  const taken = choices != null && usedWith(field.id, value, values, used);
+  const control =
+    field.input_type === "pairs" ? (
+      <PairsInput
+        ariaLabel={field.label}
+        value={value}
+        placeholder={field.placeholder}
+        disabled={disabled}
+        density={density}
+        onChange={onChange}
+      />
+    ) : field.multiple === true ? (
+      <MultiChoice
+        ariaLabel={field.label}
+        value={value}
+        choices={choices ?? []}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    ) : choices ? (
+      <SelectInput
+        form={form}
+        ariaLabel={field.label}
+        value={value}
+        choices={choices}
+        placeholder="Select a value"
+        disabled={disabled}
+        required={field.required}
+        density={density}
+        onChange={onChange}
+      />
+    ) : field.multiline ? (
+      <TextArea
+        form={form}
+        ariaLabel={field.label}
+        value={value}
+        placeholder={field.placeholder}
+        disabled={disabled}
+        required={field.required}
+        density={density}
+        onChange={onChange}
+      />
+    ) : (
+      <TextInput
+        form={form}
+        ariaLabel={field.label}
+        type={
+          field.input_type === "integer" || field.input_type === "number"
+            ? "number"
+            : "text"
+        }
+        step={field.input_type === "integer" ? 1 : "any"}
+        value={value}
+        placeholder={field.placeholder}
+        disabled={disabled}
+        required={field.required}
+        autoFocus={autoFocus}
+        density={density}
+        onChange={onChange}
+      />
+    );
+  return (
+    <Field
+      title={hideLabel ? field.help || undefined : undefined}
+      label={field.label}
+      // A field whose label is hidden (a table cell) keeps its help as hover text only.
+      help={hideLabel ? undefined : field.help || undefined}
+      error={taken ? "This combination is already used." : undefined}
+      density={density}
+      hideLabel={hideLabel}
+      group={field.input_type === "pairs"}
+    >
+      {control}
+    </Field>
+  );
+}
+
+// The fields of a form, in order. Grouped fields go into one closed Disclosure per group.
+export function FormFields({
+  fields,
+  values,
+  disabled,
+  density = "form",
+  used = [],
+  onChange,
+}: {
+  fields: readonly FormFieldSpec[];
+  values: Record<string, string>;
+  disabled: boolean;
+  density?: FieldDensity;
+  used?: Combinations;
+  onChange: (id: string, value: string) => void;
+}) {
+  const control = (field: FormFieldSpec) => (
+    <FormFieldControl
+      key={field.id}
+      field={field}
+      value={values[field.id] ?? ""}
+      values={values}
+      used={used}
+      fields={fields}
+      disabled={disabled}
+      density={density}
+      onChange={(value) => onChange(field.id, value)}
+    />
+  );
+  const groups = [
+    ...new Set(
+      fields.map((field) => field.group).filter((group) => group != null),
+    ),
+  ];
+  return (
+    <>
+      {fields.filter((field) => !field.group).map(control)}
+      {groups.map((group) => (
+        <Disclosure
+          key={group}
+          tone="muted"
+          summary={group}
+          contentClassName="mt-3 flex flex-col gap-3"
+        >
+          {fields.filter((field) => field.group === group).map(control)}
+        </Disclosure>
+      ))}
+    </>
+  );
+}
+
+// The submit button with the package's label ("Save", or "Continue" on a Target form) and, when
+// the form allows it, Cancel.
+export function FormActions({
+  request,
+  disabled,
+  onCancel,
+  compact = false,
+  vertical = false,
+  values,
+}: {
+  request: FormRequest;
+  disabled: boolean;
+  onCancel: () => void;
+  compact?: boolean;
+  // Stack the buttons, for a narrow table cell.
+  vertical?: boolean;
+  // When given, Save waits while the values repeat a used combination.
+  values?: Record<string, string>;
+}) {
+  const repeats =
+    values != null &&
+    (request.used_combinations ?? []).some((combination) =>
+      Object.entries(combination).every(([id, value]) => values[id] === value),
+    );
+  const size = compact ? "px-2.5 py-1 text-xs" : undefined;
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 gap-2",
+        vertical ? "flex-col items-stretch gap-1" : "items-center",
+      )}
+    >
+      <Button
+        type="submit"
+        variant="primary"
+        disabled={disabled || repeats}
+        className={size}
+      >
+        {request.submit_label ?? "Save"}
+      </Button>
+      {request.cancellable && (
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={disabled}
+          className={size}
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function submitForm(
+  onRespond: Emit,
+  values: Record<string, string>,
+  busy: boolean,
+) {
+  if (busy) return;
+  onRespond({ type: "form", cancelled: false, values });
+}
+
+const cancelForm = (onRespond: Emit) =>
+  onRespond({ type: "form", cancelled: true, values: {} });
+
 function FormBlock({
   request,
   resolved,
@@ -736,18 +2297,6 @@ function FormBlock({
   busy: boolean;
   onRespond: Emit;
 }) {
-  const drafts = useContext(FormDraftContext);
-  const key = `${drafts?.prefix}:${request.request_id}`;
-  const [values, updateValues] = useState<Record<string, string>>(
-    drafts?.values.get(key) ??
-      Object.fromEntries(
-        request.fields.map((field) => [field.id, field.value ?? ""]),
-      ),
-  );
-  const setValues = (value: Record<string, string>) => {
-    drafts?.values.set(key, value);
-    updateValues(value);
-  };
   // A resolved form is a receipt: show what was submitted, labelled by field, the same way a
   // resolved chat shows its answer. The package stamped the values onto the request.
   if (resolved) {
@@ -768,89 +2317,129 @@ function FormBlock({
       </div>
     );
   }
+  return <PendingForm request={request} busy={busy} onRespond={onRespond} />;
+}
 
-  const renderField = (field: FormRequest["fields"][number]) => (
-    <label key={field.id} className="flex flex-col gap-1">
-      <span className="text-sm font-medium">{field.label}</span>
-      {field.help && (
-        <span className="text-xs text-muted-foreground">{field.help}</span>
-      )}
-      {field.choices?.length || field.input_type === "boolean" ? (
-        <select
-          className="rounded-md border border-input bg-background p-2 text-sm"
-          value={values[field.id] ?? ""}
-          disabled={busy}
-          required={field.required}
-          onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
-        >
-          <option value="">Select a value</option>
-          {(field.choices?.length ? field.choices : ["true", "false"]).map(
-            (choice) => (
-              <option key={choice} value={choice}>
-                {choice}
-              </option>
-            ),
-          )}
-        </select>
-      ) : field.multiline ? (
-        <textarea
-          className="min-h-20 rounded-lg border border-input bg-background p-2 text-sm"
-          placeholder={field.placeholder}
-          value={values[field.id] ?? ""}
-          disabled={busy}
-          required={field.required}
-          onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
-        />
-      ) : (
-        <input
-          className="rounded-md border border-input bg-background p-2 text-sm"
-          type={
-            field.input_type === "integer" || field.input_type === "number"
-              ? "number"
-              : "text"
-          }
-          step={field.input_type === "integer" ? 1 : "any"}
-          placeholder={field.placeholder}
-          value={values[field.id] ?? ""}
-          disabled={busy}
-          required={field.required}
-          onChange={(e) => setValues({ ...values, [field.id]: e.target.value })}
-        />
-      )}
-    </label>
-  );
-  const groups = [
-    ...new Set(
-      request.fields
-        .map((field) => field.group)
-        .filter((group) => group != null),
-    ),
-  ];
+function PendingForm({
+  request,
+  busy,
+  onRespond,
+}: {
+  request: FormRequest;
+  busy: boolean;
+  onRespond: Emit;
+}) {
+  const { values, setValue } = useFormDraft(request);
   return (
     <form
       className="flex flex-col gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        if (busy) return;
-        onRespond({ type: "form", values });
+        submitForm(onRespond, values, busy);
       }}
     >
-      {request.fields.filter((field) => !field.group).map(renderField)}
-      {groups.map((group) => (
-        <details key={group} className="space-y-3">
-          <summary className="cursor-pointer text-sm text-muted-foreground">
-            {group}
-          </summary>
-          {request.fields
-            .filter((field) => field.group === group)
-            .map(renderField)}
-        </details>
-      ))}
-      <div>
-        <Button type="submit" variant="primary" disabled={busy}>
-          Save
-        </Button>
+      <FormFields
+        fields={request.fields}
+        values={values}
+        used={request.used_combinations}
+        disabled={busy}
+        onChange={setValue}
+      />
+      <FormActions
+        request={request}
+        disabled={busy}
+        values={values}
+        onCancel={() => cancelForm(onRespond)}
+      />
+    </form>
+  );
+}
+
+// An edit form drawn in the place of the item it edits. The first single-line field takes the
+// title position, beside the checkbox and the id; the other fields take the body position; Save
+// and Cancel take the place of the item's actions. This rule reads only the form's shape.
+export function InlineEdit({
+  request,
+  busy,
+  onRespond,
+  leading,
+  trailing,
+  notice,
+}: {
+  request: FormRequest;
+  busy: boolean;
+  onRespond: Emit;
+  // What stays from the item: its checkbox before the title, its id after it.
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  // Why the package refused the last save, when it did.
+  notice?: ReactNode;
+}) {
+  const { values, setValue } = useFormDraft(request);
+  const titleField = request.fields.find(
+    (field) => !field.multiline && !field.group && !selectChoices(field),
+  );
+  // A form with no free-text title (a Test Case pair) has no title place to take.
+  const rest = request.fields.filter((field) => field !== titleField);
+  return (
+    <form
+      aria-label={request.prompt || "Edit"}
+      className="flex flex-col gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submitForm(onRespond, values, busy);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && request.cancellable && !busy) {
+          e.preventDefault();
+          cancelForm(onRespond);
+        }
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        {leading}
+        <div className="min-w-0 flex-1">
+          {titleField && (
+            <FormFieldControl
+              field={titleField}
+              value={values[titleField.id] ?? ""}
+              disabled={busy}
+              density="inline"
+              hideLabel
+              autoFocus
+              onChange={(value) => setValue(titleField.id, value)}
+            />
+          )}
+        </div>
+        {trailing}
+        <FormActions
+          request={request}
+          disabled={busy}
+          values={values}
+          compact
+          onCancel={() => cancelForm(onRespond)}
+        />
       </div>
+      {notice && (
+        <div
+          role="alert"
+          className={cn("text-xs text-destructive", leading != null && "pl-7")}
+        >
+          {notice}
+        </div>
+      )}
+      {rest.length > 0 && (
+        <div className={cn("flex flex-col gap-2", leading != null && "pl-7")}>
+          <FormFields
+            fields={rest}
+            values={values}
+            used={request.used_combinations}
+            disabled={busy}
+            density="inline"
+            onChange={setValue}
+          />
+        </div>
+      )}
     </form>
   );
 }
@@ -871,21 +2460,21 @@ function UserSaid({ text }: { text: string }) {
 
 // ── the composer ─────────────────────────────────────────────────────────────
 
-// Whether the live screen can be talked to, and the single source of the greying rule: only a
-// chat request. A choice screen edits the specification through its own controls — "Chat about it"
-// among them — so the composer stays disabled there, and one component edits at a time. Choosing
-// "Chat about it" makes the next request a chat request, which is what turns this true. No step
-// names, no domain checks.
+// Whether the composer takes text for this request. A chat request does, and so does a review
+// that asks for feedback, even while the review waits behind an open form: the user can always
+// type a change.
 export function acceptsChat(request: WizardRequest | undefined): boolean {
-  if (!request || request.state !== "pending") return false;
-  return request.type === "chat";
+  if (!request) return false;
+  if (request.type === "chat") return request.state === "pending";
+  return request.type === "choice" && Boolean(request.feedback_placeholder);
 }
 
-// The instruction to show as placeholder when the box is greyed — the package's own words
-// for how this particular screen wants to be answered.
+// The placeholder: the package's own words for how this screen wants to be answered.
 export function composerHint(request: WizardRequest | undefined): string {
-  if (request && request.type === "choice" && request.instruction)
-    return request.instruction;
+  if (request?.type === "choice")
+    return request.feedback_placeholder || request.instruction || "";
+  if (request?.type === "chat") return "Type a reply";
+  if (request?.type === "form") return "Save or cancel the form to continue";
   return "";
 }
 
@@ -937,18 +2526,19 @@ export function Composer({
     setLocalText(next);
     onValueChange?.(next);
   };
-  const enabled = (alwaysEnabled || acceptsChat(request)) && !busy;
-  const hint =
-    placeholder ?? (enabled ? "Type a reply" : composerHint(request));
+  // Typing stays open while a reply is in flight; only Send waits for it.
+  const enabled = alwaysEnabled || acceptsChat(request);
+  const hint = placeholder ?? composerHint(request);
 
   const submit = () => {
     const trimmed = text.trim();
-    if (!trimmed || !enabled || sendBlockedReason) return;
+    if (!trimmed || !enabled || busy || sendBlockedReason) return;
     onSend(trimmed);
     if (value === undefined) setText("");
   };
 
-  const canSend = enabled && text.trim().length > 0 && !sendBlockedReason;
+  const canSend =
+    enabled && !busy && text.trim().length > 0 && !sendBlockedReason;
 
   // The box grows with what is being typed and only scrolls once it has run out of room. The
   // comment below the textarea has always claimed this; nothing implemented it, so `rows={3}` was

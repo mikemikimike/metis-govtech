@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from metis.wizard.domain import materializer, paths
+from metis.wizard.domain.nodes import duplicate_test_cases
 from metis.wizard.domain.patch import Patch, PatchOp, PatchOrigin
 from metis.wizard.domain.permissions import owner_of
 from metis.wizard.domain.specification import (
@@ -131,12 +132,13 @@ def _coerce(field_name: str, value: Any, origin: PatchOrigin) -> Any:
             "features": {"id", "name", "description", "behaviours"},
             "behaviours": {"id", "name", "description", "criteria"},
             "criteria": {"id", "name", "description"},
-            "personas": {"id", "name", "description"},
+            "personas": {"id", "name", "description", "metadata"},
             "tasks": {"id", "scenario_ref", "persona_ref", "behaviour_refs"},
             "scenarios": {
                 "id",
                 "name",
                 "description",
+                "metadata",
                 "tasks",
             },
         }.get(field_name)
@@ -409,6 +411,21 @@ def validate_model_patches(
             "The proposed patches duplicate one persona description under "
             f"{', '.join(ids)}. Update or remove the existing persona instead of adding "
             "the same content again."
+        )
+
+    # A Test Case is unique by its Persona and Scenario pair. The check reads the whole
+    # candidate, so a model cannot pair the same two items twice under two Test Cases.
+    repeats = [
+        repeat
+        for repeat in duplicate_test_cases(candidate)
+        if repeat not in duplicate_test_cases(specification)
+    ]
+    if repeats:
+        later, earlier = repeats[0]
+        raise PatchValueError(
+            f"The proposed patches give {later} the same Persona and Scenario as {earlier}. "
+            "Each Test Case needs its own Persona and Scenario pair. Change the pair, or "
+            "update the existing Test Case."
         )
 
 

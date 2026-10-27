@@ -7,7 +7,7 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 from metis.library.grader import CriterionJudgeArgs, JudgeArgs
-from metis.wizard.contracts.conversation import FormField
+from metis.wizard.contracts.conversation import FormChoice, FormField
 
 if TYPE_CHECKING:
     from metis.wizard.domain.specification import Criterion
@@ -58,8 +58,11 @@ def settings_fields(criterion: Criterion) -> list[FormField]:
                 and not nullable
                 and not (name == "model" and issubclass(model, JudgeArgs)),
                 choices=[
-                    str(v).lower() if isinstance(v, bool) else str(v)
-                    for v in prop.get("enum", [])
+                    FormChoice(value=text, label=text)
+                    for text in (
+                        str(v).lower() if isinstance(v, bool) else str(v)
+                        for v in prop.get("enum", [])
+                    )
                 ],
                 help=prop.get("description", ""),
                 group="Grader settings",

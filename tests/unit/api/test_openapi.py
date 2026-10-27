@@ -115,11 +115,7 @@ def test_concrete_request_models_have_flat_required_fields(client: TestClient) -
     schemas = client.get("/openapi.json").json()["components"]["schemas"]
 
     start = schemas["InterviewStartRequest"]
-    assert start["required"] == [
-        "description",
-        "known_capability_ids",
-        "capability_confidence",
-    ]
+    assert start["required"] == ["description"]
     assert start["additionalProperties"] is False
     assert "documents" in start["properties"]
     assert "documents" not in start["required"]
@@ -161,9 +157,9 @@ def test_state_schema_bounds_history_and_requires_non_null_pending_metadata(
 ) -> None:
     schemas = client.get("/openapi.json").json()["components"]["schemas"]
 
-    assert schemas["InterviewState"]["properties"]["history"]["maxItems"] == 12
+    assert schemas["InterviewState-Input"]["properties"]["history"]["maxItems"] == 12
     for name in ("ChatRequest", "ChoiceRequest", "FormRequest"):
-        request = schemas[name]
+        request = schemas[f"{name}-Input" if name == "ChoiceRequest" else name]
         assert {"request_id", "stage"} <= set(request["required"])
         assert request["properties"]["request_id"] == {"type": "string"}
         assert request["properties"]["stage"] == {

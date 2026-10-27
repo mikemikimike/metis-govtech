@@ -821,6 +821,26 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Configure Criterion descriptions and Grader arguments together during Wizard edits.
   Direct edits use typed fields and argument validation (#490).
 
+- Refine Behaviour review with Feature groups, stable correction targets, a selected total, and
+  separate Continue. Corrections and Target edits after Back update affected model content
+  automatically and preserve form entries. Review options use one action set, `add`, `edit`, and
+  `remove`, with the target ID naming the item. `Option.confirm` names the dependants that a
+  deletion removes. `ChoiceRequest.sections` carries heading actions, `Card.profile_section_id`
+  places each card, `FormChoice` dropdowns send IDs, and `FormRequest.submit_label` names the
+  submit button. A Test Case is unique by its Persona and Scenario pair. Scenarios and Test
+  Cases are separate steps (`InterviewStep.TEST_CASES`). The model drafts Scenarios only.
+  Continue on Scenarios calls `draft_test_cases`, which picks the Personas and Behaviours for
+  each Scenario with no Test Case, and each pick becomes a selected Test Case. A Behaviour that
+  no selected Test Case covers shows as a gap on the Test Case review. `InterviewState.excluded_tasks` holds the Test Cases that the user cleared;
+  readiness and the export use the selected ones only. `FormField.multiple`, `FormField.column`,
+  `FormChoice.hint`, `Option.hint` and `Card.show_id` support in-place row edits and ID chips. Chat feedback can select
+  Behaviours and set Trials. Back closes an open form and reopens the last review from a
+  completed Interview. A change of the selected Behaviours after Back removes unselected Behaviours from Test Cases. `init` asks
+  for a Perspective. Capability evidence and confidence can be omitted together.
+  Prompts use the selected Perspective and available capability context throughout the Interview.
+  Default generation budgets are five Behaviours and three Criteria per selected Behaviour,
+  with expansion for explicit requests and required coverage (#353).
+
 - The wizard offers no graders until real ones are added to `metis.library.graders`: the
   interview cannot produce a runnable experiment, and the manual form's grader picker is empty
   (#470).
@@ -1022,6 +1042,22 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Show Criterion descriptions with expandable Grader details and typed edit fields (#490).
 
+- Make the Profile the main work area. The active review shows in its matching Profile section,
+  and the chat keeps a feedback field open beside it with a placeholder for each step. Behaviour
+  review has collapsible Feature groups, compact selection rows, a selected total, and corrections
+  in place. Capabilities that the user does not open are sent as unspecified evidence. Every
+  item has Create, Edit, and Delete: "+" on a heading, a pen, and a trash icon, with edits in
+  place. Delete asks first and names the items that go with it. The Behaviour step is titled
+  "Features / Expected Behaviours" and warns when more than five Behaviours are selected.
+  Drag the line between the chat and the Profile to change the chat width. Section and group
+  headings show no item counts.
+  Criterion review retains Feature groups, with no checkboxes and with Grader details in quiet
+  text. Its instruction says that the Criteria under a Behaviour show how well it performs. The Scenarios step shows a Scenario card list. The next step, Test Cases, shows a
+  table with Persona, Scenario, Behaviours, Trials, and Files columns that edit in place. The Test Case checkbox
+  includes it in the evaluation, and the total counts selected Test Cases only. Every step moves
+  on with Continue. Back works while a form is open and from
+  Run settings and the completed Interview (#353, #489).
+
 - Interview downloads send the final state for compilation and export. Interview and manual downloads use dated archive names and the shared `inputs/` and `outputs/` layout. The browser shows where to extract them (#453).
 
 - Use Target in authoring views and upgrade saved Interviews while preserving
@@ -1040,9 +1076,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - The opening screen now reads its question and perspective choices from the API configuration,
   asks who the evaluation is for with hover help, and sends the selected perspective on start.
 - **Clear completion and output actions.** The conversation composer now fills its column. Early
-  finish and download use one action in the Specification footer. A normal final Continue stores the
-  completed Interview and reports that the specification is ready without an automatic compile or
-  download. The output action downloads one portable `specification.zip` with the local fixture files.
+  finish and download use one action in the Specification footer. If early finish requires a review,
+  the conversation shows it and preserves it across reloads for confirmation before download.
+  A normal final Continue stores the completed Interview and reports that the specification is ready
+  without an automatic compile or download. The output action downloads one portable
+  `specification.zip` with the local fixture files.
   Review actions are disabled when their required Specification content is incomplete.
 
 #### Deferred

@@ -52,6 +52,12 @@ function resolvedRequest(
   if (next.type === "form" && response.type === "form")
     next.answer = response.values ?? {};
   if (next.type === "choice" && response.type === "choice") {
+    next.feedback_answer = response.feedback ?? "";
+    // A review keeps its own option state when it resolves. The Profile draws it while a form
+    // or a send waits, and a `selected` flag on an option is the state of its item there (a
+    // tick), not "was this the answer". Only a plain choice records which option was chosen.
+    if (next.profile_section_id != null || (next.sections ?? []).length > 0)
+      return next;
     const selected = new Set(response.selected ?? []);
     const mark = (option: {
       id: Parameters<typeof optionKey>[0];
@@ -198,6 +204,13 @@ export function applyEnd(
   );
   if (pending && pending.kind === "interaction")
     pending.status = "ended_unanswered";
+  if (result.state.pending)
+    transcript.push({
+      kind: "interaction",
+      request_id: result.state.pending.request_id,
+      request: clone(result.state.pending),
+      status: "pending",
+    });
   return {
     ...record,
     updated_at: Date.now(),
@@ -238,4 +251,74 @@ export function toPresentation(record: LocalInterviewRecord): PresentationView {
     requests,
     specification: record.state.specification,
   };
+}
+
+export function activeReview(requests: WizardRequest[]): ChoiceRequest | null {
+  const current = requests.at(-1);
+  if (!current) return null;
+  const review = [...requests]
+    .reverse()
+    .find(
+      (request) =>
+        request.type === "choice" &&
+        request.stage === current.stage &&
+        request.profile_section_id != null,
+    );
+  if (!review || review.type !== "choice") return null;
+  return review;
+}
+
+// How the conversation pane groups its requests. Words stay visible: typed messages, chat
+// requests and their replies, choices answered with feedback, and every request that still waits
+// for an answer in the pane. The record of clicks folds into one "N actions" group: choices
+// answered only by selection, edit and add forms, and a review prompt that repeats the one before
+// it. Consecutive folded requests join one group.
+export type TranscriptItem =
+  { kind: "request"; index: number } | { kind: "actions"; indices: number[] };
+
+function isReview(request: WizardRequest): boolean {
+  return request.type === "choice" && request.profile_section_id != null;
+}
+
+function folds(
+  request: WizardRequest,
+  entry: TranscriptEntry | undefined,
+  previousReview: WizardRequest | undefined,
+): boolean {
+  if (
+    entry?.kind === "interaction" &&
+    (entry.status === "sending" || entry.status === "failed")
+  )
+    return false;
+  switch (request.type) {
+    case "chat":
+      return false;
+    case "form":
+      return request.purpose === "edit" || request.state === "resolved";
+    case "choice":
+      if (request.feedback_answer) return false;
+      if (isReview(request))
+        return (
+          previousReview?.stage === request.stage &&
+          previousReview.prompt === request.prompt
+        );
+      return request.state === "resolved";
+  }
+}
+
+export function groupTranscript(
+  requests: readonly WizardRequest[],
+  entries: readonly TranscriptEntry[] = [],
+): TranscriptItem[] {
+  const items: TranscriptItem[] = [];
+  let previousReview: WizardRequest | undefined;
+  requests.forEach((request, index) => {
+    const folded = folds(request, entries[index], previousReview);
+    if (isReview(request)) previousReview = request;
+    const last = items.at(-1);
+    if (!folded) items.push({ kind: "request", index });
+    else if (last?.kind === "actions") last.indices.push(index);
+    else items.push({ kind: "actions", indices: [index] });
+  });
+  return items;
 }

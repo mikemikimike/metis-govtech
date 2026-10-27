@@ -16,12 +16,12 @@ from metis.wizard import (
     derive_stage,
     handle_interview,
 )
-from metis.wizard.application.driver import DriverState
+from metis.wizard.application.driver import PREVIOUS_STEP, DriverState
 from metis.wizard.application.interviewer import (
     InterviewContextBudgetError,
     InterviewerOutputError,
 )
-from metis.wizard.application.screens import behaviours_screen, scenarios_screen
+from metis.wizard.application.screens import behaviours_screen, task_review_screen
 from metis.wizard.application.turn import _reconcile_locks
 from metis.wizard.contracts import (
     ChatResponse,
@@ -288,26 +288,34 @@ def test_a_behaviour_measurement_change_stays_pending_before_continue() -> None:
     ],
 )
 def test_model_failure_preserves_state_and_diagnostics(error, code, retryable) -> None:
+    """A failed model call returns a typed failure with the caller's state, also when the
+    answer fills the history to its limit (a full Clarify, then review feedback)."""
+
     class FailingInterviewer(ScriptedInterviewer):
         def clarify(self, specification, history, context=None):
             raise error
 
+        def chat(self, specification, step, text, target, context=None):
+            raise error
+
     opening = _start()
     assert isinstance(opening, InterviewSuccess)
+    full = _review_state(InterviewStep.PERSONAS)
+    full.history = [Turn(role="user", text=f"Note {i}") for i in range(HISTORY_LIMIT)]
 
-    result = _turn(
-        opening.state,
-        ChatResponse(text="a policy tool"),
-        interviewer=FailingInterviewer(),
-    )
+    for state, response in (
+        (opening.state, ChatResponse(text="a policy tool")),
+        (full, ChoiceResponse(feedback="Make them shorter.")),
+    ):
+        result = _turn(state, response, interviewer=FailingInterviewer())
 
-    assert isinstance(result, InterviewFailure)
-    assert result.code is code
-    assert result.retryable is retryable
-    assert result.state == opening.state
+        assert isinstance(result, InterviewFailure)
+        assert result.code is code
+        assert result.retryable is retryable
+        assert result.state == state
 
-    assert result.diagnostic_state is not None
-    assert str(error) in (result.diagnostic_message or result.message)
+        assert result.diagnostic_state is not None
+        assert str(error) in (result.diagnostic_message or result.message)
 
 
 def test_end_finishes_a_completable_interview() -> None:
@@ -364,10 +372,9 @@ def test_missing_target_details_can_be_completed_before_review() -> None:
     assert continued.stage is InterviewStep.CRITERIA
 
 
-@pytest.mark.parametrize("suggested_files", [[], ["policy.pdf"]])
-def test_documents_survive_turns_and_require_file_review(
-    suggested_files: list[str],
-) -> None:
+def test_documents_survive_turns_and_require_file_review() -> None:
+    """Documents travel with the state. End stops at the Scenario review so the user chooses
+    the files: the paired Test Cases start with none."""
     documents = [
         InterviewDocument(name="policy.pdf", text="POLICY_CONTEXT_SENTINEL"),
         InterviewDocument(name="terms.md"),
@@ -377,18 +384,6 @@ def test_documents_survive_turns_and_require_file_review(
         def clarify(self, specification, history, context=None):
             assert context is not None and context.documents == documents
             return super().clarify(specification, history, context)
-
-        def draft_scenarios(self, specification, context=None):
-            result = super().draft_scenarios(specification, context)
-            result.patches[0].value = result.patches[0].value.model_copy(
-                update={
-                    "tasks": [
-                        task.model_copy(update={"fixtures": suggested_files})
-                        for task in result.patches[0].value.tasks
-                    ]
-                }
-            )
-            return result
 
     interviewer = FixtureInterviewer()
     started = _start(interviewer=interviewer, documents=documents)
@@ -407,13 +402,14 @@ def test_documents_survive_turns_and_require_file_review(
     review = _end(continued.state, interviewer=interviewer, matcher=ScriptedMatcher())
     assert isinstance(review, InterviewSuccess)
     assert review.outcome == "awaiting_response"
-    assert review.stage is InterviewStep.SCENARIOS
+    assert review.stage is InterviewStep.TEST_CASES
     assert not review.state.confirmed
-    assert review.state.specification.task("TC-001").fixtures == suggested_files
+    assert review.state.specification.task("TC-001").fixtures == []
+    from metis.wizard.contracts.conversation import editable_fields_of
+
     uploads = [
         component
-        for card in review.state.pending.cards
-        for component in card.components
+        for component in editable_fields_of(review.state.pending).values()
         if component.type == "upload"
     ]
     assert uploads and uploads[0].available == ["policy.pdf", "terms.md"]
@@ -434,9 +430,9 @@ def test_documents_survive_turns_and_require_file_review(
 
 def test_final_continue_completes_a_ready_specification() -> None:
     specification = research_assistant()
-    pending = scenarios_screen(specification, "Review scenarios")
+    pending = task_review_screen(specification, "Review test cases")
     pending.request_id = "req-final"
-    pending.stage = InterviewStep.SCENARIOS
+    pending.stage = InterviewStep.TEST_CASES
     state = InterviewState(
         specification=specification,
         context=interview_context(),
@@ -652,6 +648,7 @@ def _review_state(step: InterviewStep) -> InterviewState:
         InterviewStep.CRITERIA,
         InterviewStep.PERSONAS,
         InterviewStep.SCENARIOS,
+        InterviewStep.TEST_CASES,
     ],
 )
 def test_back_then_continue_with_no_edit_returns_to_the_later_step(
@@ -678,3 +675,342 @@ def test_back_then_continue_with_no_edit_returns_to_the_later_step(
     assert later.state.pending.stage is step
     assert later.state.specification == state.specification
     assert interviewer.calls == []
+
+
+def _forward(state: InterviewState, interviewer) -> InterviewState:
+    result = _turn(
+        state, ChoiceResponse(selected=["continue"]), interviewer=interviewer
+    )
+    assert isinstance(result, InterviewSuccess)
+    return result.state
+
+
+def _back(state: InterviewState, interviewer, times: int = 1) -> InterviewState:
+    for _ in range(times):
+        result = _turn(
+            state, ChoiceResponse(selected=["back"]), interviewer=interviewer
+        )
+        assert isinstance(result, InterviewSuccess)
+        state = result.state
+    return state
+
+
+def _test_cases_continue(state: InterviewState) -> bool:
+    return next(o for o in state.pending.options if o.id.action == "continue").enabled
+
+
+@pytest.mark.parametrize("change", ["untick", "tick"])
+def test_a_measured_set_changed_after_back_still_reaches_a_runnable_review(
+    change: str,
+) -> None:
+    """Behaviours Continue keeps Test Cases in line with the measured set. An unmeasured
+    Behaviour leaves every Test Case, and a Test Case left with none covers the measured set,
+    so the Test Case review can Continue. A newly measured Behaviour gets Criteria, and the
+    review shows that no Test Case covers it yet. One chip fixes it, then Continue works."""
+    interviewer = ScriptedInterviewer()
+    state = _review_state(InterviewStep.TEST_CASES)
+    state = _back(state, interviewer, times=4)
+    assert state.pending.stage is InterviewStep.BEHAVIOURS
+    target = "EB-1" if change == "untick" else "EB-2"  # EB-2 starts unmeasured
+    ticked = _turn(
+        state, ChoiceResponse(selected=[f"tick:{target}"]), interviewer=interviewer
+    )
+    assert isinstance(ticked, InterviewSuccess)
+    state = ticked.state
+    while state.pending.stage is not InterviewStep.TEST_CASES:
+        state = _forward(state, interviewer)
+
+    measured = {b.id for b in state.specification.measured_behaviours()}
+    assert (target in measured) is (change == "tick")
+    assert all(set(t.behaviour_refs) <= measured for t in state.specification.tasks)
+    if change == "tick":
+        assert state.specification.behaviour(target).criteria  # type: ignore[union-attr]
+        assert not _test_cases_continue(state)
+        assert any(
+            w.text == f"{target} is covered by no selected Test Case."
+            for w in state.pending.warnings
+        )
+        chip = _turn(
+            state,
+            ChoiceResponse(selected=[f"cover:TC-001:{target}"]),
+            interviewer=interviewer,
+        )
+        assert isinstance(chip, InterviewSuccess)
+        state = chip.state
+    assert _test_cases_continue(state), [w.text for w in state.pending.warnings]
+
+
+@pytest.mark.parametrize(
+    ("step", "response"),
+    [
+        (InterviewStep.CRITERIA, "pen"),
+        (InterviewStep.TEST_CASES, "feedback"),
+    ],
+)
+def test_a_scope_change_on_a_later_review_keeps_the_interview_moving(
+    step: InterviewStep, response: str
+) -> None:
+    """A Behaviour edit made on a later review keeps the measured-scope lock. Continue goes
+    forward, and the completed Interview derives DONE."""
+
+    class Measures(ScriptedInterviewer):
+        def chat(self, specification, step, text, target, context=None):
+            return StepResult(
+                message="Measured.",
+                patches=[
+                    Patch(
+                        op=PatchOp.SET,
+                        path="features[F-1].behaviours[EB-2].measured",
+                        value=True,
+                    )
+                ],
+            )
+
+    interviewer = Measures()
+    state = _review_state(step)
+    if response == "pen":
+        opened = _turn(
+            state, ChoiceResponse(selected=["edit:EB-1"]), interviewer=interviewer
+        )
+        assert isinstance(opened, InterviewSuccess)
+        edited = _turn(
+            opened.state,
+            FormResponse(
+                values={"name": "Cites claims", "description": "Cites sources."}
+            ),
+            interviewer=interviewer,
+        )
+    else:
+        edited = _turn(
+            state, ChoiceResponse(feedback="Measure EB-2"), interviewer=interviewer
+        )
+    assert isinstance(edited, InterviewSuccess)
+    assert edited.state.behaviours_confirmed
+    state = edited.state
+    # A newly measured Behaviour runs where the user puts it. Here it is TC-001.
+    if response == "feedback":
+        assert not _test_cases_continue(state)
+        covered = _turn(
+            state,
+            ChoiceResponse(selected=["cover:TC-001:EB-2"]),
+            interviewer=interviewer,
+        )
+        assert isinstance(covered, InterviewSuccess)
+        state = covered.state
+    for _ in range(7):
+        result = _turn(
+            state, ChoiceResponse(selected=["continue"]), interviewer=interviewer
+        )
+        assert isinstance(result, InterviewSuccess)
+        if result.outcome == "done":
+            break
+        assert result.stage is not InterviewStep.BEHAVIOURS
+        state = result.state
+    else:
+        raise AssertionError("Continue did not reach DONE")
+    assert result.state.behaviours_confirmed and result.state.confirmed
+    assert derive_stage(result.state) is InterviewStep.DONE
+
+
+def test_back_from_a_completed_interview_reopens_the_last_review() -> None:
+    """A completed Interview has no pending request. Back, sent with an empty request id,
+    reopens the Test Case review with nothing changed, and Continue completes it again."""
+    interviewer = ScriptedInterviewer()
+    done = _turn(
+        _review_state(InterviewStep.TEST_CASES),
+        ChoiceResponse(selected=["continue"]),
+        interviewer=interviewer,
+    )
+    assert isinstance(done, InterviewSuccess) and done.outcome == "done"
+
+    reopened = _turn(
+        done.state,
+        ChoiceResponse(selected=["back"]),
+        request_id="-",
+        interviewer=interviewer,
+    )
+    assert isinstance(reopened, InterviewSuccess)
+    assert reopened.stage is InterviewStep.TEST_CASES
+    assert not reopened.state.confirmed
+    assert reopened.state.specification == done.state.specification
+    assert interviewer.calls == []
+
+    again = _forward(reopened.state, interviewer)
+    assert again.confirmed and again.pending is None
+
+    # Any other answer to a completed Interview still has nothing to bind to.
+    refused = _turn(done.state, ChoiceResponse(selected=["continue"]), request_id="-")
+    assert isinstance(refused, InterviewFailure)
+    assert refused.code == InterviewErrorCode.NO_PENDING_REQUEST
+
+
+def test_the_target_review_after_back_cancels_to_behaviours_unchanged() -> None:
+    interviewer = ScriptedInterviewer()
+    state = _back(_review_state(InterviewStep.BEHAVIOURS), interviewer)
+    form = state.pending
+    assert isinstance(form, FormRequest) and form.cancellable
+    assert form.submit_label == "Continue"
+
+    cancelled = _turn(state, FormResponse(cancelled=True), interviewer=interviewer)
+    assert isinstance(cancelled, InterviewSuccess)
+    assert cancelled.state.pending.stage is InterviewStep.BEHAVIOURS
+    assert cancelled.state.specification == state.specification
+    assert interviewer.calls == []
+    # The first step has no Back, so Back from this form is not offered.
+    refused = _turn(state, ChoiceResponse(selected=["back"]), interviewer=interviewer)
+    assert isinstance(refused, InterviewFailure)
+
+
+def test_an_earlier_review_shows_its_drafting_message_after_back() -> None:
+    interviewer = ScriptedInterviewer()
+    started = _start(interviewer=interviewer)
+    state = started.state
+    while state.pending.stage is not InterviewStep.CRITERIA:
+        if state.pending.type == "chat":
+            result = _turn(
+                state, ChatResponse(text="It answers."), interviewer=interviewer
+            )
+            assert isinstance(result, InterviewSuccess)
+            state = result.state
+        else:
+            state = _forward(state, interviewer)
+    state = InterviewState.model_validate_json(state.model_dump_json())
+
+    back = _back(state, interviewer)
+
+    assert back.pending.prompt == "Here's what I think it should do. Have a look."
+
+
+@pytest.mark.parametrize("supplied", [False, True])
+def test_start_preserves_optional_capability_context(supplied: bool) -> None:
+    fields = (
+        {"known_capability_ids": ["tool_use"], "capability_confidence": "high"}
+        if supplied
+        else {}
+    )
+    result = handle_interview(
+        InterviewStartRequest(description="A research assistant", **fields),
+        interviewer=ScriptedInterviewer(),
+        matcher=None,
+    )
+    assert isinstance(result, InterviewSuccess)
+    evidence = result.state.context.capability_evidence
+    if supplied:
+        assert evidence is not None and evidence.known_capability_ids == ["tool_use"]
+        assert evidence.confidence == "high"
+    else:
+        assert evidence is None
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"known_capability_ids": []},
+        {"capability_confidence": "low"},
+        {
+            "known_capability_ids": ["tool_use", "tool_use"],
+            "capability_confidence": "high",
+        },
+    ],
+)
+def test_start_rejects_incomplete_or_duplicate_capability_evidence(fields) -> None:
+    with pytest.raises(ValueError):
+        InterviewStartRequest(description="A research assistant", **fields)
+
+
+@pytest.mark.parametrize(
+    "name,description", [("", "A detailed description"), ("New name", " ")]
+)
+def test_direct_edit_keeps_the_form_when_required_text_is_missing(
+    name, description
+) -> None:
+    state = _pending_choice()
+    state.pending = behaviours_screen(state.specification, "Review")
+    state.pending.request_id = "req-edit"
+    state.pending.stage = InterviewStep.BEHAVIOURS
+    opened = _turn(state, ChoiceResponse(selected=["edit:EB-1"]))
+    assert isinstance(opened, InterviewSuccess)
+    result = _turn(
+        opened.state, FormResponse(values={"name": name, "description": description})
+    )
+    assert isinstance(result, InterviewFailure)
+    assert result.state == opened.state
+    assert isinstance(result.state.pending, FormRequest)
+
+
+@pytest.mark.parametrize(
+    ("step", "opener"),
+    [
+        (InterviewStep.BEHAVIOURS, "edit:EB-1"),
+        (InterviewStep.BEHAVIOURS, "add:F-1"),
+        (InterviewStep.CRITERIA, "add:EB-1"),
+        (InterviewStep.CRITERIA, "edit:AC-1-1"),
+        (InterviewStep.PERSONAS, "add:personas"),
+        (InterviewStep.SCENARIOS, "edit:S-1"),
+        (InterviewStep.TEST_CASES, "edit:TC-001"),
+    ],
+)
+def test_a_review_form_cancels_or_goes_back_without_mutation(step, opener) -> None:
+    """Every "+" and pen form is cancellable. Cancel returns to the review; Back while the
+    form is open closes it and goes back, in one turn. Neither changes the Specification."""
+    state = _review_state(step)
+    opened = _turn(state, ChoiceResponse(selected=[opener]))
+    assert isinstance(opened, InterviewSuccess)
+    assert isinstance(opened.state.pending, FormRequest)
+    assert opened.state.pending.cancellable
+    before = opened.state.model_copy(deep=True)
+
+    cancelled = _turn(opened.state, FormResponse(cancelled=True))
+    assert isinstance(cancelled, InterviewSuccess)
+    assert cancelled.state.pending.stage is step
+    assert cancelled.state.pending.type == "choice"
+    assert cancelled.state.specification == before.specification
+    assert cancelled.state.user_typed == before.user_typed
+    assert cancelled.state.issued_ids == before.issued_ids
+
+    back = _turn(opened.state, ChoiceResponse(selected=["back"]))
+    assert isinstance(back, InterviewSuccess)
+    assert back.state.pending.stage is PREVIOUS_STEP[step]
+    assert back.state.specification == before.specification
+
+    invalid = _turn(
+        opened.state, FormResponse(cancelled=True, values={"name": "Unexpected"})
+    )
+    assert isinstance(invalid, InterviewFailure)
+    assert invalid.state == before
+    stale = _turn(opened.state, FormResponse(cancelled=True), request_id="req-stale")
+    assert isinstance(stale, InterviewFailure)
+    assert stale.code == InterviewErrorCode.REQUEST_ID_MISMATCH
+
+
+@pytest.mark.parametrize(
+    "selected,values", [([], {}), (["continue"], {}), ([], {"invalid": 1})]
+)
+def test_review_feedback_is_exclusive_and_applies_in_one_turn(selected, values) -> None:
+    class FeedbackInterviewer(ScriptedInterviewer):
+        def chat(self, specification, step, text, target, context=None):
+            return StepResult(
+                message="Updated.",
+                patches=[Patch(op=PatchOp.SET, path="target.name", value=text)],
+            )
+
+    pending = behaviours_screen(research_assistant(), "Review.")
+    pending.request_id = "review-feedback"
+    pending.stage = InterviewStep.BEHAVIOURS
+    state = InterviewState(
+        specification=research_assistant(), context=interview_context(), pending=pending
+    )
+    result = _turn(
+        state,
+        ChoiceResponse(feedback="Research helper", selected=selected, values=values),
+        interviewer=FeedbackInterviewer(),
+    )
+    if selected or values:
+        assert isinstance(result, InterviewFailure)
+        assert result.state == state
+    else:
+        assert isinstance(result, InterviewSuccess)
+        assert result.state.specification.target.name == "Research helper"
+        assert result.state.pending.type == "choice"
+        assert any(turn.text == "Research helper" for turn in result.state.history)
+        assert state.specification.target.name == "Research assistant"

@@ -47,6 +47,18 @@ def impacts_for(specification: Specification, patches: list[Patch]) -> list[Impa
                 impacts.append(Impact(subject=path, kind="tree"))
             continue
 
+        if (
+            path.startswith("features[")
+            and path.endswith("].description")
+            and ".behaviours[" not in path
+        ):
+            feature_id = path.split("[", 1)[1].split("]", 1)[0]
+            feature = specification.feature(feature_id)
+            if feature is not None and ("feature", feature_id) not in seen:
+                seen.add(("feature", feature_id))
+                impacts.append(Impact(subject=feature_id, kind="feature"))
+            continue
+
         if not path.endswith(f".{BEHAVIOUR_DESCRIPTION}"):
             continue
 

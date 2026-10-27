@@ -51,7 +51,8 @@ The interface guides give the exact files or archive that each interface produce
    with no value the web client sends Low.
 5. Answer clarification questions.
 6. Review the Behaviours to measure and their Criteria.
-7. Review the Personas, Scenarios, and Test Cases.
+7. Review the Personas and Scenarios. Then review the Test Cases, which match each Scenario with
+   its Personas and Behaviours.
 8. Finish and validate the specification.
 9. Compile or package the result.
 
@@ -136,9 +137,11 @@ results.
 
 ## Review and edit Criteria
 
-Read each Criterion description, then expand **Grader details** to inspect its settings.
+The Criteria under a Behaviour show how well that Behaviour performs. The report scores a
+Behaviour from the pass rates of its Criteria. Read each Criterion description, then expand
+**Grader details** to inspect its settings.
 Ask the Wizard to revise the assessment and settings together, or select
-**Edit assessment** to change them directly. Keep directly edited fields consistent.
+the pencil (**Edit <Criterion name>**) to change them directly. Keep directly edited fields consistent.
 The Wizard validates the fields and grader arguments before it saves the edit.
 
 ## Edit fallback grading instructions

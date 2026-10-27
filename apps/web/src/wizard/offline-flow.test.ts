@@ -17,7 +17,13 @@ import {
   emptyRecord,
   removeUnreferencedFixtures,
 } from "../storage/repository.ts";
-import { applyEnd, applyTurn, startTranscript } from "./transcript.ts";
+import { InterviewOperations } from "./operations.ts";
+import {
+  applyEnd,
+  applyTurn,
+  startTranscript,
+  toPresentation,
+} from "./transcript.ts";
 
 const originalFetch = globalThis.fetch;
 
@@ -103,6 +109,7 @@ function choiceRequest(): ChoiceRequest {
 function formRequest(): FormRequest {
   return {
     type: "form",
+    cancellable: false,
     prompt: "Name the behaviour",
     title: "Behaviours",
     step: 2,
@@ -143,7 +150,7 @@ const policyTask = (fixtures: string[]) => ({
   max_run_retries: null,
 });
 
-test("runs an offline document start, reload, review, end and package flow", async () => {
+test("runs a document interview through skip, review, reload and package", async () => {
   const initialDocuments: InterviewDocument[] = [
     {
       name: "policy.md",
@@ -164,7 +171,6 @@ test("runs an offline document start, reload, review, end and package flow", asy
     },
   };
   const choice = choiceRequest();
-  const form = formRequest();
   const draftState: InterviewState = {
     ...startState,
     pending: null,
@@ -184,6 +190,7 @@ test("runs an offline document start, reload, review, end and package flow", asy
     title: "Scenarios",
     stage: "scenarios",
     step: 5,
+    sections: [],
     cards: [
       {
         kind: "scenario",
@@ -244,16 +251,8 @@ test("runs an offline document start, reload, review, end and package flow", asy
       );
     if (path.endsWith("/turn")) {
       const body = JSON.parse(String(init?.body)) as { request_id: string };
-      const next =
-        body.request_id === "chat-1"
-          ? { ...startState, pending: choice }
-          : body.request_id === "choice-1"
-            ? { ...startState, pending: form }
-            : body.request_id === "review-1"
-              ? selectedState
-              : body.request_id === "review-2"
-                ? finalState
-                : draftState;
+      assert.ok(["review-1", "review-2"].includes(body.request_id));
+      const next = body.request_id === "review-1" ? selectedState : finalState;
       return new Response(
         JSON.stringify(
           success(next, next.pending ? "awaiting_response" : "done"),
@@ -328,60 +327,37 @@ test("runs an offline document start, reload, review, end and package flow", asy
     ["policy.md", "notes.txt"],
   );
   record = reloadedStart!;
-  record = applyTurn(
-    record,
-    await api.respond(record.state, "chat-1", {
-      type: "chat",
-      text: "It answers questions",
-    }),
-    { type: "chat", text: "It answers questions" },
+  let ended = applyEnd(record, await api.end(record.state));
+  assert.deepEqual(toPresentation(ended).requests.at(-1), reviewState.pending);
+  const skipped = ended.transcript[1];
+  assert.equal(
+    skipped?.kind === "interaction" ? skipped.status : undefined,
+    "ended_unanswered",
   );
-  record = applyTurn(
-    record,
-    await api.respond(record.state, "choice-1", {
-      type: "choice",
-      selected: ["continue"],
-    }),
-    { type: "choice", selected: ["continue"] },
-  );
-  record = applyTurn(
-    record,
-    await api.respond(record.state, "form-1", {
-      type: "form",
-      values: { name: "Reviewer" },
-    }),
-    { type: "form", values: { name: "Reviewer" } },
-  );
-  await repository.put(record);
-
-  const reloaded = await new InterviewRepository().read("offline-flow");
-  assert.equal(reloaded?.transcript.length, 4);
-  let ended = applyEnd(reloaded!, await api.end(reloaded!.state));
   await repository.put(ended);
   ended = (await new InterviewRepository().read(ended.id))!;
   assert.equal(ended.state.pending?.request_id, "review-1");
+  assert.deepEqual(toPresentation(ended).requests.at(-1), reviewState.pending);
+  assert.equal(toPresentation(ended).done, false);
+  const operations = new InterviewOperations(repository, (saved) => {
+    ended = saved;
+  });
   const selection: UserResponse = {
     type: "choice",
     values: { "files:S-1": ["notes.txt"] },
   };
-  ended = removeUnreferencedFixtures(
-    applyTurn(
-      ended,
-      await api.respond(ended.state, "review-1", selection),
-      selection,
-    ),
-    ["policy.md"],
+  await operations.send(ended, selection, [], ["policy.md"]);
+  assert.deepEqual(
+    toPresentation(ended).requests.at(-1),
+    selectedState.pending,
   );
   assert.deepEqual(
     ended.fixtures.map((file) => file.name),
     ["policy.md", "notes.txt"],
   );
   const confirm: UserResponse = { type: "choice", selected: ["continue"] };
-  ended = applyTurn(
-    ended,
-    await api.respond(ended.state, "review-2", confirm),
-    confirm,
-  );
+  await operations.send(ended, confirm);
+  assert.equal(toPresentation(ended).done, true);
   const withFixture = addFixtures(ended, [
     new File(["unused later file"], "unused.json", {
       type: "application/json",
@@ -511,9 +487,10 @@ test("runs an offline start, chat, choice, form, reload, end and package flow", 
     record,
     await api.respond(record.state, "form-1", {
       type: "form",
+      cancelled: false,
       values: { name: "Reviewer" },
     }),
-    { type: "form", values: { name: "Reviewer" } },
+    { type: "form", cancelled: false, values: { name: "Reviewer" } },
   );
   await repository.put(record);
 

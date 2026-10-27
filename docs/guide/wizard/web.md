@@ -48,6 +48,10 @@ forwards `/api` requests to that address.
 
 ## Start a guided Interview
 
+The chat is on the left and the Profile is on the right. To change the chat width, drag the line
+between them. You can also focus the line and use the arrow keys. Double-click the line to
+return to the default width. The browser keeps the width for your next visit.
+
 Above the opening box, choose the mode: **Build Spec only**, or **Build Spec and Run Evals**. The
 bottom row of the box has the documents button, the Perspective control, and **Capabilities**.
 
@@ -57,10 +61,11 @@ bottom row of the box has the documents button, the Perspective control, and **C
    box shows the guiding question of each Perspective.
 3. Optional: select **Capabilities**. The ARC capabilities show in three columns, one for each
    group. Select each capability that you know the target has. On a small screen, the
-   capabilities open in a full-width sheet.
+   capabilities open in a full-width sheet. If you do not open Capabilities, the Wizard treats
+   the capabilities as unspecified.
 4. Optional: under **Confidence**, select Low, Medium, or High. The value states how complete the
-   selection is. With no confidence, the Wizard uses Low, because the selection may be
-   incomplete.
+   selection is. If you select capabilities with no confidence, the Wizard uses Low, because the
+   selection may be incomplete.
 5. The default mode is Build Spec only. In Build Spec and Run Evals, enter the target binding in
    the **Target connection** card under the box. See [Connect the target](#connect-the-target).
 6. Select Send, or press Enter. In run mode, the Wizard first checks the binding. It starts the
@@ -77,9 +82,18 @@ content.
 
 - Back from Behaviours shows a form with the Target name, users, description, and detail. A
   required field that you leave empty keeps its current value.
-- Continue with no change returns to the later step. The Wizard drafts nothing again.
-- If you change content that later content came from, the Wizard asks what to do with the later
-  content. You can keep it, regenerate it, or review it yourself.
+- Continue with no change returns to the later step. The Wizard drafts nothing again. Cancel
+  on the Target form returns to Behaviours with no change.
+- Back also works while a form is open. The form closes with no change, and the earlier step
+  opens.
+- Back on Run settings and on the completed Interview opens the Test Case review again. Continue
+  completes the Interview again.
+- If you change which Behaviours are selected, Continue updates the Test Cases to match. A Test
+  Case drops a Behaviour that is no longer selected. A Test Case left with none covers all
+  selected Behaviours. A newly selected Behaviour gets Criteria, but no Test Case covers it
+  yet: the Test Case review names it, and you choose its Test Cases with a chip or the chat.
+- If you change content that later content came from, the Wizard updates the later content
+  automatically. It keeps form-written content and unrelated selections.
 
 Clarify has no Back, because it is the first step. To correct the description, say so in your
 answer, for example "The target is for staff only." To change the Perspective, capabilities, or
@@ -104,10 +118,66 @@ the fields only". An operator can set `METIS_API_CONNECTION_CHECK=1` or `0` to c
 To add a binding to a finished Interview, select **Connect target** in the completed message. The
 next download includes the binding.
 
-## Review Criteria
+## Select Behaviours
 
-Expand **Grader details** to inspect the settings, or select **Edit assessment** to change them.
-See [Review and edit Criteria](../wizard.md#review-and-edit-criteria).
+The chat gives short instructions and is always open. Its placeholder text is an example of what
+you can type, for example "Add a new feature that describes…". The Profile section **Features /
+Expected Behaviours** groups Behaviours under their Features. Each group starts open. Collapse a group to reduce the amount on screen. Each row shows a checkbox,
+name, and description. Select its checkbox to include it. Only selected Behaviours receive new
+Criteria. Select 5 key Behaviours or fewer. You can select more, and then the review shows a
+warning.
+
+The review shows the total selected count. Select **Continue** when the selection is ready. Every
+review step moves on with **Continue**.
+
+Every item has the same actions. **+** adds an item: on the section heading it adds a Feature, on
+a Feature heading it adds a Behaviour. The pen edits an item. The trash icon deletes it. A form
+opens in the Profile with the current text. **Save** applies the exact text that you type, and
+**Cancel** returns without a change. When a deletion also removes other items, the Wizard asks
+first and names them. A Feature takes its Behaviours and their Criteria. A Behaviour takes its
+Criteria and leaves the Test Cases that cover it. A Persona or Scenario takes its Test Cases.
+The last Feature, Persona, or Scenario cannot be deleted.
+
+Use the chat for a written change request. The chat can also select Behaviours and set Trials
+when you ask it to. Content updates in place. Group expansion is retained. Corrections apply
+automatically and keep unrelated content and form-written entries.
+
+The Profile keeps earlier sections available. Criterion review uses the same Feature and Behaviour
+groups, with no checkboxes: a selected Behaviour supplies all its Criteria. Select **+** on a
+Behaviour to write a Criterion, or ask the chat to suggest one. The Wizard picks a Grader for each
+new Criterion. A Criterion edits in its own row. Grader details are in quiet text. Expand a Grader summary to inspect its identifier
+and settings, or select the pen on a Criterion to change them. See
+[Review and edit Criteria](../wizard.md#review-and-edit-criteria).
+
+Personas have no checkboxes. The Test Case table chooses which Personas run.
+
+The Scenarios step lists each Scenario as a card in the **Scenarios** section. The Wizard
+drafts the Scenarios. Check them, then select **Continue**.
+
+On the Test Cases step, the Wizard matches each Scenario that has no Test Case yet. For each
+Scenario it picks the Personas that it runs with, usually one or two, and the Behaviours that
+each pair really tests. Each pick is one Test Case. Each new Test Case is selected and covers
+the picked Behaviours. A Behaviour that no selected Test Case covers is named on the review, and
+Continue waits until you cover it. A Scenario that already has a Test Case is not matched again,
+so a Test Case that you delete does not come back. To match a Scenario that you add later,
+select **Back**, then **Continue** on Scenarios. You can also select **+** on Test Cases, or ask
+in the chat.
+
+A Persona or Scenario can have extra details, such as a role or an opening request. They show
+under **More information** on its card. In its edit form, each detail is one row with a name box
+and a value box, for example **Role** and **Policy analyst**. Select **Add a detail** for another
+row, and select **−** to remove one.
+
+The **Test Cases** section is a table. Its columns are Persona, Scenario, Behaviours, Trials, and Files. The
+Behaviours cell shows Behaviour IDs, such as EB-1. Hold the pointer on an ID to read the
+Behaviour. The row checkbox includes the Test Case in the evaluation. The total under the table
+counts only the selected Test Cases and their Trials. Only selected Test Cases go into the
+download. Continue with no selected Test Case shows "Select at least one Test Case."
+
+The pen edits a Test Case in its row: the Persona and Scenario dropdowns, the Behaviour ID
+chips, the Trials number, and the Files cell. Each pair can have one Test Case only, so a pair
+that is in use is not available. The **+** on Test Cases adds a row for a pair that has no Test
+Case yet.
 
 ## Add documents
 
@@ -121,8 +191,7 @@ Document facts:
 - The browser shows the accepted file types and size limits.
 - The API extracts text from UTF-8 TXT, Markdown, YAML, JSON, CSV, PDF text layers, and DOCX files.
 - The API does not run OCR. Scanned PDFs give no text.
-- The Wizard can suggest an opening document as a Test Case fixture. Review each suggestion under
-  **Files sent to your target**.
+- Attach an opening document to a Test Case in its **Files** cell.
 - The final package contains only files that a Test Case uses.
 
 ## Finish and download

@@ -160,8 +160,8 @@ def test_prompt_catalogue_is_a_package_resource() -> None:
         "criteria",
         "personas",
         "scenarios",
+        "test_cases",
         "chat",
-        "suggest_criterion",
     }
 
 
@@ -302,7 +302,6 @@ def test_clarify_progress_values_are_substituted_into_the_template(
         "scenarios",
         "scenario_chat",
         "criterion_chat",
-        "suggest_criterion",
     ],
 )
 def test_model_calls_receive_their_required_context(
@@ -327,8 +326,6 @@ def test_model_calls_receive_their_required_context(
         prompt = prompts.chat(
             specification, step, "CHAT_SENTINEL", None, context=context
         )
-    elif call == "suggest_criterion":
-        prompt = prompts.suggest_criterion(specification, "EB-1", context=context)
     else:
         prompt = getattr(prompts, call)(specification, context=context)
 
@@ -372,13 +369,14 @@ def test_model_calls_receive_their_required_context(
         assert _perspective_text(other.value) not in _xml_content(
             prompt.user, "perspective"
         )
-    else:
-        assert _perspective_text(perspective.value) not in prompt.system
-        assert _perspective_text(perspective.value) not in prompt.user
+    assert _perspective_text(perspective.value) in _xml_content(
+        prompt.system, "perspective_guidance"
+    )
+    assert "tool_use" in _xml_content(prompt.system, "capability_evidence")
     if call.endswith("_chat"):
         assert _xml_content(prompt.user, "user_message").strip() == "CHAT_SENTINEL"
 
 
-def test_clarify_requires_capability_evidence_context() -> None:
-    with pytest.raises(prompts.PromptCatalogError, match="capability evidence"):
-        prompts.clarify(research_assistant(), [])
+def test_unspecified_capability_context_is_available_to_all_calls() -> None:
+    prompt = prompts.clarify(research_assistant(), [])
+    assert "unspecified" in _xml_content(prompt.system, "capability_evidence").lower()

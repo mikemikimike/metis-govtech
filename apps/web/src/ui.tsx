@@ -3,8 +3,8 @@
 // the two radius tiers from the token file — `rounded-md` for small controls, `rounded-lg` for
 // surfaces — sentence case left to the package's own strings.
 
-import { ChevronRight } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -260,5 +260,291 @@ export function Mono({
     >
       {children}
     </span>
+  );
+}
+
+// ── shared CRUD controls ─────────────────────────────────────────────────────
+
+export type IconName = "pencil" | "plus" | "trash";
+
+const ICONS = { pencil: Pencil, plus: Plus, trash: Trash2 } as const;
+
+// A square ghost button that holds one lucide icon. The label is the accessible name and the
+// tooltip, so the same words reach a pointer user and a screen reader.
+export function IconAction({
+  icon,
+  label,
+  disabled = false,
+  onClick,
+}: {
+  icon: IconName;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const Icon = ICONS[icon];
+  return (
+    <Tooltip label={label} hoverOnly className="inline-flex shrink-0">
+      <button
+        type="button"
+        aria-label={label}
+        disabled={disabled}
+        onClick={onClick}
+        className={cn(
+          "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150",
+          "hover:bg-muted hover:text-foreground active:bg-border",
+          "disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent",
+        )}
+      >
+        <Icon size={15} strokeWidth={1.75} aria-hidden />
+      </button>
+    </Tooltip>
+  );
+}
+
+// An interactive checkbox. There is no read-only variant: a box the user cannot change is not
+// drawn at all, so every box on screen accepts a click.
+export function SelectBox({
+  id,
+  label,
+  checked,
+  disabled = false,
+  onChange,
+}: {
+  id?: string;
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <input
+      id={id}
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      disabled={disabled}
+      onChange={onChange}
+      className="h-4 w-4 shrink-0 accent-[hsl(var(--accent))] disabled:cursor-not-allowed"
+    />
+  );
+}
+
+// Every expandable in the client: a 14px chevron and a summary that toggle the content below.
+// The content stays mounted and is only hidden, so a closed group keeps its field values.
+//
+// `summary` is the clickable text; `label` replaces it as the accessible name when given. When the
+// caller must put a control in the summary's place, it passes `summaryControl` and a `label`: the
+// button then holds the chevron only, and the control sits beside it. `trailing` is drawn at the right end of
+// the header, outside the toggle. `tone="muted"` draws a quiet secondary block in small grey text.
+export function Disclosure({
+  summary,
+  summaryControl,
+  label,
+  trailing,
+  children,
+  open: controlled,
+  defaultOpen = false,
+  onOpenChange,
+  tone = "default",
+  indent = true,
+  className,
+  headerClassName,
+  contentClassName,
+}: {
+  summary?: ReactNode;
+  summaryControl?: ReactNode;
+  label?: string;
+  trailing?: ReactNode;
+  children: ReactNode;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  tone?: "default" | "muted";
+  // Indent the content to the summary text, past the chevron.
+  indent?: boolean;
+  className?: string;
+  headerClassName?: string;
+  contentClassName?: string;
+}) {
+  const [uncontrolled, setUncontrolled] = useState(defaultOpen);
+  const open = controlled ?? uncontrolled;
+  const contentId = useId();
+  const toggle = () => {
+    setUncontrolled(!open);
+    onOpenChange?.(!open);
+  };
+  const muted = tone === "muted";
+  return (
+    <div className={cn("flex min-w-0 flex-col", className)}>
+      <div className={cn("flex min-w-0 items-start gap-2", headerClassName)}>
+        <DisclosureButton
+          open={open}
+          controls={contentId}
+          label={label}
+          tone={tone}
+          grow={!summaryControl}
+          onClick={toggle}
+        >
+          {!summaryControl && summary}
+        </DisclosureButton>
+        {summaryControl && (
+          <div className="min-w-0 flex-1">{summaryControl}</div>
+        )}
+        {trailing}
+      </div>
+      <div
+        id={contentId}
+        hidden={!open}
+        className={cn(
+          indent && "pl-5",
+          muted && "text-xs text-muted-foreground",
+          contentClassName,
+        )}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// The toggle of a Disclosure on its own, for a layout where the header and the content are not
+// next to each other, such as a table row and the detail row below it.
+export function DisclosureButton({
+  open,
+  controls,
+  label,
+  tone = "default",
+  grow = false,
+  onClick,
+  children,
+}: {
+  open: boolean;
+  controls?: string;
+  label?: string;
+  tone?: "default" | "muted";
+  grow?: boolean;
+  onClick: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-controls={controls}
+      aria-label={label}
+      onClick={onClick}
+      className={cn(
+        "flex min-h-7 min-w-0 items-center gap-1.5 rounded-md text-left transition-colors duration-150",
+        tone === "muted"
+          ? "text-xs text-muted-foreground hover:text-foreground"
+          : "text-foreground hover:text-accent",
+        grow && "flex-1",
+      )}
+    >
+      <Chevron
+        dir={open ? "down" : "right"}
+        className="text-muted-foreground"
+      />
+      {children != null && children !== false && (
+        <span className="min-w-0 flex-1">{children}</span>
+      )}
+    </button>
+  );
+}
+
+// A modal question before a destructive action. The text is the package's own, and it names
+// what else the action removes. Cancel has the focus at first, so Enter alone does not delete.
+// The page behind is inert while it is open, Tab stays inside it, Escape closes it from anywhere,
+// and the focus goes back to the control that opened it.
+export function ConfirmDialog({
+  text,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  text: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const id = useId();
+  const dialog = useRef<HTMLDivElement | null>(null);
+  const cancel = useRef(onCancel);
+  cancel.current = onCancel;
+  // Read during the first render, before Cancel takes the focus.
+  const [trigger] = useState(() =>
+    typeof document === "undefined"
+      ? null
+      : (document.activeElement as HTMLElement | null),
+  );
+  useEffect(() => {
+    const host = dialog.current?.parentElement;
+    const others = [...document.body.children].filter(
+      (element): element is HTMLElement =>
+        element instanceof HTMLElement && element !== host && !element.inert,
+    );
+    others.forEach((element) => (element.inert = true));
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      cancel.current();
+    };
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("keydown", escape);
+      others.forEach((element) => (element.inert = false));
+      // The trigger can focus only once its tree is no longer inert.
+      requestAnimationFrame(() => trigger?.focus?.({ preventScroll: true }));
+    };
+  }, [trigger]);
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-foreground/20 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onCancel();
+      }}
+    >
+      <div
+        ref={dialog}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={`${id}-title`}
+        aria-describedby={id}
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          const buttons = [
+            ...(dialog.current?.querySelectorAll("button") ?? []),
+          ] as HTMLElement[];
+          const first = buttons[0];
+          const last = buttons.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }}
+        className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg"
+      >
+        <h2 id={`${id}-title`} className="sr-only">
+          {confirmLabel}
+        </h2>
+        <p id={id} className="text-sm">
+          {text}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="ghost" autoFocus onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="button" variant="primary" onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

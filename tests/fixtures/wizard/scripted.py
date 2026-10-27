@@ -212,8 +212,6 @@ class ScriptedInterviewer:
         context: InterviewContext | None = None,
     ) -> StepResult:
         self.calls.append("draft_scenarios")
-        covered = [b.id for b in specification.measured_behaviours()]
-        personas = [p.id for p in specification.personas]
         return StepResult(
             message="Two situations should cover everything you picked.",
             patches=[
@@ -223,18 +221,36 @@ class ScriptedInterviewer:
                     value={
                         "name": "Covered literature review",
                         "description": "Ask for a literature review on a covered topic.",
-                        # one scenario covering several behaviours — M:N, and what makes
-                        # experiments cheaper than one scenario per behaviour
-                        "tasks": [
-                            {
-                                "persona_ref": persona,
-                                "behaviour_refs": covered,
-                                "fixtures": [],
-                            }
-                            for persona in personas
-                        ],
                     },
                 ),
+            ],
+        )
+
+    def draft_test_cases(
+        self,
+        specification: Specification,
+        context: InterviewContext | None = None,
+    ) -> StepResult:
+        self.calls.append("draft_test_cases")
+        used = {task.scenario_ref for task in specification.tasks}
+        # Every Persona runs each new Scenario, and covers every measured Behaviour.
+        return StepResult(
+            message="Each persona runs the review.",
+            patches=[
+                Patch(
+                    op=PatchOp.ADD,
+                    path="tasks",
+                    value={
+                        "scenario_ref": scenario.id,
+                        "persona_ref": persona.id,
+                        "behaviour_refs": [
+                            b.id for b in specification.measured_behaviours()
+                        ],
+                    },
+                )
+                for scenario in specification.scenarios
+                if scenario.id not in used
+                for persona in specification.personas
             ],
         )
 
@@ -248,32 +264,6 @@ class ScriptedInterviewer:
     ) -> StepResult:
         self.calls.append("chat")
         return StepResult(message=f"Noted: {text}")
-
-    def suggest_criterion(
-        self,
-        specification: Specification,
-        behaviour_id: str,
-        context: InterviewContext | None = None,
-    ) -> StepResult:
-        """One new criterion for the named behaviour — a single add, as the driver requires.
-
-        The materializer assigns the criterion id after validating this semantic draft.
-        """
-        self.calls.append("suggest_criterion")
-        feature = specification.feature_of(behaviour_id)
-        return StepResult(
-            message="Here's one more you might want.",
-            patches=[
-                Patch(
-                    op=PatchOp.ADD,
-                    path=f"features[{feature.id}].behaviours[{behaviour_id}].criteria",
-                    value={
-                        "name": "Consistent follow-up",
-                        "description": "Given a follow-up on the same topic, when the agent answers again, then it stays consistent with its first answer.",
-                    },
-                )
-            ],
-        )
 
 
 TRACE_BUDGET = "metis.library.graders.demo.DemoTraceBudgetGrader"
@@ -350,7 +340,7 @@ def walk(
     the in-process gate share one answer script rather than two copies of it.
 
     The script changes the Behaviour scope, goes Back from Criteria, opens and submits one typed
-    Criterion form, and then uses explicit end from the Scenario review. This covers each request
+    Criterion form from a Behaviour's "+", and then uses explicit end from the Scenario review. This covers each request
     shape and both forward and backward lifecycle movement in one authoritative walk.
     """
     from metis.wizard import handle_interview
@@ -369,21 +359,11 @@ def walk(
     from metis.wizard.contracts.turn import InterviewSuccess
 
     def advance(request: ChoiceRequest) -> list[str]:
-        for action in ("continue", "accept"):
-            keys = [
-                str(o.id)
-                for o in request.options
-                if o.id.action == action and o.enabled
-            ]
-            keys += [
-                str(o.id)
-                for card in request.cards
-                for o in card.options
-                if o.id.action == action and o.enabled
-            ]
-            if keys:
-                return keys
-        return []
+        return [
+            str(o.id)
+            for o in request.options
+            if o.id.action == "continue" and o.enabled
+        ]
 
     if matcher is None:
         matcher = ScriptedMatcher()
@@ -456,7 +436,7 @@ def walk(
                     str(option.id)
                     for card in pending.cards
                     for option in card.options
-                    if option.id.action == "type"
+                    if option.id.action == "add"
                 ][:1]
                 assert selected
                 opened_form = True
