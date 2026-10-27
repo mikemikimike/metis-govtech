@@ -45,6 +45,21 @@ def test_a_task_model_reaches_the_trial_and_the_trial_records_its_models(
     }
 
 
+def test_persona_and_scenario_metadata_reach_the_resolved_task() -> None:
+    import yaml
+
+    document = MINIMAL_EXPERIMENT.replace(
+        "  name: alice\n", "  name: alice\n  metadata:\n    age: In their fifties.\n"
+    ).replace(
+        "  name: task-1\n",
+        "  name: task-1\n  metadata:\n    start_prompt: I need a staff guide.\n",
+    )
+    specification = Specification.model_validate(yaml.safe_load(document))
+    (scenario,) = specification.resolved_tasks()
+    assert specification.personas[0].metadata == {"age": "In their fifties."}
+    assert scenario.metadata == {"start_prompt": "I need a staff guide."}
+
+
 def test_user_agent_sampling_options_are_left_out_when_unset() -> None:
     assert sampling_options({"USER_AGENT_MAX_TOKENS": ""}) == {}
     assert sampling_options(

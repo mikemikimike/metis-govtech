@@ -342,7 +342,7 @@ def test_an_artifact_path_cannot_leave_the_trial() -> None:
 async def test_a_retried_trial_keeps_the_earlier_attempts_log(tmp_path: Path) -> None:
     """The worker moves an earlier attempt's log aside before the runner is built."""
     scenario = Scenario(id="s", description="d", persona_refs=["p"], max_turns=1)
-    persona = Persona(id="p", description="a user")
+    persona = Persona(id="p", name="p", description="a user")
     run_dir = tmp_path / "outputs" / "trials" / trial_folder_name(scenario, persona, 1)
     TransportLog.for_trial(run_dir).append("request", "GET /earlier", b"")
 

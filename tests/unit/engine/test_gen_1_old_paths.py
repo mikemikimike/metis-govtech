@@ -46,9 +46,15 @@ def test_old_types_path_reexports_gen_1_types(name: str) -> None:
     assert getattr(old_types, name) is getattr(gen_1_types, name)
 
 
-@pytest.mark.parametrize("name", ["Persona", "Scenario", "Specification"])
+@pytest.mark.parametrize("name", ["Scenario", "Specification"])
 def test_shared_types_stay_in_shared_module(name: str) -> None:
     assert getattr(old_types, name).__module__ == "metis.engine.simulation.types"
+
+
+def test_shared_persona_is_the_core_persona() -> None:
+    from metis.core.experiment import Persona
+
+    assert old_types.Persona is Persona
 
 
 def test_old_orca_api_ref_resolves_to_gen_1() -> None:

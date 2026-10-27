@@ -93,7 +93,7 @@ def simple_scenario() -> Scenario:
 
 @pytest.fixture
 def simple_persona() -> Persona:
-    return Persona(id="tester", description="A test persona")
+    return Persona(id="tester", name="tester", description="A test persona")
 
 
 def _make_canned_record(scenario: Scenario, persona: Persona) -> TrialRecord:
@@ -753,7 +753,7 @@ async def test_worker_builds_enriched_fixture_registry(tmp_path, monkeypatch):
     scenario = Scenario(
         id="s", description="d", persona_refs=["p"], fixtures=["q3.csv"]
     )
-    persona = Persona(id="p", description="d")
+    persona = Persona(id="p", name="p", description="d")
 
     await _worker(
         worker_id=0,
@@ -998,7 +998,7 @@ async def test_worker_tracks_each_task_in_records_and_progress(tmp_path: Path) -
         SimulationTrialState,
     )
 
-    persona = Persona(id="tester", description="A patient user")
+    persona = Persona(id="tester", name="tester", description="A patient user")
     scenarios = [
         Scenario(
             id="shared",

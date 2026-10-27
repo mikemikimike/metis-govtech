@@ -11,6 +11,7 @@ from metis.core.logging import get_logger
 
 from ...llm_calls import parse_completion
 from ...model_settings import llm_client, sampling_options, user_agent_settings
+from ...user_context import persona_text, scenario_text
 from ..types import UserAgentOutput
 from .prompts import FIRST_TURN, OBSERVATION, STATE, SYSTEM_PROMPT
 
@@ -92,8 +93,8 @@ class UserAgent:
         self.settings = settings or user_agent_settings()
         self._client = client or llm_client(self.settings)
         self._system = SYSTEM_PROMPT.format(
-            persona_description=persona.description,
-            scenario_description=scenario.description,
+            persona_description=persona_text(persona.description, persona.metadata),
+            scenario_description=scenario_text(scenario.description, scenario.metadata),
         )
         self._history: list[tuple[UserAgentOutput, Observation]] = []
 

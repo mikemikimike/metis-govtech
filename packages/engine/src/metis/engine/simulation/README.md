@@ -16,7 +16,7 @@ CLI (sync) → run_experiment() → asyncio.run()
 User Agent (Python/AsyncOpenAI)  →  Runner  →  Target
 ```
 
-- **User Agent** — embodies the persona, generates next messages; imported and called directly by the orchestrator
+- **User Agent** — embodies the persona, generates next messages; imported and called directly by the orchestrator. Its system prompt gives each persona and scenario description, then any `metadata` entries as `- key: value` lines, with keys as the author wrote them. No metadata key is an Engine setting: `start_prompt` or `stop_condition` is context for the simulated user only.
 - **Runner** — translates messages and actions into transport-specific calls (HTTP API, browser automation, etc.) and returns observations
 - **RunnerFactory** — manages shared resources (connection pools, browser instances, rate limiters) and creates fresh `Runner` instances per attempt
 
@@ -92,6 +92,7 @@ simulation/
 ├── runner_resolver.py — Resolves runner_factory_ref FQN to a class
 ├── experiment.py      — Experiment orchestrator (worker distribution, asyncio.gather)
 ├── types.py           — Pydantic models (Specification, Scenario, Persona)
+├── user_context.py    — Persona and scenario text, with their metadata, for both user agents
 ├── config.py          — Shared configuration (retry defaults)
 ├── exceptions.py      — Simulation-specific exceptions
 ├── _artifact_store.py — Artifact capture and storage

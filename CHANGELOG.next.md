@@ -256,6 +256,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- **The simulated user receives persona and scenario metadata (#442).** The gen_1 and gen_2
+  user agents add each `metadata` entry to the persona or scenario description in the system
+  prompt, as a `- key: value` line with the key as written. The Engine reads no key as a
+  setting. For example, `start_prompt` and `stop_condition` only give the simulated user
+  context. A persona or scenario without metadata gives the same prompt as before. The engine
+  now uses the core `Persona`, so `metis.engine.simulation.types.Persona` requires `name`.
+
 - **`fetch_session` rejects traces recorded before the Langfuse server's v4 upgrade.** Such a
   trace comes back from the v2 observations API with every observation duplicated and an extra
   root with id `t-<traceId>`, and its stored set changes with page size, so METIS does not try to

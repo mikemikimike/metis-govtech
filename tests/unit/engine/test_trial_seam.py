@@ -70,7 +70,7 @@ def scenario() -> Scenario:
 
 @pytest.fixture
 def persona() -> Persona:
-    return Persona(id="tester", description="A test persona")
+    return Persona(id="tester", name="tester", description="A test persona")
 
 
 def _trial_kwargs(

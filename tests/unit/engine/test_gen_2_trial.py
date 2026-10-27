@@ -40,7 +40,7 @@ class _Gen2Factory:
 def _kwargs(tmp_path: Path) -> dict[str, Any]:
     return {
         "runner": MagicMock(),
-        "persona": Persona(id="p1", description="d"),
+        "persona": Persona(id="p1", name="p1", description="d"),
         "scenario": Scenario(id="s1", description="g", persona_refs=["p1"]),
         "trial_config": TrialConfig(persona="p1", scenario="s1"),
         "run_dir": tmp_path / "t1",

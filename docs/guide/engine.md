@@ -249,6 +249,9 @@ personas:
       A time-poor senior director who delegates everything and expects systems
       to just work. They communicate in curt bullet points with no pleasantries
       and have a very low frustration threshold.
+    metadata:
+      age: In their early fifties.
+      input_style: Curt bullet points, no greetings.
 ```
 
 | Field | Required | Description |
@@ -256,6 +259,17 @@ personas:
 | `id` | Yes | Unique identifier, referenced by Tasks |
 | `name` | Yes | Human-readable Persona name |
 | `description` | Yes | Behavioral profile the LLM user agent embodies |
+| `metadata` | No | More context for the simulated user, as string keys and string values |
+
+Use `metadata` to add details to the description, such as age or input style. You
+choose the keys, and every key is optional. Each value must be a string. The simulated
+user receives the details as a list after the description. For the example above, it
+sees:
+
+```
+- age: In their early fifties.
+- input_style: Curt bullet points, no greetings.
+```
 
 **Writing effective personas:** Describe observable behaviors. Good descriptions specify communication style (verbose vs. terse), frustration threshold (patient vs. abandons quickly), domain expertise level, and how the persona reacts when things go wrong.
 
@@ -270,6 +284,9 @@ scenarios:
     description: >
       Upload q3_sales.csv and ask the target to analyse Q3 revenue by region
       using the median, exclude outliers, and produce a report with charts.
+    metadata:
+      start_prompt: Here are the Q3 sales. Can you break revenue down by region?
+      stop_condition: The report has the regional medians and charts.
 ```
 
 | Field | Required | Description |
@@ -277,6 +294,12 @@ scenarios:
 | `id` | Yes | Unique identifier, referenced by Tasks |
 | `name` | Yes | Human-readable Scenario name |
 | `description` | Yes | What the simulated user will attempt |
+| `metadata` | No | More context for the simulated user, as string keys and string values |
+
+Scenario `metadata` follows the same rules as Persona `metadata`. The Engine does not read
+any key as a setting. For example, `start_prompt` suggests how the simulated user can open,
+and `stop_condition` describes when the user is satisfied. The `max_turns` limit and the
+user's own decision still end the conversation.
 
 ### Tasks (Test Cases)
 

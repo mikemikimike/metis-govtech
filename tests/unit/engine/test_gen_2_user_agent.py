@@ -55,7 +55,9 @@ def _out(action: str = "Say ⟦hi⟧", decision: str = "continue") -> UserAgentO
 
 def _agent(tmp_path: Path, client: FakeClient) -> UserAgent:
     return UserAgent(
-        persona=Persona(id="p1", description="A careful accountant named Dana."),
+        persona=Persona(
+            id="p1", name="p1", description="A careful accountant named Dana."
+        ),
         scenario=Scenario(
             id="s1", description="Get a Q3 summary report.", persona_refs=["p1"]
         ),
@@ -82,6 +84,45 @@ async def test_the_prompt_has_the_persona_and_scenario_and_no_target_knowledge(
     assert "⟦" in system["content"]
     for advice in ("Haiku", "Sonnet", "AI Model", "Orca", "dropdown"):
         assert advice not in _text(client.requests[0])
+
+
+@pytest.mark.asyncio
+async def test_the_prompt_lists_persona_and_scenario_metadata_as_written(
+    tmp_path: Path,
+) -> None:
+    client = FakeClient(_out())
+    agent = UserAgent(
+        persona=Persona(
+            id="p1",
+            name="p1",
+            description="A careful accountant named Dana.",
+            metadata={"age": "In their fifties.", "input_style": "Terse."},
+        ),
+        scenario=Scenario(
+            id="s1",
+            description="Get a Q3 summary report.",
+            metadata={"stop_condition": "Dana has the report."},
+            persona_refs=["p1"],
+        ),
+        llm_log=LLMCallLog.for_trial(tmp_path),
+        client=client,  # type: ignore[arg-type]
+    )
+    await agent.decide(1, [], [])
+
+    system = client.requests[0][0]["content"]
+    assert "- age: In their fifties.\n- input_style: Terse." in system
+    assert "- stop_condition: Dana has the report." in system
+
+
+@pytest.mark.asyncio
+async def test_the_prompt_has_no_metadata_section_when_there_is_none(
+    tmp_path: Path,
+) -> None:
+    client = FakeClient(_out())
+    await _agent(tmp_path, client).decide(1, [], [])
+
+    system = client.requests[0][0]["content"]
+    assert "More about" not in system
 
 
 @pytest.mark.asyncio

@@ -97,7 +97,7 @@ async def test_a_trial_logs_every_user_agent_and_summarizer_call(
 
     trial = build_trial(
         runner=_OneFileRunner(),
-        persona=Persona(id="p", description="a user"),
+        persona=Persona(id="p", name="p", description="a user"),
         scenario=scenario,
         trial_config=TrialConfig(persona="p", scenario="s", max_turns=5),
         run_dir=run_dir,
@@ -162,7 +162,7 @@ async def test_a_retried_trial_keeps_the_earlier_attempts_log(
 
     monkeypatch.setattr(gen_1_trial, "UserAgent", failing_agent)
     scenario = Scenario(id="s", description="d", persona_refs=["p"], max_turns=1)
-    persona = Persona(id="p", description="a user")
+    persona = Persona(id="p", name="p", description="a user")
 
     class _Factory:
         async def create(self, *_args: object) -> Runner:

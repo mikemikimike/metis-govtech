@@ -11,7 +11,7 @@ from typing import Any, Self
 from pydantic import BaseModel, Field, model_validator
 
 from metis.core import Artifact
-from metis.core.experiment import Task
+from metis.core.experiment import Persona, Task
 from metis.core.specification import Specification as CoreSpecification
 from metis.core.trials import GraderRef
 
@@ -50,16 +50,6 @@ __all__ = [
 ]
 
 # ---------------------------------------------------------------------------
-# Persona
-# ---------------------------------------------------------------------------
-
-
-class Persona(BaseModel, extra="ignore"):
-    id: str
-    description: str
-
-
-# ---------------------------------------------------------------------------
 # Experiment
 # ---------------------------------------------------------------------------
 
@@ -68,6 +58,7 @@ class Scenario(BaseModel):
     task_id: str = ""
     id: str
     description: str
+    metadata: dict[str, str] = Field(default_factory=dict)
     num_trials: int = 1
     fixtures: list[str] = Field(default_factory=list)
     persona_refs: list[str] = Field(min_length=1)
@@ -166,6 +157,7 @@ class Specification(CoreSpecification):
             id=scenario.id,
             task_id=task.id,
             description=scenario.description,
+            metadata=scenario.metadata,
             persona_refs=[task.persona_ref],
             num_trials=task.num_trials,
             max_turns=task.max_turns,

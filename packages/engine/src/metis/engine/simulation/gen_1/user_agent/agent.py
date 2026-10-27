@@ -12,6 +12,7 @@ from metis.core.logging import get_logger
 
 from ...llm_calls import parse_completion
 from ...model_settings import llm_client, sampling_options, user_agent_settings
+from ...user_context import persona_text, scenario_text
 from ..types import (
     ActionResult,
     ActionSlot,
@@ -330,8 +331,12 @@ class UserAgent:
         else:
             fixtures_section = ""
         return SYSTEM_PROMPT_TEMPLATE.format(
-            persona_description=self.persona.description,
-            scenario_description=self.scenario.description,
+            persona_description=persona_text(
+                self.persona.description, self.persona.metadata
+            ),
+            scenario_description=scenario_text(
+                self.scenario.description, self.scenario.metadata
+            ),
             fixtures_section=fixtures_section,
         )
 

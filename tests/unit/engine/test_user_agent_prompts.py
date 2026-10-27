@@ -142,10 +142,39 @@ class TestTheThreeStatesAreDistinguishable:
         assert _render_observed_actions(slots) == _render_available_actions(slots)
 
 
+def test_system_prompt_lists_persona_and_scenario_metadata_as_written() -> None:
+    persona = Persona(
+        id="p",
+        name="p",
+        description="a data analyst",
+        metadata={"age": "In their fifties.", "input_style": "Terse."},
+    )
+    scenario = Scenario(
+        id="s",
+        description="upload and analyze",
+        metadata={"stop_condition": "The analysis is ready."},
+        persona_refs=["p"],
+    )
+    prompt = UserAgent(persona, scenario, llm_log=_UNUSED_LOG)._build_system_prompt()
+
+    assert "a data analyst" in prompt
+    assert "- age: In their fifties.\n- input_style: Terse." in prompt
+    assert "- stop_condition: The analysis is ready." in prompt
+
+
+def test_system_prompt_has_no_metadata_section_when_there_is_none() -> None:
+    persona = Persona(id="p", name="p", description="a data analyst")
+    scenario = Scenario(id="s", description="upload and analyze", persona_refs=["p"])
+    prompt = UserAgent(persona, scenario, llm_log=_UNUSED_LOG)._build_system_prompt()
+
+    assert "a data analyst" in prompt
+    assert "More about" not in prompt
+
+
 @pytest.mark.asyncio
 async def test_opening_offers_fixture_upload_slots(monkeypatch) -> None:
     # The client is never called because we stub _call_llm.
-    persona = Persona(id="p", description="a data analyst")
+    persona = Persona(id="p", name="p", description="a data analyst")
     scenario = Scenario(
         id="s",
         description="upload and analyze",
@@ -170,7 +199,7 @@ async def test_opening_offers_fixture_upload_slots(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_generate_response_surfaces_problems(monkeypatch) -> None:
     # The client is never called because we stub _call_llm.
-    persona = Persona(id="p", description="a data analyst")
+    persona = Persona(id="p", name="p", description="a data analyst")
     scenario = Scenario(
         id="s",
         description="upload and analyze",
@@ -238,7 +267,7 @@ def test_agent_registry_accumulates_across_turns() -> None:
     from metis.engine.simulation.types import Observation
 
     agent = UserAgent(
-        persona=Persona(id="p", description="a user"),
+        persona=Persona(id="p", name="p", description="a user"),
         scenario=Scenario(id="s", description="do a thing", persona_refs=["p"]),
         llm_log=_UNUSED_LOG,
     )
@@ -292,7 +321,7 @@ def test_turn_prompt_surfaces_described_artifact_307() -> None:
     from metis.engine.simulation.types import Artifact, Observation
 
     agent = UserAgent(
-        persona=Persona(id="p", description="a domain expert"),
+        persona=Persona(id="p", name="p", description="a domain expert"),
         scenario=Scenario(
             id="s", description="reconcile the sales data", persona_refs=["p"]
         ),
@@ -489,7 +518,7 @@ class TestRegistryKeysOnIdentity:
     @staticmethod
     def _agent() -> UserAgent:
         return UserAgent(
-            persona=Persona(id="p", description="a user"),
+            persona=Persona(id="p", name="p", description="a user"),
             scenario=Scenario(id="s", description="do a thing", persona_refs=["p"]),
             llm_log=_UNUSED_LOG,
         )
