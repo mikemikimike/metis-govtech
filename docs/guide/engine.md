@@ -512,13 +512,14 @@ The engine fetches the session and refuses traces it can't support, such as thos
 before the Langfuse server's v4 upgrade (#469). A grader then reads the session through
 `metis.core.trace_processing`, never through an observation's raw `input` or `output`: the
 processor knows which payload shapes it can read and returns a `Problem` when it can't, which a
-grader skips rather than scores. Working examples are in `metis.library.graders.demo`.
+grader records as errored rather than scores. Working examples are in
+`metis.library.graders.demo`.
 
 ```python
 from pydantic import Field
 
 from metis.core.grading import GraderResult, GradingOutput
-from metis.core.trace_processing import Problem, turns
+from metis.core.trace_processing import Problem, select_by_turn, turns
 from metis.core.traces import GradingInput
 from metis.library.grader import Grader, GraderArgs, LLMSettings
 
@@ -533,28 +534,29 @@ class AnswerLengthGrader(Grader[AnswerLengthArgs]):
     args_model = AnswerLengthArgs
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
+        selected = select_by_turn(turns(input.traces))
+        if isinstance(selected, Problem):
+            return GradingOutput.errored(selected.detail)
         results = []
-        for turn in turns(input.traces):
-            if isinstance(turn.reply, Problem):
+        for label, turn in selected.items():
+            if isinstance(turn, Problem) or isinstance(turn[0].reply, Problem):
+                detail = (
+                    turn.detail if isinstance(turn, Problem) else turn[0].reply.detail
+                )
                 results.append(
-                    GraderResult(
-                        status="skipped",
-                        reason=f"turn {turn.index + 1}: {turn.reply.detail}",
-                    )
+                    GraderResult(status="errored", reason=detail, scope=label)
                 )
                 continue
-            ok = len(turn.reply) <= self.args.max_chars
+            length = len(turn[0].reply)
             results.append(
                 GraderResult(
                     status="scored",
-                    score=1.0 if ok else 0.0,
-                    reason=f"turn {turn.index + 1}: {len(turn.reply)} chars",
+                    score=1.0 if length <= self.args.max_chars else 0.0,
+                    reason=f"{length} chars",
+                    scope=label,
                 )
             )
-        return GradingOutput(
-            results=results
-            or [GraderResult(status="skipped", reason="The session has no turns.")]
-        )
+        return GradingOutput(results=results)
 ```
 
 Put it in any importable module and name it on a Criterion:

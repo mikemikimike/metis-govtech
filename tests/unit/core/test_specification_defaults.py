@@ -40,6 +40,17 @@ def test_judge_model_round_trips() -> None:
     assert Specification.model_validate(dumped) == spec
 
 
+def test_tools_available_round_trips_and_is_omitted_when_empty() -> None:
+    tools = ["search: Searches the catalogue"]
+    spec = Specification.model_validate(_document(defaults={"tools_available": tools}))
+    dumped = spec.model_dump(mode="json")
+    assert dumped["defaults"] == {"tools_available": tools}
+    assert Specification.model_validate(dumped) == spec
+    empty = _document(defaults={"judge_model": "m", "tools_available": []})
+    dumped = Specification.model_validate(empty).model_dump(mode="json")
+    assert dumped["defaults"] == {"judge_model": "m"}
+
+
 def test_empty_defaults_are_not_written() -> None:
     """Specs without defaults serialise exactly as before, so compiled YAML does not churn."""
     dumped = Specification.model_validate(_document()).model_dump(mode="json")

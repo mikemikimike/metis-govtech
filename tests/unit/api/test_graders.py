@@ -3,14 +3,19 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
-def test_grader_catalogue_lists_the_criterion_judge(client: TestClient) -> None:
+def test_grader_catalogue_marks_only_the_criterion_judge_as_description_driven(
+    client: TestClient,
+) -> None:
     response = client.get("/api/v1/graders")
 
     assert response.status_code == 200
-    assert [row["fqn"] for row in response.json()] == [
-        "metis.library.graders.CriterionJudgeGrader"
+    driven = [
+        row["fqn"] for row in response.json() if row["uses_criterion_description"]
     ]
-    assert response.json()[0]["uses_criterion_description"] is True
+    assert driven == ["metis.library.graders.CriterionJudgeGrader"]
+    assert "metis.library.graders.ErrorRecoveryGrader" in [
+        row["fqn"] for row in response.json()
+    ]
 
 
 def test_grader_catalogue_is_sorted_and_has_only_display_fields(

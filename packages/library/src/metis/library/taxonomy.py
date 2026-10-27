@@ -26,7 +26,7 @@ for excluded entries. Other entries are catalogue entries. Their presence does n
 mean that an implementation exists.
 
 An enum member is a taxonomy value. A taxonomy definition holds the shared metadata
-and predefined behaviour for one value. ``metis.library.judgment`` contains the
+and predefined behaviour for one value. ``metis.library.judgment_form`` contains the
 working binary judgment-form definition. Definitions for the other groups remain
 design work.
 
@@ -242,7 +242,9 @@ class ReferenceType(StrEnum):
     HUMAN_PREFERENCE = (  # Requires previously supplied human labels or rankings.
         "human_preference"
     )
-    AVAILABLE_TOOLS = "available_tools"
+    AVAILABLE_TOOLS = (  # Requires defaults.tools_available in the specification.
+        "available_tools"
+    )
 
 
 class JudgmentForm(StrEnum):

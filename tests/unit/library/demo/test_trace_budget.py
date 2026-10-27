@@ -109,9 +109,9 @@ class TestGrade:
         assert len(out.results) == 1
         assert out.results[0].score == 1.0
 
-    def test_empty_session_is_skipped_not_passed(self) -> None:
+    def test_empty_session_is_errored_not_passed(self) -> None:
         out = _grade(_grader(), GradingInput(traces=()))
-        assert [(r.status, r.score) for r in out.results] == [("skipped", None)]
+        assert [(r.status, r.score) for r in out.results] == [("errored", None)]
         assert out.results[0].reason
 
     def test_traces_without_output_still_count(self) -> None:

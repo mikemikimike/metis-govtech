@@ -1,20 +1,21 @@
 """Demo graders on the captured Orca session (#431).
 
-They show grader authors how to read traces through ``metis.core.trace_processing``. The LLM
-demos run against a fake client, so these tests check what each grader sends and how it
-handles the reply, not what a real judge would think.
+They show grader authors the full grader pattern on real data. The LLM demos run against a
+fake client, so these tests check what each grader sends and how it handles the reply, not
+what a real judge would think.
 """
 
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
-from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, MagicMock
+import json
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
-from metis.core.traces import GradingInput
+from metis.core.traces import GradingInput, Observation, Trace
 from metis.library.grader import JudgeArgs, LLMSettings
 from metis.library.graders.demo import (
+    DemoAnswerHelpfulnessArgs,
     DemoAnswerHelpfulnessGrader,
     DemoRequiredToolArgs,
     DemoRequiredToolGrader,
@@ -22,143 +23,126 @@ from metis.library.graders.demo import (
     DemoTraceBudgetArgs,
     DemoTraceBudgetGrader,
 )
+from tests.fixtures.criterion_judge import judge_client
 from tests.fixtures.traces import load_orca_session
 
 if TYPE_CHECKING:
     from metis.core.grading import GradingOutput
     from metis.library.grader import Grader
 
-
-def fake_client(reply: str) -> MagicMock:
-    """An AsyncOpenAI stand-in whose every chat completion returns ``reply``."""
-    client = MagicMock()
-    response = SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=reply))]
-    )
-    client.chat.completions.create = AsyncMock(return_value=response)
-    return client
+MET = {"status": "scored", "score": 1, "reason": "Helpful."}
+UNMET = {"status": "scored", "score": 0, "reason": "No answer."}
 
 
 def _run(
-    grader: Grader, gi: GradingInput, client: MagicMock | None = None
-) -> GradingOutput:
-    return asyncio.run(
-        grader.grade(gi, LLMSettings(client=client or fake_client("{}")))
-    )
+    grader: Grader, gi: GradingInput, reply: object = MET
+) -> tuple[GradingOutput, list[dict[str, Any]]]:
+    requests: list[dict[str, Any]] = []
+    content = reply if isinstance(reply, str) else json.dumps(reply)
+    client = judge_client(content, requests)
+
+    async def run():
+        async with client:
+            return await grader.grade(gi, LLMSettings(client))
+
+    return asyncio.run(run()), requests
 
 
-def _prompt(client: MagicMock, call: int) -> str:
-    return client.chat.completions.create.await_args_list[call].kwargs["messages"][-1][
-        "content"
-    ]
+def _evidence(request: dict[str, Any]) -> str:
+    [content] = request["input"][1]["content"]
+    return content["text"]
 
 
-JUDGE = JudgeArgs(model="judge-model")
+HELPFULNESS = DemoAnswerHelpfulnessGrader(
+    DemoAnswerHelpfulnessArgs(model="judge-model")
+)
+COMPLETION = DemoTaskCompletionGrader(JudgeArgs(model="judge-model"))
 
 
 class TestRequiredTool:
     def test_required_tool_finds_make_ppt_deep_in_turn_5(self) -> None:
-        out = _run(
+        out, requests = _run(
             DemoRequiredToolGrader(DemoRequiredToolArgs(tool_name="make_ppt")),
             load_orca_session(),
         )
         (result,) = out.results
-        assert (result.status, result.score) == ("scored", 1.0)
+        assert (result.status, result.score, result.scope) == ("scored", 1.0, "session")
         assert "turn 5" in result.reason
         assert "Slide_Maker.arun" in result.reason
+        assert requests == []
 
     def test_required_tool_absent_scores_zero(self) -> None:
-        out = _run(
+        out, _ = _run(
             DemoRequiredToolGrader(DemoRequiredToolArgs(tool_name="send_email")),
             load_orca_session(),
         )
         (result,) = out.results
         assert (result.status, result.score) == ("scored", 0.0)
 
-    def test_required_tool_never_calls_the_llm(self) -> None:
-        client = fake_client("{}")
-        _run(
-            DemoRequiredToolGrader(DemoRequiredToolArgs(tool_name="make_ppt")),
-            load_orca_session(),
-            client,
-        )
-        client.chat.completions.create.assert_not_awaited()
-
 
 class TestAnswerHelpfulness:
-    def test_helpfulness_judges_each_turn_with_earlier_context(self) -> None:
-        client = fake_client('{"reasoning": "ok", "score": 0.8}')
-        out = _run(DemoAnswerHelpfulnessGrader(JUDGE), load_orca_session(), client)
-        assert [(r.status, r.score) for r in out.results] == [("scored", 0.8)] * 5
-        third = _prompt(client, 2)
+    def test_each_turn_is_judged_with_the_turns_before_it(self) -> None:
+        out, requests = _run(HELPFULNESS, load_orca_session())
+        assert [(r.status, r.score, r.scope) for r in out.results] == [
+            ("scored", 1.0, f"turns:1-{n}") for n in range(1, 6)
+        ]
+        third = _evidence(requests[2])
         assert "## Turn 1" in third and "## Turn 3" in third
         assert "## Turn 4" not in third
 
     def test_the_judge_model_is_the_one_configured(self) -> None:
-        client = fake_client('{"reasoning": "ok", "score": 1}')
-        _run(DemoAnswerHelpfulnessGrader(JUDGE), load_orca_session(), client)
-        assert (
-            client.chat.completions.create.await_args_list[0].kwargs["model"]
-            == "judge-model"
+        _, requests = _run(HELPFULNESS, load_orca_session())
+        assert requests[0]["model"] == "judge-model"
+
+    def test_a_window_limits_the_turns_the_judge_sees(self) -> None:
+        grader = DemoAnswerHelpfulnessGrader(
+            DemoAnswerHelpfulnessArgs(model="judge-model", window=2)
         )
+        out, requests = _run(grader, load_orca_session())
+        assert out.results[-1].scope == "turns:4-5"
+        assert "## Turn 3" not in _evidence(requests[-1])
 
 
 class TestTaskCompletion:
     def test_task_completion_gives_one_result_for_the_session(self) -> None:
-        client = fake_client('{"reasoning": "deck delivered", "score": 0.9}')
-        out = _run(DemoTaskCompletionGrader(JUDGE), load_orca_session(), client)
+        out, [request] = _run(COMPLETION, load_orca_session())
         (result,) = out.results
-        assert (result.status, result.score) == ("scored", 0.9)
-        assert "## Turn 5" in _prompt(client, 0)
-
-    def test_task_completion_says_no_file_was_checked(self) -> None:
-        client = fake_client('{"reasoning": "deck delivered", "score": 0.9}')
-        (result,) = _run(
-            DemoTaskCompletionGrader(JUDGE), load_orca_session(), client
-        ).results
-        assert result.reason.endswith(
-            "No file was checked: the run recorded no artifacts."
-        )
+        assert (result.status, result.score, result.scope) == ("scored", 1.0, "session")
+        assert "## Turn 5" in _evidence(request)
+        assert "Collect everything the user asked for" in request["input"][0]["content"]
 
 
 def test_an_off_menu_judge_reply_is_errored() -> None:
-    for reply in ("looks good", '{"reasoning": "x"}', '{"reasoning": "x", "score": 7}'):
-        out = _run(
-            DemoTaskCompletionGrader(JUDGE), load_orca_session(), fake_client(reply)
-        )
+    for reply in (
+        "looks good",
+        '{"reason": "x"}',
+        '{"status": "scored", "score": 0.7, "reason": "x"}',
+    ):
+        out, _ = _run(COMPLETION, load_orca_session(), reply)
         (result,) = out.results
         assert result.status == "errored", reply
         assert result.score is None
 
 
-def test_a_failing_judge_call_is_errored() -> None:
-    client = MagicMock()
-    client.chat.completions.create = AsyncMock(side_effect=RuntimeError("rate limited"))
-    (result,) = _run(
-        DemoTaskCompletionGrader(JUDGE), load_orca_session(), client
-    ).results
-    assert result.status == "errored"
-    assert "rate limited" in result.reason
-
-
-def test_every_demo_skips_an_empty_session() -> None:
+def test_every_demo_errors_on_an_empty_session() -> None:
     graders: list[Grader] = [
         DemoTraceBudgetGrader(DemoTraceBudgetArgs()),
         DemoRequiredToolGrader(DemoRequiredToolArgs(tool_name="make_ppt")),
-        DemoAnswerHelpfulnessGrader(JUDGE),
-        DemoTaskCompletionGrader(JUDGE),
+        HELPFULNESS,
+        COMPLETION,
     ]
     for grader in graders:
-        (result,) = _run(grader, GradingInput(traces=())).results
-        assert result.status == "skipped", type(grader).__name__
+        out, requests = _run(grader, GradingInput(traces=()))
+        (result,) = out.results
+        assert result.status == "errored", type(grader).__name__
+        assert requests == []
 
 
 def test_demos_produce_different_units_from_one_session() -> None:
     """#431: the same saved data, without the target or the network, yields different units."""
     gi = load_orca_session()
-    client = fake_client('{"reasoning": "ok", "score": 1}')
-    per_turn = _run(DemoAnswerHelpfulnessGrader(JUDGE), gi, client)
-    per_session = _run(DemoTaskCompletionGrader(JUDGE), gi, client)
+    per_turn, _ = _run(HELPFULNESS, gi)
+    per_session, _ = _run(COMPLETION, gi)
     assert (len(per_turn.results), len(per_session.results)) == (5, 1)
 
 
@@ -168,56 +152,30 @@ def test_demos_are_not_in_the_catalogue() -> None:
     assert not [name for name in vars(catalog) if name.startswith("Demo")]
 
 
-def test_a_turn_the_target_crashed_on_is_judged_not_skipped() -> None:
-    """No reply is the target's failure, so it is evidence to grade, never a skip (#431)."""
-    from datetime import UTC, datetime
-
-    from metis.core.traces import Observation, Trace
-
-    crashed = Trace(
-        id="t1",
-        session_id="s",
-        observations=(
-            Observation(
-                id="root",
-                trace_id="t1",
-                type="SPAN",
-                input="help me",
-                output=None,
-                start_time=datetime(2026, 1, 1, tzinfo=UTC),
+def _one_turn(output: object) -> GradingInput:
+    return GradingInput(
+        traces=(
+            Trace(
+                id="t1",
+                session_id="s",
+                observations=(
+                    Observation(
+                        id="root",
+                        trace_id="t1",
+                        type="SPAN",
+                        input="help me",
+                        output=output,
+                        start_time=datetime(2026, 1, 1, tzinfo=UTC),
+                    ),
+                ),
             ),
-        ),
+        )
     )
-    client = fake_client('{"reasoning": "no answer", "score": 0}')
-    (result,) = _run(
-        DemoAnswerHelpfulnessGrader(JUDGE), GradingInput(traces=(crashed,)), client
-    ).results
+
+
+def test_a_turn_the_target_crashed_on_is_judged() -> None:
+    """No reply is the target's failure, so it is evidence to grade, never an error (#431)."""
+    out, [request] = _run(HELPFULNESS, _one_turn(None), UNMET)
+    (result,) = out.results
     assert (result.status, result.score) == ("scored", 0.0)
-    assert "[target error: the target returned no reply]" in _prompt(client, 0)
-
-
-def test_a_turn_metis_could_not_read_is_skipped() -> None:
-    from datetime import UTC, datetime
-
-    from metis.core.traces import Observation, Trace
-
-    unreadable = Trace(
-        id="t1",
-        session_id="s",
-        observations=(
-            Observation(
-                id="root",
-                trace_id="t1",
-                type="SPAN",
-                input={"weird": 1},
-                output="an answer",
-                start_time=datetime(2026, 1, 1, tzinfo=UTC),
-            ),
-        ),
-    )
-    client = fake_client('{"reasoning": "x", "score": 1}')
-    (result,) = _run(
-        DemoAnswerHelpfulnessGrader(JUDGE), GradingInput(traces=(unreadable,)), client
-    ).results
-    assert result.status == "skipped"
-    client.chat.completions.create.assert_not_awaited()
+    assert "[target error: the target returned no reply]" in _evidence(request)

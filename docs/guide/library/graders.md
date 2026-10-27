@@ -38,7 +38,7 @@ declared path.
 For example, an `EXPECTED_OUTPUT` reference needs an expected output. A
 `TOOL_ARGUMENTS` scope needs recorded tool arguments. A weighted aggregation needs
 weights. Validate required settings before a run. During grading, report missing
-evidence as `skipped` or `errored`, according to the documented evidence contract.
+evidence as `errored`, with a reason that says what is missing.
 
 The taxonomy does not select a method. Grader code and validated arguments determine
 the method for each request. A taxonomy declaration does not establish grading accuracy.
@@ -56,7 +56,7 @@ A specialized grader declares one measure. A catch-all grader explicitly sets
 | `grader_types` | Procedures that the grader implements. |
 | `reference_types` | Reference categories that the grader can use. |
 | `judgment_forms` | Result forms that the grader can produce. |
-| `aggregations` | Rules that the grader can use to combine internal checks. |
+| `aggregations` | Rules that a multi-rule grader can use to combine its rules. |
 
 A tuple with one value records a fixed capability. A tuple with several values records
 several implemented capabilities. The declaration itself does not select a value for
@@ -70,10 +70,41 @@ aggregation logic.
 The enums define the accepted vocabulary for future grader implementations. An enum
 member alone does not provide runtime support.
 
-The current shared definition registry, `JUDGMENT_FORM_DEFINITIONS` in
-`metis.library.judgment`, contains only `JudgmentForm.BINARY`. Its definition owns the
-output instructions and the `BinaryJudgment` response model. A judge uses the same
-definition for its prompt, response schema, and response validation.
+Three shared definition registries hold this behavior. Each holds only the values that
+a grader uses:
+
+| Registry | Module | Values | What a definition holds |
+|---|---|---|---|
+| `SCOPE_DEFINITIONS` | `metis.library.scope` | `TRACE`, `SUBSESSION`, `SESSION`, `ARTIFACT` | The judge instructions for the scope, the trace processor function that selects what to judge, and the one that renders it. |
+| `JUDGMENT_FORM_DEFINITIONS` | `metis.library.judgment_form` | `BINARY` | The output instructions and the reply model (`BinaryJudgment`: status, score, reason). |
+| `AGGREGATION_DEFINITIONS` | `metis.library.aggregation` | `NONE_SINGLE_SCORE`, `PASS_IF_ALL`, `PASS_IF_ANY` | The function that combines a multi-rule grader's per-rule results into one result. |
+
+Each scope pairs a select function with a render function, both in
+`metis.core.trace_processing`. The select function returns what to judge, under the label
+of its result. The render function turns one of them into what the judge reads:
+
+| Scope | Select | One entry | Render | The judge reads |
+|---|---|---|---|---|
+| `TRACE` | `select_by_turn` | `"turn:3"`: one turn | `render_session` | that turn only |
+| `SUBSESSION` | `select_by_window` | `"turns:2-4"`: a run of turns | `render_session` | those turns |
+| `SESSION` | `select_session` | `"session"`: every turn | `render_session` | every turn |
+| `ARTIFACT` | `select_by_artifact` | `"artifact:a.pdf:0"`: a file | `render_artifact` | the file only |
+
+A subsession ends at a turn and holds up to `window` turns. A `window` that is not set
+holds every turn before the end turn, so a grader that judges one turn with the
+conversation so far as context declares `SUBSESSION`. A grader that needs another view of
+the same turns, such as `render_dialogue`, calls that render function itself.
+
+`metis.library.judge.judge` judges one rendered piece against one criterion. It builds the
+prompt from the grader's criteria and the scope and judgment form definitions, and returns
+the judge's reply as one result. A `Problem` from a select or render function is errored
+without a judge call, and so is a reply that the criterion does not apply.
+
+A multi-rule grader, such as `TaskConstraintAdherenceGrader`, loops over its rules in its
+own `grade()`. It calls `judge` once for each rule, then combines the rule results with
+`AGGREGATION_DEFINITIONS[self.aggregation]`. Under `pass_if_all`, an errored rule makes the
+piece errored, a failed rule makes it fail, and otherwise it passes. Under `pass_if_any`, a
+passing rule makes the piece pass, even when another rule errored.
 
 ## Criterion Judge example
 
@@ -122,7 +153,7 @@ It declares `Measure.TASK_CONSTRAINT_ADHERENCE`, `Scope.SESSION`,
 
 The `max_traces` argument supplies the policy rule. The grader counts all traces,
 including traces with target errors. It returns `1` when the count is within the
-budget and `0` when the count exceeds it. An empty session produces a skipped result.
+budget and `0` when the count exceeds it. An empty session produces an errored result.
 It makes no LLM call. This example checks one task constraint. It does not assess
 all task constraints.
 
@@ -142,9 +173,20 @@ demo graders in its catalog.
 Each grader defines an `args_model`. The model validates the settings stored under
 `grader_args`. Unknown keys fail validation.
 
-A grader with several supported values can use a typed argument to select one value.
-The argument model or `check_setup()` must reject unsupported combinations. The
-taxonomy records support. The argument model records a selection for one criterion.
+`GraderArgs` defines three taxonomy settings once for every grader: `scope`,
+`judgment_form`, and `aggregation`. A grader's own args model does not declare them. A
+setting that is not set means the grader's first declared value. `Grader.scope`,
+`Grader.judgment_form`, and `Grader.aggregation` give the value in use. When a grader is
+built, it rejects a value that its taxonomy does not declare, and the engine reports the
+error before the run. A spec author sets one only on a grader that declares more than one
+value, and the wizard shows it only there.
+
+A scope's own settings come from a template class in `metis.library.scope`: `TraceArgs`
+gives `turn` (`each` or `last`), `SubsessionArgs` gives `turn` and `window` (how many turns end at that turn), and
+`ArtifactArgs` gives `artifact` (the file name). A grader's args model inherits the class
+for each scope it declares, and `Grader` checks this when the class is defined.
+`metis.library.judge.TaskArgs` gives the optional `task_description`. The taxonomy records
+support. The argument model records a selection for one criterion.
 
 The current Criterion Judge has no measure mapping and fixed values in
 the other five groups. Its arguments contain its criterion text, model, input limit,
@@ -156,36 +198,41 @@ taxonomy selection fields.
 `GradingInput` contains the recorded traces and artifact records for one session. A
 grader does not receive the scenario, persona, or stop reason.
 
-A grader returns `GradingOutput` with at least one result. Use:
+A grader returns `GradingOutput` with one result for each thing it judged, and at least one
+result. Use:
 
 - `scored` when the grader made an assessment;
-- `skipped` when there is no applicable evidence;
 - `errored` when the assessment cannot complete.
 
-Skipped and errored results have no score. The engine applies the criterion threshold
-to scored results.
+Before any judge call, a grader checks that the session has the evidence its measure
+needs. For example, a tool argument grader needs recorded tool calls. When the evidence
+is absent, the grader returns one `errored` result that says what is missing. When the
+evidence is present but the event that the measure looks for did not happen, such as a
+correction grader on a session with no correction, the result is also `errored` with the
+reason. Errored results have no score. The engine applies the criterion threshold to
+scored results.
+
+`GraderResult.scope` names what the result is about: `"session"`, `"turn:3"`, or
+`"artifact:report.pdf:0"`. A multi-rule grader returns one result for each thing it judged, combined
+from its rules. The engine records the aggregation rule on `GraderRecord.aggregation`.
 
 Evidence requirements are part of the declared support. Recorded state can support a
-judgment. Unobserved live state cannot. An artifact path does not give a grader the
-artifact contents. The grader or a shared helper must load available content when the
-method needs it. Missing required evidence cannot produce a passing result.
+judgment. Unobserved live state cannot. At `ARTIFACT` scope, the judge call attaches
+the file and the judge model reads it. METIS does not extract text from files. A model
+or gateway that rejects a file type gives an errored result with its reason. Missing
+required evidence cannot produce a passing result.
 
 ## Current limits
 
 The taxonomy is library metadata. The base `Grader` contract does not require it. The
-engine, wizard, insights, and reports do not inspect it.
+engine reads only the aggregation rule, which it records on `GraderRecord.aggregation`.
+The wizard, insights, and reports do not inspect the taxonomy.
 
-Criterion Judge and DemoTraceBudget are the working reference graders. Each has one
-fixed value in each capability tuple. Other graders need their own declarations and
-behavior tests before they claim taxonomy support.
+Scope, judgment form, and aggregation values have shared runtime behavior. Grader type,
+reference type, and measure values are descriptive declarations.
 
-Only the binary judgment definition has shared runtime behavior. Scope, grader type,
-reference type, measure, and aggregation values are descriptive declarations.
-Their shared definition registries and runtime routing are not implemented.
-
-The current result model has no structured scope-item or evidence-source identifier.
-Both reference graders return one result for the complete session. Graders that
-return results for individual evidence items need a defined way to identify those items.
+A multi-rule grader combines its rules itself. Insights combines the
+results of one grader run with an equal-weight mean.
 
 The taxonomy does not test validity, reliability, calibration, or agreement with
 human assessors. Those properties need a separate evaluation method.
@@ -198,11 +245,11 @@ The following work is outside this foundation:
   of supported combinations. Tuple membership does not establish every combination.
 - Subsession graders need rules for trace membership, ordering, and the context visible
   to each judgment. Their results need a way to identify the selected evidence.
-- Internal aggregation combines checks within one judgment's scope. Cross-trial
-  aggregation belongs to reporting. Each implementation needs to define its score
+- Internal aggregation combines the rules within one judgment's scope. Cross-trial
+  aggregation belongs to reporting. Each new aggregation rule needs to define its score
   meaning and required settings, such as weights.
-- Shared definitions for other taxonomy groups need concrete consumers before they
-  become registries. Generic method selection and runtime routing are not implemented.
+- Shared definitions for grader type, reference type, and measure need concrete consumers
+  before they become registries.
 
 ## Author a grader
 
@@ -212,8 +259,26 @@ The following work is outside this foundation:
 3. Declare a `GraderTaxonomy` that describes the behavior you implement. Start with
    fixed capabilities when the grader needs only one combination.
 4. Implement `async grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput`.
-   Apply the evidence and result rules in this guide. For an LLM call, check
-   `input_budget_error` first and use `llm.client`.
+   Apply the evidence and result rules in this guide. An LLM grader selects what to judge
+   with its scope's select function, checks any evidence its measure needs, renders each
+   selected piece, and calls `metis.library.judge.judge` once for each:
+
+   ```python
+   async def grade(self, input, llm):
+       scope = SCOPE_DEFINITIONS[self.scope]
+       selected = scope.select(input, self.args)
+       if isinstance(selected, Problem):
+           return GradingOutput.errored(selected.detail)
+       return GradingOutput(
+           results=[
+               await judge(self, llm, label, scope.render(thing), self.criteria())
+               for label, thing in selected.items()
+           ]
+       )
+   ```
+
+   `judge` adds the scope instructions, the untrusted-evidence rule, and the output
+   instructions to the criteria, checks `input_budget_error`, and uses `llm.client`.
 5. Validate settings in the arguments model. Use `check_setup()` for checks that need
    the specification, such as whether a named fixture exists.
 6. Export the grader from `metis.library.graders`. Export demos only from
@@ -227,22 +292,20 @@ The following work is outside this foundation:
 
 Use `metis.core.trace_processing` when a grader needs normalized turns, tool calls,
 target errors, or artifact records. `turns(input.traces)` returns one turn per trace, oldest
-first. Use `select_all`, `select_final`, or `select_where` to select evidence.
-`render_transcript` prepares a shared text view for LLM judges.
+first. The select functions choose what to judge, and the render functions show it to the
+judge. `render_session` prepares a shared text view of turns. With `tool_results=True`,
+it adds each tool call's status and result, and `max_chars` cuts long arguments and
+results. `render_dialogue` shows only the user and assistant lines.
 
 Readers return a value or a `Problem`. A `Problem` means that METIS could not read the
-evidence. Map `no_match` and `artifact_unavailable` to `skipped`. Document whether
-`unsupported` and `missing` produce `skipped` or `errored`. Never score a `Problem`.
+evidence. Map every `Problem` to `errored`, with its detail in the reason. Never score a
+`Problem`.
 A recorded target error is evidence about the target and can support an assessment.
 
 `find_artifacts` returns artifact records. It does not open files. Langfuse media
 references are unavailable to these readers. For a judgment of one trace, provide
 only the context permitted by the grader's contract. Exclude later traces when the
 judgment must use only information available at that point.
-
-The Criterion Judge is a specific exception. It serializes the supported observation
-fields directly. It sends observation IDs, parent IDs, types, names, inputs, and
-outputs. This behavior is part of its documented evidence contract.
 
 Treat grading input as read-only. A grader instance can grade several sessions
 concurrently. Keep only immutable arguments on the grader instance. Send LLM calls

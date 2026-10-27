@@ -122,7 +122,10 @@ def build_grader(
         raise GraderSetupError(
             f"Criterion '{criterion.id}' has invalid grader_args for {criterion.grader_fqn}: {problems}"
         ) from exc
-    return cls(args)
+    try:
+        return cls(args)
+    except ValueError as exc:
+        raise GraderSetupError(f"Criterion '{criterion.id}': {exc}") from exc
 
 
 def record_results(output: GradingOutput, threshold: float) -> list[RecordedResult]:
@@ -134,8 +137,8 @@ def record_results(output: GradingOutput, threshold: float) -> list[RecordedResu
         return [
             RecordedResult(
                 outcome="errored",
-                reason="The grader returned no results; a grader with nothing to judge must "
-                "return a skipped result.",
+                reason="The grader returned no results; a grader that cannot judge the "
+                "session must return an errored result with the reason.",
             )
         ]
     return [_record(result, threshold) for result in output.results]
@@ -152,7 +155,9 @@ def _record(result: GraderResult, threshold: float) -> RecordedResult:
             scope=result.scope,
         )
     return RecordedResult(
-        outcome=result.status, reason=result.reason, scope=result.scope
+        outcome=result.status,
+        reason=result.reason,
+        scope=result.scope,
     )
 
 
@@ -198,8 +203,15 @@ async def _run_one(
         criterion_id=criterion.id,
         grader_fqn=criterion.grader_fqn,
         grader_args=grader.args.model_dump(mode="json"),
+        aggregation=_aggregation(grader),
         results=results,
     )
+
+
+def _aggregation(grader: Grader[Any]) -> str | None:
+    if getattr(grader, "taxonomy", None) is None:
+        return None
+    return str(grader.aggregation)
 
 
 async def grade_session(

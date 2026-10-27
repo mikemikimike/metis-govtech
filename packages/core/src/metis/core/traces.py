@@ -208,7 +208,8 @@ class GradingInput(BaseModel, frozen=True):
 
     traces: tuple[Trace, ...]
     """The whole session, in order, including traces whose root has no output (the target
-    crashed or timed out mid-answer). A grader that needs an output skips those itself."""
+    crashed or timed out mid-answer). A missing reply is the target failing, so it is evidence
+    to grade: ``Turn.target_errors`` records it."""
 
     artifacts: tuple[Artifact, ...] = ()
     """Every artifact the run produced, with ``path`` already resolved to a local file path.
@@ -216,8 +217,8 @@ class GradingInput(BaseModel, frozen=True):
     questions and known gaps")."""
 
     tools_available: tuple[str, ...] = ()
-    """Descriptions of every tool available to the target during this session.
-    Populated by the engine from ``defaults.tools_available`` in the specification."""
+    """A description of each tool that the target can use, copied by the engine from
+    ``defaults.tools_available``. ``()`` when the specification sets none."""
 
 
 _SESSION_TRACES_VERSION = 1

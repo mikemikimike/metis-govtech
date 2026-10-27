@@ -92,6 +92,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- `ExperimentDefaults.tools_available` and `GradingInput.tools_available`: a description of
+  each tool that the target can use, for graders that declare
+  `ReferenceType.AVAILABLE_TOOLS`. A specification that does not set it serialises unchanged.
+  The wizard does not set it.
+
 - `metis.core.target_binding.TargetBinding`: the YAML file a user writes to bind an app to
   the generic HTTP runner, published as `packages/core/schemas/target-binding.schema.json`
   (`schema_version` 1). It holds `identity`, `transport` (`http` only), `spec_url`,
@@ -192,10 +197,22 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   variable in `login.secrets`. The error never repeats a placeholder that is not a variable
   name (#283).
 
-- `GraderResult` and `RecordedResult` carry an optional `scope` string identifying the
-  graded unit (`"turn:3"`, `"item:item_1"`, `"artifact:report.txt"`, `"session"`, or
-  `"aggregate"`). Existing graders that omit `scope` are unaffected. The engine
-  orchestrator preserves `scope` through the threshold rule.
+- `GraderResult` and `RecordedResult` carry `scope`, the label of what the result is about
+  (`"session"`, `"turn:3"` or `"artifact:report.pdf:0"`). `GraderRecord.aggregation` records
+  the grader's aggregation rule (`"pass_if_all"`), or is omitted when the grader declares no
+  taxonomy.
+
+- `select_by_turn`, `select_by_window`, `select_session` and `select_by_artifact` in
+  `metis.core.trace_processing` select what a grader judges for each scope, each under a
+  label for `GraderResult.scope`. A trace is one turn on its own; a subsession is a turn and up
+  to `window` turns before it, or every turn before it when `window` is not set.
+  `render_artifact` gives a file in the form the judge reads, up to 50 MB.
+  `GradingOutput.errored(reason)` builds the one result of a session that cannot be judged.
+
+- `render_session(turns, tool_results=True)` adds each tool call's status and result, and
+  `max_chars` cuts long arguments and results. The default output does not change.
+  `render_dialogue` shows only the user and assistant lines. A reply that is a JSON object or
+  array, and not a chat message, is read as its JSON text.
 
 #### Breaking
 
@@ -213,52 +230,58 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
-- Fourteen Task and Output Quality graders covering every attribute in the
-  sub-dimension: `TaskSuccessGrader`, `OutputCorrectnessGrader`,
-  `FactualAccuracyGrader`, `RequiredComponentCompletenessGrader`,
-  `TaskConstraintAdherenceGrader`, `FormatSchemaComplianceGrader`,
-  `ClaimSupportByEvidenceGrader`, `EvidenceSourceSuitabilityGrader`,
-  `InputInterpretationAccuracyGrader`, `SpeechRecognitionAccuracyGrader`,
-  `LanguageIdentificationAccuracyGrader`, `ContentFidelityGrader`,
-  `SpokenContentFidelityGrader`, and `AttributionAccuracyGrader`.
-  Each is an LLM judge with typed arguments, a specific taxonomy Measure,
-  session scope, and the binary judgment form. Checklist graders
-  (`RequiredComponentCompletenessGrader`, `TaskConstraintAdherenceGrader`,
-  `EvidenceSourceSuitabilityGrader`) use stable-ID-based per-item assessment
-  with exact coverage validation and fractional scoring.
-  `RequiredComponentCompletenessGrader` and `TaskConstraintAdherenceGrader`
-  enforce `threshold=1.0` (all items must pass).
-
-- Sixteen Execution and Decision Quality graders covering every attribute in the
+- Sixteen Execution and Decision Quality graders, one for each attribute of the
   sub-dimension: `PlanningQualityGrader`, `ActionChoiceAppropriatenessGrader`,
   `ToolChoiceAppropriatenessGrader`, `ToolArgumentCorrectnessGrader`,
-  `UseOfObservedStateGrader`, `StateTrackingGrader`,
-  `UseOfPriorInformationGrader`, `ErrorDetectionGrader`, `ErrorRecoveryGrader`,
-  `AdaptationToChangedConditionsGrader`, `StoppingAppropriatenessGrader`,
-  `AvoidingUnproductiveRepetitionGrader`,
+  `UseOfObservedStateGrader`, `StateTrackingGrader`, `UseOfPriorInformationGrader`,
+  `ErrorDetectionGrader`, `ErrorRecoveryGrader`, `AdaptationToChangedConditionsGrader`,
+  `StoppingAppropriatenessGrader`, `AvoidingUnproductiveRepetitionGrader`,
   `AppropriateHandlingOfCapabilityLimitsGrader`, `OutcomeVerificationGrader`,
-  `ReasoningValidityGrader`, and `CoordinationQualityGrader`. Each assesses
-  full session trajectories with tool results included and uses the binary
-  LLM judgment form at session scope.
-  `FormatSchemaComplianceGrader` validates JSON output deterministically
-  with `jsonschema` before optional LLM assessment of prose rules.
-  All graders use typed evidence selectors (`LastResponseSelector`,
-  `TraceResponseSelector`, `ObservationResponseSelector`, `ArtifactSelector`,
-  `SessionSelector`) for explicit evidence targeting. Artifact content
-  extraction supports txt, md, json, csv, tsv, pdf, docx, xlsx, and pptx.
-  Shared evidence selection, artifact extraction, and structured judge-call
-  helpers live at `metis.library.graders`, alongside trace preprocessing
-  patterns that limit selected response evidence to its turn and prior context.
-  Speech graders use transcript-only evidence with provenance tracking.
-  `AttributionAccuracyGrader` distinguishes required and optional citations.
-  Missing required evidence produces errored results, not skipped (#447).
+  `ReasoningValidityGrader`, and `CoordinationQualityGrader`. Each judges the whole session,
+  with every tool call's result. `task_description` is optional; without it the judge infers
+  the goal from the user's messages. The tool graders need recorded tool calls, and
+  `ToolChoiceAppropriatenessGrader` also needs `defaults.tools_available` (#447).
+
+- Fourteen Task and Output Quality graders, one for each attribute of the sub-dimension:
+  `TaskSuccessGrader`, `OutputCorrectnessGrader`, `FactualAccuracyGrader`,
+  `RequiredComponentCompletenessGrader`, `TaskConstraintAdherenceGrader`,
+  `FormatSchemaComplianceGrader`, `ClaimSupportByEvidenceGrader`,
+  `EvidenceSourceSuitabilityGrader`, `InputInterpretationAccuracyGrader`,
+  `SpeechRecognitionAccuracyGrader`, `LanguageIdentificationAccuracyGrader`,
+  `ContentFidelityGrader`, `SpokenContentFidelityGrader`, and `AttributionAccuracyGrader`.
+  Output graders judge the final reply by default (`turn: last`), or every reply
+  (`turn: each`), or each received file with a given name (`scope: artifact`,
+  `artifact: <name>`). The judge reads the file itself. `RequiredComponentCompletenessGrader`,
+  `TaskConstraintAdherenceGrader` and `EvidenceSourceSuitabilityGrader` judge each listed
+  item on its own and combine the results by `pass_if_all`: a result scores 1 only when every
+  listed item is met, and is errored when any listed item cannot be judged.
+  `FormatSchemaComplianceGrader` checks JSON against a schema without a judge call, before
+  any prose rules (#447).
+
+- Shared definitions for grading: `SCOPE_DEFINITIONS` in `metis.library.scope` (trace,
+  subsession, session and artifact), `JUDGMENT_FORM_DEFINITIONS` in `metis.library.judgment_form`
+  (the `binary` instructions and reply model), and `AGGREGATION_DEFINITIONS` in
+  `metis.library.aggregation` (`none_single_score`, `pass_if_all` and `pass_if_any`, which
+  combine a multi-rule grader's per-rule results). `GraderArgs` has optional `scope`,
+  `judgment_form` and `aggregation` settings; an unset one is the grader's first declared
+  value, and a value the grader does not declare fails before the run. `TraceArgs`, `SubsessionArgs`,
+  `ArtifactArgs` and `TaskArgs` hold the settings that several graders share, and a grader's
+  args must include the ones for the scopes it declares. A grader whose session lacks the
+  evidence its measure needs, or where the event it looks for did not happen, returns
+  `errored` with the reason.
+
+- `metis.library.judge.judge` judges one rendered piece of a session against one criterion:
+  it builds the prompt from the grader's criteria and the shared definitions, and returns the
+  judge's status, score and reason as one result. It sends the request through the Responses
+  API, with a rendered file as an input file. A gateway or model that rejects a file type gives
+  an errored result with its reason.
 
 - Criterion fallback judge for interview criteria with no specific grader match. The judge
-  uses the current criterion description, returns a binary session score, and records skipped
-  or errored assessments separately. YAML description edits apply on the next run. Model and
-  threshold settings survive description edits. The judge reads recorded trace input and
-  output. It does not read artifact files. Shared binary output instructions and response
-  validation live in `metis.library.judgment`. No taxonomy fields are required by the
+  uses the current criterion description, returns a binary session score, and records errored
+  assessments separately. YAML description edits apply on the next run. Model and threshold
+  settings survive description edits. The judge reads the session transcript, with every tool
+  call's result. It does not read artifact files. Shared binary output instructions and response
+  validation live in `metis.library.judgment_form`. No taxonomy fields are required by the
   base grader contract (#299).
 
 - `CriterionJudgeArgs` marks a model-based grader that takes its instructions from the
@@ -282,22 +305,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
-- Checklist graders (`RequiredComponentCompletenessGrader`, `TaskConstraintAdherenceGrader`,
-  `EvidenceSourceSuitabilityGrader`) return per-item results alongside an aggregate score.
-  Insufficient evidence for one item produces an errored result for that item without
-  suppressing scores for other items. The aggregate covers only scoreable items and
-  reports coverage.
+- No library grader returns `skipped`. A session with nothing to judge is `errored`, with the
+  reason, and the binary judgment's `not_applicable` status becomes an errored result.
 
-- `CriterionJudgeGrader` reads traces through `metis.core.trace_processing` and the
-  shared `judge_call` helper instead of serializing raw observations. The session
-  transcript now uses the shared `render_transcript` format.
-
-- All graders set `scope` on their returned results for downstream scope identification.
-  Shared evidence extraction and judge call helpers are re-exported from
-  `metis.library.extraction` and `metis.library.judge_call`. Per-turn, per-artifact,
-  and per-tool-call evidence resolution helpers and an `aggregate_scored()` helper
-  for equal-weight mean scores with coverage reporting are available for graders
-  that assess independent units.
+- The demo graders show the full grader pattern. Each declares a taxonomy and selects through
+  `SCOPE_DEFINITIONS`. `DemoTaskCompletionGrader` (session) and `DemoAnswerHelpfulnessGrader`
+  (subsession, with the turns before each turn) judge with `metis.library.judge.judge`.
+  `DemoAnswerHelpfulnessGrader` takes `DemoAnswerHelpfulnessArgs`, with `turn` and `window`.
 
 #### Breaking
 
@@ -319,6 +333,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-engine
 
 #### Added
+
+- `metis engine evaluate` copies `defaults.tools_available` to each session's grading input.
 
 - **The simulated user receives persona and scenario metadata (#442).** The gen_1 and gen_2
   user agents add each `metadata` entry to the persona or scenario description in the system

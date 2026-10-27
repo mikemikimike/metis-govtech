@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import MagicMock
 
 import pytest
@@ -25,6 +25,14 @@ from metis.library.grader import (
     GraderArgs,
     JudgeArgs,
     LLMSettings,
+)
+from metis.library.taxonomy import (
+    Aggregation,
+    GraderTaxonomy,
+    GraderType,
+    JudgmentForm,
+    ReferenceType,
+    Scope,
 )
 
 if TYPE_CHECKING:
@@ -70,6 +78,27 @@ class FixedGrader(Grader[FixedArgs]):
                     score=self.args.score,
                     reason="fixed",
                 )
+            ]
+        )
+
+
+class CheckedGrader(Grader[GraderArgs]):
+    """One scored result for the session, under a declared pass-if-all rule."""
+
+    args_model = GraderArgs
+    taxonomy: ClassVar[GraderTaxonomy] = GraderTaxonomy(
+        measure=None,
+        scopes=(Scope.SESSION,),
+        grader_types=(GraderType.LLM,),
+        reference_types=(ReferenceType.RUBRIC_BASED,),
+        judgment_forms=(JudgmentForm.BINARY,),
+        aggregations=(Aggregation.PASS_IF_ALL,),
+    )
+
+    async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
+        return GradingOutput(
+            results=[
+                GraderResult(status="scored", score=0.0, reason="r", scope="session")
             ]
         )
 
@@ -233,6 +262,15 @@ class TestBuildGrader:
         with pytest.raises(GraderSetupError, match="threshold"):
             _build(FixedGrader, {"threshold": 1.5})
 
+    def test_a_taxonomy_pick_the_grader_does_not_declare_names_the_criterion(
+        self,
+    ) -> None:
+        with pytest.raises(
+            GraderSetupError,
+            match=r"Criterion 'AC-1': CheckedGrader does not support scope 'trace'",
+        ):
+            _build(CheckedGrader, {"scope": "trace"})
+
     def test_judge_model_is_resolved_before_validation(self) -> None:
         built = _build(EchoJudgeGrader, default="spec-model")
         assert built.args.model == "spec-model"  # type: ignore[attr-defined]
@@ -296,6 +334,15 @@ class TestGradeSession:
         assert record.criterion_id == "AC-1"
         assert record.grader_fqn == f"{HERE}.FixedGrader"
         assert [(r.outcome, r.score) for r in record.results] == [("passed", 0.7)]
+
+    def test_the_record_carries_the_aggregation_rule_and_scope(self) -> None:
+        (record,) = _run(_build(CheckedGrader))
+        assert record.aggregation == "pass_if_all"
+        [result] = record.results
+        assert (result.outcome, result.scope) == ("failed", "session")
+        (untyped,) = _run(_build(FixedGrader))
+        assert untyped.aggregation is None
+        assert "aggregation" not in untyped.model_dump()
 
     def test_grader_args_record_defaults_and_resolved_model(self) -> None:
         llm = _llm()

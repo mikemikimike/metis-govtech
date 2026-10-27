@@ -1,10 +1,11 @@
-"""The Grader contract: args models, the args_model/type-argument check, and grade()."""
+"""The Grader contract: args models, the args_model/type-argument check, the taxonomy settings
+and declaration checks, and grade()."""
 
 from __future__ import annotations
 
 import asyncio
 import math
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar
 from unittest.mock import MagicMock
 
 import pytest
@@ -15,6 +16,15 @@ from metis.core.grading import GraderResult, GradingOutput
 from metis.core.specification import Specification
 from metis.core.traces import GradingInput
 from metis.library.grader import Grader, GraderArgs, JudgeArgs, LLMSettings
+from metis.library.scope import ArtifactArgs, TraceArgs
+from metis.library.taxonomy import (
+    Aggregation,
+    GraderTaxonomy,
+    GraderType,
+    JudgmentForm,
+    ReferenceType,
+    Scope,
+)
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
@@ -199,3 +209,85 @@ class TestGrade:
         llm = _llm()
         with pytest.raises(AttributeError):
             llm.client = MagicMock()
+
+
+def _taxonomy(**overrides: object) -> GraderTaxonomy:
+    fields: dict[str, object] = {
+        "measure": None,
+        "scopes": (Scope.TRACE, Scope.ARTIFACT),
+        "grader_types": (GraderType.LLM,),
+        "reference_types": (ReferenceType.RUBRIC_BASED,),
+        "judgment_forms": (JudgmentForm.BINARY,),
+        "aggregations": (Aggregation.NONE_SINGLE_SCORE,),
+    }
+    fields.update(overrides)
+    return GraderTaxonomy.model_validate(fields)
+
+
+class TwoScopeArgs(GraderArgs, TraceArgs, ArtifactArgs):
+    pass
+
+
+class TwoScopeGrader(Grader[TwoScopeArgs]):
+    args_model = TwoScopeArgs
+    taxonomy: ClassVar[GraderTaxonomy] = _taxonomy()
+
+    async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
+        raise NotImplementedError
+
+
+class TestTaxonomyPicks:
+    def test_an_unset_pick_is_the_first_declared_value(self) -> None:
+        grader = TwoScopeGrader(TwoScopeArgs())
+        assert (grader.scope, grader.judgment_form, grader.aggregation) == (
+            Scope.TRACE,
+            JudgmentForm.BINARY,
+            Aggregation.NONE_SINGLE_SCORE,
+        )
+
+    def test_a_declared_pick_is_used(self) -> None:
+        grader = TwoScopeGrader(TwoScopeArgs(scope=Scope.ARTIFACT))
+        assert grader.scope == Scope.ARTIFACT
+
+    def test_a_pick_the_grader_does_not_declare_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="does not support scope 'session'"):
+            TwoScopeGrader(TwoScopeArgs(scope=Scope.SESSION))
+
+    def test_a_grader_without_a_taxonomy_accepts_no_picks(self) -> None:
+        with pytest.raises(ValueError, match="does not support scope"):
+            FontSizeGrader(FontSizeArgs(scope=Scope.SESSION))
+
+    def test_unset_picks_are_left_out_of_the_dump(self) -> None:
+        assert "scope" not in TwoScopeArgs().model_dump()
+        assert TwoScopeArgs(scope=Scope.ARTIFACT).model_dump(mode="json")["scope"] == (
+            "artifact"
+        )
+
+
+class TestTaxonomyDeclarationCheck:
+    def test_a_declared_scope_needs_its_settings(self) -> None:
+        with pytest.raises(TypeError, match="scope 'artifact' and use ArtifactArgs"):
+
+            class _Missing(Grader[TraceOnlyArgs]):
+                args_model = TraceOnlyArgs
+                taxonomy: ClassVar[GraderTaxonomy] = _taxonomy()
+
+    def test_settings_need_their_scope(self) -> None:
+        with pytest.raises(TypeError, match="scope 'artifact' and use ArtifactArgs"):
+
+            class _Extra(Grader[TwoScopeArgs]):
+                args_model = TwoScopeArgs
+                taxonomy: ClassVar[GraderTaxonomy] = _taxonomy(scopes=(Scope.TRACE,))
+
+    def test_a_declared_value_needs_a_definition(self) -> None:
+        with pytest.raises(TypeError, match="have no definition"):
+
+            class _Undefined(Grader[TwoScopeArgs]):
+                args_model = TwoScopeArgs
+                taxonomy: ClassVar[GraderTaxonomy] = _taxonomy(
+                    judgment_forms=(JudgmentForm.SCALAR,)
+                )
+
+
+class TraceOnlyArgs(GraderArgs, TraceArgs):
+    pass
