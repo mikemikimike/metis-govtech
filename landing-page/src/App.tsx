@@ -1,0 +1,519 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+/* ── Icons ── */
+const Arrow = () => <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4" /></svg>;
+const Check = () => <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 10 3 3 7-7" /></svg>;
+const Github = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.7a9.5 9.5 0 0 0-3 18.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 0 1.6 1 1.6 1 .9 1.6 2.4 1.1 2.9.9.1-.7.4-1.1.7-1.3-2.2-.3-4.6-1.1-4.6-4.7 0-1 .4-1.9 1-2.6-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.6 1a9 9 0 0 1 4.8 0c1.8-1.3 2.6-1 2.6-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.6 0 3.7-2.3 4.5-4.6 4.7.4.3.7 1 .7 1.9v2.8c0 .3.2.6.7.5A9.5 9.5 0 0 0 12 2.7Z" /></svg>;
+const FileDoc = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" /></svg>;
+const TraceNodes = () => <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="20" r="2" /><path d="M12 6v4M12 14v4" /></svg>;
+const Verdict = () => <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="10" /></svg>;
+const Xmark = () => <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8" /></svg>;
+const Spinner = () => <svg className="wt-spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 10 10" /></svg>;
+
+const GITHUB_URL = 'https://github.com/govtech-responsibleai/metis';
+const DOCS_URL = 'https://govtech-responsibleai.github.io/metis/';
+const IC_WIZARD = 'https://img.icons8.com/?size=100&id=36868&format=png&color=9B7520';
+const IC_USER = 'https://img.icons8.com/?size=100&id=23264&format=png&color=5C6569';
+const IC_BOT_ROSE = 'https://img.icons8.com/?size=100&id=lUk2otclIHsF&format=png&color=AB596A';
+const IC_BOT_BLUE = 'https://img.icons8.com/?size=100&id=lUk2otclIHsF&format=png&color=3C468B';
+
+/* ── Data ── */
+const steps = [
+  { number: '01', label: 'DEFINE', title: 'Start with what good looks like.', text: 'Map features into expected behaviors and explicit success criteria — grounded in product goals, policies, and real user needs.', tags: ['Features', 'Behaviors', 'Criteria'] },
+  { number: '02', label: 'DESIGN', title: 'Turn intent into realistic tests.', text: 'Generate personas, common and edge-case scenarios, repeatable trials, and the right graders for every behavior.', tags: ['Personas', 'Scenarios', 'Graders'] },
+  { number: '03', label: 'EXECUTE', title: 'Test the full trajectory.', text: 'Simulate adaptive, multi-turn interactions through REST APIs or real browser flows, then fetch the complete execution trace.', tags: ['Multi-turn', 'API + UI', 'Traces'] },
+  { number: '04', label: 'IMPROVE', title: 'Know exactly what to fix.', text: 'Inspect scores and reasoning at every step. Aggregate pass rates across trials and turn failure patterns into product decisions.', tags: ['Insights', 'Confidence', 'Regression'] },
+];
+
+type WizMsg = { role: 'wizard' | 'user'; text: string; files?: string[]; specLines?: number };
+const wizMsgs: WizMsg[] = [
+  { role: 'wizard', text: "Tell me about your target — what it does and who it's for." },
+  { role: 'user', text: "We're building an Enterprise AI Assistant for staff. It searches knowledge bases, drafts replies, and manages documents.", files: ['PRD.pdf', 'User Research.docx', 'Policies.pdf'], specLines: 2 },
+  { role: 'wizard', text: "I've read your documents. The assistant handles enterprise search, email drafting, and document management. What should happen when a user asks for information from a restricted source?", specLines: 6 },
+  { role: 'user', text: "It should only search authorised sources and tell the user if it can't access something." },
+  { role: 'wizard', text: "I'll set that as acceptance criteria: Factual Accuracy, Evidence Source Suitability, and Claim Support by Evidence.", specLines: 10 },
+  { role: 'user', text: "What about when it can't find relevant information?" },
+  { role: 'wizard', text: "I'll add Appropriate Handling of Capability Limits — the assistant should disclose when it can't find what the user needs.", specLines: 11 },
+];
+
+const specLines = [
+  'target:', '  name: Enterprise AI Assistant', 'feature:',
+  '  name: Enterprise Search and Knowledge Retrieval', 'behaviour:',
+  '  name: Find and use enterprise information', 'criteria:',
+  '  - Factual Accuracy', '  - Evidence Source Suitability',
+  '  - Claim Support by Evidence', '  - Appropriate Handling of Capability Limits',
+];
+
+const engMsgs = [
+  { role: 'user' as const, text: "I need to reply to Priya's thread about the team offsite. Can you check what we decided last year?" },
+  { role: 'assistant' as const, text: "Last year's offsite deck shows the team chose Sentosa with 42 attendees and an $18,000 budget. The venue was booked 10 weeks in advance." },
+  { role: 'user' as const, text: "Great, draft a reply suggesting we start booking earlier this time." },
+  { role: 'assistant' as const, text: "Hi Priya, thanks for kicking this off. Last year we booked Sentosa 10 weeks ahead and the best rooms were already gone. Could we aim for 14 weeks this time?" },
+  { role: 'user' as const, text: "Make it shorter." },
+  { role: 'assistant' as const, text: "Hi Priya, last year we booked 10 weeks out and lost the best rooms. Can we try 14 weeks this time?" },
+];
+
+const traceSpans = [
+  { type: 'TRACE', name: 'Trial 1 — TC-001 × knowledge-worker', ms: 35000, depth: 0 },
+  { type: 'LLM', name: 'gpt-4o · Persona prompt', ms: 8200, tokens: 340, depth: 1 },
+  { type: 'TOOL', name: 'search_knowledge_base("offsite")', ms: 3100, depth: 1 },
+  { type: 'LLM', name: 'gpt-4o · Generate response', ms: 11400, tokens: 520, depth: 1 },
+  { type: 'TOOL', name: 'search_knowledge_base("booking")', ms: 2800, depth: 1 },
+  { type: 'LLM', name: 'gpt-4o · Draft reply', ms: 9500, tokens: 410, depth: 1 },
+];
+
+const engStepMap = [
+  { chat: [0], trace: [0, 1] }, { chat: [], trace: [2] },
+  { chat: [1], trace: [3] }, { chat: [2], trace: [] },
+  { chat: [], trace: [4] }, { chat: [3], trace: [5] },
+  { chat: [4], trace: [] }, { chat: [5], trace: [] },
+];
+
+/* Evaluation pipeline — grader names from taxonomy_v8.csv measure dimension */
+const pipelineCriteria = [
+  { id: 'Factual Accuracy', grader: 'FactualAccuracyGrader', score: 0.30, threshold: 0.70, reason: 'The draft states 40 attendees. The source document says 42.' },
+  { id: 'Evidence Source Suitability', grader: 'EvidenceSourceGrader', score: 0.67, threshold: 0.70, reason: 'Retrieved the correct offsite deck, but also cited the 2023 policy which has been replaced.' },
+  { id: 'Claim Support by Evidence', grader: 'ClaimSupportGrader', score: 0.90, threshold: 0.70, reason: 'The reply references the planning deck and the thread. Claims are traceable to sources.' },
+];
+
+const insightTree = [
+  { depth: 0, label: 'Enterprise AI Assistant', value: 75, pass: true },
+  { depth: 1, label: 'Search & Knowledge Retrieval', value: 71, pass: true },
+  { depth: 2, label: 'Find and use enterprise info', value: 71, pass: true },
+  { depth: 3, label: 'Factual Accuracy', value: 30, pass: false },
+  { depth: 3, label: 'Evidence Source Suitability', value: 67, pass: false },
+  { depth: 3, label: 'Claim Support by Evidence', value: 90, pass: true },
+];
+
+const insightBars = [
+  { label: 'Factual Accuracy', pct: 30, threshold: 70, passed: 0, total: 4 },
+  { label: 'Evidence Source Suitability', pct: 67, threshold: 70, passed: 2, total: 3 },
+  { label: 'Claim Support by Evidence', pct: 90, threshold: 70, passed: 3, total: 4 },
+  { label: 'Output Correctness', pct: 50, threshold: 70, passed: 2, total: 4 },
+  { label: 'Input Interpretation Accuracy', pct: 75, threshold: 70, passed: 3, total: 4 },
+  { label: 'Capability Limits Handling', pct: 100, threshold: 70, passed: 4, total: 4 },
+];
+
+/* ── Hooks ── */
+const noMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function useSequence(total: number, active: boolean, ms: number) {
+  const [n, setN] = useState(() => noMotion() ? total : 0);
+  useEffect(() => {
+    if (noMotion()) { setN(total); return; }
+    if (!active || n >= total) return;
+    const t = setInterval(() => setN((v) => { if (v >= total) { clearInterval(t); return v; } return v + 1; }), ms);
+    return () => clearInterval(t);
+  }, [active, n, total, ms]);
+  const replay = useCallback(() => setN(0), []);
+  return { n, done: n >= total, replay };
+}
+
+function useTimer(active: boolean, max = 72) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (noMotion()) { setTick(max); return; }
+    if (!active || tick >= max) return;
+    const t = setInterval(() => setTick((v) => v >= max ? (clearInterval(t), v) : v + 1), 500);
+    return () => clearInterval(t);
+  }, [active, tick, max]);
+  const replay = useCallback(() => setTick(0), []);
+  const simSec = tick * 5;
+  return { tick, simSec, mm: pad2(Math.floor(simSec / 60)), ss: pad2(simSec % 60), replay };
+}
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/* Pipeline: 0=idle, 1=interaction, 2=trace, 3=grading, 4=done */
+function usePipeline(active: boolean) {
+  const [phase, setPhase] = useState(() => noMotion() ? 4 : 0);
+  const [gradersDone, setGradersDone] = useState<Set<number>>(() => noMotion() ? new Set([0, 1, 2]) : new Set());
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (noMotion()) { setPhase(4); setGradersDone(new Set([0, 1, 2])); return; }
+    if (!active || started.current) return;
+    started.current = true;
+    setTimeout(() => setPhase(1), 300);
+    setTimeout(() => setPhase(2), 3600);
+    setTimeout(() => setPhase(3), 5000);
+    setTimeout(() => setGradersDone(new Set([2])), 6200);
+    setTimeout(() => setGradersDone(new Set([1, 2])), 6800);
+    setTimeout(() => setGradersDone(new Set([0, 1, 2])), 7400);
+    setTimeout(() => setPhase(4), 8000);
+  }, [active]);
+
+  const replay = useCallback(() => {
+    started.current = false;
+    setPhase(0);
+    setGradersDone(new Set());
+    setTimeout(() => { started.current = false; }, 50);
+  }, []);
+
+  return { phase, gradersDone, replay };
+}
+
+/* ── App ── */
+export default function App() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [vis, setVis] = useState<Set<number>>(() => new Set());
+  const refs = useRef<(HTMLDivElement | null)[]>([null, null, null, null]);
+
+  // Wizard
+  const [wizPhase, setWizPhase] = useState<'idle' | 'prompt' | 'files' | 'thinking' | 'chat' | 'done'>(() => noMotion() ? 'done' : 'idle');
+  const wizStarted = useRef(false);
+  const wizTimers = useRef<number[]>([]);
+  const wizChat = useSequence(wizMsgs.length - 2, wizPhase === 'chat' || wizPhase === 'done', 1500);
+
+  // Engine
+  const engStep = useSequence(engStepMap.length, vis.has(1), 1200);
+  const engTimer = useTimer(vis.has(1));
+
+  // Pipeline (new Stage 3)
+  const pipeline = usePipeline(vis.has(2));
+
+  // Insights
+  const insVisible = vis.has(3);
+  const [insPhase, setInsPhase] = useState(() => noMotion() ? 3 : 0);
+  const insStarted = useRef(false);
+  const [jiggled, setJiggled] = useState<Set<number>>(() => new Set());
+
+  useEffect(() => {
+    const els = refs.current.filter(Boolean) as HTMLDivElement[];
+    const obs = new IntersectionObserver(
+      (entries) => setVis((prev) => {
+        const next = new Set(prev);
+        for (const e of entries) { const i = els.indexOf(e.target as HTMLDivElement); if (i >= 0 && e.isIntersecting) next.add(i); }
+        return next;
+      }),
+      { threshold: 0.05 },
+    );
+    els.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, []);
+
+  // Wizard phases
+  const startWizard = useCallback(() => {
+    wizTimers.current.forEach(clearTimeout);
+    wizTimers.current = [];
+    setWizPhase('prompt');
+    wizTimers.current.push(
+      window.setTimeout(() => setWizPhase('files'), 1500),
+      window.setTimeout(() => setWizPhase('thinking'), 2200),
+      window.setTimeout(() => setWizPhase('chat'), 4000),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (noMotion()) { setWizPhase('done'); return; }
+    if (vis.has(0) && !wizStarted.current) { wizStarted.current = true; startWizard(); }
+  }, [vis, startWizard]);
+
+  useEffect(() => () => wizTimers.current.forEach(clearTimeout), []);
+
+  // Insights — fixed: use boolean dep instead of Set
+  useEffect(() => {
+    if (noMotion()) { setInsPhase(3); return; }
+    if (!insVisible || insStarted.current) return;
+    insStarted.current = true;
+    setTimeout(() => setInsPhase(1), 400);
+    setTimeout(() => setInsPhase(2), 1400);
+    setTimeout(() => setInsPhase(3), 2400);
+  }, [insVisible]);
+
+  useEffect(() => {
+    if (insPhase < 2) return;
+    insightBars.forEach((b, i) => {
+      if (b.pct >= b.threshold) setTimeout(() => setJiggled((s) => new Set(s).add(i)), 1400 + i * 200);
+    });
+  }, [insPhase]);
+
+  // Compute visible spec lines
+  const visibleSpecLines = (() => {
+    const p = wizPhase as string;
+    const totalRevealed = p === 'done' ? wizMsgs.length : p === 'chat' ? 2 + wizChat.n : p === 'thinking' || p === 'files' ? 2 : p === 'prompt' ? 1 : 0;
+    let lines = 0;
+    for (let i = 0; i < totalRevealed; i++) { if (wizMsgs[i]?.specLines) lines = wizMsgs[i].specLines!; }
+    return lines;
+  })();
+
+  // Engine visible sets
+  const engVisChat = new Set<number>();
+  const engVisTrace = new Set<number>();
+  for (let s = 0; s < engStep.n; s++) {
+    engStepMap[s].chat.forEach((i) => engVisChat.add(i));
+    engStepMap[s].trace.forEach((i) => engVisTrace.add(i));
+  }
+
+  const wizMsgVisible = (i: number) => {
+    const p = wizPhase as string;
+    if (p === 'done') return true;
+    if (i === 0) return p !== 'idle';
+    if (i === 1) return p === 'files' || p === 'thinking' || p === 'chat';
+    if (i === 2) return p === 'thinking' || p === 'chat';
+    return p === 'chat' && wizChat.n >= i - 1;
+  };
+  const wizMsgIsThinking = (i: number) => wizPhase === 'thinking' && i === 2;
+
+  return (
+    <div className="site-shell">
+      <nav className="nav-wrap" aria-label="Main navigation">
+        <div className="nav container">
+          <a className="brand" href="#top" aria-label="METIS home"><img src="/metis-logo.png" alt="" /><span>METIS</span></a>
+          <button className="menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen} aria-label="Toggle menu"><span /><span /></button>
+          <div className={`nav-links ${menuOpen ? 'open' : ''}`}>
+            <a className="nav-cta" href={GITHUB_URL}><Github /> GitHub</a>
+          </div>
+        </div>
+      </nav>
+
+      <main id="top">
+        <section className="hero container">
+          <div className="hero-copy">
+            <div className="eyebrow">Specifications-driven evaluation</div>
+            <h1>Test your AI agents against <em>what they should actually do.</em></h1>
+            <p className="hero-lede">Most evaluation tools score an agent's final answer. METIS evaluates the full trajectory — every decision, tool call, and recovery — against structured specifications.</p>
+            <div className="hero-actions">
+              <a className="button primary" href={GITHUB_URL}><Github /> View on GitHub</a>
+            </div>
+          </div>
+        </section>
+
+        <section className="methodology" id="methodology"><div className="container">
+          <div className="section-heading"><div><div className="section-kicker">THE METIS METHODOLOGY</div><h2>From intent to evidence.</h2></div><p>A structured workflow makes rigorous agent evaluation practical — not another research project.</p></div>
+          <div className="steps">{steps.map((s) => <article key={s.number} className="step"><div className="step-top"><span>{s.number}</span><b>{s.label}</b></div><h3>{s.title}</h3><p>{s.text}</p><div className="tags">{s.tags.map((t) => <span key={t}>{t}</span>)}</div></article>)}</div>
+        </div></section>
+
+        <section className="walkthrough" id="product"><div className="container">
+          <div className="section-heading dark-text"><div><div className="section-kicker">ONE EVALUATION, START TO FINISH</div><h2>See how METIS works.</h2></div><p>Follow a single evaluation of an Enterprise AI Assistant — from specification to results.</p></div>
+
+          <div className="wt-stages">
+
+            {/* ─ Stage 1: Wizard ─ */}
+            <div className={`wt-stage ${vis.has(0) ? 'vis' : ''}`} ref={(el) => { refs.current[0] = el; }}>
+              <div className="wt-head"><span className="wt-num wizard">01</span><div><h3>Wizard</h3><small>CREATE A SPECIFICATION</small></div>
+                <button className="wt-replay" onClick={() => { wizStarted.current = true; wizChat.replay(); startWizard(); }}>Replay</button>
+              </div>
+              <div className="wt-wizard-layout">
+                <div className="wt-wizard-left">
+                  <div className="wt-chat">
+                    {wizMsgs.map((m, i) => (
+                      <div className={`wt-msg ${m.role} ${wizMsgVisible(i) ? 'show' : ''}`} key={i}>
+                        <div className="wt-msg-head">
+                          <img src={m.role === 'wizard' ? IC_WIZARD : IC_USER} alt="" className="wt-msg-icon" />
+                          <span className="wt-msg-role">{m.role === 'wizard' ? 'Wizard' : 'You'}</span>
+                        </div>
+                        <div className={`wt-msg-bubble ${wizMsgIsThinking(i) ? 'wt-typing-bubble' : ''}`}>
+                          {wizMsgIsThinking(i) ? <><i /><i /><i /></> : m.text}
+                          {m.files && <div className="wt-msg-files">{m.files.map((f) => <span key={f} className="wt-file-chip"><FileDoc />{f}</span>)}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="wt-wizard-right">
+                  <div className={`wt-spec ${visibleSpecLines > 0 ? 'vis' : ''}`}>
+                    <div className="wt-spec-chrome">specification.yaml</div>
+                    <code><pre>{specLines.map((line, i) => (
+                      <span key={i} className={`wt-spec-line ${i < visibleSpecLines ? 'vis' : ''}`} style={{ transitionDelay: `${i * 80}ms` }}>{line}{'\n'}</span>
+                    ))}{visibleSpecLines > 0 && visibleSpecLines < specLines.length && <span className="wt-cursor">▋</span>}</pre></code>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`wt-connector ${vis.has(0) ? 'vis' : ''}`}><div className="wt-conn-track" /><div className="wt-conn-runner"><FileDoc /></div><span className="wt-conn-label">specification.yaml</span></div>
+
+            {/* ─ Stage 2: Engine ─ */}
+            <div className={`wt-stage ${vis.has(1) ? 'vis' : ''}`} ref={(el) => { refs.current[1] = el; }}>
+              <div className="wt-head"><span className="wt-num engine">02</span><div><h3>Engine</h3><small>SIMULATE & CAPTURE TRACES</small></div>
+                <button className="wt-replay" onClick={() => { engStep.replay(); engTimer.replay(); }}>Replay</button>
+              </div>
+              <div className="wt-engine-panels">
+                <div className="wt-tui">
+                  <div className="wt-tui-head">METIS Engine Simulate — enterprise-ai-assistant</div>
+                  <div className="wt-tui-body">
+                    <div className="wt-tui-row"><span>Elapsed</span><b className="wt-timer">00:{engTimer.mm}:{engTimer.ss}</b></div>
+                    <div className="wt-tui-row"><span>Scenarios</span><div className="wt-tui-bar"><div style={{ width: `${Math.min((engTimer.tick / 72) * 100, 100)}%` }} /></div><b>{Math.min(Math.floor(engTimer.simSec / 120), 3)}/3</b></div>
+                    <div className="wt-tui-row"><span>Trials</span><div className="wt-tui-bar"><div style={{ width: `${Math.min((engTimer.tick / 72) * 100, 100)}%` }} /></div><b>{Math.min(Math.floor(engTimer.simSec / 40), 9)}/9</b></div>
+                    <div className="wt-tui-workers">
+                      {[{ id: 'TC-001', w: 'w0', name: 'knowledge-worker', start: 5 }, { id: 'TC-002', w: 'w1', name: 'focused-questioner', start: 120 }, { id: 'TC-003', w: 'w2', name: 'policy-seeker', start: 240 }].map((tc) => (
+                        <div key={tc.id}>{tc.id} · <b>[{tc.w}]</b> {tc.name} {engTimer.simSec > tc.start ? <><Spinner /><span className="wt-sim">simulating</span></> : <span className="wt-wait">waiting</span>}</div>
+                      ))}
+                    </div>
+                    {engTimer.simSec > 10 && <div className="wt-tui-log">
+                      <div>[experiment] RUN: knowledge-worker × S-1</div>
+                      {engTimer.simSec > 30 && <div>[sim] START: knowledge-worker × S-1 (max_turns=10)</div>}
+                      {engTimer.simSec > 120 && <div>[sim] COMPLETE: TC-001 trial 1/3 — 3 turns, 35s</div>}
+                      {engTimer.simSec > 180 && <div>[experiment] RUN: focused-questioner × S-2</div>}
+                    </div>}
+                  </div>
+                </div>
+                <div className="wt-trace">
+                  <div className="wt-trace-head">EXECUTION TRACE</div>
+                  <div className="wt-trace-body">
+                    {traceSpans.map((sp, i) => (
+                      <div className={`wt-span ${sp.type.toLowerCase()} ${engVisTrace.has(i) ? 'show' : ''}`} key={i} style={{ paddingLeft: `${sp.depth * 14}px` }}>
+                        <span className={`wt-span-type ${sp.type.toLowerCase()}`}>{sp.type}</span>
+                        <span className="wt-span-name">{sp.name}</span>
+                        <div className="wt-span-bar"><div style={{ width: engVisTrace.has(i) ? `${(sp.ms / 35000) * 100}%` : '0%' }} /></div>
+                        <span className="wt-span-ms">{(sp.ms / 1000).toFixed(1)}s{'tokens' in sp ? ` · ${sp.tokens}t` : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="wt-scenario-banner"><span className="wt-banner-tag">SCENARIO</span><strong>Draft a reply using a past event record</strong><span className="wt-banner-meta">persona: collaborative knowledge worker</span></div>
+              <div className="wt-chat compact">
+                {engMsgs.map((m, i) => (
+                  <div className={`wt-msg ${m.role} ${engVisChat.has(i) ? 'show' : ''}`} key={i}>
+                    <div className="wt-msg-head"><img src={m.role === 'user' ? IC_BOT_ROSE : IC_BOT_BLUE} alt="" className="wt-msg-icon" /><span className="wt-msg-role">{m.role === 'user' ? 'Simulated user' : 'Enterprise AI Assistant'}</span></div>
+                    <div className="wt-msg-bubble">{m.text}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className={`wt-connector ${vis.has(1) ? 'vis' : ''}`}><div className="wt-conn-track" /><div className="wt-conn-runner"><TraceNodes /></div><span className="wt-conn-label">execution trace</span></div>
+
+            {/* ─ Stage 3: Evaluation Pipeline ─ */}
+            <div className={`wt-stage ${vis.has(2) ? 'vis' : ''}`} ref={(el) => { refs.current[2] = el; }}>
+              <div className="wt-head"><span className="wt-num graders">03</span><div><h3>Evaluate</h3><small>GRADE AGAINST CRITERIA</small></div>
+                <button className="wt-replay" onClick={pipeline.replay}>Replay</button>
+              </div>
+
+              <div className="wt-pipeline">
+                {/* Trace summary */}
+                <div className={`wt-pipe-trace ${pipeline.phase >= 2 ? 'vis' : ''}`}>
+                  <div className="wt-pipe-trace-label">CAPTURED TRACE</div>
+                  <div className="wt-pipe-trace-items">
+                    <span>Turn 1: user message</span>
+                    <span className="wt-pipe-tool">Tool: search_knowledge_base</span>
+                    <span>Turn 1: agent response</span>
+                    <span>Turn 2: user message</span>
+                    <span>Turn 2: agent response</span>
+                    <span>Turn 3: user + agent</span>
+                  </div>
+                </div>
+
+                {/* Fan-out indicator */}
+                <div className={`wt-pipe-fanout ${pipeline.phase >= 3 ? 'vis' : ''}`}>
+                  <div className="wt-fanout-line" /><span>Same trace sent to each criterion</span><div className="wt-fanout-line" />
+                </div>
+
+                {/* Parallel graders */}
+                <div className={`wt-pipe-graders ${pipeline.phase >= 3 ? 'vis' : ''}`}>
+                  {pipelineCriteria.map((c, i) => {
+                    const done = pipeline.gradersDone.has(i);
+                    const pass = c.score >= c.threshold;
+                    return (
+                      <div className={`wt-pipe-grader ${done ? (pass ? 'pass' : 'fail') : 'running'}`} key={c.id}>
+                        <div className="wt-pipe-grader-head">
+                          <span className="wt-pipe-grader-type">{c.grader}</span>
+                          {!done && <Spinner />}
+                        </div>
+                        <strong>{c.id}</strong>
+                        {done ? (
+                          <>
+                            <div className="wt-pipe-score">Score: <b>{c.score.toFixed(2)}</b> <span>(threshold ≥ {c.threshold})</span></div>
+                            <span className={`wt-badge ${pass ? 'pass' : 'fail'}`}>{pass ? <><Check /> Passed</> : <><Xmark /> Failed</>}</span>
+                            <p className="wt-pipe-reason">{c.reason}</p>
+                          </>
+                        ) : (
+                          <p className="wt-pipe-evaluating">Evaluating trace evidence…</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Converge indicator */}
+                <div className={`wt-pipe-fanout ${pipeline.phase >= 4 ? 'vis' : ''}`}>
+                  <div className="wt-fanout-line" /><span>Orchestrator applies thresholds</span><div className="wt-fanout-line" />
+                </div>
+
+                {/* Aggregated result */}
+                <div className={`wt-pipe-result ${pipeline.phase >= 4 ? 'vis' : ''}`}>
+                  <div className="wt-pipe-result-head">EVALUATION RESULT</div>
+                  <div className="wt-pipe-result-body">
+                    {pipelineCriteria.map((c) => {
+                      const pass = c.score >= c.threshold;
+                      return <div key={c.id} className={`wt-pipe-result-row ${pass ? 'pass' : 'fail'}`}><span>{c.id}</span><b>{c.score.toFixed(2)}</b><span className={`wt-badge ${pass ? 'pass' : 'fail'}`}>{pass ? 'Passed' : 'Failed'}</span></div>;
+                    })}
+                  </div>
+                  <div className="wt-pipe-result-summary"><strong>1 of 3</strong> criteria passed this trial. Graders scored independently; the orchestrator applied each criterion's threshold.</div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`wt-connector ${vis.has(2) ? 'vis' : ''}`}><div className="wt-conn-track" /><div className="wt-conn-runner"><Verdict /></div><span className="wt-conn-label">graded results</span></div>
+
+            {/* ─ Stage 4: Insights ─ */}
+            <div className={`wt-stage ${vis.has(3) ? 'vis' : ''}`} ref={(el) => { refs.current[3] = el; }}>
+              <div className="wt-head"><span className="wt-num insights">04</span><div><h3>Insights</h3><small>PRESENT RESULTS</small></div></div>
+              <div className="wt-insights">
+                <div className={`wt-ins-panel ${insPhase >= 1 ? 'vis' : ''}`}>
+                  <div className="wt-ins-title">SPECIFICATION RESULTS</div>
+                  <div className="wt-tree">{insightTree.map((node, i) => (
+                    <div className={`wt-tree-node ${node.pass ? 'pass' : 'fail'}`} key={i} style={{ paddingLeft: `${node.depth * 14}px`, transitionDelay: `${i * 180}ms` }}>
+                      {node.depth > 0 && <span className="wt-tree-branch" />}
+                      <span className="wt-tree-label">{node.label}</span>
+                      <span className={`wt-tree-val ${node.pass ? 'pass' : 'fail'} ${node.pass && insPhase >= 1 ? 'pop' : ''}`}>{node.value}%</span>
+                    </div>
+                  ))}</div>
+                </div>
+
+                <div className={`wt-ins-panel ${insPhase >= 2 ? 'vis' : ''}`}>
+                  <div className="wt-ins-title">PASS RATES BY CRITERION</div>
+                  <div className="wt-bars">{insightBars.map((b, i) => {
+                    const passes = b.pct >= b.threshold;
+                    return (
+                      <div className={`wt-bar-row ${jiggled.has(i) && passes ? 'jiggle' : ''}`} key={i}>
+                        <span className="wt-bar-label">{b.label}</span>
+                        <div className="wt-bar-track"><div className="wt-bar-threshold" style={{ left: `${b.threshold}%` }} /><div className={`wt-bar-fill ${passes ? 'pass' : 'fail'}`} style={{ '--pct': `${b.pct}%` } as React.CSSProperties} /></div>
+                        <span className={`wt-bar-val ${passes ? 'pass' : 'fail'}`}>{b.pct}%</span>
+                        <span className="wt-bar-count">{b.passed}/{b.total}</span>
+                      </div>
+                    );
+                  })}</div>
+                </div>
+
+                <div className={`wt-ins-panel ${insPhase >= 3 ? 'vis' : ''}`}>
+                  <div className="wt-ins-title">TRIAL TRANSCRIPT & VERDICTS</div>
+                  <div className="wt-mini-chat">
+                    <div className="wt-mini-msg user">Reply about the offsite — what did we decide?</div>
+                    <div className="wt-mini-msg asst">Sentosa, 42 attendees, booked 10 weeks ahead.</div>
+                  </div>
+                  <div className="wt-verdicts">
+                    <div className="wt-verdict fail"><Xmark /><div><strong>Answer correctness</strong><span>Draft says 40; deck says 42.</span></div></div>
+                    <div className="wt-verdict pass"><Check /><div><strong>Source traceability</strong><span>References deck and thread.</span></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div></section>
+
+        <section className="cta-section container" id="get-started"><div className="cta-panel">
+          <div className="cta-copy"><div className="section-kicker light">OPEN SOURCE · MIT LICENSE</div><h2>Start evaluating<br />with confidence.</h2><p>Define what your agent should do. Run evaluations that test the full trajectory. Understand exactly what to fix before you ship.</p>
+            <div className="cta-actions"><a className="button primary cta-github" href={GITHUB_URL}><Github /> View on GitHub</a><a className="button secondary cta-docs" href={DOCS_URL}>Read the docs <Arrow /></a></div>
+          </div>
+        </div></section>
+      </main>
+
+      <footer><div className="container footer-inner">
+        <div className="footer-top">
+          <a className="brand footer-brand" href="#top"><img src="/metis-logo.png" alt="" /><span>METIS</span></a>
+          <p>Developed by AI Practice, GovTech Singapore</p>
+        </div>
+        <div className="footer-links">
+          <a href="https://github.com/govtech-responsibleai">GitHub</a>
+          <a href="https://blog.ai.gov.sg">Blog</a>
+          <a href="https://huggingface.co/govtech">Hugging Face</a>
+          <a href="https://playbooks.aip.gov.sg/responsibleai/">Playbook</a>
+        </div>
+        <span>Specifications in, confidence out.</span>
+      </div></footer>
+    </div>
+  );
+}
