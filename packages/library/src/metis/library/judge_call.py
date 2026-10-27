@@ -99,7 +99,7 @@ def get_session_turns(
     When ``evidence_required`` is True (default), an empty session produces errored
     because the required evidence is unavailable. When False, it produces skipped.
     """
-    session = select_all(turns(input))
+    session = select_all(turns(input.traces))
     if isinstance(session, Problem):
         if evidence_required:
             return GradingOutput(

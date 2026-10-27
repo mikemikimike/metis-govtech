@@ -193,7 +193,7 @@ def resolve_response(
     ),
 ) -> SelectedEvidence | EvidenceError:
     """Resolve a response selector against the session's traces."""
-    session = select_all(turns(input))
+    session = select_all(turns(input.traces))
     if isinstance(session, Problem):
         return EvidenceError(
             "The session has no turns; required evidence is unavailable."
@@ -299,7 +299,7 @@ def resolve_artifact(
             f"Cannot extract content from artifact '{selector.name}': {result.detail}"
         )
 
-    session = select_all(turns(input))
+    session = select_all(turns(input.traces))
     context = render_transcript(session) if not isinstance(session, Problem) else None
 
     provenance = f"artifact '{selector.name}' ({result.format})"
@@ -323,7 +323,7 @@ def resolve_session(
     """Resolve a whole-session selector."""
     from ._judge_call import render_transcript_with_tool_results
 
-    session = select_all(turns(input))
+    session = select_all(turns(input.traces))
     if isinstance(session, Problem):
         return EvidenceError(
             "The session has no turns; required evidence is unavailable."
@@ -556,7 +556,7 @@ def resolve_per_turn(
     """
     from ._judge_call import render_transcript_with_tool_results
 
-    session = turns(input)
+    session = turns(input.traces)
     if not session:
         return []
 
@@ -615,7 +615,7 @@ def resolve_all_artifacts(
     if not all_matching:
         return [(0, EvidenceError(f"No target artifact named '{name}'."))]
 
-    session = select_all(turns(input))
+    session = select_all(turns(input.traces))
     if isinstance(session, Problem):
         context = None
     elif include_tool_results:
@@ -696,7 +696,7 @@ def resolve_tool_calls(
     """
     import json as _json
 
-    session = turns(input)
+    session = turns(input.traces)
     if not session:
         return []
 
