@@ -39,10 +39,10 @@ REQUIRED: dict[str, dict[str, Any]] = {
     "ActionChoiceAppropriatenessGrader": {},
     "AdaptationToChangedConditionsGrader": {},
     "AppropriateHandlingOfCapabilityLimitsGrader": {},
-    "AttributionAccuracyGrader": {"source_materials": ["Annual report 2025"]},
+    "AttributionAccuracyGrader": {},
     "AvoidingUnproductiveRepetitionGrader": {},
-    "ClaimSupportByEvidenceGrader": {"designated_evidence": ["Revenue rose 12%."]},
-    "ContentFidelityGrader": {"source_content": "The meeting moved to Friday."},
+    "ClaimSupportByEvidenceGrader": {},
+    "ContentFidelityGrader": {},
     "CoordinationQualityGrader": {},
     "ErrorDetectionGrader": {},
     "ErrorRecoveryGrader": {},
@@ -342,6 +342,72 @@ def test_artifact_scope_prompt_judges_only_the_file(
     assert "Judge only the attached file." in criteria
     assert "user's messages" not in criteria
     assert "tool results" not in criteria
+
+
+SOURCE_GRADERS = sorted(
+    [
+        "AttributionAccuracyGrader",
+        "ClaimSupportByEvidenceGrader",
+        "ContentFidelityGrader",
+    ]
+)
+
+
+@pytest.mark.parametrize("name", SOURCE_GRADERS)
+def test_the_prompt_names_the_session_as_the_source(name: str) -> None:
+    _, [request] = _grade(_grader(name), _session(), VERDICT)
+    system = request["input"][0]["content"]
+    assert (
+        "the content that the user gave the agent or that the agent retrieved" in system
+    )
+    assert "the criterion does not apply" in system
+
+
+@pytest.mark.parametrize("name", SOURCE_GRADERS)
+def test_the_earlier_turns_are_sources_for_the_judged_reply(name: str) -> None:
+    _, [request] = _grade(_grader(name), _session(), VERDICT)
+    context, judged = request["input"][1]["content"]
+    assert context["text"].startswith("## Turn 1\nUser: hi")
+    assert judged["text"].startswith("## Turn 2\nUser: find x")
+
+
+def _fixture(tmp_path: Path) -> Artifact:
+    path = tmp_path / "minutes.txt"
+    path.write_text("The meeting moved to Friday.")
+    return Artifact(
+        name="minutes.txt", source="fixture", state="received", path=str(path)
+    )
+
+
+@pytest.mark.parametrize("name", SOURCE_GRADERS)
+def test_the_files_the_user_gave_reach_the_request(name: str, tmp_path: Path) -> None:
+    _, [request] = _grade(
+        _grader(name), _session(artifacts=(_fixture(tmp_path),)), VERDICT
+    )
+    files = [p for p in request["input"][1]["content"] if p["type"] == "input_file"]
+    assert [f["filename"] for f in files] == ["minutes.txt"]
+
+
+@pytest.mark.parametrize("name", SOURCE_GRADERS)
+def test_on_a_file_the_session_and_the_given_files_are_the_sources(
+    name: str, tmp_path: Path
+) -> None:
+    path = tmp_path / "report.txt"
+    path.write_text("Friday.")
+    output = Artifact(
+        name="report.txt", source="target", state="received", path=str(path)
+    )
+    grader = _grader(name, scope="artifact", artifact="report.txt")
+    _, [request] = _grade(
+        grader, _session(artifacts=(output, _fixture(tmp_path))), VERDICT
+    )
+    parts = request["input"][1]["content"]
+    assert parts[0]["text"].startswith("## Turn 1\nUser: hi")
+    assert [p.get("filename") for p in parts[1:]] == ["report.txt", "minutes.txt"]
+    assert (
+        "The first attached file is the assessed output."
+        in request["input"][0]["content"]
+    )
 
 
 def test_task_success_on_a_file_needs_a_goal() -> None:

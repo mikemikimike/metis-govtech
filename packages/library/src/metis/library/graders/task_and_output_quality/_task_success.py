@@ -1,4 +1,15 @@
-"""TaskSuccessGrader: whether the requested end goal was achieved."""
+"""TaskSuccessGrader: whether the requested end goal was achieved.
+
+Prompt adapted from DeepEval task completion
+(confident-ai/deepeval@d6cd78a, deepeval/metrics/task_completion/templates/
+extract_task_and_outcome_from_trace.txt and
+deepeval/metrics/task_completion/templates/generate_verdict.txt).
+Copyright 2024 Confident AI Inc. Licensed under the Apache License, Version 2.0.
+Changed for METIS: the two DeepEval calls (extract the task and outcome, then score 0 to 1) are
+one call with the extraction as first steps, and the score is binary. The trace JSON example and
+the JSON output format are removed.
+See metis/library/EXTERNAL_SOURCES.md for the license text.
+"""
 
 from __future__ import annotations
 
@@ -89,10 +100,45 @@ class TaskSuccessGrader(Grader[TaskSuccessArgs]):
             "You are assessing whether the requested end goal was achieved."
             + self._task_block()
             + section("success_conditions", self.args.success_conditions)
+            + self._steps()
             + "\n\n<assessment_boundaries>\n"
             "Assess whether the declared end goals and mandatory conditions were achieved. "
             + self._evidence_rule()
             + "\n</assessment_boundaries>"
+        )
+
+    def _steps(self) -> str:
+        if self.scope == Scope.ARTIFACT:
+            task = "1. Identify the task: the goal and success conditions given above."
+            outcome = (
+                "2. Describe the outcome: a strictly factual description of what the "
+                "file contains, based only on the file."
+            )
+            enumerate_ = "Enumerate each relevant part of the file, in plain language."
+        else:
+            task = (
+                "1. Identify the task: the task or objective expressed by the user, "
+                "together with any task description and success conditions given above."
+            )
+            outcome = (
+                "2. Describe the outcome: a strictly factual description of what the "
+                "system did, based only on the evidence."
+            )
+            enumerate_ = (
+                "Enumerate each relevant action or output the evidence shows, in plain "
+                "language."
+            )
+        return (
+            "\n\n<steps>\n"
+            "Follow these steps before you score.\n"
+            f"{task}\n"
+            f"{outcome} The outcome should be solely factual, derived strictly from the "
+            'evidence. Do not include subjective language such as "successfully", '
+            f'"efficiently", or "well". {enumerate_}\n'
+            "3. Compare how well the actual outcome aligns with the desired task. "
+            "Score 1 only when the actual outcome achieves the task and every success "
+            "condition. Otherwise, score 0."
+            "\n</steps>"
         )
 
     def _task_block(self) -> str:

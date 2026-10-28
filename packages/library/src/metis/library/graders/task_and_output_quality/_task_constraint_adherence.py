@@ -1,4 +1,13 @@
-"""TaskConstraintAdherenceGrader: whether explicit constraints were respected."""
+"""TaskConstraintAdherenceGrader: whether explicit constraints were respected.
+
+Prompt adapted from MLflow guidelines judge
+(mlflow/mlflow@ad84197, mlflow/genai/judges/prompts/guidelines.py).
+Copyright 2018 Databricks, Inc. Licensed under the Apache License, Version 2.0.
+Changed for METIS: the judge assesses one constraint for each call, and a constraint that the
+evidence cannot decide is not applicable, where MLflow passes a guideline that does not apply.
+The JSON output format is replaced by the shared judge instructions.
+See metis/library/EXTERNAL_SOURCES.md for the license text.
+"""
 
 from __future__ import annotations
 
@@ -89,9 +98,15 @@ class TaskConstraintAdherenceGrader(Grader[TaskConstraintAdherenceArgs]):
 
     def criteria(self, constraint: str) -> str:
         return (
-            "You are assessing whether one explicit constraint on task execution or "
-            "response presentation was respected."
+            "Given the following constraint and the assessed evidence, please assess "
+            "whether the evidence fully complies with the provided constraint. Only "
+            "focus on the provided constraint and not the correctness, relevance, or "
+            "effectiveness of the evidence. The constraint is one explicit restriction "
+            "on task execution or response presentation."
             f"\n\n<constraint>\n{constraint}\n</constraint>"
+            "\n\nScore 0 if the constraint is not satisfied, and state which parts of "
+            "the constraint are not satisfied in your reason. Score 1 if the constraint "
+            "is satisfied."
             "\n\n<assessment_boundaries>\n"
             "Assess explicit execution or presentation restrictions. Constraints are "
             "restrictions such as limits, prohibitions, required formats, and permitted "

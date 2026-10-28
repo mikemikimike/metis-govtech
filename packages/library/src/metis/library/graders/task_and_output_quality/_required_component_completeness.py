@@ -1,4 +1,21 @@
-"""RequiredComponentCompletenessGrader: whether every required component is present."""
+"""RequiredComponentCompletenessGrader: whether every required component is present.
+
+Prompt adapted from Arize Phoenix evals completeness classification evaluator
+(Arize-ai/phoenix@d5f5e05, js/packages/phoenix-evals/src/__generated__/default_templates/
+COMPLETENESS_CLASSIFICATION_EVALUATOR_CONFIG.ts).
+Copyright 2025 Arize AI, Inc. Licensed under the Apache License, Version 2.0.
+Changed for METIS: kept only the artifact rules and the refusal rules, removed the request
+enumeration, the action and withdrawal rules and the output format, and judged one required
+component from the settings per call.
+See metis/library/EXTERNAL_SOURCES.md for the license text.
+
+Prompt adapted from MLflow completeness
+(mlflow/mlflow@ad84197, mlflow/genai/judges/prompts/completeness.py).
+Copyright 2018 Databricks, Inc. Licensed under the Apache License, Version 2.0.
+Changed for METIS: kept the scope rules, and removed the rules that a refusal with a reason or
+a request for missing details is complete, the request listing and the output format.
+See metis/library/EXTERNAL_SOURCES.md for the license text.
+"""
 
 from __future__ import annotations
 
@@ -79,10 +96,24 @@ class RequiredComponentCompletenessGrader(Grader[RequiredComponentCompletenessAr
 
     def criteria(self, component: str) -> str:
         return (
-            "You are assessing whether one explicitly required component is present "
-            "in the assessed evidence."
+            "You are an expert evaluator labeling whether the assessed evidence contains "
+            "one explicitly required component."
             f"\n\n<required_component>\n{component}\n</required_component>"
+            "\n\nArtifacts\n"
+            "- The assistant must deliver the requested artifact.\n"
+            "- The artifact must contain every component the user explicitly required.\n"
+            "- Do not judge general quality beyond those explicit requirements.\n\n"
+            "Answers\n"
+            "- Saying the requested fact is absent, unknown, or not in the "
+            "source/context is not an answer.\n"
+            '- A refusal or "I don\'t know" is likewise not fulfilment.\n\n'
+            "Score 1 when the required component is present. Score 0 when it is "
+            "absent, or when the assistant refused, said it does not know, or said the "
+            "requested fact is absent or unknown in place of the component."
             "\n\n<assessment_boundaries>\n"
+            "Do not evaluate factual correctness, style, or usefulness beyond whether "
+            "the required component was directly handled. "
+            "Do not make assumptions or bring in external knowledge. "
             "Assess the PRESENCE of each required component, independently of its "
             "correctness or quality. A component that is present but contains errors "
             "still counts as present. A component that is absent or cannot be identified "

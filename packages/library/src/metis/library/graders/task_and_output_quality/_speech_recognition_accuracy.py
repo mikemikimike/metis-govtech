@@ -1,4 +1,13 @@
-"""SpeechRecognitionAccuracyGrader: whether recognized words accurately represent spoken input."""
+"""SpeechRecognitionAccuracyGrader: whether recognized words accurately represent spoken input.
+
+Prompt adapted from DeepEval transcription accuracy
+(confident-ai/deepeval@d6cd78a, deepeval/metrics/transcription_accuracy/templates/
+generate_verdicts.txt).
+Copyright 2024 Confident AI Inc. Licensed under the Apache License, Version 2.0.
+Changed for METIS: DeepEval judges each spoken and transcribed exchange; METIS compares the
+recognition output with one reference transcript. The JSON output format is removed.
+See metis/library/EXTERNAL_SOURCES.md for the license text.
+"""
 
 from __future__ import annotations
 
@@ -83,9 +92,33 @@ class SpeechRecognitionAccuracyGrader(Grader[SpeechRecognitionAccuracyArgs]):
             "Compare the recognition output (in the assessed evidence) against the "
             "reference transcript above. The assessed evidence must be the actual "
             "recognition output, not a conversational answer about the audio. Assess "
-            "word-level accuracy: identify substitutions, insertions, and deletions. "
-            "Minor formatting, punctuation, or capitalization differences that do not "
-            "change the spoken words are acceptable. This is an LLM-based qualitative "
+            "word-level accuracy.\n\n"
+            "Do NOT count any of these as errors — they are the same utterance written "
+            "differently:\n"
+            '- Punctuation, capitalisation, and sentence splitting ("Yes, could you" vs '
+            '"Yes. Could you").\n'
+            '- Numbers written as digits or as words ("fifteen years" vs "15 years", '
+            '"thirty days" vs "30 days").\n'
+            "- Filler words, stutters, or backchannels that were dropped "
+            '("um", "uh", "you know").\n'
+            "- Spelling variants of the same word, contractions, and obvious formatting "
+            "of dates, times, money or units.\n"
+            "- The same words repeated twice, which some speech-to-text engines emit for "
+            "one utterance.\n\n"
+            "DO count these as errors — they change what the agent was told:\n"
+            "- A name, place, company or other proper noun heard as a different word "
+            '("Kavanagh" heard as "Cavanaugh").\n'
+            "- A number, quantity, date or duration that differs in value "
+            '("fifteen" heard as "fifty", "two weeks" heard as "two months").\n'
+            '- A negation gained or lost ("I can\'t start" heard as "I can start").\n'
+            "- Words or whole clauses missing or invented such that the meaning changes.\n"
+            "- An empty recognition output when something was spoken, which means the "
+            "agent heard nothing at all.\n\n"
+            "Score 1 when the recognition output faithfully captures the reference "
+            "transcript. Score 0 when it does not. When the score is 0, the reason "
+            "quotes what was spoken and what was heard instead, and says what it "
+            "changed.\n\n"
+            "This is an LLM-based qualitative "
             "assessment of accuracy, not a computed word error rate. "
             "Language identification and interpretation are separate concerns."
             "\n</assessment_boundaries>"

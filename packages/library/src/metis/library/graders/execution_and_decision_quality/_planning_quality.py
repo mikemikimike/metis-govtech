@@ -1,4 +1,13 @@
-"""PlanningQualityGrader: whether the proposed sequence of actions is feasible and sufficient."""
+"""PlanningQualityGrader: whether the proposed sequence of actions is feasible and sufficient.
+
+Prompt adapted from DeepEval plan quality
+(confident-ai/deepeval@d6cd78a, deepeval/metrics/plan_quality/templates/evaluate_plan_quality.txt).
+Copyright 2024 Confident AI Inc. Licensed under the Apache License, Version 2.0.
+Changed for METIS: kept the completeness and logical coherence criteria and one alignment
+sentence, removed the efficiency and level-of-detail criteria, and mapped the five-level scale to
+a binary score. The JSON output format is removed.
+See metis/library/EXTERNAL_SOURCES.md for the license text.
+"""
 
 from __future__ import annotations
 
@@ -74,7 +83,27 @@ class PlanningQualityGrader(Grader[PlanningQualityArgs]):
             "and sufficient to reach the goal."
             + self.args.task_block()
             + section("plan_requirements", self.args.plan_requirements)
-            + "\n\n<assessment_boundaries>\n"
+            + "\n\n<criteria>\n"
+            "The plan is the plan the agent shows in the evidence.\n\n"
+            "1. Completeness (Most Important)\n"
+            "- The plan must fully address all major requirements of the user task.\n"
+            "- Missing even one critical subtask or dependency should reduce the score "
+            "sharply.\n"
+            "- The plan must include all prerequisite actions necessary for the final "
+            "outcome.\n\n"
+            "2. Logical Coherence\n"
+            "- Steps must follow a clear, rational sequence that leads directly to "
+            "completing the task.\n"
+            "- Disordered, redundant, or circular reasoning should be penalized heavily.\n"
+            "- Every step must have a clear purpose; no filler or irrelevant actions.\n\n"
+            "The plan must explicitly and directly target the user's stated goal."
+            "\n</criteria>"
+            "\n\n<scoring>\n"
+            "Score 1 for a plan that is complete and logically ordered: it covers all, "
+            "or nearly all, aspects of the task with clear logic, and any gaps are minor "
+            "and do not block task completion. Score 0 for a plan with missing critical "
+            "steps or disordered logic."
+            "\n</scoring>" + "\n\n<assessment_boundaries>\n"
             "Assess feasibility, sufficiency, ordering, or dependencies from the "
             "observable plan. A plan need not expose an argument. Do not assess "
             "whether the plan's reasoning is logically valid; only assess whether "

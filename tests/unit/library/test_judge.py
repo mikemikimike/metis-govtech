@@ -79,6 +79,7 @@ def _judge(
     label: str = "session",
     evidence: object = TEXT,
     max_input_tokens: int = 100_000,
+    context: dict[str, Any] | None = None,
     **client_kwargs: Any,
 ):
     requests: list[dict[str, Any]] = []
@@ -89,7 +90,12 @@ def _judge(
     async def run():
         async with client:
             return await judge(
-                _Grader(args), LLMSettings(client), label, evidence, "Check it."
+                _Grader(args),
+                LLMSettings(client),
+                label,
+                evidence,
+                "Check it.",
+                **(context or {}),
             )
 
     return asyncio.run(run()), requests
@@ -173,6 +179,30 @@ def test_sends_a_rendered_file_as_an_input_file(tmp_path: Path) -> None:
     [attached] = request["input"][1]["content"]
     assert (attached["type"], attached["filename"]) == ("input_file", "report.pdf")
     assert attached["file_data"].startswith("data:application/pdf;base64,")
+
+
+def test_sends_context_text_before_the_evidence_and_context_files_after(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.4 source")
+    report = tmp_path / "report.pdf"
+    report.write_bytes(b"%PDF-1.4 report")
+    _, [request] = _judge(
+        _reply(1),
+        evidence=render_artifact(report),
+        context={
+            "context_text": "## Turn 1\nUser: q",
+            "context_files": [render_artifact(source)],
+        },
+    )
+    parts = request["input"][1]["content"]
+    assert [(p["type"], p.get("filename")) for p in parts] == [
+        ("input_text", None),
+        ("input_file", "report.pdf"),
+        ("input_file", "source.pdf"),
+    ]
+    assert parts[0]["text"] == "## Turn 1\nUser: q"
 
 
 @pytest.mark.parametrize(

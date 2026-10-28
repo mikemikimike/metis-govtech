@@ -13,21 +13,30 @@ is errored with that error as the reason.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
-from metis.core.grading import GraderResult
-from metis.core.trace_processing import FileInput, Problem, tools_offered
+from metis.core.grading import GraderResult, GradingOutput
+from metis.core.trace_processing import (
+    FileInput,
+    Problem,
+    find_fixtures,
+    render_artifact,
+    tools_offered,
+    turns,
+)
 from metis.library.grader import input_budget_error
 from metis.library.judgment_form import JUDGMENT_FORM_DEFINITIONS
 from metis.library.scope import SCOPE_DEFINITIONS
+from metis.library.taxonomy import Scope
 from metis.library.text import NonEmptyText
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from metis.core.traces import Trace
+    from metis.core.traces import GradingInput, Trace
     from metis.library.grader import Grader, LLMSettings
 
 _UNTRUSTED = (
@@ -96,19 +105,89 @@ def available_tools_block(tools: Sequence[str], use: str) -> str:
     return section("available_tools", tools) + f"\n\n{use}"
 
 
+def sources_block(scope: Scope, use: str) -> str:
+    """The ``<sources>`` block for a grader that checks the output against the session's sources.
+
+    ``use`` says how the judge matches the output to the sources. The block says which part of
+    the request is the assessed output, as ``judge_against_sources`` sends it.
+    """
+    layout = (
+        "The text is the session transcript. The first attached file is the assessed "
+        "output. Use the transcript and any later attached files only as sources."
+        if scope == Scope.ARTIFACT
+        else "The assessed output is the assistant's reply in the last turn of the "
+        "evidence. Earlier turns, when they are shown, and any attached files are sources "
+        "only."
+    )
+    return (
+        "\n\n<sources>\nThe sources are the content that the user gave the agent or that "
+        "the agent retrieved in this session: messages, tool results, retrieved documents, "
+        f"and any attached source files. {use}\n\n{layout}\n</sources>"
+    )
+
+
+async def judge_against_sources(
+    grader: Grader[Any], llm: LLMSettings, input: GradingInput, criteria: str
+) -> GradingOutput:
+    """Judge each selected piece against the sources in the session (``sources_block``).
+
+    Each file the user gave the target is attached. Under the trace scope, the earlier turns
+    of the session come before the judged turn. Under the artifact scope, the whole session
+    comes before the file. A source file that cannot be read errors the run.
+    """
+    fixtures = [
+        render_artifact(Path(fixture.path))
+        for fixture in find_fixtures(input)
+        if fixture.path is not None
+    ]
+    files = [file for file in fixtures if isinstance(file, FileInput)]
+    if len(files) < len(fixtures):
+        problem = next(file for file in fixtures if isinstance(file, Problem))
+        return GradingOutput.errored(problem.detail)
+    scope = SCOPE_DEFINITIONS[grader.scope]
+    selected = scope.select(input, grader.args)
+    if isinstance(selected, Problem):
+        return GradingOutput.errored(selected.detail)
+    session = turns(input.traces)
+    results = []
+    for label, thing in selected.items():
+        if grader.scope == Scope.ARTIFACT:
+            earlier = session
+        elif isinstance(thing, Problem):
+            earlier = ()
+        else:
+            earlier = session[: thing[0].index]
+        context = SCOPE_DEFINITIONS[Scope.SESSION].render(earlier) if earlier else None
+        results.append(
+            await judge(
+                grader,
+                llm,
+                label,
+                scope.render(thing),
+                criteria,
+                context_files=files,
+                context_text=context if isinstance(context, str) else None,
+            )
+        )
+    return GradingOutput(results=results)
+
+
 async def judge(
     grader: Grader[Any],
     llm: LLMSettings,
     label: str,
     evidence: str | FileInput | Problem,
     criteria: str,
+    context_files: Sequence[FileInput] = (),
+    context_text: str | None = None,
 ) -> GraderResult:
     """Judge one rendered piece of the session against ``criteria`` and return its result.
 
     ``label`` is the select function's label, and becomes ``GraderResult.scope``. ``evidence``
-    is what a render function returned: text, or a file that the judge reads itself. A
-    ``Problem`` is errored without a judge call, and so is a reply that the criterion does not
-    apply.
+    is what a render function returned: text, or a file that the judge reads itself. A grader
+    whose criteria name more context sends it too: ``context_text`` goes before the evidence,
+    and each of ``context_files`` is attached after it. A ``Problem`` is errored without a
+    judge call, and so is a reply that the criterion does not apply.
     """
     if isinstance(evidence, Problem):
         return _errored(evidence.detail, label)
@@ -119,15 +198,13 @@ async def judge(
         f"{_UNTRUSTED}\n\n"
         f"<output_instructions>\n{form.output_instructions}\n</output_instructions>"
     )
-    content = (
+    content = [
+        *([{"type": "input_text", "text": context_text}] if context_text else []),
         {"type": "input_text", "text": evidence}
         if isinstance(evidence, str)
-        else {
-            "type": "input_file",
-            "filename": evidence.filename,
-            "file_data": evidence.data_url,
-        }
-    )
+        else _file_part(evidence),
+        *map(_file_part, context_files),
+    ]
     reply = await _call(
         llm,
         grader.args,
@@ -144,6 +221,10 @@ async def judge(
     return GraderResult(**verdict, scope=label)
 
 
+def _file_part(file: FileInput) -> dict[str, str]:
+    return {"type": "input_file", "filename": file.filename, "file_data": file.data_url}
+
+
 def _errored(reason: str, label: str) -> GraderResult:
     return GraderResult(status="errored", reason=reason, scope=label)
 
@@ -152,7 +233,7 @@ async def _call(
     llm: LLMSettings,
     args: Any,
     system: str,
-    content: dict[str, str],
+    content: list[dict[str, str]],
     reply_model: type[BaseModel],
     schema_name: str,
 ) -> Any:
@@ -161,7 +242,7 @@ async def _call(
         model=args.model,
         input=[
             {"role": "system", "content": system},
-            {"role": "user", "content": [content]},
+            {"role": "user", "content": content},
         ],
         text={
             "format": {
@@ -172,9 +253,16 @@ async def _call(
             }
         },
     )
-    # A file's size has its own limit in render_artifact, so it is not counted as text.
-    if content["type"] == "input_text" and (
-        over_budget := input_budget_error(args, request)
+    # A file's size has its own limit in render_artifact, so only the text is counted.
+    text = [part for part in content if part["type"] == "input_text"]
+    if text and (
+        over_budget := input_budget_error(
+            args,
+            {
+                **request,
+                "input": [request["input"][0], {"role": "user", "content": text}],
+            },
+        )
     ):
         return over_budget.reason
     try:

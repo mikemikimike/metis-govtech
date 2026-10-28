@@ -1,4 +1,13 @@
-"""OutputCorrectnessGrader: whether an answer or deliverable is substantively correct."""
+"""OutputCorrectnessGrader: whether an answer or deliverable is substantively correct.
+
+Prompt adapted from MLflow correctness
+(mlflow/mlflow@ad84197, mlflow/genai/judges/prompts/correctness.py).
+Copyright 2018 Databricks, Inc. Licensed under the Apache License, Version 2.0.
+Changed for METIS: checked the response against the correctness conditions in the settings
+in place of expected facts, removed the rule not to focus on correctness, the step-by-step
+rationale rule and the output format.
+See metis/library/EXTERNAL_SOURCES.md for the license text.
+"""
 
 from __future__ import annotations
 
@@ -70,7 +79,12 @@ class OutputCorrectnessGrader(Grader[OutputCorrectnessArgs]):
         return (
             "You are assessing whether the target response is substantively correct."
             + section("correctness_conditions", self.args.correctness_conditions)
-            + "\n\n<assessment_boundaries>\n"
+            + "\n\nYou must determine whether the response satisfies every correctness "
+            "condition above. Do not make assumptions, approximations, or bring in "
+            "external knowledge."
+            "\n\nScore 1 only if the response satisfies every correctness condition, "
+            "and score 0 otherwise. If any condition is not met, state in the reason "
+            "which condition fails." + "\n\n<assessment_boundaries>\n"
             "Assess substantive correctness of the assessed evidence under the explicit "
             "correctness conditions above. A correct answer does not establish that an "
             "external action was completed. Focus on whether the content of the response "

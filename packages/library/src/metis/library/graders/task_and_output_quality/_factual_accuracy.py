@@ -1,4 +1,15 @@
-"""FactualAccuracyGrader: whether factual claims agree with designated ground truth."""
+"""FactualAccuracyGrader: whether factual claims agree with designated ground truth.
+
+Prompt adapted from Braintrust Autoevals factuality
+(braintrustdata/autoevals@586cc16, templates/factuality.yaml), which comes from the OpenAI
+Evals fact prompt (openai/evals@8eac7a7, evals/registry/modelgraded/fact.yaml).
+Copyright (c) 2023 BrainTrust Data. Licensed under the MIT License.
+Copyright (c) 2023 OpenAI. Licensed under the MIT License.
+Changed for METIS: the submitted answer is the assessed evidence and the expert answer is the
+ground truth. Options A, B, C and E score 1 and option D scores 0, because a binary judgment
+has no partial scores. The data block and template variables are removed.
+See metis/library/EXTERNAL_SOURCES.md for the license text.
+"""
 
 from __future__ import annotations
 
@@ -63,10 +74,27 @@ class FactualAccuracyGrader(Grader[FactualAccuracyArgs]):
 
     def criteria(self) -> str:
         return (
-            "You are assessing whether factual claims in the assessed evidence agree with "
-            "the designated authoritative ground truth."
+            "You are comparing a submitted answer to an expert answer. The submitted "
+            "answer is the assessed evidence. The expert answer is the ground truth below."
             + section("ground_truth", self.args.ground_truth)
-            + "\n\n<assessment_boundaries>\n"
+            + "\n\nCompare the factual content of the submitted answer with the expert "
+            "answer. Ignore any differences in style, grammar, or punctuation.\n"
+            "The submitted answer may either be a subset or superset of the expert "
+            "answer, or it may conflict with it. Determine which case applies. Answer "
+            "by selecting one of the following options:\n"
+            "(A) The submitted answer is a subset of the expert answer and is fully "
+            "consistent with it.\n"
+            "(B) The submitted answer is a superset of the expert answer and is fully "
+            "consistent with it.\n"
+            "(C) The submitted answer contains all the same details as the expert "
+            "answer.\n"
+            "(D) There is a disagreement between the submitted answer and the expert "
+            "answer.\n"
+            "(E) The answers differ, but these differences don't matter from the "
+            "perspective of factuality.\n\n"
+            "Name the option that applies in your reason. Score 1 for option A, B, C or "
+            "E. Score 0 for option D."
+            "\n\n<assessment_boundaries>\n"
             "Compare factual claims with the designated ground truth above ONLY. Do not "
             "substitute your own knowledge or unsupported recollection. A claim that the "
             "ground truth does not address is outside the scope of this assessment; note "

@@ -255,7 +255,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `SpeechRecognitionAccuracyGrader`, `ContentFidelityGrader`, and `AttributionAccuracyGrader`.
   Output graders judge the final reply by default (`turn: last`), or every reply
   (`turn: each`), or the latest received file with a given name (`scope: artifact`,
-  `artifact: <name>`). The judge reads the file itself. With a file, `TaskSuccessGrader` and
+  `artifact: <name>`). The judge reads the file itself. `ContentFidelityGrader`,
+  `ClaimSupportByEvidenceGrader` and `AttributionAccuracyGrader` take their sources from the
+  session: what the user gave the agent or what it retrieved, earlier turns, and the files
+  the user gave the target. With a file, `TaskSuccessGrader` and
   `TaskConstraintAdherenceGrader` judge the file alone, and `TaskSuccessGrader` needs a
   `task_description` or `success_conditions`. `RequiredComponentCompletenessGrader`,
   `TaskConstraintAdherenceGrader` and `EvidenceSourceSuitabilityGrader` judge each listed
@@ -263,6 +266,26 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   item fails, is errored when none fails but one cannot be judged, and scores 1 otherwise.
   `FormatSchemaComplianceGrader` checks JSON against a schema without a judge call, before
   any prose rules (#447).
+
+- Twelve graders adapt their judge prompts from open-source evaluation prompts:
+  - Arize Phoenix: `ToolChoiceAppropriatenessGrader` (tool selection),
+    `ToolArgumentCorrectnessGrader` (tool invocation), and
+    `RequiredComponentCompletenessGrader` (completeness, with MLflow completeness).
+  - MLflow: `TaskConstraintAdherenceGrader` (guidelines) and `OutputCorrectnessGrader`
+    (correctness).
+  - DeepEval: `AttributionAccuracyGrader` (citation faithfulness), `TaskSuccessGrader` (task
+    completion), `PlanningQualityGrader` (plan quality), `SpeechRecognitionAccuracyGrader`
+    (transcription accuracy), `ClaimSupportByEvidenceGrader` (faithfulness claims, with the
+    Braintrust Autoevals faithfulness verdict), and `UseOfPriorInformationGrader` (knowledge
+    retention, with MLflow knowledge retention).
+  - Braintrust Autoevals: `FactualAccuracyGrader` (factuality, itself from the OpenAI Evals
+    `fact` prompt).
+
+  Each keeps the METIS binary score and the rule that a criterion that does not apply is not
+  scored. `RequiredComponentCompletenessGrader` counts a refusal or "I don't know" as a missing
+  component. Each module docstring
+  names the source file, the pinned commit, the license and the METIS changes, and
+  `metis/library/EXTERNAL_SOURCES.md` gives the copyright notices and license texts.
 
 - The taxonomy keeps Use of Observed State, Spoken-Content Fidelity, Language Identification
   Accuracy and Input Interpretation Accuracy, but the library has no grader for them: a trace

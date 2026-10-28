@@ -1,4 +1,4 @@
-"""ContentFidelityGrader: whether a transformation preserves designated source meaning."""
+"""ContentFidelityGrader: whether a transformation preserves the meaning of its source."""
 
 from __future__ import annotations
 
@@ -6,11 +6,9 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 
 from pydantic import Field, field_validator
 
-from metis.core.grading import GradingOutput
-from metis.core.trace_processing import Problem
 from metis.library.grader import Grader, JudgeArgs
-from metis.library.judge import judge, section
-from metis.library.scope import SCOPE_DEFINITIONS, ArtifactArgs, TraceArgs
+from metis.library.judge import judge_against_sources, section, sources_block
+from metis.library.scope import ArtifactArgs, TraceArgs
 from metis.library.taxonomy import (
     Aggregation,
     GraderTaxonomy,
@@ -20,9 +18,9 @@ from metis.library.taxonomy import (
     ReferenceType,
     Scope,
 )
-from metis.library.text import NonEmptyText  # noqa: TC001 — a Pydantic field type
 
 if TYPE_CHECKING:
+    from metis.core.grading import GradingOutput
     from metis.core.traces import GradingInput
     from metis.library.grader import LLMSettings
 
@@ -30,15 +28,11 @@ if TYPE_CHECKING:
 class ContentFidelityArgs(JudgeArgs, TraceArgs, ArtifactArgs):
     """Settings for the content-fidelity assessment.
 
-    ``source_content`` is the authoritative source to check preservation against.
     ``fidelity_requirements`` optionally specifies coverage, addition, or omission rules.
     """
 
     turn: Literal["each", "last"] = "last"
     """``last`` judges only the final reply. ``each`` judges every reply."""
-    source_content: NonEmptyText = Field(
-        description="The designated source content to check preservation against.",
-    )
     fidelity_requirements: tuple[str, ...] = Field(
         default=(),
         description=(
@@ -57,11 +51,14 @@ class ContentFidelityArgs(JudgeArgs, TraceArgs, ArtifactArgs):
 
 
 class ContentFidelityGrader(Grader[ContentFidelityArgs]):
-    """Assess whether a transformation preserves the designated source meaning.
+    """Assess whether a transformation preserves the meaning of its source.
 
-    Compares preservation against the source content, not truth against the world.
-    A transformation can have supported claims yet lose essential meaning through
-    omission. Legitimate omission failures are not suppressed.
+    The source is in the session: the content the user gave the agent or the agent
+    retrieved, and the files the user gave the target. Compares preservation against the
+    source, not truth against the world. A transformation can have supported claims yet lose
+    essential meaning through omission. Legitimate omission failures are not suppressed. A
+    session with no source content (only the reply, and no source file) is left to the judge,
+    which returns not applicable, so the result is errored with its reason.
     """
 
     args_model = ContentFidelityArgs
@@ -76,9 +73,14 @@ class ContentFidelityGrader(Grader[ContentFidelityArgs]):
 
     def criteria(self) -> str:
         return (
-            "You are assessing whether a transformation preserves the designated source "
-            "meaning or content."
-            f"\n\n<source_content>\n{self.args.source_content}\n</source_content>"
+            "You are assessing whether a transformation preserves the meaning or content "
+            "of its source."
+            + sources_block(
+                self.scope,
+                "Find the source content that the assessed output transforms, and compare "
+                "the output with it. If the session has no source content for the output, "
+                "the criterion does not apply.",
+            )
             + section("fidelity_requirements", self.args.fidelity_requirements)
             + "\n\n<assessment_boundaries>\n"
             "Compare preservation against the source, not truth against the world. "
@@ -92,13 +94,4 @@ class ContentFidelityGrader(Grader[ContentFidelityArgs]):
         )
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
-        scope = SCOPE_DEFINITIONS[self.scope]
-        selected = scope.select(input, self.args)
-        if isinstance(selected, Problem):
-            return GradingOutput.errored(selected.detail)
-        return GradingOutput(
-            results=[
-                await judge(self, llm, label, scope.render(thing), self.criteria())
-                for label, thing in selected.items()
-            ]
-        )
+        return await judge_against_sources(self, llm, input, self.criteria())
