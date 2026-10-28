@@ -18,6 +18,7 @@ from metis.engine.simulation.gen_2.runners.tools import (
     ActionState,
     run_tool,
 )
+from metis.engine.simulation.gen_2.user_agent.agent import render_observation
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -52,6 +53,13 @@ class Target:
             )
         if path == f"{API}/accepted":
             return httpx.Response(202, json={"reply": "working on it"})
+        if path == f"{API}/rejects":
+            return httpx.Response(
+                422,
+                json={"error": {"code": "invalid_request", "message": "bad session"}},
+            )
+        if path == f"{API}/rejects-long":
+            return httpx.Response(500, text="x" * 3000)
         if path == f"{API}/gone":
             return httpx.Response(404, json={"detail": "no such session"})
         if path == f"{API}/status":
@@ -413,6 +421,7 @@ async def test_a_4xx_poll_still_leaves_the_submission_unresolved(
     assert observation.submission_unresolved
     assert observation.notice is not None
     assert "never settled" in observation.notice
+    assert "rejected" not in observation.notice
 
 
 @pytest.mark.asyncio
@@ -489,3 +498,81 @@ async def test_run_tool_uses_the_handlers_it_is_given(tmp_path: Path) -> None:
 
 def test_the_handlers_any_runner_can_share() -> None:
     assert set(SHARED_HANDLERS) == {"session_id_from", "note", "report"}
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_submission_is_shown_to_the_user_as_an_error(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+    rejected = await _submit(runner, state, "/rejects")
+    await _call(
+        runner, state, "report", {"outcome": "not_done", "why": "the target said no"}
+    )
+
+    observation = runner._observation(state, None)
+
+    assert rejected["status"] == 422
+    assert observation.reply is None
+    assert observation.observed
+    assert not observation.submission_unresolved
+    assert runner.open_submission is None
+    assert observation.notice is not None
+    assert "422" in observation.notice
+    assert "invalid_request" in observation.notice
+    assert "rejected" in observation.notice
+    shown = render_observation(observation)
+    assert "422" in shown
+    assert "invalid_request" in shown
+
+
+@pytest.mark.asyncio
+async def test_a_rejection_notice_holds_only_a_short_excerpt_of_the_body(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _submit(runner, state, "/rejects-long")
+    await _call(runner, state, "report", {"outcome": "not_done", "why": "no"})
+
+    notice = runner._observation(state, None).notice
+
+    assert notice is not None
+    assert "500" in notice
+    assert len(notice) < 500
+
+
+@pytest.mark.asyncio
+async def test_a_rejection_is_reported_once(tmp_path: Path) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _submit(runner, state, "/rejects")
+    await _call(runner, state, "report", {"outcome": "not_done", "why": "no"})
+    assert runner._observation(state, None).notice is not None
+
+    runner.begin_action("Say ⟦again⟧")
+    state = ActionState(first_result=len(runner.results))
+    await _submit(runner, state)
+    await _call(
+        runner,
+        state,
+        "report",
+        {
+            "outcome": "done",
+            "why": "ok",
+            "reply_from": {"entry": runner.results[-1], "at": "$.reply"},
+        },
+    )
+
+    observation = runner._observation(state, None)
+    assert observation.notice is None
+    assert observation.reply == "hi"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_call_that_is_not_a_submission_adds_no_rejection(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _call(runner, state, "http_request", {"method": "GET", "path": "/gone"})
+    await _call(runner, state, "report", {"outcome": "unknown", "why": "looked"})
+
+    assert runner._observation(state, None).notice is None

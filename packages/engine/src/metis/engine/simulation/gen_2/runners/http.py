@@ -60,6 +60,8 @@ MAX_FILES_PER_LISTING = 100
 """A conversation does not produce more files than this; a bigger listing is not its own."""
 POLL_INTERVAL = 5.0
 """Seconds between polls; the binding and ``TrialConfig`` have no field for it."""
+REJECTION_EXCERPT = 200
+"""How much of a refusing response's body the user agent is shown."""
 MAX_ROUNDS = 12
 """Most LLM rounds one action may take."""
 ACT_MARGIN = 60.0
@@ -91,6 +93,17 @@ class Unresolved:
     submission: OpenSubmission
     response: str
     """The entry of the response that showed the failure."""
+
+
+@dataclass(frozen=True)
+class Rejected:
+    """A submission the target refused: its response was not a 2xx."""
+
+    response: str
+    """The entry of the refusing response."""
+    status: int
+    excerpt: str
+    """The start of the response body, copied from the transport log."""
 
 
 class HttpRunner(Runner):
@@ -139,6 +152,8 @@ class HttpRunner(Runner):
         so does ``settle_by_reply``."""
         self.unresolved: Unresolved | None = None
         """Set by a 4xx during a poll while a submission was open; a timeout leaves it open."""
+        self.rejected: Rejected | None = None
+        """Set when a submission got a non-2xx response; ``_observation`` reads it once."""
         self.notes: list[str] = []
         """What the agent learned about the target, shown again in each later action."""
 
@@ -267,6 +282,12 @@ class HttpRunner(Runner):
                 request_id, response_id, self._turn, response.status_code
             )
             self.answers.append(response_id)
+        elif submission:
+            self.rejected = Rejected(
+                response_id,
+                response.status_code,
+                " ".join(_preview(response).split())[:REJECTION_EXCERPT],
+            )
         reply: dict[str, Any] = {
             "request_entry": request_id,
             "response_entry": response_id,
@@ -682,6 +703,12 @@ class HttpRunner(Runner):
             notices.append(
                 f"A submission ({unresolved.submission.request}) never settled: the "
                 f"target answered the poll with a failure ({unresolved.response})."
+            )
+        if (rejected := self.rejected) is not None:
+            self.rejected = None  # read once, like ``unresolved``
+            notices.append(
+                f"The assistant rejected your message with an error "
+                f"(status {rejected.status}): {rejected.excerpt}"
             )
         if self.open_submission is not None:
             notices.append(

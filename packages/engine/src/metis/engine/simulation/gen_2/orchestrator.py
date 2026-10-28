@@ -210,10 +210,11 @@ class Orchestrator:
                 logger.info("[turn %d] STOP: submission_unresolved", turn)
                 return "system_error"
             logger.info(
-                "[turn %d] action=%r reply=%r",
+                "[turn %d] action=%r reply=%r notice=%r",
                 turn,
                 output.action[:120],
                 (observation.reply or "")[:100],
+                (observation.notice or "")[:200],
             )
 
     async def _close(self) -> None:
