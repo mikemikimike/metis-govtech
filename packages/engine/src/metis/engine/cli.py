@@ -1342,7 +1342,7 @@ def simulate(
         help="Override log directory (default: co-located with results)",
     ),
     concurrency: int = typer.Option(
-        5, "--concurrency", "-c", help="Max parallel simulation workers"
+        1, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
     resume: bool = typer.Option(
         False,
@@ -1439,7 +1439,7 @@ def run(
         help="Override log directory (default: co-located with results)",
     ),
     concurrency: int = typer.Option(
-        5, "--concurrency", "-c", help="Max parallel simulation workers"
+        1, "--concurrency", "-c", help="Max parallel simulation workers"
     ),
     resume: bool = typer.Option(
         False,

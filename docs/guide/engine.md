@@ -432,7 +432,7 @@ The flags below are optional and apply to both modes:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--concurrency N` / `-c N` | `5` | Max parallel simulation workers |
+| `--concurrency N` / `-c N` | `1` | Max parallel simulation workers |
 | `-v` / `-vv` | WARNING | Increase verbosity: `-v` for INFO, `-vv` for DEBUG |
 | `--quiet` | `false` | Suppress all output below ERROR |
 | `--no-tui` | `false` | Disable TUI dashboard (force linear log output) |
@@ -452,7 +452,7 @@ The `run` command accepts the union of the simulation and evaluation options. It
 
 ### Concurrency
 
-The `--concurrency N` flag runs N simulation workers in parallel. The default is `5`. Reduce to `1` for sequential execution or increase based on your target's capacity.
+The `--concurrency N` flag runs N simulation workers in parallel. The default is `1`, which runs trials sequentially. Increase based on your target's capacity.
 
 Runs are distributed round-robin across workers. Each worker processes its slice sequentially — one run at a time — while all workers run concurrently via `asyncio.gather`. How isolation and resource sharing work depends on the runner.
 

@@ -497,6 +497,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- **`metis engine simulate`/`run` default `--concurrency` to `1`.** Omitting the flag now runs
+  trials sequentially instead of with 5 parallel workers.
+
 - **`packages/engine/examples/` holds only the `gen_1-orca_api-1/` example.** The complete Orca
   specification, its fixtures, and the sample report are removed from it: the specification and
   the four CSV fixtures are already kept with the Wizard testbed in
