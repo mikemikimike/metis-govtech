@@ -22,10 +22,10 @@ const IC_BOT_BLUE = 'https://img.icons8.com/?size=100&id=lUk2otclIHsF&format=png
 
 /* ── Data ── */
 const steps = [
-  { number: '01', label: 'DEFINE', product: 'Wizard', title: 'Start with what good looks like.', text: 'The Wizard interviews your team and turns a description of your agent into a Specification of features, behaviours and measurable criteria. Evaluation starts from what your product should do, not a generic benchmark.' },
-  { number: '02', label: 'DESIGN', product: 'Wizard · Library', title: 'Turn intent into realistic tests.', text: 'Generate personas, everyday and edge-case scenarios, and repeated trials. A structured taxonomy matches each criterion to the right grader: deterministic checks or LLM judges.' },
-  { number: '03', label: 'EXECUTE', product: 'Engine', title: 'Test the full trajectory.', text: 'The Engine runs adaptive, multi-turn conversations through your API or a real browser. Graders score the whole execution trace, including every step, tool call and recovery, not just the final answer.' },
-  { number: '04', label: 'IMPROVE', product: 'Insights', title: 'Know exactly what to fix.', text: 'Insights rolls scores up across trials, personas and scenarios. Every result links back to a criterion and its evidence, so failures become decisions.' },
+  { number: '01', label: 'DEFINE', product: 'Wizard', title: 'Start with what good looks like.', text: 'The Wizard interviews your team and turns a description of your agent into a Specification of features, behaviours, and measurable criteria.' },
+  { number: '02', label: 'DESIGN', product: 'Wizard · Library', title: 'Turn intent into realistic tests.', text: 'Generate personas, everyday and edge-case scenarios, and repeated trials. A structured taxonomy matches each criterion to the right grader.' },
+  { number: '03', label: 'EXECUTE', product: 'Engine', title: 'Test the full trajectory.', text: 'The Engine runs adaptive, multi-turn conversations through your API or a real browser, scoring every step, tool call, and recovery.' },
+  { number: '04', label: 'IMPROVE', product: 'Insights', title: 'Know exactly what to fix.', text: 'Insights rolls scores up across trials, personas, and scenarios. Every result links back to a criterion and its evidence.' },
 ];
 
 type WizMsg = { role: 'wizard' | 'user'; text: string; files?: string[]; specLines?: number };
@@ -49,7 +49,7 @@ const specLines = [
 
 const engMsgs = [
   { role: 'user' as const, text: "I need to reply to Priya's thread about the team offsite. Can you check what we decided last year?" },
-  { role: 'assistant' as const, text: "Last year's offsite deck shows the team chose Sentosa with 42 attendees and an $18,000 budget. The venue was booked 10 weeks in advance." },
+  { role: 'assistant' as const, text: "Last year's offsite deck shows the team chose Sentosa with 40 attendees and an $18,000 budget. The venue was booked 10 weeks in advance." },
   { role: 'user' as const, text: "Great, draft a reply suggesting we start booking earlier this time." },
   { role: 'assistant' as const, text: "Hi Priya, thanks for kicking this off. Last year we booked Sentosa 10 weeks ahead and the best rooms were already gone. Could we aim for 14 weeks this time?" },
   { role: 'user' as const, text: "Make it shorter." },
@@ -74,27 +74,27 @@ const engStepMap = [
 
 /* Evaluation pipeline — grader names from taxonomy_v8.csv measure dimension */
 const pipelineCriteria = [
-  { id: 'Factual Accuracy', grader: 'FactualAccuracyGrader', score: 0.30, threshold: 0.70, reason: 'The draft states 40 attendees. The source document says 42.' },
+  { id: 'Factual Accuracy', grader: 'FactualAccuracyGrader', score: 0.30, threshold: 0.70, reason: 'The agent response states 40 attendees. The source document says 42.' },
   { id: 'Evidence Source Suitability', grader: 'EvidenceSourceGrader', score: 0.67, threshold: 0.70, reason: 'Retrieved the correct offsite deck, but also cited the 2023 policy which has been replaced.' },
   { id: 'Claim Support by Evidence', grader: 'ClaimSupportGrader', score: 0.90, threshold: 0.70, reason: 'The reply references the planning deck and the thread. Claims are traceable to sources.' },
 ];
 
 const insightTree = [
-  { depth: 0, label: 'Enterprise AI Assistant', value: 75, pass: true },
-  { depth: 1, label: 'Search & Knowledge Retrieval', value: 71, pass: true },
-  { depth: 2, label: 'Find and use enterprise info', value: 71, pass: true },
-  { depth: 3, label: 'Factual Accuracy', value: 30, pass: false },
+  { depth: 0, label: 'Enterprise AI Assistant', value: 80, pass: true },
+  { depth: 1, label: 'Search & Knowledge Retrieval', value: 70, pass: true },
+  { depth: 2, label: 'Find and use enterprise info', value: 70, pass: true },
+  { depth: 3, label: 'Factual Accuracy', value: 50, pass: false },
   { depth: 3, label: 'Evidence Source Suitability', value: 67, pass: false },
-  { depth: 3, label: 'Claim Support by Evidence', value: 90, pass: true },
+  { depth: 3, label: 'Claim Support by Evidence', value: 92, pass: true },
 ];
 
 const insightBars = [
-  { label: 'Factual Accuracy', pct: 30, threshold: 70, passed: 0, total: 4 },
-  { label: 'Evidence Source Suitability', pct: 67, threshold: 70, passed: 2, total: 3 },
-  { label: 'Claim Support by Evidence', pct: 90, threshold: 70, passed: 3, total: 4 },
-  { label: 'Output Correctness', pct: 50, threshold: 70, passed: 2, total: 4 },
-  { label: 'Input Interpretation Accuracy', pct: 75, threshold: 70, passed: 3, total: 4 },
-  { label: 'Capability Limits Handling', pct: 100, threshold: 70, passed: 4, total: 4 },
+  { label: 'Factual Accuracy', pct: 50, threshold: 75, passed: 2, total: 4 },
+  { label: 'Evidence Source Suitability', pct: 67, threshold: 80, passed: 2, total: 3 },
+  { label: 'Claim Support by Evidence', pct: 92, threshold: 85, passed: 4, total: 4 },
+  { label: 'Output Correctness', pct: 80, threshold: 70, passed: 3, total: 4 },
+  { label: 'Input Interpretation Accuracy', pct: 88, threshold: 80, passed: 4, total: 4 },
+  { label: 'Capability Limits Handling', pct: 100, threshold: 90, passed: 4, total: 4 },
 ];
 
 /* ── Hooks ── */
@@ -105,8 +105,9 @@ function useSequence(total: number, active: boolean, ms: number) {
   useEffect(() => {
     if (noMotion()) { setN(total); return; }
     if (!active || n >= total) return;
-    const t = setInterval(() => setN((v) => { if (v >= total) { clearInterval(t); return v; } return v + 1; }), ms);
-    return () => clearInterval(t);
+    const delay = n === 0 ? Math.min(300, ms) : ms;
+    const t = setTimeout(() => setN((v) => v >= total ? v : v + 1), delay);
+    return () => clearTimeout(t);
   }, [active, n, total, ms]);
   const replay = useCallback(() => setN(0), []);
   return { n, done: n >= total, replay };
@@ -159,13 +160,13 @@ function usePipeline(active: boolean) {
     if (noMotion()) { setPhase(4); setGradersDone(new Set([0, 1, 2])); return; }
     if (!active) return;
     const ts = [
-      setTimeout(() => setPhase(1), 300),
-      setTimeout(() => setPhase(2), 3600),
-      setTimeout(() => setPhase(3), 5000),
-      setTimeout(() => setGradersDone(new Set([2])), 6200),
-      setTimeout(() => setGradersDone(new Set([1, 2])), 6800),
-      setTimeout(() => setGradersDone(new Set([0, 1, 2])), 7400),
-      setTimeout(() => setPhase(4), 8000),
+      setTimeout(() => setPhase(1), 100),
+      setTimeout(() => setPhase(2), 1200),
+      setTimeout(() => setPhase(3), 2200),
+      setTimeout(() => setGradersDone(new Set([2])), 3200),
+      setTimeout(() => setGradersDone(new Set([1, 2])), 3700),
+      setTimeout(() => setGradersDone(new Set([0, 1, 2])), 4200),
+      setTimeout(() => setPhase(4), 4800),
     ];
     return () => ts.forEach(clearTimeout);
   }, [active, run]);
@@ -301,6 +302,7 @@ export default function App() {
   const insVisible = vis.has(3);
   const [insPhase, setInsPhase] = useState(() => noMotion() ? 3 : 0);
   const [jiggled, setJiggled] = useState<Set<number>>(() => new Set());
+  const [insRun, setInsRun] = useState(0);
 
   useEffect(() => {
     const els = refs.current.filter(Boolean) as HTMLDivElement[];
@@ -363,7 +365,7 @@ export default function App() {
       setTimeout(() => setInsPhase(3), 2400),
     ];
     return () => ts.forEach(clearTimeout);
-  }, [insVisible]);
+  }, [insVisible, insRun]);
 
   const barsShown = insPhase >= 2;
   useEffect(() => {
@@ -492,8 +494,8 @@ export default function App() {
                   <div className="wt-tui-head">METIS Engine Simulate — enterprise-ai-assistant</div>
                   <div className="wt-tui-body">
                     <div className="wt-tui-row"><span>Elapsed</span><b className="wt-timer">00:{engTimer.mm}:{engTimer.ss}</b></div>
-                    <div className="wt-tui-row"><span>Scenarios</span><div className="wt-tui-bar"><div style={{ width: `${Math.min((engTimer.tick / 72) * 100, 100)}%` }} /></div><b>{Math.min(Math.floor(engTimer.simSec / 120), 3)}/3</b></div>
-                    <div className="wt-tui-row"><span>Trials</span><div className="wt-tui-bar"><div style={{ width: `${Math.min((engTimer.tick / 72) * 100, 100)}%` }} /></div><b>{Math.min(Math.floor(engTimer.simSec / 40), 9)}/9</b></div>
+                    <div className="wt-tui-row"><span>Scenarios</span><div className="wt-tui-bar"><div style={{ width: '33.3%' }} /></div><b>1/3</b></div>
+                    <div className="wt-tui-row"><span>Trials</span><div className="wt-tui-bar"><div style={{ width: '44.4%' }} /></div><b>4/9</b></div>
                     <div className="wt-tui-workers">
                       {[{ id: 'TC-001', w: 'w0', name: 'knowledge-worker', start: 5 }, { id: 'TC-002', w: 'w1', name: 'focused-questioner', start: 120 }, { id: 'TC-003', w: 'w2', name: 'policy-seeker', start: 240 }].map((tc) => (
                         <div key={tc.id}>{tc.id} · <b>[{tc.w}]</b> {tc.name} {engTimer.simSec > tc.start ? <><Spinner /><span className="wt-sim">simulating</span></> : <span className="wt-wait">waiting</span>}</div>
@@ -608,7 +610,9 @@ export default function App() {
 
             {/* ─ Stage 4: Insights ─ */}
             <div className={`wt-stage ${seen.has(3) ? 'vis' : ''}`} ref={(el) => { refs.current[3] = el; }}>
-              <div className="wt-head"><span className="wt-num insights">04</span><div><h3>Insights</h3><small>PRESENT RESULTS</small></div></div>
+              <div className="wt-head"><span className="wt-num insights">04</span><div><h3>Insights</h3><small>PRESENT RESULTS</small></div>
+                <button className="wt-replay" onClick={() => { setInsPhase(0); setJiggled(new Set()); setInsRun((r) => r + 1); }}>Replay</button>
+              </div>
               <div className="wt-insights">
                 <div className={`wt-ins-panel ${insPhase >= 1 ? 'vis' : ''}`}>
                   <div className="wt-ins-title">SPECIFICATION RESULTS</div>
@@ -640,10 +644,10 @@ export default function App() {
                   <div className="wt-ins-title">TRIAL TRANSCRIPT & VERDICTS</div>
                   <div className="wt-mini-chat">
                     <div className="wt-mini-msg user">Reply about the offsite. What did we decide?</div>
-                    <div className="wt-mini-msg asst">Sentosa, 42 attendees, booked 10 weeks ahead.</div>
+                    <div className="wt-mini-msg asst">Sentosa, 40 attendees, booked 10 weeks ahead.</div>
                   </div>
                   <div className="wt-verdicts">
-                    <div className="wt-verdict fail"><Xmark /><div><strong>Answer correctness</strong><span>Draft says 40; deck says 42.</span></div></div>
+                    <div className="wt-verdict fail"><Xmark /><div><strong>Answer correctness</strong><span>Agent response says 40; deck says 42.</span></div></div>
                     <div className="wt-verdict pass"><Check /><div><strong>Source traceability</strong><span>References deck and thread.</span></div></div>
                   </div>
                 </div>
@@ -672,20 +676,25 @@ export default function App() {
 
       <footer>
         <div className="container footer-inner">
-          <div className="footer-brand-group">
-            <img src="/metis-logo.png" alt="" className="footer-logo" />
-            <div>
-              <strong className="footer-name">METIS</strong>
-              <span className="footer-full-name">{FULL_NAME}</span>
+          <div className="footer-top">
+            <div className="footer-brand-group">
+              <img src="/metis-logo.png" alt="" className="footer-logo" />
+              <div>
+                <strong className="footer-name">METIS</strong>
+                <span className="footer-full-name">{FULL_NAME}</span>
+              </div>
+            </div>
+            <div className="footer-links">
+              <a href="https://github.com/govtech-responsibleai">GitHub</a>
+              <a href="https://blog.ai.gov.sg">Blog</a>
+              <a href="https://huggingface.co/govtech">Hugging Face</a>
+              <a href="https://playbooks.aip.gov.sg/responsibleai/">Playbook</a>
             </div>
           </div>
-          <div className="footer-links">
-            <a href="https://github.com/govtech-responsibleai">GitHub</a>
-            <a href="https://blog.ai.gov.sg">Blog</a>
-            <a href="https://huggingface.co/govtech">Hugging Face</a>
-            <a href="https://playbooks.aip.gov.sg/responsibleai/">Playbook</a>
+          <div className="footer-bottom">
+            <span className="footer-attr">Developed by AI Practice, GovTech Singapore</span>
+            <span className="footer-copy">&copy; 2026 Government Technology Agency of Singapore</span>
           </div>
-          <span className="footer-attr">Developed by AI Practice, GovTech Singapore</span>
         </div>
       </footer>
     </div>
