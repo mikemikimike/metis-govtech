@@ -86,7 +86,7 @@ Resume continues the output directory named by `--experiment-dir`. It reads the 
 
 The `--concurrency N` flag runs N browser contexts in parallel on a single browser process. Each worker gets its own isolated login session and page — no shared state, no cookie leakage between workers.
 
-Runs are distributed round-robin across workers for balanced load. Start with `--concurrency 2` and increase based on target system capacity. The default (`1`) preserves sequential behaviour.
+Runs are distributed round-robin across workers for balanced load. The default is `5`; reduce to `--concurrency 1` for sequential behaviour, or increase based on target system capacity.
 
 ## Experiments
 
