@@ -286,6 +286,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   component. Each module docstring
   names the source file, the pinned commit, the license and the METIS changes, and
   `metis/library/EXTERNAL_SOURCES.md` gives the copyright notices and license texts.
+  `metis/library/graders/README.md` lists every grader with the upstream metric that it
+  adapts.
 
 - The taxonomy keeps Use of Observed State, Spoken-Content Fidelity, Language Identification
   Accuracy and Input Interpretation Accuracy, but the library has no grader for them: a trace

@@ -8,7 +8,7 @@ offer this judge, because the form has no criterion description field.
 ## Taxonomy declaration
 
 The Criterion Judge is the LLM reference grader for the taxonomy foundation.
-[DemoTraceBudget](graders.md#deterministic-reference-grader) is the deterministic reference grader.
+[DemoTraceBudget](graders.md#examples-to-copy) is the deterministic reference grader.
 Criterion Judge is a catch-all judge with `measure=None`. It has no category mapping.
 The other five groups have one fixed value:
 
