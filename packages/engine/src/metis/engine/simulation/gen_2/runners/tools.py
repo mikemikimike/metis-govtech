@@ -388,6 +388,16 @@ async def _report(
     return {"ok": True}
 
 
+async def _http_report(
+    runner: HttpRunner, state: ActionState, args: dict[str, Any]
+) -> dict[str, Any]:
+    """``report``, then settle the open submission if the reply came from its own response."""
+    result = await _report(runner, state, args)
+    if args.get("reply_from") is not None:
+        runner.settle_by_reply(str(args["reply_from"]["entry"]))
+    return result
+
+
 SHARED_HANDLERS: dict[str, Handler] = {
     "session_id_from": _session_id_from,
     "note": _note,
@@ -402,4 +412,5 @@ _HANDLERS: dict[str, Handler] = {
     "poll_until": _poll_until,
     "fetch_files": _fetch_files,
     **SHARED_HANDLERS,
+    "report": _http_report,
 }

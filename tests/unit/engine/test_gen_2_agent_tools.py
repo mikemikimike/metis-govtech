@@ -50,6 +50,10 @@ class Target:
                     "files": [{"id": "f1", "name": "a.txt"}],
                 },
             )
+        if path == f"{API}/accepted":
+            return httpx.Response(202, json={"reply": "working on it"})
+        if path == f"{API}/gone":
+            return httpx.Response(404, json={"detail": "no such session"})
         if path == f"{API}/status":
             return httpx.Response(200, json={"state": "done"})
         if path == f"{API}/names":
@@ -284,6 +288,131 @@ async def test_report_resolves_the_reply_and_keeps_the_reading_apart(
         "sent it",
     )
     assert state.report.reading.next_options == "ask more"
+
+
+async def _submit(
+    runner: HttpRunner, state: ActionState, path: str = "/chat"
+) -> dict[str, Any]:
+    return await _call(
+        runner,
+        state,
+        "http_request",
+        {"method": "POST", "path": path, "json": {"text": "{{1}}"}},
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_reply_cited_from_the_submissions_own_200_settles_it(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+    reply = await _chat(runner, state)
+    assert runner.open_submission is not None
+
+    result = await _call(
+        runner,
+        state,
+        "report",
+        {
+            "outcome": "done",
+            "why": "the answer came back in the POST",
+            "reply_from": {"entry": reply["response_entry"], "at": "$.reply"},
+        },
+    )
+
+    assert "error" not in result
+    assert runner.open_submission is None
+    observation = runner._observation(state, None)
+    assert observation.observed
+    assert observation.reply == "hi"
+    assert observation.notice is None
+    assert not observation.submission_unresolved
+
+
+@pytest.mark.asyncio
+async def test_a_202_stays_open_even_when_the_report_cites_it(tmp_path: Path) -> None:
+    runner, _, state = await _ready(tmp_path)
+    reply = await _submit(runner, state, "/accepted")
+
+    await _call(
+        runner,
+        state,
+        "report",
+        {
+            "outcome": "partial",
+            "why": "accepted, the answer comes later",
+            "reply_from": {"entry": reply["response_entry"], "at": "$.reply"},
+        },
+    )
+
+    assert runner.open_submission is not None
+    assert not runner._observation(state, None).observed
+
+
+@pytest.mark.asyncio
+async def test_citing_a_later_call_does_not_settle_the_submission(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _chat(runner, state)
+    status = await _call(
+        runner,
+        state,
+        "http_request",
+        {"method": "GET", "path": "/status"},
+    )
+
+    await _call(
+        runner,
+        state,
+        "report",
+        {
+            "outcome": "done",
+            "why": "read the session",
+            "reply_from": {"entry": status["response_entry"], "at": "$.state"},
+        },
+    )
+
+    assert runner.open_submission is not None
+
+
+@pytest.mark.asyncio
+async def test_a_report_without_a_reply_leaves_the_submission_open(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _chat(runner, state)
+
+    await _call(runner, state, "report", {"outcome": "unknown", "why": "no idea"})
+
+    assert runner.open_submission is not None
+
+
+@pytest.mark.asyncio
+async def test_a_4xx_poll_still_leaves_the_submission_unresolved(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _chat(runner, state)
+    gone = await _call(
+        runner, state, "poll_until", {"path": "/gone", "at": "$.state", "in": ["done"]}
+    )
+
+    await _call(
+        runner,
+        state,
+        "report",
+        {
+            "outcome": "not_done",
+            "why": "the poll failed",
+            "reply_from": {"entry": gone["response_entry"], "at": "$.detail"},
+        },
+    )
+
+    observation = runner._observation(state, None)
+    assert observation.submission_unresolved
+    assert observation.notice is not None
+    assert "never settled" in observation.notice
 
 
 @pytest.mark.asyncio

@@ -354,7 +354,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   runner exposes the open one and the responses that answered a submission, and takes the
   session ID from such a response or from a result logged during the current action, so a
   target that opens its session before any message (the toy app's `POST /sessions`) can have
-  its ID recorded (#543). `HttpRunnerFactory.start` opens the HTTP transport
+  its ID recorded (#543). A submission answered inside its own 200 or 201 response settles when
+  the agent's `report` cites that response in `reply_from` (`HttpRunner.settle_by_reply`), since a
+  target like that has no field to poll; a 202 stays open, because its reply comes later (#587).
+  `HttpRunnerFactory.start` opens the HTTP transport
   (honouring `tls_verify`) and `close` closes it. A binding file that is not UTF-8 gives a clear
   `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is
   fetched.
