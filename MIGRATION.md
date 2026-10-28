@@ -27,18 +27,19 @@ survives past — the coordinated v1.0 release.
 
 ## Migrating to v1.0 (from v0.x)
 
-### Documentation site
+### Landing page and documentation site
 
-The `Docs` workflow in `.github/workflows/docs.yml` builds the documentation site for
-each pull request that changes it. On a push to `main`, it publishes the site to
-<https://govtech-responsibleai.github.io/metis/>. GitHub Pages on the free plan
-publishes only from a public repository, so the workflow skips the publish job while
-the repository is private.
+The `Pages` workflow in `.github/workflows/pages.yml` builds the landing page and the
+documentation site for each pull request that changes them. On a push to `main`, it
+publishes the landing page to <https://govtech-responsibleai.github.io/metis/> and the
+documentation to <https://govtech-responsibleai.github.io/metis/docs/>. GitHub Pages on
+the free plan publishes only from a public repository, so the workflow skips the
+publish job while the repository is private.
 
 When the repository becomes public, a repository admin must do these steps once:
 
 1. In **Settings > Pages**, set **Source** to **GitHub Actions**.
-2. In **Actions**, run the `Docs` workflow on `main`.
+2. In **Actions**, run the `Pages` workflow on `main`.
 3. Add the site address to the README and to the repository **About** box.
 
 ### Execution folders

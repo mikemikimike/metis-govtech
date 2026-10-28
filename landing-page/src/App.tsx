@@ -12,7 +12,8 @@ const Xmark = () => <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 
 const Spinner = () => <svg className="wt-spin" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 1 10 10" /></svg>;
 
 const GITHUB_URL = 'https://github.com/govtech-responsibleai/metis';
-const DOCS_URL = 'https://govtech-responsibleai.github.io/metis/';
+const DOCS_URL = 'https://govtech-responsibleai.github.io/metis/docs/';
+const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 const FULL_NAME = 'Measurement and Evaluation of Trustworthy Intelligent Systems';
 const INSTALL_CMD = 'git clone https://github.com/govtech-responsibleai/metis.git && cd metis && make install';
 const IC_WIZARD = 'https://img.icons8.com/?size=100&id=36868&format=png&color=9B7520';
@@ -197,11 +198,11 @@ function HeroArt() {
 
 /* ── Hero card stack ── */
 const productShots = [
-  { src: '/product/wizard-mainpage.png', label: 'Wizard · Home', alt: 'METIS Wizard web app: the home page with a large METIS wordmark' },
-  { src: '/product/wizard-scenarios.webp', label: 'Wizard · Scenarios', alt: 'METIS Wizard web app: scenarios and the test cases selected to run' },
-  { src: '/product/engine-tui.webp', label: 'Engine · Terminal', alt: 'METIS Engine terminal dashboard simulating three scenarios in parallel' },
-  { src: '/product/insights-dashboard.webp', label: 'Insights · Results', alt: 'METIS Insights report: specification results tree with a selected criterion' },
-  { src: '/product/insights-detail.webp', label: 'Insights · Trials', alt: 'METIS Insights report: pass rates per criterion and the trial-by-criterion grid' },
+  { src: asset('product/wizard-mainpage.png'), label: 'Wizard · Home', alt: 'METIS Wizard web app: the home page with a large METIS wordmark' },
+  { src: asset('product/wizard-scenarios.webp'), label: 'Wizard · Scenarios', alt: 'METIS Wizard web app: scenarios and the test cases selected to run' },
+  { src: asset('product/engine-tui.webp'), label: 'Engine · Terminal', alt: 'METIS Engine terminal dashboard simulating three scenarios in parallel' },
+  { src: asset('product/insights-dashboard.webp'), label: 'Insights · Results', alt: 'METIS Insights report: specification results tree with a selected criterion' },
+  { src: asset('product/insights-detail.webp'), label: 'Insights · Trials', alt: 'METIS Insights report: pass rates per criterion and the trial-by-criterion grid' },
 ];
 const STACK_DEPTH = 3;
 
@@ -415,7 +416,7 @@ export default function App() {
       <header className="site-header">
         <div className="container header-inner">
           <a className="header-brand" href="#top" aria-label="METIS home">
-            <img src="/metis-logo.png" alt="" />
+            <img src={asset('metis-logo.png')} alt="" />
             <strong>METIS</strong>
             <span>{FULL_NAME}</span>
           </a>
@@ -682,7 +683,7 @@ export default function App() {
         <div className="container footer-inner">
           <div className="footer-top">
             <div className="footer-brand-group">
-              <img src="/metis-logo.png" alt="" className="footer-logo" />
+              <img src={asset('metis-logo.png')} alt="" className="footer-logo" />
               <div>
                 <strong className="footer-name">METIS</strong>
                 <span className="footer-full-name">{FULL_NAME}</span>
