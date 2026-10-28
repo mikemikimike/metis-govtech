@@ -96,8 +96,9 @@ class Observation(BaseModel):
     raw: dict[str, Any] = Field(default_factory=dict, exclude=True, repr=False)
     """The row this observation was validated from, untouched: every key the API sent, the
     original input/output strings and the original timestamp strings. It exists so the
-    observation can be saved without loss (``SessionTraces``), never for grading: graders read
-    payloads only through ``metis.core.trace_processing``. It is left out of ``model_dump`` and
+    observation can be saved without loss (``SessionTraces``), and so the trace processor
+    (``metis.core.trace_processing``) can show a payload exactly as the application sent it.
+    Nothing outside the trace processor reads it. It is left out of ``model_dump`` and
     ``repr`` so no log line or judge prompt picks up a second copy of every payload. An
     observation built from keyword arguments holds those arguments here, not a Langfuse row."""
 
@@ -215,10 +216,6 @@ class GradingInput(BaseModel, frozen=True):
     """Every artifact the run produced, with ``path`` already resolved to a local file path.
     ``()`` when the run produced none. Not tied to individual traces (see issue #428, "Open
     questions and known gaps")."""
-
-    tools_available: tuple[str, ...] = ()
-    """A description of each tool that the target can use, copied by the engine from
-    ``defaults.tools_available``. ``()`` when the specification sets none."""
 
 
 _SESSION_TRACES_VERSION = 1

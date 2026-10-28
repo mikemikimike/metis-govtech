@@ -33,8 +33,7 @@ _OPTIONAL_MODELS = ("judge_model", "user_agent_model", "runner_agent_model")
 
 
 def omit_unset_models(data: dict[str, Any]) -> None:
-    """Remove unset model fields and empty ``tools_available`` from a dumped Experiment or
-    Specification, in place.
+    """Remove unset model fields from a dumped Experiment or Specification, in place.
 
     Existing specs then serialise unchanged. ``defaults`` goes when nothing in it is set.
     """
@@ -43,8 +42,6 @@ def omit_unset_models(data: dict[str, Any]) -> None:
         for key in _OPTIONAL_MODELS:
             if defaults.get(key) is None:
                 defaults.pop(key, None)
-        if not defaults.get("tools_available"):
-            defaults.pop("tools_available", None)
         if not defaults:
             data.pop("defaults")
     for task in data.get("tasks") or []:
@@ -90,12 +87,6 @@ class ExperimentDefaults(BaseModel, extra="forbid"):
     """The user agent model of every Test Case."""
     runner_agent_model: str | None = Field(default=None, min_length=1)
     """The runner agent model of the generic runners."""
-
-    tools_available: tuple[str, ...] = ()
-    """A description of each tool that the target can use, such as
-    ``"search_database: Searches the product database by query"``. The engine copies them to
-    ``GradingInput.tools_available`` for graders that declare ``ReferenceType.AVAILABLE_TOOLS``.
-    The wizard does not set this field. Set it by hand in ``specification.yaml``."""
 
 
 class Experiment(BaseModel):

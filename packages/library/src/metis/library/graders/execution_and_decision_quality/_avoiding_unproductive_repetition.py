@@ -56,7 +56,8 @@ class AvoidingUnproductiveRepetitionGrader(Grader[AvoidingUnproductiveRepetition
             + self.args.task_block()
             + "\n\n<assessment_boundaries>\n"
             "Allow retries justified by transient conditions or new information. "
-            "Step count alone does not establish a loop."
+            "Step count alone does not establish a loop. A session with no repeated "
+            "actions avoids unproductive repetition, so score it 1."
             "\n</assessment_boundaries>"
         )
 

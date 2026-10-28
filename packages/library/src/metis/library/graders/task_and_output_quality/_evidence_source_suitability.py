@@ -33,7 +33,7 @@ class EvidenceSourceSuitabilityArgs(JudgeArgs, TraceArgs, ArtifactArgs):
 
     ``sources`` lists the evidence sources to assess. Each source is judged on its own,
     and a result scores 1 only when every source is suitable. The result is errored when
-    any source cannot be judged.
+    no source is unsuitable but one cannot be judged.
     """
 
     turn: Literal["each", "last"] = "last"

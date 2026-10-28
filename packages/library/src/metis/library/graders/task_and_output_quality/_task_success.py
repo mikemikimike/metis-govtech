@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Self
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from metis.core.grading import GradingOutput
 from metis.core.trace_processing import Problem
@@ -31,7 +31,8 @@ class TaskSuccessArgs(JudgeArgs, ArtifactArgs, TaskArgs):
 
     ``task_description`` and ``success_conditions`` are the assessment criteria, set in the
     specification. When ``task_description`` is unset, the judge infers the goal from the
-    user's messages.
+    user's messages. A file has no user messages, so the artifact scope needs at least one
+    of the two, and without ``task_description`` the judge uses the success conditions only.
     """
 
     success_conditions: tuple[str, ...] = Field(
@@ -50,13 +51,27 @@ class TaskSuccessArgs(JudgeArgs, ArtifactArgs, TaskArgs):
             raise ValueError(f"Blank success conditions at positions {blanks}.")
         return v
 
+    @model_validator(mode="after")
+    def _artifact_needs_a_goal(self) -> Self:
+        if (
+            self.scope == Scope.ARTIFACT
+            and self.task_description is None
+            and not self.success_conditions
+        ):
+            raise ValueError(
+                "The artifact scope needs task_description or success_conditions, "
+                "because a file has no user messages to infer the goal from."
+            )
+        return self
+
 
 class TaskSuccessGrader(Grader[TaskSuccessArgs]):
     """Assess whether the requested end goal was achieved under declared success conditions.
 
     For action tasks, requires recorded outcome evidence (tool results, state changes);
     an agent's claim of completion alone is insufficient. The evidence includes tool
-    results so the judge can verify that actions actually happened.
+    results so the judge can verify that actions actually happened. Under the artifact
+    scope, the judge sees only the file and judges whether the file meets the goal.
     """
 
     args_model = TaskSuccessArgs
@@ -72,16 +87,34 @@ class TaskSuccessGrader(Grader[TaskSuccessArgs]):
     def criteria(self) -> str:
         return (
             "You are assessing whether the requested end goal was achieved."
-            + self.args.task_block()
+            + self._task_block()
             + section("success_conditions", self.args.success_conditions)
             + "\n\n<assessment_boundaries>\n"
             "Assess whether the declared end goals and mandatory conditions were achieved. "
+            + self._evidence_rule()
+            + "\n</assessment_boundaries>"
+        )
+
+    def _task_block(self) -> str:
+        if self.scope == Scope.ARTIFACT and self.args.task_description is None:
+            return (
+                "\n\nNo task description is given. Judge the file against the "
+                "success conditions only."
+            )
+        return self.args.task_block()
+
+    def _evidence_rule(self) -> str:
+        if self.scope == Scope.ARTIFACT:
+            return (
+                "Judge only the attached file. It is the only evidence, so decide "
+                "whether the file itself achieves the goal."
+            )
+        return (
             "For action tasks, require recorded outcome evidence such as tool results that "
             "show state changes or confirmations from external systems. An agent's claim of "
             'completion alone (e.g. "I have completed the task") is insufficient without '
             "supporting evidence in tool results or system responses. "
             "For answer-only tasks, a correct and complete answer may establish success."
-            "\n</assessment_boundaries>"
         )
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:

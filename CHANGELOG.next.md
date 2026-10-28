@@ -92,11 +92,6 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
-- `ExperimentDefaults.tools_available` and `GradingInput.tools_available`: a description of
-  each tool that the target can use, for graders that declare
-  `ReferenceType.AVAILABLE_TOOLS`. A specification that does not set it serialises unchanged.
-  The wizard does not set it.
-
 - `metis.core.target_binding.TargetBinding`: the YAML file a user writes to bind an app to
   the generic HTTP runner, published as `packages/core/schemas/target-binding.schema.json`
   (`schema_version` 1). It holds `identity`, `transport` (`http` only), `spec_url`,
@@ -198,21 +193,29 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   name (#283).
 
 - `GraderResult` and `RecordedResult` carry `scope`, the label of what the result is about
-  (`"session"`, `"turn:3"` or `"artifact:report.pdf:0"`). `GraderRecord.aggregation` records
+  (`"session"`, `"turn:3"` or `"artifact:report.pdf"`). `GraderRecord.aggregation` records
   the grader's aggregation rule (`"pass_if_all"`), or is omitted when the grader declares no
   taxonomy.
 
 - `select_by_turn`, `select_by_window`, `select_session` and `select_by_artifact` in
   `metis.core.trace_processing` select what a grader judges for each scope, each under a
   label for `GraderResult.scope`. A trace is one turn on its own; a subsession is a turn and up
-  to `window` turns before it, or every turn before it when `window` is not set.
+  to `window` turns before it, or every turn before it when `window` is not set. The artifact
+  scope judges the latest revision of a named file: the highest `at_turn`, then the last one
+  listed. `find_fixtures` gives the files the user gave the target, and `tools_offered` the
+  tools the session offered, by agent, from the model calls, the agents and the tool calls.
   `render_artifact` gives a file in the form the judge reads, up to 50 MB.
   `GradingOutput.errored(reason)` builds the one result of a session that cannot be judged.
 
-- `render_session(turns, tool_results=True)` adds each tool call's status and result, and
-  `max_chars` cuts long arguments and results. The default output does not change.
-  `render_dialogue` shows only the user and assistant lines. A reply that is a JSON object or
-  array, and not a chat message, is read as its JSON text.
+- `render_session` shows everything the trace records in each turn, in time order: the user's
+  message, each agent's system prompt (once), what each model call wrote (never its input,
+  which repeats the history), sub-agent handoffs, tool calls, errors and warnings at the
+  observation where they happened, and the reply. `Turn.events` holds these events. With
+  `tool_results=True` it adds each tool call's status (`ok`, `warning` or `error`) and result,
+  including a result that is a list, and `max_chars` cuts long payloads. A JSON reply, tool
+  argument or tool result is shown as the text the application recorded, so `10.50` stays
+  `10.50`; `Observation.raw` is read only by the trace processor, for this. `render_dialogue`
+  shows only what the user and the agent said to each other.
 
 #### Breaking
 
@@ -230,33 +233,41 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
-- Sixteen Execution and Decision Quality graders, one for each attribute of the
-  sub-dimension: `PlanningQualityGrader`, `ActionChoiceAppropriatenessGrader`,
-  `ToolChoiceAppropriatenessGrader`, `ToolArgumentCorrectnessGrader`,
-  `UseOfObservedStateGrader`, `StateTrackingGrader`, `UseOfPriorInformationGrader`,
+- Fifteen Execution and Decision Quality graders: `PlanningQualityGrader`,
+  `ActionChoiceAppropriatenessGrader`, `ToolChoiceAppropriatenessGrader`,
+  `ToolArgumentCorrectnessGrader`, `StateTrackingGrader`, `UseOfPriorInformationGrader`,
   `ErrorDetectionGrader`, `ErrorRecoveryGrader`, `AdaptationToChangedConditionsGrader`,
   `StoppingAppropriatenessGrader`, `AvoidingUnproductiveRepetitionGrader`,
   `AppropriateHandlingOfCapabilityLimitsGrader`, `OutcomeVerificationGrader`,
-  `ReasoningValidityGrader`, and `CoordinationQualityGrader`. Each judges the whole session,
-  with every tool call's result. `task_description` is optional; without it the judge infers
-  the goal from the user's messages. The tool graders need recorded tool calls, and
-  `ToolChoiceAppropriatenessGrader` also needs `defaults.tools_available` (#447).
+  `ReasoningValidityGrader`, and `CoordinationQualityGrader`. Each judges the whole session.
+  `task_description` is optional; without it the judge infers the goal from the user's
+  messages. `ToolChoiceAppropriatenessGrader`, `ToolArgumentCorrectnessGrader`,
+  `ActionChoiceAppropriatenessGrader` and `AppropriateHandlingOfCapabilityLimitsGrader` read
+  the tool list from their `available_tools` setting, or else from the tools the session
+  offered. `ToolArgumentCorrectnessGrader` needs recorded tool calls.
+  `AvoidingUnproductiveRepetitionGrader` and `UseOfPriorInformationGrader` score a clean
+  session 1 (#447).
 
-- Fourteen Task and Output Quality graders, one for each attribute of the sub-dimension:
-  `TaskSuccessGrader`, `OutputCorrectnessGrader`, `FactualAccuracyGrader`,
-  `RequiredComponentCompletenessGrader`, `TaskConstraintAdherenceGrader`,
-  `FormatSchemaComplianceGrader`, `ClaimSupportByEvidenceGrader`,
-  `EvidenceSourceSuitabilityGrader`, `InputInterpretationAccuracyGrader`,
-  `SpeechRecognitionAccuracyGrader`, `LanguageIdentificationAccuracyGrader`,
-  `ContentFidelityGrader`, `SpokenContentFidelityGrader`, and `AttributionAccuracyGrader`.
+- Eleven Task and Output Quality graders: `TaskSuccessGrader`, `OutputCorrectnessGrader`,
+  `FactualAccuracyGrader`, `RequiredComponentCompletenessGrader`,
+  `TaskConstraintAdherenceGrader`, `FormatSchemaComplianceGrader`,
+  `ClaimSupportByEvidenceGrader`, `EvidenceSourceSuitabilityGrader`,
+  `SpeechRecognitionAccuracyGrader`, `ContentFidelityGrader`, and `AttributionAccuracyGrader`.
   Output graders judge the final reply by default (`turn: last`), or every reply
-  (`turn: each`), or each received file with a given name (`scope: artifact`,
-  `artifact: <name>`). The judge reads the file itself. `RequiredComponentCompletenessGrader`,
+  (`turn: each`), or the latest received file with a given name (`scope: artifact`,
+  `artifact: <name>`). The judge reads the file itself. With a file, `TaskSuccessGrader` and
+  `TaskConstraintAdherenceGrader` judge the file alone, and `TaskSuccessGrader` needs a
+  `task_description` or `success_conditions`. `RequiredComponentCompletenessGrader`,
   `TaskConstraintAdherenceGrader` and `EvidenceSourceSuitabilityGrader` judge each listed
-  item on its own and combine the results by `pass_if_all`: a result scores 1 only when every
-  listed item is met, and is errored when any listed item cannot be judged.
+  item on its own and combine the results by `pass_if_all`: a result scores 0 when any listed
+  item fails, is errored when none fails but one cannot be judged, and scores 1 otherwise.
   `FormatSchemaComplianceGrader` checks JSON against a schema without a judge call, before
   any prose rules (#447).
+
+- The taxonomy keeps Use of Observed State, Spoken-Content Fidelity, Language Identification
+  Accuracy and Input Interpretation Accuracy, but the library has no grader for them: a trace
+  does not record the environment state, the delivered speech, the identified language, or the
+  meaning the user intended.
 
 - Shared definitions for grading: `SCOPE_DEFINITIONS` in `metis.library.scope` (trace,
   subsession, session and artifact), `JUDGMENT_FORM_DEFINITIONS` in `metis.library.judgment_form`
@@ -333,8 +344,6 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 ### metis-engine
 
 #### Added
-
-- `metis engine evaluate` copies `defaults.tools_available` to each session's grading input.
 
 - **The simulated user receives persona and scenario metadata (#442).** The gen_1 and gen_2
   user agents add each `metadata` entry to the persona or scenario description in the system

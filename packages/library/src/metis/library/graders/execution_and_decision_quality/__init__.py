@@ -1,7 +1,7 @@
 """metis.library.graders.execution_and_decision_quality: graders for the Execution and
 Decision Quality taxonomy sub-dimension.
 
-Sixteen graders, each mapping to one Measure attribute from Planning Quality through
+Fifteen graders, each mapping to one Measure attribute from Planning Quality through
 Coordination Quality. They are re-exported from ``metis.library.graders`` so the
 canonical FQN stays ``metis.library.graders.XGrader``.
 """
@@ -37,9 +37,6 @@ from ._tool_argument_correctness import (
 )
 from ._tool_choice_appropriateness import (
     ToolChoiceAppropriatenessGrader as ToolChoiceAppropriatenessGrader,
-)
-from ._use_of_observed_state import (
-    UseOfObservedStateGrader as UseOfObservedStateGrader,
 )
 from ._use_of_prior_information import (
     UseOfPriorInformationGrader as UseOfPriorInformationGrader,

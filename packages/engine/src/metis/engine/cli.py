@@ -1159,11 +1159,6 @@ async def _evaluate_records(
                             artifacts=record.artifacts,
                             retry_timeout=langfuse_timeout,
                         )
-                        tools = specification.experiment.defaults.tools_available
-                        if tools:
-                            grading_input = grading_input.model_copy(
-                                update={"tools_available": tools}
-                            )
                         if not grading_input.traces:
                             failure_reason = "No traces found in Langfuse"
                         else:

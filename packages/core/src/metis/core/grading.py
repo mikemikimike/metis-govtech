@@ -28,7 +28,7 @@ class GraderResult(BaseModel):
     reason: str
     scope: str | None = None
     """The label of what the result is about, such as ``"session"``, ``"turn:3"`` or
-    ``"artifact:report.pdf:0"``. ``None`` when the grader does not divide the session."""
+    ``"artifact:report.pdf"``. ``None`` when the grader does not divide the session."""
 
     @model_validator(mode="after")
     def _score_matches_status(self) -> Self:

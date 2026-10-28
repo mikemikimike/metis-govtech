@@ -1,4 +1,4 @@
-"""The select and render functions, and find_artifacts (#431).
+"""The select and render functions, find_artifacts and find_fixtures (#431).
 
 The transcript is the one text view every LLM judge sees, so its layout is pinned exactly.
 """
@@ -14,6 +14,7 @@ from metis.core.trace_processing import (
     FileInput,
     Problem,
     find_artifacts,
+    find_fixtures,
     render_artifact,
     render_dialogue,
     render_session,
@@ -129,9 +130,14 @@ def test_tool_results_follow_each_call_with_its_status() -> None:
         "## Turn 1\nUser: q\n"
         'Tool search: {"q": "x"}\n'
         "Tool result [error: index unavailable]: ERROR: index unavailable\n"
-        "Assistant: done\n"
-        "[target error: index unavailable]"
+        "Assistant: done"
     )
+
+
+def test_a_tool_warning_is_labelled_a_warning() -> None:
+    gi = _tool_session(output="slow", level="WARNING", status_message="slow upstream")
+    text = render_session(turns(gi.traces), tool_results=True)
+    assert "Tool result [warning: slow upstream]: slow" in text
 
 
 def test_a_call_without_an_error_level_is_ok() -> None:
@@ -180,6 +186,22 @@ def test_find_artifacts_returns_every_received_target_match() -> None:
         ),
     )
     assert find_artifacts(gi, "deck.pptx") == (first, second)
+
+
+def test_find_fixtures_returns_every_received_file_the_user_gave() -> None:
+    brief = _artifact("brief.pdf", source="fixture")
+    data = _artifact("data.csv", source="fixture")
+    gi = GradingInput(
+        traces=(),
+        artifacts=(
+            brief,
+            _artifact("deck.pptx"),
+            _artifact("lost.csv", source="fixture", state="unavailable", path=None),
+            data,
+        ),
+    )
+    assert find_fixtures(gi) == (brief, data)
+    assert find_fixtures(GradingInput(traces=())) == ()
 
 
 def test_find_artifacts_with_no_match_is_artifact_unavailable() -> None:
@@ -263,16 +285,39 @@ def test_an_empty_session_selects_nothing() -> None:
         assert selected.detail == "The session has no turns."
 
 
-def test_select_by_artifact_gives_each_received_file_with_the_name() -> None:
-    first = _artifact("deck.pptx", path="/tmp/1/deck.pptx")
-    second = _artifact("deck.pptx", path="/tmp/2/deck.pptx")
-    gi = GradingInput(traces=(), artifacts=(first, second, _artifact("other.docx")))
+def test_select_by_artifact_gives_the_latest_revision_of_the_file() -> None:
+    gi = GradingInput(
+        traces=(),
+        artifacts=(
+            _artifact("deck.pptx", path="/tmp/turn3/deck.pptx", at_turn=3),
+            _artifact("deck.pptx", path="/tmp/turn1/deck.pptx", at_turn=1),
+            _artifact("deck.pptx", path="/tmp/unknown/deck.pptx"),
+            _artifact("deck.pptx", path="/tmp/turn3-later/deck.pptx", at_turn=3),
+            _artifact("other.docx", at_turn=4),
+        ),
+    )
     selected = select_by_artifact(gi, "deck.pptx")
     assert not isinstance(selected, Problem)
     assert {label: str(path) for label, path in selected.items()} == {
-        "artifact:deck.pptx:0": "/tmp/1/deck.pptx",
-        "artifact:deck.pptx:1": "/tmp/2/deck.pptx",
+        "artifact:deck.pptx": "/tmp/turn3-later/deck.pptx"
     }
+
+
+def test_select_by_artifact_without_turns_keeps_the_last_listed_revision() -> None:
+    gi = GradingInput(
+        traces=(),
+        artifacts=(
+            _artifact("deck.pptx", path="/tmp/1/deck.pptx"),
+            _artifact("deck.pptx", path="/tmp/2/deck.pptx"),
+        ),
+    )
+    selected = select_by_artifact(gi, "deck.pptx")
+    assert not isinstance(selected, Problem)
+    assert str(selected["artifact:deck.pptx"]) == "/tmp/2/deck.pptx"
+
+
+def test_select_by_artifact_with_no_such_file_is_a_problem() -> None:
+    gi = GradingInput(traces=(), artifacts=(_artifact("other.docx"),))
     missing = select_by_artifact(gi, "report.pdf")
     assert isinstance(missing, Problem)
     assert missing.detail == "No received target file named 'report.pdf'."
@@ -293,3 +338,116 @@ def test_render_artifact_of_a_missing_file_is_a_problem(tmp_path: Path) -> None:
     rendered = render_artifact(tmp_path / "gone.docx")
     assert isinstance(rendered, Problem)
     assert "cannot be read" in rendered.detail
+
+
+def _agent_session() -> GradingInput:
+    """A planner that thinks, hands work to a researcher, and replies."""
+    t = "t1"
+    system = {"role": "system", "content": "You plan trips."}
+    observations = (
+        Observation(
+            id="root",
+            trace_id=t,
+            type="SPAN",
+            input="Plan Osaka",
+            output="Here is your plan.",
+            start_time=_t(0),
+        ),
+        Observation(
+            id="planner",
+            trace_id=t,
+            type="AGENT",
+            name="planner",
+            parent_observation_id="root",
+            start_time=_t(1),
+        ),
+        Observation(
+            id="think",
+            trace_id=t,
+            type="GENERATION",
+            name="llm",
+            parent_observation_id="planner",
+            start_time=_t(2),
+            input={"messages": [system, {"role": "user", "content": "Plan Osaka"}]},
+            output={"role": "assistant", "content": "I should ask the researcher."},
+        ),
+        Observation(
+            id="researcher",
+            trace_id=t,
+            type="AGENT",
+            name="researcher",
+            parent_observation_id="planner",
+            input="Find hotels",
+            output="Hotel A",
+            start_time=_t(3),
+            end_time=_t(6),
+        ),
+        Observation(
+            id="tool",
+            trace_id=t,
+            type="TOOL",
+            name="search",
+            parent_observation_id="researcher",
+            input={"q": "hotels"},
+            output=[{"name": "Hotel A"}],
+            start_time=_t(4),
+        ),
+        Observation(
+            id="retry",
+            trace_id=t,
+            type="GENERATION",
+            name="llm",
+            parent_observation_id="researcher",
+            level="ERROR",
+            status_message="rate limited",
+            start_time=_t(5),
+        ),
+        Observation(
+            id="final",
+            trace_id=t,
+            type="GENERATION",
+            name="llm",
+            parent_observation_id="planner",
+            start_time=_t(7),
+            input={"messages": [system, {"role": "user", "content": "Plan Osaka"}]},
+            output={"role": "assistant", "content": "Here is your plan."},
+        ),
+    )
+    return GradingInput(
+        traces=(Trace(id=t, session_id="s", observations=observations),)
+    )
+
+
+def test_the_session_shows_every_recorded_event_in_time_order() -> None:
+    assert render_session(turns(_agent_session().traces), tool_results=True) == (
+        "## Turn 1\nUser: Plan Osaka\n"
+        "System prompt (planner): You plan trips.\n"
+        "Model (planner): I should ask the researcher.\n"
+        "Handoff to researcher (from planner): Find hotels\n"
+        'Tool search (researcher): {"q": "hotels"}\n'
+        'Tool result [ok]: [{"name": "Hotel A"}]\n'
+        "[error on GENERATION llm (researcher): rate limited]\n"
+        "researcher returned (to planner): Hotel A\n"
+        "Assistant: Here is your plan."
+    )
+
+
+def test_a_system_prompt_is_shown_once_per_session() -> None:
+    gi = _agent_session()
+    two = GradingInput(traces=gi.traces * 2)
+    assert render_session(turns(two.traces)).count("System prompt (planner)") == 1
+
+
+def test_a_model_output_that_repeats_the_reply_is_left_out() -> None:
+    text = render_session(turns(_agent_session().traces))
+    assert text.count("Here is your plan.") == 1
+
+
+def test_a_json_reply_is_shown_as_recorded() -> None:
+    recorded = '{\n  "total": 10.50\n}'
+    row = {"id": "root", "traceId": "t1", "input": "q", "output": recorded}
+    trace = Trace(
+        id="t1", session_id="s", observations=(Observation.model_validate(row),)
+    )
+    [turn] = turns((trace,))
+    assert turn.reply == recorded

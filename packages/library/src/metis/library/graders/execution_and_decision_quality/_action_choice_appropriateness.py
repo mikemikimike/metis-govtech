@@ -9,7 +9,13 @@ from pydantic import Field, field_validator
 from metis.core.grading import GradingOutput
 from metis.core.trace_processing import Problem
 from metis.library.grader import Grader, JudgeArgs
-from metis.library.judge import TaskArgs, judge, section
+from metis.library.judge import (
+    TaskArgs,
+    ToolListArgs,
+    available_tools_block,
+    judge,
+    section,
+)
 from metis.library.scope import SCOPE_DEFINITIONS
 from metis.library.taxonomy import (
     Aggregation,
@@ -26,7 +32,7 @@ if TYPE_CHECKING:
     from metis.library.grader import LLMSettings
 
 
-class ActionChoiceAppropriatenessArgs(JudgeArgs, TaskArgs):
+class ActionChoiceAppropriatenessArgs(JudgeArgs, TaskArgs, ToolListArgs):
     """Settings for the action-choice appropriateness assessment.
 
     ``task_description`` provides the goal context. ``assessment_criteria`` optionally
@@ -54,7 +60,9 @@ class ActionChoiceAppropriatenessGrader(Grader[ActionChoiceAppropriatenessArgs])
     """Assess whether recorded intermediate choices are suitable.
 
     Evaluates whether each recorded choice is appropriate for the immediate
-    objective, available evidence, constraints, and alternatives.
+    objective, available evidence, constraints, and alternatives. The judge uses the tool
+    list (the ``available_tools`` setting, or the tools the session offered) to know the
+    alternatives.
     """
 
     args_model = ActionChoiceAppropriatenessArgs
@@ -67,13 +75,18 @@ class ActionChoiceAppropriatenessGrader(Grader[ActionChoiceAppropriatenessArgs])
         aggregations=(Aggregation.NONE_SINGLE_SCORE,),
     )
 
-    def criteria(self) -> str:
+    def criteria(self, tools: tuple[str, ...]) -> str:
         return (
             "You are assessing whether recorded intermediate choices are suitable "
             "for the immediate objective, available evidence, constraints, and "
             "alternatives."
             + self.args.task_block()
             + section("assessment_criteria", self.args.assessment_criteria)
+            + available_tools_block(
+                tools,
+                "Use available_tools to know the alternatives the agent could have "
+                "chosen at each step.",
+            )
             + "\n\n<assessment_boundaries>\n"
             "Broad criterion. Assess whether each recorded intermediate choice is "
             "suitable for the immediate objective, available evidence, constraints, "
@@ -88,7 +101,13 @@ class ActionChoiceAppropriatenessGrader(Grader[ActionChoiceAppropriatenessArgs])
             return GradingOutput.errored(selected.detail)
         return GradingOutput(
             results=[
-                await judge(self, llm, label, scope.render(thing), self.criteria())
+                await judge(
+                    self,
+                    llm,
+                    label,
+                    scope.render(thing),
+                    self.criteria(self.args.tool_list(input.traces)),
+                )
                 for label, thing in selected.items()
             ]
         )

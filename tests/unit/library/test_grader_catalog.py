@@ -25,7 +25,6 @@ EXECUTION_AND_DECISION_QUALITY = {
     "StoppingAppropriatenessGrader",
     "ToolArgumentCorrectnessGrader",
     "ToolChoiceAppropriatenessGrader",
-    "UseOfObservedStateGrader",
     "UseOfPriorInformationGrader",
 }
 TASK_AND_OUTPUT_QUALITY = {
@@ -35,12 +34,9 @@ TASK_AND_OUTPUT_QUALITY = {
     "EvidenceSourceSuitabilityGrader",
     "FactualAccuracyGrader",
     "FormatSchemaComplianceGrader",
-    "InputInterpretationAccuracyGrader",
-    "LanguageIdentificationAccuracyGrader",
     "OutputCorrectnessGrader",
     "RequiredComponentCompletenessGrader",
     "SpeechRecognitionAccuracyGrader",
-    "SpokenContentFidelityGrader",
     "TaskConstraintAdherenceGrader",
     "TaskSuccessGrader",
 }

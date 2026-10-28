@@ -23,13 +23,17 @@ def _single(results: Sequence[GraderResult], label: str) -> GraderResult:
 
 
 def _pass_if_all(results: Sequence[GraderResult], label: str) -> GraderResult:
-    """Errored when any rule errored; else 0 when any rule failed; else 1."""
+    """0 when any rule failed; else errored when any rule errored; else 1."""
+    if failed := [r.reason for r in results if r.status == "scored" and r.score != 1.0]:
+        return _result("scored", 0.0, "Not every rule is met", failed, label)
     if errored := [r.reason for r in results if r.status != "scored"]:
         return _result(
-            "errored", None, "Not every rule could be judged", errored, label
+            "errored",
+            None,
+            "No rule failed, but some could not be judged",
+            errored,
+            label,
         )
-    if failed := [r.reason for r in results if r.score != 1.0]:
-        return _result("scored", 0.0, "Not every rule is met", failed, label)
     return _result("scored", 1.0, "Every rule is met", [], label)
 
 

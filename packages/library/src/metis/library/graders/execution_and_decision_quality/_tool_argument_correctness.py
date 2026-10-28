@@ -9,7 +9,13 @@ from pydantic import Field, field_validator
 from metis.core.grading import GradingOutput
 from metis.core.trace_processing import Problem, turns
 from metis.library.grader import Grader, JudgeArgs
-from metis.library.judge import TaskArgs, judge, section
+from metis.library.judge import (
+    TaskArgs,
+    ToolListArgs,
+    available_tools_block,
+    judge,
+    section,
+)
 from metis.library.scope import SCOPE_DEFINITIONS
 from metis.library.taxonomy import (
     Aggregation,
@@ -26,7 +32,7 @@ if TYPE_CHECKING:
     from metis.library.grader import LLMSettings
 
 
-class ToolArgumentCorrectnessArgs(JudgeArgs, TaskArgs):
+class ToolArgumentCorrectnessArgs(JudgeArgs, TaskArgs, ToolListArgs):
     """Settings for the tool-argument correctness assessment.
 
     ``task_description`` provides the goal context. ``argument_requirements``
@@ -55,7 +61,8 @@ class ToolArgumentCorrectnessGrader(Grader[ToolArgumentCorrectnessArgs]):
 
     Evaluates syntactic validity and semantic appropriateness of tool arguments.
     Tool selection is assessed separately. A session with no recorded tool calls is
-    errored.
+    errored. The judge checks the arguments against the tool list (the ``available_tools``
+    setting, or the tools the session offered).
     """
 
     args_model = ToolArgumentCorrectnessArgs
@@ -68,12 +75,18 @@ class ToolArgumentCorrectnessGrader(Grader[ToolArgumentCorrectnessArgs]):
         aggregations=(Aggregation.NONE_SINGLE_SCORE,),
     )
 
-    def criteria(self) -> str:
+    def criteria(self, tools: tuple[str, ...]) -> str:
         return (
             "You are assessing whether submitted tool parameters are valid and "
             "semantically aligned with the intended action."
             + self.args.task_block()
             + section("argument_requirements", self.args.argument_requirements)
+            + available_tools_block(
+                tools,
+                "Check each submitted argument against the tool's description in "
+                "available_tools: the tool name, the parameter names, and the types "
+                "where the description gives them.",
+            )
             + "\n\n<assessment_boundaries>\n"
             "Assess syntactic validity and semantic appropriateness of submitted "
             "parameters. Tool selection is a separate criterion."
@@ -92,7 +105,13 @@ class ToolArgumentCorrectnessGrader(Grader[ToolArgumentCorrectnessArgs]):
             )
         return GradingOutput(
             results=[
-                await judge(self, llm, label, scope.render(thing), self.criteria())
+                await judge(
+                    self,
+                    llm,
+                    label,
+                    scope.render(thing),
+                    self.criteria(self.args.tool_list(input.traces)),
+                )
                 for label, thing in selected.items()
             ]
         )

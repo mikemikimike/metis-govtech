@@ -33,7 +33,7 @@ class TaskConstraintAdherenceArgs(JudgeArgs, ArtifactArgs):
 
     ``constraints`` is the authoritative list of restrictions. Each constraint is judged on
     its own, and a result scores 1 only when every constraint is met. The result is errored when
-    any constraint cannot be judged.
+    no constraint failed but one cannot be judged.
     """
 
     constraints: tuple[NonEmptyText, ...] = Field(
@@ -71,9 +71,10 @@ class TaskConstraintAdherenceGrader(Grader[TaskConstraintAdherenceArgs]):
 
     Constraints are restrictions (limits, prohibitions, format rules), not task
     requirements. Each constraint is judged on its own, and the results are combined
-    by ``pass_if_all``: a result scores 1 only when every constraint is met, and is
-    errored when any constraint cannot be judged. The evidence includes tool results for
-    execution constraints.
+    by ``pass_if_all``: a result scores 0 when any constraint is not met, is errored
+    when no constraint failed but one cannot be judged, and scores 1 otherwise. The
+    session evidence includes tool results for execution constraints. Under the artifact
+    scope, the judge looks only at the file.
     """
 
     args_model = TaskConstraintAdherenceArgs
@@ -96,12 +97,23 @@ class TaskConstraintAdherenceGrader(Grader[TaskConstraintAdherenceArgs]):
             "restrictions such as limits, prohibitions, required formats, and permitted "
             "resources. Do not treat a request to include something as a constraint "
             "(that is a required component, not a restriction). "
+            + self._evidence_rule()
+            + "If the evidence is genuinely insufficient to decide the constraint, the "
+            "criterion does not apply."
+            "\n</assessment_boundaries>"
+        )
+
+    def _evidence_rule(self) -> str:
+        if self.scope == Scope.ARTIFACT:
+            return (
+                "Judge only the attached file. A constraint on how the "
+                "agent worked, such as spending or timing, cannot be decided from the "
+                "file. "
+            )
+        return (
             "Look for evidence in tool call arguments, tool results, and agent responses. "
             "A constraint on spending, timing, or resource use may be established solely "
             "by tool results even when the agent does not mention it in conversation. "
-            "If the evidence is genuinely insufficient to decide the constraint, the "
-            "criterion does not apply."
-            "\n</assessment_boundaries>"
         )
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:

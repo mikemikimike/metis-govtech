@@ -140,7 +140,7 @@ ERROR = _rule("errored", None, "undecided.")
         (Aggregation.PASS_IF_ALL, [PASS, PASS], "scored", 1.0),
         (Aggregation.PASS_IF_ALL, [PASS, FAIL], "scored", 0.0),
         (Aggregation.PASS_IF_ALL, [PASS, ERROR], "errored", None),
-        (Aggregation.PASS_IF_ALL, [FAIL, ERROR], "errored", None),
+        (Aggregation.PASS_IF_ALL, [ERROR, FAIL], "scored", 0.0),
         (Aggregation.PASS_IF_ANY, [FAIL, PASS], "scored", 1.0),
         (Aggregation.PASS_IF_ANY, [ERROR, PASS], "scored", 1.0),
         (Aggregation.PASS_IF_ANY, [FAIL, ERROR], "errored", None),
@@ -159,15 +159,17 @@ def test_aggregation_rules(rule, results, status, score) -> None:
 def test_a_combined_reason_names_each_deciding_rule() -> None:
     combined = AGGREGATION_DEFINITIONS[Aggregation.PASS_IF_ALL]([PASS, FAIL, FAIL], "s")
     assert combined.reason == "Not every rule is met: unmet. unmet."
+    combined = AGGREGATION_DEFINITIONS[Aggregation.PASS_IF_ALL]([PASS, ERROR], "s")
+    assert combined.reason == "No rule failed, but some could not be judged: undecided."
 
 
 def test_sends_a_rendered_file_as_an_input_file(tmp_path: Path) -> None:
     report = tmp_path / "report.pdf"
     report.write_bytes(b"%PDF-1.4 body")
     result, [request] = _judge(
-        _reply(1), label="artifact:report.pdf:0", evidence=render_artifact(report)
+        _reply(1), label="artifact:report.pdf", evidence=render_artifact(report)
     )
-    assert result.scope == "artifact:report.pdf:0"
+    assert result.scope == "artifact:report.pdf"
     [attached] = request["input"][1]["content"]
     assert (attached["type"], attached["filename"]) == ("input_file", "report.pdf")
     assert attached["file_data"].startswith("data:application/pdf;base64,")

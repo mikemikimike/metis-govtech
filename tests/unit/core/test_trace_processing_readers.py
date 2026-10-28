@@ -10,6 +10,8 @@ from metis.core.trace_processing import (
     Message,
     Problem,
     ToolCallPart,
+    _recorded_text,
+    _reply_of,
     messages_of,
     text_of,
     tool_arguments,
@@ -160,6 +162,17 @@ class TestTools:
             "input",
         )
 
+    def test_a_list_result_is_returned_as_is(self) -> None:
+        hits = [{"title": "a"}, {"title": "b"}]
+        assert tool_result(_tool(output=hits)) == hits
+
+    def test_json_payloads_are_shown_as_recorded(self) -> None:
+        arguments = '{"amount": 10.50}'
+        result = '[\n  {"price": 10.50}\n]'
+        call = _tool(input=arguments, output=result)
+        assert tool_arguments(call) == arguments
+        assert tool_result(call) == result
+
     def test_a_missing_result_is_missing(self) -> None:
         problem = tool_result(_tool(output=None))
         assert isinstance(problem, Problem)
@@ -242,3 +255,14 @@ class TestLangfuseMediaReferences:
             text_of("email me @ noon @@ later", role="user")
             == "email me @ noon @@ later"
         )
+
+
+class TestReply:
+    def test_a_json_reply_is_shown_as_recorded(self) -> None:
+        recorded = '{\n  "total": 10.50\n}'
+        root = Observation(id="r", trace_id="t", output=recorded)
+        reply = _reply_of(root.output, recorded=_recorded_text(root, "output"))
+        assert reply == recorded
+
+    def test_a_json_reply_with_no_recorded_text_is_serialised(self) -> None:
+        assert _reply_of({"total": 10.5}) == '{"total": 10.5}'

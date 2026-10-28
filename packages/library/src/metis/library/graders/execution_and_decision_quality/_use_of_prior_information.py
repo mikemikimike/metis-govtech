@@ -77,7 +77,8 @@ class UseOfPriorInformationGrader(Grader[UseOfPriorInformationArgs]):
             + section("prior_information", self.args.prior_information)
             + "\n\n<assessment_boundaries>\n"
             "Judge retrieval and application of earlier facts and instructions. "
-            "Separate from observing or updating current state."
+            "Separate from observing or updating current state. Score 1 when no "
+            "earlier information is relevant, or when the agent uses it correctly."
             "\n</assessment_boundaries>"
         )
 

@@ -88,7 +88,7 @@ of its result. The render function turns one of them into what the judge reads:
 | `TRACE` | `select_by_turn` | `"turn:3"`: one turn | `render_session` | that turn only |
 | `SUBSESSION` | `select_by_window` | `"turns:2-4"`: a run of turns | `render_session` | those turns |
 | `SESSION` | `select_session` | `"session"`: every turn | `render_session` | every turn |
-| `ARTIFACT` | `select_by_artifact` | `"artifact:a.pdf:0"`: a file | `render_artifact` | the file only |
+| `ARTIFACT` | `select_by_artifact` | `"artifact:a.pdf"`: the latest revision of a file | `render_artifact` | the file only |
 
 A subsession ends at a turn and holds up to `window` turns. A `window` that is not set
 holds every turn before the end turn, so a grader that judges one turn with the
@@ -102,9 +102,10 @@ without a judge call, and so is a reply that the criterion does not apply.
 
 A multi-rule grader, such as `TaskConstraintAdherenceGrader`, loops over its rules in its
 own `grade()`. It calls `judge` once for each rule, then combines the rule results with
-`AGGREGATION_DEFINITIONS[self.aggregation]`. Under `pass_if_all`, an errored rule makes the
-piece errored, a failed rule makes it fail, and otherwise it passes. Under `pass_if_any`, a
-passing rule makes the piece pass, even when another rule errored.
+`AGGREGATION_DEFINITIONS[self.aggregation]`. Under `pass_if_all`, a failed rule makes the
+piece fail, even when another rule errored. Otherwise an errored rule makes the piece
+errored, and otherwise it passes. Under `pass_if_any`, a passing rule makes the piece pass,
+even when another rule errored.
 
 ## Criterion Judge example
 
@@ -213,7 +214,7 @@ reason. Errored results have no score. The engine applies the criterion threshol
 scored results.
 
 `GraderResult.scope` names what the result is about: `"session"`, `"turn:3"`, or
-`"artifact:report.pdf:0"`. A multi-rule grader returns one result for each thing it judged, combined
+`"artifact:report.pdf"`. A multi-rule grader returns one result for each thing it judged, combined
 from its rules. The engine records the aggregation rule on `GraderRecord.aggregation`.
 
 Evidence requirements are part of the declared support. Recorded state can support a
@@ -293,16 +294,19 @@ The following work is outside this foundation:
 Use `metis.core.trace_processing` when a grader needs normalized turns, tool calls,
 target errors, or artifact records. `turns(input.traces)` returns one turn per trace, oldest
 first. The select functions choose what to judge, and the render functions show it to the
-judge. `render_session` prepares a shared text view of turns. With `tool_results=True`,
-it adds each tool call's status and result, and `max_chars` cuts long arguments and
-results. `render_dialogue` shows only the user and assistant lines.
+judge. `render_session` shows everything the trace records, in time order: the user's
+message, each agent's system prompt (once), what each model call wrote, sub-agent handoffs,
+tool calls, errors at the observation where they happened, and the reply. With
+`tool_results=True`, it adds each tool call's status and result, and `max_chars` cuts long
+payloads. `render_dialogue` shows only what the user and the agent said to each other.
 
 Readers return a value or a `Problem`. A `Problem` means that METIS could not read the
 evidence. Map every `Problem` to `errored`, with its detail in the reason. Never score a
 `Problem`.
 A recorded target error is evidence about the target and can support an assessment.
 
-`find_artifacts` returns artifact records. It does not open files. Langfuse media
+`find_artifacts` returns the records of the files the target produced, and `find_fixtures`
+returns the records of the files the user gave the target. Neither opens a file. Langfuse media
 references are unavailable to these readers. For a judgment of one trace, provide
 only the context permitted by the grader's contract. Exclude later traces when the
 judgment must use only information available at that point.

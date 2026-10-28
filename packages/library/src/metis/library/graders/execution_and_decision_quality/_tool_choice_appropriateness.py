@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from metis.core.grading import GradingOutput
-from metis.core.trace_processing import Problem, turns
+from metis.core.trace_processing import Problem
 from metis.library.grader import Grader, JudgeArgs
-from metis.library.judge import TaskArgs, judge, section
+from metis.library.judge import TaskArgs, ToolListArgs, judge, section
 from metis.library.scope import SCOPE_DEFINITIONS
 from metis.library.taxonomy import (
     Aggregation,
@@ -24,13 +24,12 @@ if TYPE_CHECKING:
     from metis.library.grader import LLMSettings
 
 
-class ToolChoiceAppropriatenessArgs(JudgeArgs, TaskArgs):
+class ToolChoiceAppropriatenessArgs(JudgeArgs, TaskArgs, ToolListArgs):
     """Settings for the tool-choice appropriateness assessment.
 
-    ``task_description`` provides the goal context.  The available tool catalogue
-    is passed at runtime through ``GradingInput.tools_available`` so the judge can
-    assess whether an available alternative better fits the task and whether unused
-    tools should have been used.
+    ``task_description`` provides the goal context. The tool list lets the judge assess
+    whether an available alternative better fits the task and whether unused tools should
+    have been used.
     """
 
 
@@ -38,11 +37,12 @@ class ToolChoiceAppropriatenessGrader(Grader[ToolChoiceAppropriatenessArgs]):
     """Assess whether the selected tool is suitable for the task.
 
     Evaluates tool suitability, including whether a tool is needed at all and
-    whether an available alternative better fits the task. Tool arguments are
-    assessed separately. A session with no recorded tool calls is errored.
+    whether an available alternative better fits the task. A session with no recorded
+    tool calls is judged too: it fails when the task needed a tool, and passes when it
+    did not. Tool arguments are assessed separately.
 
-    Requires the available tool catalogue on ``GradingInput.tools_available``.
-    Set ``defaults.tools_available`` in the specification so the engine provides it.
+    Requires a tool list: the ``available_tools`` setting, or the tools the session
+    offered. With neither, the result is errored without a judge call.
     """
 
     args_model = ToolChoiceAppropriatenessArgs
@@ -50,7 +50,7 @@ class ToolChoiceAppropriatenessGrader(Grader[ToolChoiceAppropriatenessArgs]):
         measure=Measure.TOOL_CHOICE_APPROPRIATENESS,
         scopes=(Scope.SESSION,),
         grader_types=(GraderType.LLM,),
-        reference_types=(ReferenceType.RUBRIC_BASED, ReferenceType.AVAILABLE_TOOLS),
+        reference_types=(ReferenceType.RUBRIC_BASED,),
         judgment_forms=(JudgmentForm.BINARY,),
         aggregations=(Aggregation.NONE_SINGLE_SCORE,),
     )
@@ -72,20 +72,16 @@ class ToolChoiceAppropriatenessGrader(Grader[ToolChoiceAppropriatenessArgs]):
         )
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
-        if not input.tools_available:
+        tools = self.args.tool_list(input.traces)
+        if not tools:
             return GradingOutput.errored(
-                "No tools_available reference. Set defaults.tools_available in the "
-                "specification so the engine passes it to graders."
+                "No tool list: set available_tools, or record the tools the agent was "
+                "offered."
             )
         scope = SCOPE_DEFINITIONS[self.scope]
         selected = scope.select(input, self.args)
         if isinstance(selected, Problem):
             return GradingOutput.errored(selected.detail)
-        if not any(turn.tool_calls for turn in turns(input.traces)):
-            return GradingOutput.errored(
-                "The session has no recorded tool calls, so tool choice appropriateness "
-                "cannot be assessed."
-            )
         return GradingOutput(
             results=[
                 await judge(
@@ -93,7 +89,7 @@ class ToolChoiceAppropriatenessGrader(Grader[ToolChoiceAppropriatenessArgs]):
                     llm,
                     label,
                     scope.render(thing),
-                    self.criteria(input.tools_available),
+                    self.criteria(tools),
                 )
                 for label, thing in selected.items()
             ]

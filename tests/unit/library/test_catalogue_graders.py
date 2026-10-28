@@ -9,6 +9,7 @@ results.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -51,10 +52,6 @@ REQUIRED: dict[str, dict[str, Any]] = {
     },
     "FactualAccuracyGrader": {"ground_truth": ["Paris is the capital of France."]},
     "FormatSchemaComplianceGrader": {"format_requirements": ["Use a bulleted list."]},
-    "InputInterpretationAccuracyGrader": {
-        "interpretation_criteria": ["The date the user gave"]
-    },
-    "LanguageIdentificationAccuracyGrader": {"expected_languages": ["Malay"]},
     "OutcomeVerificationGrader": {},
     "OutputCorrectnessGrader": {"correctness_conditions": ["The total is 42."]},
     "PlanningQualityGrader": {},
@@ -63,26 +60,25 @@ REQUIRED: dict[str, dict[str, Any]] = {
     "SpeechRecognitionAccuracyGrader": {
         "reference_transcript": "Book a table for two."
     },
-    "SpokenContentFidelityGrader": {"intended_content": "Your order has shipped."},
     "StateTrackingGrader": {},
     "StoppingAppropriatenessGrader": {},
     "TaskConstraintAdherenceGrader": {"constraints": ["Spend under 100 dollars."]},
     "TaskSuccessGrader": {},
     "ToolArgumentCorrectnessGrader": {},
     "ToolChoiceAppropriatenessGrader": {},
-    "UseOfObservedStateGrader": {},
     "UseOfPriorInformationGrader": {},
 }
+ARTIFACT_GOAL = {"TaskSuccessGrader": {"success_conditions": ["Lists two items."]}}
 MULTI_RULE = {
     "EvidenceSourceSuitabilityGrader": "sources",
     "RequiredComponentCompletenessGrader": "required_components",
     "TaskConstraintAdherenceGrader": "constraints",
 }
-NEEDS_TOOL_CALLS = {"ToolArgumentCorrectnessGrader", "ToolChoiceAppropriatenessGrader"}
 
 
 def _session(*, agent: str | None = "planner", **extra: Any) -> GradingInput:
-    """Two turns. The second calls a search tool, inside an agent when ``agent`` is set."""
+    """Two turns. The second calls a search tool, inside an agent when ``agent`` is set, so the
+    session offered the agent ``search``."""
     first = Trace(
         id="t1",
         session_id="s",
@@ -116,8 +112,12 @@ def _session(*, agent: str | None = "planner", **extra: Any) -> GradingInput:
     return GradingInput(traces=(first, second), **extra)
 
 
-def _with_tools(**extra: Any) -> GradingInput:
-    return _session(tools_available=("search: Searches the index",), **extra)
+TOOL_GRADERS = {
+    "ActionChoiceAppropriatenessGrader",
+    "AppropriateHandlingOfCapabilityLimitsGrader",
+    "ToolArgumentCorrectnessGrader",
+    "ToolChoiceAppropriatenessGrader",
+}
 
 
 def _grader(name: str, **args: Any):
@@ -146,7 +146,7 @@ def _grade(
 @pytest.mark.parametrize("name", sorted(REQUIRED))
 def test_the_default_judges_one_item_and_names_it(name: str) -> None:
     grader = _grader(name)
-    [result], [request] = _grade(grader, _with_tools(), VERDICT)
+    [result], [request] = _grade(grader, _session(), VERDICT)
     assert result.status == "scored", result.reason
     assert result.score == 1.0
     expected_scope = "turn:2" if grader.taxonomy.scopes[0] == Scope.TRACE else "session"
@@ -160,14 +160,16 @@ def test_the_default_judges_one_item_and_names_it(name: str) -> None:
 
 @pytest.mark.parametrize("name", sorted(n for n in REQUIRED if n not in MULTI_RULE))
 def test_a_criterion_that_does_not_apply_is_errored(name: str) -> None:
-    [result], _ = _grade(_grader(name), _with_tools(), NOT_APPLICABLE)
+    [result], _ = _grade(_grader(name), _session(), NOT_APPLICABLE)
     assert (result.status, result.reason) == ("errored", "Nothing to judge.")
 
 
 @pytest.mark.parametrize("name", sorted(REQUIRED))
 def test_an_empty_session_is_errored_without_a_judge_call(name: str) -> None:
     [result], requests = _grade(
-        _grader(name), GradingInput(traces=(), tools_available=("t",)), VERDICT
+        _grader(name, **({"available_tools": ["t"]} if name in TOOL_GRADERS else {})),
+        GradingInput(traces=()),
+        VERDICT,
     )
     assert result.status == "errored"
     assert requests == []
@@ -191,38 +193,81 @@ def test_the_measure_reference_is_required(name: str) -> None:
     ),
 )
 def test_a_task_description_is_optional_and_reaches_the_prompt(name: str) -> None:
-    _, [unset] = _grade(_grader(name), _with_tools(), VERDICT)
+    _, [unset] = _grade(_grader(name), _session(), VERDICT)
     assert "Infer what the user asked for" in unset["input"][0]["content"]
     _, [set_] = _grade(
         _grader(name, task_description="Book a flight to Osaka."),
-        _with_tools(),
+        _session(),
         VERDICT,
     )
     assert "Book a flight to Osaka." in set_["input"][0]["content"]
 
 
-@pytest.mark.parametrize("name", sorted(NEEDS_TOOL_CALLS))
-def test_tool_graders_need_recorded_tool_calls(name: str) -> None:
-    no_tools = GradingInput(
-        traces=_session().traces[:1], tools_available=("search: Searches",)
+def _no_tool_calls() -> GradingInput:
+    return GradingInput(traces=_session().traces[:1])
+
+
+def test_tool_arguments_need_recorded_tool_calls() -> None:
+    [result], requests = _grade(
+        _grader("ToolArgumentCorrectnessGrader", available_tools=["search: Searches"]),
+        _no_tool_calls(),
+        VERDICT,
     )
-    [result], requests = _grade(_grader(name), no_tools, VERDICT)
     assert result.status == "errored"
     assert "no recorded tool calls" in result.reason
     assert requests == []
 
 
-def test_tool_choice_needs_the_tool_catalogue_and_shows_it() -> None:
+@pytest.mark.parametrize("score", [0, 1])
+def test_tool_choice_judges_a_session_with_no_tool_calls(score: int) -> None:
+    reply = {"status": "scored", "score": score, "reason": "Judged."}
+    [result], [request] = _grade(
+        _grader(
+            "ToolChoiceAppropriatenessGrader", available_tools=["search: Searches"]
+        ),
+        _no_tool_calls(),
+        reply,
+    )
+    assert (result.status, result.score) == ("scored", float(score))
+    assert "search: Searches" in request["input"][0]["content"]
+
+
+def test_tool_choice_without_a_tool_list_is_errored_without_a_judge_call() -> None:
     [result], requests = _grade(
-        _grader("ToolChoiceAppropriatenessGrader"), _session(), VERDICT
+        _grader("ToolChoiceAppropriatenessGrader"), _no_tool_calls(), VERDICT
     )
     assert result.status == "errored"
-    assert "tools_available" in result.reason
+    assert "set available_tools" in result.reason
     assert requests == []
-    _, [request] = _grade(
-        _grader("ToolChoiceAppropriatenessGrader"), _with_tools(), VERDICT
-    )
-    assert "search: Searches the index" in request["input"][0]["content"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "ActionChoiceAppropriatenessGrader",
+        "AppropriateHandlingOfCapabilityLimitsGrader",
+    ],
+)
+def test_without_a_tool_list_the_judge_does_not_guess_the_tools(name: str) -> None:
+    _, [without] = _grade(_grader(name), _no_tool_calls(), VERDICT)
+    assert "No tool list is given" in without["input"][0]["content"]
+
+
+@pytest.mark.parametrize("name", sorted(TOOL_GRADERS))
+def test_the_tool_list_setting_reaches_the_prompt(name: str) -> None:
+    grader = _grader(name, available_tools=["search(query): Searches the index"])
+    _, [request] = _grade(grader, _session(), VERDICT)
+    system = request["input"][0]["content"]
+    assert "<available_tools>\n1. search(query): Searches the index\n" in system
+    assert "No tool list is given" not in system
+
+
+@pytest.mark.parametrize("name", sorted(TOOL_GRADERS))
+def test_without_the_setting_the_tool_list_is_the_tools_the_session_offered(
+    name: str,
+) -> None:
+    _, [request] = _grade(_grader(name), _session(), VERDICT)
+    assert "<available_tools>\n1. search (planner)\n" in request["input"][0]["content"]
 
 
 def test_coordination_needs_a_recorded_agent() -> None:
@@ -246,20 +291,62 @@ def test_session_graders_see_tool_results() -> None:
         n for n in REQUIRED if Scope.ARTIFACT in getattr(catalog, n).taxonomy.scopes
     ),
 )
-def test_artifact_scope_attaches_each_revision(name: str, tmp_path: Path) -> None:
+def test_artifact_scope_judges_the_latest_revision(name: str, tmp_path: Path) -> None:
+    draft, final = tmp_path / "draft", tmp_path / "final"
+    for folder, text in ((draft, "- one"), (final, "- one\n- two")):
+        folder.mkdir()
+        (folder / "report.txt").write_text(text)
+    files = tuple(
+        Artifact(
+            name="report.txt",
+            source="target",
+            state="received",
+            path=str(folder / "report.txt"),
+            at_turn=turn,
+        )
+        for folder, turn in ((draft, 1), (final, 2))
+    )
+    grader = _grader(
+        name, scope="artifact", artifact="report.txt", **ARTIFACT_GOAL.get(name, {})
+    )
+    results, requests = _grade(grader, _session(artifacts=files), VERDICT)
+    assert [r.scope for r in results] == ["artifact:report.txt"]
+    [attached] = [
+        part
+        for part in requests[0]["input"][1]["content"]
+        if part["type"] == "input_file"
+    ]
+    assert attached["filename"] == "report.txt"
+    assert attached["file_data"].endswith(base64.b64encode(b"- one\n- two").decode())
+
+
+@pytest.mark.parametrize(
+    ("name", "args"),
+    [
+        ("TaskSuccessGrader", {"success_conditions": ["Lists two items."]}),
+        ("TaskSuccessGrader", {"task_description": "Summarise the report."}),
+        ("TaskConstraintAdherenceGrader", {}),
+    ],
+)
+def test_artifact_scope_prompt_judges_only_the_file(
+    name: str, args: dict[str, Any], tmp_path: Path
+) -> None:
     path = tmp_path / "report.txt"
     path.write_text("- one\n- two")
     file = Artifact(
         name="report.txt", source="target", state="received", path=str(path)
     )
-    grader = _grader(name, scope="artifact", artifact="report.txt")
-    results, requests = _grade(grader, _with_tools(artifacts=(file, file)), VERDICT)
-    assert [r.scope for r in results] == [
-        "artifact:report.txt:0",
-        "artifact:report.txt:1",
-    ]
-    [attached] = requests[0]["input"][1]["content"]
-    assert (attached["type"], attached["filename"]) == ("input_file", "report.txt")
+    grader = _grader(name, scope="artifact", artifact="report.txt", **args)
+    _, [request] = _grade(grader, _session(artifacts=(file,)), VERDICT)
+    criteria = request["input"][0]["content"].split("</criteria>")[0]
+    assert "Judge only the attached file." in criteria
+    assert "user's messages" not in criteria
+    assert "tool results" not in criteria
+
+
+def test_task_success_on_a_file_needs_a_goal() -> None:
+    with pytest.raises(ValidationError, match="task_description or success_conditions"):
+        _grader("TaskSuccessGrader", scope="artifact", artifact="report.txt")
 
 
 @pytest.mark.parametrize("name", sorted(MULTI_RULE))
@@ -269,7 +356,7 @@ def test_artifact_scope_attaches_each_revision(name: str, tmp_path: Path) -> Non
         ([(1, "Yes."), (1, "Yes.")], "scored", 1.0),
         ([(1, "Yes."), (0, "No.")], "scored", 0.0),
         ([(1, "Yes."), (None, "Cannot tell.")], "errored", None),
-        ([(0, "No."), (None, "Cannot tell.")], "errored", None),
+        ([(None, "Cannot tell."), (0, "No.")], "scored", 0.0),
     ],
 )
 def test_multi_rule_graders_judge_each_rule_and_pass_only_if_all_pass(
@@ -283,7 +370,7 @@ def test_multi_rule_graders_judge_each_rule_and_pass_only_if_all_pass(
         else {"status": "not_applicable", "score": None, "reason": r}
         for s, r in replies
     ]
-    [result], requests = _grade(grader, _with_tools(), reply)
+    [result], requests = _grade(grader, _session(), reply)
     assert (result.status, result.score) == (status, score)
     assert len(requests) == 2
     assert "First rule." in requests[0]["input"][0]["content"]
@@ -298,7 +385,7 @@ def test_multi_rule_graders_judge_each_rule_and_pass_only_if_all_pass(
     ),
 )
 def test_trace_graders_can_judge_every_turn(name: str) -> None:
-    results, requests = _grade(_grader(name, turn="each"), _with_tools(), VERDICT)
+    results, requests = _grade(_grader(name, turn="each"), _session(), VERDICT)
     assert [r.scope for r in results] == ["turn:1", "turn:2"]
     assert len(requests) == 2
 

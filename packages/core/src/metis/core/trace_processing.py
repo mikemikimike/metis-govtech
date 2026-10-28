@@ -13,13 +13,15 @@ What a grader needs                           Use
 **1. Read the session**
 The turns: messages, tool calls, reply        ``turns(input.traces)``
 The files the target produced                 ``find_artifacts(input, name)``
+The files the user gave the target            ``find_fixtures(input)``
+The tools each agent had                      ``tools_offered(input.traces)``
 **2. Select what to judge**
 Each turn on its own (trace scope)            ``select_by_turn(turns, last_only=...)``
 A turn and turns before it (subsession)       ``select_by_window(turns, size, last_only=...)``
 The whole session (session scope)             ``select_session(turns)``
-Each file with a name (artifact scope)        ``select_by_artifact(input, name)``
+The latest revision of a file (artifact)      ``select_by_artifact(input, name)``
 **3. Render it for the judge**
-Turns: user, tool calls, reply, errors        ``render_session(turns, tool_results=...)``
+Turns: everything the trace records          ``render_session(turns, tool_results=...)``
 Turns: only what the user reads               ``render_dialogue(turns, assistant_only=...)``
 A file                                        ``render_artifact(path)``
 **4. Read one payload in detail**
@@ -37,7 +39,7 @@ Scope                   Select                One entry, label: value          R
 trace                   ``select_by_turn``    ``"turn:3"``: that one turn      ``render_session``
 subsession              ``select_by_window``  ``"turns:2-4"``: those turns     ``render_session``
 session                 ``select_session``    ``"session"``: every turn        ``render_session``
-artifact                ``select_by_artifact``  ``"artifact:a.pdf:0"``: a path  ``render_artifact``
+artifact                ``select_by_artifact``  ``"artifact:a.pdf"``: a path    ``render_artifact``
 ======================  ====================  ===============================  ==================
 
 A grader that judges one turn with every turn before it as context uses
@@ -62,10 +64,13 @@ plain string                                           ``text_of`` (for any role
 ``{"role", "parts": [...]}`` or a list of these        ``messages_of``; ``text_of`` joins the text
 (OpenTelemetry GenAI ``gen_ai.*.messages``)            parts
 a dict                                                 ``tool_arguments``, ``tool_result``
+a list (for example JSON-array search hits)            ``tool_result``
 =====================================================  ============================================
 
 A reply that is a JSON object or array, and not a chat message, is the target's answer in a
-structured format, so ``Turn.reply`` holds it as JSON text. Langfuse replaces media an
+structured format, so ``Turn.reply`` holds it as JSON text. A JSON reply, tool argument or tool
+result is shown as the text the application recorded, from ``Observation.raw``, because
+re-serialising parsed JSON changes it (``10.50`` becomes ``10.5``). Langfuse replaces media an
 application uploaded (images, files) with a reference token,
 ``@@@langfuseMedia:type=…|id=…|source=…@@@``. METIS does not fetch the media, so a judge given
 the token would grade without the image, and any text holding one is ``unsupported``. A string
@@ -81,6 +86,7 @@ import base64
 import json
 import mimetypes
 import re
+from datetime import datetime  # noqa: TC003
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -139,6 +145,44 @@ class ToolCall(BaseModel, frozen=True):
         return self.observation.id
 
 
+class SystemPrompt(BaseModel, frozen=True):
+    """The system prompt a model was given, from a ``GENERATION`` input."""
+
+    agent: str | None
+    text: str
+
+
+class ModelOutput(BaseModel, frozen=True):
+    """What one model call wrote: its reasoning, a plan, or a message between tool calls."""
+
+    agent: str | None
+    text: str | Problem
+
+
+class Handoff(BaseModel, frozen=True):
+    """A sub-agent's ``AGENT`` observation: the task it was given, or what it returned."""
+
+    agent: str
+    caller: str | None
+    direction: Literal["call", "return"]
+    payload: Any
+
+
+class ObservationError(BaseModel, frozen=True):
+    """An error or warning Langfuse recorded on an observation that is not a tool call, such as
+    a model call that the framework retried. The agent may never have seen it."""
+
+    type: str
+    name: str
+    level: str
+    message: str | None
+    agent: str | None
+
+
+Event = SystemPrompt | ModelOutput | Handoff | ToolCall | ObservationError
+"""One thing the trace records in a turn, in time order."""
+
+
 class Turn(BaseModel, frozen=True):
     """One exchange: one trace, read the way Langfuse documents a trace's input and output."""
 
@@ -152,6 +196,9 @@ class Turn(BaseModel, frozen=True):
     tool_calls: tuple[ToolCall, ...]
     """Every ``TOOL`` observation in the trace, at any depth, oldest first."""
     target_errors: tuple[TargetError, ...]
+    events: tuple[Event, ...] = ()
+    """Everything between the user's message and the reply, in time order: system prompts,
+    model output, sub-agent handoffs, tool calls and errors on other observations."""
 
     @property
     def trace_id(self) -> str:
@@ -163,6 +210,18 @@ class ToolCallPart(BaseModel, frozen=True):
 
     name: str
     arguments: dict[str, Any] | str | None = None
+
+
+class OfferedTool(BaseModel, frozen=True):
+    """A tool the target had in the session, whether or not it called it."""
+
+    name: str
+    description: str | None = None
+    parameters: dict[str, Any] | None = None
+    """The tool's JSON Schema for its arguments, when the trace recorded one."""
+    agent: str | None = None
+    """The name of the ``AGENT`` observation that had the tool, or ``None`` if the trace does
+    not say."""
 
 
 class Message(BaseModel, frozen=True):
@@ -206,9 +265,51 @@ def find_artifacts(input: GradingInput, name: str) -> tuple[Artifact, ...] | Pro
     )
 
 
+def find_fixtures(input: GradingInput) -> tuple[Artifact, ...]:
+    """Every file the user gave the target that METIS holds, in the run's order.
+
+    These are the received ``fixture`` artifacts. A session where the user gave no file
+    returns ``()``.
+    """
+    return tuple(
+        artifact
+        for artifact in input.artifacts
+        if artifact.source == "fixture"
+        and artifact.state == "received"
+        and artifact.path is not None
+    )
+
+
 # ---------------------------------------------------------------------------
 # 2. Select what a grader judges
 # ---------------------------------------------------------------------------
+
+
+def tools_offered(traces: Sequence[Trace]) -> tuple[OfferedTool, ...]:
+    """Every tool the target had in the session, one per agent and name, in the order first
+    seen. ``()`` when the traces record no tool list.
+
+    Three sources are read, and for each field the first source that holds it wins:
+
+    1. A ``GENERATION`` input's ``tools`` list, in OpenAI style
+       (``{"type": "function", "function": {"name", "description", "parameters"}}``) or
+       Anthropic style (``{"name", "description", "input_schema"}``). The agent is the
+       nearest enclosing ``AGENT``.
+    2. An ``AGENT`` observation's ``attributes.agno.tools`` metadata, a list of names. The
+       agent is that observation.
+    3. A ``TOOL`` observation's ``attributes.tool.name`` and ``attributes.tool.description``
+       metadata, or the observation's name when the metadata has no name. The agent is the
+       nearest enclosing ``AGENT``. Only a tool that was called appears here.
+
+    An entry in another shape is skipped.
+    """
+    found: dict[tuple[str | None, str], list[tuple[int, OfferedTool]]] = {}
+    for trace in traces:
+        by_id = {observation.id: observation for observation in trace.observations}
+        for observation in trace.observations:
+            for rank, tool in _tools_recorded(observation, by_id):
+                found.setdefault((tool.agent, tool.name), []).append((rank, tool))
+    return tuple(_merged(entries) for entries in found.values())
 
 
 _NO_TURNS = Problem(kind="no_match", detail="The session has no turns.")
@@ -271,11 +372,14 @@ def select_session(turns: tuple[Turn, ...]) -> dict[str, tuple[Turn, ...]] | Pro
 def select_by_artifact(
     input: GradingInput, name: str | None
 ) -> dict[str, Path] | Problem:
-    """Artifact scope: each received target file called ``name``, labelled
-    ``artifact:<name>:<n>``.
+    """Artifact scope: the latest revision of the received target file called ``name``,
+    labelled ``artifact:<name>``.
 
-    A revised file keeps its name, so each revision is its own entry. No file with the name,
-    or no name, is a ``Problem``.
+    A revised file keeps its name, and the judge grades the file the user ends up with. The
+    latest revision is the one with the highest ``at_turn``, where a revision with no
+    ``at_turn`` counts as earlier than every turn. Revisions with the same ``at_turn`` are
+    ordered by their place in ``GradingInput.artifacts``, and the last one is kept. No file
+    with the name, or no name, is a ``Problem``.
     """
     if name is None:
         return Problem(kind="no_match", detail="No artifact name is set.")
@@ -284,11 +388,9 @@ def select_by_artifact(
         return found.model_copy(
             update={"detail": f"No received target file named {name!r}."}
         )
-    return {
-        f"artifact:{name}:{index}": Path(artifact.path)
-        for index, artifact in enumerate(found)
-        if artifact.path is not None
-    }
+    _, latest = max(enumerate(found), key=_revision_order)
+    assert latest.path is not None  # find_artifacts keeps only files with a path
+    return {f"artifact:{name}": Path(latest.path)}
 
 
 # ---------------------------------------------------------------------------
@@ -302,36 +404,86 @@ def render_session(
     tool_results: bool = False,
     max_chars: int | None = None,
 ) -> str | Problem:
-    """Turns as one plain-text transcript: one turn, a window, or the whole session.
+    """Turns as one plain-text transcript of everything the trace records: one turn, a window,
+    or the whole session.
 
-    Each turn is ``## Turn N``, then ``User:``, one ``Tool name (agent): arguments`` line per
-    tool call, ``Assistant:``, and a ``[target error: …]`` line per target error. Anything
-    unreadable is shown as ``[unreadable: kind: detail]`` rather than dropped, so the judge sees
-    the gap.
+    Each turn is ``## Turn N`` and ``User:``, then its events in time order, then
+    ``Assistant:``. The events are:
+
+    - ``System prompt (agent):``, shown the first time each of an agent's system prompts
+      appears, so a long prompt is not repeated in every turn.
+    - ``Model (agent):`` for what a model call wrote, such as reasoning or a message between
+      tool calls. Only a call's output is shown, never its input, which repeats the history.
+      Output that repeats the reply or a sub-agent's answer is left out.
+    - ``Handoff to agent (from caller):`` and ``agent returned (to caller):`` for a sub-agent.
+    - ``Tool name (agent): arguments`` for each tool call.
+    - ``[error on TYPE name (agent): message]`` or ``[warning on …]`` for an error Langfuse
+      recorded on an observation that is not a tool call.
+
+    A turn whose root has no output ends with ``[target error: the target returned no reply]``.
+    Anything unreadable is shown as ``[unreadable: kind: detail]`` rather than dropped, so the
+    judge sees the gap.
 
     With ``tool_results``, each tool call line is followed by ``Tool result [status]: result``.
-    The status is ``error`` when Langfuse recorded the call's level as ``ERROR`` or ``WARNING``,
-    with the status message when there is one, else ``ok``. With ``max_chars``, an argument or
-    result longer than that ends in ``…[cut off]``. ``None`` cuts nothing, and the judge's
-    ``max_input_tokens`` limits the size. A ``Problem`` passes through unchanged, so a grader's
-    loop needs no branch for a turn that cannot be judged.
+    The status is ``error`` or ``warning`` when Langfuse recorded that level on the call, with
+    the status message when there is one, else ``ok``. With ``max_chars``, a payload longer than
+    that ends in ``…[cut off]``. ``None`` cuts nothing, and the judge's ``max_input_tokens``
+    limits the size. A ``Problem`` passes through unchanged, so a grader's loop needs no branch
+    for a turn that cannot be judged.
     """
     if isinstance(turns, Problem):
         return turns
+    shown_prompts: set[tuple[str | None, str]] = set()
     blocks: list[str] = []
     for turn in turns:
         lines = [f"## Turn {turn.index + 1}", f"User: {_shown(turn.user)}"]
-        for call in turn.tool_calls:
-            agent = f" ({call.agent})" if call.agent else ""
-            arguments = _shown_payload(tool_arguments(call.observation), max_chars)
-            lines.append(f"Tool {call.name}{agent}: {arguments}")
-            if tool_results:
-                result = _shown_payload(tool_result(call.observation), max_chars)
-                lines.append(f"Tool result [{_call_status(call)}]: {result}")
+        for event in turn.events:
+            if isinstance(event, SystemPrompt):
+                if (event.agent, event.text) in shown_prompts:
+                    continue
+                shown_prompts.add((event.agent, event.text))
+            lines.extend(_event_lines(event, tool_results, max_chars))
         lines.append(f"Assistant: {_shown(turn.reply)}")
-        lines.extend(f"[target error: {error.message}]" for error in turn.target_errors)
+        if turn.trace.root.output is None:
+            lines.append("[target error: the target returned no reply]")
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
+
+
+def _event_lines(event: Event, tool_results: bool, max_chars: int | None) -> list[str]:
+    match event:
+        case SystemPrompt(agent=agent, text=text):
+            return [f"System prompt{_by(agent)}: {_shown_payload(text, max_chars)}"]
+        case ModelOutput(agent=agent, text=text):
+            return [f"Model{_by(agent)}: {_shown(text)}"]
+        case Handoff(agent=agent, caller=caller, direction="call", payload=payload):
+            return [
+                f"Handoff to {agent}{_by(caller, 'from')}: "
+                f"{_shown_payload(payload, max_chars)}"
+            ]
+        case Handoff(agent=agent, caller=caller, payload=payload):
+            return [
+                f"{agent} returned{_by(caller, 'to')}: {_shown_payload(payload, max_chars)}"
+            ]
+        case ToolCall(name=name, agent=agent, observation=observation):
+            arguments = _shown_payload(tool_arguments(observation), max_chars)
+            lines = [f"Tool {name}{_by(agent)}: {arguments}"]
+            if tool_results:
+                result = _shown_payload(tool_result(observation), max_chars)
+                lines.append(f"Tool result [{_call_status(event)}]: {result}")
+            return lines
+        case ObservationError(
+            type=kind, name=name, level=level, message=message, agent=agent
+        ):
+            detail = f": {message}" if message else ""
+            return [f"[{_level_word(level)} on {kind} {name}{_by(agent)}{detail}]"]
+    return []
+
+
+def _by(agent: str | None, word: str = "") -> str:
+    if not agent:
+        return ""
+    return f" ({word} {agent})" if word else f" ({agent})"
 
 
 def render_dialogue(
@@ -424,13 +576,14 @@ def messages_of(value: object) -> tuple[Message, ...] | Problem:
     return tuple(m for m in messages if m is not None)
 
 
-def tool_arguments(observation: Observation) -> dict[str, Any] | Problem:
-    """A tool call's arguments, which must be a dict."""
+def tool_arguments(observation: Observation) -> dict[str, Any] | str | Problem:
+    """A tool call's arguments, which must be a JSON object: the JSON text the application
+    recorded, or the dict when it recorded no text."""
     value = observation.input
     if value is None:
         problem = Problem(kind="missing", detail="the tool call has no arguments")
     elif isinstance(value, dict):
-        return value
+        return _recorded_text(observation, "input") or value
     else:
         problem = Problem(
             kind="unsupported", detail=f"arguments are a {_describe(value)}"
@@ -438,15 +591,19 @@ def tool_arguments(observation: Observation) -> dict[str, Any] | Problem:
     return _locate(problem, observation, "input")
 
 
-def tool_result(observation: Observation) -> str | dict[str, Any] | Problem:
-    """A tool call's result: text, or a dict when the application recorded one."""
+def tool_result(
+    observation: Observation,
+) -> str | dict[str, Any] | list[Any] | Problem:
+    """A tool call's result as the application recorded it: its text, or the dict or list
+    when it recorded no text."""
     value = observation.output
     if value is None:
         problem = Problem(kind="missing", detail="the tool call has no result")
-    elif isinstance(value, (str, dict)):
-        media = _media_problem(value if isinstance(value, str) else json.dumps(value))
+    elif isinstance(value, (str, dict, list)):
+        shown = _recorded_text(observation, "output") or value
+        media = _media_problem(shown if isinstance(shown, str) else json.dumps(shown))
         if media is None:
-            return value
+            return shown
         problem = media
     else:
         problem = Problem(kind="unsupported", detail=f"result is a {_describe(value)}")
@@ -473,23 +630,201 @@ def _turn(index: int, trace: Trace) -> Turn:
         index=index,
         trace=trace,
         user=_locate_value(text_of(root.input, role="user"), root, "input"),
-        reply=_locate_value(_reply_of(root.output), root, "output"),
+        reply=_locate_value(
+            _reply_of(root.output, recorded=_recorded_text(root, "output")),
+            root,
+            "output",
+        ),
         tool_calls=tuple(
             ToolCall(turn_index=index, observation=o, agent=_agent_of(o, by_id))
             for o in trace.observations
             if o.type == "TOOL"
         ),
         target_errors=_target_errors(trace),
+        events=_events(index, trace, by_id),
     )
 
 
-def _reply_of(value: object) -> str | Problem:
+def _events(
+    index: int, trace: Trace, by_id: dict[str, Observation]
+) -> tuple[Event, ...]:
+    """The turn's events in time order. A sub-agent's answer is placed at its end time."""
+    root = trace.root
+    repeated = {_plain(root.output)} | {
+        _plain(o.output) for o in trace.observations if o.type == "AGENT"
+    }
+    timed: list[tuple[tuple[bool, float], Event]] = []
+    for observation in trace.observations:
+        if observation.id == root.id:
+            continue
+        agent = _agent_of(observation, by_id)
+        start = _when(observation.start_time)
+        if observation.type == "TOOL":
+            timed.append(
+                (
+                    start,
+                    ToolCall(turn_index=index, observation=observation, agent=agent),
+                )
+            )
+            continue
+        if observation.type == "GENERATION":
+            for prompt in _system_prompts(observation.input):
+                timed.append((start, SystemPrompt(agent=agent, text=prompt)))
+            for text in _model_texts(observation.output):
+                if isinstance(text, Problem) or _plain(text) not in repeated:
+                    timed.append((start, ModelOutput(agent=agent, text=text)))
+        elif observation.type == "AGENT" and agent is not None:
+            name = observation.name or "agent"
+            timed.append(
+                (
+                    start,
+                    Handoff(
+                        agent=name,
+                        caller=agent,
+                        direction="call",
+                        payload=_recorded_text(observation, "input")
+                        or observation.input,
+                    ),
+                )
+            )
+            timed.append(
+                (
+                    _when(observation.end_time or observation.start_time),
+                    Handoff(
+                        agent=name,
+                        caller=agent,
+                        direction="return",
+                        payload=_recorded_text(observation, "output")
+                        or observation.output,
+                    ),
+                )
+            )
+        if observation.level in _ERROR_LEVELS:
+            timed.append(
+                (
+                    start,
+                    ObservationError(
+                        type=observation.type or "observation",
+                        name=observation.name or "",
+                        level=observation.level or "",
+                        message=observation.status_message,
+                        agent=agent,
+                    ),
+                )
+            )
+    timed.sort(key=lambda entry: entry[0])
+    return tuple(event for _, event in timed)
+
+
+def _when(moment: datetime | None) -> tuple[bool, float]:
+    if moment is not None:
+        return (False, moment.timestamp())
+    return (True, 0.0)
+
+
+def _plain(value: object) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    text = text_of(value, role="assistant") if value is not None else ""
+    return text.strip() if isinstance(text, str) else ""
+
+
+def _system_prompts(value: object) -> list[str]:
+    messages = messages_of(value) if value is not None else ()
+    if isinstance(messages, Problem):
+        return []
+    return [m.text for m in messages if m.role == "system" and m.text.strip()]
+
+
+def _model_texts(value: object) -> list[str | Problem]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    messages = messages_of(value)
+    if isinstance(messages, Problem):
+        return [messages]
+    return [m.text for m in messages if m.role == "assistant" and m.text.strip()]
+
+
+def _reply_of(value: object, *, recorded: str | None = None) -> str | Problem:
     # A reply in a structured format, such as a JSON object, is the target's answer, so it is
-    # shown as JSON text. Only a chat message payload is read for its assistant text.
+    # shown as the JSON text the application recorded (``recorded``). Only a chat message
+    # payload is read for its assistant text.
     if isinstance(value, (dict, list)) and isinstance(messages_of(value), Problem):
-        text = json.dumps(value, ensure_ascii=False)
+        text = recorded or json.dumps(value, ensure_ascii=False)
         return _media_problem(text) or text
     return text_of(value, role="assistant")
+
+
+def _tools_recorded(
+    observation: Observation, by_id: dict[str, Observation]
+) -> list[tuple[int, OfferedTool]]:
+    """The tools ``observation`` records, each with the rank of its source."""
+    metadata = observation.metadata if isinstance(observation.metadata, dict) else {}
+    if observation.type == "GENERATION" and isinstance(observation.input, dict):
+        agent = _agent_of(observation, by_id)
+        entries = observation.input.get("tools")
+        return [
+            (0, tool)
+            for entry in (entries if isinstance(entries, list) else [])
+            if (tool := _declared_tool(entry, agent)) is not None
+        ]
+    if observation.type == "AGENT":
+        names = metadata.get("attributes.agno.tools")
+        return [
+            (1, OfferedTool(name=name, agent=observation.name))
+            for name in (names if isinstance(names, list) else [])
+            if isinstance(name, str) and name
+        ]
+    if observation.type == "TOOL":
+        name = metadata.get("attributes.tool.name") or observation.name
+        description = metadata.get("attributes.tool.description")
+        if isinstance(name, str) and name:
+            tool = OfferedTool(
+                name=name,
+                description=description if isinstance(description, str) else None,
+                agent=_agent_of(observation, by_id),
+            )
+            return [(2, tool)]
+    return []
+
+
+def _declared_tool(entry: object, agent: str | None) -> OfferedTool | None:
+    """One entry of a ``GENERATION`` input's ``tools`` list, in OpenAI or Anthropic style."""
+    if not isinstance(entry, dict):
+        return None
+    function = entry.get("function")
+    spec = function if isinstance(function, dict) else entry
+    name = spec.get("name")
+    if not isinstance(name, str) or not name:
+        return None
+    description = spec.get("description")
+    parameters = spec.get("parameters", spec.get("input_schema"))
+    return OfferedTool(
+        name=name,
+        description=description if isinstance(description, str) else None,
+        parameters=parameters if isinstance(parameters, dict) else None,
+        agent=agent,
+    )
+
+
+def _merged(entries: list[tuple[int, OfferedTool]]) -> OfferedTool:
+    """One tool from every record of it: for each field, the best-ranked value that is set."""
+    ranked = [tool for _, tool in sorted(entries, key=lambda entry: entry[0])]
+    first = ranked[0]
+    return first.model_copy(
+        update={
+            "description": next((t.description for t in ranked if t.description), None),
+            "parameters": next((t.parameters for t in ranked if t.parameters), None),
+        }
+    )
+
+
+def _revision_order(entry: tuple[int, Artifact]) -> tuple[bool, int, int]:
+    position, artifact = entry
+    turn = artifact.at_turn
+    return (turn is not None, turn or 0, position)
 
 
 def _agent_of(observation: Observation, by_id: dict[str, Observation]) -> str | None:
@@ -526,6 +861,18 @@ def _target_errors(trace: Trace) -> tuple[TargetError, ...]:
                 )
             )
     return tuple(errors)
+
+
+def _recorded_text(
+    observation: Observation, field: Literal["input", "output"]
+) -> str | None:
+    """The payload as the application recorded it: the original string in the Langfuse row.
+
+    Parsing and re-serialising JSON changes it (``10.50`` becomes ``10.5``, indentation is
+    lost), so a payload is shown from this text. ``None`` when the row holds no string.
+    """
+    recorded = observation.raw.get(field)
+    return recorded if isinstance(recorded, str) else None
 
 
 def _locate(problem: Problem, observation: Observation, field: Field) -> Problem:
@@ -669,7 +1016,13 @@ def _shown_payload(value: object, max_chars: int | None) -> str:
 
 
 def _call_status(call: ToolCall) -> str:
-    if call.observation.level not in _ERROR_LEVELS:
+    level = call.observation.level
+    if level not in _ERROR_LEVELS:
         return "ok"
+    word = _level_word(level)
     message = call.observation.status_message
-    return f"error: {message}" if message else "error"
+    return f"{word}: {message}" if message else word
+
+
+def _level_word(level: str | None) -> str:
+    return "warning" if level == "WARNING" else "error"

@@ -33,7 +33,7 @@ class RequiredComponentCompletenessArgs(JudgeArgs, TraceArgs, ArtifactArgs):
 
     ``required_components`` is the authoritative list of components. Each component is
     judged on its own, and a result scores 1 only when every component is present. The result
-    is errored when any component cannot be judged.
+    is errored when no component is missing but one cannot be judged.
     """
 
     turn: Literal["each", "last"] = "last"
@@ -63,8 +63,8 @@ class RequiredComponentCompletenessGrader(Grader[RequiredComponentCompletenessAr
     """Assess whether every explicitly requested component is present.
 
     Checks presence only, not correctness or quality. Each component is judged on its own,
-    and a result scores 1 only when every component is present. The result is errored when any
-    component cannot be judged.
+    and a result scores 1 only when every component is present. The result scores 0 when any
+    component is missing, and is errored when none is missing but one cannot be judged.
     """
 
     args_model = RequiredComponentCompletenessArgs
