@@ -25,6 +25,14 @@ const steps = [
   { number: '04', label: 'IMPROVE', title: 'Know exactly what to fix.', text: 'Inspect scores and reasoning at every step. Aggregate pass rates across trials and turn failure patterns into product decisions.', tags: ['Insights', 'Confidence', 'Regression'] },
 ];
 
+const whyItems = [
+  { number: '01', title: 'Start with product expectations', text: 'The Wizard walks your team through an interview, turning a description of your AI system into a structured Specification — Features, Behaviours, and measurable Criteria. Evaluation starts from what the product should do, not from generic benchmarks.' },
+  { number: '02', title: 'Test realistic interactions', text: 'The Engine drives simulated conversations using LLM-powered personas with distinct communication styles and goals. Scenarios cover both expected workflows and edge cases, with repeated trials for consistency.' },
+  { number: '03', title: 'Evaluate the full interaction trace', text: 'Graders assess the complete execution record — including intermediate steps, tool calls, and decision points — not just the final answer. Each criterion is scored against available evidence from the run.' },
+  { number: '04', title: 'Match graders to what you’re measuring', text: 'The Library provides graders suited to different evaluation criteria. Deterministic graders check concrete properties; LLM-based graders judge nuanced behaviours. A structured taxonomy helps match the right grader type to each criterion.' },
+  { number: '05', title: 'See what needs attention', text: 'Insights aggregates scores across trials, personas, and scenarios into a report with pass rates, score breakdowns, and trial-level transcripts. Results point to specific criteria and failure evidence, not just a top-line number.' },
+];
+
 type WizMsg = { role: 'wizard' | 'user'; text: string; files?: string[]; specLines?: number };
 const wizMsgs: WizMsg[] = [
   { role: 'wizard', text: "Tell me about your target — what it does and who it's for." },
@@ -127,26 +135,27 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 function usePipeline(active: boolean) {
   const [phase, setPhase] = useState(() => noMotion() ? 4 : 0);
   const [gradersDone, setGradersDone] = useState<Set<number>>(() => noMotion() ? new Set([0, 1, 2]) : new Set());
-  const started = useRef(false);
+  const [run, setRun] = useState(0);
 
   useEffect(() => {
     if (noMotion()) { setPhase(4); setGradersDone(new Set([0, 1, 2])); return; }
-    if (!active || started.current) return;
-    started.current = true;
-    setTimeout(() => setPhase(1), 300);
-    setTimeout(() => setPhase(2), 3600);
-    setTimeout(() => setPhase(3), 5000);
-    setTimeout(() => setGradersDone(new Set([2])), 6200);
-    setTimeout(() => setGradersDone(new Set([1, 2])), 6800);
-    setTimeout(() => setGradersDone(new Set([0, 1, 2])), 7400);
-    setTimeout(() => setPhase(4), 8000);
-  }, [active]);
+    if (!active) return;
+    const ts = [
+      setTimeout(() => setPhase(1), 300),
+      setTimeout(() => setPhase(2), 3600),
+      setTimeout(() => setPhase(3), 5000),
+      setTimeout(() => setGradersDone(new Set([2])), 6200),
+      setTimeout(() => setGradersDone(new Set([1, 2])), 6800),
+      setTimeout(() => setGradersDone(new Set([0, 1, 2])), 7400),
+      setTimeout(() => setPhase(4), 8000),
+    ];
+    return () => ts.forEach(clearTimeout);
+  }, [active, run]);
 
   const replay = useCallback(() => {
-    started.current = false;
     setPhase(0);
     setGradersDone(new Set());
-    setTimeout(() => { started.current = false; }, 50);
+    setRun((r) => r + 1);
   }, []);
 
   return { phase, gradersDone, replay };
@@ -154,7 +163,6 @@ function usePipeline(active: boolean) {
 
 /* ── App ── */
 export default function App() {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [vis, setVis] = useState<Set<number>>(() => new Set());
   const refs = useRef<(HTMLDivElement | null)[]>([null, null, null, null]);
 
@@ -174,7 +182,6 @@ export default function App() {
   // Insights
   const insVisible = vis.has(3);
   const [insPhase, setInsPhase] = useState(() => noMotion() ? 3 : 0);
-  const insStarted = useRef(false);
   const [jiggled, setJiggled] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
@@ -210,22 +217,26 @@ export default function App() {
 
   useEffect(() => () => wizTimers.current.forEach(clearTimeout), []);
 
-  // Insights — fixed: use boolean dep instead of Set
+  // Insights
   useEffect(() => {
     if (noMotion()) { setInsPhase(3); return; }
-    if (!insVisible || insStarted.current) return;
-    insStarted.current = true;
-    setTimeout(() => setInsPhase(1), 400);
-    setTimeout(() => setInsPhase(2), 1400);
-    setTimeout(() => setInsPhase(3), 2400);
+    if (!insVisible) return;
+    const ts = [
+      setTimeout(() => setInsPhase(1), 400),
+      setTimeout(() => setInsPhase(2), 1400),
+      setTimeout(() => setInsPhase(3), 2400),
+    ];
+    return () => ts.forEach(clearTimeout);
   }, [insVisible]);
 
+  const barsShown = insPhase >= 2;
   useEffect(() => {
-    if (insPhase < 2) return;
-    insightBars.forEach((b, i) => {
-      if (b.pct >= b.threshold) setTimeout(() => setJiggled((s) => new Set(s).add(i)), 1400 + i * 200);
-    });
-  }, [insPhase]);
+    if (!barsShown) return;
+    const ts = insightBars.flatMap((b, i) =>
+      b.pct >= b.threshold ? [setTimeout(() => setJiggled((s) => new Set(s).add(i)), 1400 + i * 200)] : [],
+    );
+    return () => ts.forEach(clearTimeout);
+  }, [barsShown]);
 
   // Compute visible spec lines
   const visibleSpecLines = (() => {
@@ -256,24 +267,18 @@ export default function App() {
 
   return (
     <div className="site-shell">
-      <nav className="nav-wrap" aria-label="Main navigation">
-        <div className="nav container">
-          <a className="brand" href="#top" aria-label="METIS home"><img src="/metis-logo.png" alt="" /><span>METIS</span></a>
-          <button className="menu-button" onClick={() => setMenuOpen(!menuOpen)} aria-expanded={menuOpen} aria-label="Toggle menu"><span /><span /></button>
-          <div className={`nav-links ${menuOpen ? 'open' : ''}`}>
-            <a className="nav-cta" href={GITHUB_URL}><Github /> GitHub</a>
-          </div>
-        </div>
-      </nav>
-
       <main id="top">
         <section className="hero container">
           <div className="hero-copy">
+            <img src="/metis-logo.png" alt="METIS" className="hero-logo" />
+            <h1 className="hero-name">METIS</h1>
+            <span className="hero-full-name">Measurement and Evaluation of Trustworthy Intelligent Systems</span>
             <div className="eyebrow">Specifications-driven evaluation</div>
-            <h1>Test your AI agents against <em>what they should actually do.</em></h1>
+            <p className="hero-tagline">Test your AI agents against <em>what they should actually do.</em></p>
             <p className="hero-lede">Most evaluation tools score an agent's final answer. METIS evaluates the full trajectory — every decision, tool call, and recovery — against structured specifications.</p>
             <div className="hero-actions">
               <a className="button primary" href={GITHUB_URL}><Github /> View on GitHub</a>
+              <a className="button secondary" href={DOCS_URL}>Read the docs <Arrow /></a>
             </div>
           </div>
         </section>
@@ -283,8 +288,23 @@ export default function App() {
           <div className="steps">{steps.map((s) => <article key={s.number} className="step"><div className="step-top"><span>{s.number}</span><b>{s.label}</b></div><h3>{s.title}</h3><p>{s.text}</p><div className="tags">{s.tags.map((t) => <span key={t}>{t}</span>)}</div></article>)}</div>
         </div></section>
 
+        <section className="why-section" id="why"><div className="container">
+          <div className="section-heading"><div><div className="section-kicker">WHY METIS</div><h2>Evaluation grounded in what your agent should do.</h2></div><p>METIS connects each step of evaluation to the expectations you set — from how tests are designed to what the results tell you.</p></div>
+          <div className="why-list">
+            {whyItems.map((item) => (
+              <div key={item.number} className="why-item">
+                <span className="why-num">{item.number}</span>
+                <div>
+                  <h3 className="why-title">{item.title}</h3>
+                  <p className="why-text">{item.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div></section>
+
         <section className="walkthrough" id="product"><div className="container">
-          <div className="section-heading dark-text"><div><div className="section-kicker">ONE EVALUATION, START TO FINISH</div><h2>See how METIS works.</h2></div><p>Follow a single evaluation of an Enterprise AI Assistant — from specification to results.</p></div>
+          <div className="section-heading"><div><div className="section-kicker">ONE EVALUATION, START TO FINISH</div><h2>See how METIS works.</h2></div><p>Follow a single evaluation of an Enterprise AI Assistant — from specification to results.</p></div>
 
           <div className="wt-stages">
 
@@ -494,26 +514,26 @@ export default function App() {
           </div>
         </div></section>
 
-        <section className="cta-section container" id="get-started"><div className="cta-panel">
-          <div className="cta-copy"><div className="section-kicker light">OPEN SOURCE · MIT LICENSE</div><h2>Start evaluating<br />with confidence.</h2><p>Define what your agent should do. Run evaluations that test the full trajectory. Understand exactly what to fix before you ship.</p>
-            <div className="cta-actions"><a className="button primary cta-github" href={GITHUB_URL}><Github /> View on GitHub</a><a className="button secondary cta-docs" href={DOCS_URL}>Read the docs <Arrow /></a></div>
-          </div>
-        </div></section>
       </main>
 
-      <footer><div className="container footer-inner">
-        <div className="footer-top">
-          <a className="brand footer-brand" href="#top"><img src="/metis-logo.png" alt="" /><span>METIS</span></a>
-          <p>Developed by AI Practice, GovTech Singapore</p>
+      <footer>
+        <div className="container footer-inner">
+          <div className="footer-brand-group">
+            <img src="/metis-logo.png" alt="" className="footer-logo" />
+            <div>
+              <strong className="footer-name">METIS</strong>
+              <span className="footer-tagline">Specifications in, confidence out.</span>
+            </div>
+          </div>
+          <div className="footer-links">
+            <a href="https://github.com/govtech-responsibleai">GitHub</a>
+            <a href="https://blog.ai.gov.sg">Blog</a>
+            <a href="https://huggingface.co/govtech">Hugging Face</a>
+            <a href="https://playbooks.aip.gov.sg/responsibleai/">Playbook</a>
+          </div>
+          <span className="footer-attr">Developed by AI Practice, GovTech Singapore</span>
         </div>
-        <div className="footer-links">
-          <a href="https://github.com/govtech-responsibleai">GitHub</a>
-          <a href="https://blog.ai.gov.sg">Blog</a>
-          <a href="https://huggingface.co/govtech">Hugging Face</a>
-          <a href="https://playbooks.aip.gov.sg/responsibleai/">Playbook</a>
-        </div>
-        <span>Specifications in, confidence out.</span>
-      </div></footer>
+      </footer>
     </div>
   );
 }
