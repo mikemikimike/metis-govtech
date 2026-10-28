@@ -1,5 +1,5 @@
 /* Inter is the Singapore Government Design System typeface; JetBrains Mono matches the Insights report */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 :root {
@@ -217,12 +217,34 @@ h2 { font-size: clamp(32px,3.8vw,48px); line-height: 1.08; letter-spacing: -.03e
 .wt-pipeline { display: flex; flex-direction: column; gap: 16px }
 
 /* Trace summary */
-.wt-pipe-trace { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: white; opacity: 0; transform: translateY(8px); transition: opacity .5s ease,transform .5s ease }
+.wt-pipe-trace { border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px 6px; background: #F2F2F0; opacity: 0; transform: translateY(8px); transition: opacity .5s ease,transform .5s ease }
 .wt-pipe-trace.vis { opacity: 1; transform: none }
-.wt-pipe-trace-label { font: 11px var(--mono); letter-spacing: .1em; color: var(--muted); margin-bottom: 8px }
-.wt-pipe-trace-items { display: flex; flex-wrap: wrap; gap: 6px }
-.wt-pipe-trace-items span { font: 11px var(--mono); padding: 4px 8px; border-radius: 4px; background: var(--tint); color: var(--navy-soft) }
-.wt-pipe-tool { background: #E0E3F0 !important; color: var(--periwinkle) !important }
+.wt-pipe-trace-label { display: flex; justify-content: space-between; gap: 12px; font: 11px var(--mono); letter-spacing: .1em; color: var(--muted); margin-bottom: 2px }
+.wt-pipe-trace-label span { letter-spacing: 0; color: var(--gold-dark) }
+
+/* Trace graph: nodes appear, then edges draw. A grader's evidence nodes turn its verdict colour. */
+.wt-graph-scroll { overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent }
+.wt-graph { display: block; width: 100%; min-width: 900px; height: auto }
+.wt-graph marker.step path { fill: #B9B2A3 }
+.wt-graph marker.loop path { fill: var(--gold-dark) }
+.wt-graph-edge path { fill: none; stroke: #C9C2B3; stroke-width: 1.2; stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset .6s ease }
+.wt-graph-edge.loop path { stroke: var(--gold-dark); stroke-width: 1.3 }
+.wt-pipe-trace.vis .wt-graph-edge path { stroke-dashoffset: 0 }
+.wt-graph-node { opacity: 0; transition: opacity .4s ease; color: var(--muted) }
+.wt-pipe-trace.vis .wt-graph-node { opacity: 1 }
+.wt-graph-node > rect { fill: white; stroke: var(--line); stroke-width: 1; transition: fill .3s ease, stroke .3s ease }
+.wt-graph-node .icon { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: stroke .3s ease }
+.wt-graph-node .name { font: 500 10px var(--mono); fill: var(--navy) }
+.wt-graph-node.persona .name, .wt-graph-node.output .name { font: 500 11px var(--sans) }
+.wt-graph-node.persona > rect, .wt-graph-node.output > rect { fill: white }
+.wt-graph-node.agent { color: var(--periwinkle) }
+.wt-graph-node.tool { color: var(--gold-dark) }
+.wt-graph-node.tool > rect { stroke-dasharray: 3 2.5 }
+.wt-graph-node.pass { color: var(--gold-dark) }
+.wt-graph-node.pass > rect { fill: #FBF3E2; stroke: var(--gold); stroke-width: 1.5; stroke-dasharray: none }
+.wt-graph-node.fail { color: var(--rose) }
+.wt-graph-node.fail > rect { fill: #F7E9EC; stroke: var(--rose); stroke-width: 1.5; stroke-dasharray: none }
+.wt-pipe-grader.active { box-shadow: 0 0 0 2px var(--line) }
 
 /* Fan-out/converge */
 .wt-pipe-fanout { display: flex; align-items: center; gap: 12px; opacity: 0; transition: opacity .4s ease }
@@ -354,6 +376,8 @@ footer { background: var(--paper); border-top: 1px solid var(--line) }
   .wt-stage,.wt-msg,.wt-spec,.wt-ins-panel,.wt-span,.wt-tree-node,.wt-spec-line,.wt-pipe-trace,.wt-pipe-graders,.wt-pipe-result,.wt-pipe-fanout { opacity: 1 !important; transform: none !important; height: auto !important }
   .wt-conn-runner { animation: none !important; top: 50% !important; opacity: 1 !important; transform: translateY(-50%) }
   .wt-bar-fill { transition: none !important; width: var(--pct) !important }
+  .wt-graph-edge path { stroke-dashoffset: 0 !important; transition: none !important }
+  .wt-graph-node { opacity: 1 !important; transition: none !important }
   .wt-spin { animation: none !important }
   .stack-card { transition: none !important }
 }

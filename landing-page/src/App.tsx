@@ -84,6 +84,68 @@ const pipelineCriteria = [
   { id: 'Claim Support by Evidence', grader: 'ClaimSupportGrader', score: 0.90, threshold: 0.70, reason: 'The reply references the planning deck and the thread. Claims are traceable to sources.' },
 ];
 
+/* Captured trace as a call graph: the orchestrator branches to two subagents, each branch loops once,
+   and both branches join in the reply. Icon paths are from Lucide (lucide.dev, ISC licence). */
+const LUCIDE: Record<string, React.ReactNode> = {
+  user: <><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>,
+  bot: <><path d="M12 8V4H8" /><rect width="16" height="12" x="4" y="8" rx="2" /><path d="M2 14h2M20 14h2M15 13v2M9 13v2" /></>,
+  search: <><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></>,
+  database: <><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5V19A9 3 0 0 0 21 19V5" /><path d="M3 12A9 3 0 0 0 21 12" /></>,
+  file: <><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M10 9H8M16 13H8M16 17H8" /></>,
+  pen: <><path d="M12 20h9" /><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z" /></>,
+  merge: <><circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M6 21V9a9 9 0 0 0 9 9" /></>,
+  mail: <><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" /><rect x="2" y="4" width="20" height="16" rx="2" /></>,
+  shield: <><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></>,
+  send: <><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z" /><path d="m21.854 2.147-10.94 10.939" /></>,
+};
+const G_W = 1120, G_H = 26;
+type GraphNode = { id: string; label: string; kind: 'persona' | 'agent' | 'tool' | 'output'; icon: keyof typeof LUCIDE; col: number; y: number };
+const graphNodes: GraphNode[] = [
+  { id: 'user', label: 'Simulated user', kind: 'persona', icon: 'user', col: 0, y: 72 },
+  { id: 'orch', label: 'orchestrator', kind: 'agent', icon: 'bot', col: 1, y: 72 },
+  { id: 'search', label: 'search_agent', kind: 'agent', icon: 'search', col: 2, y: 40 },
+  { id: 'draft', label: 'drafting_agent', kind: 'agent', icon: 'pen', col: 2, y: 104 },
+  { id: 'kb', label: 'search_knowledge_base', kind: 'tool', icon: 'database', col: 3, y: 40 },
+  { id: 'doc', label: 'read_document', kind: 'tool', icon: 'file', col: 3, y: 72 },
+  { id: 'email', label: 'compose_email', kind: 'tool', icon: 'mail', col: 3, y: 104 },
+  { id: 'sum', label: 'synthesis_agent', kind: 'agent', icon: 'merge', col: 4, y: 56 },
+  { id: 'policy', label: 'check_policy', kind: 'tool', icon: 'shield', col: 4, y: 104 },
+  { id: 'reply', label: 'Reply', kind: 'output', icon: 'send', col: 5, y: 80 },
+];
+/* Pill width from the label length: 11px Inter for plain words, 10px mono for code names. */
+const gSans = (nd: GraphNode) => nd.kind === 'persona' || nd.kind === 'output';
+const gw = (nd: GraphNode) => Math.round(32 + nd.label.length * (gSans(nd) ? 6.2 : 6.05));
+/* Columns spread across the full width, with equal gaps between the widest pill of each column. */
+const gColW = graphNodes.reduce<number[]>((w, nd) => { w[nd.col] = Math.max(w[nd.col] ?? 0, gw(nd)); return w; }, []);
+const gGap = (G_W - gColW.reduce((t, w) => t + w, 0)) / (gColW.length - 1);
+const gColX = gColW.map((_, c) => gColW.slice(0, c).reduce((t, w) => t + w + gGap, 0));
+const gx = (nd: GraphNode) => gColX[nd.col];
+const gNode = (id: string) => graphNodes.find((nd) => nd.id === id)!;
+const gEdge = (from: string, to: string) => {
+  const a = gNode(from), b = gNode(to);
+  const x1 = gx(a) + gw(a), x2 = gx(b) - 3, mx = (x1 + x2) / 2;
+  return a.y === b.y ? `M${x1},${a.y} L${x2},${b.y}` : `M${x1},${a.y} C${mx},${a.y} ${mx},${b.y} ${x2},${b.y}`;
+};
+const gMid = (id: string) => gx(gNode(id)) + gw(gNode(id)) / 2;
+type GraphEdge = { d: string; loop?: boolean };
+/* A loop arcs from one node back to an earlier one, above or below the row. */
+const gLoop = (from: string, to: string, side: 1 | -1): GraphEdge => {
+  const x1 = gMid(from), x2 = gMid(to), y = gNode(from).y + side * G_H / 2, peak = y + side * 20;
+  return { d: `M${x1},${y} C${x1},${peak} ${x2},${peak} ${x2},${y + side * 3}`, loop: true };
+};
+const graphEdges: GraphEdge[] = [
+  ...[['user', 'orch'], ['orch', 'search'], ['orch', 'draft'], ['search', 'kb'], ['search', 'doc'], ['draft', 'email'],
+    ['kb', 'sum'], ['doc', 'sum'], ['email', 'policy'], ['sum', 'reply'], ['policy', 'reply']].map(([from, to]) => ({ d: gEdge(from, to) })),
+  /* The search subagent reads the results and searches again. */
+  gLoop('kb', 'search', -1),
+  /* A failed policy check sends the draft back to compose_email. */
+  gLoop('policy', 'email', 1),
+];
+/* The trace nodes each criterion's grader read its evidence from, by pipelineCriteria index. */
+const graphEvidence = [['kb', 'sum', 'reply'], ['search', 'kb', 'doc'], ['draft', 'email', 'policy']];
+/* usePipeline finishes the graders in this order. */
+const GRADE_ORDER = [2, 1, 0];
+
 const insightTree = [
   { depth: 0, label: 'Enterprise AI Assistant', value: 80, pass: true },
   { depth: 1, label: 'Search & Knowledge Retrieval', value: 70, pass: true },
@@ -301,6 +363,12 @@ export default function App() {
 
   // Pipeline (new Stage 3)
   const pipeline = usePipeline(vis.has(2));
+  // While grading, the graph highlights the evidence of the grader that finished last.
+  // After that, hovering a grader card highlights its evidence.
+  const [graphHover, setGraphHover] = useState<number | null>(null);
+  const lastGraded = pipeline.phase === 3 ? GRADE_ORDER.filter((i) => pipeline.gradersDone.has(i)).at(-1) ?? null : null;
+  const graphActive = graphHover ?? lastGraded;
+  const graphActivePass = graphActive !== null && pipelineCriteria[graphActive].score >= pipelineCriteria[graphActive].threshold;
 
   // Insights
   const insVisible = vis.has(3);
@@ -547,16 +615,37 @@ export default function App() {
               </div>
 
               <div className="wt-pipeline">
-                {/* Trace summary */}
+                {/* Trace graph */}
                 <div className={`wt-pipe-trace ${pipeline.phase >= 2 ? 'vis' : ''}`}>
                   <div className="wt-pipe-trace-label">CAPTURED TRACE</div>
-                  <div className="wt-pipe-trace-items">
-                    <span>Turn 1: user message</span>
-                    <span className="wt-pipe-tool">Tool: search_knowledge_base</span>
-                    <span>Turn 1: agent response</span>
-                    <span>Turn 2: user message</span>
-                    <span>Turn 2: agent response</span>
-                    <span>Turn 3: user + agent</span>
+                  <div className="wt-graph-scroll">
+                    <svg className="wt-graph" viewBox={`-2 0 ${G_W + 4} 140`} role="img"
+                      aria-label="Trace graph. The simulated user talks to the orchestrator agent. The orchestrator calls two subagents. search_agent calls search_knowledge_base and read_document, searches again after it reads the results, and synthesis_agent combines them. drafting_agent calls compose_email, and check_policy sends the draft back for revision once. Both branches join in the reply.">
+                      <defs>
+                        {['step', 'loop'].map((k) => (
+                          <marker key={k} id={`wt-arrow-${k}`} className={k} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto">
+                            <path d="M0,0 L8,4 L0,8 Z" />
+                          </marker>
+                        ))}
+                      </defs>
+                      {graphEdges.map((e, i) => (
+                        <g key={i} className={`wt-graph-edge ${e.loop ? 'loop' : ''}`} style={{ transitionDelay: `${400 + i * 110}ms` }}>
+                          <path d={e.d} pathLength={1} markerEnd={`url(#wt-arrow-${e.loop ? 'loop' : 'step'})`} />
+                        </g>
+                      ))}
+                      {graphNodes.map((nd, i) => {
+                        const hit = graphActive !== null && graphEvidence[graphActive].includes(nd.id);
+                        const x = gx(nd), y = nd.y;
+                        return (
+                          <g key={nd.id} className={`wt-graph-node ${nd.kind} ${hit ? (graphActivePass ? 'pass' : 'fail') : ''}`} style={{ transitionDelay: `${i * 70}ms` }}>
+                            <title>{nd.kind}</title>
+                            <rect x={x} y={y - G_H / 2} width={gw(nd)} height={G_H} rx={6} />
+                            <svg className="icon" x={x + 9} y={y - 6.5} width={13} height={13} viewBox="0 0 24 24">{LUCIDE[nd.icon]}</svg>
+                            <text className="name" x={x + 27} y={y + 3.5}>{nd.label}</text>
+                          </g>
+                        );
+                      })}
+                    </svg>
                   </div>
                 </div>
 
@@ -571,7 +660,8 @@ export default function App() {
                     const done = pipeline.gradersDone.has(i);
                     const pass = c.score >= c.threshold;
                     return (
-                      <div className={`wt-pipe-grader ${done ? (pass ? 'pass' : 'fail') : 'running'}`} key={c.id}>
+                      <div className={`wt-pipe-grader ${done ? (pass ? 'pass' : 'fail') : 'running'} ${graphActive === i ? 'active' : ''}`} key={c.id}
+                        onMouseEnter={() => done && setGraphHover(i)} onMouseLeave={() => setGraphHover(null)}>
                         <div className="wt-pipe-grader-head">
                           <span className="wt-pipe-grader-type">{c.grader}</span>
                           {!done && <Spinner />}
