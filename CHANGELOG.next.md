@@ -352,7 +352,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   is refused. A submission (a call matching `submissions`, else any `POST`, `PUT` or `PATCH`
   with a JSON body) is refused when the action quoted nothing or another is still open; the
   runner exposes the open one and the responses that answered a submission, and takes the
-  session ID only from such a response. `HttpRunnerFactory.start` opens the HTTP transport
+  session ID from such a response or from a result logged during the current action, so a
+  target that opens its session before any message (the toy app's `POST /sessions`) can have
+  its ID recorded (#543). `HttpRunnerFactory.start` opens the HTTP transport
   (honouring `tls_verify`) and `close` closes it. A binding file that is not UTF-8 gives a clear
   `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is
   fetched.

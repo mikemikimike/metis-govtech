@@ -6,3 +6,5 @@ identity: {name: Agentic Eval Toy App}
 transport: http
 spec_url: ${TOYAPP_API_URL}/openapi.json  # TOYAPP_API_URL is the host, e.g. http://127.0.0.1:8000
 # The app has no authentication, so there is no auth block.
+# A message goes to an open session, so opening one (POST /sessions) is not the user's message.
+submissions: ["POST /api/v1/sessions/*/messages"]

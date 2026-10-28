@@ -78,7 +78,8 @@ during this action. Leave it out if the target gave no reply.
 ## The session
 
 As soon as the target's session exists, call `session_id_from` once, pointing at the \
-reply to your submission where the target shows its session ID. Reuse that session for \
+reply where the target shows its session ID: the reply to your submission, or the reply \
+to the call that opened the session during this action. Reuse that session for \
 every later action; never start a second one.
 
 ## Reporting
