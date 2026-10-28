@@ -70,13 +70,18 @@ _now = time.monotonic
 
 @dataclass(frozen=True)
 class OpenSubmission:
-    """A submission the target accepted and nothing has settled yet (``poll_until`` settles it)."""
+    """A submission the target accepted and nothing has settled yet.
+
+    ``poll_until`` settles it, or a ``report`` that cites its own 200 or 201 response.
+    """
 
     request: str
     """The transport-log entry of the request."""
     response: str
     """The entry of the response that accepted it."""
     turn: int
+    status: int | None = None
+    """The status of that response, when the runner knows it."""
 
 
 @dataclass(frozen=True)
@@ -130,7 +135,8 @@ class HttpRunner(Runner):
         """Response entries that accepted a submission. #525 uses them to tell this
         conversation's listings from an account-wide one."""
         self.open_submission: OpenSubmission | None = None
-        """The accepted submission nothing has settled yet; ``poll_until`` clears it."""
+        """The accepted submission nothing has settled yet; ``poll_until`` clears it, and
+        so does ``settle_by_reply``."""
         self.unresolved: Unresolved | None = None
         """Set by a 4xx during a poll while a submission was open; a timeout leaves it open."""
         self.notes: list[str] = []
@@ -257,7 +263,9 @@ class HttpRunner(Runner):
         request_id = self._log.get(response_id).pairs_with or ""
         self.results.append(response_id)
         if submission and response.is_success:
-            self.open_submission = OpenSubmission(request_id, response_id, self._turn)
+            self.open_submission = OpenSubmission(
+                request_id, response_id, self._turn, response.status_code
+            )
             self.answers.append(response_id)
         reply: dict[str, Any] = {
             "request_entry": request_id,
@@ -276,6 +284,24 @@ class HttpRunner(Runner):
                 )
                 reply["file_id"] = str(value)
         return reply
+
+    def settle_by_reply(self, entry: str) -> bool:
+        """Close the open submission if ``entry`` is its own 200 or 201 response.
+
+        A target that answers inside the submission response has nothing to poll, and the
+        response holds the reply, so the reply the agent cites from it is the evidence that
+        the exchange is done. A 202 means the reply comes later, so it stays open.
+        """
+        opened = self.open_submission
+        if (
+            opened is None
+            or entry != opened.response
+            or opened.status not in (200, 201)
+        ):
+            return False
+        self.open_submission = None
+        logger.info("submission_settled_by_reply", entry=entry)
+        return True
 
     async def poll_until(
         self,
