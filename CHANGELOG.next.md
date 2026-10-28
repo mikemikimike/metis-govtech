@@ -357,6 +357,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   its ID recorded (#543). A submission answered inside its own 200 or 201 response settles when
   the agent's `report` cites that response in `reply_from` (`HttpRunner.settle_by_reply`), since a
   target like that has no field to poll; a 202 stays open, because its reply comes later (#587).
+  A submission the target answers with a non-2xx status is never opened, and the user agent is
+  told so: `Observation.notice` carries the status and the first 200 characters of the response
+  body, copied from the transport log, and the orchestrator's per-turn log line shows the notice
+  beside `reply`. The user agent's prompt says an error status need not be the assistant's fault (#545).
   `HttpRunnerFactory.start` opens the HTTP transport
   (honouring `tls_verify`) and `close` closes it. A binding file that is not UTF-8 gives a clear
   `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is

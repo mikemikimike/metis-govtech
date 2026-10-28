@@ -33,7 +33,11 @@ only if your persona would need it before going on.
 For each file you see its name, type and size, and for a table its rows, columns and \
 header. You never see a file's content, so work from those facts. What the runner says \
 about whether your action worked is its interpretation, not a fact.
-7. Fill in "reasoning" with what you observed and why you chose this. It is not shown \
+7. If your message got an error response, the notice shows its status and the start \
+of its body. An error status need not mean the assistant is at fault: the request may \
+have gone wrong on the way. Judge from what the error says, and give up only as your \
+persona would.
+8. Fill in "reasoning" with what you observed and why you chose this. It is not shown \
 to the assistant.
 """
 

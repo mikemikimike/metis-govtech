@@ -87,6 +87,18 @@ async def test_the_prompt_has_the_persona_and_scenario_and_no_target_knowledge(
 
 
 @pytest.mark.asyncio
+async def test_the_prompt_says_an_error_status_need_not_be_the_assistants_fault(
+    tmp_path: Path,
+) -> None:
+    client = FakeClient(_out())
+    await _agent(tmp_path, client).decide(1, [], [])
+
+    system = client.requests[0][0]["content"]
+    assert "error status" in system
+    assert "need not" in system
+
+
+@pytest.mark.asyncio
 async def test_the_prompt_lists_persona_and_scenario_metadata_as_written(
     tmp_path: Path,
 ) -> None:
