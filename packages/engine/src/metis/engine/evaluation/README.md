@@ -40,6 +40,7 @@ Arguments include defaults and the resolved judge model.
 | Gateway | `JUDGE_API_KEY` / `JUDGE_BASE_URL`, falling back to `OPENAI_API_KEY` / `OPENAI_BASE_URL`. Required only if some criterion's grader extends `JudgeArgs`. See the [model guide](../../../../../../docs/guide/models.md). |
 | Concurrency cap | One shared `AsyncOpenAI` client, at most 50 connections, every grader LLM call from every grader run queues for one. |
 | Timeout | 300 s per request once sent; no timeout on waiting for a connection (`pool=None`), so queued calls are never recorded as errored. |
+| Tracing | The client is the `langfuse.openai` drop-in. Each grader run is one trace in the METIS-internal Langfuse (`METIS_INTERNAL_LANGFUSE_*`), named by its criterion, in the session of its trial. The trace output is the status, score and reason of each result. Off unless all three variables are set. Never the target's `LANGFUSE_*` project. |
 
 Retries are the OpenAI SDK's own (`max_retries=2`). There is no per-grader-run timeout.
 

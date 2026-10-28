@@ -18,6 +18,7 @@ from metis.core import execution_layout
 from metis.core.console import console
 from metis.core.logging import get_logger
 from metis.core.trials import TrialConfig, TrialFailure, TrialOutcome, TrialRecord
+from metis.engine.tracing import traced, trial_session_id
 
 from ._artifact_store import _save_artifacts, quarantine_stale_artifacts
 from ._fixture_artifacts import build_fixture_artifacts
@@ -221,6 +222,7 @@ async def _execute_experiment_async(
                         generation=generation,
                         default_user_agent_model=defaults.user_agent_model,
                         runner_agent_model=defaults.runner_agent_model,
+                        experiment_id=specification.id,
                         worker_trials=worker_trials,
                         experiment_root=experiment_root,
                         fixtures_dir=fixtures_dir,
@@ -287,12 +289,16 @@ async def _worker(
     generation: SimulatorGeneration | None = None,
     default_user_agent_model: str | None = None,
     runner_agent_model: str | None = None,
+    experiment_id: str | None = None,
 ) -> list[TrialRecord]:
     """One concurrent worker: creates a fresh runner per trial for isolation.
 
     Each trial's ``TrialConfig`` records the models that produce it: the user agent model
     (Task, then experiment default, then environment, then ``DEFAULT_MODEL``) and, for a
     generic runner, the runner agent model.
+
+    Each attempt is one trace in the METIS-internal Langfuse. Its session is the trial's
+    (``tracing.trial_session_id``), which the trial's grading traces share.
     """
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(worker=f"w{worker_id}")
@@ -479,7 +485,21 @@ async def _worker(
                         tui_ctx=tui_ctx,
                         shutdown_event=shutdown_event,
                     )
-                    record = await trial.execute()
+                    record = await traced(
+                        trial.execute,
+                        name=f"{task_id} x {persona.id} #{trial_index}",
+                        session_id=trial_session_id(
+                            experiment_root.resolve().name, trial_config
+                        ),
+                        metadata={
+                            "experiment_id": experiment_id,
+                            "scenario_id": scenario.id,
+                            "task_id": task_id,
+                            "persona_id": persona.id,
+                            "trial_index": trial_index,
+                            "attempt": attempt,
+                        },
+                    )
                     record.attempt_number = attempt
                     record.max_allowed_attempts = max_attempts
                     record.prior_failures = prior_failures

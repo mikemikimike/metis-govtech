@@ -22,6 +22,10 @@ pool caps how many grader LLM calls are in flight across every grader run, howev
 fans out internally. ``pool=None`` matters: a plain timeout would also limit the wait for a free
 connection, so a call queued behind others under the cap would time out before it was ever
 sent and be recorded as errored. With ``pool=None`` only the request itself is timed.
+
+The client is Langfuse's ``langfuse.openai`` drop-in. Graders call it without a Langfuse key,
+so the orchestrator runs each grader inside ``metis.engine.tracing.traced``, which names the
+METIS-internal client for every call nested inside.
 """
 
 from __future__ import annotations
@@ -30,7 +34,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from openai import AsyncOpenAI
+from langfuse.openai import AsyncOpenAI
 
 from metis.core.model_settings import ModelRole, resolve_role
 from metis.library.grader import JudgeArgs, LLMSettings, criterion_judge_args

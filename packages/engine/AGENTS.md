@@ -50,6 +50,21 @@ A breaking change to a nested model bumps the version of the root model that con
 
 See `packages/core/schemas/README.md` for the version policy.
 
+## Two Langfuse projects
+
+`LANGFUSE_*` names the Langfuse of the system under test. The extractor reads target traces
+from it. The engine traces its own model calls to the METIS-internal Langfuse
+(`METIS_INTERNAL_LANGFUSE_*`, see `src/metis/engine/tracing.py`). Every engine model client is
+the `langfuse.openai` drop-in. A drop-in call that names no Langfuse key goes to whichever
+client is registered, and in `evaluate` that is the target's. So every engine model call must
+name `tracing_key()`:
+
+- A simulation call goes through `parse_completion` or `create_completion`, which pass the key.
+- Code that calls a client it does not own, such as a library grader, runs inside
+  `tracing.traced`, which sets the key for every call nested inside.
+
+`tests/unit/engine/test_internal_tracing.py` checks both paths with a target client registered.
+
 ## Pyright Configuration
 
 The workspace disables `reportIncompatibleMethodOverride`. It was added for DeepEval's

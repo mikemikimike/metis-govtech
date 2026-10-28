@@ -256,6 +256,23 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- **The engine traces its own model calls to the METIS-internal Langfuse (#162).** When
+  `METIS_INTERNAL_LANGFUSE_PUBLIC_KEY`, `METIS_INTERNAL_LANGFUSE_SECRET_KEY` and
+  `METIS_INTERNAL_LANGFUSE_BASE_URL` are all set, `metis engine simulate` and
+  `metis engine evaluate` record the prompt, the raw reply, the model, the token counts and the
+  latency of each call. Each trial attempt is one trace, named `<task> x <persona> #<trial>`.
+  It holds the user agent, artifact summarizer and runner agent calls, with the experiment,
+  scenario, task, persona, trial and attempt as metadata. Each grader run is one trace, named
+  by its criterion, that holds the judge calls of the grader. Its output is the status, score
+  and reason of each result, so a code grader's trace shows its decision too. A trial's simulation and grading
+  traces share one Langfuse session, `<experiment folder>/<task>/<persona>/<trial>`. The
+  fixture summaries of gen_1 are one trace in the session of the experiment folder. Tracing is
+  off when a variable is missing. The engine never traces to the `LANGFUSE_*` project, which
+  it reads the target's traces from. Simulation and grading results do not change when
+  tracing is off or Langfuse is unreachable. `metis-engine` now requires `langfuse>=3.0,<4.0`.
+  `metis.core.model_settings.METIS_INTERNAL_LANGFUSE_VARS` names the three variables for the
+  wizard and the engine.
+
 - **The simulated user receives persona and scenario metadata (#442).** The gen_1 and gen_2
   user agents add each `metadata` entry to the persona or scenario description in the system
   prompt, as a `- key: value` line with the key as written. The Engine reads no key as a

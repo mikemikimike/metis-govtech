@@ -28,6 +28,7 @@ from metis.core.grading import GraderResult, GradingOutput, RecordedResult
 from metis.core.logging import get_logger
 from metis.core.reporting import GraderRecord
 from metis.engine.evaluation.judge import resolve_grader_args
+from metis.engine.tracing import traced
 from metis.library.grader import Grader
 
 if TYPE_CHECKING:
@@ -55,6 +56,9 @@ class SessionFacts:
     scenario_id: str
     task_id: str
     trial_index: int
+    trace_session_id: str | None = None
+    """The trial's session in the METIS-internal Langfuse (``tracing.trial_session_id``), so
+    its grading traces sit beside its simulation traces."""
 
 
 def resolve_grader_class(fqn: str) -> type[Grader[Any]]:
@@ -149,6 +153,16 @@ def _record(result: GraderResult, threshold: float) -> RecordedResult:
     return RecordedResult(outcome=result.status, reason=result.reason)
 
 
+def _trace_output(output: object) -> object:
+    """A grader run's results as its trace output: the status, score and reason of each."""
+    if not isinstance(output, GradingOutput):
+        return None
+    return [
+        result.model_dump(include={"status", "score", "reason"})
+        for result in output.results
+    ]
+
+
 async def _run_one(
     criterion: Criterion,
     grader: Grader[Any],
@@ -162,10 +176,27 @@ async def _run_one(
     inside ``input``/``output``/``metadata`` are not, and every grader run on a session
     executes concurrently, so a grader that edits a payload in place would otherwise change
     what the others see.
+
+    The run is one trace in the METIS-internal Langfuse, named by the criterion, with the
+    grader's results as its output. The grader's judge calls name no Langfuse client, so
+    ``traced`` names it for them.
     """
     assert criterion.grader_fqn is not None
     try:
-        output = await grader.grade(grading_input.model_copy(deep=True), llm)
+        output = await traced(
+            lambda: grader.grade(grading_input.model_copy(deep=True), llm),
+            name=criterion.id,
+            session_id=facts.trace_session_id,
+            metadata={
+                "criterion_id": criterion.id,
+                "grader_fqn": criterion.grader_fqn,
+                "session_id": facts.session_id,
+                "scenario_id": facts.scenario_id,
+                "task_id": facts.task_id,
+                "trial_index": facts.trial_index,
+            },
+            output=_trace_output,
+        )
         if not isinstance(output, GradingOutput):
             raise TypeError(
                 f"grade() returned {type(output).__name__}, not GradingOutput"

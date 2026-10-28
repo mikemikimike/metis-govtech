@@ -29,6 +29,7 @@ from metis.engine.logging import (
     setup_engine_logging,
     teardown_engine_logging,
 )
+from metis.engine.tracing import tracing_key, trial_session_id
 from metis.engine.tui import (
     SimulationScenarioState,
     SimulationState,
@@ -634,6 +635,7 @@ def _run_simulation(
         input_dir, experiment_dir, resume=resume, command=command
     )
     env_file = _load_env()
+    tracing_key()
     use_tui = not no_tui and sys.stderr.isatty()
     log_level = _resolve_log_level(verbose, quiet)
 
@@ -960,6 +962,8 @@ def _run_evaluation(
 ) -> EvaluationOutcome:
     """Evaluate records in an existing experiment directory."""
     env_file = _load_env()
+    # Registered before the target's Langfuse client, so judge calls always have their own.
+    tracing_key()
     log_level = _resolve_log_level(verbose, quiet)
     _configure_process_logging(log_level)
     evaluation_log = EvaluationLogger(experiment_dir / execution_layout.LOGS)
@@ -1198,6 +1202,9 @@ async def _evaluate_records(
                                     scenario_id=record.config.scenario,
                                     task_id=record.config.task_id,
                                     trial_index=record.config.trial_index,
+                                    trace_session_id=trial_session_id(
+                                        experiment_dir.resolve().name, record.config
+                                    ),
                                 ),
                             )
                             all_records.extend(session_records)

@@ -12,6 +12,10 @@ their client with ``max_retries=0``. The SDK's own retries would be invisible to
 the log, and turning them off without retrying here would end a trial as
 ``system_error`` on every transient gateway error.
 
+Each request also names the METIS-internal Langfuse client
+(:func:`metis.engine.tracing.tracing_key`) and is traced there as a generation named by its
+``component``. It is never traced to the target's Langfuse.
+
 The row model is private to ``metis-engine``: nothing outside the engine reads the
 file yet.
 """
@@ -25,11 +29,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, TypeVar
 
+# Patches the OpenAI client so it accepts the `langfuse_public_key=` that every request sends.
+import langfuse.openai  # noqa: F401
 from openai import APIConnectionError, APIStatusError
 from pydantic import BaseModel
 
 from metis.core import execution_layout
 from metis.core.logging import get_logger
+from metis.engine.tracing import tracing_key
 
 from ._superseded import superseded_path
 
@@ -178,6 +185,7 @@ async def parse_completion(
             messages=messages,
             response_format=response_format,
             **options,
+            **_tracing(component),
         ),
     )
 
@@ -205,9 +213,21 @@ async def create_completion(
         component=component,
         model=model,
         send=lambda: client.chat.completions.create(
-            model=model, messages=messages, tools=tools, **options
+            model=model,
+            messages=messages,
+            tools=tools,
+            **options,
+            **_tracing(component),
         ),
     )
+
+
+def _tracing(component: str) -> dict[str, Any]:
+    """The arguments that the ``langfuse.openai`` client takes off the request.
+
+    The key keeps the trace out of the target's Langfuse; see ``metis.engine.tracing``.
+    """
+    return {"langfuse_public_key": tracing_key(), "name": component}
 
 
 async def _logged_attempts(

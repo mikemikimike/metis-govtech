@@ -49,6 +49,7 @@ def _specification(scenario: Scenario, persona: Persona) -> Any:
     from metis.core.experiment import ExperimentDefaults
 
     return SimpleNamespace(
+        id="test-experiment",
         scenarios=[scenario],
         tasks=[],
         fixture_content_descriptions={},
