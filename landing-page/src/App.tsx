@@ -36,7 +36,8 @@ const wizMsgs: WizMsg[] = [
   { role: 'user', text: "It should only search authorised sources and tell the user if it can't access something." },
   { role: 'wizard', text: "I'll set that as acceptance criteria: Factual Accuracy, Evidence Source Suitability, and Claim Support by Evidence.", specLines: 10 },
   { role: 'user', text: "What about when it can't find relevant information?" },
-  { role: 'wizard', text: "I'll add Appropriate Handling of Capability Limits. The assistant should disclose when it can't find what the user needs.", specLines: 11 },
+  { role: 'wizard', text: "I'll add Appropriate Handling of Capability Limits. Now let me generate test cases — personas and scenarios to exercise each criterion.", specLines: 11 },
+  { role: 'wizard', text: "I've created three personas and two scenarios. Each test case pairs a persona with a scenario and runs multiple trials.", specLines: 18 },
 ];
 
 const specLines = [
@@ -45,6 +46,10 @@ const specLines = [
   '  name: Find and use enterprise information', 'criteria:',
   '  - Factual Accuracy', '  - Evidence Source Suitability',
   '  - Claim Support by Evidence', '  - Appropriate Handling of Capability Limits',
+  'personas:', '  - collaborative knowledge worker',
+  '  - focused questioner', '  - policy seeker',
+  'scenarios:', '  - Draft a reply using a past event record',
+  '  - Retrieve policy details across sources',
 ];
 
 const engMsgs = [
@@ -192,9 +197,8 @@ function HeroArt() {
 
 /* ── Hero card stack ── */
 const productShots = [
-  { src: '/product/wizard-behaviours.webp', label: 'Wizard · Expected behaviours', alt: 'METIS Wizard web app: the interview beside the features and expected behaviours it has drafted' },
+  { src: '/product/wizard-mainpage.png', label: 'Wizard · Home', alt: 'METIS Wizard web app: the home page with a large METIS wordmark' },
   { src: '/product/wizard-scenarios.webp', label: 'Wizard · Scenarios', alt: 'METIS Wizard web app: scenarios and the test cases selected to run' },
-  { src: '/product/wizard-tui.webp', label: 'Wizard · Terminal', alt: 'METIS Wizard in the terminal, selecting the capabilities of the target' },
   { src: '/product/engine-tui.webp', label: 'Engine · Terminal', alt: 'METIS Engine terminal dashboard simulating three scenarios in parallel' },
   { src: '/product/insights-dashboard.webp', label: 'Insights · Results', alt: 'METIS Insights report: specification results tree with a selected criterion' },
   { src: '/product/insights-detail.webp', label: 'Insights · Trials', alt: 'METIS Insights report: pass rates per criterion and the trial-by-criterion grid' },
