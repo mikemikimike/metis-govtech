@@ -197,6 +197,10 @@ const tap=q=>document.querySelector(q)?.dispatchEvent(new MouseEvent('click',{bu
 tap('[data-view="tree"]');
 tap('.treewrap [data-toggle-behaviour="B-1"]');
 tap('.treewrap [data-criterion="C-2"]');
+// Show only the tree, full width: the Trials card already shows the criterion detail.
+const s=document.createElement('style');
+s.textContent='.inv{grid-template-columns:1fr!important;height:auto!important}.panel{display:none!important}.treewrap{max-height:none!important;overflow:visible!important}';
+document.head.append(s);
 document.getElementById('spec')?.scrollIntoView();
 """,
     "detail": """
@@ -205,7 +209,8 @@ document.querySelector('[data-case="T-1"]')?.click();
 }
 # Viewport, then the crop box in CSS pixels. The detail drawer opens 80px from the left.
 VIEWS = {
-    "dashboard": ((1700, 900), (0, 238, 1700, 900)),
+    # Just the specification tree, about 16:10, so its labels read in a small card.
+    "dashboard": ((1080, 1000), (20, 255, 1060, 905)),
     "detail": ((1380, 820), (80, 0, 1380, 820)),
 }
 

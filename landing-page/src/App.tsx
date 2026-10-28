@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { startTraceArt } from './traceArt';
 
 /* ── Icons ── */
 const Arrow = () => <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4" /></svg>;
@@ -21,29 +22,21 @@ const IC_BOT_BLUE = 'https://img.icons8.com/?size=100&id=lUk2otclIHsF&format=png
 
 /* ── Data ── */
 const steps = [
-  { number: '01', label: 'DEFINE', title: 'Start with what good looks like.', text: 'Map features into expected behaviors and explicit success criteria — grounded in product goals, policies, and real user needs.', tags: ['Features', 'Behaviors', 'Criteria'] },
-  { number: '02', label: 'DESIGN', title: 'Turn intent into realistic tests.', text: 'Generate personas, common and edge-case scenarios, repeatable trials, and the right graders for every behavior.', tags: ['Personas', 'Scenarios', 'Graders'] },
-  { number: '03', label: 'EXECUTE', title: 'Test the full trajectory.', text: 'Simulate adaptive, multi-turn interactions through REST APIs or real browser flows, then fetch the complete execution trace.', tags: ['Multi-turn', 'API + UI', 'Traces'] },
-  { number: '04', label: 'IMPROVE', title: 'Know exactly what to fix.', text: 'Inspect scores and reasoning at every step. Aggregate pass rates across trials and turn failure patterns into product decisions.', tags: ['Insights', 'Confidence', 'Regression'] },
-];
-
-const whyItems = [
-  { number: '01', title: 'Start with product expectations', text: 'The Wizard walks your team through an interview, turning a description of your AI system into a structured Specification — Features, Behaviours, and measurable Criteria. Evaluation starts from what the product should do, not from generic benchmarks.' },
-  { number: '02', title: 'Test realistic interactions', text: 'The Engine drives simulated conversations using LLM-powered personas with distinct communication styles and goals. Scenarios cover both expected workflows and edge cases, with repeated trials for consistency.' },
-  { number: '03', title: 'Evaluate the full interaction trace', text: 'Graders assess the complete execution record — including intermediate steps, tool calls, and decision points — not just the final answer. Each criterion is scored against available evidence from the run.' },
-  { number: '04', title: 'Match graders to what you’re measuring', text: 'The Library provides graders suited to different evaluation criteria. Deterministic graders check concrete properties; LLM-based graders judge nuanced behaviours. A structured taxonomy helps match the right grader type to each criterion.' },
-  { number: '05', title: 'See what needs attention', text: 'Insights aggregates scores across trials, personas, and scenarios into a report with pass rates, score breakdowns, and trial-level transcripts. Results point to specific criteria and failure evidence, not just a top-line number.' },
+  { number: '01', label: 'DEFINE', product: 'Wizard', title: 'Start with what good looks like.', text: 'The Wizard interviews your team and turns a description of your agent into a Specification of features, behaviours and measurable criteria. Evaluation starts from what your product should do, not a generic benchmark.' },
+  { number: '02', label: 'DESIGN', product: 'Wizard · Library', title: 'Turn intent into realistic tests.', text: 'Generate personas, everyday and edge-case scenarios, and repeated trials. A structured taxonomy matches each criterion to the right grader: deterministic checks or LLM judges.' },
+  { number: '03', label: 'EXECUTE', product: 'Engine', title: 'Test the full trajectory.', text: 'The Engine runs adaptive, multi-turn conversations through your API or a real browser. Graders score the whole execution trace, including every step, tool call and recovery, not just the final answer.' },
+  { number: '04', label: 'IMPROVE', product: 'Insights', title: 'Know exactly what to fix.', text: 'Insights rolls scores up across trials, personas and scenarios. Every result links back to a criterion and its evidence, so failures become decisions.' },
 ];
 
 type WizMsg = { role: 'wizard' | 'user'; text: string; files?: string[]; specLines?: number };
 const wizMsgs: WizMsg[] = [
-  { role: 'wizard', text: "Tell me about your target — what it does and who it's for." },
+  { role: 'wizard', text: "Tell me about your target: what it does and who it's for." },
   { role: 'user', text: "We're building an Enterprise AI Assistant for staff. It searches knowledge bases, drafts replies, and manages documents.", files: ['PRD.pdf', 'User Research.docx', 'Policies.pdf'], specLines: 2 },
   { role: 'wizard', text: "I've read your documents. The assistant handles enterprise search, email drafting, and document management. What should happen when a user asks for information from a restricted source?", specLines: 6 },
   { role: 'user', text: "It should only search authorised sources and tell the user if it can't access something." },
   { role: 'wizard', text: "I'll set that as acceptance criteria: Factual Accuracy, Evidence Source Suitability, and Claim Support by Evidence.", specLines: 10 },
   { role: 'user', text: "What about when it can't find relevant information?" },
-  { role: 'wizard', text: "I'll add Appropriate Handling of Capability Limits — the assistant should disclose when it can't find what the user needs.", specLines: 11 },
+  { role: 'wizard', text: "I'll add Appropriate Handling of Capability Limits. The assistant should disclose when it can't find what the user needs.", specLines: 11 },
 ];
 
 const specLines = [
@@ -186,14 +179,24 @@ function usePipeline(active: boolean) {
   return { phase, gradersDone, replay };
 }
 
+/* ── Hero background ── */
+function HeroArt() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    return startTraceArt(ref.current, () => [...document.querySelectorAll('.hero h1, .hero-lede, .hero-actions, .hero-credit')]);
+  }, []);
+  return <canvas ref={ref} className="hero-art" aria-hidden="true" />;
+}
+
 /* ── Hero card stack ── */
-/* `fit: 'contain'` letterboxes very wide shots on `bg`, which matches the image's own background. */
 const productShots = [
-  { src: '/product/wizard-web.webp', label: 'Wizard · Web app', tab: 'Wizard app', alt: 'METIS Wizard web app: an interview beside the specification of features and expected behaviours' },
-  { src: '/product/wizard-tui.webp', label: 'Wizard · Terminal', tab: 'Wizard CLI', alt: 'METIS Wizard in the terminal, selecting the capabilities of the target' },
-  { src: '/product/engine-tui.webp', label: 'Engine · Terminal', tab: 'Engine', alt: 'METIS Engine terminal dashboard simulating three scenarios in parallel', fit: 'contain', bg: '#171629' },
-  { src: '/product/insights-dashboard.webp', label: 'Insights · Results', tab: 'Results', alt: 'METIS Insights report: specification results tree with a selected criterion', fit: 'contain', bg: '#ffffff' },
-  { src: '/product/insights-detail.webp', label: 'Insights · Trials', tab: 'Trials', alt: 'METIS Insights report: pass rates per criterion and the trial-by-criterion grid' },
+  { src: '/product/wizard-behaviours.webp', label: 'Wizard · Expected behaviours', alt: 'METIS Wizard web app: the interview beside the features and expected behaviours it has drafted' },
+  { src: '/product/wizard-scenarios.webp', label: 'Wizard · Scenarios', alt: 'METIS Wizard web app: scenarios and the test cases selected to run' },
+  { src: '/product/wizard-tui.webp', label: 'Wizard · Terminal', alt: 'METIS Wizard in the terminal, selecting the capabilities of the target' },
+  { src: '/product/engine-tui.webp', label: 'Engine · Terminal', alt: 'METIS Engine terminal dashboard simulating three scenarios in parallel' },
+  { src: '/product/insights-dashboard.webp', label: 'Insights · Results', alt: 'METIS Insights report: specification results tree with a selected criterion' },
+  { src: '/product/insights-detail.webp', label: 'Insights · Trials', alt: 'METIS Insights report: pass rates per criterion and the trial-by-criterion grid' },
 ];
 const STACK_DEPTH = 3;
 
@@ -216,17 +219,20 @@ function HeroStack() {
           const depth = (i - front + n) % n;
           return (
             <figure key={shot.src} className={`stack-card depth-${depth < STACK_DEPTH ? depth : 'hidden'}`} aria-hidden={depth !== 0}
-              style={{ zIndex: n - depth, background: shot.bg }}>
+              style={{ zIndex: n - depth }}>
               <span className="stack-chip">{shot.label}</span>
-              <img src={shot.src} alt={shot.alt} className={shot.fit === 'contain' ? 'contain' : ''} loading={i < 2 ? 'eager' : 'lazy'} />
+              <img src={shot.src} alt={shot.alt} loading={i < 2 ? 'eager' : 'lazy'} />
             </figure>
           );
         })}
       </div>
-      <div className="stack-tabs" role="group" aria-label="Product screenshots">
-        {productShots.map((shot, i) => (
-          <button key={shot.src} type="button" aria-pressed={i === front} aria-label={shot.label} onClick={() => setFront(i)}>{shot.tab}</button>
-        ))}
+      <div className="stack-nav">
+        <div className="stack-dots" role="group" aria-label="Product screenshots">
+          {productShots.map((shot, i) => (
+            <button key={shot.src} type="button" aria-pressed={i === front} aria-label={shot.label} onClick={() => setFront(i)} />
+          ))}
+        </div>
+        <span className="stack-label">{productShots[front].label}</span>
       </div>
       <span className="sr-only" aria-live="polite">{productShots[front].label}</span>
     </div>
@@ -271,6 +277,8 @@ function CopyCommand({ command }: { command: string }) {
 
 /* ── App ── */
 export default function App() {
+  // `seen`: a stage has peeked into view and fades in. `vis`: it reached mid-screen and animates.
+  const [seen, setSeen] = useState<Set<number>>(() => new Set());
   const [vis, setVis] = useState<Set<number>>(() => new Set());
   const refs = useRef<(HTMLDivElement | null)[]>([null, null, null, null]);
 
@@ -302,10 +310,28 @@ export default function App() {
         for (const e of entries) { const i = els.indexOf(e.target as HTMLDivElement); if (i >= 0 && e.isIntersecting) next.add(i); }
         return next;
       }),
+      // A stage starts only once its top passes into the upper 45% of the screen, where the
+      // reader is looking, so the next stage stays idle while they watch the one above it.
+      { rootMargin: '0px 0px -55% 0px' },
+    );
+    const peek = new IntersectionObserver(
+      (entries) => setSeen((prev) => {
+        const next = new Set(prev);
+        for (const e of entries) { const i = els.indexOf(e.target as HTMLDivElement); if (i >= 0 && e.isIntersecting) next.add(i); }
+        return next;
+      }),
       { threshold: 0.05 },
     );
-    els.forEach((el) => obs.observe(el));
-    return () => obs.disconnect();
+    els.forEach((el) => { obs.observe(el); peek.observe(el); });
+    // A short last stage may never reach the middle band, so reaching the page end starts all.
+    const onScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+        setVis(new Set(els.map((_, i) => i)));
+        window.removeEventListener('scroll', onScroll);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { obs.disconnect(); peek.disconnect(); window.removeEventListener('scroll', onScroll); };
   }, []);
 
   // Wizard phases
@@ -393,44 +419,36 @@ export default function App() {
 
       <main id="top">
         <section className="hero container">
+          <HeroArt />
           <div className="hero-copy">
             <h1>Test your AI agents against <em>what they should actually do.</em></h1>
-            <p className="hero-lede">Most evaluation tools score an agent's final answer. METIS evaluates the full trajectory — every decision, tool call, and recovery — against structured specifications.</p>
+            <p className="hero-lede">Most evaluation tools score an agent's final answer. METIS evaluates the full trajectory against structured specifications: every decision, every tool call, every recovery.</p>
             <div className="hero-actions">
               <a className="button primary" href={GITHUB_URL}><Github /> View on GitHub</a>
               <a className="button secondary" href={DOCS_URL}>Read the docs <Arrow /></a>
             </div>
+            <p className="hero-credit">Built by AI Practice, GovTech Singapore · Open source (MIT)</p>
           </div>
           <HeroStack />
         </section>
 
         <section className="methodology" id="methodology"><div className="container">
-          <div className="section-heading"><div><div className="section-kicker">THE METIS METHODOLOGY</div><h2>From intent to evidence.</h2></div><p>A structured workflow makes rigorous agent evaluation practical — not another research project.</p></div>
-          <div className="steps">{steps.map((s) => <article key={s.number} className="step"><div className="step-top"><span>{s.number}</span><b>{s.label}</b></div><h3>{s.title}</h3><p>{s.text}</p><div className="tags">{s.tags.map((t) => <span key={t}>{t}</span>)}</div></article>)}</div>
-        </div></section>
-
-        <section className="why-section" id="why"><div className="container">
-          <div className="section-heading"><div><div className="section-kicker">WHY METIS</div><h2>Evaluation grounded in what your agent should do.</h2></div><p>METIS connects each step of evaluation to the expectations you set — from how tests are designed to what the results tell you.</p></div>
-          <div className="why-list">
-            {whyItems.map((item) => (
-              <div key={item.number} className="why-item">
-                <span className="why-num">{item.number}</span>
-                <div>
-                  <h3 className="why-title">{item.title}</h3>
-                  <p className="why-text">{item.text}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <div className="section-heading"><div><div className="section-kicker">The METIS methodology</div><h2>Built around what your agent should do.</h2></div><p>Each step ties back to the expectations you set, from how tests are designed to what the results tell you.</p></div>
+          <div className="steps">{steps.map((s) => (
+            <article key={s.number} className="step">
+              <div className="step-top"><span>{s.number} · {s.label}</span><b>{s.product}</b></div>
+              <h3>{s.title}</h3><p>{s.text}</p>
+            </article>
+          ))}</div>
         </div></section>
 
         <section className="walkthrough" id="product"><div className="container">
-          <div className="section-heading"><div><div className="section-kicker">ONE EVALUATION, START TO FINISH</div><h2>See how METIS works.</h2></div><p>Follow a single evaluation of an Enterprise AI Assistant — from specification to results.</p></div>
+          <div className="section-heading"><div><div className="section-kicker">ONE EVALUATION, START TO FINISH</div><h2>See how METIS works.</h2></div><p>Follow a single evaluation of an Enterprise AI Assistant, from specification to results.</p></div>
 
           <div className="wt-stages">
 
             {/* ─ Stage 1: Wizard ─ */}
-            <div className={`wt-stage ${vis.has(0) ? 'vis' : ''}`} ref={(el) => { refs.current[0] = el; }}>
+            <div className={`wt-stage ${seen.has(0) ? 'vis' : ''}`} ref={(el) => { refs.current[0] = el; }}>
               <div className="wt-head"><span className="wt-num wizard">01</span><div><h3>Wizard</h3><small>CREATE A SPECIFICATION</small></div>
                 <button className="wt-replay" onClick={() => { wizStarted.current = true; wizChat.replay(); startWizard(); }}>Replay</button>
               </div>
@@ -465,7 +483,7 @@ export default function App() {
             <div className={`wt-connector ${vis.has(0) ? 'vis' : ''}`}><div className="wt-conn-track" /><div className="wt-conn-runner"><FileDoc /></div><span className="wt-conn-label">specification.yaml</span></div>
 
             {/* ─ Stage 2: Engine ─ */}
-            <div className={`wt-stage ${vis.has(1) ? 'vis' : ''}`} ref={(el) => { refs.current[1] = el; }}>
+            <div className={`wt-stage ${seen.has(1) ? 'vis' : ''}`} ref={(el) => { refs.current[1] = el; }}>
               <div className="wt-head"><span className="wt-num engine">02</span><div><h3>Engine</h3><small>SIMULATE & CAPTURE TRACES</small></div>
                 <button className="wt-replay" onClick={() => { engStep.replay(); engTimer.replay(); }}>Replay</button>
               </div>
@@ -517,7 +535,7 @@ export default function App() {
             <div className={`wt-connector ${vis.has(1) ? 'vis' : ''}`}><div className="wt-conn-track" /><div className="wt-conn-runner"><TraceNodes /></div><span className="wt-conn-label">execution trace</span></div>
 
             {/* ─ Stage 3: Evaluation Pipeline ─ */}
-            <div className={`wt-stage ${vis.has(2) ? 'vis' : ''}`} ref={(el) => { refs.current[2] = el; }}>
+            <div className={`wt-stage ${seen.has(2) ? 'vis' : ''}`} ref={(el) => { refs.current[2] = el; }}>
               <div className="wt-head"><span className="wt-num graders">03</span><div><h3>Evaluate</h3><small>GRADE AGAINST CRITERIA</small></div>
                 <button className="wt-replay" onClick={pipeline.replay}>Replay</button>
               </div>
@@ -589,7 +607,7 @@ export default function App() {
             <div className={`wt-connector ${vis.has(2) ? 'vis' : ''}`}><div className="wt-conn-track" /><div className="wt-conn-runner"><Verdict /></div><span className="wt-conn-label">graded results</span></div>
 
             {/* ─ Stage 4: Insights ─ */}
-            <div className={`wt-stage ${vis.has(3) ? 'vis' : ''}`} ref={(el) => { refs.current[3] = el; }}>
+            <div className={`wt-stage ${seen.has(3) ? 'vis' : ''}`} ref={(el) => { refs.current[3] = el; }}>
               <div className="wt-head"><span className="wt-num insights">04</span><div><h3>Insights</h3><small>PRESENT RESULTS</small></div></div>
               <div className="wt-insights">
                 <div className={`wt-ins-panel ${insPhase >= 1 ? 'vis' : ''}`}>
@@ -621,7 +639,7 @@ export default function App() {
                 <div className={`wt-ins-panel ${insPhase >= 3 ? 'vis' : ''}`}>
                   <div className="wt-ins-title">TRIAL TRANSCRIPT & VERDICTS</div>
                   <div className="wt-mini-chat">
-                    <div className="wt-mini-msg user">Reply about the offsite — what did we decide?</div>
+                    <div className="wt-mini-msg user">Reply about the offsite. What did we decide?</div>
                     <div className="wt-mini-msg asst">Sentosa, 42 attendees, booked 10 weeks ahead.</div>
                   </div>
                   <div className="wt-verdicts">
@@ -659,7 +677,6 @@ export default function App() {
             <div>
               <strong className="footer-name">METIS</strong>
               <span className="footer-full-name">{FULL_NAME}</span>
-              <span className="footer-tagline">Specifications in, confidence out.</span>
             </div>
           </div>
           <div className="footer-links">
