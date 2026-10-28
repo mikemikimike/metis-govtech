@@ -604,7 +604,7 @@ test("grouped review exposes labelled selections and separate Continue", () => {
   assert.doesNotMatch(markup, /disabled=""/);
 });
 
-test("a Test Case row ticks, shows id chips with hints, and edits in its cells", () => {
+test("a Test Case row ticks, shows id chips with hints, and edits only after the pencil", () => {
   const cover = (id: string, selected: boolean) => ({
     id: { action: "cover", target: "TC-001", via: id },
     label: id,
@@ -669,6 +669,7 @@ test("a Test Case row ticks, shows id chips with hints, and edits in its cells",
   assert.match(shown, /aria-label="Include TC-001"[^>]*checked=""/);
   assert.match(shown, /title="Description of EB-1"/);
   assert.doesNotMatch(shown, /Remove selected/);
+  assert.doesNotMatch(shown, /aria-pressed/);
 
   const field = {
     placeholder: "",

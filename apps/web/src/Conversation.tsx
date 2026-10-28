@@ -1,4 +1,12 @@
-import { ArrowUp, PencilSparkles, Upload } from "lucide-react";
+import {
+  ArrowUp,
+  ChevronDown,
+  FileText,
+  PencilSparkles,
+  Plus,
+  Upload,
+  X,
+} from "lucide-react";
 import {
   createContext,
   Fragment,
@@ -9,6 +17,7 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type {
   TranscriptEntry,
   AnyCard,
@@ -672,7 +681,6 @@ export function ActiveReview({
             cards={cards}
             disabled={disabled}
             pickFrom={pickFrom}
-            fieldFrom={fieldFrom}
             rowForm={(id) => {
               const edit = formAt(id, "row");
               return edit
@@ -829,22 +837,18 @@ export function ActiveReview({
 }
 
 // A review whose cards all carry columns: one table row per card. The row's checkbox is the
-// card's tick option (selected = included). Each cell draws its column by shape: plain text, a
-// chip group, a number field, or an upload field. The pencil turns the row into its edit form:
-// each form field goes into the cell of the column it names, and Save and Cancel take the place
-// of the row actions.
+// card's tick option (selected = included). Each cell shows its column's value and accepts no
+// edits. The pencil turns the row into its edit form (see RowEditor).
 function ReviewTable({
   cards,
   disabled,
   pickFrom,
-  fieldFrom,
   rowForm,
   formRow,
 }: {
   cards: AnyCard[];
   disabled: boolean;
   pickFrom: (anchor: string) => (key: string) => void;
-  fieldFrom: (anchor: string) => FieldChange;
   // The edit form of a row, when the user opened one, and how it answers.
   rowForm?: (id: string) => RowEdit | null;
   // Any other form opened from a row, drawn in a full-width row below it.
@@ -853,19 +857,22 @@ function ReviewTable({
   const columns = cards[0]?.columns ?? [];
   const kinds = columns.map((column) => columnKind(column));
   const ticks = cards.some((card) => tickOf(card));
-  // The chip column is wide enough for two small id chips per line, and the Files column for its
-  // icon and short names. The text columns (Persona, Scenario) share all the rest, so names get
-  // the most room on every width.
+  // The chip column is wide enough for two small id chips per line, and the Files column for the
+  // Add file button and a short name. Both have fixed widths, so the text columns (Persona,
+  // Scenario) share all the rest and names get the most room on every width. While a row is open
+  // for editing, the actions column widens to hold Save and Cancel side by side, and the text
+  // columns give up that room.
   const widths = kinds.map((kind) =>
     kind === "number"
       ? "w-12"
       : kind === "upload"
-        ? "w-[14%]"
+        ? "w-32"
         : kind === "chips"
           ? "w-[6rem]"
           : undefined,
   );
   const span = columns.length + (ticks ? 1 : 0) + 1;
+  const editing = cards.some((card) => rowForm?.(card.id) != null);
   return (
     <table className="w-full table-fixed border-collapse text-left text-sm">
       <colgroup>
@@ -873,7 +880,7 @@ function ReviewTable({
         {widths.map((width, i) => (
           <col key={i} className={width} />
         ))}
-        <col className="w-14" />
+        <col className={editing ? "w-[8.5rem]" : "w-14"} />
       </colgroup>
       <thead>
         <tr className="border-b border-border text-xs text-muted-foreground">
@@ -949,12 +956,7 @@ function ReviewTable({
                         kinds[i] === "number" && "text-right tabular-nums",
                       )}
                     >
-                      <ColumnCell
-                        column={column}
-                        disabled={disabled}
-                        onPick={pickFrom(card.id)}
-                        onFieldChange={fieldFrom(card.id)}
-                      />
+                      <ColumnCell column={column} />
                     </td>
                   ))}
                   <td className="py-1.5 pr-2">
@@ -983,9 +985,11 @@ function ReviewTable({
   );
 }
 
-// A table row in edit mode. A form cannot wrap table cells, so the form element sits in the
-// actions cell and each control in the other cells joins it through its `form` attribute. A field that names no column
-// goes into the first cell.
+// A table row in edit mode. Each form field goes into the cell of the column it names, and a field
+// that names no column goes into the first cell. Save and Cancel take the place of the row
+// actions. A form cannot wrap table cells, so the form element sits in the actions cell and each
+// control in the other cells joins it through its `form` attribute. An error notice goes in a
+// full-width row below.
 function RowEditor({
   card,
   columns,
@@ -1052,7 +1056,10 @@ function RowEditor({
     <>
       <tr
         data-keep-anchor={card.id}
-        className="bg-muted/40 align-top"
+        className={cn(
+          "bg-muted/40 align-top",
+          !edit.notice && "border-b border-border",
+        )}
         onKeyDown={(e) => {
           if (e.key === "Escape" && edit.request.cancellable && !busy) {
             e.preventDefault();
@@ -1075,30 +1082,26 @@ function RowEditor({
         {columns.map((column, i) => (
           <td
             key={column.title}
-            className={cn("px-1 py-1.5", kinds[i] === "number" && "text-right")}
+            className={cn(
+              "px-1 py-1.5",
+              // A number reads right-aligned in its box, the same as in the read-only row.
+              kinds[i] === "number" && "[&_input]:text-right",
+            )}
           >
-            {/* The Files cell puts the upload icon first and the files on its right, the same
-                as the read-only row. */}
-            <div
-              className={cn(
-                "flex min-w-0 gap-1",
-                uploadField && column.title === uploadColumn
-                  ? "flex-row items-start"
-                  : "flex-col",
-              )}
-            >
-              {uploadField && column.title === uploadColumn && (
-                <UploadButton
-                  label={`Upload ${column.title}`}
-                  disabled={busy}
-                  iconOnly
-                  onFiles={addUploads}
-                />
-              )}
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                {fields
-                  .filter((field) => cellOf(field) === i)
-                  .map((field) => (
+            <div className="flex min-w-0 flex-col gap-1">
+              {fields
+                .filter((field) => cellOf(field) === i)
+                .map((field) =>
+                  field === uploadField ? (
+                    <RowFiles
+                      key={field.id}
+                      field={field}
+                      value={values[field.id] ?? ""}
+                      disabled={busy}
+                      onChange={(value) => setValue(field.id, value)}
+                      onUpload={addUploads}
+                    />
+                  ) : (
                     <FormFieldControl
                       key={field.id}
                       field={field}
@@ -1112,12 +1115,12 @@ function RowEditor({
                       form={formId}
                       onChange={(value) => setValue(field.id, value)}
                     />
-                  ))}
-              </div>
+                  ),
+                )}
             </div>
           </td>
         ))}
-        <td className="py-1.5 pr-2 align-top">
+        <td className="py-1.5 pr-2">
           <form
             id={formId}
             aria-label={edit.request.prompt || "Edit"}
@@ -1132,31 +1135,291 @@ function RowEditor({
                 uploads.filter((file) => chosen.includes(file.name)),
               );
             }}
-            className="flex flex-col items-end gap-1"
+            className="flex justify-end"
           >
+            <span className="sr-only">{edit.request.prompt}</span>
             <FormActions
               request={edit.request}
               disabled={busy}
               values={values}
               compact
-              vertical
               onCancel={() => cancelForm(edit.onRespond)}
             />
           </form>
         </td>
       </tr>
-      <tr className="border-b border-border bg-muted/40">
-        <td colSpan={columns.length + (tick ? 1 : 0) + 1} className="px-2 pb-2">
-          {edit.notice ? (
+      {edit.notice && (
+        <tr className="border-b border-border bg-muted/40">
+          <td
+            colSpan={columns.length + (tick ? 1 : 0) + 1}
+            className="px-2 pb-2"
+          >
             <div role="alert" className="text-xs text-destructive">
               {edit.notice}
             </div>
-          ) : (
-            <span className="sr-only">{edit.request.prompt}</span>
-          )}
-        </td>
-      </tr>
+          </td>
+        </tr>
+      )}
     </>
+  );
+}
+
+// The Files cell of a row in edit mode. It lists the attached files, each with a remove button.
+// Below them, one "Add file" button opens a menu: "Upload a file" first, then the uploaded
+// documents that are not attached yet. The value is the attached names joined by commas.
+export function RowFiles({
+  field,
+  value,
+  disabled,
+  onChange,
+  onUpload,
+}: {
+  field: FormFieldSpec;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onUpload: (files: File[]) => void;
+}) {
+  const names = value.split(",").filter(Boolean);
+  const offered = (field.choices ?? [])
+    .map((choice) => choice.value)
+    .filter((name) => !names.includes(name));
+  const [menu, setMenu] = useState<MenuPlace | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const close = (refocus: boolean) => {
+    setMenu(null);
+    if (refocus) trigger.current?.focus();
+  };
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      {names.length > 0 && (
+        <ul className="flex min-w-0 flex-col">
+          {names.map((name) => (
+            <li key={name} className="flex min-w-0 items-center gap-1">
+              <span title={name} className="min-w-0 flex-1 truncate leading-7">
+                {name}
+              </span>
+              <button
+                type="button"
+                aria-label={`Remove ${name}`}
+                disabled={disabled}
+                onClick={() =>
+                  onChange(names.filter((item) => item !== name).join(","))
+                }
+                className="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+              >
+                <X size={12} strokeWidth={2} aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        ref={trigger}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={menu != null}
+        disabled={disabled}
+        onClick={(event) =>
+          menu
+            ? close(false)
+            : setMenu(menuPlace(event.currentTarget.getBoundingClientRect()))
+        }
+        className={cn(
+          "inline-flex h-8 w-fit max-w-full items-center gap-1 rounded-md border border-border bg-background px-2 text-xs font-medium transition-colors duration-150",
+          "hover:bg-muted active:bg-border disabled:cursor-not-allowed disabled:opacity-45",
+          menu && "bg-muted",
+        )}
+      >
+        <Plus size={14} strokeWidth={1.75} aria-hidden />
+        <span className="truncate">Add file</span>
+        <ChevronDown
+          size={14}
+          strokeWidth={1.75}
+          aria-hidden
+          className="text-muted-foreground"
+        />
+      </button>
+      <input
+        ref={picker}
+        type="file"
+        multiple
+        tabIndex={-1}
+        aria-hidden
+        className="sr-only"
+        onChange={(event) => {
+          onUpload([...(event.currentTarget.files ?? [])]);
+          event.currentTarget.value = "";
+        }}
+      />
+      {menu &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <FileMenu
+            place={menu}
+            offered={offered}
+            trigger={trigger}
+            onUpload={() => {
+              close(true);
+              picker.current?.click();
+            }}
+            onAttach={(name) => {
+              close(true);
+              onChange([...names, name].join(","));
+            }}
+            onClose={close}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+// Where a menu opens: under its trigger, with its left edge on the trigger's left edge. When that
+// would push the menu off the right of the window, its right edge goes on the trigger's right edge.
+// When the space under the trigger is short and the space above is larger, the menu opens above.
+// Its height never passes the space on its side, and the list scrolls inside it.
+type MenuPlace = {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+  maxHeight: number;
+};
+
+const MENU_WIDTH = 288;
+const MENU_GAP = 4;
+const MENU_MARGIN = 8;
+
+function menuPlace(bounds: DOMRect): MenuPlace {
+  const below = window.innerHeight - bounds.bottom - MENU_GAP - MENU_MARGIN;
+  const above = bounds.top - MENU_GAP - MENU_MARGIN;
+  const vertical =
+    below < 240 && above > below
+      ? { bottom: window.innerHeight - bounds.top + MENU_GAP, maxHeight: above }
+      : { top: bounds.bottom + MENU_GAP, maxHeight: below };
+  return bounds.left + MENU_WIDTH + MENU_MARGIN > window.innerWidth
+    ? { ...vertical, right: window.innerWidth - bounds.right }
+    : { ...vertical, left: bounds.left };
+}
+
+// The menu of the Files cell. It floats above the page, so it takes a border and a soft shadow.
+// It opens with the first item in focus. The arrow keys move between the items, and Escape, a
+// click outside, or a scroll closes it.
+export function FileMenu({
+  place,
+  offered,
+  trigger,
+  onUpload,
+  onAttach,
+  onClose,
+}: {
+  place: MenuPlace;
+  offered: readonly string[];
+  trigger?: { current: HTMLElement | null };
+  onUpload: () => void;
+  onAttach: (name: string) => void;
+  onClose: (refocus: boolean) => void;
+}) {
+  const panel = useRef<HTMLDivElement>(null);
+  // The listeners stay for the life of the menu; they read the latest close callback.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    panel.current
+      ?.querySelector<HTMLElement>('[role="menuitem"]')
+      ?.focus({ preventScroll: true });
+    const outside = (event: Event) => {
+      const target = event.target as Node;
+      if (panel.current?.contains(target) || trigger?.current?.contains(target))
+        return;
+      closeRef.current(false);
+    };
+    const away = () => closeRef.current(false);
+    document.addEventListener("pointerdown", outside);
+    window.addEventListener("scroll", away, true);
+    window.addEventListener("resize", away);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      window.removeEventListener("scroll", away, true);
+      window.removeEventListener("resize", away);
+    };
+  }, [trigger]);
+  const item =
+    "flex w-full min-w-0 shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-muted focus-visible:bg-muted";
+  return (
+    <div
+      ref={panel}
+      role="menu"
+      aria-label="Add file"
+      style={{ ...place, width: MENU_WIDTH }}
+      onKeyDown={(event) => {
+        // The row closes its form on Escape, so the menu keeps its keys to itself.
+        event.stopPropagation();
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onClose(true);
+          return;
+        }
+        if (event.key === "Tab") {
+          onClose(false);
+          return;
+        }
+        const step =
+          event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+        if (step === 0) return;
+        event.preventDefault();
+        const items = [
+          ...(panel.current?.querySelectorAll<HTMLElement>(
+            '[role="menuitem"]',
+          ) ?? []),
+        ];
+        const index = items.indexOf(document.activeElement as HTMLElement);
+        items[(index + step + items.length) % items.length]?.focus();
+      }}
+      className="animate-open-menu fixed z-[90] flex flex-col overflow-y-auto rounded-lg border border-border bg-card p-1.5 text-card-foreground shadow-lg"
+    >
+      <button type="button" role="menuitem" onClick={onUpload} className={item}>
+        <Upload
+          size={15}
+          strokeWidth={1.75}
+          aria-hidden
+          className="shrink-0 text-muted-foreground"
+        />
+        <span>Upload a file</span>
+      </button>
+      {offered.length > 0 && (
+        <>
+          <div
+            role="separator"
+            className="-mx-1.5 my-1.5 border-t border-border"
+          />
+          <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">
+            Uploaded documents
+          </div>
+          {offered.map((name) => (
+            <button
+              key={name}
+              type="button"
+              role="menuitem"
+              onClick={() => onAttach(name)}
+              className={item}
+            >
+              <FileText
+                size={15}
+                strokeWidth={1.75}
+                aria-hidden
+                className="shrink-0 text-muted-foreground"
+              />
+              <span title={name} className="min-w-0 truncate">
+                {name}
+              </span>
+            </button>
+          ))}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1185,82 +1448,64 @@ function columnKind(column: CardColumn): ColumnKind {
   return "rich";
 }
 
-// One table cell. A column with no components is its summary as plain text, cut to one line with
-// the full text on hover. A chip group draws every chip; a chip's hint is its hover text. A
-// number field draws as a narrow field, and an upload field as its file names and an upload
-// button.
-function ColumnCell({
-  column,
-  disabled,
-  onPick,
-  onFieldChange,
-}: {
-  column: CardColumn;
-  disabled: boolean;
-  onPick: (key: string) => void;
-  onFieldChange: FieldChange;
-}) {
+// One read-only table cell. The pencil opens the row's edit form, which holds every control, so
+// a cell only shows values. A column with no components is its summary as plain text, cut to one
+// line with the full text on hover. A chip group shows its selected chips; a chip's hint is its
+// hover text. A number field shows its number, and an upload field its file names.
+//
+// Every cell starts with a 28px line, the height of the row checkbox and the row icons, so the
+// first line of each cell sits at the same height across the row.
+export function ColumnCell({ column }: { column: CardColumn }) {
   const kind = columnKind(column);
-  if (kind === "text" || kind === "rich")
-    return (
-      <span title={column.summary} className="block min-w-0 truncate">
-        {column.summary}
-      </span>
-    );
+  const none = (
+    <span className="block leading-7 text-muted-foreground">None</span>
+  );
   if (kind === "chips") {
-    const options = column.components.flatMap((component) =>
-      component.type === "options" ? component.options : [],
-    );
-    if (options.length === 0)
-      return <span className="text-xs text-muted-foreground">None</span>;
+    const chosen = column.components
+      .flatMap((component) =>
+        component.type === "options" ? component.options : [],
+      )
+      .filter((option) => option.selected === true);
+    if (chosen.length === 0) return none;
     return (
-      <div className="flex min-w-0 flex-wrap items-center gap-0.5">
-        {options.map((option) => {
-          const on = option.selected === true;
-          return (
-            // A plain button, not `Button`: the shared button's padding and text size are too
-            // large for an id chip in a table cell.
-            <button
-              key={optionKey(option.id)}
-              type="button"
-              disabled={disabled || !option.enabled}
-              title={option.hint ?? option.label}
-              aria-pressed={on}
-              className={cn(
-                "rounded border px-1 py-px font-mono text-[10px] leading-tight tracking-tight transition-colors duration-150",
-                "disabled:cursor-not-allowed disabled:opacity-45",
-                on
-                  ? "border-accent bg-accent/12 text-foreground"
-                  : "border-border text-muted-foreground hover:bg-muted",
-              )}
-              onClick={() => onPick(optionKey(option.id))}
-            >
-              {option.label}
-            </button>
-          );
-        })}
+      <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-0.5">
+        {chosen.map((option) => (
+          <span
+            key={optionKey(option.id)}
+            title={option.hint ?? option.label}
+            className="rounded border border-accent bg-accent/12 px-1 py-px font-mono text-[10px] leading-tight tracking-tight"
+          >
+            {option.label}
+          </span>
+        ))}
       </div>
     );
   }
+  if (kind === "upload") {
+    const names = column.components.flatMap((component) =>
+      component.type === "upload" ? component.value : [],
+    );
+    if (names.length === 0) return none;
+    return (
+      <ul className="flex min-w-0 flex-col">
+        {names.map((name) => (
+          <li key={name} title={name} className="min-w-0 truncate leading-7">
+            {name}
+          </li>
+        ))}
+      </ul>
+    );
+  }
   return (
-    <div
+    <span
+      title={column.summary}
       className={cn(
-        "flex min-w-0 flex-1 flex-col gap-1",
-        kind === "number" && "items-end",
+        "block min-w-0 truncate leading-7",
+        kind === "number" && "tabular-nums",
       )}
     >
-      {column.components.map((component, i) => (
-        <ComponentBlock
-          key={i}
-          component={component}
-          disabled={disabled}
-          density="inline"
-          onPick={onPick}
-          onFieldChange={onFieldChange}
-          bare
-        />
-      ))}
-    </div>
+      {column.summary}
+    </span>
   );
 }
 
@@ -1488,7 +1733,6 @@ function ComponentBlock({
   trialCount,
   disabled,
   density = "form",
-  bare = false,
   nested = false,
   rowEdit,
   onPick,
@@ -1501,9 +1745,6 @@ function ComponentBlock({
   // Drawn inside a card, where an open, non-muted details block is one row of the card.
   nested?: boolean;
   rowEdit?: RowEdit;
-  // Draw the value only, with no label column and no trial count: a table cell has its label in
-  // the column heading.
-  bare?: boolean;
   onPick: (key: string) => void;
   onFieldChange: FieldChange;
 }) {
@@ -1626,7 +1867,7 @@ function ComponentBlock({
         );
 
       case "number":
-        return trialCount === undefined || bare ? (
+        return trialCount === undefined ? (
           <NumberCardField
             component={component}
             disabled={disabled}
@@ -1653,7 +1894,6 @@ function ComponentBlock({
           <FixtureField
             component={component}
             disabled={disabled}
-            compact={bare}
             onChange={(names, files, removedFixtures) =>
               onFieldChange(
                 optionKey(component.id),
@@ -1675,61 +1915,18 @@ function ComponentBlock({
 
   // A divider owns the whole row — it carries no label, so it skips FormRow's label/value split
   // and rules straight across.
-  if (component.type === "divider" || bare) return value;
+  if (component.type === "divider") return value;
 
   return <FormRow label={component.label}>{value}</FormRow>;
-}
-
-// A small "Upload" button that opens the file picker. The file input is the label's own, so the
-// button works with the keyboard and a screen reader.
-function UploadButton({
-  label,
-  disabled,
-  iconOnly = false,
-  onFiles,
-}: {
-  label: string;
-  disabled: boolean;
-  // A table cell shows the icon alone; its label stays as hover text and for screen readers.
-  iconOnly?: boolean;
-  onFiles: (files: File[]) => void;
-}) {
-  return (
-    <label
-      title={iconOnly ? label : undefined}
-      className={cn(
-        "inline-flex h-7 w-fit shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-within:ring-1 focus-within:ring-accent",
-        disabled && "pointer-events-none opacity-45",
-      )}
-    >
-      <Upload size={14} strokeWidth={1.75} aria-hidden />
-      {!iconOnly && <span>Upload</span>}
-      <input
-        type="file"
-        multiple
-        disabled={disabled}
-        className="sr-only"
-        aria-label={label}
-        onChange={(event) => {
-          onFiles([...(event.currentTarget.files ?? [])]);
-          event.currentTarget.value = "";
-        }}
-      />
-    </label>
-  );
 }
 
 export function FixtureField({
   component,
   disabled,
-  compact = false,
   onChange,
 }: {
   component: Extract<CardComponent, { type: "upload" }>;
   disabled: boolean;
-  // A table cell: the file names, each with a remove button, and a small upload button. Early
-  // files that are not attached yet are offered as "+ name" chips.
-  compact?: boolean;
   onChange: (
     names: string[],
     files: readonly File[],
@@ -1759,55 +1956,6 @@ export function FixtureField({
     }
     onChange(next, files, []);
   };
-
-  if (compact) {
-    const offered = available.filter((name) => !names.includes(name));
-    // The upload icon comes first; the file names follow on its right and wrap onto more lines
-    // when the cell is narrow, so a long name is never cut.
-    return (
-      <div className="flex min-w-0 items-start gap-1">
-        <UploadButton
-          label={component.label ? `Upload ${component.label}` : "Upload files"}
-          disabled={disabled}
-          iconOnly
-          onFiles={upload}
-        />
-        {(names.length > 0 || offered.length > 0) && (
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5 pt-1">
-            {names.map((name) => (
-              <span
-                key={name}
-                className="flex min-w-0 items-start gap-1 text-xs"
-              >
-                <span className="min-w-0 break-all">{name}</span>
-                <button
-                  type="button"
-                  aria-label={`Remove ${name}`}
-                  disabled={disabled}
-                  onClick={() => remove(name)}
-                  className="shrink-0 leading-none text-muted-foreground hover:text-foreground disabled:opacity-40"
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            {offered.map((name) => (
-              <button
-                key={name}
-                type="button"
-                title={`Attach ${name}`}
-                disabled={disabled}
-                onClick={() => toggle(name, true)}
-                className="min-w-0 break-all text-left text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
-              >
-                + {name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-w-0 flex-col gap-2">

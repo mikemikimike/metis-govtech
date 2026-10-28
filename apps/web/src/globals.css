@@ -329,6 +329,22 @@
   animation: open-under-box 0.16s ease-out both;
 }
 
+/* A menu opens from its trigger: it fades in and drops a few pixels. */
+@keyframes open-menu {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-open-menu {
+  animation: open-menu 0.1s ease-out both;
+}
+
 /* The default Perspective is marked until the user first opens the Perspective control. The teal
    ring draws in once when the opening appears and then stays as a still marker. It does not loop.
    The marker goes away when the user opens the control. */
@@ -347,6 +363,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .animate-open-menu,
   .animate-open-under-box,
   .perspective-default {
     animation: none !important;

@@ -1114,6 +1114,14 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `specification.zip` with the local fixture files.
   Review actions are disabled when their required Specification content is incomplete.
 
+#### Fixed
+
+- **A Test Case row is read-only until the pencil opens it (#584).** The row shows the selected
+  Behaviour IDs, the Trials number, and the attached files, with no controls. A new Test Case has
+  no files. The pencil makes the Behaviour chips clickable and the Trials editable. In edit mode,
+  the Files cell has one **Add file** menu: **Upload a file** first, then the opening documents
+  that are not attached yet.
+
 #### Deferred
 
 - Source analysis, hosted state, authentication, and evaluation execution remain outside this

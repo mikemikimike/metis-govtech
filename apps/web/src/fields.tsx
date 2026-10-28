@@ -6,7 +6,7 @@
 // above a full-height control. "inline" is an edit inside a Profile row: a shorter control at the
 // row's own text size, so the field sits where the text it replaces sat.
 
-import { Minus, Plus } from "lucide-react";
+import { ChevronDown, Minus, Plus } from "lucide-react";
 import type { KeyboardEvent, ReactNode, Ref } from "react";
 import { cn } from "./ui";
 
@@ -207,31 +207,45 @@ export function SelectInput({
   density?: FieldDensity;
   onChange: (value: string) => void;
 }) {
+  // The select draws its own chevron and keeps room for it on the right. The browser's arrow sits
+  // over the padding, so in a narrow table cell a long choice ran under it.
   return (
-    <select
-      form={form}
-      id={id}
-      ref={selectRef}
-      aria-label={ariaLabel}
-      aria-invalid={invalid}
-      value={value}
-      disabled={disabled}
-      required={required}
-      onChange={(event) => onChange(event.target.value)}
-      className={cn(CONTROL, SIZE[density], "rounded-lg")}
-    >
-      {placeholder != null && <option value="">{placeholder}</option>}
-      {choices.map((choice) => (
-        <option
-          key={choice.value}
-          value={choice.value}
-          disabled={choice.disabled}
-          title={choice.hint ?? undefined}
-        >
-          {choice.label}
-        </option>
-      ))}
-    </select>
+    <span className="relative block min-w-0">
+      <select
+        form={form}
+        id={id}
+        ref={selectRef}
+        aria-label={ariaLabel}
+        aria-invalid={invalid}
+        value={value}
+        disabled={disabled}
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(
+          CONTROL,
+          SIZE[density],
+          "w-full appearance-none truncate rounded-lg pr-7",
+        )}
+      >
+        {placeholder != null && <option value="">{placeholder}</option>}
+        {choices.map((choice) => (
+          <option
+            key={choice.value}
+            value={choice.value}
+            disabled={choice.disabled}
+            title={choice.hint ?? undefined}
+          >
+            {choice.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={14}
+        strokeWidth={1.75}
+        aria-hidden
+        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+      />
+    </span>
   );
 }
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
+import { renderToStaticMarkup } from "react-dom/server";
 import {
   Children,
   isValidElement,
@@ -24,7 +25,14 @@ import {
   FooterChip,
   PerspectivePicker,
 } from "./OpeningControls";
-import { Composer, FixtureField, Transcript } from "./Conversation";
+import {
+  ColumnCell,
+  Composer,
+  FileMenu,
+  FixtureField,
+  RowFiles,
+  Transcript,
+} from "./Conversation";
 import { ConnectionForm } from "./ConnectionStep";
 import { emptyConnectionDraft, type ConnectionDraft } from "./connection";
 import { InterviewRail } from "./InterviewRail";
@@ -781,6 +789,122 @@ test("Scenario review exposes early fixture suggestions for user selection", () 
     names: ["policy.pdf", "terms.pdf"],
     removed: [],
   });
+});
+
+test("A Test Case row shows its values and accepts no edits", () => {
+  const behaviours = ColumnCell({
+    column: {
+      title: "Behaviours",
+      summary: "EB-1",
+      components: [
+        {
+          type: "options",
+          options: [
+            {
+              id: { action: "cover", target: "TC-001", via: "EB-1" },
+              label: "EB-1",
+              hint: "Asks first",
+              selected: true,
+              enabled: true,
+            },
+            {
+              id: { action: "cover", target: "TC-001", via: "EB-2" },
+              label: "EB-2",
+              selected: false,
+              enabled: true,
+            },
+          ],
+        },
+      ],
+    } as never,
+  });
+  const files = ColumnCell({
+    column: {
+      title: "Files",
+      summary: "None",
+      components: [
+        {
+          type: "upload",
+          id: { action: "files", target: "TC-001" },
+          label: "Files sent to your target",
+          value: [],
+          available: ["policy.pdf", "terms.pdf"],
+        },
+      ],
+    } as never,
+  });
+  const trials = ColumnCell({
+    column: {
+      title: "Trials",
+      summary: "3",
+      components: [
+        {
+          type: "number",
+          id: { action: "trials", target: "TC-001" },
+          label: "Trials",
+          value: 3,
+          min: 1,
+          max: 10,
+        },
+      ],
+    } as never,
+  });
+  const controls = (node: ReactNode) =>
+    findElements(node, (element) =>
+      ["button", "input", "select"].includes(element.type as string),
+    );
+
+  assert.deepEqual(
+    [...controls(behaviours), ...controls(files), ...controls(trials)],
+    [],
+  );
+  assert.doesNotMatch(JSON.stringify(behaviours), /EB-2/);
+  assert.match(JSON.stringify(behaviours), /EB-1/);
+  assert.doesNotMatch(JSON.stringify(files), /policy\.pdf/);
+  assert.match(JSON.stringify(trials), /"3"/);
+});
+
+test("An edited Test Case row lists its attached files and one Add file menu", () => {
+  const shown = renderToStaticMarkup(
+    <RowFiles
+      field={
+        {
+          id: "files",
+          label: "Files",
+          multiple: true,
+          choices: [
+            { value: "policy.pdf", label: "policy.pdf" },
+            { value: "terms.pdf", label: "terms.pdf" },
+          ],
+        } as never
+      }
+      value="policy.pdf"
+      disabled={false}
+      onChange={() => {}}
+      onUpload={() => {}}
+    />,
+  );
+
+  assert.match(shown, /aria-label="Remove policy\.pdf"/);
+  assert.match(shown, /aria-haspopup="menu"[^>]*>.*Add file/);
+  assert.doesNotMatch(shown, /terms\.pdf/);
+});
+
+test("The Files menu offers upload first and then each unattached document", () => {
+  const shown = renderToStaticMarkup(
+    <FileMenu
+      place={{ top: 0, left: 0, maxHeight: 400 }}
+      offered={["terms.pdf", "notes.txt"]}
+      onUpload={() => {}}
+      onAttach={() => {}}
+      onClose={() => {}}
+    />,
+  );
+  const items = [
+    ...shown.matchAll(/role="menuitem"[^>]*>(.*?)<\/button>/g),
+  ].map(([, item]) => (item ?? "").replace(/<[^>]+>/g, ""));
+
+  assert.deepEqual(items, ["Upload a file", "terms.pdf", "notes.txt"]);
 });
 
 test("History stays usable while the sending Interview is protected from deletion", () => {

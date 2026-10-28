@@ -174,8 +174,10 @@ Behaviour. The row checkbox includes the Test Case in the evaluation. The total 
 counts only the selected Test Cases and their Trials. Only selected Test Cases go into the
 download. Continue with no selected Test Case shows "Select at least one Test Case."
 
-The pen edits a Test Case in its row: the Persona and Scenario dropdowns, the Behaviour ID
-chips, the Trials number, and the Files cell. Each pair can have one Test Case only, so a pair
+A row shows its values only. To change a Test Case, select the pen. The row then shows the
+Persona and Scenario dropdowns, the Behaviour ID chips, the Trials number, and the Files cell. In
+the Files cell, open **Add file**. Choose **Upload a file**, or choose an opening document. Select
+**Save** to keep the changes. Each pair can have one Test Case only, so a pair
 that is in use is not available. The **+** on Test Cases adds a row for a pair that has no Test
 Case yet.
 
@@ -191,7 +193,8 @@ Document facts:
 - The browser shows the accepted file types and size limits.
 - The API extracts text from UTF-8 TXT, Markdown, YAML, JSON, CSV, PDF text layers, and DOCX files.
 - The API does not run OCR. Scanned PDFs give no text.
-- Attach an opening document to a Test Case in its **Files** cell.
+- A Test Case has no files at first. Select its pen to add an opening document or upload a file
+  in its **Files** cell.
 - The final package contains only files that a Test Case uses.
 
 ## Finish and download
