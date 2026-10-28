@@ -707,8 +707,8 @@ class HttpRunner(Runner):
         if (rejected := self.rejected) is not None:
             self.rejected = None  # read once, like ``unresolved``
             notices.append(
-                f"The assistant rejected your message with an error "
-                f"(status {rejected.status}): {rejected.excerpt}"
+                f"Your message got an error response (status {rejected.status}): "
+                f"{rejected.excerpt}"
             )
         if self.open_submission is not None:
             notices.append(

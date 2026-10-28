@@ -360,7 +360,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   A submission the target answers with a non-2xx status is never opened, and the user agent is
   told so: `Observation.notice` carries the status and the first 200 characters of the response
   body, copied from the transport log, and the orchestrator's per-turn log line shows the notice
-  beside `reply` (#545).
+  beside `reply`. The user agent's prompt says an error status need not be the assistant's fault (#545).
   `HttpRunnerFactory.start` opens the HTTP transport
   (honouring `tls_verify`) and `close` closes it. A binding file that is not UTF-8 gives a clear
   `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is

@@ -421,7 +421,7 @@ async def test_a_4xx_poll_still_leaves_the_submission_unresolved(
     assert observation.submission_unresolved
     assert observation.notice is not None
     assert "never settled" in observation.notice
-    assert "rejected" not in observation.notice
+    assert "status 4" not in observation.notice
 
 
 @pytest.mark.asyncio
@@ -520,7 +520,8 @@ async def test_a_rejected_submission_is_shown_to_the_user_as_an_error(
     assert observation.notice is not None
     assert "422" in observation.notice
     assert "invalid_request" in observation.notice
-    assert "rejected" in observation.notice
+    assert "error" in observation.notice
+    assert "assistant" not in observation.notice
     shown = render_observation(observation)
     assert "422" in shown
     assert "invalid_request" in shown
