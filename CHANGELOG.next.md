@@ -294,6 +294,21 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   does not record the environment state, the delivered speech, the identified language, or the
   meaning the user intended.
 
+- Nine Interaction Quality graders, one for each attribute that a text session can show:
+  `RelevanceGrader`, `CommunicationClarityGrader`, `CrossTurnCoherenceGrader`,
+  `ClarificationAppropriatenessGrader`, `UserCorrectionSupportGrader`,
+  `ActionStatusTransparencyGrader`, `ExplanationUsefulnessGrader`,
+  `ToneAppropriatenessGrader`, and `OutputNaturalnessGrader`. Each judges the whole session
+  by default. Relevance, clarity, explanation usefulness, tone, and naturalness also take
+  `scope: subsession`, one result for each turn, judged with the turns before it. Each
+  judge reads only the evidence that its measure needs: the user messages and replies for
+  clarity, coherence, and tone, the replies alone for naturalness, and each tool call's
+  status and result for action status. Seven graders take optional free-text settings that
+  give the judge facts the trace cannot show: `purpose` (relevance), `audience` (clarity),
+  `confirm_before` and `question_limit` (clarification), `fixed_rules` (correction
+  support), `disclosure_level` and `ui_status` (action status), `expected_tone` (tone), and
+  `conventions` (naturalness) (#451).
+
 - Shared definitions for grading: `SCOPE_DEFINITIONS` in `metis.library.scope` (trace,
   subsession, session and artifact), `JUDGMENT_FORM_DEFINITIONS` in `metis.library.judgment_form`
   (the `binary` instructions and reply model), and `AGGREGATION_DEFINITIONS` in
