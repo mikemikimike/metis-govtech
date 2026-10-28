@@ -28,5 +28,8 @@ def disable_external_tracing(monkeypatch: pytest.MonkeyPatch) -> None:
         "LANGFUSE_BASE_URL",
         "LANGFUSE_PUBLIC_KEY",
         "LANGFUSE_SECRET_KEY",
+        "METIS_INTERNAL_LANGFUSE_BASE_URL",
+        "METIS_INTERNAL_LANGFUSE_PUBLIC_KEY",
+        "METIS_INTERNAL_LANGFUSE_SECRET_KEY",
     ):
         monkeypatch.delenv(name, raising=False)

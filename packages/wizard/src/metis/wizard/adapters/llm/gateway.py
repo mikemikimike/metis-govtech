@@ -9,11 +9,13 @@ integration.
 The client is imported from `langfuse.openai`, Langfuse's drop-in for the OpenAI client.
 Importing it patches the client so every chat and embedding call is recorded as a generation —
 input, raw reply, model, token usage and latency — with no tracing code on the call path.
-`_ask` is wrapped with `@observe`, so a call's three attempts nest under one trace named by the
+`_ask` opens one observation, so a call's three attempts nest under one trace named by the
 Interview step. A caller that has an Interview ID can use it to group traces; the stateless
-lifecycle normally records them ungrouped. Tracing is opt-in by environment: with no `LANGFUSE_*`
-variables the drop-in disables itself and sends nothing, and it exports on a background thread, so
-it never blocks or fails the Interview.
+lifecycle normally records them ungrouped. The traces go to the METIS-internal Langfuse, which is
+opt-in by the three `METIS_INTERNAL_LANGFUSE_*` variables. The `LANGFUSE_*` variables name the
+target's Langfuse, which the engine reads, so the wizard never uses them: with an internal
+variable missing, the gateway holds a disabled client and sends nothing. The client exports on a
+background thread, so it never blocks or fails the Interview.
 
 Every call asks for structured output and retries twice on a validation failure, feeding the
 error back each time. Three attempts total, silent unless all three fail: a first-attempt
@@ -36,7 +38,7 @@ from dataclasses import dataclass, field
 from importlib import import_module
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from langfuse import get_client, observe
+from langfuse import Langfuse, get_client
 from openai import APIError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
@@ -74,6 +76,15 @@ if TYPE_CHECKING:
 
 ATTEMPTS = 3
 
+TRACING_VARS = (
+    "METIS_INTERNAL_LANGFUSE_PUBLIC_KEY",
+    "METIS_INTERNAL_LANGFUSE_SECRET_KEY",
+    "METIS_INTERNAL_LANGFUSE_BASE_URL",
+)
+"""The METIS-internal Langfuse. Tracing is on only when all three are set."""
+
+_TRACING_OFF_KEY = "metis-internal-tracing-off"
+
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -105,6 +116,24 @@ def check_credentials(
         missing = {settings.role: ROLES[settings.role].key_vars}
         path = env_file if env_file is not None else find_env_file(env=env)
         raise CredentialsMissing(format_missing_settings(command, missing, path))
+
+
+def tracing_key(env: Mapping[str, str] | None = None) -> str:
+    """Register the METIS-internal Langfuse client and return its public key.
+
+    Every traced call names this key, so the drop-in and `@observe` use this client and no
+    other. A client built without keys reads `LANGFUSE_*`, the target's project. So when an
+    internal variable is missing, the client is a disabled one under a placeholder key.
+    """
+    env = os.environ if env is None else env
+    public_key, secret_key, base_url = (env.get(name) for name in TRACING_VARS)
+    if public_key and secret_key and base_url:
+        Langfuse(public_key=public_key, secret_key=secret_key, base_url=base_url)
+        return public_key
+    Langfuse(
+        public_key=_TRACING_OFF_KEY, secret_key=_TRACING_OFF_KEY, tracing_enabled=False
+    )
+    return _TRACING_OFF_KEY
 
 
 def _client(settings: RoleSettings) -> Any:
@@ -140,6 +169,7 @@ class GatewayInterviewer:
     _client: Any = None
     _embedding_client: Any = None
     interview_id: str | None = None
+    _tracing_key: str = field(default_factory=tracing_key)
 
     def __post_init__(self) -> None:
         if self._client is None:
@@ -167,7 +197,6 @@ class GatewayInterviewer:
 
     # ── the retry loop ─────────────────────────────────────────────────────
 
-    @observe
     def _ask(
         self,
         prompt: prompts.ModelPrompt,
@@ -183,15 +212,28 @@ class GatewayInterviewer:
         anything that took a correction is `True`. `_step` uses the flag to decide whether the
         model's intro can be trusted in front of the user.
 
-        `@observe` opens the trace; each attempt's `create` call nests under it as a generation.
-        The trace is named by the interview step and, where known, carries the interview id, so one
-        interview reads as one sequence. A call with no interview id is still recorded, ungrouped.
+        The observation opens the trace; each attempt's `create` call nests under it as a
+        generation. The trace is named by the interview step and, where known, carries the
+        interview id, so one interview reads as one sequence. A call with no interview id is still
+        recorded, ungrouped.
         """
-        # `session_id=` is the Langfuse SDK's trace-grouping parameter. It stays empty when a
-        # stateless caller has no Interview ID; the call is still traced.
-        get_client().update_current_trace(
-            name=prompt.name, session_id=self.interview_id
-        )
+        tracer = get_client(public_key=self._tracing_key)
+        with tracer.start_as_current_observation(
+            name=prompt.name, input={"system": prompt.system, "user": prompt.user}
+        ) as observation:
+            # `session_id=` is the Langfuse SDK's trace-grouping parameter. It stays empty when
+            # a stateless caller has no Interview ID; the call is still traced.
+            tracer.update_current_trace(name=prompt.name, session_id=self.interview_id)
+            result, recovered = self._attempts(prompt, schema, validate)
+            observation.update(output=result.model_dump(mode="json"))
+            return result, recovered
+
+    def _attempts(
+        self,
+        prompt: prompts.ModelPrompt,
+        schema: type[T],
+        validate: Callable[[T], None] | None,
+    ) -> tuple[T, bool]:
         messages = [
             {"role": "system", "content": prompt.system},
             {"role": "user", "content": prompt.user},
@@ -231,6 +273,7 @@ class GatewayInterviewer:
                     messages=messages,
                     response_format=response_format,
                     max_completion_tokens=self.output_tokens,
+                    langfuse_public_key=self._tracing_key,
                 )
             except APIError as exc:
                 raise InterviewerOutputError(
@@ -494,6 +537,8 @@ class GatewayInterviewer:
         if self._embedding_client is None:
             raise InterviewerUnavailable("The embeddings role has no API key.")
         response = self._embedding_client.embeddings.create(
-            model=self.embeddings.model, input=texts
+            model=self.embeddings.model,
+            input=texts,
+            langfuse_public_key=self._tracing_key,
         )
         return [item.embedding for item in response.data]

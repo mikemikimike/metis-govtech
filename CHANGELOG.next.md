@@ -925,6 +925,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Breaking
 
+- **Interview tracing uses the METIS-internal Langfuse.** The wizard and the API trace their model
+  calls only when `METIS_INTERNAL_LANGFUSE_PUBLIC_KEY`, `METIS_INTERNAL_LANGFUSE_SECRET_KEY` and
+  `METIS_INTERNAL_LANGFUSE_BASE_URL` are all set. They no longer read `LANGFUSE_*`, which stays the
+  Langfuse of the system under test for `metis engine`. Before, one `.env` sent Interview prompts
+  and replies to the target's project. To keep wizard tracing, copy the keys to the new
+  variables (#578).
+
 - Rename the wizard `Task` and `TaskDraft` models to `Feature` and `FeatureDraft`. Specifications use
   `features`, patch paths use `features[...]`, and new feature IDs use `F-`. Specification schema
   version 1, prompts, API types, browser forms, and reports use the glossary term (#392).

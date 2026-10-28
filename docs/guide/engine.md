@@ -50,7 +50,7 @@ Set Langfuse and OpenAI credentials, plus the credentials for your selected Orca
 
 | Group | Variables | Purpose |
 |-------|-----------|---------|
-| Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | Trace storage and retrieval |
+| Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | The Langfuse of the system under test. The engine reads the target's traces from it. The wizard traces to a separate METIS-internal Langfuse (`METIS_INTERNAL_LANGFUSE_*`). |
 | Models | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | The shared gateway of the user agent, the runner agent, and the judge. Each role can have its own model and gateway. See the [model guide](models.md). |
 | Orca API runner | `ORCA_API_URL`, `ORCA_API_KEY` | Target URL and API key for the example experiment |
 | Orca browser runner | `ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD` | Target URL and login credentials when selecting the browser runner |

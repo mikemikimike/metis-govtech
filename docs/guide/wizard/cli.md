@@ -41,7 +41,7 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
    | `DEFAULT_MODEL` | No | Model of every chat role. Unset uses `gpt-6-luna`. |
    | `INTERVIEW_MODEL` | No | Interview model name. Unset uses `DEFAULT_MODEL`. |
    | `EMBEDDING_MODEL` | No | Embedding model for scorer matching. Unset uses `text-embedding-3-large`. Without an embeddings key, the CLI warns, and each Criterion uses the criterion judge. |
-   | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | No | Tracing. Tracing is off unless all three are set. |
+   | `METIS_INTERNAL_LANGFUSE_PUBLIC_KEY`, `METIS_INTERNAL_LANGFUSE_SECRET_KEY`, `METIS_INTERNAL_LANGFUSE_BASE_URL` | No | Tracing of the Interview model calls to the METIS-internal Langfuse. Tracing is off unless all three are set. The wizard does not use the `LANGFUSE_*` variables, which name the Langfuse of the system under test. |
 
    An environment variable has priority over the value in `.env`. The command reads one `.env`
    file and prints its path. See the [model guide](../models.md) for the search and the

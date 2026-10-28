@@ -176,16 +176,23 @@ trace has the name of the Interview step. A caller can also give the gateway an 
 group its traces. The stateless lifecycle does not carry an Interview ID, so the CLI and API
 normally record these traces ungrouped; the missing ID does not prevent tracing.
 
-`langfuse` is a base dependency, so it installs with the wizard. To turn tracing on, set these
-three environment variables before you start the wizard:
+`langfuse` is a base dependency, so it installs with the wizard. The traces go to the
+METIS-internal Langfuse. To turn tracing on, set these three environment variables before you
+start the wizard:
 
-- `LANGFUSE_BASE_URL`
-- `LANGFUSE_PUBLIC_KEY`
-- `LANGFUSE_SECRET_KEY`
+- `METIS_INTERNAL_LANGFUSE_BASE_URL`
+- `METIS_INTERNAL_LANGFUSE_PUBLIC_KEY`
+- `METIS_INTERNAL_LANGFUSE_SECRET_KEY`
 
 Tracing is off when a variable is missing. There is no default host, so no interview content goes
-anywhere until an operator gives their own instance. When tracing is off, the drop-in disables
-itself and sends nothing. It writes traces on a background thread, so tracing does not block or
+anywhere until an operator gives their own instance. The wizard never falls back to the
+`LANGFUSE_*` variables. Those name the Langfuse of the system under test, which the engine reads,
+and a fallback would put Interview content in the target's project.
+
+The gateway gives the Langfuse client its keys directly, and every traced call names that client
+by its public key. A client built without keys reads `LANGFUSE_*`, so when tracing is off the
+gateway registers a disabled client under a placeholder key. When tracing is off, the client
+sends nothing. It writes traces on a background thread, so tracing does not block or
 stop the interview. There is no wizard-owned failure-safe wrapper: the wizard uses the behaviour
 of the library.
 

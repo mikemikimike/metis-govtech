@@ -14,6 +14,7 @@ from metis.wizard.adapters.llm.gateway import (
     GatewayInterviewer,
     ModelOutputError,
     check_credentials,
+    tracing_key,
 )
 from metis.wizard.application import prompts
 from metis.wizard.application.interviewer import (
@@ -141,7 +142,8 @@ def test_embeddings_are_optional_and_use_the_embedding_model(
     gateway = GatewayInterviewer(_client=client)
 
     assert gateway.embed(["text"]) == [[1.0]]
-    assert sent == {"model": "custom-embedding", "input": ["text"]}
+    assert sent["model"] == "custom-embedding"
+    assert sent["input"] == ["text"]
 
 
 def test_each_role_uses_its_own_gateway(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -663,7 +665,7 @@ def test_each_semantic_call_sends_one_complete_named_prompt() -> None:
 def test_an_unconfigured_interview_still_completes_a_call(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """With no Langfuse env (the conftest default), tracing self-disables and the call is
+    """With no internal Langfuse env (the conftest default), tracing is off and the call is
     unaffected — the interview never depends on a trace backend being reachable."""
     good = ClarifyResult(message="What does it do?", done=False).model_dump_json()
     model, completions = interviewer([good])
@@ -672,6 +674,62 @@ def test_an_unconfigured_interview_still_completes_a_call(
 
     assert result.message == "What does it do?"
     assert len(completions.calls) == 1
+
+
+TARGET_LANGFUSE = {
+    "LANGFUSE_PUBLIC_KEY": "pk-target",
+    "LANGFUSE_SECRET_KEY": "sk-target",
+    "LANGFUSE_BASE_URL": "https://target.example",
+}
+
+
+def test_tracing_uses_only_the_metis_internal_langfuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The client gets the internal keys explicitly, so the SDK never reads `LANGFUSE_*`, and
+    every model call names that client."""
+    from metis.wizard.adapters.llm import gateway
+
+    built: list[dict[str, object]] = []
+    monkeypatch.setattr(gateway, "Langfuse", lambda **kwargs: built.append(kwargs))
+    env = {
+        **TARGET_LANGFUSE,
+        "METIS_INTERNAL_LANGFUSE_PUBLIC_KEY": "pk-internal",
+        "METIS_INTERNAL_LANGFUSE_SECRET_KEY": "sk-internal",
+        "METIS_INTERNAL_LANGFUSE_BASE_URL": "https://internal.example",
+    }
+    good = ClarifyResult(message="What does it do?", done=False).model_dump_json()
+    completions = FakeCompletions(replies=[good])
+    model = GatewayInterviewer(
+        _client=FakeClient(completions=completions), _tracing_key=tracing_key(env)
+    )
+
+    model._ask(simple_prompt(), ClarifyResult)
+
+    assert built == [
+        {
+            "public_key": "pk-internal",
+            "secret_key": "sk-internal",
+            "base_url": "https://internal.example",
+        }
+    ]
+    assert completions.calls[0]["langfuse_public_key"] == "pk-internal"
+
+
+def test_the_target_langfuse_is_never_a_tracing_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without all three internal variables, tracing is off. The target's keys would put
+    Interview content in the target's project."""
+    from metis.wizard.adapters.llm import gateway
+
+    built: list[dict[str, object]] = []
+    monkeypatch.setattr(gateway, "Langfuse", lambda **kwargs: built.append(kwargs))
+
+    key = tracing_key(TARGET_LANGFUSE)
+
+    assert [client["tracing_enabled"] for client in built] == [False]
+    assert key not in TARGET_LANGFUSE.values()
 
 
 def test_the_gateway_builds_its_client_from_the_langfuse_drop_in() -> None:
