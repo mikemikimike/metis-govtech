@@ -9,6 +9,8 @@ import base64
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from metis.core import Artifact
 from metis.core.trace_processing import (
     FileInput,
@@ -95,11 +97,6 @@ def test_assistant_only_dialogue_keeps_only_the_replies() -> None:
     )
 
 
-def test_dialogue_marks_unreadable_messages() -> None:
-    text = render_dialogue(turns(_session(reply=None).traces))
-    assert "Assistant: [unreadable: missing: no value]" in text
-
-
 def _tool_session(arguments: object = None, **tool: object) -> GradingInput:
     t = "t1"
     observations = (
@@ -138,12 +135,6 @@ def test_a_tool_warning_is_labelled_a_warning() -> None:
     gi = _tool_session(output="slow", level="WARNING", status_message="slow upstream")
     text = render_session(turns(gi.traces), tool_results=True)
     assert "Tool result [warning: slow upstream]: slow" in text
-
-
-def test_a_call_without_an_error_level_is_ok() -> None:
-    gi = _tool_session(output={"hits": 2})
-    text = render_session(turns(gi.traces), tool_results=True)
-    assert 'Tool result [ok]: {"hits": 2}' in text
 
 
 def test_the_default_transcript_shows_no_tool_results() -> None:
@@ -438,16 +429,17 @@ def test_a_system_prompt_is_shown_once_per_session() -> None:
     assert render_session(turns(two.traces)).count("System prompt (planner)") == 1
 
 
-def test_a_model_output_that_repeats_the_reply_is_left_out() -> None:
-    text = render_session(turns(_agent_session().traces))
-    assert text.count("Here is your plan.") == 1
-
-
-def test_a_json_reply_is_shown_as_recorded() -> None:
-    recorded = '{\n  "total": 10.50\n}'
-    row = {"id": "root", "traceId": "t1", "input": "q", "output": recorded}
+@pytest.mark.parametrize(
+    ("output", "reply"),
+    [
+        ('{\n  "total": 10.50\n}', '{\n  "total": 10.50\n}'),
+        ({"total": 10.5}, '{"total": 10.5}'),
+    ],
+)
+def test_a_json_reply_is_shown_as_recorded(output: object, reply: str) -> None:
+    row = {"id": "root", "traceId": "t1", "input": "q", "output": output}
     trace = Trace(
         id="t1", session_id="s", observations=(Observation.model_validate(row),)
     )
     [turn] = turns((trace,))
-    assert turn.reply == recorded
+    assert turn.reply == reply

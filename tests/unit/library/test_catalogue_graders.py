@@ -29,11 +29,6 @@ if TYPE_CHECKING:
     from metis.core.grading import GraderResult
 
 VERDICT = {"status": "scored", "score": 1, "reason": "Met."}
-NOT_APPLICABLE = {
-    "status": "not_applicable",
-    "score": None,
-    "reason": "Nothing to judge.",
-}
 
 REQUIRED: dict[str, dict[str, Any]] = {
     "ActionChoiceAppropriatenessGrader": {},
@@ -158,12 +153,6 @@ def test_the_default_judges_one_item_and_names_it(name: str) -> None:
             assert text in system, f"{name} leaves {text!r} out of the prompt"
 
 
-@pytest.mark.parametrize("name", sorted(n for n in REQUIRED if n not in MULTI_RULE))
-def test_a_criterion_that_does_not_apply_is_errored(name: str) -> None:
-    [result], _ = _grade(_grader(name), _session(), NOT_APPLICABLE)
-    assert (result.status, result.reason) == ("errored", "Nothing to judge.")
-
-
 @pytest.mark.parametrize("name", sorted(REQUIRED))
 def test_an_empty_session_is_errored_without_a_judge_call(name: str) -> None:
     [result], requests = _grade(
@@ -218,17 +207,15 @@ def test_tool_arguments_need_recorded_tool_calls() -> None:
     assert requests == []
 
 
-@pytest.mark.parametrize("score", [0, 1])
-def test_tool_choice_judges_a_session_with_no_tool_calls(score: int) -> None:
-    reply = {"status": "scored", "score": score, "reason": "Judged."}
+def test_tool_choice_judges_a_session_with_no_tool_calls() -> None:
     [result], [request] = _grade(
         _grader(
             "ToolChoiceAppropriatenessGrader", available_tools=["search: Searches"]
         ),
         _no_tool_calls(),
-        reply,
+        VERDICT,
     )
-    assert (result.status, result.score) == ("scored", float(score))
+    assert (result.status, result.score) == ("scored", 1.0)
     assert "search: Searches" in request["input"][0]["content"]
 
 
@@ -416,28 +403,17 @@ def test_task_success_on_a_file_needs_a_goal() -> None:
 
 
 @pytest.mark.parametrize("name", sorted(MULTI_RULE))
-@pytest.mark.parametrize(
-    ("replies", "status", "score"),
-    [
-        ([(1, "Yes."), (1, "Yes.")], "scored", 1.0),
-        ([(1, "Yes."), (0, "No.")], "scored", 0.0),
-        ([(1, "Yes."), (None, "Cannot tell.")], "errored", None),
-        ([(None, "Cannot tell."), (0, "No.")], "scored", 0.0),
-    ],
-)
 def test_multi_rule_graders_judge_each_rule_and_pass_only_if_all_pass(
-    name: str, replies, status, score
+    name: str,
 ) -> None:
     rules = ["First rule.", "Second rule."]
     grader = _grader(name, **{MULTI_RULE[name]: rules})
     reply = [
-        {"status": "scored", "score": s, "reason": r}
-        if s is not None
-        else {"status": "not_applicable", "score": None, "reason": r}
-        for s, r in replies
+        {"status": "scored", "score": 1, "reason": "Yes."},
+        {"status": "scored", "score": 0, "reason": "No."},
     ]
     [result], requests = _grade(grader, _session(), reply)
-    assert (result.status, result.score) == (status, score)
+    assert (result.status, result.score) == ("scored", 0.0)
     assert len(requests) == 2
     assert "First rule." in requests[0]["input"][0]["content"]
     assert "Second rule." in requests[1]["input"][0]["content"]

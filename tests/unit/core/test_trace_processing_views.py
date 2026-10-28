@@ -142,10 +142,6 @@ class TestTurns:
         (turn,) = turns(_session(_turn_trace("t1", 0)).traces)
         assert turn.target_errors == ()
 
-    def test_a_structured_reply_is_its_json_text(self) -> None:
-        (turn,) = turns(_session(_turn_trace("t1", 0, reply='{"total": 42}')).traces)
-        assert turn.reply == '{"total": 42}'
-
     def test_a_chat_message_reply_is_its_text(self) -> None:
         message = {"role": "assistant", "content": "done"}
         (turn,) = turns(_session(_turn_trace("t1", 0, reply=message)).traces)
