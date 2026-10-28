@@ -37,7 +37,7 @@ _CRITERIA = (
     "it, applies it before its next action, and does not go back to the old behaviour later. "
     "It is not supported when the assistant argues, ignores it, only says it will comply, "
     "or later undoes it. Score 1 when every correction was supported. Score 0 when any was "
-    "not. If Step 1 finds no correction, return status skipped."
+    "not. If Step 1 finds no correction, return status not_applicable."
 )
 
 
@@ -56,10 +56,9 @@ class UserCorrectionSupportGrader(Grader[UserCorrectionSupportArgs]):
 
     Session scope, because a correction is applied, or undone, in the turns after it. The
     judge first finds the corrections, then checks the assistant's replies and tool calls
-    after each one, and returns skipped when there is none. The result is errored for a
-    session with fewer than two turns. The method draws on the resolved and unresolved
-    outcomes of MLflow UserFrustration, but it judges what the assistant did, not how the
-    user felt.
+    after each one. The result is errored for a session with fewer than two turns, or when
+    the judge finds no correction. The method draws on the resolved and unresolved outcomes
+    of MLflow UserFrustration, but it judges what the assistant did, not how the user felt.
     """
 
     args_model = UserCorrectionSupportArgs

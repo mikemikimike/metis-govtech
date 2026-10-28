@@ -32,7 +32,7 @@ _CRITERIA = (
     "and act on it, without burying it in method the user did not ask for. Score 1 when the "
     "explanations help the user understand and act. Score 0 when an explanation the user "
     "needed is missing, only restates the result, is too vague to check, or leaves out the "
-    "reason. If there is no explanation and none was needed, return status skipped."
+    "reason. If there is no explanation and none was needed, return status not_applicable."
 )
 
 
@@ -45,7 +45,7 @@ class ExplanationUsefulnessGrader(Grader[ExplanationUsefulnessArgs]):
 
     At session scope, by default, one verdict, because one explanation can span several
     turns. At subsession scope, one verdict for each reply, judged with the turns before it.
-    Either way the judge returns skipped when there is no explanation and none was needed.
+    Either way the result is errored when there is no explanation and none was needed.
     """
 
     args_model = ExplanationUsefulnessArgs

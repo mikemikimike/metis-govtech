@@ -279,6 +279,17 @@ def test_transparency_shows_each_call_with_its_status_and_a_cut_result() -> None
 
 
 @pytest.mark.parametrize(
+    "grader_cls", [ExplanationUsefulnessGrader, UserCorrectionSupportGrader]
+)
+def test_a_session_without_the_event_is_errored(grader_cls) -> None:
+    reply = {"status": "not_applicable", "score": None, "reason": "None found."}
+    [result], _ = grade(grader_cls, two_turn_session(), reply)
+
+    assert (result.status, result.reason) == ("errored", "None found.")
+    assert "return status not_applicable" in criteria_sent(grader_cls)
+
+
+@pytest.mark.parametrize(
     ("grader_cls", "gi", "reason"),
     [
         (RelevanceGrader, GradingInput(traces=()), "no turns"),
