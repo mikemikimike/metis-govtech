@@ -12,6 +12,8 @@ const Spinner = () => <svg className="wt-spin" viewBox="0 0 24 24" aria-hidden="
 
 const GITHUB_URL = 'https://github.com/govtech-responsibleai/metis';
 const DOCS_URL = 'https://govtech-responsibleai.github.io/metis/';
+const FULL_NAME = 'Measurement and Evaluation of Trustworthy Intelligent Systems';
+const INSTALL_CMD = 'git clone https://github.com/govtech-responsibleai/metis.git && cd metis && make install';
 const IC_WIZARD = 'https://img.icons8.com/?size=100&id=36868&format=png&color=9B7520';
 const IC_USER = 'https://img.icons8.com/?size=100&id=23264&format=png&color=5C6569';
 const IC_BOT_ROSE = 'https://img.icons8.com/?size=100&id=lUk2otclIHsF&format=png&color=AB596A';
@@ -131,6 +133,29 @@ function useTimer(active: boolean, max = 72) {
 }
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
+/* Keep the newest shown message in view inside a height-capped chat. Scrolls only the chat,
+   never the page. `key` changes whenever another message appears. */
+function useFollowLatest(ref: React.RefObject<HTMLDivElement | null>, key: unknown) {
+  // Fade the top edge once earlier messages are scrolled out of view.
+  useEffect(() => {
+    const box = ref.current;
+    if (!box) return;
+    const onScroll = () => box.classList.toggle('scrolled', box.scrollTop > 4);
+    box.addEventListener('scroll', onScroll, { passive: true });
+    return () => box.removeEventListener('scroll', onScroll);
+  }, [ref]);
+
+  useEffect(() => {
+    const box = ref.current;
+    if (!box || box.scrollHeight <= box.clientHeight) return;
+    const shown = box.querySelectorAll<HTMLElement>('.wt-msg.show');
+    const last = shown[shown.length - 1];
+    if (!last) return;
+    const top = Math.max(0, last.offsetTop + last.offsetHeight - box.clientHeight + 8);
+    box.scrollTo({ top, behavior: noMotion() ? 'auto' : 'smooth' });
+  }, [ref, key]);
+}
+
 /* Pipeline: 0=idle, 1=interaction, 2=trace, 3=grading, 4=done */
 function usePipeline(active: boolean) {
   const [phase, setPhase] = useState(() => noMotion() ? 4 : 0);
@@ -161,6 +186,89 @@ function usePipeline(active: boolean) {
   return { phase, gradersDone, replay };
 }
 
+/* ── Hero card stack ── */
+/* `fit: 'contain'` letterboxes very wide shots on `bg`, which matches the image's own background. */
+const productShots = [
+  { src: '/product/wizard-web.webp', label: 'Wizard · Web app', tab: 'Wizard app', alt: 'METIS Wizard web app: an interview beside the specification of features and expected behaviours' },
+  { src: '/product/wizard-tui.webp', label: 'Wizard · Terminal', tab: 'Wizard CLI', alt: 'METIS Wizard in the terminal, selecting the capabilities of the target' },
+  { src: '/product/engine-tui.webp', label: 'Engine · Terminal', tab: 'Engine', alt: 'METIS Engine terminal dashboard simulating three scenarios in parallel', fit: 'contain', bg: '#171629' },
+  { src: '/product/insights-dashboard.webp', label: 'Insights · Results', tab: 'Results', alt: 'METIS Insights report: specification results tree with a selected criterion', fit: 'contain', bg: '#ffffff' },
+  { src: '/product/insights-detail.webp', label: 'Insights · Trials', tab: 'Trials', alt: 'METIS Insights report: pass rates per criterion and the trial-by-criterion grid' },
+];
+const STACK_DEPTH = 3;
+
+function HeroStack() {
+  const [front, setFront] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const n = productShots.length;
+
+  useEffect(() => {
+    if (paused || noMotion()) return;
+    const t = setInterval(() => setFront((i) => (i + 1) % n), 4000);
+    return () => clearInterval(t);
+  }, [paused, n]);
+
+  return (
+    <div className="hero-stack" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)} onBlur={() => setPaused(false)}>
+      <div className="stack-cards">
+        {productShots.map((shot, i) => {
+          const depth = (i - front + n) % n;
+          return (
+            <figure key={shot.src} className={`stack-card depth-${depth < STACK_DEPTH ? depth : 'hidden'}`} aria-hidden={depth !== 0}
+              style={{ zIndex: n - depth, background: shot.bg }}>
+              <span className="stack-chip">{shot.label}</span>
+              <img src={shot.src} alt={shot.alt} className={shot.fit === 'contain' ? 'contain' : ''} loading={i < 2 ? 'eager' : 'lazy'} />
+            </figure>
+          );
+        })}
+      </div>
+      <div className="stack-tabs" role="group" aria-label="Product screenshots">
+        {productShots.map((shot, i) => (
+          <button key={shot.src} type="button" aria-pressed={i === front} aria-label={shot.label} onClick={() => setFront(i)}>{shot.tab}</button>
+        ))}
+      </div>
+      <span className="sr-only" aria-live="polite">{productShots[front].label}</span>
+    </div>
+  );
+}
+
+/* ── Install command ── */
+function CopyCommand({ command }: { command: string }) {
+  const [copied, setCopied] = useState(false);
+  const codeRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(t);
+  }, [copied]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+    } catch {
+      // Without clipboard access, select the text and try the older copy command; if that
+      // fails too, the selection stays so the user can copy it themselves.
+      const range = document.createRange();
+      if (codeRef.current) range.selectNodeContents(codeRef.current);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+      if (document.execCommand('copy')) setCopied(true);
+    }
+  };
+
+  return (
+    <div className="cta-install">
+      <div className="cta-install-head"><span>Quickstart</span>
+        <button type="button" onClick={copy}>{copied ? <><Check /> Copied</> : 'Copy'}</button>
+      </div>
+      <pre><span aria-hidden="true">$ </span><code ref={codeRef}>{command}</code></pre>
+    </div>
+  );
+}
+
 /* ── App ── */
 export default function App() {
   const [vis, setVis] = useState<Set<number>>(() => new Set());
@@ -171,6 +279,8 @@ export default function App() {
   const wizStarted = useRef(false);
   const wizTimers = useRef<number[]>([]);
   const wizChat = useSequence(wizMsgs.length - 2, wizPhase === 'chat' || wizPhase === 'done', 1500);
+  const wizChatRef = useRef<HTMLDivElement>(null);
+  const engChatRef = useRef<HTMLDivElement>(null);
 
   // Engine
   const engStep = useSequence(engStepMap.length, vis.has(1), 1200);
@@ -264,23 +374,34 @@ export default function App() {
     return p === 'chat' && wizChat.n >= i - 1;
   };
   const wizMsgIsThinking = (i: number) => wizPhase === 'thinking' && i === 2;
+  const wizShown = wizMsgs.filter((_, i) => wizMsgVisible(i)).length;
+  useFollowLatest(wizChatRef, `${wizShown}-${wizPhase}`);
+  useFollowLatest(engChatRef, engVisChat.size);
 
   return (
     <div className="site-shell">
+      <header className="site-header">
+        <div className="container header-inner">
+          <a className="header-brand" href="#top" aria-label="METIS home">
+            <img src="/metis-logo.png" alt="" />
+            <strong>METIS</strong>
+            <span>{FULL_NAME}</span>
+          </a>
+          <a className="button secondary header-github" href={GITHUB_URL}><Github /> GitHub</a>
+        </div>
+      </header>
+
       <main id="top">
         <section className="hero container">
           <div className="hero-copy">
-            <img src="/metis-logo.png" alt="METIS" className="hero-logo" />
-            <h1 className="hero-name">METIS</h1>
-            <span className="hero-full-name">Measurement and Evaluation of Trustworthy Intelligent Systems</span>
-            <div className="eyebrow">Specifications-driven evaluation</div>
-            <p className="hero-tagline">Test your AI agents against <em>what they should actually do.</em></p>
+            <h1>Test your AI agents against <em>what they should actually do.</em></h1>
             <p className="hero-lede">Most evaluation tools score an agent's final answer. METIS evaluates the full trajectory — every decision, tool call, and recovery — against structured specifications.</p>
             <div className="hero-actions">
               <a className="button primary" href={GITHUB_URL}><Github /> View on GitHub</a>
               <a className="button secondary" href={DOCS_URL}>Read the docs <Arrow /></a>
             </div>
           </div>
+          <HeroStack />
         </section>
 
         <section className="methodology" id="methodology"><div className="container">
@@ -315,7 +436,7 @@ export default function App() {
               </div>
               <div className="wt-wizard-layout">
                 <div className="wt-wizard-left">
-                  <div className="wt-chat">
+                  <div className="wt-chat capped" ref={wizChatRef}>
                     {wizMsgs.map((m, i) => (
                       <div className={`wt-msg ${m.role} ${wizMsgVisible(i) ? 'show' : ''}`} key={i}>
                         <div className="wt-msg-head">
@@ -383,7 +504,7 @@ export default function App() {
                 </div>
               </div>
               <div className="wt-scenario-banner"><span className="wt-banner-tag">SCENARIO</span><strong>Draft a reply using a past event record</strong><span className="wt-banner-meta">persona: collaborative knowledge worker</span></div>
-              <div className="wt-chat compact">
+              <div className="wt-chat compact capped" ref={engChatRef}>
                 {engMsgs.map((m, i) => (
                   <div className={`wt-msg ${m.role} ${engVisChat.has(i) ? 'show' : ''}`} key={i}>
                     <div className="wt-msg-head"><img src={m.role === 'user' ? IC_BOT_ROSE : IC_BOT_BLUE} alt="" className="wt-msg-icon" /><span className="wt-msg-role">{m.role === 'user' ? 'Simulated user' : 'Enterprise AI Assistant'}</span></div>
@@ -514,6 +635,21 @@ export default function App() {
           </div>
         </div></section>
 
+        <section className="cta-section" id="get-started"><div className="container">
+          <div className="cta-panel">
+            <div className="cta-copy">
+              <div className="section-kicker">OPEN SOURCE · MIT LICENSE</div>
+              <h2>Start evaluating with confidence.</h2>
+              <p>Define what your agent should do, test the full trajectory, and know exactly what to fix before you ship.</p>
+              <div className="cta-actions">
+                <a className="button primary" href={GITHUB_URL}><Github /> View on GitHub</a>
+                <a className="button secondary" href={DOCS_URL}>Read the docs <Arrow /></a>
+              </div>
+            </div>
+            <CopyCommand command={INSTALL_CMD} />
+          </div>
+        </div></section>
+
       </main>
 
       <footer>
@@ -522,6 +658,7 @@ export default function App() {
             <img src="/metis-logo.png" alt="" className="footer-logo" />
             <div>
               <strong className="footer-name">METIS</strong>
+              <span className="footer-full-name">{FULL_NAME}</span>
               <span className="footer-tagline">Specifications in, confidence out.</span>
             </div>
           </div>
