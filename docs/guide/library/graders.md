@@ -175,6 +175,12 @@ Do not read trace or observation fields in a grader. Use `metis.core.trace_proce
 - `find_artifacts` and `find_fixtures` give the records of the files that the target produced
   and the files that the user gave the target.
 
+The render function of a scope gives `render_session` with tool results. A grader whose
+measure needs other evidence calls its own render function in `grade()`, in place of
+`scope.render`. For example, `ToneAppropriatenessGrader` judges only what the user reads, so
+it uses `render_dialogue`. `OutputNaturalnessGrader` uses
+`render_dialogue(turns, assistant_only=True)`, because it judges only the replies.
+
 If a grader needs a view that does not exist, add it to `trace_processing.py` with tests in
 `tests/unit/core/`. Do not build it in the grader.
 
@@ -188,7 +194,7 @@ The `taxonomy` declaration describes the grader with one vocabulary. It has six 
 | Field | Meaning | Most graders |
 |---|---|---|
 | `measure` | The property that the grader assesses. | One `Measure` value, such as `OUTPUT_CORRECTNESS` |
-| `scopes` | The parts of a session that it can judge. | `TRACE` and `ARTIFACT`, or `SESSION` |
+| `scopes` | The parts of a session that it can judge. | `TRACE` and `ARTIFACT`, `SESSION`, or `SESSION` and `SUBSESSION` |
 | `grader_types` | How it judges. | `LLM` |
 | `reference_types` | What it judges against. | `RUBRIC_BASED` or `EXPECTED_OUTPUT` |
 | `judgment_forms` | The form of the result. | `BINARY` |
@@ -247,6 +253,9 @@ measure that, compare its results with human labels on representative sessions.
 | `TaskConstraintAdherenceGrader` | Several rules combined by `pass_if_all` |
 | `ClaimSupportByEvidenceGrader` | Output against sources |
 | `FormatSchemaComplianceGrader` | A check in code before the judge call, and `check_setup()` |
+| `RelevanceGrader` | `SESSION` by default, or `SUBSESSION` for one result for each turn |
+| `ToneAppropriatenessGrader` | Its own render function, `render_dialogue` |
+| `ActionStatusTransparencyGrader` | An errored result before the judge call when the evidence is missing |
 | `demo.DemoTraceBudgetGrader` | A deterministic grader with no judge call |
 | `CriterionJudgeGrader` | The fallback judge, with `measure=None`. See the [Criterion Judge guide](criterionjudge.md). |
 

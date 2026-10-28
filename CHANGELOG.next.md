@@ -310,11 +310,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `conventions` (naturalness) (#451).
 
 - Three Interaction Quality graders adapt their judge prompts from open-source evaluation
-  prompts: `RelevanceGrader` from DeepEval turn relevancy, the padding check of
-  `CommunicationClarityGrader` from Arize Phoenix conciseness, and
-  `UserCorrectionSupportGrader` from Arize Phoenix user friction. Each module docstring names
-  the source file, the pinned commit, the license and the METIS changes, and
-  `metis/library/EXTERNAL_SOURCES.md` gives the copyright notices and license texts (#451).
+  prompts: `RelevanceGrader` from DeepEval Turn Relevancy, the padding check of
+  `CommunicationClarityGrader` from Arize Phoenix `conciseness`, and
+  `UserCorrectionSupportGrader` from Arize Phoenix `user_friction`. Each module docstring
+  names the source file, the pinned commit, the license and the METIS changes, and
+  `metis/library/EXTERNAL_SOURCES.md` gives the copyright notices and license texts.
+  `metis/library/graders/README.md` lists the nine graders under Interaction Quality (#451).
 
 - Shared definitions for grading: `SCOPE_DEFINITIONS` in `metis.library.scope` (trace,
   subsession, session and artifact), `JUDGMENT_FORM_DEFINITIONS` in `metis.library.judgment_form`

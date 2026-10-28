@@ -47,6 +47,20 @@ for METIS.
 | `ReasoningValidityGrader` | METIS |
 | `CoordinationQualityGrader` | METIS |
 
+## Interaction Quality
+
+| Grader | Adapted from |
+|---|---|
+| `RelevanceGrader` | [DeepEval Turn Relevancy](https://github.com/confident-ai/deepeval/blob/d6cd78ac44da4623ff07c73310dfca474c212068/deepeval/metrics/turn_relevancy/templates/generate_verdicts.txt) |
+| `CommunicationClarityGrader` | [Phoenix conciseness](https://github.com/Arize-ai/phoenix/blob/d5f5e054756e98d05172a1651c6ffa3fc6f2ff27/js/packages/phoenix-evals/src/__generated__/default_templates/CONCISENESS_CLASSIFICATION_EVALUATOR_CONFIG.ts), for the padding check only |
+| `CrossTurnCoherenceGrader` | METIS |
+| `ClarificationAppropriatenessGrader` | METIS |
+| `UserCorrectionSupportGrader` | [Phoenix user_friction](https://github.com/Arize-ai/phoenix/blob/d5f5e054756e98d05172a1651c6ffa3fc6f2ff27/js/packages/phoenix-evals/src/__generated__/default_templates/USER_FRICTION_CLASSIFICATION_EVALUATOR_CONFIG.ts) |
+| `ActionStatusTransparencyGrader` | METIS |
+| `ExplanationUsefulnessGrader` | METIS |
+| `ToneAppropriatenessGrader` | METIS |
+| `OutputNaturalnessGrader` | METIS |
+
 ## Fallback judge
 
 `CriterionJudgeGrader` has no measure. It uses the criterion description as its rubric. The
