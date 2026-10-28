@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
+import structlog.testing
 
 from metis.core.trials import TrialConfig
 from metis.engine.simulation._fixture_artifacts import build_fixture_artifacts
@@ -47,6 +48,8 @@ class Target:
             return httpx.Response(201, json={"sessionId": "s-1", "reply": "hi"})
         if path == "/api/v1/files":
             return httpx.Response(200, json={"fileId": "f-1"})
+        if path == "/api/v1/sessions":
+            return httpx.Response(201, json={"session_id": "s-2", "messages": []})
         if path == "/api/v1/limited" and self.limited:
             self.limited -= 1
             return httpx.Response(429, headers={"retry-after": self.retry_after})
@@ -350,36 +353,63 @@ async def test_the_bindings_submissions_replace_the_default_rule(
 
 
 @pytest.mark.asyncio
-async def test_the_session_id_comes_only_from_a_submissions_reply(
-    tmp_path: Path,
-) -> None:
+async def test_the_session_id_comes_from_a_submissions_reply(tmp_path: Path) -> None:
     runner, _ = await _ready(tmp_path)
     runner.begin_action("Say ⟦hi⟧")
     chat = await runner.http_request("POST", "/chat", json={"m": "{{1}}"})
-    other = await runner.http_request("GET", "/files")
-
-    with pytest.raises(PointerError, match="not one of the entries"):
-        runner.record_session_id(Pointer(other["response_entry"], "$.ok"))
-    assert runner.session_id is None
 
     runner.record_session_id(Pointer(chat["response_entry"], "$.sessionId"))
     assert runner.session_id == "s-1"
 
 
 @pytest.mark.asyncio
-async def test_a_file_id_from_an_upload_is_not_a_session_id(tmp_path: Path) -> None:
-    runner, target = await _ready(tmp_path)
-    runner.begin_action("Attach ⟦notes.txt⟧")
-
-    upload = await runner.http_request(
-        "POST", "/files", multipart={"file": "@notes.txt"}
+async def test_the_session_id_may_come_from_the_call_that_opens_the_session(
+    tmp_path: Path,
+) -> None:
+    """A two-step target gives the ID before any message is sent (#543)."""
+    runner, _ = await _ready(
+        tmp_path, extra="submissions: ['POST /api/v1/sessions/*/messages']\n"
     )
+    runner.begin_action("Say ⟦hi⟧")
+    opened = await runner.http_request("POST", "/sessions", json={})
 
-    assert b"hello notes" in target.sent("/api/v1/files")[0].content
-    with pytest.raises(PointerError):
-        runner.record_session_id(Pointer(upload["response_entry"], "$.fileId"))
-    assert runner.session_id is None
     assert runner.open_submission is None
+    runner.record_session_id(Pointer(opened["response_entry"], "$.session_id"))
+    assert runner.session_id == "s-2"
+
+    runner.begin_action("Say ⟦more⟧")
+    with pytest.raises(PointerError, match="not one of the entries"):
+        runner.record_session_id(Pointer(opened["response_entry"], "$.session_id"))
+
+
+@pytest.mark.asyncio
+async def test_a_session_wildcard_submits_only_the_message_call(tmp_path: Path) -> None:
+    runner, _ = await _ready(
+        tmp_path, extra="submissions: ['POST /sessions/*/messages']\n"
+    )
+    runner.begin_action("Say ⟦hi⟧")
+
+    await runner.http_request("POST", "/sessions", json={})
+    assert runner.open_submission is None
+
+    await runner.http_request("POST", "/sessions/s-2/messages", json={"m": "{{1}}"})
+    assert runner.open_submission is not None
+
+
+@pytest.mark.asyncio
+async def test_recording_the_session_id_is_logged(tmp_path: Path) -> None:
+    runner, _ = await _ready(tmp_path)
+    runner.begin_action("Say ⟦hi⟧")
+    chat = await runner.http_request("POST", "/chat", json={"m": "{{1}}"})
+
+    with structlog.testing.capture_logs() as logs:
+        runner.record_session_id(Pointer(chat["response_entry"], "$.sessionId"))
+
+    found = [e for e in logs if e["event"] == "session_id_found"]
+    assert len(found) == 1
+    assert found[0]["session_id"] == "s-1"
+    assert found[0]["entry"] == chat["response_entry"]
+    assert found[0]["log_level"] == "info"
 
 
 # --- the factory ----------------------------------------------------------------------

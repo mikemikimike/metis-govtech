@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from metis.core import Artifact, resolve_artifact_path
 from metis.core.logging import get_logger
+from metis.engine.tracing import traced
 
 from .._fixture_artifacts import build_fixture_artifacts
 from .._hashing import sha256_file
@@ -229,17 +230,24 @@ async def resolve_fixture_descriptions(
     map is threaded into every per-run :func:`build_fixture_artifacts` call, so no
     run re-summarizes. Names absent from the map (missing/unreadable on disk) are
     simply omitted. Never raises into the caller. The summaries' LLM calls go to
-    the experiment's ``logs/llm_calls.jsonl``, since they belong to no one trial.
+    the experiment's ``logs/llm_calls.jsonl``, since they belong to no one trial,
+    and to one ``fixture_descriptions`` trace in the experiment's Langfuse session.
     """
     unique_names = sorted(set(fixture_names))
     artifacts = build_fixture_artifacts(
         unique_names, fixtures_dir, experiment_root, author_descriptions
     )
-    await summarize_fixture_artifacts(
-        artifacts,
-        experiment_root,
-        llm_log=LLMCallLog.for_experiment(experiment_root),
-        settings=user_agent_settings(user_agent_model),
+    experiment = experiment_root.resolve().name
+    await traced(
+        lambda: summarize_fixture_artifacts(
+            artifacts,
+            experiment_root,
+            llm_log=LLMCallLog.for_experiment(experiment_root),
+            settings=user_agent_settings(user_agent_model),
+        ),
+        name="fixture_descriptions",
+        session_id=experiment,
+        metadata={"experiment": experiment},
     )
     return {
         a.name: a.content_description

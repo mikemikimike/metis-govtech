@@ -60,6 +60,8 @@ MAX_FILES_PER_LISTING = 100
 """A conversation does not produce more files than this; a bigger listing is not its own."""
 POLL_INTERVAL = 5.0
 """Seconds between polls; the binding and ``TrialConfig`` have no field for it."""
+REJECTION_EXCERPT = 200
+"""How much of a refusing response's body the user agent is shown."""
 MAX_ROUNDS = 12
 """Most LLM rounds one action may take."""
 ACT_MARGIN = 60.0
@@ -70,13 +72,18 @@ _now = time.monotonic
 
 @dataclass(frozen=True)
 class OpenSubmission:
-    """A submission the target accepted and nothing has settled yet (``poll_until`` settles it)."""
+    """A submission the target accepted and nothing has settled yet.
+
+    ``poll_until`` settles it, or a ``report`` that cites its own 200 or 201 response.
+    """
 
     request: str
     """The transport-log entry of the request."""
     response: str
     """The entry of the response that accepted it."""
     turn: int
+    status: int | None = None
+    """The status of that response, when the runner knows it."""
 
 
 @dataclass(frozen=True)
@@ -86,6 +93,17 @@ class Unresolved:
     submission: OpenSubmission
     response: str
     """The entry of the response that showed the failure."""
+
+
+@dataclass(frozen=True)
+class Rejected:
+    """A submission the target refused: its response was not a 2xx."""
+
+    response: str
+    """The entry of the refusing response."""
+    status: int
+    excerpt: str
+    """The start of the response body, copied from the transport log."""
 
 
 class HttpRunner(Runner):
@@ -118,6 +136,7 @@ class HttpRunner(Runner):
         )
         self._turn = 0
         self._session_id: str | None = None
+        self._action_start = 0
         self.spans = Spans.of("")
         self.spec_entry = ""
         """The log entry holding the specification: the target's description, not an answer."""
@@ -129,9 +148,12 @@ class HttpRunner(Runner):
         """Response entries that accepted a submission. #525 uses them to tell this
         conversation's listings from an account-wide one."""
         self.open_submission: OpenSubmission | None = None
-        """The accepted submission nothing has settled yet; ``poll_until`` clears it."""
+        """The accepted submission nothing has settled yet; ``poll_until`` clears it, and
+        so does ``settle_by_reply``."""
         self.unresolved: Unresolved | None = None
         """Set by a 4xx during a poll while a submission was open; a timeout leaves it open."""
+        self.rejected: Rejected | None = None
+        """Set when a submission got a non-2xx response; ``_observation`` reads it once."""
         self.notes: list[str] = []
         """What the agent learned about the target, shown again in each later action."""
 
@@ -185,15 +207,23 @@ class HttpRunner(Runner):
     def begin_action(self, action: str) -> None:
         """Start a turn: number the action's quoted spans. ``act`` calls this first."""
         self._turn += 1
+        self._action_start = len(self.results)
         self.spans = Spans.of(action)
 
     def record_session_id(self, pointer: Pointer) -> None:
-        """Copy the session ID from a submission's response, and from nothing else.
+        """Copy the session ID from a submission's response or from this action's calls.
+
+        A target that opens its session before any message shows the ID in a call that
+        is not a submission, so the action's own results are citable too.
 
         :raises PointerError: When the pointer does not lead to such a response.
         """
-        value, _ = resolve(pointer, self._log, allowed=self.answers)
+        allowed = [*self.answers, *self.results[self._action_start :]]
+        value, _ = resolve(pointer, self._log, allowed=allowed)
         self._session_id = str(value)
+        logger.info(
+            "session_id_found", session_id=self._session_id, entry=pointer.entry
+        )
 
     async def http_request(
         self,
@@ -248,8 +278,16 @@ class HttpRunner(Runner):
         request_id = self._log.get(response_id).pairs_with or ""
         self.results.append(response_id)
         if submission and response.is_success:
-            self.open_submission = OpenSubmission(request_id, response_id, self._turn)
+            self.open_submission = OpenSubmission(
+                request_id, response_id, self._turn, response.status_code
+            )
             self.answers.append(response_id)
+        elif submission:
+            self.rejected = Rejected(
+                response_id,
+                response.status_code,
+                " ".join(_preview(response).split())[:REJECTION_EXCERPT],
+            )
         reply: dict[str, Any] = {
             "request_entry": request_id,
             "response_entry": response_id,
@@ -267,6 +305,24 @@ class HttpRunner(Runner):
                 )
                 reply["file_id"] = str(value)
         return reply
+
+    def settle_by_reply(self, entry: str) -> bool:
+        """Close the open submission if ``entry`` is its own 200 or 201 response.
+
+        A target that answers inside the submission response has nothing to poll, and the
+        response holds the reply, so the reply the agent cites from it is the evidence that
+        the exchange is done. A 202 means the reply comes later, so it stays open.
+        """
+        opened = self.open_submission
+        if (
+            opened is None
+            or entry != opened.response
+            or opened.status not in (200, 201)
+        ):
+            return False
+        self.open_submission = None
+        logger.info("submission_settled_by_reply", entry=entry)
+        return True
 
     async def poll_until(
         self,
@@ -647,6 +703,12 @@ class HttpRunner(Runner):
             notices.append(
                 f"A submission ({unresolved.submission.request}) never settled: the "
                 f"target answered the poll with a failure ({unresolved.response})."
+            )
+        if (rejected := self.rejected) is not None:
+            self.rejected = None  # read once, like ``unresolved``
+            notices.append(
+                f"Your message got an error response (status {rejected.status}): "
+                f"{rejected.excerpt}"
             )
         if self.open_submission is not None:
             notices.append(

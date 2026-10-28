@@ -370,6 +370,23 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- **The engine traces its own model calls to the METIS-internal Langfuse (#162).** When
+  `METIS_INTERNAL_LANGFUSE_PUBLIC_KEY`, `METIS_INTERNAL_LANGFUSE_SECRET_KEY` and
+  `METIS_INTERNAL_LANGFUSE_BASE_URL` are all set, `metis engine simulate` and
+  `metis engine evaluate` record the prompt, the raw reply, the model, the token counts and the
+  latency of each call. Each trial attempt is one trace, named `<task> x <persona> #<trial>`.
+  It holds the user agent, artifact summarizer and runner agent calls, with the experiment,
+  scenario, task, persona, trial and attempt as metadata. Each grader run is one trace, named
+  by its criterion, that holds the judge calls of the grader. Its output is the status, score
+  and reason of each result, so a code grader's trace shows its decision too. A trial's simulation and grading
+  traces share one Langfuse session, `<experiment folder>/<task>/<persona>/<trial>`. The
+  fixture summaries of gen_1 are one trace in the session of the experiment folder. Tracing is
+  off when a variable is missing. The engine never traces to the `LANGFUSE_*` project, which
+  it reads the target's traces from. Simulation and grading results do not change when
+  tracing is off or Langfuse is unreachable. `metis-engine` now requires `langfuse>=3.0,<4.0`.
+  `metis.core.model_settings.METIS_INTERNAL_LANGFUSE_VARS` names the three variables for the
+  wizard and the engine.
+
 - **The simulated user receives persona and scenario metadata (#442).** The gen_1 and gen_2
   user agents add each `metadata` entry to the persona or scenario description in the system
   prompt, as a `- key: value` line with the key as written. The Engine reads no key as a
@@ -449,7 +466,16 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   is refused. A submission (a call matching `submissions`, else any `POST`, `PUT` or `PATCH`
   with a JSON body) is refused when the action quoted nothing or another is still open; the
   runner exposes the open one and the responses that answered a submission, and takes the
-  session ID only from such a response. `HttpRunnerFactory.start` opens the HTTP transport
+  session ID from such a response or from a result logged during the current action, so a
+  target that opens its session before any message (the toy app's `POST /sessions`) can have
+  its ID recorded (#543). A submission answered inside its own 200 or 201 response settles when
+  the agent's `report` cites that response in `reply_from` (`HttpRunner.settle_by_reply`), since a
+  target like that has no field to poll; a 202 stays open, because its reply comes later (#587).
+  A submission the target answers with a non-2xx status is never opened, and the user agent is
+  told so: `Observation.notice` carries the status and the first 200 characters of the response
+  body, copied from the transport log, and the orchestrator's per-turn log line shows the notice
+  beside `reply`. The user agent's prompt says an error status need not be the assistant's fault (#545).
+  `HttpRunnerFactory.start` opens the HTTP transport
   (honouring `tls_verify`) and `close` closes it. A binding file that is not UTF-8 gives a clear
   `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is
   fetched.
@@ -593,6 +619,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   at import time.
 
 #### Changed
+
+- **`metis engine simulate`/`run` default `--concurrency` to `1`.** Omitting the flag now runs
+  trials sequentially instead of with 5 parallel workers.
 
 - **`packages/engine/examples/` holds only the `gen_1-orca_api-1/` example.** The complete Orca
   specification, its fixtures, and the sample report are removed from it: the specification and

@@ -37,6 +37,17 @@ ENV_FILE_VAR = "METIS_ENV_FILE"
 
 SHARED_PREFIX = "OPENAI"
 
+METIS_INTERNAL_LANGFUSE_VARS = (
+    "METIS_INTERNAL_LANGFUSE_PUBLIC_KEY",
+    "METIS_INTERNAL_LANGFUSE_SECRET_KEY",
+    "METIS_INTERNAL_LANGFUSE_BASE_URL",
+)
+"""The METIS-internal Langfuse, where the wizard and the engine trace their own model calls.
+
+Tracing is on only when all three are set. There is no fallback to ``LANGFUSE_*``, which names
+the Langfuse of the system under test.
+"""
+
 
 def default_model(env: Mapping[str, str]) -> str:
     """The model of every chat role that has no model of its own: ``DEFAULT_MODEL``, else
@@ -306,6 +317,7 @@ def load_env(cwd: Path | None = None) -> Path | None:
 
 __all__ = [
     "ENV_FILE_VAR",
+    "METIS_INTERNAL_LANGFUSE_VARS",
     "MODEL_GUIDE",
     "ROLES",
     "ModelRole",

@@ -24,8 +24,10 @@ and the notes about it, then do it, look at the result, and report.
 ## How to work
 
 1. Read the action, the file list, the open submission and your notes.
-2. If a submission is open, it must settle before a new one can be sent. Settle it with \
-`poll_until`.
+2. If a submission is open, it must settle before a new one can be sent. If the target \
+answers inside the submission's own response (a 200 or 201 that holds the reply), there is \
+nothing to poll: read that reply and cite it in `report.reply_from`, and code settles the \
+submission. A 202 means the reply comes later, so settle that one with `poll_until`.
 3. Call `operation` to read an endpoint's definition before you use it: you are shown \
 only an index of the specification, and `operation` sends nothing to the target. Then do \
 the action with the tools, one step at a time, and read each result before the \
@@ -78,7 +80,8 @@ during this action. Leave it out if the target gave no reply.
 ## The session
 
 As soon as the target's session exists, call `session_id_from` once, pointing at the \
-reply to your submission where the target shows its session ID. Reuse that session for \
+reply where the target shows its session ID: the reply to your submission, or the reply \
+to the call that opened the session during this action. Reuse that session for \
 every later action; never start a second one.
 
 ## Reporting
@@ -157,7 +160,8 @@ def first_message(
     )
     opened = (
         f"OPEN: {open_submission} It has not settled. Settle it before anything else; "
-        "no new submission can be sent until it does."
+        "no new submission can be sent until it does. A reply already in its own "
+        "response settles it when your report cites it."
         if open_submission
         else "none open"
     )

@@ -50,7 +50,8 @@ Set Langfuse and OpenAI credentials, plus the credentials for your selected Orca
 
 | Group | Variables | Purpose |
 |-------|-----------|---------|
-| Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | The Langfuse of the system under test. The engine reads the target's traces from it. The wizard traces to a separate METIS-internal Langfuse (`METIS_INTERNAL_LANGFUSE_*`). |
+| Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | The Langfuse of the system under test. The engine reads the target's traces from it. The engine never traces its own model calls there. |
+| METIS-internal Langfuse (optional) | `METIS_INTERNAL_LANGFUSE_PUBLIC_KEY`, `METIS_INTERNAL_LANGFUSE_SECRET_KEY`, `METIS_INTERNAL_LANGFUSE_BASE_URL` | Where the engine and the wizard trace their own model calls. Each trial attempt and each grader run is one trace, and a trial's traces share one session. Tracing is off unless all three are set. |
 | Models | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | The shared gateway of the user agent, the runner agent, and the judge. Each role can have its own model and gateway. See the [model guide](models.md). |
 | Orca API runner | `ORCA_API_URL`, `ORCA_API_KEY` | Target URL and API key for the example experiment |
 | Orca browser runner | `ORCA_URL`, `ORCA_USERNAME`, `ORCA_PASSWORD` | Target URL and login credentials when selecting the browser runner |
@@ -431,7 +432,7 @@ The flags below are optional and apply to both modes:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--concurrency N` / `-c N` | `5` | Max parallel simulation workers |
+| `--concurrency N` / `-c N` | `1` | Max parallel simulation workers |
 | `-v` / `-vv` | WARNING | Increase verbosity: `-v` for INFO, `-vv` for DEBUG |
 | `--quiet` | `false` | Suppress all output below ERROR |
 | `--no-tui` | `false` | Disable TUI dashboard (force linear log output) |
@@ -451,7 +452,7 @@ The `run` command accepts the union of the simulation and evaluation options. It
 
 ### Concurrency
 
-The `--concurrency N` flag runs N simulation workers in parallel. The default is `5`. Reduce to `1` for sequential execution or increase based on your target's capacity.
+The `--concurrency N` flag runs N simulation workers in parallel. The default is `1`, which runs trials sequentially. Increase based on your target's capacity.
 
 Runs are distributed round-robin across workers. Each worker processes its slice sequentially — one run at a time — while all workers run concurrently via `asyncio.gather`. How isolation and resource sharing work depends on the runner.
 

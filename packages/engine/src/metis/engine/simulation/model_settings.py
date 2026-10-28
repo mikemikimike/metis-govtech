@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from openai import AsyncOpenAI
+from langfuse.openai import AsyncOpenAI
 
 from metis.core.model_settings import ModelRole, RoleSettings, resolve_role
 
@@ -65,7 +65,8 @@ def llm_client(settings: RoleSettings) -> AsyncOpenAI:
     """A client for the gateway of ``settings``.
 
     ``max_retries=0``: retries happen in ``parse_completion`` / ``create_completion``, where
-    each attempt is logged.
+    each attempt is logged. The client is Langfuse's drop-in, which traces each attempt to the
+    METIS-internal Langfuse.
     """
     return AsyncOpenAI(
         api_key=settings.api_key, base_url=settings.base_url, max_retries=0

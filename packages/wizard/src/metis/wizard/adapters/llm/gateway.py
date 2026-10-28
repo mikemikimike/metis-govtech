@@ -43,6 +43,7 @@ from openai import APIError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 
 from metis.core.model_settings import (
+    METIS_INTERNAL_LANGFUSE_VARS,
     ROLES,
     ModelRole,
     RoleSettings,
@@ -75,13 +76,6 @@ if TYPE_CHECKING:
     from metis.wizard.domain.specification import Criterion, Specification
 
 ATTEMPTS = 3
-
-TRACING_VARS = (
-    "METIS_INTERNAL_LANGFUSE_PUBLIC_KEY",
-    "METIS_INTERNAL_LANGFUSE_SECRET_KEY",
-    "METIS_INTERNAL_LANGFUSE_BASE_URL",
-)
-"""The METIS-internal Langfuse. Tracing is on only when all three are set."""
 
 _TRACING_OFF_KEY = "metis-internal-tracing-off"
 
@@ -126,7 +120,9 @@ def tracing_key(env: Mapping[str, str] | None = None) -> str:
     internal variable is missing, the client is a disabled one under a placeholder key.
     """
     env = os.environ if env is None else env
-    public_key, secret_key, base_url = (env.get(name) for name in TRACING_VARS)
+    public_key, secret_key, base_url = (
+        env.get(name) for name in METIS_INTERNAL_LANGFUSE_VARS
+    )
     if public_key and secret_key and base_url:
         Langfuse(public_key=public_key, secret_key=secret_key, base_url=base_url)
         return public_key
