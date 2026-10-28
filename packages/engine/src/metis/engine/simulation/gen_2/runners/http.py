@@ -118,6 +118,7 @@ class HttpRunner(Runner):
         )
         self._turn = 0
         self._session_id: str | None = None
+        self._action_start = 0
         self.spans = Spans.of("")
         self.spec_entry = ""
         """The log entry holding the specification: the target's description, not an answer."""
@@ -185,15 +186,23 @@ class HttpRunner(Runner):
     def begin_action(self, action: str) -> None:
         """Start a turn: number the action's quoted spans. ``act`` calls this first."""
         self._turn += 1
+        self._action_start = len(self.results)
         self.spans = Spans.of(action)
 
     def record_session_id(self, pointer: Pointer) -> None:
-        """Copy the session ID from a submission's response, and from nothing else.
+        """Copy the session ID from a submission's response or from this action's calls.
+
+        A target that opens its session before any message shows the ID in a call that
+        is not a submission, so the action's own results are citable too.
 
         :raises PointerError: When the pointer does not lead to such a response.
         """
-        value, _ = resolve(pointer, self._log, allowed=self.answers)
+        allowed = [*self.answers, *self.results[self._action_start :]]
+        value, _ = resolve(pointer, self._log, allowed=allowed)
         self._session_id = str(value)
+        logger.info(
+            "session_id_found", session_id=self._session_id, entry=pointer.entry
+        )
 
     async def http_request(
         self,

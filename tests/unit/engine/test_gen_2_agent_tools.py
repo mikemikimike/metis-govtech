@@ -225,7 +225,7 @@ async def test_session_id_from_records_the_id_from_a_submissions_reply(
 
 
 @pytest.mark.asyncio
-async def test_session_id_from_refuses_a_result_that_answers_no_submission(
+async def test_session_id_from_refuses_an_earlier_actions_non_submission_result(
     tmp_path: Path,
 ) -> None:
     runner, _, state = await _ready(tmp_path)
@@ -233,6 +233,7 @@ async def test_session_id_from_refuses_a_result_that_answers_no_submission(
     status = await _call(
         runner, state, "http_request", {"method": "GET", "path": "/status"}
     )
+    runner.begin_action("Say ⟦more⟧")
 
     result = await _call(
         runner,
