@@ -21,7 +21,9 @@ The module paths are relative to `metis/library/graders/`.
 - Source revision: `d5f5e054756e98d05172a1651c6ffa3fc6f2ff27`
 - Used in: `task_and_output_quality/_required_component_completeness.py`,
   `execution_and_decision_quality/_tool_argument_correctness.py`,
-  `execution_and_decision_quality/_tool_choice_appropriateness.py`
+  `execution_and_decision_quality/_tool_choice_appropriateness.py`,
+  `interaction_quality/_communication_clarity.py`,
+  `interaction_quality/_user_correction_support.py`
 
 ### Braintrust Autoevals (braintrustdata/autoevals)
 
@@ -41,7 +43,8 @@ The module paths are relative to `metis/library/graders/`.
   `task_and_output_quality/_speech_recognition_accuracy.py`,
   `task_and_output_quality/_task_success.py`,
   `execution_and_decision_quality/_planning_quality.py`,
-  `execution_and_decision_quality/_use_of_prior_information.py`
+  `execution_and_decision_quality/_use_of_prior_information.py`,
+  `interaction_quality/_relevance.py`
 
 ### MLflow (mlflow/mlflow)
 

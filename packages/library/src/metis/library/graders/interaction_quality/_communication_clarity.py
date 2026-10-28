@@ -1,4 +1,16 @@
-"""CommunicationClarityGrader: the assistant's replies are clear and well organized."""
+"""CommunicationClarityGrader: the assistant's replies are clear and well organized.
+
+The conciseness check is adapted from Arize Phoenix evals conciseness classification evaluator
+(Arize-ai/phoenix@d5f5e05, js/packages/phoenix-evals/src/__generated__/default_templates/
+CONCISENESS_CLASSIFICATION_EVALUATOR_CONFIG.ts).
+Copyright 2025 Arize AI, Inc. Licensed under the Apache License, Version 2.0.
+Changed for METIS: the verbose rubric is one check inside a wider clarity measure, and a reply
+fails it only when the extra content makes the meaning hard to get. The rule against
+explanations that were not requested is removed, because a needed explanation is not padding.
+The template variables and output format are replaced by the session evidence and the shared
+judge instructions.
+See metis/library/EXTERNAL_SOURCES.md for the license text.
+"""
 
 from __future__ import annotations
 
@@ -32,10 +44,18 @@ _CRITERIA = (
     "first or is easy to find; that the order and structure, such as steps, lists, or "
     "headings, fit the content; that the meaning has one reasonable reading; that terms the "
     "user may not know are explained or avoided; and that the point is not hidden under "
-    "repetition, filler, or detail the user did not need. Score 1 when the replies are clear. "
-    "Score 0 when a reply is ambiguous, disorganized, or padded enough to make the meaning "
-    "hard to get. Grammar and natural phrasing belong to output naturalness, and politeness "
-    "and warmth to tone, so do not judge them here. Do not judge correctness or task success."
+    "repetition, filler, or detail the user did not need. Filler includes unnecessary "
+    "pleasantries, hedging language or excessive qualifiers, meta-commentary about the "
+    "response itself, and unnecessary formatting for simple answers. Score 1 when the "
+    "replies are clear. Score 0 when a reply is ambiguous, disorganized, or padded enough to "
+    "make the meaning hard to get."
+)
+
+_BOUNDARIES = (
+    "\n\n<assessment_boundaries>\n"
+    "Grammar and natural phrasing belong to output naturalness, and politeness and warmth to "
+    "tone, so do not judge them here. Do not judge correctness or task success."
+    "\n</assessment_boundaries>"
 )
 
 
@@ -56,8 +76,7 @@ class CommunicationClarityGrader(Grader[CommunicationClarityArgs]):
     At session scope, by default, one verdict on all replies. At subsession scope, one verdict
     for each reply. The judge reads the user messages and the replies, without tool traffic,
     because clarity is a property of what the user reads. It covers organization, ambiguity
-    and padding, not fluent phrasing or tone, which have their own graders. The criteria draw
-    on Phoenix conciseness.
+    and padding, not fluent phrasing or tone, which have their own graders.
     """
 
     args_model = CommunicationClarityArgs
@@ -72,11 +91,12 @@ class CommunicationClarityGrader(Grader[CommunicationClarityArgs]):
 
     def criteria(self) -> str:
         if self.args.audience is None:
-            return _CRITERIA
+            return _CRITERIA + _BOUNDARIES
         return (
-            f"{_CRITERIA} Judge clarity for this audience, not for the user that the "
-            f"conversation suggests: {self.args.audience} Count a term as unexplained only "
-            "if this audience would not know it."
+            _CRITERIA
+            + " Judge clarity for this audience, not for the user that the conversation "
+            f"suggests: {self.args.audience} Count a term as unexplained only if this "
+            "audience would not know it." + _BOUNDARIES
         )
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:

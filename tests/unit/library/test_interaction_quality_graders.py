@@ -229,9 +229,11 @@ def test_each_grader_has_its_own_optional_settings(grader_cls) -> None:
 @pytest.mark.parametrize("grader_cls", [g for g in GRADERS if SETTINGS[g]])
 def test_each_setting_adds_to_its_graders_criteria(grader_cls) -> None:
     default = criteria_sent(grader_cls)
+    rules, _, boundaries = default.partition("\n\n<assessment_boundaries>")
     for name, value in SETTINGS[grader_cls].items():
         with_setting = criteria_sent(grader_cls, **{name: value})
-        assert with_setting.startswith(default)
+        assert with_setting.startswith(rules)
+        assert with_setting.endswith(boundaries)
         assert value in with_setting
 
 
