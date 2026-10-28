@@ -160,6 +160,13 @@ class TestTools:
             "input",
         )
 
+    def test_json_payloads_are_shown_as_recorded(self) -> None:
+        arguments = '{"amount": 10.50}'
+        result = '[\n  {"price": 10.50}\n]'
+        call = _tool(input=arguments, output=result)
+        assert tool_arguments(call) == arguments
+        assert tool_result(call) == result
+
     def test_a_missing_result_is_missing(self) -> None:
         problem = tool_result(_tool(output=None))
         assert isinstance(problem, Problem)

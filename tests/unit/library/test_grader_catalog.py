@@ -10,7 +10,39 @@ import pytest
 import metis.library.graders as catalog
 from metis.library.grader import Grader
 
-EXPECTED = {"CriterionJudgeGrader"}
+EXECUTION_AND_DECISION_QUALITY = {
+    "ActionChoiceAppropriatenessGrader",
+    "AdaptationToChangedConditionsGrader",
+    "AppropriateHandlingOfCapabilityLimitsGrader",
+    "AvoidingUnproductiveRepetitionGrader",
+    "CoordinationQualityGrader",
+    "ErrorDetectionGrader",
+    "ErrorRecoveryGrader",
+    "OutcomeVerificationGrader",
+    "PlanningQualityGrader",
+    "ReasoningValidityGrader",
+    "StateTrackingGrader",
+    "StoppingAppropriatenessGrader",
+    "ToolArgumentCorrectnessGrader",
+    "ToolChoiceAppropriatenessGrader",
+    "UseOfPriorInformationGrader",
+}
+TASK_AND_OUTPUT_QUALITY = {
+    "AttributionAccuracyGrader",
+    "ClaimSupportByEvidenceGrader",
+    "ContentFidelityGrader",
+    "EvidenceSourceSuitabilityGrader",
+    "FactualAccuracyGrader",
+    "FormatSchemaComplianceGrader",
+    "OutputCorrectnessGrader",
+    "RequiredComponentCompletenessGrader",
+    "SpeechRecognitionAccuracyGrader",
+    "TaskConstraintAdherenceGrader",
+    "TaskSuccessGrader",
+}
+EXPECTED = (
+    {"CriterionJudgeGrader"} | EXECUTION_AND_DECISION_QUALITY | TASK_AND_OUTPUT_QUALITY
+)
 
 
 def _exported_classes() -> dict[str, type]:
@@ -21,7 +53,7 @@ def _exported_classes() -> dict[str, type]:
     }
 
 
-def test_exports_exactly_the_new_graders() -> None:
+def test_exports_exactly_the_catalogue_graders() -> None:
     assert set(_exported_classes()) == EXPECTED
 
 

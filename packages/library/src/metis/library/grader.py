@@ -20,7 +20,6 @@ import json
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
-    Annotated,
     Any,
     ClassVar,
     Generic,
@@ -29,10 +28,15 @@ from typing import (
     get_origin,
 )
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from metis.core.grading import GraderResult
 from metis.core.logging import get_logger
+from metis.library.aggregation import AGGREGATION_DEFINITIONS
+from metis.library.judgment_form import JUDGMENT_FORM_DEFINITIONS
+from metis.library.scope import SCOPE_DEFINITIONS, SCOPE_SETTINGS
+from metis.library.taxonomy import Aggregation, GraderTaxonomy, JudgmentForm, Scope
+from metis.library.text import NonEmptyText
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -50,6 +54,11 @@ class GraderArgs(BaseModel):
     Unknown keys are rejected, so a misspelt arg fails the engine's pre-run validation instead
     of silently taking its default. Frozen, because one grader, and so one args object, is
     shared by every concurrent grader run of its criterion.
+
+    ``threshold`` and the three taxonomy settings are the same on every grader. A taxonomy
+    setting of ``None`` means the grader's first declared value, and ``Grader.__init__`` rejects
+    a value the grader does not declare. A spec author sets one only on a grader that declares
+    more than one value.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -57,11 +66,19 @@ class GraderArgs(BaseModel):
     threshold: float = Field(default=0.5, ge=0, le=1, strict=True)
     """A scored result passes when ``score >= threshold``. The default also separates the
     ``0.0``/``1.0`` scores of a binary grader, so only graders with graded scores need it set."""
+    scope: Scope | None = Field(default=None, exclude_if=lambda value: value is None)
+    """Which part of the session to judge, from the grader's ``taxonomy.scopes``."""
+    judgment_form: JudgmentForm | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    """The form of the judge's verdict, from the grader's ``taxonomy.judgment_forms``."""
+    aggregation: Aggregation | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    """How a multi-rule grader combines its rules, from the grader's ``taxonomy.aggregations``."""
 
 
 logger = get_logger(__name__)
-
-NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 DEFAULT_MAX_INPUT_TOKENS = 128_000
 
@@ -139,7 +156,7 @@ def input_budget_error(
 ) -> GraderResult | None:
     """An errored result when ``request`` is above ``args.max_input_tokens``, else ``None``.
 
-    ``request`` is the keyword arguments for one chat completion call. One token per UTF-8
+    ``request`` is the keyword arguments for one Responses API call. One token per UTF-8
     byte is a conservative bound for byte-based tokenizers; 4,096 covers message framing.
     """
     estimate = len(json.dumps(request, ensure_ascii=False).encode("utf-8")) + 4096
@@ -156,6 +173,12 @@ def input_budget_error(
 
 
 ArgsT = TypeVar("ArgsT", bound=GraderArgs)
+
+_TAXONOMY_SETTINGS = (
+    ("scope", "scopes"),
+    ("judgment_form", "judgment_forms"),
+    ("aggregation", "aggregations"),
+)
 
 
 @dataclass(frozen=True)
@@ -185,8 +208,20 @@ class Grader(abc.ABC, Generic[ArgsT]):
     args_model: ClassVar[type[GraderArgs]]
     """This grader's parameters, as written under ``grader_args`` in specification.yaml."""
 
+    taxonomy: ClassVar[GraderTaxonomy]
+    """What this grader supports. Optional: a grader with no taxonomy accepts no taxonomy
+    settings."""
+
     def __init__(self, args: ArgsT) -> None:
         self.args = args
+        for setting, declared in _TAXONOMY_SETTINGS:
+            value = getattr(args, setting)
+            allowed = getattr(getattr(self, "taxonomy", None), declared, ())
+            if value is not None and value not in allowed:
+                raise ValueError(
+                    f"{type(self).__name__} does not support {setting} {value.value!r}; "
+                    f"it supports {[v.value for v in allowed]}."
+                )
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -213,16 +248,57 @@ class Grader(abc.ABC, Generic[ArgsT]):
                 f"{getattr(args_model, '__name__', args_model)!r}; set "
                 f"args_model = {declared.__name__}."
             )
+        taxonomy = cls.__dict__.get("taxonomy")
+        if taxonomy is None:
+            return
+        for scope, settings in SCOPE_SETTINGS.items():
+            if (scope in taxonomy.scopes) != issubclass(args_model, settings):
+                raise TypeError(
+                    f"{cls.__name__}: declare scope {scope.value!r} and use "
+                    f"{settings.__name__} together, or neither."
+                )
+        for values, definitions in (
+            (taxonomy.scopes, SCOPE_DEFINITIONS),
+            (taxonomy.judgment_forms, JUDGMENT_FORM_DEFINITIONS),
+            (taxonomy.aggregations, AGGREGATION_DEFINITIONS),
+        ):
+            if missing := [v.value for v in values if v not in definitions]:
+                raise TypeError(
+                    f"{cls.__name__} declares {missing}, which have no definition."
+                )
+
+    @property
+    def scope(self) -> Scope:
+        """The scope set for this criterion, or the grader's first declared scope."""
+        return self.args.scope or self._declared().scopes[0]
+
+    @property
+    def judgment_form(self) -> JudgmentForm:
+        """The judgment form set for this criterion, or the grader's first declared one."""
+        return self.args.judgment_form or self._declared().judgment_forms[0]
+
+    @property
+    def aggregation(self) -> Aggregation:
+        """The aggregation rule set for this criterion, or the grader's first declared one."""
+        return self.args.aggregation or self._declared().aggregations[0]
+
+    def _declared(self) -> GraderTaxonomy:
+        taxonomy = getattr(self, "taxonomy", None)
+        if taxonomy is None:
+            raise TypeError(f"{type(self).__name__} declares no taxonomy.")
+        return taxonomy
 
     @abc.abstractmethod
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
-        """Grades the session, returning one result per grading scope.
+        """Grades the session, returning one result per scope item.
 
         A model-based grader calls ``input_budget_error`` before each model call.
 
-        Return one skipped result, never an empty list, when there is nothing to judge. When a
-        grader LLM call fails or its reply can't be parsed for one part of the session, record
-        that part as errored and carry on. An exception that escapes ``grade()`` is recorded as
+        Before any judge call, check that the session has the evidence the measure needs. When
+        it does not, or the event the measure looks for did not happen, return one errored
+        result that says what is missing, never an empty list. When a grader LLM call fails or
+        its reply can't be parsed for one part of the session, record that part as errored and
+        carry on. An exception that escapes ``grade()`` is recorded as
         one errored result for the whole grader run.
         """
 

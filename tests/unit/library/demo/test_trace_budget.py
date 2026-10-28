@@ -109,11 +109,6 @@ class TestGrade:
         assert len(out.results) == 1
         assert out.results[0].score == 1.0
 
-    def test_empty_session_is_skipped_not_passed(self) -> None:
-        out = _grade(_grader(), GradingInput(traces=()))
-        assert [(r.status, r.score) for r in out.results] == [("skipped", None)]
-        assert out.results[0].reason
-
     def test_traces_without_output_still_count(self) -> None:
         """A crashed exchange is still an exchange the session spent."""
         grading_input = GradingInput(

@@ -35,7 +35,7 @@ _OPTIONAL_MODELS = ("judge_model", "user_agent_model", "runner_agent_model")
 def omit_unset_models(data: dict[str, Any]) -> None:
     """Remove unset model fields from a dumped Experiment or Specification, in place.
 
-    Existing specs then serialise unchanged. ``defaults`` goes when no model is set.
+    Existing specs then serialise unchanged. ``defaults`` goes when nothing in it is set.
     """
     defaults = data.get("defaults")
     if isinstance(defaults, dict):

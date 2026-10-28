@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING, ClassVar
 from pydantic import Field
 
 from metis.core.grading import GraderResult, GradingOutput
-from metis.core.trace_processing import Problem, select_all, turns
+from metis.core.trace_processing import Problem
 from metis.library.grader import Grader, GraderArgs
+from metis.library.scope import SCOPE_DEFINITIONS
 from metis.library.taxonomy import (
     Aggregation,
     GraderTaxonomy,
@@ -39,8 +40,8 @@ class DemoTraceBudgetGrader(Grader[DemoTraceBudgetArgs]):
 
     The simplest use of the trace processor. Code-based and session-scoped: counts every turn,
     including turns whose target failed, and scores 1.0 when the count is at most
-    ``max_traces`` and 0.0 otherwise. Skips a session with no traces, since there is nothing to
-    count. One trace is usually one persona message and the target's reply, so this is a
+    ``max_traces`` and 0.0 otherwise. Errors on a session with no traces, since there is nothing
+    to count. One trace is usually one persona message and the target's reply, so this is a
     budget on exchanges.
     """
 
@@ -55,22 +56,17 @@ class DemoTraceBudgetGrader(Grader[DemoTraceBudgetArgs]):
     )
 
     async def grade(self, input: GradingInput, llm: LLMSettings) -> GradingOutput:
-        selected = select_all(turns(input.traces))
+        selected = SCOPE_DEFINITIONS[self.scope].select(input, self.args)
         if isinstance(selected, Problem):
-            return GradingOutput(
-                results=[
-                    GraderResult(
-                        status="skipped", reason="The session has no traces to count."
-                    )
-                ]
-            )
-        count, budget = len(selected), self.args.max_traces
+            return GradingOutput.errored("The session has no traces to count.")
+        count, budget = len(selected["session"]), self.args.max_traces
         return GradingOutput(
             results=[
                 GraderResult(
                     status="scored",
                     score=1.0 if count <= budget else 0.0,
                     reason=f"The session used {count} trace(s) against a budget of {budget}.",
+                    scope="session",
                 )
             ]
         )
