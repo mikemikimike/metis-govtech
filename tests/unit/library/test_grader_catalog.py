@@ -40,8 +40,22 @@ TASK_AND_OUTPUT_QUALITY = {
     "TaskConstraintAdherenceGrader",
     "TaskSuccessGrader",
 }
+INTERACTION_QUALITY = {
+    "ActionStatusTransparencyGrader",
+    "ClarificationAppropriatenessGrader",
+    "CommunicationClarityGrader",
+    "CrossTurnCoherenceGrader",
+    "ExplanationUsefulnessGrader",
+    "OutputNaturalnessGrader",
+    "RelevanceGrader",
+    "ToneAppropriatenessGrader",
+    "UserCorrectionSupportGrader",
+}
 EXPECTED = (
-    {"CriterionJudgeGrader"} | EXECUTION_AND_DECISION_QUALITY | TASK_AND_OUTPUT_QUALITY
+    {"CriterionJudgeGrader"}
+    | EXECUTION_AND_DECISION_QUALITY
+    | INTERACTION_QUALITY
+    | TASK_AND_OUTPUT_QUALITY
 )
 
 
