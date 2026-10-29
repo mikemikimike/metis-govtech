@@ -30,7 +30,7 @@ section[id] { scroll-margin-top: 64px }
 .header-brand strong { font-size: 18px; font-weight: 800; letter-spacing: .1em }
 .header-brand span { font: 600 13px var(--sans); letter-spacing: .06em; color: #8CA0A6; padding-left: 12px; border-left: 1px solid rgba(229,174,79,.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .button.header-github { min-height: 36px; padding: 0 14px; font-size: 14px; gap: 8px }
-.button.header-github svg { width: 16px; fill: currentColor; stroke: none }
+.button.secondary.header-github svg { width: 16px; fill: currentColor; stroke: none }
 
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 24px; border-radius: 8px; font-size: 14px; font-weight: 700; transition: .2s; white-space: nowrap; flex-wrap: nowrap; flex-shrink: 0 }
 .button:hover { transform: translateY(-2px) }
