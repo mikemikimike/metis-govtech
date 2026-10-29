@@ -566,12 +566,19 @@ export const api = {
     });
   },
   package: (
-    source: { state: InterviewState } | { specification: Specification },
+    // An Interview carries its connection in its state. A manual Specification sends its own.
+    source:
+      | { state: InterviewState }
+      | { specification: Specification; connection?: TargetConnection },
     files: readonly PackageFile[],
   ) => {
     const form = new FormData();
     if ("state" in source) form.append("state", JSON.stringify(source.state));
-    else form.append("specification", JSON.stringify(source.specification));
+    else {
+      form.append("specification", JSON.stringify(source.specification));
+      if (source.connection)
+        form.append("connection", JSON.stringify(source.connection));
+    }
     for (const file of files) form.append("files", file.blob, file.name);
     return callBlob("/api/v1/wizard/package", {
       method: "POST",

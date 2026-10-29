@@ -7,6 +7,8 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ConnectionForm, ModePicker } from "./ConnectionStep";
+import { startConnection, type ConnectionDraft } from "./connection";
 import { downloadArchive } from "./download";
 import {
   ACCEPTED_FIXTURE_EXTENSIONS,
@@ -30,7 +32,13 @@ import {
   type ManualScenario,
   type ManualTestCase,
 } from "./manual";
-import { api, TransportError, type GraderSpec } from "./transport/api";
+import {
+  api,
+  TransportError,
+  type ConnectionCheckResult,
+  type GraderSpec,
+  type TargetConnection,
+} from "./transport/api";
 import { Button, cn, formatTrials, Mono } from "./ui";
 
 function AdditionalContext({
@@ -196,7 +204,57 @@ export function focusManualInput(
   return true;
 }
 
-export function ManualForm({ onBack }: { onBack: () => void }) {
+// Compile the manual Experiment and package it. In run mode `connection` gives the target
+// connection, and a null connection stops the download before any request. `onCompiled` gets the
+// Task IDs that compile assigned, so the form keeps them even when packaging fails.
+export async function packageManualExperiment(
+  experiment: ManualExperiment,
+  files: readonly ManualFixture[],
+  connection: (() => Promise<TargetConnection | null>) | null,
+  onCompiled: (taskIds: Array<string | undefined>) => void,
+): Promise<Awaited<ReturnType<typeof api.package>> | null> {
+  const target = connection ? await connection() : null;
+  if (connection && !target) return null;
+  const submitted = synthesizeManualSpecification(experiment);
+  const compiled = await api.compile(submitted);
+  const assigned = compiled.specification.tasks ?? [];
+  onCompiled(assigned.map((task) => task.id ?? undefined));
+  return api.package(
+    {
+      specification: {
+        ...submitted,
+        tasks: assigned.map((task) => ({
+          ...task,
+          fixtures: task.fixtures ?? [],
+          behaviour_refs: task.behaviour_refs ?? [],
+          num_trials: task.num_trials ?? 3,
+        })),
+      },
+      ...(target ? { connection: target } : {}),
+    },
+    files,
+  );
+}
+
+// The opening owns the mode and the connection draft, so the mode carries between the two views.
+export type ManualFormProps = {
+  onBack: () => void;
+  connectionDraft: ConnectionDraft;
+  onConnectionDraft: (draft: ConnectionDraft) => void;
+  connectionResult: ConnectionCheckResult | null;
+  onTestConnection: () => void;
+  // Checks the draft and stores the result. Download calls it when no result is current.
+  checkConnection: () => Promise<ConnectionCheckResult>;
+};
+
+export function ManualForm({
+  onBack,
+  connectionDraft,
+  onConnectionDraft,
+  connectionResult,
+  onTestConnection,
+  checkConnection,
+}: ManualFormProps) {
   const [experiment, setExperiment] = useState<ManualExperiment>(
     emptyManualExperiment,
   );
@@ -211,6 +269,9 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
   const [showErrors, setShowErrors] = useState(false);
   const [submitAttempt, setSubmitAttempt] = useState(0);
   const formRef = useRef<HTMLDivElement | null>(null);
+  const connectionRef = useRef<HTMLElement | null>(null);
+  const runMode = connectionDraft.mode === "run";
+  const connectionInvalid = runMode && connectionResult?.binding === null;
 
   const personaIdRefs = useRef<Array<HTMLInputElement | null>>([]);
   const scenarioIdRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -401,35 +462,33 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const usedFiles = keepReferencedFixtures(experiment.tasks, library);
-      const submitted = synthesizeManualSpecification(experiment);
-      const compiled = await api.compile(submitted);
-      const assigned = compiled.specification.tasks ?? [];
-      setExperiment((current) =>
-        current === experiment
-          ? {
-              ...current,
-              tasks: current.tasks.map((task, index) => ({
-                ...task,
-                id: assigned[index]?.id ?? task.id,
-              })),
-            }
-          : current,
+      const archive = await packageManualExperiment(
+        experiment,
+        keepReferencedFixtures(experiment.tasks, library),
+        runMode
+          ? async () =>
+              startConnection(
+                connectionDraft,
+                connectionResult ?? (await checkConnection()),
+              )
+          : null,
+        (taskIds) =>
+          setExperiment((current) =>
+            current === experiment
+              ? {
+                  ...current,
+                  tasks: current.tasks.map((task, index) => ({
+                    ...task,
+                    id: taskIds[index] ?? task.id,
+                  })),
+                }
+              : current,
+          ),
       );
-      const archive = await api.package(
-        {
-          specification: {
-            ...submitted,
-            tasks: assigned.map((task) => ({
-              ...task,
-              fixtures: task.fixtures ?? [],
-              behaviour_refs: task.behaviour_refs ?? [],
-              num_trials: task.num_trials ?? 3,
-            })),
-          },
-        },
-        usedFiles,
-      );
+      if (!archive) {
+        connectionRef.current?.focus();
+        return;
+      }
       downloadArchive(archive);
     } catch (cause) {
       setError(
@@ -465,6 +524,15 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
               Define what to run and how to score it. METIS will build a
               ready-to-use experiment package.
             </p>
+          </div>
+          <div>
+            <ModePicker
+              mode={connectionDraft.mode}
+              disabled={busy}
+              onSelect={(mode) =>
+                onConnectionDraft({ ...connectionDraft, mode })
+              }
+            />
           </div>
         </header>
 
@@ -952,10 +1020,41 @@ export function ManualForm({ onBack }: { onBack: () => void }) {
           </section>
         </section>
 
+        {runMode && (
+          <section
+            ref={connectionRef}
+            tabIndex={-1}
+            aria-labelledby="manual-connection"
+            className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <div className="border-b border-border bg-muted/35 px-5 py-5 sm:px-7 sm:py-6">
+              <SectionHeading
+                id="manual-connection"
+                title="Target connection"
+                hint="Tell the Engine how to reach the target."
+              />
+            </div>
+            <div className="px-5 py-6 sm:px-7 sm:py-7">
+              <ConnectionForm
+                draft={connectionDraft}
+                onDraft={onConnectionDraft}
+                result={connectionResult}
+                busy={busy}
+                onTest={onTestConnection}
+              />
+            </div>
+          </section>
+        )}
+
         <section className="flex flex-col gap-3 border-t border-border pt-6">
           <p className="text-sm text-muted-foreground">
             Extract the download into <code>experiments/design/</code>.
           </p>
+          {connectionInvalid && (
+            <p role="alert" className="text-sm text-destructive">
+              The target connection is not valid.
+            </p>
+          )}
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}

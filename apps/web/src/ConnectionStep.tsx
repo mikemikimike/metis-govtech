@@ -1,11 +1,64 @@
-// The target connection form. In the opening it is the panel under the box when the user
-// chooses "Build Spec and Run Evals". The Done pane shows it again to add a connection later.
+// The mode picker and the target connection form. In the opening the form is the panel under the
+// box when the user chooses "Build Spec and connect target". The manual form shows it as a card
+// in run mode. The Done pane shows it again to add a connection later.
 // Secret fields take environment-variable names only.
 import { ChevronRight } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { ConnectionCheckResult } from "./transport/api";
-import { errorsByField, type ConnectionDraft } from "./connection";
+import {
+  errorsByField,
+  submissionHints,
+  type ConnectionDraft,
+  type ConnectionMode,
+} from "./connection";
 import { Button, cn } from "./ui";
+
+const MODE_LABELS: Record<ConnectionMode, string> = {
+  spec: "Build Spec only",
+  run: "Build Spec and connect target",
+};
+
+// The mode is a choice about the whole session. In the opening it sits above the box, apart from
+// the chips that give the Interview its context. The manual form shows it in its header.
+export function ModePicker({
+  mode,
+  disabled,
+  onSelect,
+}: {
+  mode: ConnectionMode;
+  disabled: boolean;
+  onSelect: (mode: ConnectionMode) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Mode"
+      // The selected option's corners follow the border: its radius is the outer radius less
+      // the padding (16px - 2px).
+      className="inline-flex self-center rounded-lg border border-border bg-card p-0.5"
+    >
+      {(["spec", "run"] as const).map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="radio"
+          aria-checked={mode === id}
+          disabled={disabled}
+          onClick={() => onSelect(id)}
+          className={cn(
+            "rounded-[14px] px-3.5 py-1.5 text-sm transition-colors duration-150",
+            mode === id
+              ? "bg-accent/10 font-medium text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+            "disabled:cursor-not-allowed disabled:opacity-45",
+          )}
+        >
+          {MODE_LABELS[id]}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const SECRET_HINT = "Variable name only. Set its value in .env.";
 
@@ -24,20 +77,26 @@ export function ConnectionForm({
   onTest: () => void;
 }) {
   const [more, setMore] = useState(false);
-  const errors = errorsByField(result);
+  const errors = errorsByField(draft, result);
+  const hints = submissionHints(draft, result);
   const set = <K extends keyof ConnectionDraft>(
     key: K,
     value: ConnectionDraft[K],
   ) => onDraft({ ...draft, [key]: value });
   const http = draft.transport === "http";
-  // An error in a field under "More options" opens it, so the user sees what to fix.
+  // An error, a warning, or a suggestion for a field under "More options" opens it, so the
+  // user sees it.
   const moreError = http
     ? errors.secretHeaders ||
       errors.forbiddenCalls ||
       errors.submissions ||
-      errors.notes
+      errors.notes ||
+      hints.warning ||
+      hints.suggestion.length > 0
     : errors.loginSecrets || errors.notes;
 
+  // TODO: Link the target connection setup guide here when the docs are ready. The fields are
+  // hard to fill in without it.
   return (
     <div className="flex flex-col gap-4">
       <Toggle
@@ -147,14 +206,42 @@ export function ConnectionForm({
                 />
                 <Field
                   multiline
-                  label="Message calls"
+                  label="Submissions"
                   placeholder="POST /chat"
                   hint="One per line. The calls that send the user's message."
                   value={draft.submissions}
                   error={errors.submissions}
+                  warning={hints.warning ?? undefined}
                   disabled={busy}
                   onChange={(value) => set("submissions", value)}
                 />
+                {hints.suggestion.length > 0 && (
+                  <>
+                    <span aria-hidden className="max-sm:hidden" />
+                    <div className="flex flex-col items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                      <p className="text-foreground">
+                        The OpenAPI document suggests these submissions. Check
+                        them before you use them.
+                      </p>
+                      <ul className="flex flex-col gap-0.5">
+                        {hints.suggestion.map((pattern) => (
+                          <li key={pattern}>
+                            <code>{pattern}</code>
+                          </li>
+                        ))}
+                      </ul>
+                      <Button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          set("submissions", hints.suggestion.join("\n"))
+                        }
+                      >
+                        Use these submissions
+                      </Button>
+                    </div>
+                  </>
+                )}
                 <span aria-hidden className="max-sm:hidden" />
                 <label className="flex items-center gap-2 text-sm text-foreground">
                   <input
@@ -218,17 +305,23 @@ export function ConnectionStatusLine({
         Fix the marked fields, or choose Build Spec only.
       </p>
     );
+  // A failed check shows under the field it belongs to, so the list keeps the passed ones.
+  const failed = (result.probes ?? []).some((probe) => !probe.ok);
   return (
     <ul role="status" className="flex flex-col gap-1 text-sm">
       <li className="text-foreground">✓ The fields are valid.</li>
-      {(result.probes ?? []).map((probe) => (
-        <li
-          key={probe.name}
-          className={probe.ok ? "text-foreground" : "text-destructive"}
-        >
-          {probe.ok ? "✓" : "✗"} <code>{probe.name}</code>: {probe.message}
+      {(result.probes ?? [])
+        .filter((probe) => probe.ok)
+        .map((probe) => (
+          <li key={probe.name} className="text-foreground">
+            ✓ <code>{probe.name}</code>: {probe.message}
+          </li>
+        ))}
+      {failed && (
+        <li className="text-destructive">
+          ✗ Some checks failed. Fix the marked fields and test again.
         </li>
-      ))}
+      )}
       {!result.live && (
         <li className="text-muted-foreground">
           This server checks the fields only. Run{" "}
@@ -288,6 +381,7 @@ function Field({
   placeholder,
   hint,
   error,
+  warning,
   disabled,
   multiline = false,
   onChange,
@@ -297,6 +391,8 @@ function Field({
   placeholder?: string;
   hint?: string;
   error?: string;
+  // A problem that does not stop the binding, such as a pattern that matches no call.
+  warning?: string;
   disabled: boolean;
   multiline?: boolean;
   onChange: (value: string) => void;
@@ -331,6 +427,8 @@ function Field({
         )}
         {error ? (
           <span className="text-xs text-destructive">{error}</span>
+        ) : warning ? (
+          <span className="text-xs text-foreground">⚠ {warning}</span>
         ) : (
           // A hint is a quiet aside, so it is small and sits at the right edge.
           hint && (

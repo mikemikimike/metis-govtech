@@ -196,7 +196,9 @@ Interview interface only (`apps/api -> metis.wizard`): the router calls `handle_
 `compile_specification`, and the in-memory specification packager and maps typed results onto HTTP
 responses. No stage, Specification, prompt, matching, fixture validation, or compilation rule lives in
 the API. The package route accepts one JSON source part: `state` for an Interview or
-`specification` for a manual export. It accepts request-scoped fixture bytes and returns one
+`specification` for a manual export. A manual export can also send a `connection` part, which
+gives the same run-mode export as an Interview with that connection. An Interview carries its
+connection in its state. The route accepts request-scoped fixture bytes and returns one
 dated ZIP archive; it retains no uploaded files. Wizard owns the archive filename
 and dated root folder. The API sends the filename in `Content-Disposition`, and the
 browser uses it for the download.

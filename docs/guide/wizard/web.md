@@ -22,7 +22,8 @@ See the [Wizard overview](../wizard.md) for the shared Interview flow and output
    `INTERVIEW_MODEL` and `EMBEDDING_MODEL` are optional. The API starts when a setting is missing.
    Without an interview key, Send is grey and shows "Configure API keys to start interview".
    Without an embeddings key, a banner says "Set up embedding models to select optimal graders",
-   and the Interview still runs. See the [model guide](../models.md).
+   and the Interview still runs. The manual form calls no model, so it needs no key and shows
+   no banner. **Test connection** also works with no key. See the [model guide](../models.md).
 3. Install the full workspace, or install the API and web projects separately:
 
    ```bash
@@ -52,8 +53,9 @@ The chat is on the left and the Profile is on the right. To change the chat widt
 between them. You can also focus the line and use the arrow keys. Double-click the line to
 return to the default width. The browser keeps the width for your next visit.
 
-Above the opening box, choose the mode: **Build Spec only**, or **Build Spec and Run Evals**. The
-bottom row of the box has the documents button, the Perspective control, and **Capabilities**.
+Above the opening box, choose the mode: **Build Spec only**, or **Build Spec and connect
+target**. The bottom row of the box has the documents button, the Perspective control, and
+**Capabilities**.
 
 1. Enter a description of the target.
 2. Select who the evaluation is for. The Perspective control shows the current Perspective. End
@@ -66,8 +68,9 @@ bottom row of the box has the documents button, the Perspective control, and **C
 4. Optional: under **Confidence**, select Low, Medium, or High. The value states how complete the
    selection is. If you select capabilities with no confidence, the Wizard uses Low, because the
    selection may be incomplete.
-5. The default mode is Build Spec only. In Build Spec and Run Evals, enter the target binding in
-   the **Target connection** card under the box. See [Connect the target](#connect-the-target).
+5. The default mode is Build Spec only. In Build Spec and connect target, enter the target
+   binding in the **Target connection** card under the box. See
+   [Connect the target](#connect-the-target).
 6. Select Send, or press Enter. In run mode, the Wizard first checks the binding. It starts the
    Interview only when the binding is valid. This sends all opening values in one request.
 
@@ -105,10 +108,11 @@ In run mode, select **HTTP API** or **Browser**, and enter the required fields. 
 holds the optional fields. Each secret field takes the name of an environment variable, never its
 value. See [Connect the target](../wizard.md#connect-the-target) for the fields.
 
-Select **Test connection** at the bottom of the card. Each check shows with ✓ or ✗. Send uses the
-last test. If you change a field after the test, Send tests the binding again. If the fields are
-not valid, Send marks them and does not start the Interview. Fix the fields, or choose **Build
-Spec only**.
+Select **Test connection** at the bottom of the card. Each passed check shows with ✓. Each problem
+shows in red under the field to fix, such as "APP_API_KEY is not set. Set it in .env." under the
+API key variable. Send uses the last test. If you change a field after the test, Send tests the
+binding again. If the fields are not valid, Send marks them and does not start the Interview. Fix
+the fields, or choose **Build Spec only**.
 
 The API reads your `.env` and reaches the target only when it runs on your computer
 (`make run-api` listens on `127.0.0.1`). An API that other people can reach checks the fields
@@ -242,15 +246,29 @@ the archive for that request and does not keep the files.
 
 ## Write the Experiment directly
 
-Use **Write it yourself** when you already know the Experiment to run. This path does not use the
-Interview and creates no Interview record.
+Use **Skip the interview and write it yourself** when you already know the Experiment to run.
+This path does not use the Interview and creates no Interview record.
 
-1. Select **Write it yourself**.
+1. On the opening screen, choose the mode. Then select **Skip the interview and write it
+   yourself**. The form keeps the mode that you chose. The mode toggle is also at the top of the
+   form, so you can change the mode there.
 2. Set the Experiment ID and description.
 3. Define Personas and Scenarios in their sections.
 4. Select **Add test case**. Select one Persona and one Scenario,
    and set its Trial count, scorers, and files. Add more test cases as needed.
-5. Select **Download specification**.
+5. In **Build Spec and connect target**, fill in the **Target connection** card above the download.
+   It has the same fields and the same **Test connection** button as the card on the opening
+   screen. See [Connect the target](#connect-the-target).
+6. Select **Download specification**.
+
+In run mode, the download needs a valid binding. Download uses the last test. If you change a
+field after the test, Download tests the binding again. If the binding is not valid, the
+download does not start. The form shows "The target connection is not valid.", the card marks
+each field to fix, and the focus moves to the card. There is no way to skip the binding in run
+mode. To download without a binding, choose **Build Spec only**.
+
+To add a binding to an earlier spec-only download, open the form again, choose **Build Spec and
+Run Evals**, enter the binding, and download again.
 
 If a field is not complete, the download does not start. The form shows "Some fields are not
 complete.", marks each field that needs a change in red, and moves the focus to the first one.
@@ -267,7 +285,9 @@ Editor rules:
 - Each Scenario needs at least one test case.
 
 The manual export uses `YYYYMMDD-HHMMSS-manual.zip` and a matching root folder. It contains an empty `inputs/` folder, `outputs/specification.yaml`, and the
-selected files under `outputs/fixtures/`. It contains no Interview state.
+selected files under `outputs/fixtures/`. It contains no Interview state. In run mode, it also
+contains `outputs/target-binding.yaml`, and `outputs/specification.yaml` names the gen_2 runner
+and the binding file. This is the same export as an Interview with the same binding.
 
 ## Browser storage and current limits
 

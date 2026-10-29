@@ -89,6 +89,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from metis.wizard.application.interviewer import Interviewer
+    from metis.wizard.contracts.connection import TargetConnection
     from metis.wizard.contracts.conversation import AnyResponse
 
 # The interview has five stages, so a best-effort finish that clicks Continue on each cannot need
@@ -616,15 +617,24 @@ def compile_specification(specification: Specification) -> CompileResult:
 def package_specification(
     source: Specification | InterviewState,
     fixtures: Iterable[SpecificationFixture],
+    *,
+    connection: TargetConnection | None = None,
 ) -> SpecificationArchive:
     """Compile a manual Specification or final Interview state into a portable export.
 
-    An Interview with a target connection exports `target-binding.yaml` next to
-    `specification.yaml`, which then names the gen_2 runner and the binding file.
+    A target connection exports `target-binding.yaml` next to `specification.yaml`, which then
+    names the gen_2 runner and the binding file. An Interview takes its connection from its
+    state. A manual Specification takes it from `connection`, so both give the same export for
+    the same binding.
+
+    :raises ValueError: `connection` is given with an Interview state.
     """
-    connection = (
-        source.context.connection if isinstance(source, InterviewState) else None
-    )
+    if isinstance(source, InterviewState):
+        if connection is not None:
+            raise ValueError(
+                "An Interview state carries its own connection; do not pass one."
+            )
+        connection = source.context.connection
     # An Interview exports only the Test Cases that the user kept selected.
     specification = connected_specification(
         selected_specification(source.specification, source.excluded_tasks)

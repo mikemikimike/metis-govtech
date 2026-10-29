@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
+
 import httpx
 import pytest
 import yaml
 from pydantic import ValidationError
 
 from metis.core.target_binding import TargetBinding
-from metis.wizard import InterviewState, check_connection, set_connection
+from metis.wizard import (
+    InterviewState,
+    SpecificationFixture,
+    check_connection,
+    package_specification,
+    set_connection,
+)
 from metis.wizard.application.connection import (
     RUNNER_FACTORY_REFS,
     binding_yaml,
@@ -20,6 +29,7 @@ from metis.wizard.contracts import (
     TargetConnection,
 )
 from tests.fixtures.wizard.connections import (
+    CHAT_DOCUMENT,
     OPENAPI_DOCUMENT,
     PLANTED_SECRET,
     browser_binding,
@@ -294,3 +304,129 @@ def test_the_connection_transport_must_match_the_binding() -> None:
         TargetConnection.model_validate(
             {"transport": "browser", "binding": http_binding()}
         )
+
+
+def _fixtures() -> list[SpecificationFixture]:
+    return [SpecificationFixture("policy.pdf", io.BytesIO(b"policy bytes"))]
+
+
+def _outputs(archive_bytes: bytes) -> dict[str, bytes]:
+    """The archive's `outputs/` members by path below the dated root folder."""
+    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+        return {
+            name.split("/", 1)[1]: archive.read(name)
+            for name in archive.namelist()
+            if name.split("/", 1)[1].startswith("outputs/")
+        }
+
+
+@pytest.mark.parametrize("transport", list(ConnectionTransport))
+def test_a_manual_specification_with_a_connection_exports_like_an_interview(
+    transport: ConnectionTransport,
+) -> None:
+    target = connection(transport)
+    specification = research_assistant()
+    state = set_connection(
+        InterviewState(specification=specification, context=interview_context()),
+        target,
+    )
+
+    manual = package_specification(specification, _fixtures(), connection=target)
+    interview = package_specification(state, _fixtures())
+
+    assert _outputs(manual.content) == _outputs(interview.content)
+    exported = yaml.safe_load(_outputs(manual.content)["outputs/specification.yaml"])
+    assert exported["runner_factory_ref"] == RUNNER_FACTORY_REFS[transport]
+    assert "outputs/target-binding.yaml" in _outputs(manual.content)
+    with zipfile.ZipFile(io.BytesIO(manual.content)) as archive:
+        roots = {name.split("/", 1)[0] for name in archive.namelist()}
+        assert all(root.endswith("-manual") for root in roots)
+        assert not any(
+            name.endswith("interview_state.json") for name in archive.namelist()
+        )
+
+
+def test_a_manual_specification_without_a_connection_keeps_the_default_runner() -> None:
+    outputs = _outputs(package_specification(research_assistant(), _fixtures()).content)
+
+    assert "outputs/target-binding.yaml" not in outputs
+    exported = yaml.safe_load(outputs["outputs/specification.yaml"])
+    assert "target_binding" not in exported
+    assert exported["runner_factory_ref"] == research_assistant().runner_factory_ref
+
+
+def test_an_interview_state_takes_its_connection_only_from_the_state() -> None:
+    state = InterviewState(
+        specification=research_assistant(), context=interview_context()
+    )
+
+    with pytest.raises(ValueError, match="own connection"):
+        package_specification(state, _fixtures(), connection=connection())
+
+
+def _check(document: object, **overrides: object):
+    factory = mock_client_factory(
+        lambda request: (
+            httpx.Response(200, json=document)
+            if request.method == "GET"
+            else httpx.Response(200)
+        )
+    )
+    return check_connection(
+        http_binding(**overrides), live=True, environ=ENVIRON, client_factory=factory
+    )
+
+
+def test_the_check_suggests_the_write_that_takes_one_free_text_field() -> None:
+    result = _check(CHAT_DOCUMENT)
+
+    assert result.suggested_submissions == ["POST /conversations/*/messages"]
+    assert result.warnings == []
+    # a suggestion is a hint only: the checked binding keeps what the user wrote
+    assert result.binding is not None
+    assert result.binding.submissions == []
+
+
+def test_a_submissions_pattern_that_matches_no_call_gives_a_warning_naming_it() -> None:
+    result = _check(
+        CHAT_DOCUMENT,
+        submissions=["POST /conversations/*/messages", "POST /chats"],
+    )
+
+    assert [(warning.loc, warning.msg) for warning in result.warnings] == [
+        (["submissions", 1], "POST /chats matches no call in the OpenAPI document.")
+    ]
+    assert result.binding is not None
+    assert result.status is ConnectionStatus.CHECKED
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {**OPENAPI_DOCUMENT, "paths": {"/upload": CHAT_DOCUMENT["paths"]["/upload"]}},
+        {
+            **OPENAPI_DOCUMENT,
+            "paths": {"/settings": CHAT_DOCUMENT["paths"]["/settings"]},
+        },
+    ],
+)
+def test_a_document_with_no_chat_like_write_suggests_nothing(document) -> None:
+    result = _check(document)
+
+    assert result.suggested_submissions == []
+    assert result.errors == []
+
+
+def test_without_a_document_the_check_suggests_nothing_and_warns_nothing() -> None:
+    factory = mock_client_factory(lambda _: httpx.Response(404))
+
+    result = check_connection(
+        http_binding(submissions=["POST /chats"]),
+        live=True,
+        environ=ENVIRON,
+        client_factory=factory,
+    )
+
+    assert result.suggested_submissions == []
+    assert result.warnings == []
+    assert result.binding is not None

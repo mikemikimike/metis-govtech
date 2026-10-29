@@ -99,6 +99,11 @@ class ConnectionCheckResult(BaseModel):
     `binding` is the validated binding, or `None` when `errors` is not empty. `live` is true
     when the Wizard also checked the environment and reached the target; `probes` holds those
     results. `status` is `checked` only when the live checks ran and all passed.
+
+    When the check read an OpenAPI document, `suggested_submissions` lists the calls that look
+    like they send the user's message, and `warnings` names each `submissions` pattern that
+    matches no call in the document. A warning does not make the binding invalid, and the
+    Wizard never puts a suggestion into the binding. The user chooses.
     """
 
     binding: TargetBinding | None = None
@@ -106,6 +111,8 @@ class ConnectionCheckResult(BaseModel):
     live: bool = False
     probes: list[ConnectionProbe] = Field(default_factory=list)
     status: ConnectionStatus = ConnectionStatus.UNCHECKED
+    suggested_submissions: list[str] = Field(default_factory=list)
+    warnings: list[ConnectionFieldError] = Field(default_factory=list)
 
     @field_serializer("binding")
     def _write_binding(self, binding: TargetBinding | None, info: SerializationInfo):  # noqa: ANN202

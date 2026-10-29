@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 
 import pytest
@@ -289,3 +290,67 @@ def test_an_interview_export_writes_the_binding_only_in_run_mode(
             )
         for name in names:
             assert PLANTED_SECRET.encode() not in archive.read(name)
+
+
+@pytest.mark.parametrize("transport", list(ConnectionTransport))
+def test_a_manual_export_with_a_connection_names_the_binding_and_the_gen_2_runner(
+    client: TestClient, transport: ConnectionTransport
+) -> None:
+    response = client.post(
+        "/api/v1/wizard/package",
+        data={
+            "specification": _specification(),
+            "connection": connection(transport).model_dump_json(),
+        },
+        files=[("files", ("policy.pdf", b"policy bytes", "application/pdf"))],
+    )
+
+    assert response.status_code == 200
+    root = "20261016-223045-manual"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        binding = yaml.safe_load(archive.read(f"{root}/outputs/target-binding.yaml"))
+        specification = yaml.safe_load(
+            archive.read(f"{root}/outputs/specification.yaml")
+        )
+        assert f"{root}/inputs/interview_state.json" not in archive.namelist()
+    assert binding["transport"] == transport.value
+    assert specification["target_binding"] == "target-binding.yaml"
+    assert specification["runner_factory_ref"].startswith(
+        "metis.engine.simulation.gen_2.runners."
+    )
+
+
+def test_a_manual_export_refuses_a_binding_with_a_credential_in_a_url(
+    client: TestClient,
+) -> None:
+    target = connection().model_dump(mode="json")
+    target["binding"]["spec_url"] = (
+        f"https://alice:{PLANTED_SECRET}@app.example/openapi.json"
+    )
+
+    response = client.post(
+        "/api/v1/wizard/package",
+        data={"specification": _specification(), "connection": json.dumps(target)},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"
+    assert "spec_url" in response.json()["message"]
+    assert PLANTED_SECRET not in response.text
+
+
+def test_an_interview_export_takes_no_separate_connection(client: TestClient) -> None:
+    state = InterviewState(
+        specification=research_assistant(), context=interview_context(), confirmed=True
+    )
+
+    response = client.post(
+        "/api/v1/wizard/package",
+        data={
+            "state": state.model_dump_json(),
+            "connection": connection().model_dump_json(),
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"

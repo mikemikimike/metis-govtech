@@ -34,7 +34,11 @@ from metis.wizard.application.config import (
     interview_client_config,
     working_status,
 )
-from metis.wizard.application.connection import check_connection, set_connection
+from metis.wizard.application.connection import (
+    check_connection,
+    set_connection,
+    validate_binding,
+)
 from metis.wizard.application.interviewer import InterviewerUnavailable
 from metis.wizard.application.matching.library_catalogue import (
     library_catalogue as _library_catalogue,
@@ -195,6 +199,7 @@ __all__ = [
     "package_specification",
     "render_review",
     "set_connection",
+    "validate_binding",
     "write_experiment",
     "write_review",
     "working_status",

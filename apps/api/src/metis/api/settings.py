@@ -108,10 +108,9 @@ InterviewHandler: TypeAlias = Callable[[InterviewRequest], InterviewResult]
 
 @dataclass(frozen=True)
 class WizardDependencies:
-    """The configured public Interview handler and connection-check switch used by the routes."""
+    """The configured public Interview handler used by the Interview routes."""
 
     interview_handler: InterviewHandler
-    connection_check: bool = False
 
 
 def build_dependencies(settings: Settings) -> WizardDependencies:
@@ -133,10 +132,7 @@ def build_dependencies(settings: Settings) -> WizardDependencies:
         interview=settings.role(ModelRole.INTERVIEW),
         embeddings=settings.role(ModelRole.EMBEDDINGS),
     )
-    return WizardDependencies(
-        interview_handler=handle_interview,
-        connection_check=settings.connection_check,
-    )
+    return WizardDependencies(interview_handler=handle_interview)
 
 
 __all__ = [

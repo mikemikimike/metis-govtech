@@ -77,7 +77,7 @@ the Profile states what METIS evaluates, and the binding states how METIS reache
    only a web page.
 2. Enter the values that the target cannot supply:
    - HTTP: the target name, the OpenAPI URL, and the API key variable. Under **More options**:
-     secret headers, refused calls, message calls, TLS verification, and runner notes.
+     secret headers, refused calls, submissions, TLS verification, and runner notes.
    - Browser: the target name, the start page URL, and the sign-in steps with `{{secret:NAME}}`
      placeholders. Under **More options**: the sign-in variables and runner notes.
 3. Select **Test connection** in the web client. The CLI tests the binding after the fields.
@@ -106,6 +106,25 @@ that the binding was not tested.
 A download with a binding has `outputs/target-binding.yaml` next to `outputs/specification.yaml`.
 The Specification names the gen_2 runner in `runner_factory_ref` and the file in `target_binding`.
 The binding file starts with a comment that lists the variables to set.
+
+### Submissions
+
+**Submissions** (`submissions` in the binding) are the calls that send the user's message. When
+the list is empty, the Engine treats each `POST`, `PUT`, or `PATCH` with a JSON body as a
+submission. A target that has other JSON writes, such as a settings change, needs the list.
+
+When the test reads the OpenAPI document, it helps with this list:
+
+- It suggests each write whose JSON body has exactly one required field, and that field is free
+  text. A `{name}` path parameter becomes `*`, for example `POST /conversations/*/messages`.
+- It warns about each submission that you wrote that matches no call in the document. The
+  warning names the pattern. A warning does not stop the download.
+
+The document does not say which field is the chat message, so a suggestion can be wrong. The
+Wizard adds a suggestion to the binding only when you accept it. In the web client, select
+**Use these submissions** under **More options**. In the CLI, answer `y`. A target with no
+OpenAPI document, or with no matching write, gets no suggestion. The Engine uses only the binding
+file. It does not guess submissions during a run.
 
 ## ARC capability catalogue
 

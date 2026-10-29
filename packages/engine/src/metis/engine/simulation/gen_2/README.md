@@ -85,7 +85,9 @@ change these:
 - `secret_headers` adds a header from an environment variable to matching calls. A secret
   that is not set adds nothing.
 - `submissions` lists the calls that send the user's message. Left empty, any `POST`,
-  `PUT` or `PATCH` with a JSON body counts.
+  `PUT` or `PATCH` with a JSON body counts. The Wizard's connection test suggests entries
+  from the OpenAPI document and warns about an entry that matches no call. The engine reads
+  only this list and infers nothing at run time.
 - `forbidden_calls` are `METHOD /glob` patterns; `*` matches within a path segment and
   `**` across segments. Write `*` for a path parameter.
 - `advice` (`limits`, `notes`) is for the agent only. Code does not check it. Put in it

@@ -13,7 +13,6 @@ import {
   InitialDocumentPicker,
   OpeningConfigurationState,
   OpeningRoute,
-  ModePicker,
   OpeningScreen,
   type CapabilityEvidenceDraft,
   type OpeningControl,
@@ -33,7 +32,7 @@ import {
   RowFiles,
   Transcript,
 } from "./Conversation";
-import { ConnectionForm } from "./ConnectionStep";
+import { ConnectionForm, ModePicker } from "./ConnectionStep";
 import { emptyConnectionDraft, type ConnectionDraft } from "./connection";
 import { InterviewRail } from "./InterviewRail";
 import {
@@ -1048,7 +1047,7 @@ test("the mode toggle above the box shows the connection card only in run mode",
   assert.equal(option("Build Spec only").props["aria-checked"], true);
   assert.equal(card().length, 0);
 
-  (option("Build Spec and Run Evals").props.onClick as () => void)();
+  (option("Build Spec and connect target").props.onClick as () => void)();
   assert.equal(draft.mode, "run");
   findElement(card()[0], (element) => element.type === ConnectionForm);
   assert.equal(control, null);

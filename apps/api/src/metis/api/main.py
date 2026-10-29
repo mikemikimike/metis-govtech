@@ -53,11 +53,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Compose production collaborators before the app accepts requests.
 
     Missing model settings do not stop the start. The app keeps the error, `GET /api/v1/models`
-    reports the missing roles, and each Interview route returns 503 `model_unavailable`.
+    reports the missing roles, and each Interview route returns 503 `model_unavailable`. The
+    connection check, compile, and package routes call no model, so they work without keys.
     """
     if getattr(app.state, "wizard_dependencies", None) is None:
         settings = Settings.from_env()
         app.state.model_settings = settings
+        app.state.connection_check = settings.connection_check
         try:
             app.state.wizard_dependencies = build_dependencies(settings)
         except SettingsError as exc:
@@ -80,8 +82,9 @@ def create_app(
     )
     if interview_handler is not None:
         app.state.wizard_dependencies = WizardDependencies(
-            interview_handler=interview_handler, connection_check=connection_check
+            interview_handler=interview_handler
         )
+        app.state.connection_check = connection_check
 
     @app.get("/health")
     def health() -> dict[str, str]:

@@ -49,6 +49,22 @@ def test_the_app_starts_without_keys_and_the_interview_needs_only_its_own_key(
         build_dependencies(Settings(env={"EMBEDDING_API_KEY": "k"}))
 
 
+def test_the_connection_check_works_without_model_keys(no_keys: None) -> None:
+    binding = {
+        "schema_version": 1,
+        "identity": {"name": "Billing bot"},
+        "transport": "http",
+        "spec_url": "",
+    }
+    with TestClient(create_app()) as client:
+        response = client.post(
+            "/api/v1/wizard/connection/check", json={"binding": binding}
+        )
+
+    assert response.status_code == 200
+    assert response.json()["errors"][0]["loc"] == ["spec_url"]
+
+
 def test_models_reports_each_role_and_its_missing_variables_without_secrets(
     monkeypatch: pytest.MonkeyPatch, no_keys: None
 ) -> None:

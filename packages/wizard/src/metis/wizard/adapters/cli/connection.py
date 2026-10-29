@@ -184,6 +184,9 @@ def read_target_connection(
             out("Fix the values. To continue without a binding, run with --mode spec.")
             data = _fix(ask, out, data)
             continue
+        if _offer_suggestion(ask, out, result, data):
+            data = {**data, "submissions": list(result.suggested_submissions)}
+            continue
         choice = ask.choose(
             _NEXT,
             name="Next",
@@ -210,6 +213,26 @@ _NEXT = [
 ]
 
 
+def _offer_suggestion(
+    ask: Prompter,
+    out: Printer,
+    result: ConnectionCheckResult,
+    data: Mapping[str, Any],
+) -> bool:
+    """Show the submissions that the OpenAPI document suggests, and ask to use them.
+
+    A document does not mark the chat message field, so the binding gets a suggestion only when
+    the user says yes.
+    """
+    suggested = result.suggested_submissions
+    if not suggested or sorted(suggested) == sorted(data.get("submissions") or []):
+        return False
+    out("\nThe OpenAPI document suggests these submissions:")
+    for pattern in suggested:
+        out(f"  {pattern}")
+    return ask.confirm("Use them as the submissions?", False) is True
+
+
 def _fix(ask: Prompter, out: Printer, data: Mapping[str, Any]) -> dict[str, Any]:
     """Ask the binding fields again, with the current values as defaults."""
     fixed = _read_values(ask, out, _answers(data))
@@ -229,6 +252,8 @@ def _show(result: ConnectionCheckResult, out: Printer) -> None:
     for probe in result.probes:
         mark = "✓" if probe.ok else "✗"
         out(f"  {mark} {probe.name}: {probe.message}")
+    for warning in result.warnings:
+        out(f"  ⚠ {warning.msg}")
 
 
 # ── binding values ────────────────────────────────────────────────────────

@@ -64,6 +64,76 @@ OPENAPI_DOCUMENT = {
 }
 
 
+# A chat target: one message write, plus writes that are not messages.
+CHAT_DOCUMENT = {
+    "openapi": "3.1.0",
+    "info": {"title": "Policy assistant", "version": "1"},
+    "servers": [{"url": "/api/v1"}],
+    "paths": {
+        "/conversations/{id}/messages": {
+            "post": {
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {"$ref": "#/components/schemas/Message"}
+                        }
+                    }
+                }
+            },
+            "get": {},
+        },
+        "/settings": {
+            "patch": {
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["theme", "language"],
+                                "properties": {
+                                    "theme": {"type": "string"},
+                                    "language": {"type": "string"},
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/conversations/{id}/title": {
+            "put": {
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": ["colour"],
+                                "properties": {
+                                    "colour": {"type": "string", "enum": ["red"]}
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/upload": {"post": {"requestBody": {"content": {"multipart/form-data": {}}}}},
+    },
+    "components": {
+        "schemas": {
+            "Message": {
+                "type": "object",
+                "required": ["text"],
+                "properties": {
+                    "text": {"type": "string"},
+                    "draft": {"type": "boolean"},
+                },
+            }
+        }
+    },
+}
+
+
 def mock_client_factory(handler):
     """Build the check's HTTP client on `httpx.MockTransport`, so no request leaves the test."""
     seen: list[httpx.Request] = []

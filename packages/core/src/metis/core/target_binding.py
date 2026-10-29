@@ -38,6 +38,17 @@ CallPattern = Annotated[
 OpenAPI's ``{name}`` parameters, queries and fragments are rejected, since a pattern
 holding them would never match a request path; write ``*`` for a parameter."""
 
+
+def call_matches(pattern: str, method: str, path: str) -> bool:
+    """Whether a ``CallPattern`` covers a call: ``*`` within a segment, ``**`` across."""
+    verb, _, glob = pattern.partition(" ")
+    regex = "".join(
+        ".*" if part == "**" else "[^/]*" if part == "*" else re.escape(part)
+        for part in re.split(r"(\*\*|\*)", glob)
+    )
+    return verb in ("*", method) and re.fullmatch(regex, path) is not None
+
+
 _Path = Annotated[str, StringConstraints(pattern=r"^/[^\s{}?#]*$")]
 
 

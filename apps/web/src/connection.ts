@@ -138,6 +138,26 @@ export function draftFieldFor(
   }
 }
 
+// What the last test found about the submissions: patterns that match no call in the OpenAPI
+// document, and the calls that the document suggests. A suggestion goes into the draft only when
+// the user selects it, so the user always confirms it.
+export function submissionHints(
+  draft: ConnectionDraft,
+  result: ConnectionCheckResult | null,
+): { warning: string | null; suggestion: string[] } {
+  const warning =
+    (result?.warnings ?? [])
+      .filter((item) => draftFieldFor(item.loc) === "submissions")
+      .map((item) => item.msg)
+      .join(" ") || null;
+  const suggestion = result?.suggested_submissions ?? [];
+  const current = list(draft.submissions);
+  const same =
+    suggestion.length === current.length &&
+    suggestion.every((item) => current.includes(item));
+  return { warning, suggestion: same ? [] : suggestion };
+}
+
 // The connection to start the Interview with, from the check result. Spec-only mode starts with
 // no connection. Run mode starts only with a valid binding.
 export function startConnection(
@@ -147,17 +167,54 @@ export function startConnection(
   return draft.mode === "spec" ? null : connectionFromCheck(result);
 }
 
+function fieldMessage(msg: string): string {
+  // Pydantic says "String should have at least 1 character" for an empty field.
+  if (/at least 1 character/.test(msg)) return "Required";
+  if (/should match pattern/.test(msg))
+    return "Use a variable name in capital letters, digits, and _, such as APP_API_KEY.";
+  return msg.replace(/^Value error, /, "");
+}
+
+// The field that a failed live check belongs to. A variable check is named after the variable,
+// so it goes to the field that names that variable.
+function probeField(
+  draft: ConnectionDraft,
+  name: string,
+): keyof ConnectionDraft | null {
+  if (name === "spec_url" || name === "server") return "specUrl";
+  if (name === "start_url") return "startUrl";
+  if (draft.secretEnv.trim() === name) return "secretEnv";
+  if (list(draft.loginSecrets).includes(name)) return "loginSecrets";
+  if (secretHeaders(draft.secretHeaders).some((header) => header.env === name))
+    return "secretHeaders";
+  if (draft.specUrl.includes(`\${${name}}`)) return "specUrl";
+  if (draft.startUrl.includes(`\${${name}}`)) return "startUrl";
+  return null;
+}
+
+function probeMessage(name: string, message: string): string {
+  if (message === "not set") return `${name} is not set. Set it in .env.`;
+  if (name === "server") return `The OpenAPI document loads, but ${message}.`;
+  return message.charAt(0).toUpperCase() + message.slice(1) + ".";
+}
+
+// Every problem from the last test, under the field to fix. A problem with no field goes to
+// "binding", which shows under the form.
 export function errorsByField(
+  draft: ConnectionDraft,
   result: ConnectionCheckResult | null,
 ): Partial<Record<keyof ConnectionDraft | "binding", string>> {
   const errors: Partial<Record<keyof ConnectionDraft | "binding", string>> = {};
-  for (const error of result?.errors ?? []) {
-    const field = draftFieldFor(error.loc) ?? "binding";
-    // Pydantic says "String should have at least 1 character" for an empty field.
-    const message = /at least 1 character/.test(error.msg)
-      ? "Required"
-      : error.msg;
+  const add = (field: keyof ConnectionDraft | "binding", message: string) => {
     errors[field] = errors[field] ? `${errors[field]} ${message}` : message;
-  }
+  };
+  for (const error of result?.errors ?? [])
+    add(draftFieldFor(error.loc) ?? "binding", fieldMessage(error.msg));
+  for (const probe of result?.probes ?? [])
+    if (!probe.ok)
+      add(
+        probeField(draft, probe.name) ?? "binding",
+        probeMessage(probe.name, probe.message),
+      );
   return errors;
 }
