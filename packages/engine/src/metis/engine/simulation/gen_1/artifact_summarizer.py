@@ -193,7 +193,7 @@ async def summarize_fixture_artifacts(
     Reuses :func:`summarize_artifact` (the same summarizer target outputs use).
     Its ``state_description`` is target-facing ("delivered at turn N"), which is
     wrong for an uploaded fixture, so it is cleared afterward — fixtures are
-    disambiguated for the persona by ``source`` + ``at_turn``, not a state line.
+    disambiguated for the persona by ``source`` + ``at_simulated_turn``, not a state line.
     Mutates each artifact in place; never raises into the caller.
     """
     for artifact in fixtures:

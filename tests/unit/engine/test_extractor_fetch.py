@@ -246,7 +246,10 @@ class TestArtifacts:
         lf = FakeLangfuse(session=[root], traces={"t1": [root]})
         artifacts = [
             Artifact(
-                name="deck.pptx", path="runs/a/deck.pptx", at_turn=2, state="received"
+                name="deck.pptx",
+                path="runs/a/deck.pptx",
+                at_simulated_turn=2,
+                state="received",
             ),
             Artifact(name="gone.csv", state="unavailable"),
         ]
@@ -255,7 +258,7 @@ class TestArtifacts:
 
         deck, gone = grading_input.artifacts
         assert deck.path == str(tmp_path / "runs/a/deck.pptx")
-        assert deck.at_turn == 2
+        assert deck.at_simulated_turn == 2
         assert gone.path is None
 
     def test_every_artifact_is_attached_regardless_of_turn(
@@ -265,7 +268,7 @@ class TestArtifacts:
         root = _obs("r1", "t1")
         lf = FakeLangfuse(session=[root], traces={"t1": [root]})
         artifacts = [
-            Artifact(name=f"f{i}", path=f"f{i}", at_turn=i, state="received")
+            Artifact(name=f"f{i}", path=f"f{i}", at_simulated_turn=i, state="received")
             for i in range(5)
         ]
         assert len(_fetch(lf, tmp_path, artifacts=artifacts).artifacts) == 5

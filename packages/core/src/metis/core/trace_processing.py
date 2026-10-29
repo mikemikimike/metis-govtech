@@ -376,8 +376,8 @@ def select_by_artifact(
     labelled ``artifact:<name>``.
 
     A revised file keeps its name, and the judge grades the file the user ends up with. The
-    latest revision is the one with the highest ``at_turn``, where a revision with no
-    ``at_turn`` counts as earlier than every turn. Revisions with the same ``at_turn`` are
+    latest revision is the one with the highest ``at_simulated_turn``, where a revision with no
+    ``at_simulated_turn`` counts as earlier than every turn. Revisions with the same ``at_simulated_turn`` are
     ordered by their place in ``GradingInput.artifacts``, and the last one is kept. No file
     with the name, or no name, is a ``Problem``.
     """
@@ -970,7 +970,7 @@ def _merged(entries: list[tuple[int, OfferedTool]]) -> OfferedTool:
 
 def _revision_order(entry: tuple[int, Artifact]) -> tuple[bool, int, int]:
     position, artifact = entry
-    turn = artifact.at_turn
+    turn = artifact.at_simulated_turn
     return (turn is not None, turn or 0, position)
 
 

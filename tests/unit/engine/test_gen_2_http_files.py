@@ -116,7 +116,11 @@ async def test_each_listed_file_is_one_real_download_recorded_with_its_turn(
     ]
     assert result["listing"] == listing.entry
     first, _ = (a for a in runner.ledger.artifacts() if a.source == "target")
-    assert (first.external_id, first.at_turn, first.state) == ("1", 1, "received")
+    assert (first.external_id, first.at_simulated_turn, first.state) == (
+        "1",
+        1,
+        "received",
+    )
     entry = runner._log.get(result["files"][0]["entry"])
     assert entry.summary == "GET /api/v1/files/1/content -> 200"
 

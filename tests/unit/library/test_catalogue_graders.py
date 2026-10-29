@@ -289,7 +289,7 @@ def test_artifact_scope_judges_the_latest_revision(name: str, tmp_path: Path) ->
             source="target",
             state="received",
             path=str(folder / "report.txt"),
-            at_turn=turn,
+            at_simulated_turn=turn,
         )
         for folder, turn in ((draft, 1), (final, 2))
     )

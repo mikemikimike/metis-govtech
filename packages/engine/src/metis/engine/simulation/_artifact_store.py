@@ -119,7 +119,7 @@ def _save_artifacts(record: TrialRecord, run_dir: Path, experiment_root: Path) -
                 "source": artifact.source,
                 "state": artifact.state,
                 "external_id": artifact.external_id,
-                "at_turn": artifact.at_turn,
+                "at_simulated_turn": artifact.at_simulated_turn,
                 "path": str(local) if local else "",
             }
         )

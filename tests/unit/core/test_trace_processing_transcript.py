@@ -280,11 +280,13 @@ def test_select_by_artifact_gives_the_latest_revision_of_the_file() -> None:
     gi = GradingInput(
         traces=(),
         artifacts=(
-            _artifact("deck.pptx", path="/tmp/turn3/deck.pptx", at_turn=3),
-            _artifact("deck.pptx", path="/tmp/turn1/deck.pptx", at_turn=1),
+            _artifact("deck.pptx", path="/tmp/turn3/deck.pptx", at_simulated_turn=3),
+            _artifact("deck.pptx", path="/tmp/turn1/deck.pptx", at_simulated_turn=1),
             _artifact("deck.pptx", path="/tmp/unknown/deck.pptx"),
-            _artifact("deck.pptx", path="/tmp/turn3-later/deck.pptx", at_turn=3),
-            _artifact("other.docx", at_turn=4),
+            _artifact(
+                "deck.pptx", path="/tmp/turn3-later/deck.pptx", at_simulated_turn=3
+            ),
+            _artifact("other.docx", at_simulated_turn=4),
         ),
     )
     selected = select_by_artifact(gi, "deck.pptx")

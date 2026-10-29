@@ -93,7 +93,7 @@ async def test_orchestrator_summarizes_downloads(monkeypatch, tmp_path: Path) ->
     assert seen and seen[0][1] == 1
     art = record.artifacts[0]
     assert art.content_description == "3 rows x 2 cols"
-    assert art.at_turn == 1
+    assert art.at_simulated_turn == 1
 
 
 @pytest.mark.asyncio
@@ -102,7 +102,7 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
 ) -> None:
     from metis.engine.simulation.gen_1 import orchestrator as orch_mod
 
-    # The worker-enriched registry object (has a description; no at_turn yet).
+    # The worker-enriched registry object (has a description; no at_simulated_turn yet).
     registry = Artifact(
         name="q3.csv",
         source="fixture",
@@ -140,9 +140,9 @@ async def test_fixture_stub_swapped_for_registry_object_and_deduped(
 
     await orch._enrich_observation_artifacts(obs, turn_count=3, current_message="here")
 
-    # Stub replaced in place by the registry object; at_turn stamped; not summarized.
+    # Stub replaced in place by the registry object; at_simulated_turn stamped; not summarized.
     assert obs.artifacts[0] is registry
-    assert registry.at_turn == 3
+    assert registry.at_simulated_turn == 3
     assert calls == []  # fixtures skip summarize
 
     # Record dedups: registry appears in both _fixture_artifacts and collected.
@@ -181,7 +181,7 @@ async def test_target_artifact_still_stamped_and_summarized(
     obs = Observation(text="ok", artifacts=[target])
     await orch._enrich_observation_artifacts(obs, turn_count=2, current_message="go")
 
-    assert target.at_turn == 2
+    assert target.at_simulated_turn == 2
     assert calls == ["out.csv"]  # targets are summarized
 
 
@@ -284,4 +284,4 @@ async def test_a_later_echo_without_an_id_does_not_blank_the_id(
         current_message="b",
     )
     assert registry.external_id == "orca-file-77"
-    assert registry.at_turn == 2
+    assert registry.at_simulated_turn == 2

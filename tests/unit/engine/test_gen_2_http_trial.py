@@ -214,7 +214,9 @@ async def test_a_full_trial_writes_a_record_from_a_real_session_and_a_real_downl
     assert loaded.outcome.stop_reason == "goal_achieved"
     assert loaded.outcome.total_turns == 2
     assert loaded.target_session_id == "s-1"  # copied from the reply, not written
-    assert [(a.name, a.source, a.state, a.at_turn) for a in loaded.artifacts] == [
+    assert [
+        (a.name, a.source, a.state, a.at_simulated_turn) for a in loaded.artifacts
+    ] == [
         ("q3_sales.csv", "fixture", "received", 1),
         ("report.csv", "target", "received", 1),
     ]

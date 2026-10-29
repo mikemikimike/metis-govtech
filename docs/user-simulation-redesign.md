@@ -33,7 +33,7 @@ scripts were run from `$TMPDIR` with `python -I` and only read `SR`.
 | 8. The YAML target profile | **adapt** |
 | 9. Rereading the whole specification every round | **reject** (fix folded into card 1) |
 | 10. `BrowserRunner` | **adapt** (taken untested) |
-| 11. Turn semantics and `at_turn` | **adapt** |
+| 11. Turn semantics and `at_simulated_turn` | **adapt** |
 | 12. LLM-built map of user-input fields | **reject** |
 | Artifact ledger (Part 2) | **adapt** (write path only) |
 | Workflow contract (Part 2) | **adapt** (a "run one trial" seam only) |
@@ -945,7 +945,7 @@ they need Chromium outside the macOS sandbox anyway (`SP/FINDINGS.md`, D3).
 browser entry kinds, and the artifact write path. Playwright is already a dependency of
 `orca_playwright`.
 
-## 11. Turn semantics and `at_turn`
+## 11. Turn semantics and `at_simulated_turn`
 
 **Verdict: adapt.**
 
@@ -953,27 +953,27 @@ browser entry kinds, and the artifact write path. Playwright is already a depend
 definition for a generic runner, and it matches what METIS counts today: one user-agent
 decision, one `send_turn`. A turn doing more target work than before (TC-004 turn 2
 answered a form and fetched 6–8 files, **checked**) is by design and harmless. The
-part to adapt is `at_turn`, which the spike numbers differently from METIS.
+part to adapt is `at_simulated_turn`, which the spike numbers differently from METIS.
 
 **What changes.**
 
-- **`at_turn` follows METIS's numbering.** METIS stamps `at_turn` with the 1-based turn
+- **`at_simulated_turn` follows METIS's numbering.** METIS stamps `at_simulated_turn` with the 1-based turn
   number on which the file moved (`simulation/orchestrator.py`, lines 591 and 594). The
   spike stamps `turn - 1`, so its first turn's upload is `0` and turn 2's downloads are
   `1` (**checked**, `V5` TC-004 #1). The same trial would put the same file on different
   numbers depending on the runner. The generic runner must use METIS's convention.
-- **The closing step's files keep the last turn's `at_turn`**, as in the spike, and the
+- **The closing step's files keep the last turn's `at_simulated_turn`**, as in the spike, and the
   closing step isn't counted in `total_turns`.
 
-**METIS today.** `TrialOutcome.total_turns` counts completed turns, and `Artifact.at_turn`
-is the 1-based turn (see above). No reader of `at_turn` exists outside the simulation
+**METIS today.** `TrialOutcome.total_turns` counts completed turns, and `Artifact.at_simulated_turn`
+is the 1-based turn (see above). No reader of `at_simulated_turn` exists outside the simulation
 package (**checked**, by grepping `packages/` and `apps/`).
 
 **Evidence used.** `V5` `turns[].gestures` (**checked**): 12 turns, 3 doing more than one
 thing, all TC-004 turn 2.
 
 **Known limit.** Keeping METIS's numbering also keeps #427's mismatch: evaluation compares
-`at_turn` with a trace's position in the session, which is a different count, so a file
+`at_simulated_turn` with a trace's position in the session, which is a different count, so a file
 can attach to the wrong turn. `gen_2` is no worse than `gen_1` here. #427 is fixed once,
 for both, outside #460 (decided at review).
 
@@ -1055,7 +1055,7 @@ cards 2 and 3's checks run, so the checks aren't rebuilt per runner.
 - Read `SR/common/artifact-ledger.md`, and `SP/p4/runner.py`'s `_record_upload` and
   `_record_download`, which both transports call.
 - `V5` (**checked**): each TC-004 and TC-013 record lists `q3_sales.csv` twice, once with
-  `at_turn` unset and once with `at_turn` 0 and Orca's file ID.
+  `at_simulated_turn` unset and once with `at_simulated_turn` 0 and Orca's file ID.
 
 **Checks not run.** The shared component's own tests (`SR/common/artifact_ledger/`).
 

@@ -112,7 +112,7 @@ async def _after_one_turn(tmp_path: Path, collect: bool) -> Trial:
 
 def _target_files(runner: HttpRunner) -> list[tuple[str, str, int | None]]:
     return [
-        (a.name, a.state, a.at_turn)
+        (a.name, a.state, a.at_simulated_turn)
         for a in runner.ledger.artifacts()
         if a.source == "target"
     ]
@@ -153,7 +153,7 @@ async def test_a_promise_the_closing_step_cannot_meet_is_recorded_unavailable(
     await trial.runner.end_chat([Promise(name="chart.vl.json", turn=1)])
 
     [entry] = [a for a in trial.runner.ledger.artifacts() if a.name == "chart.vl.json"]
-    assert (entry.state, entry.at_turn) == ("unavailable", 1)
+    assert (entry.state, entry.at_simulated_turn) == ("unavailable", 1)
     assert entry.state_description == "promised in turn 1, never delivered"
 
 

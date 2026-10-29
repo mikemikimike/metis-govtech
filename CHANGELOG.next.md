@@ -201,7 +201,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `metis.core.trace_processing` select what a grader judges for each scope, each under a
   label for `GraderResult.scope`. A trace is one turn on its own; a subsession is a turn and up
   to `window` turns before it, or every turn before it when `window` is not set. The artifact
-  scope judges the latest revision of a named file: the highest `at_turn`, then the last one
+  scope judges the latest revision of a named file: the highest `at_simulated_turn`, then the last one
   listed. `find_fixtures` gives the files the user gave the target, and `tools_offered` the
   tools the session offered, by agent, from the model calls, the agents and the tool calls.
   `render_artifact` gives a file in the form the judge reads, up to 50 MB.
@@ -456,7 +456,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   component of the target's name in `outputs/trials/<id>/artifacts/`, through a `.part` file
   that is renamed only once the bytes are whole, so a partial download is never kept. A name
   that is taken becomes `name-1.ext`, `name-2.ext`, and no saved file or entry is ever
-  overwritten. Code sets `path`, `digest` and `state`, and the caller supplies `at_turn`. It
+  overwritten. Code sets `path`, `digest` and `state`, and the caller supplies `at_simulated_turn`. It
   returns the `ArtifactRef` the transport log uses. A download is refused, leaving no file
   and no entry, when a `.png`, `.jpg`, `.gif`, `.pdf`, `.docx`, `.xlsx`, `.pptx` or `.zip`
   does not start with its type's signature, or when a JSON document or JSON content type is
@@ -636,7 +636,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   scenario descriptions and no knowledge of any target. Each file the user holds is its
   `file_facts` line and never its content, and files the target promised but has not
   delivered are listed. Its calls go through `parse_completion` into the trial's LLM-call log.
-  The turn loop uses `gen_1`'s stop reasons and numbers `at_turn` from 1. Each turn updates
+  The turn loop uses `gen_1`'s stop reasons and numbers `at_simulated_turn` from 1. Each turn updates
   the progress display, and a set `shutdown_event` ends the trial as `interrupted`. After the
   last turn it calls `end_chat` once. That call is not a turn and is not in `total_turns`.
   Errors behave as in `gen_1`, so the retry loop's partial record keeps the turns, artifacts

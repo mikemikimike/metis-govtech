@@ -50,7 +50,9 @@ def test_a_download_is_saved_and_recorded_by_code(
 ) -> None:
     ledger = _ledger(tmp_path, trial_dir)
 
-    ref = ledger.record_download("report.pdf", PDF, at_turn=2, external_id="f-1")
+    ref = ledger.record_download(
+        "report.pdf", PDF, at_simulated_turn=2, external_id="f-1"
+    )
 
     assert ref == ArtifactRef(
         path="artifacts/report.pdf", sha256=hashlib.sha256(PDF).hexdigest()
@@ -63,7 +65,7 @@ def test_a_download_is_saved_and_recorded_by_code(
         "state": "received",
         "external_id": "f-1",
         "path": "outputs/trials/t1/artifacts/report.pdf",
-        "at_turn": 2,
+        "at_simulated_turn": 2,
         "state_description": None,
         "digest": ref.sha256,
         "hash_algorithm": "SHA256",
@@ -71,12 +73,12 @@ def test_a_download_is_saved_and_recorded_by_code(
     }
 
 
-def test_the_caller_supplies_at_turn_even_when_there_is_none(
+def test_the_caller_supplies_at_simulated_turn_even_when_there_is_none(
     tmp_path: Path, trial_dir: Path
 ) -> None:
     ledger = _ledger(tmp_path, trial_dir)
-    ledger.record_download("a.pdf", PDF, at_turn=None)
-    assert ledger.artifacts()[0].at_turn is None
+    ledger.record_download("a.pdf", PDF, at_simulated_turn=None)
+    assert ledger.artifacts()[0].at_simulated_turn is None
 
 
 def test_a_name_that_is_taken_gets_a_numbered_name(
@@ -86,8 +88,8 @@ def test_a_name_that_is_taken_gets_a_numbered_name(
     (trial_dir / "artifacts" / "report.pdf").write_bytes(b"%PDF-earlier")
     ledger = _ledger(tmp_path, trial_dir)
 
-    first = ledger.record_download("report.pdf", PDF, at_turn=1)
-    second = ledger.record_download("report.pdf", PDF + b"2", at_turn=2)
+    first = ledger.record_download("report.pdf", PDF, at_simulated_turn=1)
+    second = ledger.record_download("report.pdf", PDF + b"2", at_simulated_turn=2)
 
     assert (first.path, second.path) == (
         "artifacts/report-1.pdf",
@@ -112,7 +114,7 @@ def test_a_file_is_saved_under_the_last_component_of_its_name(
 ) -> None:
     ledger = _ledger(tmp_path, trial_dir)
 
-    ref = ledger.record_download(reported, PDF, at_turn=0)
+    ref = ledger.record_download(reported, PDF, at_simulated_turn=0)
 
     assert ref.path == f"artifacts/{saved}"
     assert ledger.artifacts()[0].name == saved
@@ -130,7 +132,7 @@ def test_the_bytes_are_written_through_a_part_file(
         seen.append(sorted(p.name for p in (trial_dir / "artifacts").iterdir()))
         yield b"more"
 
-    ledger.record_download("report.pdf", chunks(), at_turn=0)
+    ledger.record_download("report.pdf", chunks(), at_simulated_turn=0)
 
     assert seen == [["report.pdf.part"]]
     assert [p.name for p in (trial_dir / "artifacts").iterdir()] == ["report.pdf"]
@@ -144,7 +146,7 @@ def test_a_partial_download_is_never_kept(tmp_path: Path, trial_dir: Path) -> No
         raise ConnectionError("reset by peer")
 
     with pytest.raises(ConnectionError):
-        ledger.record_download("report.pdf", broken(), at_turn=0)
+        ledger.record_download("report.pdf", broken(), at_simulated_turn=0)
 
     assert list((trial_dir / "artifacts").iterdir()) == []
     assert ledger.artifacts() == []
@@ -157,7 +159,7 @@ def test_a_json_chat_reply_saved_as_docx_is_refused(
     ledger = _ledger(tmp_path, trial_dir)
 
     with pytest.raises(ArtifactRejected, match="JSON"):
-        ledger.record_download("summary.docx", CHAT_REPLY, at_turn=1)
+        ledger.record_download("summary.docx", CHAT_REPLY, at_simulated_turn=1)
 
     assert list((trial_dir / "artifacts").iterdir()) == []
     assert ledger.artifacts() == []
@@ -182,10 +184,10 @@ def test_a_typed_file_must_start_with_its_signature(
     ledger = _ledger(tmp_path, trial_dir)
 
     with pytest.raises(ArtifactRejected, match="not a"):
-        ledger.record_download(name, b"<html>Sign in</html>", at_turn=0)
+        ledger.record_download(name, b"<html>Sign in</html>", at_simulated_turn=0)
     assert ledger.artifacts() == []
 
-    ledger.record_download(name, good, at_turn=0)
+    ledger.record_download(name, good, at_simulated_turn=0)
     assert [a.name for a in ledger.artifacts()] == [name]
 
 
@@ -198,7 +200,7 @@ def test_json_content_type_cannot_be_saved_under_a_non_json_name(
         ledger.record_download(
             "report.docx",
             ZIP,
-            at_turn=0,
+            at_simulated_turn=0,
             content_type="application/json; charset=utf-8",
         )
 
@@ -209,7 +211,10 @@ def test_json_is_accepted_under_a_json_name(tmp_path: Path, trial_dir: Path) -> 
     ledger = _ledger(tmp_path, trial_dir)
 
     ledger.record_download(
-        "chart.vl.json", CHAT_REPLY, at_turn=0, content_type="application/json"
+        "chart.vl.json",
+        CHAT_REPLY,
+        at_simulated_turn=0,
+        content_type="application/json",
     )
 
     assert [a.name for a in ledger.artifacts()] == ["chart.vl.json"]
@@ -228,13 +233,17 @@ def test_a_fixture_has_one_entry_however_often_it_is_uploaded(
     (tmp_path / "inputs" / "fixtures").mkdir(parents=True)
     (tmp_path / "inputs" / "fixtures" / "q3_sales.csv").write_bytes(_sales_csv())
     ledger = _ledger(tmp_path, trial_dir, ["q3_sales.csv"])
-    assert ledger.artifacts()[0].at_turn is None
+    assert ledger.artifacts()[0].at_simulated_turn is None
 
-    ledger.record_upload("q3_sales.csv", at_turn=0)
-    ledger.record_upload("q3_sales.csv", at_turn=3)
+    ledger.record_upload("q3_sales.csv", at_simulated_turn=0)
+    ledger.record_upload("q3_sales.csv", at_simulated_turn=3)
 
     (entry,) = ledger.artifacts()
-    assert (entry.source, entry.name, entry.at_turn) == ("fixture", "q3_sales.csv", 0)
+    assert (entry.source, entry.name, entry.at_simulated_turn) == (
+        "fixture",
+        "q3_sales.csv",
+        0,
+    )
     assert entry.path == "inputs/fixtures/q3_sales.csv"
 
 
@@ -242,27 +251,27 @@ def test_only_a_held_file_can_be_uploaded(tmp_path: Path, trial_dir: Path) -> No
     ledger = _ledger(tmp_path, trial_dir)
 
     with pytest.raises(KeyError, match="nope.csv"):
-        ledger.record_upload("nope.csv", at_turn=0)
+        ledger.record_upload("nope.csv", at_simulated_turn=0)
 
 
 def test_uploading_a_download_adds_no_entry(tmp_path: Path, trial_dir: Path) -> None:
     ledger = _ledger(tmp_path, trial_dir)
-    ledger.record_download("report.pdf", PDF, at_turn=1)
+    ledger.record_download("report.pdf", PDF, at_simulated_turn=1)
 
-    ledger.record_upload("report.pdf", at_turn=2)
+    ledger.record_upload("report.pdf", at_simulated_turn=2)
 
     (entry,) = ledger.artifacts()
-    assert (entry.source, entry.at_turn) == ("target", 1)
+    assert (entry.source, entry.at_simulated_turn) == ("target", 1)
 
 
 def test_artifacts_returns_copies(tmp_path: Path, trial_dir: Path) -> None:
     ledger = _ledger(tmp_path, trial_dir)
-    ledger.record_download("report.pdf", PDF, at_turn=1)
+    ledger.record_download("report.pdf", PDF, at_simulated_turn=1)
 
-    ledger.artifacts()[0].at_turn = 99
+    ledger.artifacts()[0].at_simulated_turn = 99
     ledger.artifacts().clear()
 
-    assert [a.at_turn for a in ledger.artifacts()] == [1]
+    assert [a.at_simulated_turn for a in ledger.artifacts()] == [1]
 
 
 def test_facts_for_a_200_row_csv_state_rows_columns_and_header(
@@ -313,7 +322,7 @@ def test_a_download_carries_its_facts_as_its_content_description(
 ) -> None:
     ledger = _ledger(tmp_path, trial_dir)
 
-    ledger.record_download("q3_sales.csv", _sales_csv(200), at_turn=0)
+    ledger.record_download("q3_sales.csv", _sales_csv(200), at_simulated_turn=0)
 
     description = ledger.artifacts()[0].content_description
     assert description is not None
@@ -352,9 +361,9 @@ def test_facts_are_computed_once_per_digest(
     monkeypatch.setattr(artifacts_module, "_content_facts", spy)
     ledger = _ledger(tmp_path, trial_dir)
 
-    ledger.record_download("a.csv", _sales_csv(10), at_turn=0)
-    ledger.record_download("b.csv", _sales_csv(10), at_turn=1)
-    ledger.record_download("c.csv", _sales_csv(11), at_turn=2)
+    ledger.record_download("a.csv", _sales_csv(10), at_simulated_turn=0)
+    ledger.record_download("b.csv", _sales_csv(10), at_simulated_turn=1)
+    ledger.record_download("c.csv", _sales_csv(11), at_simulated_turn=2)
 
     assert calls == ["a.csv", "c.csv"]
     descriptions = [a.content_description or "" for a in ledger.artifacts()]
@@ -364,7 +373,7 @@ def test_facts_are_computed_once_per_digest(
 
 def test_a_fixture_must_be_a_fixture(tmp_path: Path, trial_dir: Path) -> None:
     ledger = _ledger(tmp_path, trial_dir)
-    ledger.record_download("report.pdf", PDF, at_turn=0)
+    ledger.record_download("report.pdf", PDF, at_simulated_turn=0)
 
     with pytest.raises(ValueError, match="fixture"):
         ArtifactLedger(tmp_path, trial_dir, ledger.artifacts())
@@ -376,10 +385,14 @@ def test_a_failed_download_is_recorded_once_with_its_reason(
     ledger = _ledger(tmp_path, trial_dir)
 
     first = ledger.record_failure(
-        "a.pdf", "unfetched", "GET /f/1 -> 404", at_turn=2, external_id="1"
+        "a.pdf", "unfetched", "GET /f/1 -> 404", at_simulated_turn=2, external_id="1"
     )
-    ledger.record_failure("b.pdf", "unavailable", "listed with no ID", at_turn=2)
-    again = ledger.record_failure("b.pdf", "unavailable", "listed again", at_turn=3)
+    ledger.record_failure(
+        "b.pdf", "unavailable", "listed with no ID", at_simulated_turn=2
+    )
+    again = ledger.record_failure(
+        "b.pdf", "unavailable", "listed again", at_simulated_turn=3
+    )
 
     assert first is not None
     assert (first.state, first.state_description, first.external_id) == (
@@ -398,9 +411,11 @@ def test_a_file_already_held_is_not_recorded_as_a_failure(
     tmp_path: Path, trial_dir: Path
 ) -> None:
     ledger = _ledger(tmp_path, trial_dir)
-    ledger.record_download("a.pdf", PDF, at_turn=1)
+    ledger.record_download("a.pdf", PDF, at_simulated_turn=1)
 
-    assert ledger.record_failure("a.pdf", "unfetched", "late", at_turn=2) is None
+    assert (
+        ledger.record_failure("a.pdf", "unfetched", "late", at_simulated_turn=2) is None
+    )
     assert [a.state for a in ledger.artifacts()] == ["received"]
 
 
@@ -411,7 +426,7 @@ def test_an_upload_can_keep_the_targets_id_for_the_file(
     (tmp_path / "inputs" / "fixtures" / "q3_sales.csv").write_bytes(_sales_csv(3))
     ledger = _ledger(tmp_path, trial_dir, ["q3_sales.csv"])
 
-    kept = ledger.record_upload("q3_sales.csv", at_turn=1, external_id="up-1")
+    kept = ledger.record_upload("q3_sales.csv", at_simulated_turn=1, external_id="up-1")
 
     assert kept.external_id == "up-1"
     assert ledger.artifacts()[0].external_id == "up-1"

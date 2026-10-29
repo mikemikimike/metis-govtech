@@ -789,7 +789,7 @@ class BrowserRunner(Runner):
         result = await self._done(action, {"file_accepted": accepted}, error=error)
         # recorded only when the control took the file and the page then shows its name
         if accepted and held.name in self.snapshot:
-            self.ledger.record_upload(held.name, at_turn=self._turn)
+            self.ledger.record_upload(held.name, at_simulated_turn=self._turn)
             result["ledger"] = "recorded upload"
         else:
             result["ledger"] = "not recorded: " + (
@@ -885,10 +885,10 @@ class BrowserRunner(Runner):
                 files.append({"name": name, "skipped": "already held"})
                 continue
             try:
-                self.ledger.record_download(name, data, at_turn=self._turn)
+                self.ledger.record_download(name, data, at_simulated_turn=self._turn)
             except ArtifactRejected as exc:
                 self.ledger.record_failure(
-                    name, "unfetched", str(exc), at_turn=self._turn
+                    name, "unfetched", str(exc), at_simulated_turn=self._turn
                 )
                 files.append({"name": name, "state": "unfetched", "why": str(exc)})
                 continue

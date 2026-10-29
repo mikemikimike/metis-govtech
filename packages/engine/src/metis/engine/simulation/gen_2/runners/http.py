@@ -305,7 +305,7 @@ class HttpRunner(Runner):
                 reply["file_id_error"] = str(exc)
             else:
                 self.ledger.record_upload(
-                    uploads[0], at_turn=self._turn, external_id=str(value)
+                    uploads[0], at_simulated_turn=self._turn, external_id=str(value)
                 )
                 reply["file_id"] = str(value)
         return reply
@@ -449,7 +449,7 @@ class HttpRunner(Runner):
                     name,
                     "unavailable",
                     f"listed with no ID in {entry.id}",
-                    at_turn=self._turn,
+                    at_simulated_turn=self._turn,
                 )
                 files.append({"name": name, "outcome": "unavailable"})
             elif str(raw_id) in uploaded:
@@ -491,7 +491,7 @@ class HttpRunner(Runner):
                 self.ledger.record_download(
                     name,
                     response.content,
-                    at_turn=self._turn,
+                    at_simulated_turn=self._turn,
                     external_id=file_id,
                     content_type=response.headers.get("content-type"),
                 )
@@ -499,7 +499,11 @@ class HttpRunner(Runner):
                 problem = str(exc)
         if problem is not None:
             self.ledger.record_failure(
-                name, "unfetched", problem, at_turn=self._turn, external_id=file_id
+                name,
+                "unfetched",
+                problem,
+                at_simulated_turn=self._turn,
+                external_id=file_id,
             )
         outcome = "received" if problem is None else "unfetched"
         return {"name": name, "outcome": outcome, "entry": response_id}
@@ -534,7 +538,7 @@ class HttpRunner(Runner):
                 raise ToolRefused(f"{name!r} is not a file you hold")
             kind = mimetypes.guess_type(name)[0] or "application/octet-stream"
             files[part] = (name, (self._root / held.path).read_bytes(), kind)
-            self.ledger.record_upload(name, at_turn=self._turn)
+            self.ledger.record_upload(name, at_simulated_turn=self._turn)
         return data or None, files or None
 
     def _credentials(self, method: str, path: str) -> dict[str, str]:
@@ -778,7 +782,7 @@ class HttpRunner(Runner):
                         p.name,
                         "unavailable",
                         f"promised in turn {p.turn}, never delivered",
-                        at_turn=self._turn,
+                        at_simulated_turn=self._turn,
                     )
 
     async def teardown(self) -> None:

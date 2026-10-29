@@ -21,7 +21,7 @@ class Runner(ABC):
 
     The orchestrator owns the trial's :class:`ArtifactLedger` and binds it with
     :meth:`use_ledger` before ``setup``. A runner records every file it sends or
-    receives through ``self.ledger``, stamping ``at_turn`` with its own count of ``act``
+    receives through ``self.ledger``, stamping ``at_simulated_turn`` with its own count of ``act``
     calls from 1. The orchestrator calls ``act`` exactly once per turn, so the two
     counts agree. ``end_chat`` records under the last turn's number.
     """

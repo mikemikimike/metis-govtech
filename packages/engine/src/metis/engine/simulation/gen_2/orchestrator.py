@@ -135,7 +135,7 @@ class Orchestrator:
     def _check_fixtures(self, stop_reason: str) -> str:
         """Check 1: a fixture the scenario names that was never sent fails the trial."""
         for a in self._ledger.artifacts():
-            if a.source == "fixture" and a.at_turn is None:
+            if a.source == "fixture" and a.at_simulated_turn is None:
                 self._failure = (
                     "evaluation_runner",
                     f"fixture_never_uploaded: {a.name}",

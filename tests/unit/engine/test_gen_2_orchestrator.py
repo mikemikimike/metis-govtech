@@ -86,11 +86,13 @@ class FakeRunner(Runner):
         if step.set_event is not None:
             step.set_event.set()
         for name in step.uploads:
-            self.ledger.record_upload(name, at_turn=self.turn)
+            self.ledger.record_upload(name, at_simulated_turn=self.turn)
         for name in step.unfetched:
-            self.ledger.record_failure(name, "unfetched", "404", at_turn=self.turn)
+            self.ledger.record_failure(
+                name, "unfetched", "404", at_simulated_turn=self.turn
+            )
         for name, data in step.downloads.items():
-            self.ledger.record_download(name, data, at_turn=self.turn)
+            self.ledger.record_download(name, data, at_simulated_turn=self.turn)
         if step.raises is not None:
             raise step.raises
         assert step.observation is not None
@@ -99,7 +101,7 @@ class FakeRunner(Runner):
     async def end_chat(self, promised: list[Promise]) -> None:
         self.events.append("end_chat")
         for name, data in self._late.items():
-            self.ledger.record_download(name, data, at_turn=self.turn)
+            self.ledger.record_download(name, data, at_simulated_turn=self.turn)
 
     async def teardown(self) -> None:
         self.events.append("teardown")
@@ -203,7 +205,7 @@ async def test_full_trial_writes_a_record_that_load_file_reads(tmp_path: Path) -
     assert loaded.outcome.stop_reason == "goal_achieved"
     assert loaded.outcome.total_turns == 2
     assert loaded.target_session_id == "sess-1"
-    assert [(a.name, a.source, a.at_turn) for a in loaded.artifacts] == [
+    assert [(a.name, a.source, a.at_simulated_turn) for a in loaded.artifacts] == [
         ("q3_sales.csv", "fixture", 1),
         ("report.csv", "target", 2),
         ("chart.vl.json", "target", 2),
@@ -228,7 +230,9 @@ async def test_a_fixture_uploaded_twice_is_one_entry(tmp_path: Path) -> None:
 
     record = await orch.execute()
 
-    assert [(a.name, a.at_turn) for a in record.artifacts] == [("q3_sales.csv", 1)]
+    assert [(a.name, a.at_simulated_turn) for a in record.artifacts] == [
+        ("q3_sales.csv", 1)
+    ]
 
 
 @pytest.mark.asyncio
@@ -251,7 +255,9 @@ async def test_closing_call_is_not_a_turn(tmp_path: Path) -> None:
     record = await orch.execute()
 
     assert record.outcome.total_turns == 1
-    assert [(a.name, a.at_turn) for a in record.artifacts] == [("late.txt", 1)]
+    assert [(a.name, a.at_simulated_turn) for a in record.artifacts] == [
+        ("late.txt", 1)
+    ]
 
 
 @pytest.mark.asyncio
@@ -520,7 +526,7 @@ async def test_a_promise_recorded_unavailable_is_no_longer_promised(
     await orch.execute()
     assert [p.name for p in orch._still_promised()] == ["report.csv"]
     orch._ledger.record_failure(
-        "report.csv", "unavailable", "never delivered", at_turn=1
+        "report.csv", "unavailable", "never delivered", at_simulated_turn=1
     )
 
     assert orch._still_promised() == []
