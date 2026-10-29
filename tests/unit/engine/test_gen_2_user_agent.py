@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
+import structlog.testing
 
 from metis.core import Artifact
 from metis.engine.simulation.artifacts import file_facts
@@ -304,3 +305,40 @@ async def test_a_refusal_raises(tmp_path: Path) -> None:
 def test_a_continue_decision_needs_an_action() -> None:
     with pytest.raises(ValueError, match="action"):
         UserAgentOutput(reasoning="", action="  ", decision="continue")
+
+
+@pytest.mark.asyncio
+async def test_the_decision_line_holds_the_whole_action(tmp_path: Path) -> None:
+    action = "Ask ⟦" + "a long question. " * 30 + "⟧"
+    agent = _agent(tmp_path, FakeClient(_out(action)))
+
+    with structlog.testing.capture_logs() as logs:
+        await agent.decide(1, [], [])
+
+    (line,) = [e for e in logs if e["event"] == "user_agent_decided"]
+    assert line["turn"] == 1
+    assert line["decision"] == "continue"
+    assert line["action"] == action
+    assert line["reasoning"] == "because"
+
+
+def test_the_action_field_the_model_fills_says_the_message_goes_inside_the_quotes() -> (
+    None
+):
+    schema = UserAgentOutput.model_json_schema()
+
+    description = schema["properties"]["action"]["description"]
+
+    assert "⟦" in description and "⟧" in description
+    assert "whole message" in description
+    assert "nothing is sent" in description
+
+
+def test_every_field_the_model_fills_has_a_description() -> None:
+    properties = UserAgentOutput.model_json_schema()["properties"]
+
+    assert set(properties) == {"reasoning", "action", "decision"}
+    assert all(p.get("description") for p in properties.values())
+    assert "not shown to the assistant" in properties["reasoning"]["description"]
+    assert "goal_achieved" in properties["decision"]["description"]
+    assert "giving_up" in properties["decision"]["description"]

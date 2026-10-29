@@ -15,9 +15,13 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from metis.core.logging import get_logger
+
 from ..evidence import Pointer, PointerError, resolve
 from ..types import Reading
 from .rules import ToolRefused
+
+logger = get_logger()
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -49,6 +53,8 @@ class ActionState:
 
     first_result: int
     """``len(runner.results)`` when the action began: its entries come after this."""
+    turn: int | str = 0
+    """What the log calls this action: its turn number, or ``closing`` or ``sign_in``."""
     transport_failed: bool = False
     report: Report | None = None
     refusals: list[str] = field(default_factory=list)
@@ -287,14 +293,43 @@ async def run_tool(
             raise ToolRefused("the arguments are not valid JSON") from None
         if not isinstance(args, dict):
             raise ToolRefused("the arguments must be a JSON object")
-        return await handler(runner, state, args)
+        result = await handler(runner, state, args)
+        logger.debug(
+            "runner_agent_tool_call",
+            turn=state.turn,
+            tool=name,
+            result="ok",
+            detail=_summary(args, result),
+        )
+        return result
     except (ToolRefused, PointerError) as exc:
         message = f"refused, nothing was sent: {exc}"
         state.refusals.append(f"{name}: {exc}")
+        logger.info(
+            "runner_agent_tool_call",
+            turn=state.turn,
+            tool=name,
+            result="refused",
+            detail=str(exc),
+        )
         return {"error": message}
     except httpx.TransportError as exc:
         state.transport_failed = True
+        logger.info(
+            "runner_agent_tool_call",
+            turn=state.turn,
+            tool=name,
+            result="transport_failed",
+            detail=type(exc).__name__,
+        )
         return {"error": f"the call failed at the transport: {type(exc).__name__}"}
+
+
+def _summary(args: dict[str, Any], result: dict[str, Any]) -> str:
+    """What a finished tool call did, in a few words for the log."""
+    if "status" in result:
+        return f"{args.get('method', '')} {args.get('path', '')} -> {result['status']}".strip()
+    return " ".join(f"{k}={str(v)[:60]}" for k, v in args.items() if k != "json")[:200]
 
 
 async def _operation(

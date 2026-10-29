@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import openai
 import pytest
+import structlog.testing
 
 from metis.core.trials import TrialConfig
 from metis.engine.simulation.artifacts import ArtifactLedger
@@ -398,3 +399,60 @@ def test_the_prompt_keeps_the_rules_and_drops_the_prototypes_browser_parts() -> 
         assert kept in SYSTEM_PROMPT
     for dropped in ("artifact_ledger_append", "form_from", "snapshot", "browser"):
         assert dropped not in SYSTEM_PROMPT
+
+
+@pytest.mark.asyncio
+async def test_an_action_that_quoted_no_message_sends_nothing_and_keeps_its_turn_number(
+    tmp_path: Path,
+) -> None:
+    llm = ScriptedLLM(
+        [_chat()],
+        [("report", {"outcome": "not_done", "why": "no text to send"})],
+        [_chat()],
+        [("report", {"outcome": "not_done", "why": "no text to send"})],
+    )
+    runner, target = await _ready(tmp_path, llm)
+
+    first = await runner.act("Ask about the leave policy", [])
+    second = await runner.act("Say ⟦hello⟧", [])
+
+    assert first.sent_nothing
+    assert "quoted no message" in (first.notice or "")
+    assert first.reply is None
+    assert not second.sent_nothing
+    assert runner._turn == 1  # only the action that was sent is a turn
+
+
+@pytest.mark.asyncio
+async def test_the_runner_agents_rounds_and_tool_calls_say_which_turn_they_belong_to(
+    tmp_path: Path,
+) -> None:
+    llm = ScriptedLLM([_chat()], [("report", {"outcome": "unknown", "why": "x"})])
+    runner, _ = await _ready(tmp_path, llm)
+
+    with structlog.testing.capture_logs() as logs:
+        await runner.act("Say ⟦hello⟧", [])
+        await runner.act("Say ⟦again⟧", [])
+
+    mine = [
+        e
+        for e in logs
+        if e["event"] in ("runner_agent_round", "runner_agent_tool_call")
+    ]
+    assert {e["turn"] for e in mine} == {1, 2}
+
+
+@pytest.mark.asyncio
+async def test_the_closing_call_is_labelled_closing_not_as_the_last_turn(
+    tmp_path: Path,
+) -> None:
+    llm = ScriptedLLM([("report", {"outcome": "done", "why": "x"})])
+    runner, _ = await _ready(tmp_path, llm)
+    await runner.act("Say ⟦hello⟧", [])
+
+    with structlog.testing.capture_logs() as logs:
+        await runner.end_chat([])
+
+    mine = [e for e in logs if e["event"].startswith("runner_agent_")]
+    assert mine
+    assert {e["turn"] for e in mine} == {"closing"}

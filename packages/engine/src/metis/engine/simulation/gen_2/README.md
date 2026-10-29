@@ -46,6 +46,7 @@ enforces them; the prompt only explains them.
 | The agent cannot set `Authorization`, `Cookie` or `Host`. Code adds credentials. | The agent must never see or send a secret, and the log redacts them. |
 | The user's words reach the target only as `{{n}}` placeholders that code replaces. | The record can then say the target received the user's words exactly. |
 | A submission is refused when the action quoted nothing. | The agent invented a message the user never wrote. |
+| An action whose submission was refused for quoting nothing is not a turn; three in a row end the trial. | The user agent is told, and the turn count and `max_turns` stay true. |
 | One submission may be open at a time; `poll_until` settles it. | A second message sent while the first is running corrupts the conversation. |
 | The session ID is copied from a submission's reply, and nowhere else. | The agent once pointed at an upload's file ID. |
 | `fetch_files` takes a logged listing that is this conversation's, at most 100 files, and one `{id}` in the path. It skips the user's own uploads and files already held. | An account-wide listing would pull in files from other conversations. |

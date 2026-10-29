@@ -247,6 +247,9 @@ class BrowserRunner(Runner):
         """The latest capture's snapshot, as logged (secrets already ``***``)."""
         self.refs: dict[str, tuple[str, str]] = {}
         """Ref to ``(role, name)`` for the latest snapshot; older refs are refused."""
+        self.unquoted = False
+        """Set when typing was refused because the action quoted no message;
+        ``_observation`` reads it once."""
         self.typed: dict[str, str] = {}
         """Ref to the user's text typed and not yet sent."""
         self.choices: list[str] = []
@@ -413,7 +416,10 @@ class BrowserRunner(Runner):
         :raises TurnRecoverableError: When the runner agent's LLM cannot be reached.
         """
         self.begin_action(action)
-        return await self._attempt(promised, signing_in=False)
+        observation = await self._attempt(promised, signing_in=False)
+        if observation.sent_nothing:
+            self._turn -= 1  # the orchestrator does not count this action as a turn
+        return observation
 
     async def sign_in(self) -> Observation:
         """Have the agent sign in as the binding's ``login`` says; not a user's action."""
@@ -427,7 +433,10 @@ class BrowserRunner(Runner):
     async def _attempt(
         self, promised: list[Promise], *, signing_in: bool
     ) -> Observation:
-        state = ActionState(first_result=len(self.results))
+        state = ActionState(
+            first_result=len(self.results),
+            turn="sign_in" if signing_in else self._turn,
+        )
         failures = self.failures
         started = _now()
         limit = min(self._wait + ACT_MARGIN, max(0.0, self._deadline - started))
@@ -481,7 +490,10 @@ class BrowserRunner(Runner):
                 return "the action's time limit passed before the agent reported"
             sent = trimmed_pages(messages)
             logger.debug(
-                "runner_agent_round", round=round_number, chars_sent=sent_chars(sent)
+                "runner_agent_round",
+                turn=state.turn,
+                round=round_number,
+                chars_sent=sent_chars(sent),
             )
             try:
                 completion = await create_completion(
@@ -541,6 +553,9 @@ class BrowserRunner(Runner):
     def _observation(self, state: ActionState, stopped: str | None) -> Observation:
         """Build the result from what was logged; the agent's words only fill ``reading``."""
         notices: list[str] = []
+        sent_nothing, self.unquoted = self.unquoted, False  # read once
+        if sent_nothing:
+            notices.append("Nothing was sent: your action quoted no message.")
         if self.open_submission is not None:
             notices.append(
                 f"A submission ({self.open_submission.request}) is still open."
@@ -558,6 +573,7 @@ class BrowserRunner(Runner):
             promised=report.promised if report else [],
             observed=self.open_submission is None and not state.transport_failed,
             notice=" ".join(notices) or None,
+            sent_nothing=sent_nothing,
         )
 
     async def end_chat(self, promised: list[Promise]) -> None:
@@ -668,6 +684,7 @@ class BrowserRunner(Runner):
             text, logged, users = self._secrets[secret], "***", False
         else:
             if not self.spans.texts:
+                self.unquoted = True
                 raise ToolRefused(
                     "the user's action quoted nothing to send, so nothing may be typed"
                 )

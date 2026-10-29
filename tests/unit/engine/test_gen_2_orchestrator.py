@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
+import structlog.testing
 
 from metis.core.trials import TrialConfig, TrialRecord
 from metis.engine.simulation._fixture_artifacts import build_fixture_artifacts
@@ -586,3 +587,114 @@ async def test_no_fixture_check_on_an_interrupted_or_zero_turn_trial(
 
     assert _failure(await interrupted.execute()) == ("interrupted", None, None)
     assert _failure(await empty.execute()) == ("user_abandoned", None, None)
+
+
+def _unsent() -> Observation:
+    return Observation(
+        reply=None,
+        reading=Reading(outcome="not_done", why="no text"),
+        notice="Nothing was sent: your action quoted no message.",
+        sent_nothing=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_action_that_sent_nothing_is_not_a_turn_and_the_user_is_told(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner([Step(_unsent()), Step(_observation())])
+    agent = ScriptedAgent([_go("Ask about leave"), _go(), _done()])
+
+    record = await _build(tmp_path, runner, agent).execute()
+
+    assert record.outcome.total_turns == 1
+    assert record.outcome.stop_reason == "goal_achieved"
+    assert agent.turns == [1, 1, 2]  # the empty action did not use up turn 1
+    assert agent.remembered[0].sent_nothing
+    assert "quoted no message" in (agent.remembered[0].notice or "")
+
+
+@pytest.mark.asyncio
+async def test_an_action_that_sent_nothing_does_not_spend_the_turn_budget(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner([Step(_unsent()), Step(_unsent()), Step(_observation())])
+    agent = ScriptedAgent([_go("a"), _go("b"), _go(), _go()])
+
+    record = await _build(tmp_path, runner, agent, max_turns=1).execute()
+
+    assert record.outcome.stop_reason == "max_turns"
+    assert record.outcome.total_turns == 1
+    assert runner.actions == ["a", "b", "Say ⟦hi⟧"]
+
+
+@pytest.mark.asyncio
+async def test_three_empty_actions_in_a_row_end_the_trial_and_blame_the_user_agent(
+    tmp_path: Path,
+) -> None:
+    runner = FakeRunner([Step(_unsent()), Step(_unsent()), Step(_unsent())])
+    agent = ScriptedAgent([_go("a")])
+
+    record = await _build(tmp_path, runner, agent).execute()
+
+    assert _failure(record) == (
+        "system_error",
+        "user_agent",
+        "no_message_quoted",
+    )
+    assert record.outcome.total_turns == 0
+    assert agent.turns == [1, 1, 1]  # the user is not asked a fourth time
+    assert runner.events == ["setup", "act", "act", "act", "teardown"]
+
+
+@pytest.mark.asyncio
+async def test_a_sent_action_resets_the_run_of_empty_actions(tmp_path: Path) -> None:
+    runner = FakeRunner(
+        [
+            Step(_unsent()),
+            Step(_unsent()),
+            Step(_observation()),
+            Step(_unsent()),
+            Step(_unsent()),
+            Step(_observation()),
+        ]
+    )
+    agent = ScriptedAgent([_go()] * 6 + [_done()])
+
+    record = await _build(tmp_path, runner, agent).execute()
+
+    assert record.outcome.stop_reason == "goal_achieved"
+    assert record.outcome.total_turns == 2
+
+
+@pytest.mark.asyncio
+async def test_the_turn_line_holds_the_whole_action_and_reply(tmp_path: Path) -> None:
+    action = "Ask ⟦" + "a long question. " * 20 + "⟧"
+    reply = "a long answer. " * 20
+    runner = FakeRunner([Step(_observation(reply))])
+    agent = ScriptedAgent([_go(action), _done()])
+
+    with structlog.testing.capture_logs() as logs:
+        await _build(tmp_path, runner, agent).execute()
+
+    (line,) = [e for e in logs if e["event"] == "orchestrator_turn_result"]
+    assert line["turn"] == 1
+    assert line["action"] == action
+    assert line["reply"] == reply
+    assert line["outcome"] == "sent"
+    assert line["sent_nothing"] is False
+    assert line["notice"] is None
+
+
+@pytest.mark.asyncio
+async def test_the_turn_line_shows_an_action_that_sent_nothing(tmp_path: Path) -> None:
+    runner = FakeRunner([Step(_unsent()), Step(_observation())])
+    agent = ScriptedAgent([_go("Ask about leave"), _go(), _done()])
+
+    with structlog.testing.capture_logs() as logs:
+        await _build(tmp_path, runner, agent).execute()
+
+    first = [e for e in logs if e["event"] == "orchestrator_turn_result"][0]
+    assert first["sent_nothing"] is True
+    assert first["reply"] is None
+    assert "quoted no message" in first["notice"]

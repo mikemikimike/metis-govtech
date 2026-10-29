@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
+import structlog.testing
 
 from metis.core.trials import TrialConfig
 from metis.engine.simulation.artifacts import ArtifactLedger
@@ -577,3 +578,133 @@ async def test_a_failed_call_that_is_not_a_submission_adds_no_rejection(
     await _call(runner, state, "report", {"outcome": "unknown", "why": "looked"})
 
     assert runner._observation(state, None).notice is None
+
+
+async def _begin_without_a_quote(
+    runner: HttpRunner, action: str = "Ask about the leave policy"
+) -> ActionState:
+    runner.begin_action(action)
+    return ActionState(first_result=len(runner.results))
+
+
+@pytest.mark.asyncio
+async def test_a_submission_with_no_quoted_message_is_reported_as_sent_nothing(
+    tmp_path: Path,
+) -> None:
+    runner, target, _ = await _ready(tmp_path)
+    state = await _begin_without_a_quote(runner)
+
+    refused = await _submit(runner, state)
+    await _call(runner, state, "report", {"outcome": "not_done", "why": "no text"})
+    observation = runner._observation(state, None)
+
+    assert refused["error"].startswith("refused, nothing was sent: ")
+    assert target.sent("/chat") == []
+    assert observation.sent_nothing
+    assert observation.notice is not None
+    assert "quoted no message" in observation.notice
+    assert "quoted no message" in render_observation(observation)
+
+
+@pytest.mark.asyncio
+async def test_reads_before_the_refused_submission_do_not_make_the_action_a_turn(
+    tmp_path: Path,
+) -> None:
+    runner, target, _ = await _ready(tmp_path)
+    state = await _begin_without_a_quote(runner)
+
+    # What the runner agent does first on a real target: a health check, a session open.
+    await _call(runner, state, "http_request", {"method": "GET", "path": "/status"})
+    await _submit(runner, state)
+    await _call(runner, state, "report", {"outcome": "not_done", "why": "no text"})
+    observation = runner._observation(state, None)
+
+    assert len(runner.results) > state.first_result  # the read was logged
+    assert target.sent("/chat") == []
+    assert observation.sent_nothing
+    assert "quoted no message" in (observation.notice or "")
+
+
+@pytest.mark.asyncio
+async def test_an_action_that_never_tried_to_submit_is_not_sent_nothing(
+    tmp_path: Path,
+) -> None:
+    runner, _, _ = await _ready(tmp_path)
+    state = await _begin_without_a_quote(runner, "Fetch the report")
+
+    await _call(runner, state, "report", {"outcome": "unknown", "why": "waited"})
+    observation = runner._observation(state, None)
+
+    assert not observation.sent_nothing
+    assert observation.notice is None
+
+
+@pytest.mark.asyncio
+async def test_an_action_with_a_quoted_message_is_sent_and_not_sent_nothing(
+    tmp_path: Path,
+) -> None:
+    runner, target, state = await _ready(tmp_path)
+
+    await _chat(runner, state)
+    await _call(
+        runner,
+        state,
+        "report",
+        {
+            "outcome": "done",
+            "why": "ok",
+            "reply_from": {"entry": runner.results[-1], "at": "$.reply"},
+        },
+    )
+    observation = runner._observation(state, None)
+
+    assert json.loads(target.sent("/chat")[0].content) == {"text": "hello"}
+    assert not observation.sent_nothing
+    assert observation.notice is None
+    assert observation.reply == "hi"
+
+
+@pytest.mark.asyncio
+async def test_the_refusal_is_reported_once(tmp_path: Path) -> None:
+    runner, _, _ = await _ready(tmp_path)
+    state = await _begin_without_a_quote(runner)
+    await _submit(runner, state)
+    await _call(runner, state, "report", {"outcome": "not_done", "why": "no text"})
+    assert runner._observation(state, None).sent_nothing
+
+    state = await _begin_without_a_quote(runner, "Wait")
+    await _call(runner, state, "report", {"outcome": "unknown", "why": "waited"})
+
+    assert not runner._observation(state, None).sent_nothing
+
+
+@pytest.mark.asyncio
+async def test_every_tool_call_is_logged_with_its_outcome(tmp_path: Path) -> None:
+    runner, _, state = await _ready(tmp_path)
+
+    with structlog.testing.capture_logs() as logs:
+        await _chat(runner, state)
+        await _call(runner, state, "http_request", {"method": "DELETE", "path": "/x"})
+
+    calls = [e for e in logs if e["event"] == "runner_agent_tool_call"]
+    assert [(e["tool"], e["result"]) for e in calls] == [
+        ("http_request", "ok"),
+        ("http_request", "refused"),
+    ]
+    assert calls[0]["detail"] == "POST /chat -> 201"
+    assert "forbidden" in calls[1]["detail"]
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_for_quoting_nothing_is_logged_with_its_reason(
+    tmp_path: Path,
+) -> None:
+    runner, _, _ = await _ready(tmp_path)
+    state = await _begin_without_a_quote(runner)
+
+    with structlog.testing.capture_logs() as logs:
+        await _submit(runner, state)
+
+    (call,) = [e for e in logs if e["event"] == "runner_agent_tool_call"]
+    assert call["result"] == "refused"
+    assert "quoted nothing to send" in call["detail"]
