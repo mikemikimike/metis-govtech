@@ -53,9 +53,15 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Add the Docusaurus site setup, task-based navigation, shared page layout
   components, and METIS visual style. Include logo assets and Make commands
-  to install, preview, check, and build the site. A `Docs` workflow checks the
+  to install, preview, check, and build the site. A `Pages` workflow checks the
   site on each pull request and publishes it to GitHub Pages from `main` when
-  the repository is public.
+  the repository is public. The landing page is served at `/metis/` and the
+  documentation at `/metis/docs/`.
+
+- Add the METIS landing page in `landing-page/`. It shows product screenshots of
+  the Wizard, Engine, and Insights, a walkthrough of an evaluation, and links to
+  the repository and the documentation. Use `make run-landing` to preview it and
+  `make build-site` to build the landing page and the documentation together.
 
 - Add the MIT licence and a security policy. The README shows the new logo, a
   centred title and description, and badges for the supported Python versions,

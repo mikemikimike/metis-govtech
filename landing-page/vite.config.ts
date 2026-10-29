@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-export default defineConfig({
+// GitHub Pages serves the build at https://govtech-responsibleai.github.io/metis/.
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/metis/' : '/',
   plugins: [
     react(),
     tailwindcss(),
@@ -16,4 +18,4 @@ export default defineConfig({
     port: parseInt(process.env.PORT || '8443'),
     strictPort: true,
   },
-})
+}))

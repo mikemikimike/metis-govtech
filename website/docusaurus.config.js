@@ -5,7 +5,7 @@ const config = {
   title: 'METIS',
   tagline: 'Measurement and Evaluation of Trustworthy Intelligent Systems',
   url: 'https://govtech-responsibleai.github.io',
-  baseUrl: '/metis/',
+  baseUrl: '/metis/docs/',
   trailingSlash: false,
   favicon: 'img/metis-mark.png',
   onBrokenLinks: 'throw',
