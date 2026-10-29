@@ -67,7 +67,7 @@ Then decide what to change:
 - **Your application**, if the grader is right.
 - **The Criterion** in your specification, if it asks for the wrong thing, as in this example.
 - **The pass mark or the grader**, if the grader misreads the conversation, or is too strict or
-  too lenient. See [View our graders](library.md).
+  too lenient. See [Grader library](library/grader-library.md).
 
 ### When a result errored
 

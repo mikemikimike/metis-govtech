@@ -32,7 +32,7 @@ To change a Criterion, select the pen. To add one, select **+** on a Behaviour. 
 ### When no grader fits
 
 The Wizard picks the grader from the words of the Criterion. When no grader in the
-[library](library.md) fits, it uses the **criterion judge**, an LLM judge that follows the text of
+[library](library/grader-library.md) fits, it uses the **criterion judge**, an LLM judge that follows the text of
 the Criterion. So write each Criterion as one clear check.
 
 ## Go back

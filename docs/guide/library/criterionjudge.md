@@ -105,13 +105,13 @@ Errored results do not count as failures.
 ## Evidence that the judge reads
 
 The judge reads the session as a transcript, one block for each turn. A block holds the user's
-message, each tool call with its arguments, its status and its full result, the assistant's
-reply, and each error that the target reported. METIS makes this transcript with
+message, each agent's system prompt the first time it appears, what each model call wrote,
+each tool call with its arguments, its status and its full result, the assistant's reply, and
+each error that the target reported. METIS makes this transcript with
 `render_session(turns, tool_results=True)` from `metis.core.trace_processing`, so the
 judge sees the same view as the other LLM graders.
 
-The judge does not see observations that are not part of a turn, such as nested LLM calls and
-system prompts. It does not see trace metadata or timing fields. It does not read artifact
+The judge does not see trace metadata or timing fields. It does not read artifact
 files, so a file path or a recorded claim about a file does not show what the file contains.
 If the criterion needs other evidence, select a specific grader.
 
