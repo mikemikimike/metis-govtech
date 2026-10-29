@@ -17,17 +17,17 @@ def schema(repo_root: Path) -> dict:
 
 
 @pytest.fixture
-def orca(repo_root: Path) -> dict:
-    path = repo_root / "tests/fixtures/target_binding/orca-api.yaml"
+def chat_app(repo_root: Path) -> dict:
+    path = repo_root / "tests/fixtures/target_binding/chat-app.yaml"
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def test_orca_binding_validates_against_model(orca):
-    binding = TargetBinding.model_validate(orca)
-    assert binding.spec_url == "${ORCA_API_URL}/openapi.json"
+def test_chat_app_binding_validates_against_model(chat_app):
+    binding = TargetBinding.model_validate(chat_app)
+    assert binding.spec_url == "${CHAT_API_URL}/openapi.json"
     assert binding.tls_verify is False
-    assert binding.auth is not None and binding.auth.secret_env == "ORCA_API_KEY"
-    assert binding.secret_headers[0].env == "ORCA_PLATFORM_AI_KEY"
+    assert binding.auth is not None and binding.auth.secret_env == "CHAT_API_KEY"
+    assert binding.secret_headers[0].env == "CHAT_GATEWAY_KEY"
     assert binding.submissions == ["POST /api/v1/chat"]
     assert binding.forbidden_calls == ["DELETE /api/v1/**", "POST /api/v1/chat/cancel"]
     assert binding.preflight_reads == ["/api/v1/usage"]
@@ -35,8 +35,8 @@ def test_orca_binding_validates_against_model(orca):
     assert binding.advice.limits.submit_per_minute == 6
 
 
-def test_orca_binding_validates_against_published_schema(schema, orca):
-    jsonschema.validate(instance=orca, schema=schema)
+def test_chat_app_binding_validates_against_published_schema(schema, chat_app):
+    jsonschema.validate(instance=chat_app, schema=schema)
 
 
 def test_published_schema_marks_advice(schema):
@@ -46,10 +46,10 @@ def test_published_schema_marks_advice(schema):
     )
 
 
-def test_published_schema_rejects_secret_value(schema, orca):
-    orca["auth"]["secret_env"] = "sk-live-AbC123"
+def test_published_schema_rejects_secret_value(schema, chat_app):
+    chat_app["auth"]["secret_env"] = "sk-live-AbC123"
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(instance=orca, schema=schema)
+        jsonschema.validate(instance=chat_app, schema=schema)
 
 
 def test_a_browser_binding_validates_against_published_schema(schema, repo_root):

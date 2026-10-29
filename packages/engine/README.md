@@ -31,40 +31,40 @@ These commands use the `simple` example, which is small enough for a quick first
 
 ```bash
 # Run end-to-end (Simulation TUI, then evaluation progress bar)
-metis engine run --input-dir packages/engine/examples/gen_1-orca_api-1/
+metis engine run --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/
 
 # Or run the phases separately, in this order. simulate prints the evaluate command.
 # The --experiment-dir value is the output directory that simulate created.
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/
-metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/
+metis engine evaluate --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/
 
 # Resume an interrupted simulation. simulate prints this exact command;
 # --experiment-dir is the output directory to continue.
-metis engine simulate --resume --experiment-dir experiments/execute/orca-eval-20260820-143000/
-metis engine run --resume --experiment-dir experiments/execute/orca-eval-20260820-143000/
+metis engine simulate --resume --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/
+metis engine run --resume --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/
 
 # With the browser runner selected and its credentials set:
-HEADED=true metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/
+HEADED=true metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/
 
 # Verbosity controls log detail, not progress displays.
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ -v    # INFO
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ -vv   # DEBUG
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --quiet  # ERROR only
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/ -v    # INFO
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/ -vv   # DEBUG
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/ --quiet  # ERROR only
 
 # Disable the Simulation TUI (force linear simulation output)
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --no-tui
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/ --no-tui
 
 # Structured log files (JSON lines)
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --log-format json
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/ --log-format json
 
 # Override log directory (default: co-located with results)
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --log-dir /tmp/my-logs
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/ --log-dir /tmp/my-logs
 
 # Concurrent simulation (2 parallel browser contexts)
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/ --concurrency 2
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/ --concurrency 2
 
 # Custom Langfuse timeout for evaluation (default: 90s)
-metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/ --langfuse-timeout 120
+metis engine evaluate --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/ --langfuse-timeout 120
 ```
 
 | Command | Reads | Writes |
@@ -76,7 +76,7 @@ metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-14
 
 The two commands take different paths. `simulate` takes the source experiment as `--input-dir`. `evaluate` takes one simulation output directory as `--experiment-dir`, so the scored output never depends on timestamps. `simulate` prints the exact `evaluate` command for the directory it created.
 
-`experiments/execute/orca-eval-20260820-143000/` in the examples above is only a sample name. `simulate` makes the real name from the experiment `id` and the start time of the run. Use the path that `simulate` printed.
+`experiments/execute/toyapp-http-simple-20260820-143000/` in the examples above is only a sample name. `simulate` makes the real name from the experiment `id` and the start time of the run. Use the path that `simulate` printed.
 
 Evaluation has no TUI option. It uses a normal progress bar in a terminal and linear per-record progress in a non-interactive environment.
 
@@ -99,7 +99,7 @@ my-experiment/
     └── data.csv
 ```
 
-See [`examples/gen_1-orca_api-1/`](examples/gen_1-orca_api-1/) for a working reference.
+See [`examples/http-agentic_eval_toyapp-1/`](examples/http-agentic_eval_toyapp-1/) for a working reference.
 
 Each execution produces output in `experiments/execute/<id>-<timestamp>/`. Reports appear after `evaluate` or `run`:
 

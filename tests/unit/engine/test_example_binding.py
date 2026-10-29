@@ -1,4 +1,4 @@
-"""The example target binding for Orca's API, and the README that shows it (#481)."""
+"""The example target bindings, and the README that shows them."""
 
 from __future__ import annotations
 
@@ -12,23 +12,23 @@ from metis.engine.simulation.runners.rules import ToolRefused, check_call
 
 ENGINE = Path(__file__).resolve().parents[3] / "packages" / "engine"
 EXAMPLE = ENGINE / "examples"
-BINDING = EXAMPLE / "http-orca_api-1" / "orca-api.yaml"
+TOY = EXAMPLE / "http-agentic_eval_toyapp-1"
+BINDING = TOY / "toyapp-api.yaml"
 README = ENGINE / "src/metis/engine/simulation/README.md"
 SCHEMA = EXAMPLE.parents[1] / "core" / "schemas" / "target-binding.schema.json"
 
 
 @pytest.fixture
 def binding(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("ORCA_API_URL", "https://orca.example:7443/api/v1")
-    monkeypatch.setenv("ORCA_API_KEY", "key-1")
-    return load_target_binding(EXAMPLE / "http-orca_api-1", "orca-api.yaml")
+    monkeypatch.setenv("TOYAPP_API_URL", "http://toyapp.example:8000")
+    return load_target_binding(TOY, "toyapp-api.yaml")
 
 
 def test_the_example_loads_and_expands_its_spec_url(binding) -> None:
-    assert binding.binding.identity.name == "Orca"
-    assert binding.spec_url == "https://orca.example:7443/api/v1/openapi.json"
-    assert binding.binding.tls_verify is False
-    assert binding.secret("ORCA_API_KEY") is not None
+    assert binding.binding.identity.name == "Agentic Eval Toy App"
+    assert binding.spec_url == "http://toyapp.example:8000/openapi.json"
+    assert binding.binding.tls_verify is True
+    assert binding.binding.auth is None
 
 
 def test_the_example_points_editors_at_the_published_schema() -> None:
@@ -39,25 +39,15 @@ def test_the_example_points_editors_at_the_published_schema() -> None:
     assert (BINDING.parent / relative).resolve() == SCHEMA.resolve()
 
 
-@pytest.mark.parametrize(
-    ("method", "path"),
-    [("DELETE", "/api/v1/sessions/s-1"), ("DELETE", "/api/v1/files/f-1")],
-)
-def test_the_example_forbids_the_calls_orca_should_not_get(
-    binding, method: str, path: str
-) -> None:
+def test_the_example_names_the_call_that_sends_the_message(binding) -> None:
+    assert binding.binding.submissions == ["POST /api/v1/sessions/*/messages"]
+
+
+def test_a_forbidden_call_pattern_refuses_a_delete(binding) -> None:
+    patterns = ["DELETE /api/v1/**"]
     with pytest.raises(ToolRefused, match="forbidden"):
-        check_call(method, path, binding.binding.forbidden_calls)
-
-
-def test_the_example_allows_the_calls_a_trial_needs(binding) -> None:
-    for method, path in [
-        ("POST", "/api/v1/chat"),
-        ("POST", "/api/v1/chat/cancel"),
-        ("POST", "/api/v1/files"),
-        ("GET", "/api/v1/files/f-1/content"),
-    ]:
-        check_call(method, path, binding.binding.forbidden_calls)
+        check_call("DELETE", "/api/v1/sessions/s-1", patterns)
+    check_call("POST", "/api/v1/sessions/s-1/messages", patterns)
 
 
 def test_the_example_matches_the_model_it_is_written_for() -> None:
@@ -70,8 +60,8 @@ def test_the_readme_shows_the_example_exactly() -> None:
     assert BINDING.read_text(encoding="utf-8") in README.read_text(encoding="utf-8")
 
 
-def test_the_readme_says_it_has_only_been_tried_on_orca() -> None:
-    assert "Orca's API only" in README.read_text(encoding="utf-8")
+def test_the_readme_says_it_has_only_been_tried_on_the_toy_app() -> None:
+    assert "bundled toy app only" in README.read_text(encoding="utf-8")
 
 
 WEB_EXAMPLE = ENGINE / "example-experiment"

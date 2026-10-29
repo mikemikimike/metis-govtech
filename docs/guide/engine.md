@@ -85,33 +85,32 @@ Run the bundled example experiment to verify everything works end-to-end.
 
 ### The Example Experiment
 
-The directory `packages/engine/examples/gen_1-orca_api-1/` contains a small experiment definition written for Orca. The persona, task description, and grader selection assume Orca's API.
+The directory `packages/engine/examples/http-agentic_eval_toyapp-1/` contains a small experiment definition for the bundled toy app. The persona, task descriptions, and grader selection assume that app's API.
 
 ```
 examples/
-└── gen_1-orca_api-1/        # One Task, one Trial, one Grader, no uploaded files
+└── http-agentic_eval_toyapp-1/   # Three Tasks, one Trial each, no uploaded files
     ├── specification.yaml
+    ├── toyapp-api.yaml           # The target binding
     └── fixtures/
 ```
 
 ### Run It
 
-The commands below use `examples/gen_1-orca_api-1/`, which is small enough for a quick first run.
-The complete Orca specification, with 18 Tasks and 54 Trials, is in
-`packages/testbed/wizard/cases/orca/outputs/`.
+The commands below use `examples/http-agentic_eval_toyapp-1/`, which is small enough for a quick first run.
 
 ```bash
-metis engine run --input-dir packages/engine/examples/gen_1-orca_api-1/
+metis engine run --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/
 ```
 
 To run the phases separately, use `simulate` first. It prints the exact `evaluate` command for the output directory it created. `evaluate` scores the directory that you name:
 
 ```bash
-metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/
-metis engine evaluate --experiment-dir experiments/execute/orca-eval-20260820-143000/
+metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/
+metis engine evaluate --experiment-dir experiments/execute/toyapp-http-simple-20260820-143000/
 ```
 
-`experiments/execute/orca-eval-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
+`experiments/execute/toyapp-http-simple-20260820-143000/` is the output directory that `simulate` created. The name is only a sample: `simulate` makes the real name from the experiment `id` and the start time of the run, so use the path that `simulate` printed.
 
 If simulation stops before all runs finish, continue the output directory that you name. `simulate` prints this exact command, so you never retype a timestamp:
 
@@ -186,10 +185,10 @@ status, failure-evidence, and information-architecture rules.
 
 ### Debugging Tip
 
-For the browser runner, set `HEADED=true` to show the browser window. The bundled example selects the API runner. To use the browser runner, set `runner_factory_ref` to `metis.engine.simulation.runners.orca_playwright.OrcaPlaywrightRunnerFactory` and supply its credentials:
+For the browser runner, set `HEADED=true` to show the browser window. The bundled example selects the HTTP runner. To use the browser runner, set `runner_factory_ref` to `metis.engine.simulation.runners.browser.BrowserRunnerFactory` and supply its credentials:
 
 ```bash
-HEADED=true metis engine simulate --input-dir packages/engine/examples/gen_1-orca_api-1/
+HEADED=true metis engine simulate --input-dir packages/engine/examples/http-agentic_eval_toyapp-1/
 ```
 
 ---
@@ -983,7 +982,7 @@ the grader configuration used for each Criterion.
 The [JSON Schema](../../packages/core/schemas/specification.schema.json) provides
 editor completion and shape validation. The engine also checks references and
 coverage when it loads the document. From a specification in
-`packages/engine/examples/gen_1-orca_api-1/`, use this editor directive:
+`packages/engine/examples/http-agentic_eval_toyapp-1/`, use this editor directive:
 
 ```yaml
 # yaml-language-server: $schema=../../../core/schemas/specification.schema.json

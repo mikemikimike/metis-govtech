@@ -69,9 +69,9 @@ file, a *target binding*, instead of writing a Python runner. A browser runner d
 for an app that has only a web page. In both, a user agent decides one plain-language action
 per turn, and a runner carries it out on the target.
 
-> **Tested on Orca's API only.** The runner has run Orca's REST API and nothing else. The
-> rules below were each found on Orca, and a second app will probably need more. Once a
-> second app has been bound, this page becomes the basis for the user guide.
+> **Tested on the bundled toy app only.** The rules below were each found while binding
+> an app, and a second app will probably need more. Once a second app has been bound, this
+> page becomes the basis for the user guide.
 
 ### How a turn works
 
@@ -136,7 +136,7 @@ target_binding: my-app.yaml
 ```
 
 Its shape is `TargetBinding` in `metis.core.target_binding`, published as
-`packages/core/schemas/target-binding.schema.json`. Start from the Orca example below and
+`packages/core/schemas/target-binding.schema.json`. Start from the example below and
 change these:
 
 - `identity` names the app.
@@ -157,20 +157,19 @@ change these:
 - `advice` (`limits`, `notes`) is for the agent only. Code does not check it. Put in it
   what the specification cannot say, such as "the first chat call starts the session".
 
-The example, `packages/engine/examples/http-orca_api-1/orca-api.yaml`:
+The example, `packages/engine/examples/http-agentic_eval_toyapp-1/toyapp-api.yaml`:
 
 ```yaml
 # yaml-language-server: $schema=../../../core/schemas/target-binding.schema.json
-# Orca's REST API, bound to the generic HTTP runner. What the OpenAPI document already
-# says (routes, bearer auth, polling) is left to it. This file adds only what it cannot.
+# The agentic-eval toy app's REST API, bound to the generic HTTP runner. Its OpenAPI
+# document declares no server URL, so paths are written from the host root.
 schema_version: 1
-identity: {name: Orca, version: "1.0.0"}
+identity: {name: Agentic Eval Toy App}
 transport: http
-spec_url: ${ORCA_API_URL}/openapi.json  # ORCA_API_URL ends in /api/v1
-tls_verify: false  # Orca's host uses a self-signed certificate
-auth: {scheme: from_spec, secret_env: ORCA_API_KEY}
-forbidden_calls:
-  - "DELETE /**"  # the document lists deletes, but a trial must not remove sessions or files
+spec_url: ${TOYAPP_API_URL}/openapi.json  # TOYAPP_API_URL is the host, e.g. http://127.0.0.1:8000
+# The app has no authentication, so there is no auth block.
+# A message goes to an open session, so opening one (POST /sessions) is not the user's message.
+submissions: ["POST /api/v1/sessions/*/messages"]
 ```
 
 To try a binding, set the variables it names and run the experiment as usual. The runner

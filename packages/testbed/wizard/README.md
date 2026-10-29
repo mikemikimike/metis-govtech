@@ -7,10 +7,10 @@ It compares each generated Specification with a human-reviewed reference.
 
 From the repository root, configure `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and an
 `INTERVIEW_MODEL` that your API key can access. Set `INTERVIEW_CONTEXT_TOKENS` to
-the model's supported limit when using large inputs such as Orca.
+the model's supported limit when using large inputs.
 
 ```bash
-# Run all five cases and save results under a version name.
+# Run all four cases and save results under a version name.
 uv run metis-testbed wizard --target-version version-a
 
 # Run again after changing the Wizard version.
@@ -26,19 +26,17 @@ run time. Open `report.md` for the run summary and linked case reports.
 
 ## Test cases
 
-The suite contains five cases:
+The suite contains four cases:
 
 | Case | Product being described |
 |---|---|
-| [Orca](cases/orca/README.md) | An enterprise assistant using product documentation |
 | [Enterprise AI Assistant](cases/enterprise-ai-assistant/README.md) | An assistant for enterprise information and workflows |
 | [Travel Planner](cases/travel-planner-langgraph/README.md) | An assistant for planning trips |
 | [Billing Support](cases/billing-support/README.md) | An assistant for billing requests and account actions |
 | [Incident Triage](cases/incident-triage/README.md) | An assistant for assessing and routing incidents |
 
 Each case supplies `inputs/prompt.md` and supporting documents. Its
-`outputs/specification.yaml` is the reference. Restore the local Orca inputs
-listed in its README before running all five cases.
+`outputs/specification.yaml` is the reference.
 
 ## Testing and interpreting results
 
@@ -96,7 +94,7 @@ model, and endpoint remain unchanged. Score reports are saved under `results/` a
 Markdown for review and JSON for program use.
 
 There is no similarity pass threshold. Success means completion and scoring for
-all five cases. Low similarity scores are findings for prompt and reference review.
+all four cases. Low similarity scores are findings for prompt and reference review.
 
 ### Example output
 

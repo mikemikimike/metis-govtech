@@ -36,7 +36,10 @@ def test_target_binding_must_be_relative(path):
 
 
 def test_example_specification_dumps_without_target_binding(repo_root: Path):
-    path = repo_root / "packages/testbed/wizard/cases/orca/outputs/specification.yaml"
+    path = (
+        repo_root
+        / "packages/testbed/wizard/cases/enterprise-ai-assistant/outputs/specification.yaml"
+    )
     spec = Specification.model_validate(
         yaml.safe_load(path.read_text(encoding="utf-8"))
     )
