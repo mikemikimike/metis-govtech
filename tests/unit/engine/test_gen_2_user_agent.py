@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
+import structlog.testing
 
 from metis.core import Artifact
 from metis.engine.simulation.artifacts import file_facts
@@ -304,3 +305,18 @@ async def test_a_refusal_raises(tmp_path: Path) -> None:
 def test_a_continue_decision_needs_an_action() -> None:
     with pytest.raises(ValueError, match="action"):
         UserAgentOutput(reasoning="", action="  ", decision="continue")
+
+
+@pytest.mark.asyncio
+async def test_the_decision_line_holds_the_whole_action(tmp_path: Path) -> None:
+    action = "Ask ⟦" + "a long question. " * 30 + "⟧"
+    agent = _agent(tmp_path, FakeClient(_out(action)))
+
+    with structlog.testing.capture_logs() as logs:
+        await agent.decide(1, [], [])
+
+    (line,) = [e for e in logs if e["event"] == "user_agent_decision"]
+    assert line["turn"] == 1
+    assert line["decision"] == "continue"
+    assert line["action"] == action
+    assert line["reasoning"] == "because"

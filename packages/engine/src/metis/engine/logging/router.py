@@ -38,6 +38,26 @@ _LEVEL_MAP = {
     "critical": logging.CRITICAL,
 }
 
+_NOT_IN_FILE_LINE = frozenset(
+    {
+        "event",
+        "level",
+        "timestamp",
+        "exception",
+        "scenario_id",
+        "task_id",
+        "persona_id",
+        "trial_index",
+        "worker",
+        "module",
+        "lineno",
+        "logger_name",
+        "_record",
+        "_from_stdlib",
+    }
+)
+"""Keys a text line leaves out: the line has them already, or the file's name says them."""
+
 _LEVEL_STYLES = {
     "debug": "dim",
     "info": "green",
@@ -211,6 +231,11 @@ class LogRouter:
         level = event_dict.get("level", "info").upper()
         event = event_dict.get("event", "")
         line = f"[{timestamp}] [{level:<8}] {event}"
+        fields = " ".join(
+            f"{k}={v}" for k, v in event_dict.items() if k not in _NOT_IN_FILE_LINE
+        )
+        if fields:
+            line += f"  {fields}"
         exception = event_dict.get("exception")
         return f"{line}\n{exception}" if exception else line
 

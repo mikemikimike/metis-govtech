@@ -132,11 +132,11 @@ class UserAgent:
             messages.append({"role": "user", "content": f"{FIRST_TURN}\n\n{state}"})
         output = await self._call(messages)
         logger.info(
-            "[user_agent] turn %d: decision=%s action=%r reasoning=%s",
-            turn,
-            output.decision,
-            output.action[:200],
-            output.reasoning,
+            "user_agent_decision",
+            turn=turn,
+            decision=output.decision,
+            action=output.action,
+            reasoning=output.reasoning,
         )
         return output
 

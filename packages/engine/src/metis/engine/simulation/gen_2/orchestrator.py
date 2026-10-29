@@ -213,6 +213,16 @@ class Orchestrator:
                 self._turns += 1
             self._note_promises(observation, turn)
             self._agent.remember(output, observation)
+            logger.info(
+                "turn",
+                turn=turn,
+                counted=not observation.sent_nothing,
+                sent_nothing=observation.sent_nothing,
+                outcome=observation.reading.outcome,
+                action=output.action,
+                reply=observation.reply,
+                notice=observation.notice,
+            )
             if empty_actions >= _MAX_EMPTY_ACTIONS:
                 self._failure = ("evaluation_runner", "no_message_quoted")
                 logger.info("[turn %d] STOP: no_message_quoted", turn)
@@ -223,13 +233,6 @@ class Orchestrator:
                 self._failure = ("evaluation_runner", "submission_unresolved")
                 logger.info("[turn %d] STOP: submission_unresolved", turn)
                 return "system_error"
-            logger.info(
-                "[turn %d] action=%r reply=%r notice=%r",
-                turn,
-                output.action[:120],
-                (observation.reply or "")[:100],
-                (observation.notice or "")[:200],
-            )
 
     async def _close(self) -> None:
         """The closing call. Whatever it fails with, the turns already played stand."""

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
+import structlog.testing
 
 from metis.core.trials import TrialConfig, TrialRecord
 from metis.engine.simulation._fixture_artifacts import build_fixture_artifacts
@@ -664,3 +665,36 @@ async def test_a_sent_action_resets_the_run_of_empty_actions(tmp_path: Path) -> 
 
     assert record.outcome.stop_reason == "goal_achieved"
     assert record.outcome.total_turns == 2
+
+
+@pytest.mark.asyncio
+async def test_the_turn_line_holds_the_whole_action_and_reply(tmp_path: Path) -> None:
+    action = "Ask ⟦" + "a long question. " * 20 + "⟧"
+    reply = "a long answer. " * 20
+    runner = FakeRunner([Step(_observation(reply))])
+    agent = ScriptedAgent([_go(action), _done()])
+
+    with structlog.testing.capture_logs() as logs:
+        await _build(tmp_path, runner, agent).execute()
+
+    (line,) = [e for e in logs if e["event"] == "turn"]
+    assert line["turn"] == 1
+    assert line["action"] == action
+    assert line["reply"] == reply
+    assert line["outcome"] == "sent"
+    assert line["sent_nothing"] is False
+    assert line["notice"] is None
+
+
+@pytest.mark.asyncio
+async def test_the_turn_line_shows_an_action_that_sent_nothing(tmp_path: Path) -> None:
+    runner = FakeRunner([Step(_unsent()), Step(_observation())])
+    agent = ScriptedAgent([_go("Ask about leave"), _go(), _done()])
+
+    with structlog.testing.capture_logs() as logs:
+        await _build(tmp_path, runner, agent).execute()
+
+    first = [e for e in logs if e["event"] == "turn"][0]
+    assert first["sent_nothing"] is True
+    assert first["reply"] is None
+    assert "quoted no message" in first["notice"]

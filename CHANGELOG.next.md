@@ -368,6 +368,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   the notice, and three such actions in a row end the trial as a `system_error` with failure
   `no_message_quoted`. An action that quoted nothing but never tried to send, such as a file
   fetch, is counted as before (#544).
+  The per-trial text log now keeps each event's own fields as `key=value` after the event name
+  (the file's name, level and time are not repeated). The runner agent's every tool call is logged
+  as `runner_tool_call` with its tool, result (`ok`, `refused`, `transport_failed`) and a short
+  detail, so a refused submission shows its reason. The orchestrator logs one `turn` line per
+  action with the whole action and reply and its `counted` and `sent_nothing` facts, and the user
+  agent logs `user_agent_decision` with the whole action.
   `HttpRunnerFactory.start` opens the HTTP transport
   (honouring `tls_verify`) and `close` closes it. A binding file that is not UTF-8 gives a clear
   `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is

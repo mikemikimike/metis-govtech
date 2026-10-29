@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import pytest
+import structlog.testing
 
 from metis.core.trials import TrialConfig
 from metis.engine.simulation.artifacts import ArtifactLedger
@@ -672,3 +673,35 @@ async def test_the_refusal_is_reported_once(tmp_path: Path) -> None:
     await _call(runner, state, "report", {"outcome": "unknown", "why": "waited"})
 
     assert not runner._observation(state, None).sent_nothing
+
+
+@pytest.mark.asyncio
+async def test_every_tool_call_is_logged_with_its_outcome(tmp_path: Path) -> None:
+    runner, _, state = await _ready(tmp_path)
+
+    with structlog.testing.capture_logs() as logs:
+        await _chat(runner, state)
+        await _call(runner, state, "http_request", {"method": "DELETE", "path": "/x"})
+
+    calls = [e for e in logs if e["event"] == "runner_tool_call"]
+    assert [(e["tool"], e["result"]) for e in calls] == [
+        ("http_request", "ok"),
+        ("http_request", "refused"),
+    ]
+    assert calls[0]["detail"] == "POST /chat -> 201"
+    assert "forbidden" in calls[1]["detail"]
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_for_quoting_nothing_is_logged_with_its_reason(
+    tmp_path: Path,
+) -> None:
+    runner, _, _ = await _ready(tmp_path)
+    state = await _begin_without_a_quote(runner)
+
+    with structlog.testing.capture_logs() as logs:
+        await _submit(runner, state)
+
+    (call,) = [e for e in logs if e["event"] == "runner_tool_call"]
+    assert call["result"] == "refused"
+    assert "quoted nothing to send" in call["detail"]

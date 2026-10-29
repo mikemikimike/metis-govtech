@@ -249,6 +249,32 @@ class TestLogRouter:
         # Exactly one line (plus the trailing newline written by process()).
         assert content == "[2026-08-05T10:00:00] [INFO    ] ordinary event\n"
 
+    def test_text_file_line_keeps_the_events_own_fields(self, tmp_path: Path) -> None:
+        router = LogRouter(log_dir=tmp_path, log_format="text")
+        router.open_trial("scn", "per", trial_index=1, num_trials=1)
+        event_dict = {
+            "event": "session_id_found",
+            "level": "info",
+            "timestamp": "2026-08-05T10:00:00",
+            "scenario_id": "scn",
+            "task_id": "scn",
+            "persona_id": "per",
+            "trial_index": 1,
+            "worker": "w1",
+            "module": "http",
+            "lineno": 227,
+            "session_id": "s-1",
+            "entry": "e5",
+        }
+        self._process(router, event_dict)
+        router.close_all()
+        content = (tmp_path / "simulate-scn_per-01.log").read_text()
+        # What the file already says (its name, level, time) is not repeated.
+        assert content == (
+            "[2026-08-05T10:00:00] [INFO    ] session_id_found"
+            "  session_id=s-1 entry=e5\n"
+        )
+
     def test_open_trial_with_run_dir_creates_symlink(self, tmp_path: Path) -> None:
         log_dir = tmp_path / "logs"
         run_dir = tmp_path / "runs" / "my-run"
