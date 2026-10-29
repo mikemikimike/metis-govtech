@@ -364,11 +364,12 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   An action whose runner tried to submit or type but was refused because the action quoted no
   `⟦…⟧` message sets `Observation.sent_nothing` (code decides it, never the runner agent) and
   a notice saying so. Reads the runner agent made first, such as a health check or opening the
-  session, do not change that. It is not a turn: the
-  orchestrator leaves it out of `total_turns` and the `max_turns` budget, the user agent is shown
-  the notice, and three such actions in a row end the trial as a `system_error` with failure
-  `no_message_quoted`. An action that quoted nothing but never tried to send, such as a file
-  fetch, is counted as before (#544).
+  session, do not change that. It is not a turn: the orchestrator leaves it out of `total_turns`
+  and the `max_turns` budget, the user agent is shown the notice, and three such actions in a row
+  end the trial as a `system_error` with failure source `user_agent` and message
+  `no_message_quoted`. The user agent's `action` field now says that the whole message goes
+  between `⟦` and `⟧` and that an action without one sends nothing. An action that quoted nothing
+  but never tried to send, such as a file fetch, is counted as before (#544).
   The per-trial text log and the TUI tail now show each event's own fields as `key=value` after
   the event name (the file's name, level and time are not repeated; the tail clips a long line).
   Each gen_2 line names who wrote it and carries the turn it belongs to: `user_agent_decided`

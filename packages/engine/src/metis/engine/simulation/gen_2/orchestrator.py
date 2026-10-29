@@ -224,7 +224,7 @@ class Orchestrator:
                 notice=observation.notice,
             )
             if empty_actions >= _MAX_EMPTY_ACTIONS:
-                self._failure = ("evaluation_runner", "no_message_quoted")
+                self._failure = ("user_agent", "no_message_quoted")
                 logger.info("[turn %d] STOP: no_message_quoted", turn)
                 return "system_error"
             if observation.submission_unresolved:

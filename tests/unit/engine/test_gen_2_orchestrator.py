@@ -629,7 +629,7 @@ async def test_an_action_that_sent_nothing_does_not_spend_the_turn_budget(
 
 
 @pytest.mark.asyncio
-async def test_three_empty_actions_in_a_row_end_the_trial_as_an_evaluation_fault(
+async def test_three_empty_actions_in_a_row_end_the_trial_and_blame_the_user_agent(
     tmp_path: Path,
 ) -> None:
     runner = FakeRunner([Step(_unsent()), Step(_unsent()), Step(_unsent())])
@@ -639,7 +639,7 @@ async def test_three_empty_actions_in_a_row_end_the_trial_as_an_evaluation_fault
 
     assert _failure(record) == (
         "system_error",
-        "evaluation_runner",
+        "user_agent",
         "no_message_quoted",
     )
     assert record.outcome.total_turns == 0

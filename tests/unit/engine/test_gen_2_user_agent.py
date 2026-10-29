@@ -320,3 +320,15 @@ async def test_the_decision_line_holds_the_whole_action(tmp_path: Path) -> None:
     assert line["decision"] == "continue"
     assert line["action"] == action
     assert line["reasoning"] == "because"
+
+
+def test_the_action_field_the_model_fills_says_the_message_goes_inside_the_quotes() -> (
+    None
+):
+    schema = UserAgentOutput.model_json_schema()
+
+    description = schema["properties"]["action"]["description"]
+
+    assert "⟦" in description and "⟧" in description
+    assert "whole message" in description
+    assert "nothing is sent" in description

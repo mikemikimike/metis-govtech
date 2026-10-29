@@ -12,7 +12,14 @@ class UserAgentOutput(BaseModel):
 
     reasoning: str
     """Why the user chose this. Kept in the log, never shown to the target or the runner."""
-    action: str
+    action: str = Field(
+        description=(
+            "One plain-language action. Anything you send to the assistant, the whole "
+            "message, goes between ⟦ and ⟧, written the way your persona would type it, "
+            "for example: ⟦How many leave days do I get?⟧. An action with no ⟦ ⟧ "
+            "quoted message means nothing is sent."
+        )
+    )
     """One plain-language action. Text for the target sits between ``⟦`` and ``⟧``."""
     decision: Literal["continue", "goal_achieved", "giving_up"]
 
