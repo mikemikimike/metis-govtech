@@ -1,4 +1,4 @@
-.PHONY: install-docs run-docs build-docs check-docs help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-branch
+.PHONY: install-docs run-docs build-docs check-docs install-landing run-landing build-landing build-site help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-branch
 
 help:
 	@printf "Available targets:\n"
@@ -10,6 +10,7 @@ help:
 	@printf "  make install-api                 Install metis-api only\n"
 	@printf "  make install-web                 Install apps/web dependencies from its lockfile\n"
 	@printf "  make install-docs                Install website dependencies from its lockfile\n"
+	@printf "  make install-landing             Install landing-page dependencies from its lockfile\n"
 	@printf "  make install-extras              Install all optional extras\n"
 	@printf "  make install-extras-playwright   Install Playwright Python package + Chromium binary\n"
 	@printf "\n"
@@ -18,6 +19,7 @@ help:
 	@printf "  make run-api              Start the API server on port 8001\n"
 	@printf "  make run-web              Start the web dev server\n"
 	@printf "  make run-docs             Start the docs on port 3000\n"
+	@printf "  make run-landing          Start the landing page on port 8443\n"
 	@printf "\n"
 	@printf "Code quality:\n"
 	@printf "  make lint              Run Ruff lint checks\n"
@@ -33,6 +35,8 @@ help:
 	@printf "  make check-web         Run non-mutating apps/web checks\n"
 	@printf "  make check-docs        Check links and build the docs\n"
 	@printf "  make build-docs        Build the docs site\n"
+	@printf "  make build-landing     Build the landing page\n"
+	@printf "  make build-site        Build the GitHub Pages site into _site/ (landing page + docs)\n"
 	@printf "\n"
 	@printf "Other:\n"
 	@printf "  make clean             Remove all generated/cached files\n"
@@ -65,6 +69,21 @@ build-docs:
 	npm --prefix website run build
 
 check-docs: build-docs
+
+install-landing:
+	pnpm --dir landing-page install --frozen-lockfile
+
+run-landing:
+	pnpm --dir landing-page dev
+
+build-landing:
+	pnpm --dir landing-page build
+
+# GitHub Pages serves the landing page at /metis/ and the docs at /metis/docs/.
+build-site: build-landing build-docs
+	rm -rf _site
+	cp -R landing-page/dist _site
+	cp -R website/build _site/docs
 
 install-extras: install-extras-playwright
 
@@ -143,7 +162,7 @@ ci:
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
-	rm -rf .ruff_cache .pyright .mypy_cache
+	rm -rf .ruff_cache .pyright .mypy_cache _site
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 
 # --- Release workflow -----------------------------------------------------------

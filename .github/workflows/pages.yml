@@ -1,18 +1,18 @@
-name: Docs
+name: Pages
 
 on:
   push:
     branches: [main]
-    paths: ['docs/tutorial/**', 'website/**', '.github/workflows/docs.yml']
+    paths: ['docs/tutorial/**', 'website/**', 'landing-page/**', 'Makefile', '.github/workflows/pages.yml']
   pull_request:
-    paths: ['docs/tutorial/**', 'website/**', '.github/workflows/docs.yml']
+    paths: ['docs/tutorial/**', 'website/**', 'landing-page/**', 'Makefile', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: docs-${{ github.ref }}
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,16 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: website/package-lock.json
-      - run: make install-docs
-      - run: make check-docs
+      - run: make install-docs install-landing
+      # The landing page is served at /metis/ and the docs at /metis/docs/.
+      - run: make check-docs build-site
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: website/build
+          path: _site
 
   # GitHub Pages on the free plan serves only public repositories.
   deploy:
