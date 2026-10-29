@@ -170,6 +170,23 @@ async def test_a_4xx_while_a_submission_is_open_makes_it_unresolved(
 
 
 @pytest.mark.asyncio
+async def test_a_405_is_the_runners_wrong_method_and_leaves_the_submission_open(
+    tmp_path: Path, clock: Clock
+) -> None:
+    """#593: polling a POST-only path says nothing about the target's answer."""
+    runner, target = await _ready(tmp_path)
+    target.script = [httpx.Response(405, json={"detail": "Method Not Allowed"})]
+    await _open(runner)
+    submission = runner.open_submission
+
+    result = await _poll(runner, in_=["done"])
+
+    assert result["status"] == 405
+    assert runner.open_submission == submission
+    assert runner.unresolved is None
+
+
+@pytest.mark.asyncio
 async def test_a_5xx_or_a_4xx_with_nothing_open_stops_without_unresolved(
     tmp_path: Path, clock: Clock
 ) -> None:

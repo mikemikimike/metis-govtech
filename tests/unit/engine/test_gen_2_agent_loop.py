@@ -155,6 +155,7 @@ def _report(runner: HttpRunner, which: int = -1, **extra: Any) -> Callable[[], R
         args = {
             "outcome": "done",
             "why": "sent it",
+            "submission": "answered",
             "reply_from": {"entry": runner.results[which], "at": "$.reply"},
             **extra,
         }
@@ -269,7 +270,17 @@ async def test_a_reply_cited_from_an_earlier_action_is_refused_and_can_be_fixed(
     await runner.act("Say ⟦a⟧", [])
     old = runner.results[-1]
     llm._replies[:] = [
-        [("report", {"outcome": "done", "why": "x", "reply_from": {"entry": old}})],
+        [
+            (
+                "report",
+                {
+                    "outcome": "done",
+                    "why": "x",
+                    "submission": "pending",
+                    "reply_from": {"entry": old},
+                },
+            )
+        ],
         [("http_request", {"method": "GET", "path": "/status"})],
         lambda: [
             (
@@ -277,6 +288,7 @@ async def test_a_reply_cited_from_an_earlier_action_is_refused_and_can_be_fixed(
                 {
                     "outcome": "done",
                     "why": "x",
+                    "submission": "pending",
                     "reply_from": {"entry": runner.results[-1], "at": "$.state"},
                 },
             )
@@ -301,6 +313,7 @@ async def test_promised_files_are_copied_by_code_from_the_reply(tmp_path: Path) 
                 {
                     "outcome": "partial",
                     "why": "x",
+                    "submission": "answered",
                     "promised": [
                         {
                             "entry": runner.results[-1],

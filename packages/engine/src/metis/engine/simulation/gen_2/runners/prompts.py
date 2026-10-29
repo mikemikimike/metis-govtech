@@ -26,8 +26,11 @@ and the notes about it, then do it, look at the result, and report.
 1. Read the action, the file list, the open submission and your notes.
 2. If a submission is open, it must settle before a new one can be sent. If the target \
 answers inside the submission's own response (a 200 or 201 that holds the reply), there is \
-nothing to poll: read that reply and cite it in `report.reply_from`, and code settles the \
-submission. A 202 means the reply comes later, so settle that one with `poll_until`.
+nothing to poll: set `report.submission` to `answered` and cite the reply in \
+`report.reply_from`. If the reply comes later (always so for a 202), settle it with \
+`poll_until`, using only a path the specification lists for GET, and set \
+`report.submission` to `pending` until it does. Only `report.submission` settles a \
+submission; a wrong `reply_from` loses the reply, not the submission.
 3. Call `operation` to read an endpoint's definition before you use it: you are shown \
 only an index of the specification, and `operation` sends nothing to the target. Then do \
 the action with the tools, one step at a time, and read each result before the \
@@ -160,8 +163,8 @@ def first_message(
     )
     opened = (
         f"OPEN: {open_submission} It has not settled. Settle it before anything else; "
-        "no new submission can be sent until it does. A reply already in its own "
-        "response settles it when your report cites it."
+        "no new submission can be sent until it does. Say in `report.submission` "
+        "whether the response you read already answers it."
         if open_submission
         else "none open"
     )

@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     Handler = Callable[[Any, "ActionState", dict[str, Any]], Awaitable[dict[str, Any]]]
 
 OUTCOMES = ("done", "not_done", "partial", "unknown")
+SUBMISSION_STATES = ("answered", "pending")
 MAX_DEFINITION_CHARS = 6000
 """Most characters of one operation's definition the agent is shown."""
 REF_DEPTH = 3
@@ -56,6 +57,8 @@ class ActionState:
     turn: int | str = 0
     """What the log calls this action: its turn number, or ``closing`` or ``sign_in``."""
     transport_failed: bool = False
+    answered: bool = False
+    """The agent closed an open submission as answered during this action."""
     report: Report | None = None
     refusals: list[str] = field(default_factory=list)
 
@@ -170,6 +173,14 @@ TOOLS: list[Any] = [
             "outcome": {"type": "string", "enum": list(OUTCOMES)},
             "why": {"type": "string"},
             "next_options": {"type": "string"},
+            "submission": {
+                "type": "string",
+                "enum": list(SUBMISSION_STATES),
+                "description": (
+                    "Required while a submission is open: `answered` if the target's "
+                    "reply is already in its response, `pending` if it comes later."
+                ),
+            },
             "reply_from": pointer_schema(),
             "promised": {"type": "array", "items": pointer_schema()},
         },
@@ -426,11 +437,23 @@ async def _report(
 async def _http_report(
     runner: HttpRunner, state: ActionState, args: dict[str, Any]
 ) -> dict[str, Any]:
-    """``report``, then settle the open submission if the reply came from its own response."""
-    result = await _report(runner, state, args)
-    if args.get("reply_from") is not None:
-        runner.settle_by_reply(str(args["reply_from"]["entry"]))
-    return result
+    """``report``, after the agent says whether the open submission is answered.
+
+    The agent reads the response and decides; code only refuses a decision the status
+    contradicts. A wrong ``reply_from`` then costs the reply, never the submission.
+    """
+    opened = runner.open_submission
+    if opened is not None:
+        decision = args.get("submission")
+        if decision not in SUBMISSION_STATES:
+            raise ToolRefused(
+                "a submission is open: set `submission` to `answered` (its reply is in "
+                "the response you read) or `pending` (the reply comes later)"
+            )
+        if decision == "answered":
+            runner.settle_answered()
+            state.answered = True
+    return await _report(runner, state, args)
 
 
 SHARED_HANDLERS: dict[str, Handler] = {

@@ -63,6 +63,12 @@ class Target:
             return httpx.Response(500, text="x" * 3000)
         if path == f"{API}/gone":
             return httpx.Response(404, json={"detail": "no such session"})
+        if path == f"{API}/long":
+            return httpx.Response(
+                200, json={"filler": "x" * 5000, "result": {"message": "the tail"}}
+            )
+        if path == f"{API}/post-only" and request.method != "POST":
+            return httpx.Response(405, json={"detail": "Method Not Allowed"})
         if path == f"{API}/status":
             return httpx.Response(200, json={"state": "done"})
         if path == f"{API}/names":
@@ -283,6 +289,7 @@ async def test_report_resolves_the_reply_and_keeps_the_reading_apart(
             "outcome": "done",
             "why": "sent it",
             "next_options": "ask more",
+            "submission": "answered",
             "reply_from": {"entry": reply["response_entry"], "at": "$.reply"},
             "promised": [{"entry": reply["response_entry"], "at": "$.files[0].name"}],
         },
@@ -325,6 +332,7 @@ async def test_a_reply_cited_from_the_submissions_own_200_settles_it(
         {
             "outcome": "done",
             "why": "the answer came back in the POST",
+            "submission": "answered",
             "reply_from": {"entry": reply["response_entry"], "at": "$.reply"},
         },
     )
@@ -350,6 +358,7 @@ async def test_a_202_stays_open_even_when_the_report_cites_it(tmp_path: Path) ->
         {
             "outcome": "partial",
             "why": "accepted, the answer comes later",
+            "submission": "pending",
             "reply_from": {"entry": reply["response_entry"], "at": "$.reply"},
         },
     )
@@ -378,6 +387,7 @@ async def test_citing_a_later_call_does_not_settle_the_submission(
         {
             "outcome": "done",
             "why": "read the session",
+            "submission": "pending",
             "reply_from": {"entry": status["response_entry"], "at": "$.state"},
         },
     )
@@ -392,9 +402,126 @@ async def test_a_report_without_a_reply_leaves_the_submission_open(
     runner, _, state = await _ready(tmp_path)
     await _chat(runner, state)
 
-    await _call(runner, state, "report", {"outcome": "unknown", "why": "no idea"})
+    await _call(
+        runner,
+        state,
+        "report",
+        {"outcome": "unknown", "why": "no idea", "submission": "pending"},
+    )
 
     assert runner.open_submission is not None
+
+
+@pytest.mark.asyncio
+async def test_a_wrong_reply_path_does_not_keep_an_answered_submission_open(
+    tmp_path: Path,
+) -> None:
+    """#593: the target answered inside the 200; a bad citation costs the reply only."""
+    runner, _, state = await _ready(tmp_path)
+    reply = await _chat(runner, state)
+    wrong = {
+        "outcome": "done",
+        "why": "the answer came back in the POST",
+        "submission": "answered",
+        "reply_from": {"entry": reply["response_entry"], "at": "$.body.reply"},
+    }
+
+    refused = await _call(runner, state, "report", wrong)
+
+    assert "error" in refused
+    assert runner.open_submission is None
+    right = {**wrong, "reply_from": {**wrong["reply_from"], "at": "$.reply"}}
+    assert "error" not in await _call(runner, state, "report", right)
+    observation = runner._observation(state, None)
+    assert observation.observed
+    assert observation.reply == "hi"
+    assert not observation.submission_unresolved
+
+
+@pytest.mark.asyncio
+async def test_an_answered_submission_with_no_cited_reply_says_so(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _chat(runner, state)
+
+    await _call(
+        runner,
+        state,
+        "report",
+        {"outcome": "done", "why": "answered", "submission": "answered"},
+    )
+
+    observation = runner._observation(state, None)
+    assert observation.observed
+    assert observation.reply is None
+    assert observation.notice is not None
+    assert "no reply was recorded" in observation.notice
+
+
+@pytest.mark.asyncio
+async def test_a_report_must_say_whether_an_open_submission_is_answered(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _chat(runner, state)
+
+    result = await _call(runner, state, "report", {"outcome": "done", "why": "sent"})
+
+    assert "submission" in result["error"]
+    assert state.report is None
+    assert runner.open_submission is not None
+
+
+@pytest.mark.asyncio
+async def test_a_200_the_agent_calls_pending_stays_open(tmp_path: Path) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _chat(runner, state)
+
+    await _call(
+        runner,
+        state,
+        "report",
+        {"outcome": "partial", "why": "queued", "submission": "pending"},
+    )
+
+    assert runner.open_submission is not None
+
+
+@pytest.mark.asyncio
+async def test_a_202_cannot_be_called_answered(tmp_path: Path) -> None:
+    runner, _, state = await _ready(tmp_path)
+    await _submit(runner, state, "/accepted")
+
+    result = await _call(
+        runner,
+        state,
+        "report",
+        {"outcome": "done", "why": "it answered", "submission": "answered"},
+    )
+
+    assert "poll_until" in result["error"]
+    assert runner.open_submission is not None
+
+
+@pytest.mark.asyncio
+async def test_a_report_with_nothing_open_needs_no_submission_field(
+    tmp_path: Path,
+) -> None:
+    runner, _, state = await _ready(tmp_path)
+
+    result = await _call(runner, state, "report", {"outcome": "done", "why": "read"})
+
+    assert "error" not in result
+
+
+@pytest.mark.asyncio
+async def test_the_agent_gets_the_whole_response_body(tmp_path: Path) -> None:
+    runner, _, state = await _ready(tmp_path)
+
+    reply = await _submit(runner, state, "/long")
+
+    assert json.loads(reply["body"])["result"]["message"] == "the tail"
 
 
 @pytest.mark.asyncio
@@ -439,6 +566,7 @@ async def test_a_reply_cited_from_an_earlier_action_is_refused(tmp_path: Path) -
         {
             "outcome": "done",
             "why": "x",
+            "submission": "pending",
             "reply_from": {"entry": earlier["response_entry"], "at": "$.reply"},
         },
     )
@@ -560,6 +688,7 @@ async def test_a_rejection_is_reported_once(tmp_path: Path) -> None:
         {
             "outcome": "done",
             "why": "ok",
+            "submission": "answered",
             "reply_from": {"entry": runner.results[-1], "at": "$.reply"},
         },
     )
@@ -653,6 +782,7 @@ async def test_an_action_with_a_quoted_message_is_sent_and_not_sent_nothing(
         {
             "outcome": "done",
             "why": "ok",
+            "submission": "answered",
             "reply_from": {"entry": runner.results[-1], "at": "$.reply"},
         },
     )

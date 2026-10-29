@@ -85,7 +85,13 @@ class Trial:
             return [
                 (
                     "report",
-                    {"outcome": "done", "why": "x", "reply_from": reply, **extra},
+                    {
+                        "outcome": "done",
+                        "why": "x",
+                        "submission": "answered",
+                        "reply_from": reply,
+                        **extra,
+                    },
                 )
             ]
 
