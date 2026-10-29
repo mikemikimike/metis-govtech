@@ -192,6 +192,31 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   variable in `login.secrets`. The error never repeats a placeholder that is not a variable
   name (#283).
 
+- `GraderResult` and `RecordedResult` carry `scope`, the label of what the result is about
+  (`"session"`, `"turn:3"` or `"artifact:report.pdf"`). `GraderRecord.aggregation` records
+  the grader's aggregation rule (`"pass_if_all"`), or is omitted when the grader declares no
+  taxonomy.
+
+- `select_by_turn`, `select_by_window`, `select_session` and `select_by_artifact` in
+  `metis.core.trace_processing` select what a grader judges for each scope, each under a
+  label for `GraderResult.scope`. A trace is one turn on its own; a subsession is a turn and up
+  to `window` turns before it, or every turn before it when `window` is not set. The artifact
+  scope judges the latest revision of a named file: the highest `at_turn`, then the last one
+  listed. `find_fixtures` gives the files the user gave the target, and `tools_offered` the
+  tools the session offered, by agent, from the model calls, the agents and the tool calls.
+  `render_artifact` gives a file in the form the judge reads, up to 50 MB.
+  `GradingOutput.errored(reason)` builds the one result of a session that cannot be judged.
+
+- `render_session` shows everything the trace records in each turn, in time order: the user's
+  message, each agent's system prompt (once), what each model call wrote (never its input,
+  which repeats the history), sub-agent handoffs, tool calls, errors and warnings at the
+  observation where they happened, and the reply. `Turn.events` holds these events. With
+  `tool_results=True` it adds each tool call's status (`ok`, `warning` or `error`) and result,
+  including a result that is a list, and `max_chars` cuts long payloads. A JSON reply, tool
+  argument or tool result is shown as the text the application recorded, so `10.50` stays
+  `10.50`; `Observation.raw` is read only by the trace processor, for this. `render_dialogue`
+  shows only what the user and the agent said to each other.
+
 #### Breaking
 
 - Each Criterion states one assessment rule and owns its Grader configuration (#490).
@@ -208,12 +233,114 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- Fifteen Execution and Decision Quality graders: `PlanningQualityGrader`,
+  `ActionChoiceAppropriatenessGrader`, `ToolChoiceAppropriatenessGrader`,
+  `ToolArgumentCorrectnessGrader`, `StateTrackingGrader`, `UseOfPriorInformationGrader`,
+  `ErrorDetectionGrader`, `ErrorRecoveryGrader`, `AdaptationToChangedConditionsGrader`,
+  `StoppingAppropriatenessGrader`, `AvoidingUnproductiveRepetitionGrader`,
+  `AppropriateHandlingOfCapabilityLimitsGrader`, `OutcomeVerificationGrader`,
+  `ReasoningValidityGrader`, and `CoordinationQualityGrader`. Each judges the whole session.
+  `task_description` is optional; without it the judge infers the goal from the user's
+  messages. `ToolChoiceAppropriatenessGrader`, `ToolArgumentCorrectnessGrader`,
+  `ActionChoiceAppropriatenessGrader` and `AppropriateHandlingOfCapabilityLimitsGrader` read
+  the tool list from their `available_tools` setting, or else from the tools the session
+  offered. `ToolArgumentCorrectnessGrader` needs recorded tool calls.
+  `AvoidingUnproductiveRepetitionGrader` and `UseOfPriorInformationGrader` score a clean
+  session 1 (#447).
+
+- Eleven Task and Output Quality graders: `TaskSuccessGrader`, `OutputCorrectnessGrader`,
+  `FactualAccuracyGrader`, `RequiredComponentCompletenessGrader`,
+  `TaskConstraintAdherenceGrader`, `FormatSchemaComplianceGrader`,
+  `ClaimSupportByEvidenceGrader`, `EvidenceSourceSuitabilityGrader`,
+  `SpeechRecognitionAccuracyGrader`, `ContentFidelityGrader`, and `AttributionAccuracyGrader`.
+  Output graders judge the final reply by default (`turn: last`), or every reply
+  (`turn: each`), or the latest received file with a given name (`scope: artifact`,
+  `artifact: <name>`). The judge reads the file itself. `ContentFidelityGrader`,
+  `ClaimSupportByEvidenceGrader` and `AttributionAccuracyGrader` take their sources from the
+  session: what the user gave the agent or what it retrieved, earlier turns, and the files
+  the user gave the target. With a file, `TaskSuccessGrader` and
+  `TaskConstraintAdherenceGrader` judge the file alone, and `TaskSuccessGrader` needs a
+  `task_description` or `success_conditions`. `RequiredComponentCompletenessGrader`,
+  `TaskConstraintAdherenceGrader` and `EvidenceSourceSuitabilityGrader` judge each listed
+  item on its own and combine the results by `pass_if_all`: a result scores 0 when any listed
+  item fails, is errored when none fails but one cannot be judged, and scores 1 otherwise.
+  `FormatSchemaComplianceGrader` checks JSON against a schema without a judge call, before
+  any prose rules (#447).
+
+- Twelve graders adapt their judge prompts from open-source evaluation prompts:
+  - Arize Phoenix: `ToolChoiceAppropriatenessGrader` (tool selection),
+    `ToolArgumentCorrectnessGrader` (tool invocation), and
+    `RequiredComponentCompletenessGrader` (completeness, with MLflow completeness).
+  - MLflow: `TaskConstraintAdherenceGrader` (guidelines) and `OutputCorrectnessGrader`
+    (correctness).
+  - DeepEval: `AttributionAccuracyGrader` (citation faithfulness), `TaskSuccessGrader` (task
+    completion), `PlanningQualityGrader` (plan quality), `SpeechRecognitionAccuracyGrader`
+    (transcription accuracy), `ClaimSupportByEvidenceGrader` (faithfulness claims, with the
+    Braintrust Autoevals faithfulness verdict), and `UseOfPriorInformationGrader` (knowledge
+    retention, with MLflow knowledge retention).
+  - Braintrust Autoevals: `FactualAccuracyGrader` (factuality, itself from the OpenAI Evals
+    `fact` prompt).
+
+  Each keeps the METIS binary score and the rule that a criterion that does not apply is not
+  scored. `RequiredComponentCompletenessGrader` counts a refusal or "I don't know" as a missing
+  component. Each module docstring
+  names the source file, the pinned commit, the license and the METIS changes, and
+  `metis/library/EXTERNAL_SOURCES.md` gives the copyright notices and license texts.
+  `metis/library/graders/README.md` lists every grader with the upstream metric that it
+  adapts.
+
+- The taxonomy keeps Use of Observed State, Spoken-Content Fidelity, Language Identification
+  Accuracy and Input Interpretation Accuracy, but the library has no grader for them: a trace
+  does not record the environment state, the delivered speech, the identified language, or the
+  meaning the user intended.
+
+- Nine Interaction Quality graders, one for each attribute that a text session can show:
+  `RelevanceGrader`, `CommunicationClarityGrader`, `CrossTurnCoherenceGrader`,
+  `ClarificationAppropriatenessGrader`, `UserCorrectionSupportGrader`,
+  `ActionStatusTransparencyGrader`, `ExplanationUsefulnessGrader`,
+  `ToneAppropriatenessGrader`, and `OutputNaturalnessGrader`. Each judges the whole session
+  by default. Relevance, clarity, explanation usefulness, tone, and naturalness also take
+  `scope: subsession`, one result for each turn, judged with the turns before it. Each
+  judge reads only the evidence that its measure needs: the user messages and replies for
+  clarity, coherence, and tone, the replies alone for naturalness, and each tool call's
+  status and result for action status. Seven graders take optional free-text settings that
+  give the judge facts the trace cannot show: `purpose` (relevance), `audience` (clarity),
+  `confirm_before` and `question_limit` (clarification), `fixed_rules` (correction
+  support), `disclosure_level` and `ui_status` (action status), `expected_tone` (tone), and
+  `conventions` (naturalness) (#451).
+
+- Three Interaction Quality graders adapt their judge prompts from open-source evaluation
+  prompts: `RelevanceGrader` from DeepEval Turn Relevancy, the padding check of
+  `CommunicationClarityGrader` from Arize Phoenix `conciseness`, and
+  `UserCorrectionSupportGrader` from Arize Phoenix `user_friction`. Each module docstring
+  names the source file, the pinned commit, the license and the METIS changes, and
+  `metis/library/EXTERNAL_SOURCES.md` gives the copyright notices and license texts.
+  `metis/library/graders/README.md` lists the nine graders under Interaction Quality (#451).
+
+- Shared definitions for grading: `SCOPE_DEFINITIONS` in `metis.library.scope` (trace,
+  subsession, session and artifact), `JUDGMENT_FORM_DEFINITIONS` in `metis.library.judgment_form`
+  (the `binary` instructions and reply model), and `AGGREGATION_DEFINITIONS` in
+  `metis.library.aggregation` (`none_single_score`, `pass_if_all` and `pass_if_any`, which
+  combine a multi-rule grader's per-rule results). `GraderArgs` has optional `scope`,
+  `judgment_form` and `aggregation` settings; an unset one is the grader's first declared
+  value, and a value the grader does not declare fails before the run. `TraceArgs`, `SubsessionArgs`,
+  `ArtifactArgs` and `TaskArgs` hold the settings that several graders share, and a grader's
+  args must include the ones for the scopes it declares. A grader whose session lacks the
+  evidence its measure needs, or where the event it looks for did not happen, returns
+  `errored` with the reason.
+
+- `metis.library.judge.judge` judges one rendered piece of a session against one criterion:
+  it builds the prompt from the grader's criteria and the shared definitions, and returns the
+  judge's status, score and reason as one result. It sends the request through the Responses
+  API, with a rendered file as an input file. A gateway or model that rejects a file type gives
+  an errored result with its reason.
+
 - Criterion fallback judge for interview criteria with no specific grader match. The judge
-  uses the current criterion description, returns a binary session score, and records skipped
-  or errored assessments separately. YAML description edits apply on the next run. Model and
-  threshold settings survive description edits. The judge reads recorded trace input and
-  output. It does not read artifact files. Shared binary output instructions and response
-  validation live in `metis.library.judgment`. No taxonomy fields are required by the
+  uses the current criterion description, returns a binary session score, and records errored
+  assessments separately. YAML description edits apply on the next run. Model and threshold
+  settings survive description edits. The judge reads the session transcript, with every tool
+  call's result. It does not read artifact files. Shared binary output instructions and response
+  validation live in `metis.library.judgment_form`. No taxonomy fields are required by the
   base grader contract (#299).
 
 - `CriterionJudgeArgs` marks a model-based grader that takes its instructions from the
@@ -234,6 +361,16 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   an LLM assessment with no measure mapping. DemoTraceBudget demonstrates a deterministic
   task-constraint check. Both return one binary session result and declare fixed
   capabilities. The taxonomy does not add generic method selection or runtime routing.
+
+#### Changed
+
+- No library grader returns `skipped`. A session with nothing to judge is `errored`, with the
+  reason, and the binary judgment's `not_applicable` status becomes an errored result.
+
+- The demo graders show the full grader pattern. Each declares a taxonomy and selects through
+  `SCOPE_DEFINITIONS`. `DemoTaskCompletionGrader` (session) and `DemoAnswerHelpfulnessGrader`
+  (subsession, with the turns before each turn) judge with `metis.library.judge.judge`.
+  `DemoAnswerHelpfulnessGrader` takes `DemoAnswerHelpfulnessArgs`, with `turn` and `window`.
 
 #### Breaking
 

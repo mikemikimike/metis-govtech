@@ -67,16 +67,16 @@ def a_criterion(then: str, **kw) -> Criterion:
 
 def test_the_catalogue_lists_the_criterion_judge() -> None:
     library_catalogue.cache_clear()
-    assert [spec.fqn for spec in library_catalogue()] == [CRITERION_JUDGE_FQN]
+    assert CRITERION_JUDGE_FQN in [spec.fqn for spec in library_catalogue()]
 
 
 def test_the_catalogue_reads_an_exported_grader(a_catalogued_grader: type) -> None:
     specs = library_catalogue()
 
-    assert [spec.fqn for spec in specs] == [
-        CRITERION_JUDGE_FQN,
-        "metis.library.graders.DemoTraceBudgetGrader",
-    ]
+    fqns = [spec.fqn for spec in specs]
+    assert CRITERION_JUDGE_FQN in fqns
+    assert "metis.library.graders.DemoTraceBudgetGrader" in fqns
+    assert fqns == sorted(fqns)
     assert all(spec.fqn and spec.name and spec.description for spec in specs)
 
 

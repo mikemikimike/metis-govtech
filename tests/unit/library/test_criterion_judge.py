@@ -10,7 +10,7 @@ from metis.core.artifacts import Artifact
 from metis.core.traces import GradingInput
 from metis.library.grader import CriterionJudgeArgs, LLMSettings
 from metis.library.graders import CriterionJudgeGrader
-from metis.library.judgment import JUDGMENT_FORM_DEFINITIONS, BinaryJudgment
+from metis.library.judgment_form import JUDGMENT_FORM_DEFINITIONS, BinaryJudgment
 from metis.library.taxonomy import (
     Aggregation,
     GraderType,
@@ -55,17 +55,17 @@ def test_uses_the_shared_binary_judgment_definition() -> None:
         ),
         (
             {
-                "status": "skipped",
+                "status": "not_applicable",
                 "score": None,
                 "reason": "The condition did not occur.",
             },
-            "skipped",
+            "errored",
             None,
         ),
         ({"status": "scored", "score": 0.5, "reason": "Partial."}, "errored", None),
         ({"status": "scored", "score": True, "reason": "Yes."}, "errored", None),
         ({"status": "scored", "score": "1", "reason": "Yes."}, "errored", None),
-        ({"status": "skipped", "score": 1, "reason": "No."}, "errored", None),
+        ({"status": "not_applicable", "score": 1, "reason": "No."}, "errored", None),
         ({"status": "scored", "score": 1, "reason": " "}, "errored", None),
         ("not json", "errored", None),
         ("", "errored", None),
@@ -89,10 +89,13 @@ def test_response_contract_and_recorded_evidence(reply, status, score) -> None:
     assert result.reason.strip()
     [request] = requests
     assert request["model"] == "test-judge"
-    assert "Name a source." in request["messages"][0]["content"]
-    observations = json.loads(request["messages"][1]["content"])[0]["observations"]
-    assert [o["id"] for o in observations] == ["root", "tool"]
-    assert observations[1]["output"] == {"url": "example.org"}
+    assert "Name a source." in request["input"][0]["content"]
+    [evidence] = request["input"][1]["content"]
+    assert evidence["text"] == (
+        "## Turn 1\nUser: Find a source\nTool search: [unreadable: missing: the tool call has no arguments]\n"
+        'Tool result [ok]: {"url": "example.org"}\nAssistant: The source is example.org'
+    )
+    assert result.scope == "session"
 
 
 def test_provider_failure_is_an_error() -> None:
@@ -126,7 +129,7 @@ def test_provider_failure_is_an_error() -> None:
         ),
     ],
 )
-def test_empty_session_skips_without_a_model_call(artifacts) -> None:
+def test_empty_session_is_errored_without_a_model_call(artifacts) -> None:
     requests = []
     client = judge_client("unused", requests)
     grader = CriterionJudgeGrader(
@@ -139,36 +142,14 @@ def test_empty_session_skips_without_a_model_call(artifacts) -> None:
                 GradingInput(traces=(), artifacts=artifacts), LLMSettings(client)
             )
 
-    assert asyncio.run(run()).results[0].status == "skipped"
+    [result] = asyncio.run(run()).results
+    assert (result.status, result.reason) == ("errored", "The session has no turns.")
     assert requests == []
 
 
 def test_runtime_instructions_must_be_nonempty() -> None:
     with pytest.raises(ValidationError, match="criterion"):
         CriterionJudgeArgs(model="test-judge", criterion=" ")
-
-
-@pytest.mark.parametrize(
-    ("finish_reason", "refusal"),
-    [("length", None), ("stop", "Cannot assess this request.")],
-)
-def test_incomplete_or_refused_assessment_is_an_error(finish_reason, refusal) -> None:
-    requests = []
-    client = judge_client(
-        '{"status":"scored","score":1,"reason":"Yes."}',
-        requests,
-        finish_reason=finish_reason,
-        refusal=refusal,
-    )
-    grader = CriterionJudgeGrader(
-        CriterionJudgeArgs(model="test-judge", criterion="Name a source.")
-    )
-
-    async def run():
-        async with client:
-            return await grader.grade(recorded_session(), LLMSettings(client))
-
-    assert asyncio.run(run()).results[0].status == "errored"
 
 
 @pytest.mark.parametrize(

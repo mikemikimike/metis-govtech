@@ -13,9 +13,6 @@ from metis.core import trace_processing
 from metis.core.trace_processing import (
     Problem,
     TargetError,
-    select_all,
-    select_final,
-    select_where,
     turns,
 )
 from metis.core.traces import GradingInput, Observation, Trace
@@ -145,33 +142,17 @@ class TestTurns:
         (turn,) = turns(_session(_turn_trace("t1", 0)).traces)
         assert turn.target_errors == ()
 
+    def test_a_chat_message_reply_is_its_text(self) -> None:
+        message = {"role": "assistant", "content": "done"}
+        (turn,) = turns(_session(_turn_trace("t1", 0, reply=message)).traces)
+        assert turn.reply == "done"
+
     def test_no_traces_is_no_turns(self) -> None:
         assert turns(()) == ()
 
     def test_turns_takes_traces_directly(self) -> None:
         session = _session(_turn_trace("t1", 0), _turn_trace("t2", 5))
         assert [turn.trace_id for turn in turns(session.traces)] == ["t1", "t2"]
-
-
-class TestSelection:
-    def test_select_final_of_nothing_is_no_match(self) -> None:
-        problem = select_final(())
-        assert isinstance(problem, Problem)
-        assert problem.kind == "no_match"
-
-    def test_select_all_and_final(self) -> None:
-        units = turns(_session(_turn_trace("t1", 0), _turn_trace("t2", 5)).traces)
-        assert select_all(units) == units
-        assert select_final(units) == (units[1],)
-
-    def test_select_where_filters_and_reports_empty(self) -> None:
-        units = turns(
-            _session(_turn_trace("t1", 0, user="hi"), _turn_trace("t2", 5)).traces
-        )
-        assert select_where(units, lambda turn: turn.user == "hi") == (units[0],)
-        problem = select_where(units, lambda turn: turn.user == "nope")
-        assert isinstance(problem, Problem)
-        assert problem.kind == "no_match"
 
 
 def test_processing_has_no_orca_names() -> None:

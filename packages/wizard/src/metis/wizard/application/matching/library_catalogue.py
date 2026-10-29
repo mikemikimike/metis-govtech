@@ -54,6 +54,18 @@ def _type_name(annotation: object) -> str:
     return getattr(annotation, "__name__", None) or str(annotation)
 
 
+_TAXONOMY_SETTINGS = {
+    "scope": "scopes",
+    "judgment_form": "judgment_forms",
+    "aggregation": "aggregations",
+}
+"""Each taxonomy setting in every args model, and the taxonomy field that lists its values."""
+
+
+def _supported(cls: type[Grader[Any]], setting: str) -> tuple[Any, ...]:
+    return getattr(getattr(cls, "taxonomy", None), _TAXONOMY_SETTINGS[setting], ())
+
+
 def _params(cls: type[Grader[Any]]) -> list[GraderParam]:
     """The grader's ``args_model`` fields, read from the class without building anything."""
     params = []
@@ -64,6 +76,8 @@ def _params(cls: type[Grader[Any]]) -> list[GraderParam]:
             continue  # resolved by the engine, never chosen per criterion in the wizard
         if name == "criterion" and issubclass(cls.args_model, CriterionJudgeArgs):
             continue  # filled from the criterion description
+        if name in _TAXONOMY_SETTINGS and len(_supported(cls, name)) < 2:
+            continue  # the grader supports one value, so there is nothing to choose
         required = info.is_required()
         params.append(
             GraderParam(

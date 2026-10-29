@@ -176,7 +176,7 @@ def test_edited_yaml_description_reaches_the_judge_and_result_record(
             )
 
     [record] = asyncio.run(run())
-    assert "TWO independent sources" in requests[0]["messages"][0]["content"]
+    assert "TWO independent sources" in requests[0]["input"][0]["content"]
     assert record.grader_args == {
         "criterion": str(loaded.criterion(criterion.id).description),
         "model": model or "default-judge",

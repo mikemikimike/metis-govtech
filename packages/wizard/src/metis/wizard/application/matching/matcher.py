@@ -160,6 +160,10 @@ def default_grader_args(criterion: Criterion) -> dict[str, Any]:
         for name, info in model.model_fields.items()
         if not info.is_required()
         and not (name in {"model", "max_input_tokens"} and issubclass(model, JudgeArgs))
+        # An unset taxonomy setting means the grader's own default, so it is not copied.
+        and not (
+            name in {"scope", "judgment_form", "aggregation"} and info.default is None
+        )
     }
 
 

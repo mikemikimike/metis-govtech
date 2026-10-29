@@ -37,31 +37,45 @@ def recorded_session() -> GradingInput:
 
 
 def judge_client(
-    content: str,
+    content: str | list[str],
     requests: list[dict[str, Any]],
     *,
     status_code: int = 200,
-    finish_reason: str = "stop",
+    status: str = "completed",
     refusal: str | None = None,
 ) -> AsyncOpenAI:
+    """An offline client whose Responses API calls return ``content``.
+
+    A list gives one reply for each call, in order. A string is the reply to every call.
+    """
+    replies = content if isinstance(content, list) else None
+
     def respond(request: httpx.Request) -> httpx.Response:
+        text = replies[len(requests)] if replies is not None else content
         requests.append(json.loads(request.content))
+        part = (
+            {"type": "refusal", "refusal": refusal}
+            if refusal is not None
+            else {"type": "output_text", "text": text, "annotations": []}
+        )
         return httpx.Response(
             status_code,
             json={
-                "id": "completion-1",
-                "object": "chat.completion",
-                "created": 1,
+                "id": "response-1",
+                "object": "response",
+                "created_at": 1,
                 "model": "test-judge",
-                "choices": [
+                "status": status,
+                "parallel_tool_calls": False,
+                "tool_choice": "none",
+                "tools": [],
+                "output": [
                     {
-                        "index": 0,
-                        "finish_reason": finish_reason,
-                        "message": {
-                            "role": "assistant",
-                            "content": content,
-                            "refusal": refusal,
-                        },
+                        "id": "message-1",
+                        "type": "message",
+                        "role": "assistant",
+                        "status": "completed",
+                        "content": [part],
                     }
                 ],
             },

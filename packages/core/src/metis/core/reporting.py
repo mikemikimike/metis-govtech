@@ -2,9 +2,9 @@
 
 `metis engine evaluate` runs each criterion's grader once per session, applies the criterion's
 threshold to every ``GraderResult`` the grader returned, and writes one ``GraderRecord`` per
-grader per session. A record holds one ``RecordedResult`` per grading scope the grader chose: a
-per-trace grader over a 10-trace session contributes 10 results, a session grader 1, so a
-report should show each result count beside its rate.
+grader per session. A record holds one ``RecordedResult`` for each thing judged: a per-turn grader over
+a 10-turn session contributes 10 results, a session grader 1, so a report should show each
+result count beside its rate.
 
 The models live in metis-core as the shared evaluation output contract.
 EvaluationResults is code-produced, like TrialRecord, so it has no published JSON Schema file.
@@ -36,6 +36,11 @@ class GraderRecord(BaseModel):
     grader_fqn: str
     grader_args: dict[str, Any]
     """The validated args, defaults and resolved judge model included."""
+    aggregation: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    """The rule that combined each result's checks into its score, such as ``"pass_if_all"``,
+    from the grader's taxonomy. ``None`` for a grader that declares no taxonomy."""
     results: list[RecordedResult] = Field(min_length=1)
 
 

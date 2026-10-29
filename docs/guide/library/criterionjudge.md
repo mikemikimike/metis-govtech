@@ -8,7 +8,7 @@ offer this judge, because the form has no criterion description field.
 ## Taxonomy declaration
 
 The Criterion Judge is the LLM reference grader for the taxonomy foundation.
-[DemoTraceBudget](graders.md#deterministic-reference-grader) is the deterministic reference grader.
+[DemoTraceBudget](graders.md#examples-to-copy) is the deterministic reference grader.
 Criterion Judge is a catch-all judge with `measure=None`. It has no category mapping.
 The other five groups have one fixed value:
 
@@ -88,24 +88,32 @@ above the default. To judge such a session, raise the limit.
 
 ## Results
 
-The judge returns one result for the whole session:
+The judge returns one result for the whole session, with the scope `"session"`:
 
 - A score of `1` means that the recorded evidence satisfies the criterion.
 - A score of `0` means that the recorded evidence does not satisfy the criterion.
-- A skipped result means that the session has no applicable evidence. A session with no recorded
-  input or output is skipped without a model call.
-- An errored result means that the request was above the input limit, that the provider failed,
-  or that the reply was not valid.
+- An errored result means that the session cannot be judged. The reason says why. The cases
+  are these:
+  - The session has no turns. The judge is not called.
+  - The event that the criterion looks for did not happen.
+  - The request was above the input limit.
+  - The provider failed.
+  - The reply was not valid.
 
-Skipped and errored results do not count as failures.
+Errored results do not count as failures.
 
 ## Evidence that the judge reads
 
-The judge receives these fields of each observation, grouped by trace: the ID, the parent ID,
-the type, the name, the input, and the output. It does not receive trace metadata or timing
-fields. It does not read artifact files, so a file path or a recorded claim about a file does
-not show what the file contains. If the criterion needs other evidence, select a specific
-grader.
+The judge reads the session as a transcript, one block for each turn. A block holds the user's
+message, each tool call with its arguments, its status and its full result, the assistant's
+reply, and each error that the target reported. METIS makes this transcript with
+`render_session(turns, tool_results=True)` from `metis.core.trace_processing`, so the
+judge sees the same view as the other LLM graders.
+
+The judge does not see observations that are not part of a turn, such as nested LLM calls and
+system prompts. It does not see trace metadata or timing fields. It does not read artifact
+files, so a file path or a recorded claim about a file does not show what the file contains.
+If the criterion needs other evidence, select a specific grader.
 
 ## Check the judge with a provider
 
