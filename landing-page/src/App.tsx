@@ -24,7 +24,7 @@ const IC_BOT_BLUE = 'https://img.icons8.com/?size=100&id=lUk2otclIHsF&format=png
 /* ── Data ── */
 const steps = [
   { number: '01', label: 'DEFINE', product: 'Wizard', title: 'Start with what good looks like.', text: 'The Wizard interviews your team and turns a description of your agent into a Specification of features, behaviours, and measurable criteria.' },
-  { number: '02', label: 'DESIGN', product: 'Wizard · Library', title: 'Turn intent into realistic tests.', text: 'Generate personas, everyday and edge-case scenarios, and repeated trials. A structured taxonomy matches each criterion to the right grader.' },
+  { number: '02', label: 'DESIGN', product: 'Wizard · Library', title: 'Turn expected behaviours into realistic tests.', text: 'Generate personas, everyday and edge-case scenarios, and repeated trials. A structured taxonomy matches each criterion to the right grader.' },
   { number: '03', label: 'EXECUTE', product: 'Engine', title: 'Test the full trajectory.', text: 'The Engine runs adaptive, multi-turn conversations through your API or a real browser, scoring every step, tool call, and recovery.' },
   { number: '04', label: 'IMPROVE', product: 'Insights', title: 'Know exactly what to fix.', text: 'Insights rolls scores up across trials, personas, and scenarios. Every result links back to a criterion and its evidence.' },
 ];
