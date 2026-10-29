@@ -491,9 +491,16 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   runner exposes the open one and the responses that answered a submission, and takes the
   session ID from such a response or from a result logged during the current action, so a
   target that opens its session before any message (the toy app's `POST /sessions`) can have
-  its ID recorded (#543). A submission answered inside its own 200 or 201 response settles when
-  the agent's `report` cites that response in `reply_from` (`HttpRunner.settle_by_reply`), since a
-  target like that has no field to poll; a 202 stays open, because its reply comes later (#587).
+  its ID recorded (#543). While a submission is open, the runner
+  agent's `report` must set `submission` to `answered` (the reply is in the response it read) or
+  `pending` (it comes later); `answered` closes the submission (`HttpRunner.settle_answered`),
+  and code refuses it for a 202, whose reply comes later and settles through `poll_until`
+  (#587, #593). `reply_from` only supplies the reply text: a path the response does not hold
+  costs the reply, not the submission, and the notice says the target answered but no reply was
+  recorded. The agent is shown each response body whole, with no length cap, so it reads the
+  field it cites from the real response. A 405 during a poll is the runner's own wrong method on
+  that path, so it leaves the submission open and is not reported as a submission that never
+  settled; other 4xx answers still are (#593).
   A submission the target answers with a non-2xx status is never opened, and the user agent is
   told so: `Observation.notice` carries the status and the first 200 characters of the response
   body, copied from the transport log, and the orchestrator's per-turn log line shows the notice

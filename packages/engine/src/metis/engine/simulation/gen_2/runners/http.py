@@ -74,7 +74,7 @@ _now = time.monotonic
 class OpenSubmission:
     """A submission the target accepted and nothing has settled yet.
 
-    ``poll_until`` settles it, or a ``report`` that cites its own 200 or 201 response.
+    ``poll_until`` settles it, or a ``report`` whose ``submission`` says it is answered.
     """
 
     request: str
@@ -149,7 +149,7 @@ class HttpRunner(Runner):
         conversation's listings from an account-wide one."""
         self.open_submission: OpenSubmission | None = None
         """The accepted submission nothing has settled yet; ``poll_until`` clears it, and
-        so does ``settle_by_reply``."""
+        so does ``settle_answered``."""
         self.unresolved: Unresolved | None = None
         """Set by a 4xx during a poll while a submission was open; a timeout leaves it open."""
         self.rejected: Rejected | None = None
@@ -310,23 +310,21 @@ class HttpRunner(Runner):
                 reply["file_id"] = str(value)
         return reply
 
-    def settle_by_reply(self, entry: str) -> bool:
-        """Close the open submission if ``entry`` is its own 200 or 201 response.
+    def settle_answered(self) -> None:
+        """Close the open submission because the runner agent read its reply in the response.
 
-        A target that answers inside the submission response has nothing to poll, and the
-        response holds the reply, so the reply the agent cites from it is the evidence that
-        the exchange is done. A 202 means the reply comes later, so it stays open.
+        :raises ToolRefused: When the response was a 202, which promises the reply later.
         """
         opened = self.open_submission
-        if (
-            opened is None
-            or entry != opened.response
-            or opened.status not in (200, 201)
-        ):
-            return False
+        if opened is None:
+            return
+        if opened.status not in (200, 201):
+            raise ToolRefused(
+                f"the submission was accepted with {opened.status}, which means the reply "
+                "comes later: settle it with `poll_until`"
+            )
         self.open_submission = None
-        logger.info("submission_settled_by_reply", entry=entry)
-        return True
+        logger.info("submission_answered", entry=opened.response)
 
     async def poll_until(
         self,
@@ -366,7 +364,12 @@ class HttpRunner(Runner):
             }
             if response.status_code != 429:  # _send waited it out; carry on
                 if not response.is_success:
-                    if 400 <= response.status_code < 500 and self.open_submission:
+                    # A 405 is the runner's own wrong method, not the target's failure.
+                    if (
+                        400 <= response.status_code < 500
+                        and response.status_code != 405
+                        and self.open_submission
+                    ):
                         self.unresolved = Unresolved(self.open_submission, response_id)
                         self.open_submission = None
                     return reply
@@ -725,6 +728,11 @@ class HttpRunner(Runner):
         sent_nothing, self.unquoted = self.unquoted, False  # read once
         if sent_nothing:
             notices.append("Nothing was sent: your action quoted no message.")
+        if state.answered and (state.report is None or state.report.reply is None):
+            notices.append(
+                "The target answered the submission, but no reply was recorded: the "
+                "report cited none that its response holds."
+            )
         if self.open_submission is not None:
             notices.append(
                 f"A submission ({self.open_submission.request}) is still open."
@@ -822,7 +830,7 @@ def _skipped(name: str | None, why: str) -> dict[str, Any]:
 
 
 def _preview(response: httpx.Response) -> str:
-    return response.content.decode("utf-8", errors="replace")[:4000]
+    return response.content.decode("utf-8", errors="replace")
 
 
 def _retry_after(response: httpx.Response) -> float:

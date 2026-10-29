@@ -140,7 +140,10 @@ async def test_a_long_conversation_sends_fewer_characters_than_the_untrimmed_one
 async def test_each_round_logs_the_characters_sent_at_debug_level(
     tmp_path: Path,
 ) -> None:
-    llm = ScriptedLLM([_chat()], [("report", {"outcome": "unknown", "why": "x"})])
+    llm = ScriptedLLM(
+        [_chat()],
+        [("report", {"outcome": "unknown", "why": "x", "submission": "pending"})],
+    )
     runner, _ = await _ready(tmp_path, llm)
 
     with structlog.testing.capture_logs() as logs:
