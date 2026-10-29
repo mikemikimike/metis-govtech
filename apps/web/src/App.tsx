@@ -1256,7 +1256,7 @@ export function OpeningScreen(props: OpeningScreenProps) {
   };
 
   return (
-    <div className="quiet-scrollbar flex flex-1 overflow-y-auto px-6 py-10 max-sm:px-4">
+    <div className="quiet-scrollbar flex flex-1 overflow-y-auto px-6 py-10 [scrollbar-gutter:stable] max-sm:px-4">
       <div className="animate-enter-opening-step mx-auto my-auto flex w-full max-w-3xl flex-col gap-8">
         <h1 className="text-center text-2xl font-semibold text-foreground">
           {config.opening_question}
@@ -1339,89 +1339,92 @@ export function OpeningScreen(props: OpeningScreenProps) {
                 }
               />
             </div>
-            {documentTrayOpen && (
-              <DocumentTray onClose={() => onDocumentTrayOpen(false)}>
-                <InitialDocumentPicker
-                  config={config}
-                  documents={documents}
-                  documentReads={props.documentReads}
-                  disabled={busy}
-                  onAdd={props.onAddDocuments}
-                  onRemove={props.onRemoveDocument}
-                  onKeepWithoutReading={props.onKeepDocumentUnread}
-                />
-              </DocumentTray>
-            )}
-            {perspectiveOpen && (
-              <UnderBoxSurface
-                id="opening-perspective"
-                label="Perspective"
-                onClose={() => onOpenControl(null)}
-              >
-                {/* Equal side space keeps the cards clear of the close button and centred. */}
-                <div className="px-6">
-                  <PerspectivePicker
-                    perspectives={config.perspectives}
-                    selected={perspective}
-                    onSelect={props.onPerspective}
+            {/* The cards under the box share one column. Only the first card starts under the box. */}
+            <div className="under-box-stack relative z-0 mx-auto flex w-[95%] flex-col gap-2">
+              {documentTrayOpen && (
+                <DocumentTray onClose={() => onDocumentTrayOpen(false)}>
+                  <InitialDocumentPicker
+                    config={config}
+                    documents={documents}
+                    documentReads={props.documentReads}
                     disabled={busy}
+                    onAdd={props.onAddDocuments}
+                    onRemove={props.onRemoveDocument}
+                    onKeepWithoutReading={props.onKeepDocumentUnread}
                   />
-                </div>
-              </UnderBoxSurface>
-            )}
-            {capabilitiesOpen && (
-              <UnderBoxSurface
-                id="opening-capabilities"
-                label="Capabilities"
-                onClose={() => onOpenControl(null)}
-                sheet
-              >
-                <CapabilityPicker
-                  categories={config.capability_categories}
-                  selected={capabilityEvidence.known_capability_ids}
-                  onChange={(knownCapabilityIds) =>
-                    onCapabilityEvidence({
-                      ...capabilityEvidence,
-                      known_capability_ids: knownCapabilityIds,
-                    })
-                  }
-                  disabled={busy}
-                  hideLegend
-                />
-                {/* On a small screen, the confidence row stays at the foot of the sheet. */}
-                <div className="max-sm:sticky max-sm:-bottom-4 max-sm:-mx-4 max-sm:bg-card max-sm:px-4 max-sm:pb-4 max-sm:pt-2">
-                  <CapabilityConfidencePicker
-                    selected={capabilityEvidence.confidence}
-                    onSelect={(confidence) =>
+                </DocumentTray>
+              )}
+              {perspectiveOpen && (
+                <UnderBoxSurface
+                  id="opening-perspective"
+                  label="Perspective"
+                  onClose={() => onOpenControl(null)}
+                >
+                  {/* Equal side space keeps the cards clear of the close button and centred. */}
+                  <div className="px-6">
+                    <PerspectivePicker
+                      perspectives={config.perspectives}
+                      selected={perspective}
+                      onSelect={props.onPerspective}
+                      disabled={busy}
+                    />
+                  </div>
+                </UnderBoxSurface>
+              )}
+              {capabilitiesOpen && (
+                <UnderBoxSurface
+                  id="opening-capabilities"
+                  label="Capabilities"
+                  onClose={() => onOpenControl(null)}
+                  sheet
+                >
+                  <CapabilityPicker
+                    categories={config.capability_categories}
+                    selected={capabilityEvidence.known_capability_ids}
+                    onChange={(knownCapabilityIds) =>
                       onCapabilityEvidence({
                         ...capabilityEvidence,
-                        confidence,
+                        known_capability_ids: knownCapabilityIds,
                       })
                     }
                     disabled={busy}
+                    hideLegend
                   />
-                </div>
-              </UnderBoxSurface>
-            )}
-            {runMode && (
-              // Run mode needs the binding, so this card stays open and is not a footer panel.
-              <section
-                id="opening-connection"
-                aria-label="Target connection"
-                className="animate-open-under-box relative z-0 mx-auto -mt-4 flex w-[95%] flex-col gap-3 rounded-2xl border border-border bg-card px-5 pb-5 pt-9"
-              >
-                <h2 className="text-sm font-medium text-foreground">
-                  Target connection
-                </h2>
-                <ConnectionForm
-                  draft={connectionDraft}
-                  onDraft={onConnectionDraft}
-                  result={connectionResult}
-                  busy={busy}
-                  onTest={onTestConnection}
-                />
-              </section>
-            )}
+                  {/* On a small screen, the confidence row stays at the foot of the sheet. */}
+                  <div className="max-sm:sticky max-sm:-bottom-4 max-sm:-mx-4 max-sm:bg-card max-sm:px-4 max-sm:pb-4 max-sm:pt-2">
+                    <CapabilityConfidencePicker
+                      selected={capabilityEvidence.confidence}
+                      onSelect={(confidence) =>
+                        onCapabilityEvidence({
+                          ...capabilityEvidence,
+                          confidence,
+                        })
+                      }
+                      disabled={busy}
+                    />
+                  </div>
+                </UnderBoxSurface>
+              )}
+              {runMode && (
+                // Run mode needs the binding, so this card stays open and is not a footer panel.
+                <section
+                  id="opening-connection"
+                  aria-label="Target connection"
+                  className="animate-open-under-box relative flex flex-col gap-3 rounded-2xl border border-border bg-card px-4 py-4"
+                >
+                  <h2 className="text-sm font-medium text-foreground">
+                    Target connection
+                  </h2>
+                  <ConnectionForm
+                    draft={connectionDraft}
+                    onDraft={onConnectionDraft}
+                    result={connectionResult}
+                    busy={busy}
+                    onTest={onTestConnection}
+                  />
+                </section>
+              )}
+            </div>
           </div>
           <ManualAuthoringEntry onOpen={props.onManualOpen} />
         </div>

@@ -8,7 +8,7 @@ a basic setup needs only three lines in `.env`.
 | Step | Role | Recommended model | Effect on scores |
 |---|---|---|---|
 | Interview | Interview | A capable reasoning model. The quality of the test configuration depends on this model. | No |
-| Scorer matching | Embeddings | An embedding model. | No |
+| Grader matching | Embeddings | An embedding model. | No |
 | Simulation | User agent (also the gen_1 artifact summariser) | A capable reasoning model. It must act like a realistic user. | Yes |
 | Simulation, generic runners | Runner agent | A capable reasoning model. It chooses the calls or page actions that carry out each user action. | Yes |
 | Grading | Judge | A fast, lightweight decision model by default, because it runs for each criterion and each conversation. Use a capable reasoning model if the budget allows it. | Yes |

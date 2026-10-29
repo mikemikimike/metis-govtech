@@ -238,6 +238,10 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- **Taxonomy dimensions.** `metis.library.taxonomy` adds the `Dimension` enum and the
+  `MEASURE_DIMENSIONS` table. The table gives the Dimension of each Measure, such as
+  `error_recovery` in `execution_and_decision_quality` (#602).
+
 - Fifteen Execution and Decision Quality graders: `PlanningQualityGrader`,
   `ActionChoiceAppropriatenessGrader`, `ToolChoiceAppropriatenessGrader`,
   `ToolArgumentCorrectnessGrader`, `StateTrackingGrader`, `UseOfPriorInformationGrader`,
@@ -946,6 +950,16 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- **Grader taxonomy and settings in the catalogue.** `GraderSpec` and `GraderSummary` carry the
+  grader's `taxonomy`. `GraderSummary` also carries the `dimension` of its measure. A grader with
+  no taxonomy or no measure has `null` for these fields. Both models also carry `settings`, a
+  list of `GraderSetting` values with the name, kind, required flag, default, choices, base flag,
+  and description of each key that a Criterion can set. The list gives the `GraderArgs` settings
+  `threshold`, `scope`, `judgment_form`, and `aggregation` first, then the grader's own settings.
+  A taxonomy setting lists the values that the grader declares. The list omits `model`,
+  `max_input_tokens`, and `criterion`, because the engine fills them. `GraderSummary` no longer
+  has `default_args`. `GraderSpec.params` and the matcher do not change (#602).
+
 - **Target connection with a gen_2 target binding.** At the start, the Wizard asks for **Build
   Spec only** or **Build Spec and Run Evals**. In run mode, the user selects HTTP API or Browser
   and enters the binding values. Secret fields take environment-variable names only. Every client
@@ -1222,6 +1236,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- **Grader taxonomy and settings rows.** Each `GET /api/v1/graders` row adds `taxonomy` and
+  `dimension`, so a client can group and filter the graders. Each row also adds `settings`, with
+  the required and optional settings of the grader and their kinds and defaults. The row no
+  longer has `default_args`. Use the `default` of each setting in `settings` (#602).
+
 - **Request-scoped document extraction.** `POST /api/v1/wizard/documents/extract` returns text or a
   typed error in the existing failure envelope. It closes uploaded streams and keeps no files or
   Interview state. The wizard configuration route also exposes the document limits.
@@ -1282,10 +1301,30 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Added
 
+- **Grouped grader picker.** The manual form groups graders by dimension, such as Task and
+  Output Quality and Interaction Quality. Graders with no dimension are in an Other group. Each
+  row shows its grader types, scopes, reference types, and judgment forms as chips, with one
+  colour for each field. The search also finds the measure, the chip values, and the dimension
+  name. Each
+  selected grader has a settings box with a description and one list of every grader setting:
+  the common settings first, then the grader's own settings. Each setting starts from its default.
+  A choice setting has a dropdown. A required setting has a red `*` after its name, and the download
+  stops until it has a value. An empty value uses the grader default. The form has no custom
+  setting keys. The form is more compact. The page has a Specification part and, in run mode,
+  a separate Target connection part with a neutral card. Each section has a plain heading with a
+  plus button, each Persona, Scenario, and test case card has a tinted header, and descriptions
+  and lists sit side by side on wide screens. The download button has an icon and sits next to
+  the mode picker in a bar that stays at the top while the form scrolls. A Persona card uses a
+  pencil button to edit and a check button to finish. The download button is grey until every
+  field is complete. A click on it still marks the fields to fix, and the form shows no
+  separate "not complete" message. The grader search is the top row of the
+  grader list box, and the list scrolls inside the box. The test case files are labelled
+  "Fixtures (files the target can use in each trial)" (#602).
+
 - The manual form omits graders that take their instructions from a criterion description,
   because the form has no criterion description (#299).
 
-- **Manual metadata.** Personas and Scenarios have optional Additional context
+- **Manual metadata.** Personas and Scenarios have optional Metadata
   key/value fields. Export preserves the text values and checks for blank or
   duplicate keys (#441).
 
@@ -1304,8 +1343,8 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   through `GET /api/v1/graders`; the rest of the Interview remains usable when that route fails.
 - **Manual experiment authoring.** The opening screen offers a stateless form for
   Experiment details, Personas, Scenarios, and Test Cases. Each Test Case selects one
-  Persona and one Scenario, with its own Trials, scorers, and files. The form retains
-  assigned Task IDs and stores scorer settings on Criteria. It builds `specification.zip`
+  Persona and one Scenario, with its own Trials, graders, and files. The form retains
+  assigned Task IDs and stores grader settings on Criteria. It builds `specification.zip`
   with `specification.yaml` and fixtures through the existing API, without an Interview
   record (#395). When a field is not complete, **Download specification** marks each
   field that needs a change, shows what to change, and moves the focus to the first one.
@@ -1319,6 +1358,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- **Tighter layout and the METIS brand.** Padding, margins, and gaps are 10% smaller across the app,
+  and body text has a line height of 1.5. The navigation rail shows the METIS mark and the METIS
+  wordmark, the same as the docs site (#602).
 - **Opening setup in the chat box.** The Perspective and capability controls are now in the bottom
   row of the opening box, next to the documents button. The separate capability screen and its
   **Edit target** button are removed. The Perspective control marks End user as the default until
@@ -1375,6 +1417,9 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Fixed
 
+- **Opening panels with the target connection.** In **Build Spec and connect target**, the
+  Perspective or Capabilities panel and the Target connection card are now stacked with a gap
+  between them. Before, the connection card was drawn over the bottom of the open panel (#602).
 - **A Test Case row is read-only until the pencil opens it (#584).** The row shows the selected
   Behaviour IDs, the Trials number, and the attached files, with no controls. A new Test Case has
   no files. The pencil makes the Behaviour chips clickable and the Trials editable. In edit mode,
@@ -1391,6 +1436,4 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 - Rename the web client's `metricCatalogue`/`metricState`/`metricByFqn` state,
   `api.metrics()` call, and `Criterion.metric_fqn`/`metric_args` wire fields to
   `graderCatalogue`/`graderState`/`graderByFqn`, `api.graders()`, and
-  `grader_fqn`/`grader_args`, matching the renamed `GET /api/v1/graders` route. The manual
-  form's `scorer`-prefixed UI identifiers are unchanged — intentional, see
-  `apps/web/AGENTS.md` (#415).
+  `grader_fqn`/`grader_args`, matching the renamed `GET /api/v1/graders` route (#415).

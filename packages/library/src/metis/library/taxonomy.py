@@ -16,7 +16,8 @@ The conceptual hierarchy for one judgment is:
             Aggregation, such as none_single_score.
 
 Measure and Scope are flat enums of attributes. Group comments name their
-subdimensions. The mechanism subdimensions have separate enums.
+subdimensions. Dimension names the Measure subdimensions, and MEASURE_DIMENSIONS
+gives the Dimension of each Measure. The mechanism subdimensions have separate enums.
 GraderTaxonomy declares the values a grader supports. It does not select defaults
 or validate combinations. A catch-all judge has no fixed Measure and uses None.
 
@@ -36,12 +37,16 @@ grader defines which settings it accepts. General taxonomy selection is not
 implemented.
 """
 
+from collections.abc import Mapping
 from enum import StrEnum
+from types import MappingProxyType
 
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
+    "MEASURE_DIMENSIONS",
     "Aggregation",
+    "Dimension",
     "Measure",
     "Scope",
     "GraderType",
@@ -49,6 +54,18 @@ __all__ = [
     "JudgmentForm",
     "ReferenceType",
 ]
+
+
+class Dimension(StrEnum):
+    """Measure subdimensions, in display order."""
+
+    TASK_AND_OUTPUT_QUALITY = "task_and_output_quality"
+    EXECUTION_AND_DECISION_QUALITY = "execution_and_decision_quality"
+    RESOURCE_USE = "resource_use"
+    RELIABILITY_AND_ROBUSTNESS = "reliability_and_robustness"
+    SAFETY = "safety"
+    SECURITY = "security"
+    INTERACTION_QUALITY = "interaction_quality"
 
 
 class Measure(StrEnum):
@@ -181,6 +198,95 @@ class Measure(StrEnum):
         "signal_rendering_quality"
     )
     ACOUSTIC_QUALITY = "acoustic_quality"  # Requires an available audio artifact.
+
+
+MEASURE_DIMENSIONS: Mapping[Measure, Dimension] = MappingProxyType(
+    {
+        Measure.TASK_SUCCESS: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.OUTPUT_CORRECTNESS: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.FACTUAL_ACCURACY: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.REQUIRED_COMPONENT_COMPLETENESS: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.TASK_CONSTRAINT_ADHERENCE: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.FORMAT_AND_SCHEMA_COMPLIANCE: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.CLAIM_SUPPORT_BY_EVIDENCE: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.EVIDENCE_SOURCE_SUITABILITY: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.INPUT_INTERPRETATION_ACCURACY: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.SPEECH_RECOGNITION_ACCURACY: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.LANGUAGE_IDENTIFICATION_ACCURACY: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.CONTENT_FIDELITY: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.SPOKEN_CONTENT_FIDELITY: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.ATTRIBUTION_ACCURACY: Dimension.TASK_AND_OUTPUT_QUALITY,
+        Measure.PLANNING_QUALITY: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.ACTION_CHOICE_APPROPRIATENESS: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.TOOL_CHOICE_APPROPRIATENESS: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.TOOL_ARGUMENT_CORRECTNESS: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.USE_OF_OBSERVED_STATE: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.STATE_TRACKING: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.USE_OF_PRIOR_INFORMATION: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.ERROR_DETECTION: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.ERROR_RECOVERY: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.ADAPTATION_TO_CHANGED_CONDITIONS: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.STOPPING_APPROPRIATENESS: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.AVOIDING_UNPRODUCTIVE_REPETITION: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.APPROPRIATE_HANDLING_OF_CAPABILITY_LIMITS: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.OUTCOME_VERIFICATION: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.REASONING_VALIDITY: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.COORDINATION_QUALITY: Dimension.EXECUTION_AND_DECISION_QUALITY,
+        Measure.TOKEN_USAGE: Dimension.RESOURCE_USE,
+        Measure.ELAPSED_TIME: Dimension.RESOURCE_USE,
+        Measure.MODEL_CALL_COUNT: Dimension.RESOURCE_USE,
+        Measure.TOOL_CALL_COUNT: Dimension.RESOURCE_USE,
+        Measure.MONETARY_COST: Dimension.RESOURCE_USE,
+        Measure.EXECUTION_STEP_COUNT: Dimension.RESOURCE_USE,
+        Measure.AGENT_COMPUTE_USE: Dimension.RESOURCE_USE,
+        Measure.HUMAN_ASSISTANCE_REQUIRED: Dimension.RESOURCE_USE,
+        Measure.ROBUSTNESS_TO_TOOL_FAILURES: Dimension.RELIABILITY_AND_ROBUSTNESS,
+        Measure.LONG_TASK_PERFORMANCE_STABILITY: Dimension.RELIABILITY_AND_ROBUSTNESS,
+        Measure.ROBUSTNESS_TO_CONTEXT_DEGRADATION: Dimension.RELIABILITY_AND_ROBUSTNESS,
+        Measure.ROBUSTNESS_TO_EQUIVALENT_INPUT_VARIATION: Dimension.RELIABILITY_AND_ROBUSTNESS,
+        Measure.ROBUSTNESS_TO_OPERATING_CONDITION_VARIATION: Dimension.RELIABILITY_AND_ROBUSTNESS,
+        Measure.SAFE_FAILURE_HANDLING: Dimension.RELIABILITY_AND_ROBUSTNESS,
+        Measure.REPEATED_RUN_CONSISTENCY: Dimension.RELIABILITY_AND_ROBUSTNESS,
+        Measure.FAILURE_CONTAINMENT: Dimension.RELIABILITY_AND_ROBUSTNESS,
+        Measure.CONFIDENCE_CALIBRATION: Dimension.RELIABILITY_AND_ROBUSTNESS,
+        Measure.INAPPROPRIATE_CONTENT: Dimension.SAFETY,
+        Measure.HARMFUL_ASSISTANCE: Dimension.SAFETY,
+        Measure.HARMFUL_ACTIONS: Dimension.SAFETY,
+        Measure.TRUTHFULNESS: Dimension.SAFETY,
+        Measure.PRIVACY: Dimension.SAFETY,
+        Measure.FAIRNESS_AND_AUTONOMY: Dimension.SAFETY,
+        Measure.AUTHORITY_BOUNDARIES: Dimension.SAFETY,
+        Measure.OVERSIGHT_AND_SAFEGUARDS: Dimension.SAFETY,
+        Measure.REFUSAL_AND_CRISIS_RESPONSE: Dimension.SAFETY,
+        Measure.POLICY_COMPLIANCE: Dimension.SAFETY,
+        Measure.CONFIDENTIALITY_PROTECTION: Dimension.SECURITY,
+        Measure.DECISION_INTEGRITY_UNDER_MANIPULATION: Dimension.SECURITY,
+        Measure.STORED_DATA_INTEGRITY: Dimension.SECURITY,
+        Measure.MODEL_ASSET_INTEGRITY: Dimension.SECURITY,
+        Measure.ACCESS_CONTROL_INTEGRITY: Dimension.SECURITY,
+        Measure.EXECUTION_ENVIRONMENT_CONTAINMENT: Dimension.SECURITY,
+        Measure.RESOURCE_BOUND_ADHERENCE: Dimension.SECURITY,
+        Measure.SERVICE_AVAILABILITY_PROTECTION: Dimension.SECURITY,
+        Measure.TOOL_AND_COMPONENT_INTEGRITY: Dimension.SECURITY,
+        Measure.INTER_AGENT_COMMUNICATION_INTEGRITY: Dimension.SECURITY,
+        Measure.GENERATED_ARTIFACT_SECURITY: Dimension.SECURITY,
+        Measure.RELEVANCE: Dimension.INTERACTION_QUALITY,
+        Measure.COMMUNICATION_CLARITY: Dimension.INTERACTION_QUALITY,
+        Measure.PERCEPTUAL_INTELLIGIBILITY: Dimension.INTERACTION_QUALITY,
+        Measure.CROSS_TURN_COHERENCE: Dimension.INTERACTION_QUALITY,
+        Measure.TURN_TAKING: Dimension.INTERACTION_QUALITY,
+        Measure.UNCERTAINTY_COMMUNICATION: Dimension.INTERACTION_QUALITY,
+        Measure.CLARIFICATION_APPROPRIATENESS: Dimension.INTERACTION_QUALITY,
+        Measure.USER_CORRECTION_AND_OVERRIDE_SUPPORT: Dimension.INTERACTION_QUALITY,
+        Measure.ACTION_STATUS_TRANSPARENCY: Dimension.INTERACTION_QUALITY,
+        Measure.EXPLANATION_USEFULNESS: Dimension.INTERACTION_QUALITY,
+        Measure.TONE_APPROPRIATENESS: Dimension.INTERACTION_QUALITY,
+        Measure.OUTPUT_NATURALNESS: Dimension.INTERACTION_QUALITY,
+        Measure.SIGNAL_RENDERING_QUALITY: Dimension.INTERACTION_QUALITY,
+        Measure.ACOUSTIC_QUALITY: Dimension.INTERACTION_QUALITY,
+    }
+)
+"""The Dimension of each Measure. The keys follow the Measure group comments."""
 
 
 class Scope(StrEnum):

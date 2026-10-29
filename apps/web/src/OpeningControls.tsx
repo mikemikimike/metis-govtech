@@ -97,9 +97,9 @@ export function UnderBoxSurface({
         id={id}
         aria-label={label}
         className={cn(
-          "animate-open-under-box relative z-0 mx-auto -mt-4 flex w-[95%] flex-col gap-3 rounded-2xl border border-border bg-card px-5 pb-5 pt-9",
+          "animate-open-under-box relative flex flex-col gap-3 rounded-2xl border border-border bg-card px-4 py-4",
           sheet &&
-            "max-sm:quiet-scrollbar max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-30 max-sm:mt-0 max-sm:max-h-[80vh] max-sm:w-full max-sm:overflow-y-auto max-sm:rounded-b-none max-sm:pt-4 max-sm:shadow-[0_-8px_24px_hsl(0_0%_0%/0.08)]",
+            "under-box-sheet max-sm:quiet-scrollbar max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-30 max-sm:max-h-[80vh] max-sm:w-full max-sm:overflow-y-auto max-sm:rounded-b-none max-sm:pt-4 max-sm:shadow-[0_-8px_24px_hsl(0_0%_0%/0.08)]",
         )}
       >
         {/* The chip that opens the panel names it, so the panel shows no visible title. The close
@@ -109,9 +109,7 @@ export function UnderBoxSurface({
           aria-label={`Close ${label.toLowerCase()}`}
           onClick={onClose}
           className={cn(
-            "absolute right-2.5 top-6 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-            // The sheet on a small screen is not under the box, so its corner starts higher.
-            sheet && "max-sm:top-2.5",
+            "under-box-close absolute right-2.5 top-2.5 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
           )}
         >
           <X size={16} strokeWidth={1.75} aria-hidden />

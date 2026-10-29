@@ -27,13 +27,13 @@ Example evaluation details for a research assistant:
 | Criterion | Each citation supports the answer. |
 | Persona | A policy analyst who needs to check a new rule. |
 | Scenario | Ask how a new leave policy applies to a part-time employee. |
-| Scorer | A check that compares the answer with its cited sources. |
+| Grader | A check that compares the answer with its cited sources. |
 
 The Interview produces one Specification with these related concepts:
 
 | Concept | Contents |
 |---|---|
-| Profile | The target and its users, Features, Behaviours, Criteria, and their scorer settings |
+| Profile | The target and its users, Features, Behaviours, Criteria, and their grader settings |
 | Specification | The Profile and the configuration needed to conduct an Experiment |
 | Experiment | A collection of Runs used to evaluate one or more targets across a set of Test Cases |
 

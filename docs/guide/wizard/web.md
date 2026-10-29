@@ -255,11 +255,15 @@ This path does not use the Interview and creates no Interview record.
 2. Set the Experiment ID and description.
 3. Define Personas and Scenarios in their sections.
 4. Select **Add test case**. Select one Persona and one Scenario,
-   and set its Trial count, scorers, and files. Add more test cases as needed.
-5. In **Build Spec and connect target**, fill in the **Target connection** card above the download.
+   and set its Trial count, graders, and fixtures. Fixtures are files that the target can use in
+   each trial. Add more test cases as needed.
+5. In **Build Spec and connect target**, fill in the **Target connection** part. It comes after the
+   **Specification** part.
    It has the same fields and the same **Test connection** button as the card on the opening
    screen. See [Connect the target](#connect-the-target).
-6. Select **Download specification**.
+6. Select **Download specification** next to the mode picker. The mode picker and the download
+   button stay at the top of the form while you scroll. Extract the download into
+   `experiments/design/`.
 
 In run mode, the download needs a valid binding. Download uses the last test. If you change a
 field after the test, Download tests the binding again. If the binding is not valid, the
@@ -270,19 +274,41 @@ mode. To download without a binding, choose **Build Spec only**.
 To add a binding to an earlier spec-only download, open the form again, choose **Build Spec and
 Run Evals**, enter the binding, and download again.
 
-If a field is not complete, the download does not start. The form shows "Some fields are not
-complete.", marks each field that needs a change in red, and moves the focus to the first one.
+**Download specification** stays grey until every field is complete. Select it anyway to find the
+fields to fix: the form marks each field that needs a change in red and moves the focus to the
+first one.
 Each marked field tells you what to change. Every Scenario must be selected in at least one
 test case.
 
 Editor rules:
 
-- Select **Done** to close a Persona editor. Select **Edit** to open it again.
+- Select the check button to close a Persona editor. Select the pencil button to open it again.
+- Select the plus button in the Personas, Scenarios, or Test cases header to add an item.
 - Each test case selects exactly one Persona and one Scenario.
 - Multiple test cases can use the same pair with different settings or files.
 - Renaming a Persona or Scenario updates its test case references. Removing one
   clears those selections. Select a replacement before you download.
 - Each Scenario needs at least one test case.
+- The grader list groups the graders by dimension, such as Task and Output Quality or
+  Interaction Quality. Graders with no dimension are in the Other group.
+- Each grader shows its taxonomy as chips: its grader types, scopes, reference types, and
+  judgment forms. Each of these fields has one colour. Hover over a chip to see its field.
+- The grader search finds text in the name, the description, the dimension, the measure,
+  and each chip. For example, search for "session" to find the graders
+  that judge a full session.
+- Each selected grader shows a settings box below the list. The box has a description and a
+  list of settings. The description starts as the grader description, and it becomes the
+  description of the check in the download. It must not be empty.
+- The settings list shows every setting that the grader accepts in one list. The common
+  settings, such as `threshold` and `scope`, come first. The grader's own settings come after
+  them. You cannot add other keys.
+- Each setting starts from its default. A setting with a fixed list of values, such as `turn`
+  or `scope`, has a dropdown. Select **Default** to use the grader default.
+- A setting with a red `*` after its name is required. It has no default. Enter a value before you download.
+  Otherwise, the download stops and shows "Enter a value." under the setting.
+- Enter a number, a list, or an object as JSON. For example, enter `0.7` for `threshold` and
+  `["Rates rose in 2024."]` for `ground_truth`. A text setting stays text. An empty value is
+  omitted, so the grader uses its default.
 
 The manual export uses `YYYYMMDD-HHMMSS-manual.zip` and a matching root folder. It contains an empty `inputs/` folder, `outputs/specification.yaml`, and the
 selected files under `outputs/fixtures/`. It contains no Interview state. In run mode, it also
@@ -307,10 +333,9 @@ and the binding file. This is the same export as an Interview with the same bind
 - `make check-web` runs the web checks.
 - `make build-web` makes a production build.
 
-Scorer settings in the manual form accept a JSON object. The downloaded document
-stores these settings on Criteria. Each test case becomes one Task in the YAML. The form retains Task IDs returned
+The downloaded document stores the grader description and settings on Criteria. Each test case becomes one Task in the YAML. The form retains Task IDs returned
 by the backend through later edits.
 
-In the manual form, open **Additional context** under a Persona or Scenario to
-add optional metadata. Enter a unique key and a text value for each row. The
+In the manual form, use the **Metadata (Optional)** list of a Persona or Scenario to add
+optional metadata. Enter a unique key and a text value for each row. The
 downloaded Specification preserves these values. Remove a row to omit it.

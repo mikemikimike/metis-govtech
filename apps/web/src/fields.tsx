@@ -28,11 +28,14 @@ export function Field({
   hideLabel = false,
   title,
   group = false,
+  fill = false,
   children,
 }: {
   // A field with several controls (a details list) is a group, not one labelled control, so
   // a click on the label does not move to its first box.
   group?: boolean;
+  // The field takes the full height of its grid row, so a fill text area can grow into it.
+  fill?: boolean;
   // Hover text for the whole field.
   title?: string;
   label: string;
@@ -50,6 +53,7 @@ export function Field({
       className={cn(
         "flex min-w-0 flex-col",
         density === "form" ? "gap-1.5" : "gap-1",
+        fill && "h-full",
       )}
     >
       <span
@@ -137,6 +141,8 @@ export function TextArea({
   disabled,
   required,
   density = "form",
+  rows,
+  fill = false,
   form,
   onChange,
 }: {
@@ -148,11 +154,16 @@ export function TextArea({
   disabled?: boolean;
   required?: boolean;
   density?: FieldDensity;
+  /** Sets the height in lines. Without it, the density sets a minimum height. */
+  rows?: number;
+  /** Grows to the height of a fill Field. `rows` is then the minimum height. */
+  fill?: boolean;
   form?: string;
   onChange: (value: string) => void;
 }) {
   return (
     <textarea
+      rows={rows}
       form={form}
       id={id}
       aria-label={ariaLabel}
@@ -165,7 +176,9 @@ export function TextArea({
       className={cn(
         CONTROL,
         "resize-y rounded-lg py-2 text-sm",
-        density === "form" ? "min-h-24 px-3" : "min-h-16 px-2",
+        density === "form" ? "px-3" : "px-2",
+        rows === undefined && (density === "form" ? "min-h-24" : "min-h-16"),
+        fill && "flex-1",
       )}
     />
   );

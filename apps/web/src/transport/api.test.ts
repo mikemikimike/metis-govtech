@@ -230,12 +230,16 @@ test("packages a synthesized manual Specification and its fixtures as multipart"
         num_trials: 1,
         persona_ref: "reviewer",
         fixtures: ["policy.pdf"],
-        scorers: [
+        graders: [
           {
-            fqn: "metis.library.graders.demo.DemoTraceBudgetGrader",
-            name: "Turn budget",
+            spec: {
+              fqn: "metis.library.graders.demo.DemoTraceBudgetGrader",
+              name: "Turn budget",
+              description: "Checks the turn budget.",
+              uses_criterion_description: false,
+            },
             description: "Checks the turn budget.",
-            uses_criterion_description: false,
+            values: {},
           },
         ],
       },

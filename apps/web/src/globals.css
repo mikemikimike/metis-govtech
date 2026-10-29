@@ -36,6 +36,12 @@
 
   --gold: 41 39% 54%;
 
+  /* The taxonomy chips on a grader row. One quiet hue for each taxonomy field. */
+  --tag-type: 187 60% 24%;
+  --tag-scope: 222 45% 38%;
+  --tag-reference: 32 60% 32%;
+  --tag-judgment: 280 30% 38%;
+
   --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 98%;
 
@@ -74,6 +80,11 @@
 
     --gold: 42 45% 61%;
 
+    --tag-type: 187 46% 62%;
+    --tag-scope: 222 55% 72%;
+    --tag-reference: 32 60% 64%;
+    --tag-judgment: 280 35% 74%;
+
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 98%;
 
@@ -109,6 +120,10 @@
   --radius-md: var(--radius);
   --radius-lg: var(--radius-large);
 
+  /* One step of padding, margin, and gap. It is 10% under the Tailwind default (0.25rem), so the
+     whole app is slightly tighter and keeps its proportions. */
+  --spacing: 0.225rem;
+
   --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
@@ -136,7 +151,7 @@
        chat apps all sit at 16 for the body; the smaller size read as cramped. `text-sm`
        and `text-xs` on secondary chrome scale up in proportion, so the hierarchy holds. */
     font-size: 1rem;
-    line-height: 1.6;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -323,6 +338,60 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* The cards that open under the opening box. The stack starts under the box, so the box covers
+   the top edge of the first card. That card gets the overlap as extra top padding, and so does
+   its close button. A sheet on a small screen is not under the box, so it keeps its padding. */
+.under-box-stack {
+  --under-box-overlap: 1rem;
+  margin-top: calc(-1 * var(--under-box-overlap));
+}
+
+/* With no card open, the stack takes no space, so it does not pull the next row up. */
+.under-box-stack:empty {
+  display: none;
+}
+
+.under-box-stack > section:first-of-type {
+  padding-top: calc(0.75rem + var(--under-box-overlap));
+}
+
+.under-box-stack > section:first-of-type > .under-box-close {
+  top: calc(0.625rem + var(--under-box-overlap));
+}
+
+@media (max-width: 39.999rem) {
+  .under-box-stack > section.under-box-sheet {
+    padding-top: 1rem;
+  }
+
+  .under-box-stack > section.under-box-sheet > .under-box-close {
+    top: 0.625rem;
+  }
+}
+
+/* A taxonomy chip: the text in the field's hue on a light wash of the same hue. Both are faded,
+   so the grader name and description stay the strongest text on the row. */
+.tag {
+  color: hsl(var(--tag) / 0.7);
+  background-color: hsl(var(--tag) / 0.07);
+}
+
+.tag-type {
+  --tag: var(--tag-type);
+}
+
+.tag-scope {
+  --tag: var(--tag-scope);
+}
+
+.tag-reference {
+  --tag: var(--tag-reference);
+}
+
+.tag-judgment {
+  --tag: var(--tag-judgment);
 }
 
 .animate-open-under-box {

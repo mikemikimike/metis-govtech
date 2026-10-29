@@ -1,4 +1,9 @@
-import type { GraderSpec, Specification } from "./transport/api";
+import type {
+  Dimension,
+  GraderSetting,
+  GraderSpec,
+  Specification,
+} from "./transport/api";
 
 export interface ManualMetadataEntry {
   key: string;
@@ -27,10 +32,16 @@ export interface ManualTestCase {
   timeout_minutes?: number;
   response_wait_ms?: number;
   max_run_retries?: number | null;
-  scorers: GraderSpec[];
+  graders: ManualGrader[];
   fixtures: string[];
-  grader_args_text?: Record<string, string>;
-  grader_args?: Record<string, Record<string, unknown>>;
+}
+
+/** One selected grader and the Criterion settings that the test case gives it. */
+export interface ManualGrader {
+  spec: GraderSpec;
+  description: string;
+  /** The text that the user typed for each setting, by setting name. Empty means the default. */
+  values: Record<string, string>;
 }
 
 export interface ManualExperiment {
@@ -72,21 +83,87 @@ export function emptyManualTestCase(): ManualTestCase {
     scenario_ref: "",
     persona_ref: "",
     num_trials: 1,
-    scorers: [],
+    graders: [],
     fixtures: [],
   };
 }
 
-export function scorerParameters(
+function settingText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+/** A new selection starts with the grader's description and the default of each setting. */
+export function selectGrader(
+  task: ManualTestCase,
+  grader: GraderSpec,
+): ManualTestCase {
+  if (task.graders.some((selected) => selected.spec.fqn === grader.fqn))
+    return task;
+  const values = Object.fromEntries(
+    (grader.settings ?? []).map((setting) => [
+      setting.name,
+      settingText(setting.default),
+    ]),
+  );
+  return {
+    ...task,
+    graders: [
+      ...task.graders,
+      { spec: grader, description: grader.description, values },
+    ],
+  };
+}
+
+export function deselectGrader(
   task: ManualTestCase,
   fqn: string,
-): Record<string, unknown> {
-  const text = task.grader_args_text?.[fqn];
-  const value: unknown =
-    text === undefined ? (task.grader_args?.[fqn] ?? {}) : JSON.parse(text);
-  if (value === null || typeof value !== "object" || Array.isArray(value))
-    throw new Error("Scorer settings must be a JSON object.");
-  return value as Record<string, unknown>;
+): ManualTestCase {
+  return {
+    ...task,
+    graders: task.graders.filter((grader) => grader.spec.fqn !== fqn),
+  };
+}
+
+export function updateGrader(
+  task: ManualTestCase,
+  fqn: string,
+  patch: Partial<Pick<ManualGrader, "description" | "values">>,
+): ManualTestCase {
+  return {
+    ...task,
+    graders: task.graders.map((grader) =>
+      grader.spec.fqn === fqn ? { ...grader, ...patch } : grader,
+    ),
+  };
+}
+
+// CHOICE and TEXT values are text. The other kinds are typed as JSON, such as 0.7, true, or ["a"].
+const TEXT_KINDS: ReadonlySet<GraderSetting["kind"]> = new Set([
+  "choice",
+  "text",
+]);
+
+function settingValue(setting: GraderSetting, text: string): unknown {
+  if (TEXT_KINDS.has(setting.kind)) return text;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    // compile reports the setting that is not valid
+    return text;
+  }
+}
+
+// An empty value is omitted, so the grader uses its default.
+function graderArgs(grader: ManualGrader): Record<string, unknown> {
+  return Object.fromEntries(
+    (grader.spec.settings ?? []).flatMap((setting) => {
+      const text = grader.values[setting.name] ?? "";
+      return text.trim() === ""
+        ? []
+        : [[setting.name, settingValue(setting, text)]];
+    }),
+  );
 }
 
 function metadataKeyError(
@@ -127,12 +204,12 @@ export function synthesizeManualSpecification(
       name: label,
       description: scenario?.description.trim() ?? "",
       measured: true,
-      criteria: task.scorers.map((scorer, scorerIndex) => ({
-        id: `AC-${taskIndex + 1}-${scorerIndex + 1}`,
-        name: scorer.name,
-        description: `${scorer.name}: ${scorer.description}`,
-        grader_fqn: scorer.fqn,
-        grader_args: scorerParameters(task, scorer.fqn),
+      criteria: task.graders.map((grader, graderIndex) => ({
+        id: `AC-${taskIndex + 1}-${graderIndex + 1}`,
+        name: grader.spec.name,
+        description: grader.description.trim(),
+        grader_fqn: grader.spec.fqn,
+        grader_args: graderArgs(grader),
       })),
     };
   });
@@ -192,7 +269,7 @@ export function synthesizeManualSpecification(
 
 /**
  * One incomplete field in the manual form. `field` names the control that shows the
- * message: `experiment.id`, `persona.0.description`, `task.1.scorers`, and so on.
+ * message: `experiment.id`, `persona.0.description`, `task.1.graders`, and so on.
  * Collection keys (`personas`, `scenarios`, `tasks`) mark an empty collection.
  */
 export interface ManualFieldError {
@@ -285,16 +362,15 @@ export function manualFieldErrors(
       task.num_trials > 20
     )
       add(`task.${index}.trials`, "Enter 1 to 20 Trials.");
-    if (!task.scorers.length)
-      add(`task.${index}.scorers`, "Select at least one scorer.");
-    for (const scorer of task.scorers) {
-      try {
-        scorerParameters(task, scorer.fqn);
-      } catch {
-        add(
-          `task.${index}.settings.${scorer.fqn}`,
-          "Enter the settings as a JSON object, such as {}.",
-        );
+    if (!task.graders.length)
+      add(`task.${index}.graders`, "Select at least one grader.");
+    for (const grader of task.graders) {
+      const prefix = `task.${index}.settings.${grader.spec.fqn}`;
+      if (!grader.description.trim())
+        add(`${prefix}.description`, "Enter a description.");
+      for (const setting of grader.spec.settings ?? []) {
+        if (setting.required && !(grader.values[setting.name] ?? "").trim())
+          add(`${prefix}.values.${setting.name}`, "Enter a value.");
       }
     }
     const missing = task.fixtures.filter((name) => !present.has(name));
@@ -331,7 +407,78 @@ export function keepReferencedFixtures(
   return fixtures.filter((fixture) => referenced.has(fixture.name));
 }
 
-export function manualScorers(graders: GraderSpec[]): GraderSpec[] {
+export function manualGraders(graders: GraderSpec[]): GraderSpec[] {
   // The manual form has no criterion description to give these graders their instructions.
   return graders.filter((grader) => !grader.uses_criterion_description);
+}
+
+// Display order of the grader groups. The Record type makes a new Dimension fail typecheck.
+export const DIMENSION_LABELS: Record<Dimension, string> = {
+  task_and_output_quality: "Task and Output Quality",
+  execution_and_decision_quality: "Execution and Decision Quality",
+  resource_use: "Resource Use",
+  reliability_and_robustness: "Reliability and Robustness",
+  safety: "Safety",
+  security: "Security",
+  interaction_quality: "Interaction Quality",
+};
+
+// Words that sentence case would spell wrongly.
+const TAXONOMY_WORDS: Record<string, string> = { llm: "LLM" };
+
+/** `tool_argument_correctness` → `Tool argument correctness`, `llm` → `LLM`. */
+export function taxonomyLabel(value: string): string {
+  const words = value.split("_").map((word) => TAXONOMY_WORDS[word] ?? word);
+  const [first = "", ...rest] = words;
+  return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(" ");
+}
+
+export interface GraderGroup {
+  dimension: Dimension | null;
+  label: string;
+  graders: GraderSpec[];
+}
+
+function graderSearchText(grader: GraderSpec): string {
+  const taxonomy = grader.taxonomy;
+  const values = [
+    ...(taxonomy?.measure ? [taxonomy.measure] : []),
+    ...(taxonomy?.grader_types ?? []),
+    ...(taxonomy?.scopes ?? []),
+    ...(taxonomy?.reference_types ?? []),
+    ...(taxonomy?.judgment_forms ?? []),
+  ];
+  return [
+    grader.name,
+    grader.description,
+    grader.dimension ? DIMENSION_LABELS[grader.dimension] : "",
+    ...values,
+    ...values.map(taxonomyLabel),
+  ]
+    .join("\n")
+    .toLowerCase();
+}
+
+/** The graders that match the query, grouped by Dimension in display order. */
+export function graderGroups(
+  graders: GraderSpec[],
+  query: string,
+): GraderGroup[] {
+  const value = query.trim().toLowerCase();
+  const shown = value
+    ? graders.filter((grader) => graderSearchText(grader).includes(value))
+    : graders;
+  const groups: GraderGroup[] = [
+    ...(Object.keys(DIMENSION_LABELS) as Dimension[]).map((dimension) => ({
+      dimension,
+      label: DIMENSION_LABELS[dimension],
+      graders: shown.filter((grader) => grader.dimension === dimension),
+    })),
+    {
+      dimension: null,
+      label: "Other",
+      graders: shown.filter((grader) => !grader.dimension),
+    },
+  ];
+  return groups.filter((group) => group.graders.length > 0);
 }

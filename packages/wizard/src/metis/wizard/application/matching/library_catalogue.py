@@ -25,12 +25,25 @@ from __future__ import annotations
 
 import inspect
 import re
+from enum import Enum
 from functools import lru_cache
 from importlib import import_module
-from typing import Any
+from types import NoneType, UnionType
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Union, get_args, get_origin
 
-from metis.library.grader import CriterionJudgeArgs, Grader, JudgeArgs
-from metis.wizard.contracts.grader_spec import GraderParam, GraderSpec
+from pydantic import BaseModel
+from pydantic_core import to_jsonable_python
+
+from metis.library.grader import CriterionJudgeArgs, Grader, GraderArgs, JudgeArgs
+from metis.wizard.contracts.grader_spec import (
+    GraderParam,
+    GraderSetting,
+    GraderSettingKind,
+    GraderSpec,
+)
+
+if TYPE_CHECKING:
+    from pydantic.fields import FieldInfo
 
 # The one string that says where the graders live.
 GRADERS_PACKAGE = "metis.library.graders"
@@ -66,16 +79,34 @@ def _supported(cls: type[Grader[Any]], setting: str) -> tuple[Any, ...]:
     return getattr(getattr(cls, "taxonomy", None), _TAXONOMY_SETTINGS[setting], ())
 
 
+_ENGINE_FILLED: dict[type[GraderArgs], tuple[str, ...]] = {
+    # resolved by the engine, never chosen per criterion in the wizard
+    JudgeArgs: ("model", "max_input_tokens"),
+    # filled from the criterion description
+    CriterionJudgeArgs: ("criterion",),
+}
+"""The args fields that the engine fills, for each args base that declares them."""
+
+
+def _user_fields(cls: type[Grader[Any]]) -> dict[str, FieldInfo]:
+    """The ``args_model`` fields a Criterion can set, in declaration order."""
+    filled = {
+        name
+        for base, names in _ENGINE_FILLED.items()
+        if issubclass(cls.args_model, base)
+        for name in names
+    }
+    return {
+        name: info
+        for name, info in cls.args_model.model_fields.items()
+        if name not in filled
+    }
+
+
 def _params(cls: type[Grader[Any]]) -> list[GraderParam]:
     """The grader's ``args_model`` fields, read from the class without building anything."""
     params = []
-    for name, info in cls.args_model.model_fields.items():
-        if name in ("model", "max_input_tokens") and issubclass(
-            cls.args_model, JudgeArgs
-        ):
-            continue  # resolved by the engine, never chosen per criterion in the wizard
-        if name == "criterion" and issubclass(cls.args_model, CriterionJudgeArgs):
-            continue  # filled from the criterion description
+    for name, info in _user_fields(cls).items():
         if name in _TAXONOMY_SETTINGS and len(_supported(cls, name)) < 2:
             continue  # the grader supports one value, so there is nothing to choose
         required = info.is_required()
@@ -90,6 +121,78 @@ def _params(cls: type[Grader[Any]]) -> list[GraderParam]:
             )
         )
     return params
+
+
+_KINDS: dict[object, GraderSettingKind] = {
+    bool: GraderSettingKind.BOOLEAN,
+    int: GraderSettingKind.INTEGER,
+    float: GraderSettingKind.NUMBER,
+    str: GraderSettingKind.TEXT,
+    tuple: GraderSettingKind.LIST,
+    list: GraderSettingKind.LIST,
+    set: GraderSettingKind.LIST,
+    frozenset: GraderSettingKind.LIST,
+    dict: GraderSettingKind.OBJECT,
+}
+"""The setting kind of each plain type or generic origin. Any other type is TEXT."""
+
+
+def _unwrap(annotation: Any) -> Any:
+    """Remove ``Annotated`` and an optional ``None``, so ``Optional[Annotated[str, ...]]`` is ``str``."""
+    while True:
+        origin = get_origin(annotation)
+        if origin is Annotated:
+            annotation = get_args(annotation)[0]
+            continue
+        if origin in (Union, UnionType):
+            members = [arg for arg in get_args(annotation) if arg is not NoneType]
+            if len(members) == 1:
+                annotation = members[0]
+                continue
+        return annotation
+
+
+def _kind(annotation: Any) -> tuple[GraderSettingKind, list[str]]:
+    """The setting kind of a field type, and the allowed values of a CHOICE."""
+    value_type = _unwrap(annotation)
+    if get_origin(value_type) is Literal:
+        return GraderSettingKind.CHOICE, [str(value) for value in get_args(value_type)]
+    if inspect.isclass(value_type) and issubclass(value_type, Enum):
+        return GraderSettingKind.CHOICE, [str(member.value) for member in value_type]
+    if inspect.isclass(value_type) and issubclass(value_type, BaseModel):
+        return GraderSettingKind.OBJECT, []
+    return _KINDS.get(get_origin(value_type) or value_type, GraderSettingKind.TEXT), []
+
+
+def _setting(cls: type[Grader[Any]], name: str, info: FieldInfo) -> GraderSetting:
+    kind, choices = _kind(info.annotation)
+    if name in _TAXONOMY_SETTINGS:
+        # a grader accepts only the taxonomy values it declares
+        choices = [str(value) for value in _supported(cls, name)]
+    required = info.is_required()
+    return GraderSetting(
+        name=name,
+        kind=kind,
+        required=required,
+        default=None
+        if required
+        else to_jsonable_python(info.get_default(call_default_factory=True)),
+        choices=choices,
+        base=name in GraderArgs.model_fields,
+        description=info.description,
+    )
+
+
+def _settings(cls: type[Grader[Any]]) -> list[GraderSetting]:
+    """Every key a Criterion can set: the base settings, then the grader's own settings.
+
+    The base settings are kept even when the grader declares one taxonomy value, so the user
+    sees the full list of keys that the grader accepts.
+    """
+    fields = _user_fields(cls)
+    own = [name for name in fields if name not in GraderArgs.model_fields]
+    base = [name for name in GraderArgs.model_fields if name in fields]
+    return [_setting(cls, name, fields[name]) for name in (*base, *own)]
 
 
 def _is_grader(obj: object) -> bool:
@@ -124,9 +227,11 @@ def library_catalogue() -> list[GraderSpec]:
                 name=_human_name(name),
                 description=_summary(obj),
                 params=_params(obj),
+                settings=_settings(obj),
                 uses_criterion_description=issubclass(
                     obj.args_model, CriterionJudgeArgs
                 ),
+                taxonomy=getattr(obj, "taxonomy", None),
             )
         )
 

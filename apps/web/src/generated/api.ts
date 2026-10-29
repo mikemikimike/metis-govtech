@@ -286,6 +286,12 @@ export interface components {
             notes: string;
         };
         /**
+         * Aggregation
+         * @description Rules for combining checks within one scope item.
+         * @enum {string}
+         */
+        Aggregation: "none_single_score" | "weighted_average" | "pass_if_all" | "pass_if_any" | "thresholded" | "hierarchical_aggregation" | "learned_aggregate" | "pareto_multi_objective";
+        /**
          * Auth
          * @description How the engine authenticates every request. The runner agent never sees it.
          */
@@ -889,6 +895,12 @@ export interface components {
             };
         };
         /**
+         * Dimension
+         * @description Measure subdimensions, in display order.
+         * @enum {string}
+         */
+        Dimension: "task_and_output_quality" | "execution_and_decision_quality" | "resource_use" | "reliability_and_robustness" | "safety" | "security" | "interaction_quality";
+        /**
          * DocumentExtractionErrorCode
          * @description Stable causes returned when an uploaded Interview document cannot be read.
          * @enum {string}
@@ -1116,6 +1128,34 @@ export interface components {
             };
         };
         /**
+         * GraderSetting
+         * @description One key that a Criterion can set under ``grader_args``.
+         */
+        GraderSetting: {
+            /** Name */
+            name: string;
+            kind: components["schemas"]["GraderSettingKind"];
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /** Default */
+            default?: unknown;
+            /** Choices */
+            choices?: string[];
+            /** Base */
+            base: boolean;
+            /** Description */
+            description?: string | null;
+        };
+        /**
+         * GraderSettingKind
+         * @description How a client edits the value of a grader setting.
+         * @enum {string}
+         */
+        GraderSettingKind: "number" | "integer" | "boolean" | "text" | "list" | "choice" | "object";
+        /**
          * GraderSummary
          * @description The small, stable grader shape exposed to presentation clients.
          */
@@ -1131,11 +1171,42 @@ export interface components {
              * @default false
              */
             uses_criterion_description: boolean;
-            /** Default Args */
-            default_args?: {
-                [key: string]: unknown;
-            };
+            /** Settings */
+            settings?: components["schemas"]["GraderSetting"][];
+            taxonomy?: components["schemas"]["GraderTaxonomy"] | null;
+            dimension?: components["schemas"]["Dimension"] | null;
         };
+        /**
+         * GraderTaxonomy
+         * @description Taxonomy values that one grader supports.
+         *
+         *     A grader has one measure, or None when it is a catch-all judge.
+         *     Each other field lists one or more supported values. A one-value field is fixed
+         *     for that grader. A field with several values can
+         *     become a form choice when the grader's args model has the matching setting.
+         *     This declaration records support only. Tuple order does not select a default.
+         *     The grader must validate the combinations it implements. General runtime
+         *     routing from selected values to definitions remains design work.
+         */
+        GraderTaxonomy: {
+            measure: components["schemas"]["Measure"] | null;
+            /** Scopes */
+            scopes: components["schemas"]["Scope"][];
+            /** Grader Types */
+            grader_types: components["schemas"]["GraderType"][];
+            /** Reference Types */
+            reference_types: components["schemas"]["ReferenceType"][];
+            /** Judgment Forms */
+            judgment_forms: components["schemas"]["JudgmentForm"][];
+            /** Aggregations */
+            aggregations: components["schemas"]["Aggregation"][];
+        };
+        /**
+         * GraderType
+         * @description Procedures that a grader can use to assess one scope item.
+         * @enum {string}
+         */
+        GraderType: "deterministic" | "statistical_metric" | "learned_discriminative_model" | "embedding_similarity" | "llm" | "hybrid" | "human";
         /**
          * InterviewConfig
          * @description Package-owned values that a wizard door needs to render its opening screen.
@@ -1401,6 +1472,12 @@ export interface components {
             response: components["schemas"]["ChatResponse"] | components["schemas"]["ChoiceResponse"] | components["schemas"]["FormResponse"];
         };
         /**
+         * JudgmentForm
+         * @description Result forms that a grader can produce for one scope item.
+         * @enum {string}
+         */
+        JudgmentForm: "binary" | "categorical" | "scalar" | "ordinal" | "pairwise_preference" | "rationale_judgement" | "diagnostic_labels" | "structured_multi_field_judgement";
+        /**
          * Limits
          * @description The target's rate limits, as the runner agent should pace itself.
          */
@@ -1431,6 +1508,12 @@ export interface components {
              */
             secrets?: string[];
         };
+        /**
+         * Measure
+         * @description Properties assessed by graders.
+         * @enum {string}
+         */
+        Measure: "task_success" | "output_correctness" | "factual_accuracy" | "required_component_completeness" | "task_constraint_adherence" | "format_and_schema_compliance" | "claim_support_by_evidence" | "evidence_source_suitability" | "input_interpretation_accuracy" | "speech_recognition_accuracy" | "language_identification_accuracy" | "content_fidelity" | "spoken_content_fidelity" | "attribution_accuracy" | "planning_quality" | "action_choice_appropriateness" | "tool_choice_appropriateness" | "tool_argument_correctness" | "use_of_observed_state" | "state_tracking" | "use_of_prior_information" | "error_detection" | "error_recovery" | "adaptation_to_changed_conditions" | "stopping_appropriateness" | "avoiding_unproductive_repetition" | "appropriate_handling_of_capability_limits" | "outcome_verification" | "reasoning_validity" | "coordination_quality" | "token_usage" | "elapsed_time" | "model_call_count" | "tool_call_count" | "monetary_cost" | "execution_step_count" | "agent_compute_use" | "human_assistance_required" | "robustness_to_tool_failures" | "long_task_performance_stability" | "robustness_to_context_degradation" | "robustness_to_equivalent_input_variation" | "robustness_to_operating_condition_variation" | "safe_failure_handling" | "repeated_run_consistency" | "failure_containment" | "confidence_calibration" | "inappropriate_content" | "harmful_assistance" | "harmful_actions" | "truthfulness" | "privacy" | "fairness_and_autonomy" | "authority_boundaries" | "oversight_and_safeguards" | "refusal_and_crisis_response" | "policy_compliance" | "confidentiality_protection" | "decision_integrity_under_manipulation" | "stored_data_integrity" | "model_asset_integrity" | "access_control_integrity" | "execution_environment_containment" | "resource_bound_adherence" | "service_availability_protection" | "tool_and_component_integrity" | "inter_agent_communication_integrity" | "generated_artifact_security" | "relevance" | "communication_clarity" | "perceptual_intelligibility" | "cross_turn_coherence" | "turn_taking" | "uncertainty_communication" | "clarification_appropriateness" | "user_correction_and_override_support" | "action_status_transparency" | "explanation_usefulness" | "tone_appropriateness" | "output_naturalness" | "signal_rendering_quality" | "acoustic_quality";
         /**
          * MissingData
          * @description One structured reason a Specification is not yet runnable.
@@ -1588,6 +1671,12 @@ export interface components {
             question: string;
         };
         /**
+         * ReferenceType
+         * @description Reference categories that a grader can use.
+         * @enum {string}
+         */
+        ReferenceType: "referenceless" | "rubric_based" | "expected_output" | "expected_trajectory_action" | "policy_rule" | "environment_state" | "pairwise_candidate" | "historical_baseline" | "human_preference";
+        /**
          * ReviewSection
          * @description A heading on a review screen, with the actions that belong to it.
          *
@@ -1715,6 +1804,15 @@ export interface components {
             /** Trials */
             trials: number;
         };
+        /**
+         * Scope
+         * @description Evidence units that can each receive one grader result.
+         *
+         *     Interaction scopes select traces. Trace covers one trace. Subsession covers
+         *     a subset of a session's traces. Session covers all traces for one trial.
+         * @enum {string}
+         */
+        Scope: "model_decision_generation" | "model_reasoning" | "artifact" | "tool_selection" | "tool_arguments" | "tool_execution" | "environment_action" | "trace" | "subsession" | "session";
         /**
          * SecretHeader
          * @description A header the engine adds, from an environment variable, to matching requests.

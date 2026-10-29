@@ -1,28 +1,42 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import type { GraderSpec } from "./transport/api.ts";
 import {
+  deselectGrader,
   emptyManualExperiment,
   emptyManualTestCase,
   keepReferencedFixtures,
   manualFieldErrors,
   replaceTaskReference,
+  graderGroups,
+  selectGrader,
   synthesizeManualSpecification,
+  updateGrader,
   type ManualExperiment,
+  type ManualGrader,
 } from "./manual.ts";
 
-const synthesisScorer = {
+const synthesisGrader = {
   fqn: "tests.unit.engine.graders_for_tests.FixedScoreGrader",
   name: "Synthesis faithfulness",
   description: "Checks that the answer uses its evidence.",
   uses_criterion_description: false,
 };
-const budgetScorer = {
+const budgetGrader: GraderSpec = {
   fqn: "metis.library.graders.demo.DemoTraceBudgetGrader",
   name: "Turn budget",
   description: "Checks that the conversation stays within its turn budget.",
   uses_criterion_description: false,
+  settings: [
+    { name: "max_traces", kind: "integer", required: false, base: false },
+  ],
 };
+const selected = (grader: GraderSpec): ManualGrader => ({
+  spec: grader,
+  description: `${grader.name}: ${grader.description}`,
+  values: {},
+});
 const synthesis = {
   id: " manual-research ",
   description: " Check research answers and recovery. ",
@@ -42,7 +56,7 @@ const synthesis = {
       persona_ref: "analyst",
       num_trials: 2,
       fixtures: ["policy.pdf"],
-      scorers: [synthesisScorer, budgetScorer],
+      graders: [selected(synthesisGrader), selected(budgetGrader)],
     },
     {
       id: "",
@@ -51,7 +65,7 @@ const synthesis = {
       persona_ref: "director",
       num_trials: 2,
       fixtures: ["policy.pdf"],
-      scorers: [synthesisScorer, budgetScorer],
+      graders: [selected(synthesisGrader), selected(budgetGrader)],
     },
     {
       id: "",
@@ -60,7 +74,7 @@ const synthesis = {
       persona_ref: "analyst",
       num_trials: 1,
       fixtures: ["notes.txt"],
-      scorers: [budgetScorer],
+      graders: [selected(budgetGrader)],
     },
   ],
 } satisfies ManualExperiment;
@@ -120,7 +134,7 @@ test("each test case selects an existing Persona and Scenario and valid executio
     "task.0.persona",
     "task.0.scenario",
     "task.0.trials",
-    "task.0.scorers",
+    "task.0.graders",
     "task.0.files",
   ]);
   assert.deepEqual(
@@ -180,15 +194,14 @@ test("keeps fixture bytes until the last test case that uses them is removed", (
   );
 });
 
-test("the same Persona and Scenario can have separate test cases and scorer settings", () => {
+test("the same Persona and Scenario can have separate test cases and grader settings", () => {
   const experiment: ManualExperiment = structuredClone(synthesis);
-  const first = experiment.tasks[0];
-  const second = experiment.tasks[1];
+  const [first, second] = experiment.tasks;
   first.id = "TC-first";
   second.id = "TC-second";
   second.persona_ref = first.persona_ref;
-  first.grader_args_text = { [budgetScorer.fqn]: '{"max_traces":4}' };
-  second.grader_args_text = { [budgetScorer.fqn]: '{"max_traces":10}' };
+  first.graders[1].values = { max_traces: "4" };
+  second.graders[1].values = { max_traces: "10" };
   const specification = synthesizeManualSpecification(experiment);
   assert.deepEqual(
     specification.tasks.slice(0, 2).map((t) => t.id),
@@ -199,27 +212,128 @@ test("the same Persona and Scenario can have separate test cases and scorer sett
     specification.tasks.reduce((total, t) => total + t.num_trials, 0),
     5,
   );
-  assert.deepEqual(
-    specification.features[0].behaviours[0].criteria[1].grader_args,
-    {
-      max_traces: 4,
-    },
-  );
-  assert.deepEqual(
-    specification.features[0].behaviours[1].criteria[1].grader_args,
-    {
-      max_traces: 10,
-    },
-  );
+  const [one, two] = specification.features[0].behaviours;
+  assert.deepEqual(one.criteria[1].grader_args, { max_traces: 4 });
+  assert.deepEqual(two.criteria[1].grader_args, { max_traces: 10 });
   assert.notDeepEqual(
     specification.tasks[0].behaviour_refs,
     specification.tasks[1].behaviour_refs,
   );
-  first.grader_args_text[budgetScorer.fqn] = "[]";
-  assert.ok(
-    manualFieldErrors(experiment, []).some(
-      (error) => error.field === `task.0.settings.${budgetScorer.fqn}`,
+});
+
+const relevanceGrader: GraderSpec = {
+  fqn: "metis.library.graders.RelevanceGrader",
+  name: "Relevance",
+  description: "Whether the replies address what the user needs.",
+  uses_criterion_description: false,
+  settings: [
+    { name: "ground_truth", kind: "list", required: true, base: false },
+    {
+      name: "turn",
+      kind: "choice",
+      required: false,
+      default: "last",
+      choices: ["each", "last"],
+      base: false,
+    },
+    { name: "purpose", kind: "text", required: false, base: false },
+    {
+      name: "threshold",
+      kind: "number",
+      required: false,
+      default: 0.5,
+      base: true,
+    },
+    {
+      name: "scope",
+      kind: "choice",
+      required: false,
+      default: null,
+      choices: ["session"],
+      base: true,
+    },
+  ],
+};
+
+test("a selected grader starts with its description and the default of each setting", () => {
+  const task = selectGrader(emptyManualTestCase(), relevanceGrader);
+  assert.deepEqual(task.graders, [
+    {
+      spec: relevanceGrader,
+      description: "Whether the replies address what the user needs.",
+      values: {
+        ground_truth: "",
+        turn: "last",
+        purpose: "",
+        threshold: "0.5",
+        scope: "",
+      },
+    },
+  ]);
+  assert.equal(selectGrader(task, relevanceGrader), task);
+  assert.deepEqual(deselectGrader(task, relevanceGrader.fqn).graders, []);
+});
+
+test("grader settings become the Criterion description and grader args of each setting kind", () => {
+  const experiment: ManualExperiment = structuredClone(synthesis);
+  let task = selectGrader(
+    { ...experiment.tasks[2], graders: [] },
+    relevanceGrader,
+  );
+  task = updateGrader(task, relevanceGrader.fqn, {
+    description: "  Replies answer the policy question.  ",
+    values: {
+      ground_truth: '["Rates rose in 2024."]',
+      turn: "each",
+      purpose: "true",
+      threshold: "0.7",
+      scope: "",
+    },
+  });
+  experiment.tasks[2] = task;
+  const [criterion] =
+    synthesizeManualSpecification(experiment).features[0].behaviours[2]
+      .criteria;
+  assert.equal(criterion.description, "Replies answer the policy question.");
+  assert.deepEqual(criterion.grader_args, {
+    ground_truth: ["Rates rose in 2024."],
+    turn: "each",
+    purpose: "true",
+    threshold: 0.7,
+  });
+});
+
+test("a grader setting that is not valid JSON goes to compile as typed", () => {
+  const experiment: ManualExperiment = structuredClone(synthesis);
+  experiment.tasks[0] = updateGrader(experiment.tasks[0], budgetGrader.fqn, {
+    values: { max_traces: "four" },
+  });
+  const [, criterion] =
+    synthesizeManualSpecification(experiment).features[0].behaviours[0]
+      .criteria;
+  assert.deepEqual(criterion.grader_args, { max_traces: "four" });
+});
+
+test("a grader needs a description and a value for each required setting", () => {
+  const experiment: ManualExperiment = structuredClone(synthesis);
+  experiment.tasks[0] = selectGrader(experiment.tasks[0], relevanceGrader);
+  experiment.tasks[0] = updateGrader(experiment.tasks[0], budgetGrader.fqn, {
+    description: " ",
+  });
+  assert.deepEqual(
+    manualFieldErrors(experiment, []).filter((error) =>
+      error.field.startsWith("task.0.settings."),
     ),
+    [
+      {
+        field: `task.0.settings.${budgetGrader.fqn}.description`,
+        message: "Enter a description.",
+      },
+      {
+        field: `task.0.settings.${relevanceGrader.fqn}.values.ground_truth`,
+        message: "Enter a value.",
+      },
+    ],
   );
 });
 
@@ -278,8 +392,8 @@ test("manual metadata preserves text and requires unique nonblank keys", () => {
   }
 });
 
-test("manual scorers can run without an interview criterion", async () => {
-  const { manualScorers } = await import("./manual.ts");
+test("manual graders can run without an interview criterion", async () => {
+  const { manualGraders } = await import("./manual.ts");
   const fallback = {
     fqn: "metis.library.graders.CriterionJudgeGrader",
     name: "Criterion judge",
@@ -292,5 +406,94 @@ test("manual scorers can run without an interview criterion", async () => {
     description: "Check the trace count.",
     uses_criterion_description: false,
   };
-  assert.deepEqual(manualScorers([fallback, budget]), [budget]);
+  assert.deepEqual(manualGraders([fallback, budget]), [budget]);
+});
+
+type Taxonomy = NonNullable<GraderSpec["taxonomy"]>;
+
+function taxonomyGrader(
+  name: string,
+  dimension: GraderSpec["dimension"],
+  measure: Taxonomy["measure"],
+  scopes: Taxonomy["scopes"],
+  grader_types: Taxonomy["grader_types"] = ["llm"],
+): GraderSpec {
+  return {
+    fqn: `metis.library.graders.${name.replaceAll(" ", "")}Grader`,
+    name,
+    description: `Checks ${name.toLowerCase()}.`,
+    uses_criterion_description: false,
+    dimension,
+    taxonomy: {
+      measure,
+      scopes,
+      grader_types,
+      reference_types: ["rubric_based"],
+      judgment_forms: ["binary"],
+      aggregations: ["none_single_score"],
+    },
+  };
+}
+
+const relevance = taxonomyGrader(
+  "Relevance",
+  "interaction_quality",
+  "relevance",
+  ["trace"],
+);
+const recovery = taxonomyGrader(
+  "Error recovery",
+  "execution_and_decision_quality",
+  "error_recovery",
+  ["session"],
+);
+const success = taxonomyGrader(
+  "Task success",
+  "task_and_output_quality",
+  "task_success",
+  ["session"],
+  ["llm", "deterministic"],
+);
+const unclassified = {
+  fqn: "metis.library.graders.TraceBudgetGrader",
+  name: "Trace budget",
+  description: "Check the trace count.",
+  uses_criterion_description: false,
+};
+
+test("graders are grouped by dimension in taxonomy order with unclassified graders last", () => {
+  const groups = graderGroups([unclassified, relevance, recovery, success], "");
+  assert.deepEqual(
+    groups.map((group) => [group.label, group.graders.map((g) => g.name)]),
+    [
+      ["Task and Output Quality", ["Task success"]],
+      ["Execution and Decision Quality", ["Error recovery"]],
+      ["Interaction Quality", ["Relevance"]],
+      ["Other", ["Trace budget"]],
+    ],
+  );
+});
+
+test("grader search matches the dimension, measure, and each taxonomy chip", () => {
+  const all = [unclassified, relevance, recovery, success];
+  const names = (query: string) =>
+    graderGroups(all, query).flatMap((group) =>
+      group.graders.map((grader) => grader.name),
+    );
+  assert.deepEqual(names("interaction quality"), ["Relevance"]);
+  assert.deepEqual(names("error_recovery"), ["Error recovery"]);
+  assert.deepEqual(names("Error recovery"), ["Error recovery"]);
+  assert.deepEqual(names("DETERMINISTIC"), ["Task success"]);
+  assert.deepEqual(names("trace"), ["Relevance", "Trace budget"]);
+  assert.deepEqual(names("rubric based"), [
+    "Task success",
+    "Error recovery",
+    "Relevance",
+  ]);
+  assert.deepEqual(names("binary"), [
+    "Task success",
+    "Error recovery",
+    "Relevance",
+  ]);
+  assert.deepEqual(names("no such grader"), []);
 });

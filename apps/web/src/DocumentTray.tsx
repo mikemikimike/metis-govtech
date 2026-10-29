@@ -11,7 +11,7 @@ export function DocumentTray({
   return (
     <section
       aria-label="Documents"
-      className="relative z-0 mx-auto -mt-4 flex min-h-16 w-[95%] flex-wrap items-start gap-3 rounded-2xl border border-border bg-card px-4 pb-3 pt-7 text-muted-foreground"
+      className="relative flex flex-wrap items-start gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-muted-foreground"
     >
       <h2 className="shrink-0 text-sm font-medium text-foreground">
         Documents

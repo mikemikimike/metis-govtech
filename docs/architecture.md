@@ -252,7 +252,7 @@ are sent only for request-scoped text extraction or packaging. It MUST NOT depen
 resources, wizard static assets, or an embedded wizard runtime.
 
 It MUST offer two authoring paths: the guided Interview, and a manual form for a user who already
-knows the scorers to run. The manual form MUST stay flat: it MUST NOT surface Feature, Behaviour, or
+knows the graders to run. The manual form MUST stay flat: it MUST NOT surface Feature, Behaviour, or
 Criterion. It MUST build a valid `Specification` in the browser and submit it to the existing
 package route, and it MUST NOT add a route or create an Interview record. Server-side validation in
 `metis-wizard` stays authoritative for both paths.

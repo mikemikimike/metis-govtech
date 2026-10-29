@@ -903,7 +903,11 @@ function BehaviourView({
                     )}
                     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
                       {Object.entries({
-                        ...grader?.default_args,
+                        ...Object.fromEntries(
+                          (grader?.settings ?? [])
+                            .filter((setting) => !setting.required)
+                            .map((setting) => [setting.name, setting.default]),
+                        ),
                         ...c.grader_args,
                       }).map(([key, value]) => (
                         <div key={key} className="contents">

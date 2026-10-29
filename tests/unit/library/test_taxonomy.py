@@ -30,6 +30,11 @@ def test_taxonomy_values_validate_and_round_trip_as_json(enum_type) -> None:
         adapter.validate_json('"unsupported_taxonomy_value"')
 
 
+def test_every_measure_belongs_to_one_dimension() -> None:
+    assert set(taxonomy.MEASURE_DIMENSIONS) == set(taxonomy.Measure)
+    assert set(taxonomy.MEASURE_DIMENSIONS.values()) == set(taxonomy.Dimension)
+
+
 @pytest.fixture
 def declaration() -> dict[str, object]:
     return {

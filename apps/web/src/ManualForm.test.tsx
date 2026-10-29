@@ -70,12 +70,16 @@ const experiment: ManualExperiment = {
       num_trials: 1,
       persona_ref: "reviewer",
       fixtures: [],
-      scorers: [
+      graders: [
         {
-          fqn: "metis.library.graders.demo.DemoTraceBudgetGrader",
-          name: "Turn budget",
+          spec: {
+            fqn: "metis.library.graders.demo.DemoTraceBudgetGrader",
+            name: "Turn budget",
+            description: "Checks the turn budget.",
+            uses_criterion_description: false,
+          },
           description: "Checks the turn budget.",
-          uses_criterion_description: false,
+          values: {},
         },
       ],
     },
@@ -128,10 +132,10 @@ test("the new manual form presents its Experiment sections in order", () => {
   assert.match(markup, /aria-label="Experiment ID"/);
   assert.doesNotMatch(markup, />New Persona<\/h4>/);
   assert.doesNotMatch(markup, />New Scenario<\/h4>/);
-  assert.match(markup, />Add Persona<\/button>/);
-  assert.match(markup, />Add Scenario<\/button>/);
+  assert.match(markup, /aria-label="Add Persona"/);
+  assert.match(markup, /aria-label="Add Scenario"/);
   assert.match(markup, /No Personas yet/);
-  assert.match(markup, />Add test case<\/button>/);
+  assert.match(markup, /aria-label="Add test case"/);
   assert.match(markup, />ID<\/span>/);
   assert.match(markup, />Description<\/span>/);
   assert.match(markup, /Download specification/);
@@ -140,11 +144,10 @@ test("the new manual form presents its Experiment sections in order", () => {
   assert.doesNotMatch(markup, />Behaviour</);
   assert.doesNotMatch(markup, />Criterion</);
 
-  const experiment = markup.indexOf('id="manual-experiment"');
   const details = markup.indexOf('id="manual-experiment-details"');
   const personas = markup.indexOf('id="manual-personas"');
   const scenarios = markup.indexOf('id="manual-scenarios"');
-  assert.ok(experiment < details);
+  assert.ok(details >= 0);
   assert.ok(details < personas);
   assert.ok(personas < scenarios);
   assert.ok(scenarios < markup.indexOf('id="manual-tasks"'));
@@ -202,11 +205,17 @@ test("the manual form keeps the mode that the opening chose", () => {
     <ManualForm {...props({ connectionDraft: runDraft })} />,
   );
   assert.match(run, /aria-checked="true"[^>]*>Build Spec and connect target</);
-  assert.match(run, /id="manual-connection"/);
+  assert.match(run, /<h2 id="manual-specification"[^>]*>Specification<\/h2>/);
+  assert.match(run, /<h2 id="manual-connection"[^>]*>Target connection<\/h2>/);
   assert.match(run, />Test connection</);
+  // The download sits next to the mode picker, above both parts.
   assert.ok(
-    run.indexOf('id="manual-connection"') <
-      run.indexOf("Download specification"),
+    run.indexOf("Download specification") <
+      run.indexOf('id="manual-specification"'),
+  );
+  assert.ok(
+    run.indexOf('id="manual-specification"') <
+      run.indexOf('id="manual-connection"'),
   );
 });
 

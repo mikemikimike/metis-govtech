@@ -29,9 +29,42 @@ def test_grader_catalogue_is_sorted_and_has_only_display_fields(
     assert rows
     assert all(
         set(row)
-        == {"fqn", "name", "description", "uses_criterion_description", "default_args"}
+        == {
+            "fqn",
+            "name",
+            "description",
+            "uses_criterion_description",
+            "settings",
+            "taxonomy",
+            "dimension",
+        }
         for row in rows
     )
+
+
+def test_grader_catalogue_rows_carry_the_taxonomy_dimension_and_settings(
+    client: TestClient,
+) -> None:
+    rows = {row["fqn"]: row for row in client.get("/api/v1/graders").json()}
+
+    recovery = rows["metis.library.graders.ErrorRecoveryGrader"]
+    assert recovery["dimension"] == "execution_and_decision_quality"
+    assert recovery["taxonomy"]["measure"] == "error_recovery"
+    assert recovery["taxonomy"]["scopes"] == ["session"]
+    assert recovery["taxonomy"]["grader_types"] == ["llm"]
+    settings = {setting["name"]: setting for setting in recovery["settings"]}
+    assert settings["scope"]["choices"] == ["session"]
+    assert settings["threshold"] == {
+        "name": "threshold",
+        "kind": "number",
+        "required": False,
+        "default": 0.5,
+        "choices": [],
+        "base": True,
+        "description": None,
+    }
+    judge = rows["metis.library.graders.CriterionJudgeGrader"]
+    assert judge["dimension"] is None
 
 
 def test_grader_catalogue_failure_uses_service_error_shape(

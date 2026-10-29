@@ -33,8 +33,12 @@ export function InterviewRail({
           it — the shape a chat app's rail takes, so the product name anchors the shell and the
           action reads as the first row of the list beneath it rather than a toolbar button. */}
       <div className="flex items-center justify-between gap-2 px-3 pt-3">
-        <span className="text-sm font-semibold text-foreground">
-          METIS-Wizard
+        {/* The same mark and wordmark as the docs site's navbar. */}
+        <span className="flex items-center gap-1.5">
+          <img src="/metis-mark.png" alt="" className="h-7 w-7" />
+          <span className="text-base font-black tracking-[0.14em] text-foreground">
+            METIS
+          </span>
         </span>
         {onCollapse && (
           <button
