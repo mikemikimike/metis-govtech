@@ -131,8 +131,8 @@ async def judge_against_sources(
 ) -> GradingOutput:
     """Judge each selected piece against the sources in the session (``sources_block``).
 
-    Each file the user gave the target is attached. Under the trace scope, the earlier turns
-    of the session come before the judged turn. Under the artifact scope, the whole session
+    Each file the user gave the target is attached. Under the trace scope, the earlier recorded
+    turns of the session come before the judged recorded turn. Under the artifact scope, the whole session
     comes before the file. A source file that cannot be read errors the run.
     """
     fixtures = [

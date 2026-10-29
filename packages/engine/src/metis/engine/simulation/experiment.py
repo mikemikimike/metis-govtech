@@ -258,7 +258,7 @@ async def _execute_experiment_async(
             status = "PASS" if r.outcome.stop_reason == "goal_achieved" else "----"
             console.print(f"  [{status}] {r.config.persona} x {r.config.scenario}")
             console.print(
-                f"         Turns: {r.outcome.total_turns}, "
+                f"         Simulated turns: {r.outcome.simulated_turns_completed}, "
                 f"Duration: {r.outcome.duration_seconds}s, "
                 f"Reason: {r.outcome.stop_reason}"
             )
@@ -510,15 +510,17 @@ async def _worker(
                         if trial is not None
                         else None
                     )
-                    turn_reached = (
-                        partial.outcome.total_turns if partial is not None else 0
+                    simulated_turns_completed = (
+                        partial.outcome.simulated_turns_completed
+                        if partial is not None
+                        else 0
                     )
                     duration_ms = int((time.time() - run_start) * 1000)
                     failure = TrialFailure(
                         attempt_number=attempt,
                         failure_type=type(exc).__name__,
                         submission_phase="unknown",
-                        turn_reached=turn_reached,
+                        simulated_turns_completed=simulated_turns_completed,
                         error_message=str(exc) or type(exc).__name__,
                         duration_ms=duration_ms,
                     )
@@ -546,7 +548,7 @@ async def _worker(
                                 target_session_id=None,
                                 outcome=TrialOutcome(
                                     stop_reason="system_error",
-                                    total_turns=0,
+                                    simulated_turns_completed=0,
                                     duration_seconds=(time.time() - run_start),
                                 ),
                                 artifacts=[],
@@ -567,26 +569,28 @@ async def _worker(
                         if trial is not None
                         else None
                     )
-                    turn_reached = (
-                        partial.outcome.total_turns if partial is not None else 0
+                    simulated_turns_completed = (
+                        partial.outcome.simulated_turns_completed
+                        if partial is not None
+                        else 0
                     )
                     duration_ms = int((time.time() - run_start) * 1000)
                     logger.exception(
                         "[experiment] Worker w%d: unexpected crash on attempt "
-                        "%d/%d for %s × %s (reached turn %d)",
+                        "%d/%d for %s × %s (%d simulated turns completed)",
                         worker_id,
                         attempt,
                         max_attempts,
                         task_id,
                         persona.id,
-                        turn_reached,
+                        simulated_turns_completed,
                     )
                     prior_failures.append(
                         TrialFailure(
                             attempt_number=attempt,
                             failure_type=type(exc).__name__,
                             submission_phase="unknown",
-                            turn_reached=turn_reached,
+                            simulated_turns_completed=simulated_turns_completed,
                             # str(exc) is empty for message-less exceptions;
                             # fall back to the class name so it is never blank.
                             error_message=str(exc) or type(exc).__name__,
@@ -603,7 +607,7 @@ async def _worker(
                                 target_session_id=None,
                                 outcome=TrialOutcome(
                                     stop_reason="system_error",
-                                    total_turns=0,
+                                    simulated_turns_completed=0,
                                     duration_seconds=(time.time() - run_start),
                                 ),
                                 artifacts=[],
@@ -635,7 +639,7 @@ async def _worker(
                     trial_index=trial_index,
                     num_trials=scenario.num_trials,
                     stop_reason=record.outcome.stop_reason,
-                    total_turns=record.outcome.total_turns,
+                    simulated_turns_completed=record.outcome.simulated_turns_completed,
                     duration_seconds=record.outcome.duration_seconds,
                 )
             if log_router:
@@ -668,14 +672,14 @@ async def _worker(
                     console.print(
                         f"  [w{worker_id}] {scenario.id} × {persona.id} — "
                         f"{record.outcome.stop_reason}, "
-                        f"{record.outcome.total_turns} turns, "
+                        f"{record.outcome.simulated_turns_completed} simulated turns, "
                         f"{record.outcome.duration_seconds:.0f}s"
                     )
 
             logger.info(
-                "[experiment] Result: stop_reason=%s, turns=%d, duration=%.1fs",
+                "[experiment] Result: stop_reason=%s, simulated_turns_completed=%d, duration=%.1fs",
                 record.outcome.stop_reason,
-                record.outcome.total_turns,
+                record.outcome.simulated_turns_completed,
                 record.outcome.duration_seconds,
             )
 

@@ -160,7 +160,9 @@ def test_task_records_keep_criterion_configuration_and_trial_identity(
                 grader_refs=scenario.grader_refs,
             ),
             outcome=TrialOutcome(
-                stop_reason="goal_achieved", total_turns=7, duration_seconds=1
+                stop_reason="goal_achieved",
+                simulated_turns_completed=7,
+                duration_seconds=1,
             ),
         )
         path.write_text(record.model_dump_json())

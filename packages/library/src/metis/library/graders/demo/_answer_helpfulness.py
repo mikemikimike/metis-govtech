@@ -25,17 +25,18 @@ if TYPE_CHECKING:
 
 
 class DemoAnswerHelpfulnessArgs(JudgeArgs, SubsessionArgs):
-    """The judge model, and the subsession settings: which turns end a window, and how long it
-    is. The default ``window`` holds every turn before the judged turn."""
+    """The judge model, and the subsession settings: which recorded turns end a window, and how
+    long it is. The default ``window`` holds every recorded turn before the judged one."""
 
 
 class DemoAnswerHelpfulnessGrader(Grader[DemoAnswerHelpfulnessArgs]):
-    """Demo: one judged result for each turn, judged with the turns before it.
+    """Demo: one judged result for each recorded turn, judged with the recorded turns before it.
 
-    Shows an LLM grader that needs context: it declares the subsession scope, so each turn is
-    judged with the conversation before it and never sees what came after. A turn whose reply
-    METIS could not read is errored, unless the target itself reported an error on it: a missing
-    reply is the target failing, so that turn is judged, with the error shown to the judge.
+    Shows an LLM grader that needs context: it declares the subsession scope, so each recorded
+    turn is judged with the conversation before it and never sees what came after. A recorded
+    turn whose reply METIS could not read is errored, unless the target itself reported an error
+    on it: a missing reply is the target failing, so that turn is judged, with the error shown
+    to the judge.
     """
 
     args_model = DemoAnswerHelpfulnessArgs

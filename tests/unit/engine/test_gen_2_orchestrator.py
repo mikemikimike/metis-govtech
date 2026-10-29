@@ -203,7 +203,7 @@ async def test_full_trial_writes_a_record_that_load_file_reads(tmp_path: Path) -
     path.write_text(json.dumps(record.model_dump()), encoding="utf-8")
     loaded = TrialRecord.load_file(path)
     assert loaded.outcome.stop_reason == "goal_achieved"
-    assert loaded.outcome.total_turns == 2
+    assert loaded.outcome.simulated_turns_completed == 2
     assert loaded.target_session_id == "sess-1"
     assert [(a.name, a.source, a.at_simulated_turn) for a in loaded.artifacts] == [
         ("q3_sales.csv", "fixture", 1),
@@ -254,7 +254,7 @@ async def test_closing_call_is_not_a_turn(tmp_path: Path) -> None:
 
     record = await orch.execute()
 
-    assert record.outcome.total_turns == 1
+    assert record.outcome.simulated_turns_completed == 1
     assert [(a.name, a.at_simulated_turn) for a in record.artifacts] == [
         ("late.txt", 1)
     ]
@@ -268,7 +268,7 @@ async def test_no_closing_call_when_no_action_was_taken(tmp_path: Path) -> None:
     record = await orch.execute()
 
     assert record.outcome.stop_reason == "user_abandoned"
-    assert record.outcome.total_turns == 0
+    assert record.outcome.simulated_turns_completed == 0
     assert runner.events == ["setup", "teardown"]
 
 
@@ -281,7 +281,7 @@ async def test_max_turns_stops_without_asking_the_user_again(tmp_path: Path) -> 
     record = await orch.execute()
 
     assert record.outcome.stop_reason == "max_turns"
-    assert record.outcome.total_turns == 3
+    assert record.outcome.simulated_turns_completed == 3
     assert agent.turns == [1, 2, 3]
     assert runner.events[-2:] == ["end_chat", "teardown"]
 
@@ -294,7 +294,7 @@ async def test_timeout_stops_before_the_first_turn(tmp_path: Path) -> None:
     record = await orch.execute()
 
     assert record.outcome.stop_reason == "timeout"
-    assert record.outcome.total_turns == 0
+    assert record.outcome.simulated_turns_completed == 0
 
 
 @pytest.mark.asyncio
@@ -321,7 +321,7 @@ async def test_shutdown_during_a_turn_keeps_that_turn_and_skips_the_closing_call
     record = await orch.execute()
 
     assert record.outcome.stop_reason == "interrupted"
-    assert record.outcome.total_turns == 1
+    assert record.outcome.simulated_turns_completed == 1
     assert runner.events == ["setup", "act", "teardown"]
 
 
@@ -371,7 +371,7 @@ async def test_a_failing_user_agent_is_a_system_error(tmp_path: Path) -> None:
     record = await orch.execute()
 
     assert record.outcome.stop_reason == "system_error"
-    assert record.outcome.total_turns == 1
+    assert record.outcome.simulated_turns_completed == 1
     assert "end_chat" not in runner.events
 
 
@@ -389,7 +389,7 @@ async def test_an_unavailable_user_agent_raises_so_the_trial_is_retried(
     with pytest.raises(UserAgentUnavailableError):
         await orch.execute()
 
-    assert orch.partial_record("system_error").outcome.total_turns == 1
+    assert orch.partial_record("system_error").outcome.simulated_turns_completed == 1
     assert runner.events[-1] == "teardown"
 
 
@@ -403,7 +403,7 @@ async def test_a_recoverable_turn_error_counts_and_tells_the_user(
 
     record = await orch.execute()
 
-    assert record.outcome.total_turns == 2
+    assert record.outcome.simulated_turns_completed == 2
     failed = agent.remembered[0]
     assert failed.reply is None
     assert failed.observed is False
@@ -441,7 +441,7 @@ async def test_two_consecutive_turn_errors_escalate_and_keep_progress(
 
     partial = orch.partial_record("system_error")
     assert partial.outcome.stop_reason == "system_error"
-    assert partial.outcome.total_turns == 2
+    assert partial.outcome.simulated_turns_completed == 2
     assert partial.target_session_id == "sess-1"
     assert [a.name for a in partial.artifacts] == ["a.txt"]
     assert runner.events[-1] == "teardown"
@@ -463,7 +463,7 @@ async def test_a_trial_level_error_propagates_for_the_retry_loop(
         await orch.execute()
 
     partial = orch.partial_record("system_error")
-    assert partial.outcome.total_turns == 1
+    assert partial.outcome.simulated_turns_completed == 1
     assert [a.name for a in partial.artifacts] == ["a.txt"]
     assert runner.events[-1] == "teardown"
 
@@ -476,7 +476,7 @@ async def test_partial_record_before_execute_has_the_fixtures(tmp_path: Path) ->
 
     partial = orch.partial_record("system_error")
 
-    assert partial.outcome.total_turns == 0
+    assert partial.outcome.simulated_turns_completed == 0
     assert [a.name for a in partial.artifacts] == ["q3_sales.csv"]
 
 
@@ -554,7 +554,7 @@ async def test_an_unsettled_submission_ends_the_loop_and_still_closes(
         "evaluation_runner",
         "submission_unresolved",
     )
-    assert record.outcome.total_turns == 1
+    assert record.outcome.simulated_turns_completed == 1
     assert agent.turns == [1]  # the user is not asked again
     assert runner.events == ["setup", "act", "end_chat", "teardown"]
 
@@ -632,7 +632,7 @@ async def test_an_action_that_sent_nothing_is_not_a_turn_and_the_user_is_told(
 
     record = await _build(tmp_path, runner, agent).execute()
 
-    assert record.outcome.total_turns == 1
+    assert record.outcome.simulated_turns_completed == 1
     assert record.outcome.stop_reason == "goal_achieved"
     assert agent.turns == [1, 1, 2]  # the empty action did not use up turn 1
     assert agent.remembered[0].sent_nothing
@@ -649,7 +649,7 @@ async def test_an_action_that_sent_nothing_does_not_spend_the_turn_budget(
     record = await _build(tmp_path, runner, agent, max_turns=1).execute()
 
     assert record.outcome.stop_reason == "max_turns"
-    assert record.outcome.total_turns == 1
+    assert record.outcome.simulated_turns_completed == 1
     assert runner.actions == ["a", "b", "Say ⟦hi⟧"]
 
 
@@ -667,7 +667,7 @@ async def test_three_empty_actions_in_a_row_end_the_trial_and_blame_the_user_age
         "user_agent",
         "no_message_quoted",
     )
-    assert record.outcome.total_turns == 0
+    assert record.outcome.simulated_turns_completed == 0
     assert agent.turns == [1, 1, 1]  # the user is not asked a fourth time
     assert runner.events == ["setup", "act", "act", "act", "teardown"]
 
@@ -689,7 +689,7 @@ async def test_a_sent_action_resets_the_run_of_empty_actions(tmp_path: Path) -> 
     record = await _build(tmp_path, runner, agent).execute()
 
     assert record.outcome.stop_reason == "goal_achieved"
-    assert record.outcome.total_turns == 2
+    assert record.outcome.simulated_turns_completed == 2
 
 
 @pytest.mark.asyncio

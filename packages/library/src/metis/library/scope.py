@@ -40,18 +40,20 @@ class TraceArgs(BaseModel):
     """The setting of the ``trace`` scope."""
 
     turn: Literal["each", "last"] = "each"
-    """``each`` judges every turn, each on its own. ``last`` judges only the final turn."""
+    """``each`` judges every recorded turn, each on its own. ``last`` judges only the final
+    recorded turn."""
 
 
 class SubsessionArgs(BaseModel):
     """The settings of the ``subsession`` scope."""
 
     turn: Literal["each", "last"] = "each"
-    """The turn each subsession ends at: ``each`` turn, or only the ``last`` turn."""
+    """The recorded turn each subsession ends at: ``each`` recorded turn, or only the ``last``
+    one."""
     window: int | None = Field(default=None, ge=1, strict=True)
-    """How many turns one subsession holds: its end turn and the turns just before it. ``None``
-    holds every turn before it, so the judge has the whole conversation so far. The turns
-    before the subsession are not shown to the judge."""
+    """How many recorded turns one subsession holds: its end turn and the recorded turns just
+    before it. ``None`` holds every recorded turn before it, so the judge has the whole
+    conversation so far. The recorded turns before the subsession are not shown to the judge."""
 
 
 class ArtifactArgs(BaseModel):

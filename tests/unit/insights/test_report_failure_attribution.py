@@ -28,7 +28,7 @@ def _only_trial(
         config=TrialConfig(persona="p", scenario="s"),
         outcome=TrialOutcome(
             stop_reason=stop_reason,
-            total_turns=1,
+            simulated_turns_completed=1,
             duration_seconds=1.0,
             failure_source=failure_source,
             failure_message=failure_message,

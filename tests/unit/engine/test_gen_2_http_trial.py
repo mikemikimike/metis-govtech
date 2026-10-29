@@ -212,7 +212,7 @@ async def test_a_full_trial_writes_a_record_from_a_real_session_and_a_real_downl
     path.write_text(json.dumps(record.model_dump(mode="json")), encoding="utf-8")
     loaded = TrialRecord.load_file(path)
     assert loaded.outcome.stop_reason == "goal_achieved"
-    assert loaded.outcome.total_turns == 2
+    assert loaded.outcome.simulated_turns_completed == 2
     assert loaded.target_session_id == "s-1"  # copied from the reply, not written
     assert [
         (a.name, a.source, a.state, a.at_simulated_turn) for a in loaded.artifacts
@@ -249,7 +249,7 @@ async def test_the_round_cap_ends_a_looping_agent_and_the_trial_goes_on(
     record = await orchestrator.execute()
 
     assert record.outcome.stop_reason == "goal_achieved"
-    assert record.outcome.total_turns == 1
+    assert record.outcome.simulated_turns_completed == 1
     [seen] = agent.remembered
     assert seen.reply is None
     assert seen.notice is not None and f"{MAX_ROUNDS} rounds" in seen.notice
@@ -274,7 +274,7 @@ async def test_a_failed_runner_agent_call_costs_one_turn_not_the_trial(
     record = await orchestrator.execute()
 
     assert record.outcome.stop_reason == "goal_achieved"
-    assert record.outcome.total_turns == 2
+    assert record.outcome.simulated_turns_completed == 2
     first, second = agent.remembered
     assert first.observed is False and first.reply is None
     assert first.notice is not None and "No reply was captured" in first.notice

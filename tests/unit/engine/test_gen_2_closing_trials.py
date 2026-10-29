@@ -191,7 +191,7 @@ async def test_the_closing_step_finds_a_file_the_reply_never_named(
     record = await _record(trial, tmp_path)
 
     assert record.outcome.stop_reason == "goal_achieved"
-    assert record.outcome.total_turns == 1
+    assert record.outcome.simulated_turns_completed == 1
     assert (record.outcome.failure_source, record.outcome.failure_message) == (
         None,
         None,
@@ -292,7 +292,7 @@ async def test_a_reply_that_never_settles_ends_the_loop_and_still_closes(
     assert outcome.stop_reason == "system_error"
     assert outcome.failure_source == "evaluation_runner"
     assert outcome.failure_message == "submission_unresolved"
-    assert outcome.total_turns == 1
+    assert outcome.simulated_turns_completed == 1
     assert agent.turns == [1]  # no second turn was started
     assert trial.target.chats == 1
     closing = [r for r in trial.llm.requests if "closing step" in str(r["messages"][1])]

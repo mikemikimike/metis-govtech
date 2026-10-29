@@ -617,7 +617,7 @@ class Orchestrator:
             target_session_id=target_session_id,
             outcome=TrialOutcome(
                 stop_reason=stop_reason,
-                total_turns=self._turns_completed,
+                simulated_turns_completed=self._turns_completed,
                 duration_seconds=round(duration_seconds, 1),
             ),
             artifacts=list(
@@ -631,7 +631,7 @@ class Orchestrator:
         """Build a TrialRecord from whatever progress this trial has made.
 
         Used by the experiment worker when execute() raises unexpectedly, so
-        the progress made is preserved instead of discarded. total_turns is
+        the progress made is preserved instead of discarded. simulated_turns_completed is
         the number of turns completed so far; duration is measured from the
         trial's start.
         """

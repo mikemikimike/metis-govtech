@@ -35,7 +35,9 @@ class TestSaveArtifacts:
             config=TrialConfig(persona="p1", scenario="s1", grader_refs=[]),
             target_session_id="sess-abc",
             outcome=TrialOutcome(
-                stop_reason="goal_achieved", total_turns=3, duration_seconds=10.0
+                stop_reason="goal_achieved",
+                simulated_turns_completed=3,
+                duration_seconds=10.0,
             ),
             artifacts=[
                 Artifact(
@@ -82,7 +84,9 @@ def test_manifest_keeps_logical_name_when_disk_path_is_decollided(tmp_path):
     record = TrialRecord(
         config=TrialConfig(persona="p", scenario="s"),
         outcome=TrialOutcome(
-            stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+            stop_reason="goal_achieved",
+            simulated_turns_completed=1,
+            duration_seconds=1.0,
         ),
         artifacts=[art],
     )
@@ -100,7 +104,9 @@ def test_manifest_carries_external_id(tmp_path: Path) -> None:
     record = TrialRecord(
         config=TrialConfig(persona="p", scenario="s"),
         outcome=TrialOutcome(
-            stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+            stop_reason="goal_achieved",
+            simulated_turns_completed=1,
+            duration_seconds=1.0,
         ),
         artifacts=[
             Artifact(

@@ -363,10 +363,12 @@ class TestI4DeliveryMultiplicity:
         assert response.action_results[0].succeeded is False
         assert response.action_results[0].detail
         assert response.response_notices
-        assert record.outcome.total_turns == 1
+        assert record.outcome.simulated_turns_completed == 1
 
     @pytest.mark.asyncio
-    async def test_total_turns_counts_only_completed_exchanges(self, tmp_path) -> None:
+    async def test_simulated_turns_completed_counts_only_completed_exchanges(
+        self, tmp_path
+    ) -> None:
         # Two exchanges, then giving_up is seen at the top of turn 3,
         # where turn_count is already 3. An empty script makes the runner
         # answer each turn with a conforming observation.
@@ -376,7 +378,7 @@ class TestI4DeliveryMultiplicity:
         record = await orch.execute()
 
         assert record.outcome.stop_reason == "user_abandoned"
-        assert record.outcome.total_turns == 2
+        assert record.outcome.simulated_turns_completed == 2
 
     @pytest.mark.asyncio
     async def test_a_discarded_message_is_logged_in_full(

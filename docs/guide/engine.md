@@ -349,7 +349,7 @@ Tasks also accept optional execution settings:
 
 | Field | Default | Purpose |
 |-------|---------|---------|
-| `max_turns` | `20` | Maximum user-agent turns before the run stops |
+| `max_turns` | `20` | Maximum simulated turns before the run stops |
 | `timeout_minutes` | `15` | Time limit for the simulation run |
 | `response_wait_ms` | `300000` | Response wait limit used by the runner, in milliseconds |
 | `max_run_retries` | `null` | Use the runner's retry default; `0` disables run retries |
@@ -398,7 +398,7 @@ defaults:
 ```
 
 Two Criteria can use the same grader with different arguments; each gets its own results,
-identified by its Criterion ID. A trace budget does not change the engine's execution turn
+identified by its Criterion ID. A trace budget does not change the engine's simulated-turn
 limit.
 
 ### Working Reference
@@ -493,7 +493,7 @@ The Simulation TUI and evaluation progress are visible regardless of verbosity l
 
 ### Interrupt Handling
 
-- **First Ctrl+C:** finishes the current conversation turn gracefully, then stops
+- **First Ctrl+C:** finishes the current simulated turn gracefully, then stops
 - **Second Ctrl+C:** force-aborts immediately
 
 ### Non-TTY Environments
@@ -584,7 +584,7 @@ and makes calls through `llm.client`, a shared `AsyncOpenAI`.
 | "could not be imported" | FQN typo or module not installed | Check the import path for typos, ensure the package containing the grader is installed in your venv |
 | Simulation hangs indefinitely | Target unresponsive or page never finishes loading | Use `HEADED=true` to see the browser, increase the Task's `response_wait_ms` |
 | Simulation TUI not appearing | Running in a non-TTY environment | Expected — the Simulation TUI requires an interactive terminal. Use linear output or run in a real terminal |
-| Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current turn | Press Ctrl+C a second time to force-abort |
+| Ctrl+C doesn't stop immediately | Graceful shutdown is finishing the current simulated turn | Press Ctrl+C a second time to force-abort |
 | "is not a subclass of metis.library.grader.Grader" | The FQN names something other than a grader | Subclass metis.library.grader.Grader[YourArgs] and set args_model = YourArgs |
 | "has invalid grader_args" | A grader_args key is misspelt, has the wrong type, or is out of range | Fix the field the message names; keys must match the grader's args_model |
 | Duplicate persona/scenario ID error | Two entries share the same `id` | Use unique IDs for every persona and scenario |

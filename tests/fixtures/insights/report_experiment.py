@@ -123,7 +123,7 @@ def trial_record(
             task_id=task_id, trial_index=trial, persona="P-1", scenario=TASKS[task_id]
         ),
         outcome=TrialOutcome(
-            stop_reason=stop_reason, total_turns=3, duration_seconds=1.0
+            stop_reason=stop_reason, simulated_turns_completed=3, duration_seconds=1.0
         ),
         target_session_id=f"{task_id}-{trial}",
     )

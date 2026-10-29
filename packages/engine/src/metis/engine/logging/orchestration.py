@@ -103,7 +103,7 @@ class OrchestrationLogger:
         trial_index: int,
         num_trials: int,
         stop_reason: str,
-        total_turns: int,
+        simulated_turns_completed: int,
         duration_seconds: float,
     ) -> None:
         duration_str = f"{duration_seconds:.0f}s"
@@ -116,14 +116,14 @@ class OrchestrationLogger:
                     "trial_index": trial_index,
                     "num_trials": num_trials,
                     "stop_reason": stop_reason,
-                    "total_turns": total_turns,
+                    "simulated_turns_completed": simulated_turns_completed,
                     "duration_seconds": duration_seconds,
                 }
             )
         else:
             self._write_text(
                 f"TRIAL {scenario_id} x {persona_id} [trial {trial_index}/{num_trials}] "
-                f"COMPLETED ({stop_reason}, {total_turns} turns, {duration_str})"
+                f"COMPLETED ({stop_reason}, {simulated_turns_completed} simulated turns, {duration_str})"
             )
 
     def scenario_completed(

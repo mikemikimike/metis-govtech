@@ -48,7 +48,7 @@ def _write_record(
         ),
         outcome=TrialOutcome(
             stop_reason="goal_achieved",
-            total_turns=1,
+            simulated_turns_completed=1,
             duration_seconds=1.0,
         ),
         target_session_id=session_id,
@@ -466,7 +466,9 @@ def _write_judge_record(experiment_dir: Path, fqn: str) -> None:
             grader_refs=[GraderRef(criterion_id="AC-1-1", fqn=fqn, args={})],
         ),
         outcome=TrialOutcome(
-            stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+            stop_reason="goal_achieved",
+            simulated_turns_completed=1,
+            duration_seconds=1.0,
         ),
         target_session_id="session-1",
     )
@@ -693,7 +695,9 @@ def test_record_criteria_missing_from_the_snapshot_are_reported(
             ],
         ),
         outcome=TrialOutcome(
-            stop_reason="goal_achieved", total_turns=1, duration_seconds=1.0
+            stop_reason="goal_achieved",
+            simulated_turns_completed=1,
+            duration_seconds=1.0,
         ),
         target_session_id="session-1",
     )

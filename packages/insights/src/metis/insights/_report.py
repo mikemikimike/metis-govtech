@@ -172,7 +172,7 @@ def _load_trial_records(run_dir: Path) -> list[dict[str, Any]]:
                 "stopReason": stop_reason,
                 "message": message or stop_reason,
                 "failureSource": failure_source,
-                "total_turns": outcome.total_turns,
+                "simulated_turns_completed": outcome.simulated_turns_completed,
                 "duration": outcome.duration_seconds,
                 # A retried run is a run whose comparability is worth a second
                 # look: a retry is a free do-over only if the failure was

@@ -16,7 +16,7 @@ class TestTrialFailure:
             attempt_number=1,
             failure_type="auth_loss",
             submission_phase="post",
-            turn_reached=5,
+            simulated_turns_completed=5,
             error_message="redirected to /login",
             duration_ms=45000,
         )
@@ -36,7 +36,7 @@ class TestTrialRecordExtension:
                 },
                 "outcome": {
                     "stop_reason": "max_turns",
-                    "total_turns": 10,
+                    "simulated_turns_completed": 10,
                     "duration_seconds": 60.0,
                 },
             }
@@ -65,7 +65,7 @@ class TestTrialRecordExtension:
                 "config": {"persona": "p", "scenario": "s"},
                 "outcome": {
                     "stop_reason": "max_turns",
-                    "total_turns": 1,
+                    "simulated_turns_completed": 1,
                     "duration_seconds": 3.0,
                 },
                 "conversation": [
@@ -84,7 +84,7 @@ class TestTrialRecordExtension:
                     {
                         "attempt_number": 1,
                         "failure_type": "auth_loss",
-                        "turn_reached": 5,
+                        "simulated_turns_completed": 5,
                         "error_message": "redirected",
                         "duration_ms": 20000,
                     }
@@ -103,7 +103,7 @@ class TestTrialRecordExtension:
                 "config": {"persona": "p", "scenario": "s"},
                 "outcome": {
                     "stop_reason": "max_turns",
-                    "total_turns": 5,
+                    "simulated_turns_completed": 5,
                     "duration_seconds": 30.0,
                 },
             }
@@ -123,7 +123,7 @@ def test_outcome_cause_defaults_to_none() -> None:
             "config": {"persona": "p", "scenario": "s"},
             "outcome": {
                 "stop_reason": "max_turns",
-                "total_turns": 1,
+                "simulated_turns_completed": 1,
                 "duration_seconds": 1.0,
             },
         }
