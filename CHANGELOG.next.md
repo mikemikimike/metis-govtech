@@ -945,17 +945,19 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   API 422 response and binding errors never repeat an input value. `httpx` is a direct dependency
   (#283).
 
-- **Run Evals from a manual Specification.** The manual form keeps the mode that the user chose
-  on the opening screen and shows the mode toggle at its top. In **Build Spec and Run Evals**, it
-  shows the Target connection card with **Test connection** above the download. The download
-  needs a valid binding, and an invalid binding marks the card fields and stops the download. The
-  run-mode download has `outputs/target-binding.yaml`, and `specification.yaml` names the gen_2
-  runner and the binding, the same as an Interview with the same binding. A spec-only manual
-  download is the same as before. `package_specification` takes a `connection` keyword for a
-  Specification source. `POST /api/v1/wizard/package` takes an optional `connection` form field
-  with `specification`. It applies the `/connection/check` validation and gives 400
-  `validation_error` for an invalid binding or for `connection` with `state`. The error never
-  repeats a binding value (#567).
+- **Run Evals from a manual Specification.** The run mode is now named **Build Spec and connect
+  target**. The manual form keeps the mode that the user chose on the opening screen and shows the
+  mode toggle at its top. In **Build Spec and connect target**, it shows the Target connection
+  card with **Test connection** above the download. Each problem from the test shows under the
+  field to fix. The form needs no model key and shows no model banner, and
+  `POST /api/v1/wizard/connection/check` works when the API has no model key. The download needs
+  a valid binding, and an invalid binding marks the card fields and stops the download. The run-mode
+  download has `outputs/target-binding.yaml`, and `specification.yaml` names the gen_2 runner and
+  the binding, the same as an Interview with the same binding. A spec-only manual download is the
+  same as before. `package_specification` takes a `connection` keyword for a Specification source.
+  `POST /api/v1/wizard/package` takes an optional `connection` form field with `specification`. It
+  applies the `/connection/check` validation and gives 400 `validation_error` for an invalid
+  binding or for `connection` with `state`. The error never repeats a binding value (#567).
 
 - The matcher selects `CriterionJudgeGrader` when no specific grader is similar enough, when
   the catalogue has no specific grader, or when the embedding provider fails. A rematch keeps

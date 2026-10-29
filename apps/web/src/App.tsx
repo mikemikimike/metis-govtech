@@ -835,7 +835,8 @@ export function App() {
         />
       )}
       <main className="flex min-w-0 flex-1 flex-col">
-        <ModelBanner statuses={modelStatuses} />
+        {/* The manual form calls no model, so the embeddings banner does not apply to it. */}
+        {!manualOpen && <ModelBanner statuses={modelStatuses} />}
         {error && (
           <Banner
             message={error}
