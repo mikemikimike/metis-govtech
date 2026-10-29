@@ -16,9 +16,14 @@ from metis.core import Artifact, resolve_artifact_path
 from metis.core.reporting import EvaluationResults
 from metis.core.trials import TrialConfig, TrialRecord
 from metis.engine import cli
-from metis.engine.simulation.gen_1 import trial as gen_1_trial
-from metis.engine.simulation.runner import Runner
-from metis.engine.simulation.types import ChosenAction, Observation, UserAgentOutput
+from metis.engine.simulation.gen_2 import trial as gen_2_trial
+from metis.engine.simulation.gen_2.runner import Runner
+from metis.engine.simulation.gen_2.types import (
+    Observation,
+    Promise,
+    Reading,
+    UserAgentOutput,
+)
 from metis.wizard.application.compile.specification import (
     SpecificationFixture,
     build_specification_archive,
@@ -26,42 +31,37 @@ from metis.wizard.application.compile.specification import (
 
 
 class FileRunner(Runner):
-    def __init__(self, run_dir: Path, fixtures_dir: Path, root: Path) -> None:
+    def __init__(self, run_dir: Path, fixtures_dir: Path) -> None:
         self.run_dir = run_dir
         self.fixtures_dir = fixtures_dir
-        self.root = root
+
+    @property
+    def session_id(self) -> str:
+        return self.run_dir.name
 
     async def setup(self, config: TrialConfig) -> None:
         assert config.fixtures == ["input.txt"]
 
-    async def send_turn(self, message: str, actions: list[ChosenAction]) -> Observation:
+    async def act(self, action: str, promised: list[Promise]) -> Observation:
         content = (self.fixtures_dir / "input.txt").read_bytes()
-        output = self.run_dir / "artifacts" / "answer.bin"
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(content + b" processed")
-        return Observation(
-            text="File processed",
-            artifacts=[
-                Artifact(
-                    name=output.name,
-                    source="target",
-                    state="received",
-                    path=output.relative_to(self.root).as_posix(),
-                )
-            ],
+        self.ledger.record_upload("input.txt", at_simulated_turn=1)
+        self.ledger.record_download(
+            "answer.bin", content + b" processed", at_simulated_turn=1
         )
+        return Observation(
+            reply="File processed",
+            reading=Reading(outcome="completed", why="The file was processed."),
+        )
+
+    async def end_chat(self, promised: list[Promise]) -> None:
+        pass
 
     async def teardown(self) -> None:
         pass
 
-    async def get_session_id(self) -> str:
-        return self.run_dir.name
-
 
 class FileRunnerFactory:
-    @classmethod
-    def from_env(cls, headed: bool = False) -> FileRunnerFactory:
-        return cls()
+    generation = "gen_2"
 
     @property
     def retry_defaults(self) -> tuple[int, float]:
@@ -73,7 +73,7 @@ class FileRunnerFactory:
     async def create(
         self, run_dir: Path, fixtures_dir: Path, experiment_root: Path
     ) -> Runner:
-        return FileRunner(run_dir, fixtures_dir, experiment_root)
+        return FileRunner(run_dir, fixtures_dir)
 
     async def close(self) -> None:
         pass
@@ -83,11 +83,17 @@ class ScriptedUser:
     def __init__(self, **_kwargs: object) -> None:
         pass
 
-    async def generate_opening(self) -> UserAgentOutput:
-        return UserAgentOutput(message="Process the file", decision="continue")
+    async def decide(
+        self, turn: int, held: list[Artifact], promised: list[Promise]
+    ) -> UserAgentOutput:
+        if turn == 1:
+            return UserAgentOutput(
+                reasoning="Start.", action="⟦Process the file⟧", decision="continue"
+            )
+        return UserAgentOutput(reasoning="Done.", action="", decision="goal_achieved")
 
-    async def generate_response(self, _payload: object) -> UserAgentOutput:
-        return UserAgentOutput(message="Done", decision="goal_achieved")
+    def remember(self, output: UserAgentOutput, observation: Observation) -> None:
+        pass
 
 
 @pytest.mark.parametrize("source", ["folder", "wizard_archive"])
@@ -135,7 +141,7 @@ def _exercise(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str) -> N
     monkeypatch.setattr(cli, "_find_project_root", lambda: tmp_path)
     (tmp_path / ".env").write_text("OPENAI_API_KEY=test-key\n", encoding="utf-8")
     monkeypatch.setenv("METIS_ENV_FILE", str(tmp_path / ".env"))
-    monkeypatch.setattr(gen_1_trial, "UserAgent", ScriptedUser)
+    monkeypatch.setattr(gen_2_trial, "UserAgent", ScriptedUser)
     _patch_evaluation(monkeypatch, traces=1)
     runner = CliRunner()
     simulation = runner.invoke(

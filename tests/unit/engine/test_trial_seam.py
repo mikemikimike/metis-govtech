@@ -1,4 +1,4 @@
-"""The "run one trial" seam: the runner factory picks the simulator generation (#475)."""
+"""The "run one trial" seam: the runner factory picks the simulator generation."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from metis.engine.simulation.experiment import (
     _execute_experiment_async,
     _worker,
 )
-from metis.engine.simulation.gen_1 import trial as gen_1_trial
+from metis.engine.simulation.gen_2 import trial as gen_2_trial
 from metis.engine.simulation.llm_calls import LLMCallLog
 from metis.engine.simulation.model_settings import user_agent_settings
 from metis.engine.simulation.trial import create_trial
@@ -27,6 +27,8 @@ from metis.engine.simulation.types import Persona, Scenario
 
 class _Factory:
     """Factory that hands out mock runners and counts how many it made."""
+
+    generation = "gen_2"
 
     def __init__(self) -> None:
         self.created = 0
@@ -115,7 +117,7 @@ async def _run_worker(
     )
 
 
-def test_factory_without_generation_gets_gen_1_trial(
+def test_a_gen_2_factory_gets_a_gen_2_trial(
     monkeypatch: pytest.MonkeyPatch,
     persona: Persona,
     scenario: Scenario,
@@ -131,8 +133,8 @@ def test_factory_without_generation_gets_gen_1_trial(
         built["orch"] = kwargs
         return "orch"
 
-    monkeypatch.setattr(gen_1_trial, "UserAgent", fake_agent)
-    monkeypatch.setattr(gen_1_trial, "Orchestrator", fake_orchestrator)
+    monkeypatch.setattr(gen_2_trial, "UserAgent", fake_agent)
+    monkeypatch.setattr(gen_2_trial, "Orchestrator", fake_orchestrator)
 
     trial = create_trial(_Factory(), **_trial_kwargs(persona, scenario, tmp_path))
 
@@ -149,7 +151,6 @@ def test_factory_without_generation_gets_gen_1_trial(
         "trial_config",
         "scenario",
         "run_dir",
-        "fixtures_dir",
         "experiment_root",
         "fixture_artifacts",
         "trial_index",
@@ -167,7 +168,7 @@ def test_unknown_generation_raises(
     class _Gen9Factory(_Factory):
         generation = "gen_9"
 
-    with pytest.raises(ValueError, match=r"'gen_9'.*supported: 'gen_1', 'gen_2'"):
+    with pytest.raises(ValueError, match=r"'gen_9'.*supported:.*'gen_2'"):
         create_trial(_Gen9Factory(), **_trial_kwargs(persona, scenario, tmp_path))
 
 
@@ -177,15 +178,14 @@ def test_generation_is_read_from_the_factory_class(
     scenario: Scenario,
     tmp_path: Path,
 ) -> None:
-    # A mock factory answers any attribute name; the seam must not mistake that
-    # answer for a declared generation.
-    monkeypatch.setattr(gen_1_trial, "UserAgent", lambda **_kw: "agent")
-    monkeypatch.setattr(gen_1_trial, "Orchestrator", lambda **_kw: "orch")
+    # An instance attribute is not a declaration: the seam reads the class, so a
+    # mock factory that answers any attribute name cannot pick a generation.
+    monkeypatch.setattr(gen_2_trial, "UserAgent", lambda **_kw: "agent")
+    monkeypatch.setattr(gen_2_trial, "Orchestrator", lambda **_kw: "orch")
+    factory = _Factory()
+    factory.generation = "gen_9"
 
-    assert (
-        create_trial(AsyncMock(), **_trial_kwargs(persona, scenario, tmp_path))
-        == "orch"
-    )
+    assert create_trial(factory, **_trial_kwargs(persona, scenario, tmp_path)) == "orch"
 
 
 @pytest.mark.asyncio
@@ -211,7 +211,7 @@ async def test_trial_construction_failure_retries_with_empty_record(
     def boom(**_kwargs: Any) -> None:
         raise RuntimeError("bad persona")
 
-    monkeypatch.setattr(gen_1_trial, "UserAgent", boom)
+    monkeypatch.setattr(gen_2_trial, "UserAgent", boom)
     factory = _Factory()
 
     [record] = await _run_worker(
@@ -266,9 +266,7 @@ def test_unknown_generation_error_lists_registered_generations(
     class _BadFactory(_Factory):
         generation = "gen_9"
 
-    with pytest.raises(
-        ValueError, match=r"'gen_9'.*_BadFactory.*supported: 'gen_1', 'gen_2'"
-    ):
+    with pytest.raises(ValueError, match=r"'gen_9'.*_BadFactory.*supported:.*'gen_2'"):
         seam.resolve_generation(_BadFactory())
 
 

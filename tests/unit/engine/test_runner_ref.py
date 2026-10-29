@@ -273,16 +273,16 @@ class TestExampleExperiment:
         / "packages"
         / "engine"
         / "examples"
-        / "gen_1-orca_api-1"
+        / "gen_2-http-agentic_eval_toyapp-1"
         / "specification.yaml"
     )
 
     def test_example_experiment_loads(self) -> None:
         document = Specification.load_file(self.EXAMPLE)
-        assert document.experiment.id == "orca-simple"
+        assert document.experiment.id == "toyapp-http-simple"
         assert (
             document.experiment.runner_factory_ref
-            == "metis.engine.simulation.runners.orca_api.OrcaApiRunnerFactory"
+            == "metis.engine.simulation.gen_2.runners.http.HttpRunnerFactory"
         )
         graders = {c.grader_fqn for b in document.behaviours() for c in b.criteria}
-        assert graders == {"metis.library.graders.demo.DemoTraceBudgetGrader"}
+        assert graders == {"metis.library.graders.CriterionJudgeGrader"}

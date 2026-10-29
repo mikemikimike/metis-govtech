@@ -1,4 +1,4 @@
-"""gen_2 plugged into the seam: registration, the trial it builds, and fixture facts (#480)."""
+"""gen_2 plugged into the seam: registration, the trial it builds, and fixture facts."""
 
 from __future__ import annotations
 
@@ -54,8 +54,8 @@ def _kwargs(tmp_path: Path) -> dict[str, Any]:
     }
 
 
-def test_gen_2_is_registered_beside_gen_1() -> None:
-    assert sorted(seam._GENERATIONS) == ["gen_1", "gen_2"]
+def test_gen_2_is_registered() -> None:
+    assert "gen_2" in seam._GENERATIONS
     assert seam._GENERATIONS["gen_2"].build_trial is build_trial
     assert (
         seam._GENERATIONS["gen_2"].resolve_fixture_descriptions
