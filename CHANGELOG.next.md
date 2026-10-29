@@ -883,6 +883,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 - Each trial tab shows the conversation saved in `outputs/traces/<session_id>.json` (#503).
 
+- The report page counts only recorded turns, the turns the graders judge. A trial's ending
+  gives the number of conversation rows, and the page no longer shows `total_turns`, which
+  counts simulated turns. `report.json` keeps `total_turns`, and its trials no longer have
+  `turnCountNote` (#621).
+
 - Use Target in report JSON, failure sources, and report labels (#429).
 
 - Expand Task Behaviour selections for plan counts, Criterion score attribution, and missing-result explanations (#413).

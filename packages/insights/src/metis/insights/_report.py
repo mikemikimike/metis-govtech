@@ -21,11 +21,7 @@ from metis.insights._aggregation import (
     summarize_run,
     wilson_interval,
 )
-from metis.insights._conversation import (
-    conversation_rows,
-    read_turns,
-    turn_count_note,
-)
+from metis.insights._conversation import conversation_rows, read_turns
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -184,15 +180,13 @@ def _load_trial_records(run_dir: Path) -> list[dict[str, Any]]:
                 # for ConsecutiveFailureEscalation. Issue #346.
                 #
                 "attempt": record.attempt_number,
-                **_conversation(run_dir, session, outcome.total_turns),
+                **_conversation(run_dir, session),
             }
         )
     return trials
 
 
-def _conversation(
-    run_dir: Path, session: str | None, total_turns: int
-) -> dict[str, Any]:
+def _conversation(run_dir: Path, session: str | None) -> dict[str, Any]:
     """The trial's conversation fields: its turns, or why there are none."""
     if not session:
         return {
@@ -204,7 +198,6 @@ def _conversation(
         return {"conversation": [], "conversationProblem": session_turns.detail}
     return {
         "conversation": conversation_rows(session_turns),
-        "turnCountNote": turn_count_note(len(session_turns), total_turns),
     }
 
 

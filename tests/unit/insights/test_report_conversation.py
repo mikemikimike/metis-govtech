@@ -12,7 +12,7 @@ from metis.core import SessionTraces, execution_layout
 from metis.core.reporting import EvaluationResults
 from metis.core.trace_processing import Problem, turns
 from metis.core.traces import Observation, Trace
-from metis.insights._conversation import conversation_rows, read_turns, turn_count_note
+from metis.insights._conversation import conversation_rows, read_turns
 from metis.insights._models import Report
 from metis.insights._report import build_report, load_report_sources
 from tests.fixtures.insights.report_experiment import (
@@ -107,18 +107,6 @@ def test_unreadable_payload_is_shown_not_blanked() -> None:
     assert row["errors"] == ["the target returned no reply"]
 
 
-@pytest.mark.parametrize(
-    ("saved", "recorded", "note"),
-    [
-        (3, 4, "3 of 4 recorded turns have traces"),
-        (4, 4, None),
-        (4, None, None),
-    ],
-)
-def test_turn_count_note(saved: int, recorded: int | None, note: str | None) -> None:
-    assert turn_count_note(saved, recorded) == note
-
-
 def test_missing_file_problem_names_the_file_not_the_local_path(
     tmp_path: Path,
 ) -> None:
@@ -191,22 +179,6 @@ def test_trial_shows_each_savedturn_trace(experiment_root: Path) -> None:
         },
     ]
     assert trial["conversationProblem"] is None
-    assert trial["turnCountNote"] is None
-
-
-def test_trial_with_fewer_saved_turns_than_recorded_has_a_note(
-    experiment_root: Path,
-) -> None:
-    save_trial_traces(
-        experiment_root,
-        "T-1-1",
-        [turn_trace(1, "hello", "hi"), turn_trace(2, "bye", "ok")],
-    )
-
-    trial = _trial(_report(experiment_root), "T-1-1")
-
-    assert len(trial["conversation"]) == 2
-    assert trial["turnCountNote"] == "2 of 3 recorded turns have traces"
 
 
 def _missing(root: Path) -> None:
@@ -243,7 +215,6 @@ def test_trial_without_readable_traces_gives_the_reason(
     assert trial["conversation"] == []
     assert re.search(reason, trial["conversationProblem"])
     assert str(experiment_root) not in trial["conversationProblem"]
-    assert trial["turnCountNote"] is None
 
 
 def test_trial_without_a_session_gives_the_reason(experiment_root: Path) -> None:
