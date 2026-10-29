@@ -487,8 +487,7 @@ def end(
     responses={422: {"model": ServiceError}, 500: {"model": ServiceError}},
 )
 def check_target_connection(
-    body: ConnectionCheckRequest,
-    dependencies: WizardDependencies = Depends(get_dependencies),
+    body: ConnectionCheckRequest, request: Request
 ) -> ConnectionCheckResult:
     """Validate binding values and return field errors as `loc` and `msg` only.
 
@@ -500,9 +499,9 @@ def check_target_connection(
     names a `${NAME}` variable is not requested, and its probe tells the user to check it with
     `metis wizard connect`.
     """
-    return check_connection(
-        body.binding, live=dependencies.connection_check, expand_variables=False
-    )
+    # The check calls no model, so it reads its switch from the app and works without keys.
+    live: bool = getattr(request.app.state, "connection_check", False)
+    return check_connection(body.binding, live=live, expand_variables=False)
 
 
 @router.post(
