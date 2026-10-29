@@ -50,6 +50,9 @@ class Observation(BaseModel):
     """A problem METIS itself found with the turn, such as a timeout. Not the runner's."""
     submission_unresolved: bool = False
     """``True`` when a submission never settled, so the target cannot take another."""
+    sent_nothing: bool = False
+    """``True`` when the action tried to send a message but quoted none, and nothing
+    else reached the target. The turn is not counted."""
 
 
 class Promise(BaseModel, frozen=True):

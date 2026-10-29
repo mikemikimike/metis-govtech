@@ -154,6 +154,9 @@ class HttpRunner(Runner):
         """Set by a 4xx during a poll while a submission was open; a timeout leaves it open."""
         self.rejected: Rejected | None = None
         """Set when a submission got a non-2xx response; ``_observation`` reads it once."""
+        self.unquoted = False
+        """Set when a submission was refused because the action quoted no message;
+        ``_observation`` reads it once."""
         self.notes: list[str] = []
         """What the agent learned about the target, shown again in each later action."""
 
@@ -264,6 +267,7 @@ class HttpRunner(Runner):
                 "it must settle before another is sent"
             )
         if submission and not self.spans.texts:
+            self.unquoted = True
             raise ToolRefused(
                 "the user's action quoted nothing to send, so nothing may be submitted"
             )
@@ -579,7 +583,10 @@ class HttpRunner(Runner):
         :raises TurnRecoverableError: When the runner agent's LLM cannot be reached.
         """
         self.begin_action(action)
-        return await self._attempt(promised, closing=False)
+        observation = await self._attempt(promised, closing=False)
+        if observation.sent_nothing:
+            self._turn -= 1  # the orchestrator does not count this action as a turn
+        return observation
 
     async def _attempt(self, promised: list[Promise], *, closing: bool) -> Observation:
         """The loop ``act`` and ``end_chat`` share: resume, run the agent, observe."""
@@ -710,6 +717,10 @@ class HttpRunner(Runner):
                 f"Your message got an error response (status {rejected.status}): "
                 f"{rejected.excerpt}"
             )
+        unquoted, self.unquoted = self.unquoted, False  # read once
+        sent_nothing = unquoted and len(self.results) == state.first_result
+        if sent_nothing:
+            notices.append("Nothing was sent: your action quoted no message.")
         if self.open_submission is not None:
             notices.append(
                 f"A submission ({self.open_submission.request}) is still open."
@@ -728,6 +739,7 @@ class HttpRunner(Runner):
             observed=self.open_submission is None and not state.transport_failed,
             notice=" ".join(notices) or None,
             submission_unresolved=unsettled,
+            sent_nothing=sent_nothing,
         )
 
     async def end_chat(self, promised: list[Promise]) -> None:

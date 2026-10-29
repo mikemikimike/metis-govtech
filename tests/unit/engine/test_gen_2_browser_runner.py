@@ -556,3 +556,74 @@ def test_the_two_factories_refuse_each_others_bindings(tmp_path: Path) -> None:
 
 def test_the_transport_log_is_the_trials_own(tmp_path: Path) -> None:
     assert TransportLog.for_trial(tmp_path / "trial").path.parent.name == "evidence"
+
+
+@pytest.mark.asyncio
+async def test_typing_with_no_quoted_message_is_sent_nothing_and_not_a_turn(
+    tmp_path: Path, clock: Clock
+) -> None:
+    llm = ScriptedLLM(
+        [("type", {"ref": "e2", "text": "hi"})],
+        [("report", {"outcome": "not_done", "why": "no text to type"})],
+        _send(),
+        [("wait_for", {"text_present": "Echo:"})],
+    )
+    runner, page, _ = await _ready(tmp_path, llm)
+    llm._replies.append(_report(runner))
+
+    empty = await runner.act("Ask about the leave policy", [])
+    sent = await runner.act("Say ⟦hello⟧", [])
+
+    assert page.sent == ["hello"]
+    assert empty.sent_nothing
+    assert "quoted no message" in (empty.notice or "")
+    assert not sent.sent_nothing
+    assert sent.notice is None
+    assert runner._turn == 1
+
+
+@pytest.mark.asyncio
+async def test_looking_at_the_page_does_not_make_an_unquoted_action_a_turn(
+    tmp_path: Path, clock: Clock
+) -> None:
+    llm = ScriptedLLM(
+        [("snapshot", {}), ("type", {"ref": "e2", "text": "hi"})],
+        [("report", {"outcome": "unknown", "why": "looked"})],
+    )
+    runner, _, _ = await _ready(tmp_path, llm)
+
+    observation = await runner.act("Look around", [])
+
+    assert observation.sent_nothing
+    assert runner._turn == 0
+
+
+@pytest.mark.asyncio
+async def test_an_action_with_no_quote_that_never_tried_to_type_is_a_turn(
+    tmp_path: Path, clock: Clock
+) -> None:
+    llm = ScriptedLLM([("report", {"outcome": "unknown", "why": "looked"})])
+    runner, _, _ = await _ready(tmp_path, llm)
+
+    observation = await runner.act("Look around", [])
+
+    assert not observation.sent_nothing
+    assert observation.notice is None
+    assert runner._turn == 1
+
+
+@pytest.mark.asyncio
+async def test_an_unquoted_action_that_also_acted_on_the_page_is_a_turn(
+    tmp_path: Path, clock: Clock
+) -> None:
+    llm = ScriptedLLM(
+        [("type", {"ref": "e2", "text": "hi"}), ("click", {"ref": "e3"})],
+        [("report", {"outcome": "unknown", "why": "clicked"})],
+    )
+    runner, _, _ = await _ready(tmp_path, llm)
+
+    observation = await runner.act("Look around", [])
+
+    assert not observation.sent_nothing
+    assert observation.notice is None
+    assert runner._turn == 1

@@ -3,7 +3,9 @@
 The stop reasons are gen_1's. Each turn is one user-agent decision and one ``Runner.act``,
 numbered from 1. After the loop the orchestrator calls ``Runner.end_chat`` once, unless
 the trial was interrupted, the session was spent, or the user agent failed; that closing
-call is not a turn and is not in ``total_turns``.
+call is not a turn and is not in ``total_turns``. Nor is an action that sent nothing
+because it quoted no message (``Observation.sent_nothing``); the user agent is told, and
+the trial ends after three of them in a row.
 """
 
 from __future__ import annotations
@@ -44,6 +46,9 @@ _STOPS_WITH_CLOSING_CALL = frozenset(
 _UNCHECKED_STOPS = frozenset({"interrupted", "system_error"})
 """Endings after which the fixture check does not run: the trial is already cut short."""
 _DECISION_STOPS = {"goal_achieved": "goal_achieved", "giving_up": "user_abandoned"}
+_MAX_EMPTY_ACTIONS = 3
+"""Actions in a row that send nothing before the trial is ended: they are not turns, so
+``max_turns`` would never stop a user agent that keeps quoting no message."""
 
 
 def _undelivered_notice(exc: Exception) -> str:
@@ -155,6 +160,7 @@ class Orchestrator:
 
     async def _run_turns(self) -> str:
         consecutive_failures = 0
+        empty_actions = 0
         while True:
             if self._shutdown_event and self._shutdown_event.is_set():
                 return "interrupted"
@@ -200,9 +206,17 @@ class Orchestrator:
             finally:
                 self._session_id = self._session_id or self._runner.session_id
 
-            self._turns += 1
+            if observation.sent_nothing:
+                empty_actions += 1
+            else:
+                empty_actions = 0
+                self._turns += 1
             self._note_promises(observation, turn)
             self._agent.remember(output, observation)
+            if empty_actions >= _MAX_EMPTY_ACTIONS:
+                self._failure = ("evaluation_runner", "no_message_quoted")
+                logger.info("[turn %d] STOP: no_message_quoted", turn)
+                return "system_error"
             if observation.submission_unresolved:
                 # No new submission may be sent while one is open, so no later turn
                 # could proceed; the closing step still collects what it can.

@@ -361,6 +361,13 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   told so: `Observation.notice` carries the status and the first 200 characters of the response
   body, copied from the transport log, and the orchestrator's per-turn log line shows the notice
   beside `reply`. The user agent's prompt says an error status need not be the assistant's fault (#545).
+  An action whose runner tried to submit or type but was refused because the action quoted no
+  `⟦…⟧` message, and which sent nothing else to the target, sets `Observation.sent_nothing`
+  (code decides it, never the runner agent) and a notice saying so. It is not a turn: the
+  orchestrator leaves it out of `total_turns` and the `max_turns` budget, the user agent is shown
+  the notice, and three such actions in a row end the trial as a `system_error` with failure
+  `no_message_quoted`. An action that quoted nothing but never tried to send, such as a file
+  fetch, is counted as before (#544).
   `HttpRunnerFactory.start` opens the HTTP transport
   (honouring `tls_verify`) and `close` closes it. A binding file that is not UTF-8 gives a clear
   `TargetBindingError`, and a `spec_url` with no host is rejected when the specification is
