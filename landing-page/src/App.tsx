@@ -32,7 +32,7 @@ const steps = [
 type WizMsg = { role: 'wizard' | 'user'; text: string; files?: string[]; specLines?: number };
 const wizMsgs: WizMsg[] = [
   { role: 'wizard', text: "Tell me about your target: what it does and who it's for." },
-  { role: 'user', text: "We're building an Enterprise AI Assistant for staff. It searches knowledge bases, drafts replies, and manages documents.", files: ['PRD.pdf', 'User Research.docx', 'Policies.pdf'], specLines: 2 },
+  { role: 'user', text: "We've built an AI agent for staff. It searches knowledge bases, drafts replies, and manages documents.", files: ['PRD.pdf', 'User Research.docx', 'Policies.pdf'], specLines: 2 },
   { role: 'wizard', text: "I've read your documents. The assistant handles enterprise search, email drafting, and document management. What should happen when a user asks for information from a restricted source?", specLines: 6 },
   { role: 'user', text: "It should only search authorised sources and tell the user if it can't access something." },
   { role: 'wizard', text: "I'll set that as acceptance criteria: Factual Accuracy, Evidence Source Suitability, and Claim Support by Evidence.", specLines: 10 },
@@ -42,7 +42,7 @@ const wizMsgs: WizMsg[] = [
 ];
 
 const specLines = [
-  'target:', '  name: Enterprise AI Assistant', 'feature:',
+  'target:', '  name: Target AI Agent', 'feature:',
   '  name: Enterprise Search and Knowledge Retrieval', 'behaviour:',
   '  name: Find and use enterprise information', 'criteria:',
   '  - Factual Accuracy', '  - Evidence Source Suitability',
@@ -64,18 +64,21 @@ const engMsgs = [
 
 const traceSpans = [
   { type: 'TRACE', name: 'Trial 1 — TC-001 × knowledge-worker', ms: 35000, depth: 0 },
-  { type: 'LLM', name: 'gpt-4o · Persona prompt', ms: 8200, tokens: 340, depth: 1 },
-  { type: 'TOOL', name: 'search_knowledge_base("offsite")', ms: 3100, depth: 1 },
-  { type: 'LLM', name: 'gpt-4o · Generate response', ms: 11400, tokens: 520, depth: 1 },
-  { type: 'TOOL', name: 'search_knowledge_base("booking")', ms: 2800, depth: 1 },
-  { type: 'LLM', name: 'gpt-4o · Draft reply', ms: 9500, tokens: 410, depth: 1 },
+  { type: 'AGENT', name: 'search_agent', ms: 14500, depth: 1 },
+  { type: 'TOOL', name: 'search_knowledge_base("offsite")', ms: 3100, depth: 2 },
+  { type: 'TOOL', name: 'read_document("offsite_deck_2025")', ms: 2400, depth: 2 },
+  { type: 'AGENT', name: 'drafting_agent', ms: 10200, depth: 1 },
+  { type: 'TOOL', name: 'compose_email("re: Offsite planning")', ms: 4200, depth: 2 },
+  { type: 'TOOL', name: 'check_policy("travel_policy")', ms: 1800, depth: 2 },
+  { type: 'AGENT', name: 'synthesis_agent', ms: 8500, depth: 1 },
+  { type: 'LLM', name: 'gpt-4o · Draft reply', ms: 6200, tokens: 410, depth: 2 },
 ];
 
 const engStepMap = [
   { chat: [0], trace: [0, 1] }, { chat: [], trace: [2] },
-  { chat: [1], trace: [3] }, { chat: [2], trace: [] },
-  { chat: [], trace: [4] }, { chat: [3], trace: [5] },
-  { chat: [4], trace: [] }, { chat: [5], trace: [] },
+  { chat: [1], trace: [3] }, { chat: [2], trace: [4] },
+  { chat: [], trace: [5] }, { chat: [3], trace: [6] },
+  { chat: [4], trace: [7] }, { chat: [5], trace: [8] },
 ];
 
 /* Evaluation pipeline — grader names from taxonomy_v8.csv measure dimension */
@@ -148,7 +151,7 @@ const graphEvidence = [['kb', 'sum', 'reply'], ['search', 'kb', 'doc'], ['draft'
 const GRADE_ORDER = [2, 1, 0];
 
 const insightTree = [
-  { depth: 0, label: 'Enterprise AI Assistant', value: 80, pass: true },
+  { depth: 0, label: 'Target AI Agent', value: 80, pass: true },
   { depth: 1, label: 'Search & Knowledge Retrieval', value: 70, pass: true },
   { depth: 2, label: 'Find and use enterprise info', value: 70, pass: true },
   { depth: 3, label: 'Factual Accuracy', value: 50, pass: false },
@@ -518,7 +521,7 @@ export default function App() {
         </div></section>
 
         <section className="walkthrough" id="product"><div className="container">
-          <div className="section-heading"><div><div className="section-kicker">ONE EVALUATION, START TO FINISH</div><h2>See how METIS works.</h2></div><p>Follow a single evaluation of an Enterprise AI Assistant, from specification to results.</p></div>
+          <div className="section-heading"><div><div className="section-kicker">ONE EVALUATION, START TO FINISH</div><h2>See how METIS works.</h2></div><p>Follow a single evaluation of a Target AI Agent, from specification to results.</p></div>
 
           <div className="wt-stages">
 
@@ -564,7 +567,7 @@ export default function App() {
               </div>
               <div className="wt-engine-panels">
                 <div className="wt-tui">
-                  <div className="wt-tui-head">METIS Engine Simulate — enterprise-ai-assistant</div>
+                  <div className="wt-tui-head">METIS Engine Simulate — target-ai-agent</div>
                   <div className="wt-tui-body">
                     <div className="wt-tui-row"><span>Elapsed</span><b className="wt-timer">00:{engTimer.mm}:{engTimer.ss}</b></div>
                     <div className="wt-tui-row"><span>Scenarios</span><div className="wt-tui-bar"><div style={{ width: '33.3%' }} /></div><b>1/3</b></div>
@@ -600,7 +603,7 @@ export default function App() {
               <div className="wt-chat compact capped" ref={engChatRef}>
                 {engMsgs.map((m, i) => (
                   <div className={`wt-msg ${m.role} ${engVisChat.has(i) ? 'show' : ''}`} key={i}>
-                    <div className="wt-msg-head"><img src={m.role === 'user' ? IC_BOT_ROSE : IC_BOT_BLUE} alt="" className="wt-msg-icon" /><span className="wt-msg-role">{m.role === 'user' ? 'Simulated user' : 'Enterprise AI Assistant'}</span></div>
+                    <div className="wt-msg-head"><img src={m.role === 'user' ? IC_BOT_ROSE : IC_BOT_BLUE} alt="" className="wt-msg-icon" /><span className="wt-msg-role">{m.role === 'user' ? 'Simulated user' : 'Target AI Agent'}</span></div>
                     <div className="wt-msg-bubble">{m.text}</div>
                   </div>
                 ))}

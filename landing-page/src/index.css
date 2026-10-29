@@ -199,12 +199,14 @@ h2 { font-size: clamp(32px,3.8vw,48px); line-height: 1.08; letter-spacing: -.03e
 .wt-span-type.trace { background: var(--navy); color: #8CA0A6 }
 .wt-span-type.llm { background: #FBF0D4; color: var(--gold-dark) }
 .wt-span-type.tool { background: #E0E3F0; color: var(--periwinkle) }
+.wt-span-type.agent { background: #DFF0E4; color: var(--green) }
 .wt-span-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--navy-soft); font: 11px var(--mono) }
 .wt-span-bar { height: 5px; background: var(--tint); border-radius: 3px; overflow: hidden }
 .wt-span-bar > div { height: 100%; border-radius: 3px; transition: width .8s ease }
 .wt-span.llm .wt-span-bar > div { background: var(--gold) }
 .wt-span.tool .wt-span-bar > div { background: var(--periwinkle) }
 .wt-span.trace .wt-span-bar > div { background: var(--navy-soft) }
+.wt-span.agent .wt-span-bar > div { background: var(--green) }
 .wt-span-ms { font: 11px var(--mono); color: var(--muted); text-align: right; white-space: nowrap }
 
 /* ── Scenario banner ── */
