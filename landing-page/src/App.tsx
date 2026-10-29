@@ -758,7 +758,6 @@ export default function App() {
         <section className="cta-section" id="get-started"><div className="container">
           <div className="cta-panel">
             <div className="cta-copy">
-              <div className="section-kicker">OPEN SOURCE · MIT LICENSE</div>
               <h2>Start evaluating with confidence.</h2>
               <p>Define what your agent should do, test the full trajectory, and know exactly what to fix before you ship.</p>
               <div className="cta-actions">
