@@ -8,17 +8,21 @@ const sidebars = {
     {
       type: 'category',
       label: 'Build your specification',
-      link: {type: 'doc', id: 'wizard'},
       collapsed: false,
       items: [
+        {type: 'doc', id: 'wizard', label: 'Specification wizard'},
         {
           type: 'category',
           label: 'Guided interview',
-          link: {type: 'doc', id: 'wizard-interview'},
           collapsed: false,
-          items: ['product-requirements', 'test-scenarios'],
+          items: [
+            {type: 'doc', id: 'wizard-interview', label: 'Start the interview'},
+            'product-requirements',
+            'test-scenarios',
+          ],
         },
-        {type: 'doc', id: 'manual-specification', label: 'Configure manually'},
+        {type: 'doc', id: 'specification-file', label: 'Write your own specification'},
+        {type: 'doc', id: 'target-connection', label: 'Target connection'},
       ],
     },
     {
