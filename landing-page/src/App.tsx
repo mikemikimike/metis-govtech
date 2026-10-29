@@ -21,6 +21,13 @@ const IC_USER = 'https://img.icons8.com/?size=100&id=23264&format=png&color=5C65
 const IC_BOT_ROSE = 'https://img.icons8.com/?size=100&id=lUk2otclIHsF&format=png&color=AB596A';
 const IC_BOT_BLUE = 'https://img.icons8.com/?size=100&id=lUk2otclIHsF&format=png&color=3C468B';
 
+const RestartIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+    <path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
 /* ── Data ── */
 const steps = [
   { number: '01', label: 'DEFINE', product: 'Wizard', title: 'Start with what good looks like.', text: 'The Wizard interviews your team and turns a description of your agent into a Specification of features, behaviours, and measurable criteria.' },
@@ -42,7 +49,7 @@ const wizMsgs: WizMsg[] = [
 ];
 
 const specLines = [
-  'target:', '  name: Enterprise AI Assistant', '',
+  'target:', '  name: Target AI Agent', '',
   'features:', '  - name: Enterprise Search and Knowledge Retrieval',
   '    behaviours:', '      - name: Find and use enterprise information',
   '        criteria:', '          - Factual Accuracy', '          - Evidence Source Suitability',
@@ -511,7 +518,7 @@ export default function App() {
         </section>
 
         <section className="methodology" id="methodology"><div className="container">
-          <div className="section-heading"><div><div className="section-kicker">The evaluation loop</div><h2>Evaluate your agent against requirements you define.</h2></div><p>Each step ties back to the expectations you set, from how tests are designed to what the results tell you.</p></div>
+          <div className="section-heading"><div><div className="section-kicker">The evaluation loop</div><h2>Evaluate your agent against requirements you define.</h2></div><p>Each step ties back to the expectations you set, from how tests are designed to what the results tell you. Read our <a href="https://playbooks.aip.gov.sg/evaluation-playbook/" className="inline-link">Evaluation Playbook</a>.</p></div>
           <div className="steps">{steps.map((s) => (
             <article key={s.number} className="step">
               <div className="step-top"><span>{s.number} · {s.label}</span><b>{s.product}</b></div>
@@ -521,14 +528,14 @@ export default function App() {
         </div></section>
 
         <section className="walkthrough" id="product"><div className="container">
-          <div className="section-heading"><div><div className="section-kicker">ONE EVALUATION, START TO FINISH</div><h2>See how METIS works.</h2></div><p>Follow a single evaluation of a Target AI Agent, from specification to results.</p></div>
+          <div className="section-heading"><div><h2>See how METIS works.</h2></div><p>Follow a single evaluation of a Target AI Agent, from specification to results.</p></div>
 
           <div className="wt-stages">
 
             {/* ─ Stage 1: Wizard ─ */}
             <div className={`wt-stage ${seen.has(0) ? 'vis' : ''}`} ref={(el) => { refs.current[0] = el; }}>
               <div className="wt-head"><span className="wt-num wizard">01</span><div><h3>Wizard</h3><small>CREATE A SPECIFICATION</small></div>
-                <button className="wt-replay" onClick={() => { wizStarted.current = true; wizChat.replay(); startWizard(); }}>Replay</button>
+                <button className="wt-replay" aria-label="Replay" onClick={() => { wizStarted.current = true; wizChat.replay(); startWizard(); }}><RestartIcon /></button>
               </div>
               <div className="wt-wizard-layout">
                 <div className="wt-wizard-left">
@@ -563,7 +570,7 @@ export default function App() {
             {/* ─ Stage 2: Engine ─ */}
             <div className={`wt-stage ${seen.has(1) ? 'vis' : ''}`} ref={(el) => { refs.current[1] = el; }}>
               <div className="wt-head"><span className="wt-num engine">02</span><div><h3>Engine</h3><small>SIMULATE & CAPTURE TRACES</small></div>
-                <button className="wt-replay" onClick={() => { engStep.replay(); engTimer.replay(); }}>Replay</button>
+                <button className="wt-replay" aria-label="Replay" onClick={() => { engStep.replay(); engTimer.replay(); }}><RestartIcon /></button>
               </div>
               <div className="wt-engine-panels">
                 <div className="wt-tui">
@@ -615,7 +622,7 @@ export default function App() {
             {/* ─ Stage 3: Evaluation Pipeline ─ */}
             <div className={`wt-stage ${seen.has(2) ? 'vis' : ''}`} ref={(el) => { refs.current[2] = el; }}>
               <div className="wt-head"><span className="wt-num graders">03</span><div><h3>Evaluate</h3><small>GRADE AGAINST CRITERIA</small></div>
-                <button className="wt-replay" onClick={pipeline.replay}>Replay</button>
+                <button className="wt-replay" aria-label="Replay" onClick={pipeline.replay}><RestartIcon /></button>
               </div>
 
               <div className="wt-pipeline">
@@ -709,7 +716,7 @@ export default function App() {
             {/* ─ Stage 4: Insights ─ */}
             <div className={`wt-stage ${seen.has(3) ? 'vis' : ''}`} ref={(el) => { refs.current[3] = el; }}>
               <div className="wt-head"><span className="wt-num insights">04</span><div><h3>Insights</h3><small>PRESENT RESULTS</small></div>
-                <button className="wt-replay" onClick={() => { setInsPhase(0); setJiggled(new Set()); setInsRun((r) => r + 1); }}>Replay</button>
+                <button className="wt-replay" aria-label="Replay" onClick={() => { setInsPhase(0); setJiggled(new Set()); setInsRun((r) => r + 1); }}><RestartIcon /></button>
               </div>
               <div className="wt-insights">
                 <div className={`wt-ins-panel ${insPhase >= 1 ? 'vis' : ''}`}>
@@ -718,7 +725,7 @@ export default function App() {
                     <div className={`wt-tree-node ${node.pass ? 'pass' : 'fail'}`} key={i} style={{ paddingLeft: `${node.depth * 14}px`, transitionDelay: `${i * 180}ms` }}>
                       {node.depth > 0 && <span className="wt-tree-branch" />}
                       <span className="wt-tree-label">{node.label}</span>
-                      <span className={`wt-tree-val ${node.pass ? 'pass' : 'fail'} ${node.pass && insPhase >= 1 ? 'pop' : ''}`}>{node.value}%</span>
+                      <span className={`wt-tree-val ${node.pass ? 'pass' : 'fail'}`}>{node.value}%</span>
                     </div>
                   ))}</div>
                 </div>
@@ -785,7 +792,8 @@ export default function App() {
               <a href="https://github.com/govtech-responsibleai">GitHub</a>
               <a href="https://blog.ai.gov.sg">Blog</a>
               <a href="https://huggingface.co/govtech">Hugging Face</a>
-              <a href="https://playbooks.aip.gov.sg/responsibleai/">Playbook</a>
+              <a href="https://playbooks.aip.gov.sg/responsibleai/">RAI Playbook</a>
+              <a href="https://playbooks.aip.gov.sg/evaluation-playbook/">Eval Playbook</a>
             </div>
           </div>
           <div className="footer-bottom">
