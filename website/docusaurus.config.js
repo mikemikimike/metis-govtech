@@ -17,7 +17,6 @@ const config = {
       'classic',
       {
         docs: {
-          path: '../docs/tutorial',
           routeBasePath: '/',
           sidebarPath: './sidebars.js',
         },
