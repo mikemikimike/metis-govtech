@@ -13,7 +13,6 @@ import {
   InitialDocumentPicker,
   OpeningConfigurationState,
   OpeningRoute,
-  ModePicker,
   OpeningScreen,
   type CapabilityEvidenceDraft,
   type OpeningControl,
@@ -33,7 +32,7 @@ import {
   RowFiles,
   Transcript,
 } from "./Conversation";
-import { ConnectionForm } from "./ConnectionStep";
+import { ConnectionForm, ModePicker } from "./ConnectionStep";
 import { emptyConnectionDraft, type ConnectionDraft } from "./connection";
 import { InterviewRail } from "./InterviewRail";
 import {

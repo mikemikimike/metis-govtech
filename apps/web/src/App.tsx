@@ -30,13 +30,12 @@ import {
   ReviewSectionActions,
   Transcript,
 } from "./Conversation";
-import { ConnectionForm } from "./ConnectionStep";
+import { ConnectionForm, ModePicker } from "./ConnectionStep";
 import {
   bindingFromDraft,
   emptyConnectionDraft,
   startConnection,
   type ConnectionDraft,
-  type ConnectionMode,
 } from "./connection";
 import { AddDocuments, DocumentTray } from "./DocumentTray";
 import { Done } from "./Done";
@@ -1148,53 +1147,6 @@ export function OpeningConfigurationState({
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-const MODE_LABELS: Record<ConnectionMode, string> = {
-  spec: "Build Spec only",
-  run: "Build Spec and Run Evals",
-};
-
-// The mode is a choice about the whole session, so it sits above the box, apart from the chips
-// that give the Interview its context.
-export function ModePicker({
-  mode,
-  disabled,
-  onSelect,
-}: {
-  mode: ConnectionMode;
-  disabled: boolean;
-  onSelect: (mode: ConnectionMode) => void;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Mode"
-      // The selected option's corners follow the border: its radius is the outer radius less
-      // the padding (16px - 2px).
-      className="inline-flex self-center rounded-lg border border-border bg-card p-0.5"
-    >
-      {(["spec", "run"] as const).map((id) => (
-        <button
-          key={id}
-          type="button"
-          role="radio"
-          aria-checked={mode === id}
-          disabled={disabled}
-          onClick={() => onSelect(id)}
-          className={cn(
-            "rounded-[14px] px-3.5 py-1.5 text-sm transition-colors duration-150",
-            mode === id
-              ? "bg-accent/10 font-medium text-foreground"
-              : "text-muted-foreground hover:text-foreground",
-            "disabled:cursor-not-allowed disabled:opacity-45",
-          )}
-        >
-          {MODE_LABELS[id]}
-        </button>
-      ))}
     </div>
   );
 }

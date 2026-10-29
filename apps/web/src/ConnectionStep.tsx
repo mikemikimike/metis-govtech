@@ -1,11 +1,63 @@
-// The target connection form. In the opening it is the panel under the box when the user
-// chooses "Build Spec and Run Evals". The Done pane shows it again to add a connection later.
+// The mode picker and the target connection form. In the opening the form is the panel under the
+// box when the user chooses "Build Spec and Run Evals". The Done pane shows it again to add a
+// connection later.
 // Secret fields take environment-variable names only.
 import { ChevronRight } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { ConnectionCheckResult } from "./transport/api";
-import { errorsByField, type ConnectionDraft } from "./connection";
+import {
+  errorsByField,
+  type ConnectionDraft,
+  type ConnectionMode,
+} from "./connection";
 import { Button, cn } from "./ui";
+
+const MODE_LABELS: Record<ConnectionMode, string> = {
+  spec: "Build Spec only",
+  run: "Build Spec and Run Evals",
+};
+
+// The mode is a choice about the whole session, so it sits above the box, apart from the chips
+// that give the Interview its context.
+export function ModePicker({
+  mode,
+  disabled,
+  onSelect,
+}: {
+  mode: ConnectionMode;
+  disabled: boolean;
+  onSelect: (mode: ConnectionMode) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Mode"
+      // The selected option's corners follow the border: its radius is the outer radius less
+      // the padding (16px - 2px).
+      className="inline-flex self-center rounded-lg border border-border bg-card p-0.5"
+    >
+      {(["spec", "run"] as const).map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="radio"
+          aria-checked={mode === id}
+          disabled={disabled}
+          onClick={() => onSelect(id)}
+          className={cn(
+            "rounded-[14px] px-3.5 py-1.5 text-sm transition-colors duration-150",
+            mode === id
+              ? "bg-accent/10 font-medium text-foreground"
+              : "text-muted-foreground hover:text-foreground",
+            "disabled:cursor-not-allowed disabled:opacity-45",
+          )}
+        >
+          {MODE_LABELS[id]}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const SECRET_HINT = "Variable name only. Set its value in .env.";
 
