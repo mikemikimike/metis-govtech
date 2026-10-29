@@ -23,6 +23,7 @@ from ..exceptions import (
     TargetSessionEnded,
     TrialRecoverableError,
     TurnRecoverableError,
+    UserAgentUnavailableError,
 )
 from .types import Observation, Promise, Reading
 
@@ -175,6 +176,8 @@ class Orchestrator:
                 output = await self._agent.decide(
                     turn, self._ledger.artifacts(), self._still_promised()
                 )
+            except UserAgentUnavailableError:
+                raise
             except Exception as exc:
                 logger.info("[turn %d] STOP: user agent LLM failed: %s", turn, exc)
                 return "system_error"

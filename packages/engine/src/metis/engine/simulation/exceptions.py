@@ -10,7 +10,8 @@ Hierarchy:
     │   ├── AuthLossError
     │   ├── PageCrashError
     │   ├── ConsecutiveFailureEscalation
-    │   └── TargetSessionLostError
+    │   ├── TargetSessionLostError
+    │   └── UserAgentUnavailableError
     ├── ResponseTimeoutError (record incomplete, continue)
     ├── TargetSessionEnded (clean stop, target exhausted)
     └── RunnerContractError (engine defect, no retry — system error)
@@ -55,6 +56,15 @@ class ConsecutiveFailureEscalation(TrialRecoverableError):
 
 class TargetSessionLostError(TrialRecoverableError):
     """A session the runner was driving is gone (404) — reaped or deleted mid-trial."""
+
+
+class UserAgentUnavailableError(TrialRecoverableError):
+    """The persona LLM kept failing with a transient error past the call's own retries.
+
+    The endpoint, not the trial, is at fault, so the experiment replays the trial.
+    A permanent failure (bad key, bad request, refusal, unparseable output) is not
+    this error: it stays a ``system_error``.
+    """
 
 
 class ResponseTimeoutError(SimulationError):

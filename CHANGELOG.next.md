@@ -666,6 +666,16 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   where each comes from. The simulation models resolve when the engine builds each trial, not
   at import time.
 
+#### Fixed
+
+- A gen_2 trial is retried when the user agent's LLM stays unreachable. After the call's own
+  retries run out on a connection error, a timeout, a 408, 409 or 429, or a 5xx, the user agent
+  raises `UserAgentUnavailableError`, a `TrialRecoverableError`. The orchestrator lets it
+  propagate, so the experiment replays the trial within its attempt budget, records the failure
+  in `prior_failures`, and on the last attempt keeps the partial record with the turns played.
+  A failure that cannot pass, such as a rejected key or request, a refusal or an unparseable
+  answer, still ends the trial as a `system_error` without a retry (#401).
+
 #### Changed
 
 - **`metis engine simulate`/`run` default `--concurrency` to `1`.** Omitting the flag now runs

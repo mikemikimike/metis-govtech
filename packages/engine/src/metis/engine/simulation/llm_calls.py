@@ -128,7 +128,7 @@ class LLMCallLog:
             fh.write(record.model_dump_json() + "\n")
 
 
-def _is_retryable(exc: Exception) -> bool:
+def is_retryable(exc: Exception) -> bool:
     """The OpenAI SDK's retry rule: connection errors, timeouts, 408, 409, 429, 5xx."""
     if isinstance(exc, APIConnectionError):  # includes APITimeoutError
         return True
@@ -261,7 +261,7 @@ async def _logged_attempts(
                     error=f"{type(exc).__name__}: {exc}",
                 )
             )
-            if retry == MAX_RETRIES or not _is_retryable(exc):
+            if retry == MAX_RETRIES or not is_retryable(exc):
                 raise
             delay = _retry_delay(retry)
             logger.warning(
