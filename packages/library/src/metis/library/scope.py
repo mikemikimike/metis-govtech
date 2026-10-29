@@ -74,7 +74,13 @@ SCOPE_SETTINGS: dict[Scope, type[BaseModel]] = {
 @dataclass(frozen=True)
 class ScopeDefinition:
     """What the judge is told about one scope, the trace processor function that selects what
-    to judge, and the one that renders each selected piece for the judge."""
+    to judge, and the one that renders each selected piece for the judge.
+
+    In ``instructions``, and in every prompt a grader sends the judge, "turn" means a
+    **recorded turn** (``GLOSSARY.md``): one trace, shown to the judge under a ``## Turn N``
+    heading. The judge never sees the glossary, so the prompts keep the word the transcript
+    uses. Do not write "recorded turn" in a prompt, and never mean a simulated turn there.
+    """
 
     instructions: str
     select: Callable[[GradingInput, Any], Mapping[str, Any] | Problem]

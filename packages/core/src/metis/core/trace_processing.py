@@ -133,6 +133,8 @@ class ToolCall(BaseModel, frozen=True):
     """One ``TOOL`` observation, wherever it sits in its trace."""
 
     turn_index: int
+    """The 0-based position of the recorded turn (the trace) that holds this call, so
+    ``turn_index + 1`` is the ``N`` of its ``turn:N`` label. It is never a simulated turn."""
     observation: Observation
     agent: str | None
     """The name of the nearest enclosing ``AGENT`` observation, or ``None`` if there is none."""
@@ -147,9 +149,16 @@ class ToolCall(BaseModel, frozen=True):
 
 
 class Turn(BaseModel, frozen=True):
-    """One exchange: one trace, read the way Langfuse documents a trace's input and output."""
+    """One **recorded turn** (``GLOSSARY.md``): one trace, read the way Langfuse documents a
+    trace's input and output.
+
+    In this module "turn" always means this, never a simulated turn. The name is not
+    ``RecordedTurn`` because ``turn:N`` labels and the ``turn`` grader setting already use the
+    bare word and are saved in ``results.json`` and in specifications.
+    """
 
     index: int
+    """The 0-based position of the trace in the session; ``index + 1`` is the ``N`` of ``turn:N``."""
     trace: Trace
     user: str | Problem
     """``trace.root.input`` as user text."""

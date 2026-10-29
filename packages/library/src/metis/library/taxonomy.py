@@ -185,6 +185,8 @@ class Measure(StrEnum):
     RELEVANCE = "relevance"
     COMMUNICATION_CLARITY = "communication_clarity"
     PERCEPTUAL_INTELLIGIBILITY = "perceptual_intelligibility"
+    # "Turn" here is a recorded turn (GLOSSARY.md): coherence from one trace to the next.
+    # The value is saved and published, so it keeps the bare word.
     CROSS_TURN_COHERENCE = "cross_turn_coherence"
     TURN_TAKING = "turn_taking"
     UNCERTAINTY_COMMUNICATION = "uncertainty_communication"

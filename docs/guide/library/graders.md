@@ -69,6 +69,12 @@ rest:
 
 ## Scopes
 
+In this guide, in the `turn` setting, in `turn:N` labels, and in the prompts sent to the judge,
+"turn" means a **recorded turn**: one trace of the target's session, as defined in
+[`GLOSSARY.md`](../../../GLOSSARY.md). It never means a simulated turn, which is one exchange
+in the engine's simulation loop. The prompts keep the bare word because the transcript the
+judge reads has `## Turn N` headings.
+
 The scope decides what one result is about. A grader declares the scopes that it supports.
 A criterion selects one with `grader_args.scope`. When `scope` is not set, the grader uses the
 first scope that it declares.
