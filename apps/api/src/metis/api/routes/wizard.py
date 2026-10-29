@@ -58,12 +58,14 @@ from metis.wizard import (
     Specification,
     SpecificationError,
     SpecificationFixture,
+    TargetConnection,
     check_connection,
     compile_specification,
     extract_documents,
     interview_client_config,
     package_specification,
     set_connection,
+    validate_binding,
 )
 
 if TYPE_CHECKING:
@@ -306,6 +308,25 @@ def config() -> InterviewConfig:
     return interview_client_config()
 
 
+class _ConnectionInvalid(ValueError):
+    """A connection field that the route refuses. The message is safe to return: no value."""
+
+
+def _target_connection(raw: str) -> TargetConnection:
+    """Parse the connection form field and apply the same check as `/connection/check`."""
+    target = TargetConnection.model_validate_json(raw)
+    result = validate_binding(
+        target.binding.model_dump(mode="json", exclude_defaults=True)
+    )
+    if result.errors:
+        reasons = "; ".join(
+            f"{'.'.join(str(part) for part in error.loc)}: {error.msg}"
+            for error in result.errors
+        )
+        raise _ConnectionInvalid(f"The target connection is not valid. {reasons}")
+    return target
+
+
 @router.post(
     "/package",
     summary="Package a wizard Specification and fixtures into a ZIP",
@@ -326,17 +347,32 @@ def package(
     specification: Annotated[str | None, Form()] = None,
     files: Annotated[list[UploadFile] | None, File()] = None,
     state: Annotated[str | None, Form()] = None,
+    connection: Annotated[str | None, Form()] = None,
 ) -> Response | JSONResponse:
-    """Build one request-scoped engine-ready ZIP without retaining uploaded files."""
+    """Build one request-scoped engine-ready ZIP without retaining uploaded files.
+
+    Send `state` for an Interview or `specification` for a manual export. With `specification`,
+    an optional `connection` (a `TargetConnection` as JSON) adds `outputs/target-binding.yaml`
+    and names the gen_2 runner, the same as an Interview with that connection. An Interview
+    carries its connection in its state, so `connection` with `state` is rejected. A binding
+    that fails the `/connection/check` validation gives 400 `validation_error`. The message
+    names each field and its reason, and never a value.
+    """
     uploads = files or []
     try:
         if (specification is None) == (state is None):
             raise ValueError("Supply exactly one of state or specification.")
+        if state is not None and connection is not None:
+            raise _ConnectionInvalid(
+                "Send a connection only with a specification. "
+                "An Interview state carries its own connection."
+            )
         parsed = (
             InterviewState.model_validate_json(state)
             if state is not None
             else Specification.model_validate_json(specification or "")
         )
+        target = _target_connection(connection) if connection is not None else None
         fixtures: list[SpecificationFixture] = []
         for upload in uploads:
             fixtures.append(
@@ -345,11 +381,18 @@ def package(
                     stream=upload.file,
                 )
             )
-        archive = package_specification(parsed, fixtures)
+        archive = package_specification(parsed, fixtures, connection=target)
     except (CompilationError, SpecificationError) as exc:
         return JSONResponse(
             ServiceError(
                 code="compilation_failed", message=str(exc), retryable=False
+            ).model_dump(),
+            status_code=400,
+        )
+    except _ConnectionInvalid as exc:
+        return JSONResponse(
+            ServiceError(
+                code="validation_error", message=str(exc), retryable=False
             ).model_dump(),
             status_code=400,
         )

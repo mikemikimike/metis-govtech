@@ -339,7 +339,7 @@ Use either endpoint after `/turn` or `/end` returns `done`.
 | Endpoint | Input | Output | Use |
 |---|---|---|---|
 | `POST /compile` | `state.specification` as JSON | `specification.yaml` as a string and `specification` with assigned Task IDs | Store or display YAML yourself. |
-| `POST /package` | One JSON form field: `state` for Interviews or `specification` for manual exports; fixture file parts | `YYYYMMDD-HHMMSS-interview.zip` | Download a portable specification. |
+| `POST /package` | One JSON form field: `state` for Interviews or `specification` for manual exports; an optional `connection` with `specification`; fixture file parts | `YYYYMMDD-HHMMSS-interview.zip` | Download a portable specification. |
 
 Compile directly from `interview.json`:
 
@@ -369,6 +369,23 @@ with both `state` and `specification` are rejected.
 For a manual export, send the user-authored Specification in the `specification` form field.
 The manual ZIP uses `YYYYMMDD-HHMMSS-manual.zip` and a matching root folder. It contains an
 empty `inputs/` folder and the same `outputs/` layout.
+
+To run a manual export, also send a `connection` form field. Its value is a connection as JSON,
+in the same shape as `state.context.connection`. The ZIP then contains
+`outputs/target-binding.yaml`, and `outputs/specification.yaml` names the gen_2 runner and the
+binding file. This is the same export as an Interview with that connection. The API applies the
+same validation as `POST /connection/check`. A binding that is not valid gives a 400
+`validation_error`. Its message names each field and its reason, and never the value. Send
+`connection` only with `specification`. An Interview keeps its connection in its state, so a
+request with `state` and `connection` gives a 400 `validation_error`.
+
+```bash
+curl --fail-with-body http://localhost:8001/api/v1/wizard/package \
+  -F 'specification=<specification.json' \
+  -F 'connection=<connection.json' \
+  -F 'files=@policy.pdf' \
+  --remote-name --remote-header-name
+```
 
 The API retains no uploaded bytes or experiment files. A successful package response contains
 a generated Specification and marks a completed export. Extract the archive into `experiments/design/`

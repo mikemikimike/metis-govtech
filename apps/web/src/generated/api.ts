@@ -74,6 +74,13 @@ export interface paths {
         /**
          * Package a wizard Specification and fixtures into a ZIP
          * @description Build one request-scoped engine-ready ZIP without retaining uploaded files.
+         *
+         *     Send `state` for an Interview or `specification` for a manual export. With `specification`,
+         *     an optional `connection` (a `TargetConnection` as JSON) adds `outputs/target-binding.yaml`
+         *     and names the gen_2 runner, the same as an Interview with that connection. An Interview
+         *     carries its connection in its state, so `connection` with `state` is rejected. A binding
+         *     that fails the `/connection/check` validation gives 400 `validation_error`. The message
+         *     names each field and its reason, and never a value.
          */
         post: operations["package_api_v1_wizard_package_post"];
         delete?: never;
@@ -415,6 +422,8 @@ export interface components {
             files?: string[] | null;
             /** State */
             state?: string | null;
+            /** Connection */
+            connection?: string | null;
         };
         /**
          * CapabilityCategory
