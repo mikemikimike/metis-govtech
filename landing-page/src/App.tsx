@@ -511,7 +511,7 @@ export default function App() {
         </section>
 
         <section className="methodology" id="methodology"><div className="container">
-          <div className="section-heading"><div><div className="section-kicker">The METIS methodology</div><h2>Built around what your agent should do.</h2></div><p>Each step ties back to the expectations you set, from how tests are designed to what the results tell you.</p></div>
+          <div className="section-heading"><div><div className="section-kicker">The evaluation loop</div><h2>Evaluate your agent against requirements you define.</h2></div><p>Each step ties back to the expectations you set, from how tests are designed to what the results tell you.</p></div>
           <div className="steps">{steps.map((s) => (
             <article key={s.number} className="step">
               <div className="step-top"><span>{s.number} · {s.label}</span><b>{s.product}</b></div>
