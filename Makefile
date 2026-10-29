@@ -1,4 +1,4 @@
-.PHONY: install-docs run-docs build-docs check-docs help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-init release-branch release-issue
+.PHONY: install-docs run-docs build-docs check-docs help install install-wizard install-engine install-api install-web install-extras install-extras-playwright run run-api run-web lint lint-fix format format-check fix typecheck check-ratchet check ci test test-unit format-check-web typecheck-web test-web build-web check-api-web check-web clean release-init release-branch release-issue
 
 help:
 	@printf "Available targets:\n"
@@ -26,7 +26,8 @@ help:
 	@printf "  make format-check      Check formatting without modifying files\n"
 	@printf "  make fix               Apply lint autofixes and format\n"
 	@printf "  make typecheck         Run Pyright type checking\n"
-	@printf "  make check             Run lint + format-check + typecheck (non-mutating)\n"
+	@printf "  make check-ratchet     Fail if a clean-up gate term appears in more files than its ceiling\n"
+	@printf "  make check             Run lint + format-check + typecheck + ratchet (non-mutating)\n"
 	@printf "  make test              Run all tests\n"
 	@printf "  make test-unit         Run unit tests only\n"
 	@printf "  make ci                Full CI suite: check + web checks + test\n"
@@ -130,10 +131,14 @@ test:
 test-unit:
 	uv run pytest tests/unit/
 
+check-ratchet:
+	uv run python scripts/check_ratchet.py
+
 check:
 	$(MAKE) lint
 	$(MAKE) format-check
 	$(MAKE) typecheck
+	$(MAKE) check-ratchet
 
 ci:
 	$(MAKE) check
