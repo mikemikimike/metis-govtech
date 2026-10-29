@@ -83,8 +83,8 @@ def _artifact_line(art: Artifact) -> str:
     desc = art.content_description or "(no description available)"
     if art.source == "fixture":
         tag = "fixture"
-    elif art.at_turn is not None:
-        tag = f"delivered turn {art.at_turn}"
+    elif art.at_simulated_turn is not None:
+        tag = f"delivered turn {art.at_simulated_turn}"
     else:
         tag = "delivered"
     line = f'  - id: "{art.id}", name: "{art.name}" ({tag}): {desc}'
@@ -98,7 +98,7 @@ def _render_artifacts(artifacts: dict[str, Artifact] | None) -> str:
 
     Two labelled groups keep the persona from mistaking its own uploaded input
     for a target deliverable. Same-named files are disambiguated by the per-line
-    tag (source + at_turn). Compact and description-only: never the uri or the
+    tag (source + at_simulated_turn). Compact and description-only: never the uri or the
     bytes. Empty string when there are none so the section disappears.
 
     The delivered group is presented as exhaustive, which is what lets the

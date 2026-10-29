@@ -25,7 +25,7 @@ def build_fixture_artifacts(
 
     Resolves each name under ``fixtures_dir`` (rejecting path escapes and the
     directory itself), sets a relative ``path``, and computes a SHA-256 digest
-    from the bytes in hand. ``at_turn`` stays ``None``. ``content_description``
+    from the bytes in hand. ``at_simulated_turn`` stays ``None``. ``content_description``
     is set from the optional ``content_descriptions`` map when the name is
     present, else ``None``.
     """

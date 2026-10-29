@@ -449,7 +449,7 @@ async def test_an_upload_is_recorded_only_when_the_page_shows_the_file(
     assert shown["ledger"] == "recorded upload"
     assert hidden["ledger"].startswith("not recorded")
     assert "not a file you hold" in unknown["error"]
-    assert runner.ledger.artifacts()[0].at_turn == 1
+    assert runner.ledger.artifacts()[0].at_simulated_turn == 1
 
 
 @pytest.mark.asyncio

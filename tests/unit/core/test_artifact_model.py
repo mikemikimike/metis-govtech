@@ -14,7 +14,7 @@ def test_artifact_defaults() -> None:
     art = Artifact(name="report.csv", state="unavailable")
     assert art.source == "target"
     assert art.path is None
-    assert art.at_turn is None
+    assert art.at_simulated_turn is None
     assert art.content_description is None
     assert art.state_description is None
     assert art.digest is None
@@ -28,7 +28,7 @@ def test_artifact_round_trips() -> None:
         source="target",
         state="received",
         path="runs/s1-p1-1/artifacts/report.csv",
-        at_turn=2,
+        at_simulated_turn=2,
         content_description="Q3 sales export",
         digest="a" * 64,
         hash_algorithm="SHA256",

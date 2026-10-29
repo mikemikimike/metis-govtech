@@ -9,7 +9,8 @@ from openai import APIError, AsyncOpenAI
 
 from metis.core.logging import get_logger
 
-from ...llm_calls import parse_completion
+from ...exceptions import UserAgentUnavailableError
+from ...llm_calls import is_retryable, parse_completion
 from ...model_settings import llm_client, sampling_options, user_agent_settings
 from ...user_context import persona_text, scenario_text
 from ..types import UserAgentOutput
@@ -159,6 +160,10 @@ class UserAgent:
                 **options,
             )
         except APIError as exc:
+            if is_retryable(exc):
+                raise UserAgentUnavailableError(
+                    f"User agent LLM unavailable: {exc}"
+                ) from exc
             raise RuntimeError(f"User agent LLM call failed: {exc}") from exc
         message = response.choices[0].message
         if message.parsed is not None:

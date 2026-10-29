@@ -21,7 +21,9 @@ def test_builds_one_artifact_per_existing_fixture(tmp_path: Path) -> None:
     assert [a.path for a in arts] == ["fixtures/input.csv", "fixtures/brief.pdf"]
     assert all(len(a.digest or "") == 64 for a in arts)
     assert all(a.hash_algorithm == "SHA256" for a in arts)
-    assert all(a.at_turn is None and a.content_description is None for a in arts)
+    assert all(
+        a.at_simulated_turn is None and a.content_description is None for a in arts
+    )
     assert arts[0].media_type == "text/csv"
     assert arts[1].media_type == "application/pdf"
 

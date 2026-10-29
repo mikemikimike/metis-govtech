@@ -396,7 +396,7 @@ class Orchestrator:
 
                 self._turns_completed += 1
 
-                # Track artifacts (already stamped with at_turn above)
+                # Track artifacts (already stamped with at_simulated_turn above)
                 artifacts_collected.extend(observation.artifacts)
 
                 # Turn summary
@@ -590,10 +590,10 @@ class Orchestrator:
                     # upload without an id must not blank the id an earlier turn
                     # established.
                     registry.external_id = artifact.external_id
-                registry.at_turn = turn_count
+                registry.at_simulated_turn = turn_count
                 observation.artifacts[i] = registry
             else:
-                artifact.at_turn = turn_count
+                artifact.at_simulated_turn = turn_count
                 await summarize_artifact(
                     artifact,
                     experiment_root=self._experiment_root,

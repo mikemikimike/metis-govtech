@@ -288,7 +288,7 @@ def test_render_artifacts_groups_by_source() -> None:
         name="report.txt",
         source="fixture",
         path="inputs/report.txt",
-        at_turn=1,
+        at_simulated_turn=1,
         content_description="the input the user uploaded",
         state="received",
     )
@@ -296,7 +296,7 @@ def test_render_artifacts_groups_by_source() -> None:
         name="report.txt",
         source="target",
         path="runs/out/report.txt",
-        at_turn=3,
+        at_simulated_turn=3,
         content_description="the assistant's generated report",
         state_description="delivered at turn 3",
         state="received",
@@ -529,13 +529,16 @@ class TestRegistryKeysOnIdentity:
 
         agent = self._agent()
         failed = Artifact(
-            name="chart.vl.json", external_id="f-9", at_turn=3, state="unfetched"
+            name="chart.vl.json",
+            external_id="f-9",
+            at_simulated_turn=3,
+            state="unfetched",
         )
         recovered = Artifact(
             name="chart.vl.json",
             external_id="f-9",
             path="runs/x/chart.vl.json",
-            at_turn=4,
+            at_simulated_turn=4,
             content_description="A bar chart of Q3 revenue.",
             state="received",
         )
@@ -649,10 +652,16 @@ class TestRegistryKeysOnIdentity:
 
         agent = self._agent()
         first = Artifact(
-            name="report.txt", path="runs/x/report.txt", at_turn=2, state="received"
+            name="report.txt",
+            path="runs/x/report.txt",
+            at_simulated_turn=2,
+            state="received",
         )
         again = Artifact(
-            name="report.txt", path="runs/x/report.txt", at_turn=3, state="received"
+            name="report.txt",
+            path="runs/x/report.txt",
+            at_simulated_turn=3,
+            state="received",
         )
 
         agent._merge_artifacts(Observation(artifacts=[first]))

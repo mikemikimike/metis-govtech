@@ -14,6 +14,7 @@ from metis.engine.simulation.exceptions import (
     TransientDOMError,
     TrialRecoverableError,
     TurnRecoverableError,
+    UserAgentUnavailableError,
 )
 
 
@@ -83,3 +84,7 @@ def test_runner_contract_error_is_caught_by_no_recovery_ladder() -> None:
 def test_runner_contract_error_carries_its_message() -> None:
     exc = RunnerContractError("I1: the runner returned 2 rows for 3 actions")
     assert "2 rows for 3 actions" in str(exc)
+
+
+def test_user_agent_unavailable_is_trial_recoverable() -> None:
+    assert issubclass(UserAgentUnavailableError, TrialRecoverableError)

@@ -40,6 +40,8 @@ class Artifact(BaseModel):
     ``id`` identifies this record; ``external_id`` identifies the *file* on the
     target's side, which is what makes a completed run re-checkable against the
     target and what lets a collector dedupe by identity rather than filename.
+
+    ``at_simulated_turn`` is a simulated turn, never a recorded turn.
     """
 
     id: str = Field(default_factory=lambda: str(uuid4()))
@@ -64,7 +66,12 @@ class Artifact(BaseModel):
     #: file and needs its own id, or the run cannot show that anything changed.
     external_id: str | None = None
     path: str | None = None
-    at_turn: int | None = None
+    #: The **simulated turn** (counted from 1 by METIS's own simulation loop) in
+    #: which the file was uploaded or received. It is not a recorded turn: METIS
+    #: does not know which of the target's traces produced a file, so this
+    #: number must not be used to index into the session's traces or to match a
+    #: grader's ``turn:N`` label. See ``GLOSSARY.md``.
+    at_simulated_turn: int | None = None
     content_description: str | None = None
     state_description: str | None = None
     digest: str | None = None

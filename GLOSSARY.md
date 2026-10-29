@@ -18,6 +18,7 @@
 | Fixture | An artefact or piece of environment state selected by a **task** to execute its **scenario**. It may be supplied by the user or generated dynamically. A fixture is an input, not an expected answer or scoring rule. |
 | Test Case / Task | A complete specification of a particular evaluation problem, combining a **scenario**, a **persona**, **fixtures**, a Trial count, and references to **expected behaviours**. Each selected Behaviour supplies all its Criteria. Each Task has an ID. **Test case** and **task** are interchangeable terms. |
 | Trial | One execution of a **test case** against a **target**, producing a **trace** and evaluation outputs. |
+| Simulated turn | One exchange in the simulation loop of a **trial**: the simulated user's message, with any actions such as a file upload, and the **target**'s reply. METIS counts simulated turns as it runs, and `max_turns` limits them. A retried delivery is the same simulated turn, and the closing end-of-chat step is not one. A simulated turn is what METIS did; the matching **recorded turn** is what the target logged. Use "turn" alone in neither. |
 | Run | A grouping of repeated **trials** of the same **test case**. |
 | Experiment | A collection of **runs** used to evaluate one or more **targets** across a set of **test cases**. |
 | Grader | A procedure that evaluates a **trial** against one or more **criteria** and produces a **trial score**. |
@@ -58,7 +59,10 @@ They are listed from largest to smallest.
 | Session | A collection of **traces** corresponding to exactly one **trial**, including references to where artefacts can be retrieved. METIS assumes a one-to-one correspondence between a session and a trial: the **target**'s conversation for a trial produces the traces that make up its session. |
 | Subsession | A group of **traces** that is a subset of one **session** and covers part of one **trial**. A subsession is a subset of steps from the full **session** of the **target**, evaluated as a local segment. |
 | Trace | The observable record of what occurred during a **trial**: a group of **observations** that contain the interactions, actions, tool calls, relevant state changes, and references to where artefacts can be retrieved. |
+| Recorded turn | One **trace** read as an exchange: the root observation's input is the user's message and its output is the reply, plus the tool calls and errors inside the trace. Graders see only recorded turns, and a recorded turn's number is its position among the **session**'s traces (`turn:N`). |
 | Observation | One recorded step of the **target**, such as a model call or a tool call, with its input, output, and timing. Each observation belongs to exactly one **trace** and can be nested under another observation in the same trace. |
+
+Note: **Simulated turns** and **recorded turns** are counted from different evidence. METIS assumes they agree: each message the simulator sends produces exactly one trace in the **target**'s session, in the same order. If a target emits no trace, or several, for a message, the two counts differ. Simulation limits and progress use simulated turns; grading uses recorded turns.
 
 Note: Artefact references in **traces** and **sessions** identify where the artefacts can be retrieved. They do not contain the artefacts themselves.
 

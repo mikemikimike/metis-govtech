@@ -6,11 +6,15 @@ import json
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
+import httpx
+import openai
 import pytest
 import structlog.testing
 
 from metis.core import Artifact
+from metis.engine.simulation import llm_calls
 from metis.engine.simulation.artifacts import file_facts
+from metis.engine.simulation.exceptions import UserAgentUnavailableError
 from metis.engine.simulation.gen_2.types import (
     Observation,
     Promise,
@@ -48,6 +52,25 @@ class FakeClient:
             usage=None,
             choices=[SimpleNamespace(message=message, finish_reason="stop")],
         )
+
+
+class FailingClient(FakeClient):
+    """A client whose every request raises ``error``."""
+
+    def __init__(self, error: Exception) -> None:
+        super().__init__()
+        self._error = error
+
+    async def _parse(self, *, messages: list[dict[str, Any]], **_kw: Any) -> Any:
+        raise self._error
+
+
+_REQUEST = httpx.Request("POST", "https://llm.example/v1/chat/completions")
+
+
+@pytest.fixture(autouse=True)
+def no_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(llm_calls, "_retry_delay", lambda _: 0.0)
 
 
 def _out(action: str = "Say ⟦hi⟧", decision: str = "continue") -> UserAgentOutput:
@@ -300,6 +323,52 @@ async def test_each_call_is_logged_to_the_trial_llm_log(tmp_path: Path) -> None:
 async def test_a_refusal_raises(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="refused"):
         await _agent(tmp_path, FakeClient(refusal="no")).decide(1, [], [])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error",
+    [
+        openai.APIConnectionError(request=_REQUEST),
+        openai.APITimeoutError(request=_REQUEST),
+        openai.InternalServerError(
+            "bad gateway", response=httpx.Response(502, request=_REQUEST), body=None
+        ),
+        openai.RateLimitError(
+            "slow down", response=httpx.Response(429, request=_REQUEST), body=None
+        ),
+    ],
+    ids=["connection", "timeout", "5xx", "429"],
+)
+async def test_a_transient_failure_that_outlasts_the_retries_is_unavailable(
+    tmp_path: Path, error: Exception
+) -> None:
+    with pytest.raises(UserAgentUnavailableError) as raised:
+        await _agent(tmp_path, FailingClient(error)).decide(1, [], [])
+
+    assert raised.value.__cause__ is error
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error",
+    [
+        openai.AuthenticationError(
+            "bad key", response=httpx.Response(401, request=_REQUEST), body=None
+        ),
+        openai.BadRequestError(
+            "bad schema", response=httpx.Response(400, request=_REQUEST), body=None
+        ),
+    ],
+    ids=["401", "400"],
+)
+async def test_a_permanent_failure_is_not_unavailable(
+    tmp_path: Path, error: Exception
+) -> None:
+    with pytest.raises(RuntimeError, match="LLM call failed") as raised:
+        await _agent(tmp_path, FailingClient(error)).decide(1, [], [])
+
+    assert not isinstance(raised.value, UserAgentUnavailableError)
 
 
 def test_a_continue_decision_needs_an_action() -> None:

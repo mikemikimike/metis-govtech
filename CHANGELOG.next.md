@@ -178,6 +178,11 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
 
 #### Changed
 
+- **`Artifact.at_turn` is now `at_simulated_turn`.** The number is the turn METIS's own
+  simulation loop was on, counted from 1. It is not a position among the target's traces,
+  because METIS cannot tell which trace produced a file. A saved `record.json` that still has
+  an `at_turn` key loads, but the value is dropped and `at_simulated_turn` is `None`.
+
 - **`TargetBinding` also binds a web page: `transport` is `http` or `browser` (#484).** A
   `browser` binding has a `start_url` and an optional `login` (`note`, the sign-in steps in
   plain words, and `secrets`, the environment variables it types), and `spec_url` is
@@ -201,7 +206,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   `metis.core.trace_processing` select what a grader judges for each scope, each under a
   label for `GraderResult.scope`. A trace is one turn on its own; a subsession is a turn and up
   to `window` turns before it, or every turn before it when `window` is not set. The artifact
-  scope judges the latest revision of a named file: the highest `at_turn`, then the last one
+  scope judges the latest revision of a named file: the highest `at_simulated_turn`, then the last one
   listed. `find_fixtures` gives the files the user gave the target, and `tools_offered` the
   tools the session offered, by agent, from the model calls, the agents and the tool calls.
   `render_artifact` gives a file in the form the judge reads, up to 50 MB.
@@ -456,7 +461,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   component of the target's name in `outputs/trials/<id>/artifacts/`, through a `.part` file
   that is renamed only once the bytes are whole, so a partial download is never kept. A name
   that is taken becomes `name-1.ext`, `name-2.ext`, and no saved file or entry is ever
-  overwritten. Code sets `path`, `digest` and `state`, and the caller supplies `at_turn`. It
+  overwritten. Code sets `path`, `digest` and `state`, and the caller supplies `at_simulated_turn`. It
   returns the `ArtifactRef` the transport log uses. A download is refused, leaving no file
   and no entry, when a `.png`, `.jpg`, `.gif`, `.pdf`, `.docx`, `.xlsx`, `.pptx` or `.zip`
   does not start with its type's signature, or when a JSON document or JSON content type is
@@ -636,7 +641,7 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   scenario descriptions and no knowledge of any target. Each file the user holds is its
   `file_facts` line and never its content, and files the target promised but has not
   delivered are listed. Its calls go through `parse_completion` into the trial's LLM-call log.
-  The turn loop uses `gen_1`'s stop reasons and numbers `at_turn` from 1. Each turn updates
+  The turn loop uses `gen_1`'s stop reasons and numbers `at_simulated_turn` from 1. Each turn updates
   the progress display, and a set `shutdown_event` ends the trial as `interrupted`. After the
   last turn it calls `end_chat` once. That call is not a turn and is not in `total_turns`.
   Errors behave as in `gen_1`, so the retry loop's partial record keeps the turns, artifacts
@@ -666,7 +671,20 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   where each comes from. The simulation models resolve when the engine builds each trial, not
   at import time.
 
+#### Fixed
+
+- A gen_2 trial is retried when the user agent's LLM stays unreachable. After the call's own
+  retries run out on a connection error, a timeout, a 408, 409 or 429, or a 5xx, the user agent
+  raises `UserAgentUnavailableError`, a `TrialRecoverableError`. The orchestrator lets it
+  propagate, so the experiment replays the trial within its attempt budget, records the failure
+  in `prior_failures`, and on the last attempt keeps the partial record with the turns played.
+  A failure that cannot pass, such as a rejected key or request, a refusal or an unparseable
+  answer, still ends the trial as a `system_error` without a retry (#401).
+
 #### Changed
+
+- **`run-manifest.json` names each file's turn `at_simulated_turn`** (was `at_turn`), after the
+  `Artifact` field it comes from. See `metis-core`.
 
 - **`metis engine simulate`/`run` default `--concurrency` to `1`.** Omitting the flag now runs
   trials sequentially instead of with 5 parallel workers.

@@ -442,7 +442,7 @@ async def _worker(
                 trial: Trial | None = None  # reset each attempt
 
                 # Descriptions were resolved once per experiment before fan-out;
-                # this only mints a fresh Artifact per attempt (clean at_turn/id)
+                # this only mints a fresh Artifact per attempt (clean at_simulated_turn/id)
                 # from that map — no re-summarization here.
                 fixture_artifacts = build_fixture_artifacts(
                     scenario.fixtures,

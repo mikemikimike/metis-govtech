@@ -170,7 +170,7 @@ async def _record(trial: Trial, tmp_path: Path) -> TrialRecord:
 
 
 def _files(record: TrialRecord) -> list[tuple[str, str, int | None]]:
-    return [(a.name, a.state, a.at_turn) for a in record.artifacts]
+    return [(a.name, a.state, a.at_simulated_turn) for a in record.artifacts]
 
 
 @pytest.mark.asyncio

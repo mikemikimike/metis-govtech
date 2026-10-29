@@ -173,7 +173,7 @@ class ArtifactLedger:
         name: str,
         data: bytes | Iterable[bytes],
         *,
-        at_turn: int | None,
+        at_simulated_turn: int | None,
         external_id: str | None = None,
         content_type: str | None = None,
     ) -> ArtifactRef:
@@ -182,7 +182,7 @@ class ArtifactLedger:
         :param name: The name the target reported; the file is saved under its last
             component.
         :param data: The body, whole or as the chunks of a stream.
-        :param at_turn: The turn the download belongs to, as the caller works it out.
+        :param at_simulated_turn: The turn the download belongs to, as the caller works it out.
         :param content_type: The response's ``Content-Type``, for the byte check.
         :raises ArtifactRejected: The bytes do not match the name. Nothing is kept.
         :raises Exception: Whatever ends the stream early. Nothing is kept.
@@ -212,7 +212,7 @@ class ArtifactLedger:
                 state="received",
                 external_id=external_id,
                 path=dest.relative_to(self._root).as_posix(),
-                at_turn=at_turn,
+                at_simulated_turn=at_simulated_turn,
                 content_description=self._facts(dest, safe, sha256),
                 digest=sha256,
                 hash_algorithm="SHA256",
@@ -228,7 +228,7 @@ class ArtifactLedger:
         state: Literal["unfetched", "unavailable"],
         reason: str,
         *,
-        at_turn: int | None,
+        at_simulated_turn: int | None,
         external_id: str | None = None,
     ) -> Artifact | None:
         """Record a file that was not received: ``unfetched`` can be retried, ``unavailable`` not.
@@ -248,18 +248,18 @@ class ArtifactLedger:
             source="target",
             state=state,
             external_id=external_id,
-            at_turn=at_turn,
+            at_simulated_turn=at_simulated_turn,
             state_description=reason,
         )
         self._entries.append(entry)
         return entry.model_copy(deep=True)
 
     def record_upload(
-        self, name: str, *, at_turn: int, external_id: str | None = None
+        self, name: str, *, at_simulated_turn: int, external_id: str | None = None
     ) -> Artifact:
         """Note that a held file was sent to the target; no entry is added.
 
-        A fixture's entry gets ``at_turn`` the first time it is uploaded. Later uploads
+        A fixture's entry gets ``at_simulated_turn`` the first time it is uploaded. Later uploads
         change nothing: the transport log has each one.
 
         :param external_id: The target's ID for the uploaded file, kept on a fixture's
@@ -270,8 +270,8 @@ class ArtifactLedger:
         for entry in reversed(self._entries):
             if entry.name == name:
                 if entry.source == "fixture":
-                    if entry.at_turn is None:
-                        entry.at_turn = at_turn
+                    if entry.at_simulated_turn is None:
+                        entry.at_simulated_turn = at_simulated_turn
                     if external_id is not None:
                         entry.external_id = external_id
                 return entry.model_copy(deep=True)

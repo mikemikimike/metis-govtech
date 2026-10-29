@@ -41,7 +41,7 @@ class TestSaveArtifacts:
                 Artifact(
                     name="report.pdf",
                     path="outputs/trials/s1-p1-1/artifacts/report.pdf",
-                    at_turn=2,
+                    at_simulated_turn=2,
                     state="received",
                 ),
                 Artifact(
