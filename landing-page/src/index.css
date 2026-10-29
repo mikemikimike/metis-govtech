@@ -344,7 +344,6 @@ h2 { font-size: clamp(32px,3.8vw,48px); line-height: 1.08; letter-spacing: -.03e
 /* ── Closing CTA ── */
 .cta-section { background: var(--paper); padding: 16px 0 40px }
 .cta-panel { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 40px; align-items: center; padding: 44px 48px; border-radius: 16px; color: var(--paper); background: radial-gradient(circle at 85% 20%,rgba(60,70,139,.28),transparent 40%),linear-gradient(135deg,#021220,#0a2a3d 70%,#021220) }
-.cta-panel .section-kicker { color: var(--gold) }
 .cta-panel h2 { color: var(--paper); margin-bottom: 14px }
 .cta-copy p { color: #B8C8CC; font-size: 15px; line-height: 1.7; margin: 0; max-width: 440px }
 .cta-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px }
