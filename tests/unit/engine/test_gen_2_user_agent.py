@@ -332,3 +332,13 @@ def test_the_action_field_the_model_fills_says_the_message_goes_inside_the_quote
     assert "⟦" in description and "⟧" in description
     assert "whole message" in description
     assert "nothing is sent" in description
+
+
+def test_every_field_the_model_fills_has_a_description() -> None:
+    properties = UserAgentOutput.model_json_schema()["properties"]
+
+    assert set(properties) == {"reasoning", "action", "decision"}
+    assert all(p.get("description") for p in properties.values())
+    assert "not shown to the assistant" in properties["reasoning"]["description"]
+    assert "goal_achieved" in properties["decision"]["description"]
+    assert "giving_up" in properties["decision"]["description"]
