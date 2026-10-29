@@ -1,6 +1,6 @@
-"""Demo graders on the captured Orca session (#431).
+"""Demo graders on the synthetic helpdesk session.
 
-They show grader authors the full grader pattern on real data. The LLM demos run against a
+They show grader authors the full grader pattern on a session with sub-agents. The LLM demos run against a
 fake client, so these tests check what each grader sends and how it handles the reply, not
 what a real judge would think.
 """
@@ -24,7 +24,7 @@ from metis.library.graders.demo import (
     DemoTraceBudgetGrader,
 )
 from tests.fixtures.criterion_judge import judge_client
-from tests.fixtures.traces import load_orca_session
+from tests.fixtures.traces import load_session
 
 if TYPE_CHECKING:
     from metis.core.grading import GradingOutput
@@ -60,21 +60,21 @@ COMPLETION = DemoTaskCompletionGrader(JudgeArgs(model="judge-model"))
 
 
 class TestRequiredTool:
-    def test_required_tool_finds_make_ppt_deep_in_turn_5(self) -> None:
+    def test_required_tool_finds_build_report_deep_in_turn_5(self) -> None:
         out, requests = _run(
-            DemoRequiredToolGrader(DemoRequiredToolArgs(tool_name="make_ppt")),
-            load_orca_session(),
+            DemoRequiredToolGrader(DemoRequiredToolArgs(tool_name="build_report")),
+            load_session(),
         )
         (result,) = out.results
         assert (result.status, result.score, result.scope) == ("scored", 1.0, "session")
         assert "turn 5" in result.reason
-        assert "Slide_Maker.arun" in result.reason
+        assert "Report_Writer.arun" in result.reason
         assert requests == []
 
     def test_required_tool_absent_scores_zero(self) -> None:
         out, _ = _run(
             DemoRequiredToolGrader(DemoRequiredToolArgs(tool_name="send_email")),
-            load_orca_session(),
+            load_session(),
         )
         (result,) = out.results
         assert (result.status, result.score) == ("scored", 0.0)
@@ -82,7 +82,7 @@ class TestRequiredTool:
 
 class TestAnswerHelpfulness:
     def test_each_turn_is_judged_with_the_turns_before_it(self) -> None:
-        out, requests = _run(HELPFULNESS, load_orca_session())
+        out, requests = _run(HELPFULNESS, load_session())
         assert [(r.status, r.score, r.scope) for r in out.results] == [
             ("scored", 1.0, f"turns:1-{n}") for n in range(1, 6)
         ]
@@ -91,21 +91,21 @@ class TestAnswerHelpfulness:
         assert "## Turn 4" not in third
 
     def test_the_judge_model_is_the_one_configured(self) -> None:
-        _, requests = _run(HELPFULNESS, load_orca_session())
+        _, requests = _run(HELPFULNESS, load_session())
         assert requests[0]["model"] == "judge-model"
 
     def test_a_window_limits_the_turns_the_judge_sees(self) -> None:
         grader = DemoAnswerHelpfulnessGrader(
             DemoAnswerHelpfulnessArgs(model="judge-model", window=2)
         )
-        out, requests = _run(grader, load_orca_session())
+        out, requests = _run(grader, load_session())
         assert out.results[-1].scope == "turns:4-5"
         assert "## Turn 3" not in _evidence(requests[-1])
 
 
 class TestTaskCompletion:
     def test_task_completion_gives_one_result_for_the_session(self) -> None:
-        out, [request] = _run(COMPLETION, load_orca_session())
+        out, [request] = _run(COMPLETION, load_session())
         (result,) = out.results
         assert (result.status, result.score, result.scope) == ("scored", 1.0, "session")
         assert "## Turn 5" in _evidence(request)
@@ -118,7 +118,7 @@ def test_an_off_menu_judge_reply_is_errored() -> None:
         '{"reason": "x"}',
         '{"status": "scored", "score": 0.7, "reason": "x"}',
     ):
-        out, _ = _run(COMPLETION, load_orca_session(), reply)
+        out, _ = _run(COMPLETION, load_session(), reply)
         (result,) = out.results
         assert result.status == "errored", reply
         assert result.score is None
@@ -127,7 +127,7 @@ def test_an_off_menu_judge_reply_is_errored() -> None:
 def test_every_demo_errors_on_an_empty_session() -> None:
     graders: list[Grader] = [
         DemoTraceBudgetGrader(DemoTraceBudgetArgs()),
-        DemoRequiredToolGrader(DemoRequiredToolArgs(tool_name="make_ppt")),
+        DemoRequiredToolGrader(DemoRequiredToolArgs(tool_name="build_report")),
         HELPFULNESS,
         COMPLETION,
     ]
@@ -139,8 +139,8 @@ def test_every_demo_errors_on_an_empty_session() -> None:
 
 
 def test_demos_produce_different_units_from_one_session() -> None:
-    """#431: the same saved data, without the target or the network, yields different units."""
-    gi = load_orca_session()
+    """The same saved data, without the target or the network, yields different units."""
+    gi = load_session()
     per_turn, _ = _run(HELPFULNESS, gi)
     per_session, _ = _run(COMPLETION, gi)
     assert (len(per_turn.results), len(per_session.results)) == (5, 1)

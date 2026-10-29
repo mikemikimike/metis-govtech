@@ -1,4 +1,4 @@
-"""A trial's conversation, read from the traces `evaluate` saved, in the report (#462, #503)."""
+"""A trial's conversation, read from the traces `evaluate` saved, in the report."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from tests.fixtures.insights.report_experiment import (
     turn_trace,
     write_experiment,
 )
-from tests.fixtures.traces import SESSION_ID, load_orca_session
+from tests.fixtures.traces import SESSION_ID, load_session
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -38,19 +38,19 @@ def _save(experiment_dir: Path, session_id: str, saved: SessionTraces) -> Path:
     return path
 
 
-def _save_orca(experiment_dir: Path) -> Path:
-    saved = SessionTraces.from_traces(SESSION_ID, load_orca_session().traces)
+def _save_session(experiment_dir: Path) -> Path:
+    saved = SessionTraces.from_traces(SESSION_ID, load_session().traces)
     return _save(experiment_dir, SESSION_ID, saved)
 
 
 def test_reads_saved_traces_into_rows(tmp_path: Path) -> None:
-    _save_orca(tmp_path)
+    _save_session(tmp_path)
 
     result = read_turns(tmp_path, SESSION_ID)
 
     assert not isinstance(result, Problem)
     rows = conversation_rows(result)
-    assert len(rows) == len(load_orca_session().traces)
+    assert len(rows) == len(load_session().traces)
     assert [row["turn"] for row in rows] == list(range(1, len(rows) + 1))
     assert all(isinstance(row["user"], str) for row in rows)
 
@@ -63,7 +63,7 @@ def test_missing_file_is_a_problem(tmp_path: Path) -> None:
 
 
 def test_corrupt_file_is_a_problem_not_a_crash(tmp_path: Path) -> None:
-    path = _save_orca(tmp_path)
+    path = _save_session(tmp_path)
     path.write_text(path.read_text(encoding="utf-8")[:40], encoding="utf-8")
 
     result = read_turns(tmp_path, SESSION_ID)
@@ -73,7 +73,7 @@ def test_corrupt_file_is_a_problem_not_a_crash(tmp_path: Path) -> None:
 
 
 def test_unsupported_schema_version_is_a_problem(tmp_path: Path) -> None:
-    path = _save_orca(tmp_path)
+    path = _save_session(tmp_path)
     data = json.loads(path.read_text(encoding="utf-8"))
     data["schema_version"] = 2
     path.write_text(json.dumps(data), encoding="utf-8")
@@ -86,7 +86,7 @@ def test_unsupported_schema_version_is_a_problem(tmp_path: Path) -> None:
 
 
 def test_file_for_another_session_is_a_problem(tmp_path: Path) -> None:
-    other = SessionTraces.from_traces("someone-else", load_orca_session().traces)
+    other = SessionTraces.from_traces("someone-else", load_session().traces)
     _save(tmp_path, SESSION_ID, other)
 
     result = read_turns(tmp_path, SESSION_ID)
@@ -118,7 +118,7 @@ def test_missing_file_problem_names_the_file_not_the_local_path(
 
 
 def test_unreadable_row_problem_says_which_field(tmp_path: Path) -> None:
-    path = _save_orca(tmp_path)
+    path = _save_session(tmp_path)
     data = json.loads(path.read_text(encoding="utf-8"))
     del data["traces"][0]["observations"][0]["id"]
     path.write_text(json.dumps(data), encoding="utf-8")
