@@ -1047,7 +1047,7 @@ test("the mode toggle above the box shows the connection card only in run mode",
   assert.equal(option("Build Spec only").props["aria-checked"], true);
   assert.equal(card().length, 0);
 
-  (option("Build Spec and Run Evals").props.onClick as () => void)();
+  (option("Build Spec and connect target").props.onClick as () => void)();
   assert.equal(draft.mode, "run");
   findElement(card()[0], (element) => element.type === ConnectionForm);
   assert.equal(control, null);

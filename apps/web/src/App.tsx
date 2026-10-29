@@ -846,7 +846,21 @@ export function App() {
           />
         )}
         {manualOpen ? (
-          <ManualForm onBack={() => setManualOpen(false)} />
+          <ManualForm
+            onBack={() => setManualOpen(false)}
+            connectionDraft={connectionDraft}
+            onConnectionDraft={(next) => {
+              setConnectionDraft(next);
+              setConnectionResult(null);
+            }}
+            connectionResult={connectionResult}
+            onTestConnection={() =>
+              void operations.run(operationKey, async () => {
+                await checkDraft();
+              })
+            }
+            checkConnection={checkDraft}
+          />
         ) : connectionStep === "add" && view !== null ? (
           <AddConnection
             draft={connectionDraft}
@@ -1091,7 +1105,7 @@ type OpeningScreenProps = {
   onOpenControl: (control: OpeningControl | null) => void;
   // False until the user first opens the Perspective control. Until then, the default is marked.
   perspectiveSeen: boolean;
-  // "Build Spec only" or "Build Spec and Run Evals". Run mode shows the connection form.
+  // "Build Spec only" or "Build Spec and connect target". Run mode shows the connection form.
   connectionDraft: ConnectionDraft;
   onConnectionDraft: (draft: ConnectionDraft) => void;
   connectionResult: ConnectionCheckResult | null;

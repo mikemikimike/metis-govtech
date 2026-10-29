@@ -1,6 +1,6 @@
 // The mode picker and the target connection form. In the opening the form is the panel under the
-// box when the user chooses "Build Spec and Run Evals". The Done pane shows it again to add a
-// connection later.
+// box when the user chooses "Build Spec and connect target". The manual form shows it as a card
+// in run mode. The Done pane shows it again to add a connection later.
 // Secret fields take environment-variable names only.
 import { ChevronRight } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -14,11 +14,11 @@ import { Button, cn } from "./ui";
 
 const MODE_LABELS: Record<ConnectionMode, string> = {
   spec: "Build Spec only",
-  run: "Build Spec and Run Evals",
+  run: "Build Spec and connect target",
 };
 
-// The mode is a choice about the whole session, so it sits above the box, apart from the chips
-// that give the Interview its context.
+// The mode is a choice about the whole session. In the opening it sits above the box, apart from
+// the chips that give the Interview its context. The manual form shows it in its header.
 export function ModePicker({
   mode,
   disabled,
