@@ -27,6 +27,7 @@ import openai
 from openai import AsyncOpenAI
 
 from metis.core.logging import get_logger
+from metis.core.target_binding import call_matches
 
 from ...artifacts import ArtifactRejected
 from ...config import TrialRetryConfig
@@ -39,7 +40,7 @@ from ..evidence import Pointer, PointerError, resolve
 from ..runner import Runner
 from ..types import Observation, Reading
 from .prompts import NUDGE, SYSTEM_PROMPT, first_message
-from .rules import SUBMIT_METHODS, ToolRefused, check_call, check_headers, matches
+from .rules import SUBMIT_METHODS, ToolRefused, check_call, check_headers
 from .spans import Spans
 from .tools import TOOLS, ActionState, operation_index, run_tool
 
@@ -518,7 +519,7 @@ class HttpRunner(Runner):
     def _is_submission(self, method: str, path: str, has_json: bool) -> bool:
         patterns = self._binding.binding.submissions
         if patterns:
-            return any(matches(p, method, path) for p in patterns)
+            return any(call_matches(p, method, path) for p in patterns)
         return method in SUBMIT_METHODS and has_json
 
     def _multipart(
@@ -551,7 +552,7 @@ class HttpRunner(Runner):
             found["Authorization"] = f"Bearer {key.get_secret_value()}"
         for rule in binding.binding.secret_headers:
             value = binding.secret(rule.env)
-            if value is not None and matches(rule.match, method, path):
+            if value is not None and call_matches(rule.match, method, path):
                 found[rule.header] = value.get_secret_value()
         return found
 

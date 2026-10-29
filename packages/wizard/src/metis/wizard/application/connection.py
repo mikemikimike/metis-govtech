@@ -29,7 +29,7 @@ import httpx
 import yaml
 from pydantic import ValidationError
 
-from metis.core.target_binding import TargetBinding
+from metis.core.target_binding import TargetBinding, call_matches
 from metis.wizard.application import export_layout
 from metis.wizard.contracts.connection import (
     ConnectionCheckResult,
@@ -125,7 +125,7 @@ def check_connection(
     result = validate_binding(data)
     if not live or result.binding is None:
         return result
-    probes = live_probes(
+    probes, document = live_probes(
         result.binding,
         expand_variables=expand_variables,
         environ=os.environ if environ is None else environ,
@@ -136,7 +136,11 @@ def check_connection(
         if all(probe.ok for probe in probes)
         else ConnectionStatus.UNCHECKED
     )
-    return result.model_copy(update={"live": True, "probes": probes, "status": status})
+    update: dict[str, Any] = {"live": True, "probes": probes, "status": status}
+    if document is not None:
+        update["suggested_submissions"] = suggest_submissions(document)
+        update["warnings"] = submission_warnings(result.binding.submissions, document)
+    return result.model_copy(update=update)
 
 
 def live_probes(
@@ -145,20 +149,23 @@ def live_probes(
     environ: Mapping[str, str],
     client_factory: Callable[[bool], httpx.Client],
     expand_variables: bool = True,
-) -> list[ConnectionProbe]:
-    """Report each named variable as set or not set, then try to reach the target."""
+) -> tuple[list[ConnectionProbe], dict[str, Any] | None]:
+    """Report each named variable as set or not set, then try to reach the target.
+
+    :returns: The probes, and the OpenAPI document when the check read one.
+    """
     probes = _variable_probes(binding, environ)
     # `None` keeps every `${NAME}` value out of the URLs that the check requests
     url_environ = environ if expand_variables else None
     if binding.transport == "http":
-        probes += _fetch_openapi(
+        fetched, document = _fetch_openapi(
             binding.spec_url or "", binding.tls_verify, url_environ, client_factory
         )
-    else:
-        probes.append(
-            _load_start_page(binding.start_url or "", url_environ, client_factory)
-        )
-    return probes
+        return probes + fetched, document
+    probes.append(
+        _load_start_page(binding.start_url or "", url_environ, client_factory)
+    )
+    return probes, None
 
 
 def required_variables(binding: TargetBinding) -> list[str]:
@@ -232,7 +239,7 @@ def _fetch_openapi(
     tls_verify: bool,
     environ: Mapping[str, str] | None,
     client_factory: Callable[[bool], httpx.Client],
-) -> list[ConnectionProbe]:
+) -> tuple[list[ConnectionProbe], dict[str, Any] | None]:
     """Fetch the OpenAPI document, then check that its server answers.
 
     The server check sends one HEAD request to the server root. It calls no endpoint of the API,
@@ -241,7 +248,9 @@ def _fetch_openapi(
     probe = "spec_url"
     url, reason = _expand(written, environ)
     if url is None:
-        return [ConnectionProbe(name=probe, ok=False, message=f"not fetched: {reason}")]
+        return [
+            ConnectionProbe(name=probe, ok=False, message=f"not fetched: {reason}")
+        ], None
     if urlsplit(url).scheme.lower() not in ("http", "https"):
         return [
             ConnectionProbe(
@@ -252,7 +261,7 @@ def _fetch_openapi(
                     f"URLs. For a file, put it next to {TARGET_BINDING_FILE} before you run."
                 ),
             )
-        ]
+        ], None
     try:
         with client_factory(tls_verify) as client:
             response = client.get(url)
@@ -263,18 +272,18 @@ def _fetch_openapi(
                         ok=False,
                         message=f"{written!r} returned HTTP {response.status_code}",
                     )
-                ]
+                ], None
             document, problem = _openapi_document(response.content, url)
             if document is None:
                 return [
                     ConnectionProbe(
                         name=probe, ok=False, message=f"{written!r} {problem}"
                     )
-                ]
+                ], None
             server = _server_url(document, url)
             probes = [ConnectionProbe(name=probe, ok=True, message=_summary(document))]
             probes.append(_server_answers(client, server))
-            return probes
+            return probes, document
     except httpx.HTTPError as exc:
         # the exception text can hold the expanded URL, so only its type is shown
         return [
@@ -283,7 +292,7 @@ def _fetch_openapi(
                 ok=False,
                 message=f"could not fetch {written!r} ({type(exc).__name__})",
             )
-        ]
+        ], None
 
 
 def _openapi_document(content: bytes, url: str) -> tuple[dict[str, Any] | None, str]:
@@ -380,6 +389,96 @@ def _load_start_page(
     )
 
 
+# ── submissions from the OpenAPI document ───────────────────────────────
+#
+# A document does not say which field is the chat message, so a suggestion is a hint that the
+# user confirms. The engine reads only the binding file and infers nothing at run time.
+
+_WRITE_METHODS = ("post", "put", "patch")
+_PARAMETER = re.compile(r"\{[^{}]*\}")
+
+
+def _operations(document: Mapping[str, Any]) -> list[tuple[str, str, dict[str, Any]]]:
+    """Each `(METHOD, path, operation)` in the document, in document order."""
+    found: list[tuple[str, str, dict[str, Any]]] = []
+    for path, item in document["paths"].items():
+        if not isinstance(path, str) or not isinstance(item, dict):
+            continue
+        for method, operation in item.items():
+            if method.lower() in _HTTP_METHODS and isinstance(operation, dict):
+                found.append((method.upper(), path, operation))
+    return found
+
+
+def _resolve(document: Mapping[str, Any], schema: object) -> dict[str, Any]:
+    """The schema, with one local `$ref` such as `#/components/schemas/Chat` followed."""
+    if not isinstance(schema, dict):
+        return {}
+    ref = schema.get("$ref")
+    if not isinstance(ref, str) or not ref.startswith("#/"):
+        return schema
+    target: object = document
+    for part in ref[2:].split("/"):
+        target = target.get(part) if isinstance(target, dict) else None
+    return target if isinstance(target, dict) else {}
+
+
+def _takes_one_message(
+    document: Mapping[str, Any], operation: Mapping[str, Any]
+) -> bool:
+    """Whether the JSON body requires exactly one field, and that field is free text."""
+    body = _resolve(document, operation.get("requestBody"))
+    content = body.get("content")
+    media = content.get("application/json") if isinstance(content, dict) else None
+    if not isinstance(media, dict):
+        return False
+    schema = _resolve(document, media.get("schema"))
+    properties = schema.get("properties")
+    required = schema.get("required")
+    if not isinstance(properties, dict) or not isinstance(required, list):
+        return False
+    if len(required) != 1:
+        return False
+    field = _resolve(document, properties.get(required[0]))
+    return (
+        field.get("type") == "string" and not {"enum", "format", "const"} & field.keys()
+    )
+
+
+def _pattern(method: str, path: str) -> str:
+    """The `METHOD /glob` for an operation. A `{name}` path parameter becomes `*`."""
+    return f"{method} {_PARAMETER.sub('*', path)}"
+
+
+def suggest_submissions(document: Mapping[str, Any]) -> list[str]:
+    """The writes whose JSON body takes one required free-text field, as binding patterns."""
+    return list(
+        dict.fromkeys(
+            _pattern(method, path)
+            for method, path, operation in _operations(document)
+            if method.lower() in _WRITE_METHODS
+            and _takes_one_message(document, operation)
+        )
+    )
+
+
+def submission_warnings(
+    patterns: list[str], document: Mapping[str, Any]
+) -> list[ConnectionFieldError]:
+    """One warning for each `submissions` pattern that matches no call in the document."""
+    calls = [
+        (method, _PARAMETER.sub("_", path)) for method, path, _ in _operations(document)
+    ]
+    return [
+        ConnectionFieldError(
+            loc=["submissions", index],
+            msg=f"{pattern} matches no call in the OpenAPI document.",
+        )
+        for index, pattern in enumerate(patterns)
+        if not any(call_matches(pattern, method, path) for method, path in calls)
+    ]
+
+
 # ── the Interview and the export ──────────────────────────────────────────
 
 
@@ -448,5 +547,7 @@ __all__ = [
     "optional_variables",
     "required_variables",
     "set_connection",
+    "submission_warnings",
+    "suggest_submissions",
     "validate_binding",
 ]

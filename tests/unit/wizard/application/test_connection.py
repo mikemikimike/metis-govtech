@@ -29,6 +29,7 @@ from metis.wizard.contracts import (
     TargetConnection,
 )
 from tests.fixtures.wizard.connections import (
+    CHAT_DOCUMENT,
     OPENAPI_DOCUMENT,
     PLANTED_SECRET,
     browser_binding,
@@ -361,3 +362,71 @@ def test_an_interview_state_takes_its_connection_only_from_the_state() -> None:
 
     with pytest.raises(ValueError, match="own connection"):
         package_specification(state, _fixtures(), connection=connection())
+
+
+def _check(document: object, **overrides: object):
+    factory = mock_client_factory(
+        lambda request: (
+            httpx.Response(200, json=document)
+            if request.method == "GET"
+            else httpx.Response(200)
+        )
+    )
+    return check_connection(
+        http_binding(**overrides), live=True, environ=ENVIRON, client_factory=factory
+    )
+
+
+def test_the_check_suggests_the_write_that_takes_one_free_text_field() -> None:
+    result = _check(CHAT_DOCUMENT)
+
+    assert result.suggested_submissions == ["POST /conversations/*/messages"]
+    assert result.warnings == []
+    # a suggestion is a hint only: the checked binding keeps what the user wrote
+    assert result.binding is not None
+    assert result.binding.submissions == []
+
+
+def test_a_submissions_pattern_that_matches_no_call_gives_a_warning_naming_it() -> None:
+    result = _check(
+        CHAT_DOCUMENT,
+        submissions=["POST /conversations/*/messages", "POST /chats"],
+    )
+
+    assert [(warning.loc, warning.msg) for warning in result.warnings] == [
+        (["submissions", 1], "POST /chats matches no call in the OpenAPI document.")
+    ]
+    assert result.binding is not None
+    assert result.status is ConnectionStatus.CHECKED
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {**OPENAPI_DOCUMENT, "paths": {"/upload": CHAT_DOCUMENT["paths"]["/upload"]}},
+        {
+            **OPENAPI_DOCUMENT,
+            "paths": {"/settings": CHAT_DOCUMENT["paths"]["/settings"]},
+        },
+    ],
+)
+def test_a_document_with_no_chat_like_write_suggests_nothing(document) -> None:
+    result = _check(document)
+
+    assert result.suggested_submissions == []
+    assert result.errors == []
+
+
+def test_without_a_document_the_check_suggests_nothing_and_warns_nothing() -> None:
+    factory = mock_client_factory(lambda _: httpx.Response(404))
+
+    result = check_connection(
+        http_binding(submissions=["POST /chats"]),
+        live=True,
+        environ=ENVIRON,
+        client_factory=factory,
+    )
+
+    assert result.suggested_submissions == []
+    assert result.warnings == []
+    assert result.binding is not None

@@ -6,8 +6,9 @@ API, a header that carries a credential, a call the binding forbids.
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
+
+from metis.core.target_binding import call_matches
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -40,7 +41,7 @@ def check_path(path: str) -> None:
 def check_call(method: str, path: str, forbidden: Iterable[str]) -> None:
     """Refuse a bad path, then a call the binding forbids; every tool that sends uses it."""
     check_path(path)
-    if any(matches(pattern, method, path) for pattern in forbidden):
+    if any(call_matches(pattern, method, path) for pattern in forbidden):
         raise ToolRefused(f"{method} {path} is forbidden by the target binding")
 
 
@@ -52,13 +53,3 @@ def check_headers(headers: dict[str, str] | None) -> dict[str, str]:
                 f"you cannot set the {name} header; code adds credentials"
             )
     return dict(headers or {})
-
-
-def matches(pattern: str, method: str, path: str) -> bool:
-    """Whether ``METHOD /glob`` covers a call: ``*`` within a segment, ``**`` across."""
-    verb, _, glob = pattern.partition(" ")
-    regex = "".join(
-        ".*" if part == "**" else "[^/]*" if part == "*" else re.escape(part)
-        for part in re.split(r"(\*\*|\*)", glob)
-    )
-    return verb in ("*", method) and re.fullmatch(regex, path) is not None

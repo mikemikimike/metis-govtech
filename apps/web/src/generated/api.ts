@@ -815,6 +815,11 @@ export interface components {
          *     `binding` is the validated binding, or `None` when `errors` is not empty. `live` is true
          *     when the Wizard also checked the environment and reached the target; `probes` holds those
          *     results. `status` is `checked` only when the live checks ran and all passed.
+         *
+         *     When the check read an OpenAPI document, `suggested_submissions` lists the calls that look
+         *     like they send the user's message, and `warnings` names each `submissions` pattern that
+         *     matches no call in the document. A warning does not make the binding invalid, and the
+         *     Wizard never puts a suggestion into the binding. The user chooses.
          */
         ConnectionCheckResult: {
             binding?: components["schemas"]["TargetBinding"] | null;
@@ -829,6 +834,10 @@ export interface components {
             probes?: components["schemas"]["ConnectionProbe"][];
             /** @default unchecked */
             status: components["schemas"]["ConnectionStatus"];
+            /** Suggested Submissions */
+            suggested_submissions?: string[];
+            /** Warnings */
+            warnings?: components["schemas"]["ConnectionFieldError"][];
         };
         /**
          * ConnectionFieldError

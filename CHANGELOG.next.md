@@ -959,6 +959,15 @@ single `[1.0.0a1] — Unreleased` heading below is not bumped per change.
   applies the `/connection/check` validation and gives 400 `validation_error` for an invalid
   binding or for `connection` with `state`. The error never repeats a binding value (#567).
 
+- **Submission help from the OpenAPI document.** When the connection test reads the OpenAPI
+  document, it suggests the `submissions` patterns for each write whose JSON body has exactly one
+  required free-text field, and warns about each `submissions` pattern that matches no call in
+  the document. `ConnectionCheckResult` has `suggested_submissions` and `warnings`. A warning does
+  not make the binding invalid. The Wizard adds a suggestion to the binding only when the user
+  accepts it: **Use these submissions** in the web client, or a yes in the CLI. The Engine infers
+  nothing at run time. The call pattern rule is `call_matches` in `metis.core.target_binding`,
+  so the Wizard and the Engine match patterns the same way (#606).
+
 - The matcher selects `CriterionJudgeGrader` when no specific grader is similar enough, when
   the catalogue has no specific grader, or when the embedding provider fails. A rematch keeps
   the Criterion's settings when the selected grader does not change. Validation uses the

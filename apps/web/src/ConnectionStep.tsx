@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import type { ConnectionCheckResult } from "./transport/api";
 import {
   errorsByField,
+  submissionHints,
   type ConnectionDraft,
   type ConnectionMode,
 } from "./connection";
@@ -77,17 +78,21 @@ export function ConnectionForm({
 }) {
   const [more, setMore] = useState(false);
   const errors = errorsByField(draft, result);
+  const hints = submissionHints(draft, result);
   const set = <K extends keyof ConnectionDraft>(
     key: K,
     value: ConnectionDraft[K],
   ) => onDraft({ ...draft, [key]: value });
   const http = draft.transport === "http";
-  // An error in a field under "More options" opens it, so the user sees what to fix.
+  // An error, a warning, or a suggestion for a field under "More options" opens it, so the
+  // user sees it.
   const moreError = http
     ? errors.secretHeaders ||
       errors.forbiddenCalls ||
       errors.submissions ||
-      errors.notes
+      errors.notes ||
+      hints.warning ||
+      hints.suggestion.length > 0
     : errors.loginSecrets || errors.notes;
 
   return (
@@ -199,14 +204,42 @@ export function ConnectionForm({
                 />
                 <Field
                   multiline
-                  label="Message calls"
+                  label="Submissions"
                   placeholder="POST /chat"
                   hint="One per line. The calls that send the user's message."
                   value={draft.submissions}
                   error={errors.submissions}
+                  warning={hints.warning ?? undefined}
                   disabled={busy}
                   onChange={(value) => set("submissions", value)}
                 />
+                {hints.suggestion.length > 0 && (
+                  <>
+                    <span aria-hidden className="max-sm:hidden" />
+                    <div className="flex flex-col items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                      <p className="text-foreground">
+                        The OpenAPI document suggests these submissions. Check
+                        them before you use them.
+                      </p>
+                      <ul className="flex flex-col gap-0.5">
+                        {hints.suggestion.map((pattern) => (
+                          <li key={pattern}>
+                            <code>{pattern}</code>
+                          </li>
+                        ))}
+                      </ul>
+                      <Button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          set("submissions", hints.suggestion.join("\n"))
+                        }
+                      >
+                        Use these submissions
+                      </Button>
+                    </div>
+                  </>
+                )}
                 <span aria-hidden className="max-sm:hidden" />
                 <label className="flex items-center gap-2 text-sm text-foreground">
                   <input
@@ -346,6 +379,7 @@ function Field({
   placeholder,
   hint,
   error,
+  warning,
   disabled,
   multiline = false,
   onChange,
@@ -355,6 +389,8 @@ function Field({
   placeholder?: string;
   hint?: string;
   error?: string;
+  // A problem that does not stop the binding, such as a pattern that matches no call.
+  warning?: string;
   disabled: boolean;
   multiline?: boolean;
   onChange: (value: string) => void;
@@ -389,6 +425,8 @@ function Field({
         )}
         {error ? (
           <span className="text-xs text-destructive">{error}</span>
+        ) : warning ? (
+          <span className="text-xs text-foreground">⚠ {warning}</span>
         ) : (
           // A hint is a quiet aside, so it is small and sits at the right edge.
           hint && (

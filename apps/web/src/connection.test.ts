@@ -5,6 +5,7 @@ import {
   emptyConnectionDraft,
   errorsByField,
   startConnection,
+  submissionHints,
   type ConnectionDraft,
 } from "./connection.ts";
 import type { ConnectionCheckResult } from "./transport/api.ts";
@@ -132,4 +133,35 @@ test("sign-in variables with no sign-in steps still reach the check", () => {
     loginSecrets: "APP_USER",
   });
   assert.deepEqual(binding.login, { note: "", secrets: ["APP_USER"] });
+});
+
+test("the test result warns about a submission and offers the suggested ones", () => {
+  const draft: ConnectionDraft = { ...http, submissions: "POST /chats" };
+  const result: ConnectionCheckResult = {
+    ...valid(draft),
+    warnings: [
+      {
+        loc: ["submissions", 0],
+        msg: "POST /chats matches no call in the OpenAPI document.",
+      },
+    ],
+    suggested_submissions: ["POST /conversations/*/messages"],
+  };
+
+  assert.deepEqual(submissionHints(draft, result), {
+    warning: "POST /chats matches no call in the OpenAPI document.",
+    suggestion: ["POST /conversations/*/messages"],
+  });
+  // once the draft holds the suggestion, it is not offered again
+  assert.deepEqual(
+    submissionHints(
+      { ...draft, submissions: "POST /conversations/*/messages" },
+      { ...result, warnings: [] },
+    ),
+    { warning: null, suggestion: [] },
+  );
+  assert.deepEqual(submissionHints(draft, null), {
+    warning: null,
+    suggestion: [],
+  });
 });

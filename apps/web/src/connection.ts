@@ -138,6 +138,26 @@ export function draftFieldFor(
   }
 }
 
+// What the last test found about the submissions: patterns that match no call in the OpenAPI
+// document, and the calls that the document suggests. A suggestion goes into the draft only when
+// the user selects it, so the user always confirms it.
+export function submissionHints(
+  draft: ConnectionDraft,
+  result: ConnectionCheckResult | null,
+): { warning: string | null; suggestion: string[] } {
+  const warning =
+    (result?.warnings ?? [])
+      .filter((item) => draftFieldFor(item.loc) === "submissions")
+      .map((item) => item.msg)
+      .join(" ") || null;
+  const suggestion = result?.suggested_submissions ?? [];
+  const current = list(draft.submissions);
+  const same =
+    suggestion.length === current.length &&
+    suggestion.every((item) => current.includes(item));
+  return { warning, suggestion: same ? [] : suggestion };
+}
+
 // The connection to start the Interview with, from the check result. Spec-only mode starts with
 // no connection. Run mode starts only with a valid binding.
 export function startConnection(

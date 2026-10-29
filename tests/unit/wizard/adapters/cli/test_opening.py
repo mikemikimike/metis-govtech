@@ -74,3 +74,47 @@ def test_skipping_capability_evidence_does_not_ask_for_confidence() -> None:
         None,
         None,
     )
+
+
+def test_run_mode_offers_the_suggested_message_calls_and_uses_them_only_on_yes() -> (
+    None
+):
+    import httpx
+
+    from metis.wizard.adapters.cli.connection import read_target_connection
+    from tests.fixtures.wizard.connections import (
+        CHAT_DOCUMENT,
+        http_binding,
+        mock_client_factory,
+    )
+
+    factory = mock_client_factory(
+        lambda request: (
+            httpx.Response(200, json=CHAT_DOCUMENT)
+            if request.method == "GET"
+            else httpx.Response(200)
+        )
+    )
+    environ = {"APP_URL": "https://app.example", "APP_KEY": "key"}
+
+    def run(*answers: str):
+        replies = iter(answers)
+        out: list[str] = []
+        connection = read_target_connection(
+            out=out.append,
+            read=lambda _prompt: next(replies),
+            values=http_binding(submissions=["POST /chats"]),
+            environ=environ,
+            client_factory=factory,
+        )
+        return connection, "\n".join(out)
+
+    declined, text = run("n", "c")
+    assert "⚠ POST /chats matches no call in the OpenAPI document." in text
+    assert "  POST /conversations/*/messages" in text
+    assert declined is not None
+    assert declined.binding.submissions == ["POST /chats"]
+
+    accepted, _ = run("y", "c")
+    assert accepted is not None
+    assert accepted.binding.submissions == ["POST /conversations/*/messages"]
