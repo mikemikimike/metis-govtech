@@ -15,17 +15,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Number of tracked files that may contain each term, matched case-insensitively.
 CEILINGS = {
-    "orca": 12,
-    "gen_1": 5,
-    "gen_2": 27,
-    "platformai": 3,
-    "platform_ai": 2,
-    "X-PlatformAI": 2,
-    "a2i": 6,
+    "orca": 6,
+    "gen_1": 2,
+    "gen_2": 1,
+    "platformai": 1,
+    "platform_ai": 1,
+    "X-PlatformAI": 1,
+    "a2i": 0,
     "gen1": 0,
-    "elb.amazonaws": 1,
-    "langfuse.ai": 1,
-    "mom.gov": 1,
+    "elb.amazonaws": 0,
+    "langfuse.ai": 0,
+    "mom.gov": 0,
 }
 
 # Lockfile integrity hashes match short terms by chance, and this script names every term.

@@ -1,1 +1,1 @@
-"""gen_2's runners."""
+"""The generic runners."""

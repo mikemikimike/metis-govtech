@@ -114,8 +114,8 @@ experiments/execute/toyapp-http-simple-20260730-143022/
 │   │       ├── record.json
 │   │       ├── simulate.log       # Link to the trial log
 │   │       ├── evidence/
-│   │       │   ├── llm_calls.jsonl  # One row per user-agent and summarizer LLM request
-│   │       │   └── log.jsonl        # One entry per request and response (gen_2 runners)
+│   │       │   ├── llm_calls.jsonl  # One row per user-agent and runner-agent LLM request
+│   │       │   └── log.jsonl        # One entry per request and response
 │   │       └── artifacts/
 │   │           ├── run-manifest.json
 │   │           └── ...

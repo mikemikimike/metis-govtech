@@ -60,8 +60,6 @@ For the full specification (component contracts, dependency invariants, versioni
 
 ## Development Workflow
 
-For the step-by-step GitHub collaboration playbook (branching, PRs, reviews, merging), see [docs/github-workflow.md](docs/github-workflow.md).
-
 ### Branching
 
 Branch off `main` with a descriptive prefix:
@@ -280,7 +278,7 @@ When in doubt, check the DAG in [docs/architecture.md](docs/architecture.md).
 
 ## Versioning & Release
 
-Each package is versioned independently via a static `version` field in its `pyproject.toml`. For the step-by-step release procedure, see [docs/github-workflow.md](docs/github-workflow.md#completing-a-release). For coordinated major version bumps and maintenance branches, see [docs/version-maintenance.md](docs/version-maintenance.md).
+Each package is versioned independently via a static `version` field in its `pyproject.toml`. For coordinated major version bumps and maintenance branches, see [docs/version-maintenance.md](docs/version-maintenance.md).
 
 The naming conventions are:
 - **Branch:** `release/<package-name>/v<semver>` (e.g., `release/metis-engine/v0.2.0`)
@@ -308,8 +306,6 @@ make release-issue  APP=api    VER=1.0.0   # Create issue only
 Use `PKG=<name>` for workspace packages (`packages/`) or `APP=<name>` for apps (`apps/`).
 
 Platform detection is automatic (GitHub/GitLab via remote URL). Override with `PLATFORM=github|gitlab` for self-hosted instances. If no CLI is available, the formatted issue is printed to stdout for manual pasting.
-
-> **GitLab users:** Symlink `docs/templates/release-issue.md` to `.gitlab/issue_templates/release-issue.md` for UI integration.
 
 > **First-time setup:** Create the required labels on your repo before first use:
 > ```bash

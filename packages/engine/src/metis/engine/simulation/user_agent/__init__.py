@@ -1,1 +1,1 @@
-"""gen_2's user agent."""
+"""The user agent."""

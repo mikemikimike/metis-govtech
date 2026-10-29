@@ -1,4 +1,4 @@
-"""Whole gen_2 trials around the closing step and the checks, on a fake target (#483).
+"""Whole trials around the closing step and the checks, on a fake target.
 
 Each trial runs the real orchestrator and ``HttpRunner`` over ``httpx.MockTransport``
 with scripted LLM replies, and reads its record back with ``TrialRecord.load_file``.

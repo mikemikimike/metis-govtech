@@ -8,7 +8,7 @@ Evaluation runtime — simulation harness, trace extraction, and grader executio
 
 ## Runner Contract
 
-`docs/runner-contract.md` is normative for every `Runner` implementation. When changing a runner, `Observation`, `ActionResult`, or the orchestrator's handling of either, read it first and keep it in sync — it is the document the conformance suite in issue #358 will be written against.
+`docs/runner-contract.md` is normative for every `Runner` implementation. When changing a runner, `Observation`, or the orchestrator's handling of either, read it first and keep it in sync.
 
 ## Schema Sync
 

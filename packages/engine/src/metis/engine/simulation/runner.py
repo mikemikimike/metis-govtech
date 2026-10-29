@@ -1,4 +1,4 @@
-"""gen_2's Runner ABC: carries out one plain-language action on the target."""
+"""The Runner ABC: carries out one plain-language action on the target."""
 
 from __future__ import annotations
 

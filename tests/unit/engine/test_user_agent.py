@@ -1,4 +1,4 @@
-"""The gen_2 user agent: one plain-language action per turn, facts apart from readings (#480)."""
+"""The user agent: one plain-language action per turn, facts apart from readings."""
 
 from __future__ import annotations
 

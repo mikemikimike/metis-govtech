@@ -1,1 +1,0 @@
-../../docs/templates/release-issue.md

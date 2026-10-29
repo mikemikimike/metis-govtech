@@ -293,7 +293,7 @@ def test_an_interview_export_writes_the_binding_only_in_run_mode(
 
 
 @pytest.mark.parametrize("transport", list(ConnectionTransport))
-def test_a_manual_export_with_a_connection_names_the_binding_and_the_gen_2_runner(
+def test_a_manual_export_with_a_connection_names_the_binding_and_the_generic_runner(
     client: TestClient, transport: ConnectionTransport
 ) -> None:
     response = client.post(

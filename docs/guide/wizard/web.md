@@ -312,7 +312,7 @@ Editor rules:
 
 The manual export uses `YYYYMMDD-HHMMSS-manual.zip` and a matching root folder. It contains an empty `inputs/` folder, `outputs/specification.yaml`, and the
 selected files under `outputs/fixtures/`. It contains no Interview state. In run mode, it also
-contains `outputs/target-binding.yaml`, and `outputs/specification.yaml` names the gen_2 runner
+contains `outputs/target-binding.yaml`, and `outputs/specification.yaml` names the generic runner
 and the binding file. This is the same export as an Interview with the same binding.
 
 ## Browser storage and current limits

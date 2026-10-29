@@ -1,4 +1,4 @@
-"""The gen_2 turn loop, driven by a scripted runner and a scripted user agent (#480)."""
+"""The turn loop, driven by a scripted runner and a scripted user agent."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ class Step:
 
 
 class FakeRunner(Runner):
-    """A gen_2 runner that follows a script and records what it was asked."""
+    """A runner that follows a script and records what it was asked."""
 
     def __init__(self, script: list[Step], *, late: dict[str, bytes] | None = None):
         self._script = script

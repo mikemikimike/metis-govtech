@@ -1,4 +1,4 @@
-"""A whole gen_2 trial through the generic HTTP runner, against a fake target (#481).
+"""A whole trial through the generic HTTP runner, against a fake target.
 
 The target is a small app served by ``httpx.MockTransport``; both LLMs are scripted. The
 orchestrator, the ledger, the transport log and the record are the real ones.

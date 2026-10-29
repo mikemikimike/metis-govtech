@@ -168,7 +168,7 @@ def test_the_engine_builds_the_runner_factory_that_a_download_names(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A run-mode download loads into the gen_2 factory; a spec-only one keeps the default.
+    """A run-mode download loads into the generic runner factory; a spec-only one keeps the default.
 
     The engine copies `outputs/` to the experiment's `inputs/`, so the factory reads the
     binding from there. No request reaches a target: the factory only loads the binding.

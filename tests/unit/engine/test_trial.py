@@ -1,4 +1,4 @@
-"""gen_2 plugged into the seam: registration, the trial it builds, and fixture facts."""
+"""The trial the seam builds, and fixture facts."""
 
 from __future__ import annotations
 

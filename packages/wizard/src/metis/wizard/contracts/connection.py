@@ -1,7 +1,7 @@
 """The target connection: how METIS reaches the target, kept apart from the Target Profile.
 
 The Profile states what METIS evaluates. The connection states how the engine reaches the
-target: one `TargetBinding` for the generic gen_2 HTTP or browser runner. A binding names
+target: one `TargetBinding` for the generic HTTP or browser runner. A binding names
 environment variables and never holds a secret value, so the connection can travel in the
 client-held Interview state. Prompts and the model gateway never read it.
 """

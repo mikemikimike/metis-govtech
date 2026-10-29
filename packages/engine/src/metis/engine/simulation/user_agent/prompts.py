@@ -1,4 +1,4 @@
-"""Prompt text for gen_2's user agent. Nothing here names or describes any target."""
+"""Prompt text for the user agent. Nothing here names or describes any target."""
 
 SYSTEM_PROMPT = """You are playing a person using an AI assistant. You are the USER, \
 not the assistant.

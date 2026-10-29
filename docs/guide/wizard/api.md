@@ -372,7 +372,7 @@ empty `inputs/` folder and the same `outputs/` layout.
 
 To run a manual export, also send a `connection` form field. Its value is a connection as JSON,
 in the same shape as `state.context.connection`. The ZIP then contains
-`outputs/target-binding.yaml`, and `outputs/specification.yaml` names the gen_2 runner and the
+`outputs/target-binding.yaml`, and `outputs/specification.yaml` names the generic runner and the
 binding file. This is the same export as an Interview with that connection. The API applies the
 same validation as `POST /connection/check`. A binding that is not valid gives a 400
 `validation_error`. Its message names each field and its reason, and never the value. Send
@@ -453,7 +453,7 @@ To start in run mode, put a connection in the start request:
 The connection travels in `state.context.connection`. Prompts and the model never read it. A
 spec-only state has no `connection` key. To add or replace the connection later, send the state
 to `POST /connection` and save the returned state. `POST /package` then adds
-`outputs/target-binding.yaml`, and `outputs/specification.yaml` names the gen_2 runner and the
+`outputs/target-binding.yaml`, and `outputs/specification.yaml` names the generic runner and the
 binding file.
 
 ## Handle errors and resume
