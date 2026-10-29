@@ -173,7 +173,7 @@ async def test_a_4xx_while_a_submission_is_open_makes_it_unresolved(
 async def test_a_405_is_the_runners_wrong_method_and_leaves_the_submission_open(
     tmp_path: Path, clock: Clock
 ) -> None:
-    """#593: polling a POST-only path says nothing about the target's answer."""
+    """Polling a POST-only path says nothing about the target's answer."""
     runner, target = await _ready(tmp_path)
     target.script = [httpx.Response(405, json={"detail": "Method Not Allowed"})]
     await _open(runner)

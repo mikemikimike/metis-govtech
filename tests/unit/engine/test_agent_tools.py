@@ -416,7 +416,7 @@ async def test_a_report_without_a_reply_leaves_the_submission_open(
 async def test_a_wrong_reply_path_does_not_keep_an_answered_submission_open(
     tmp_path: Path,
 ) -> None:
-    """#593: the target answered inside the 200; a bad citation costs the reply only."""
+    """The target answered inside the 200; a bad citation costs the reply only."""
     runner, _, state = await _ready(tmp_path)
     reply = await _chat(runner, state)
     wrong = {

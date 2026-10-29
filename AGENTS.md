@@ -108,10 +108,8 @@ All contributors (human and AI) MUST follow the guidelines in [CONTRIBUTING.md](
 ## Documentation for work in progress
 
 Treat user corrections as part of the final design. Write documentation, comments,
-and tests as if that design was present from the start of the current work. Consolidate
-changelog entries around the final result. Record migrations only for behavior that
-existed before the current work or has real consumers. Omit temporary fields, abandoned
-approaches, and the sequence of feedback. Preserve released history.
+and tests as if that design was present from the start of the current work. Omit
+temporary fields, abandoned approaches, and the sequence of feedback.
 
 ## Coding Conventions
 
@@ -125,15 +123,6 @@ approaches, and the sequence of feedback. Preserve released history.
 - Versioning: independent per package via static `version` in `pyproject.toml`; scoped git tags `<package-name>/v<semver>`
 - Release workflow: develop on `release/<package>/v<semver>` branch → merge to `main` → tag the merge commit (`<package>/v<semver>`)
 - Every merge to `main` MUST be tagged with a version bump for the affected package(s)
-- Each package maintains a `CHANGELOG.md` — write entries during development, not at merge time
-- When editing a changelog or preparing a PR, follow the
-  [changelog entry rules](CONTRIBUTING.md#changelog-entries) and check entries against the final PR diff.
-- **⚠️ v1 pre-release (temporary, remove at graduation):** development currently targets the long-lived
-  `next` branch. There, package versions are frozen at `1.0.0a1` and changelog entries go in the root
-  `CHANGELOG.next.md` — **not** the per-package `CHANGELOG.md` files. This note and every other `next`
-  mention are stripped when `next` merges to `main`; see the
-  [graduation cleanup checklist](docs/version-maintenance.md#graduating-next-to-main) and
-  [CONTRIBUTING.md](CONTRIBUTING.md#target-branch-next-vs-v0x)
 - Commit messages MUST use a Conventional Commit type and the package scope in parentheses:
   `feat(wizard): split prompt configuration ownership`. Use the affected package name as the
   scope (`core`, `library`, `engine`, `wizard`, or `insights`), not the `metis-` distribution

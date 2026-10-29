@@ -384,7 +384,7 @@ async def _worker(
             #
             # Consequence worth knowing: a run that spent attempts, was
             # interrupted, then succeeded after a --resume reports attempt 1, so
-            # the report's "retried" marker does not fire for it. Issue #346.
+            # the report's "retried" marker does not fire for it.
             max_attempts = 1 + (
                 scenario.max_trial_retries
                 if scenario.max_trial_retries is not None
@@ -402,7 +402,7 @@ async def _worker(
                 # runner exists is enough to give this attempt a clean one.
                 # Keyed on the directory's contents, not on `attempt`, so a
                 # resumed run (a new process, counter back at 1) is covered
-                # too. Issue #346.
+                # too.
                 quarantine_dest = quarantine_stale_artifacts(run_dir)
                 if quarantine_dest is not None:
                     logger.info(

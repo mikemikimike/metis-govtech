@@ -15,12 +15,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Number of tracked files that may contain each term, matched case-insensitively.
 CEILINGS = {
-    "orca": 6,
-    "gen_1": 2,
-    "gen_2": 1,
-    "platformai": 1,
-    "platform_ai": 1,
-    "X-PlatformAI": 1,
+    "orca": 0,
+    "gen_1": 0,
+    "gen_2": 0,
+    "platformai": 0,
+    "platform_ai": 0,
+    "X-PlatformAI": 0,
     "a2i": 0,
     "gen1": 0,
     "elb.amazonaws": 0,

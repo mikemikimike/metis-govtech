@@ -35,7 +35,7 @@ class FontSizeArgs(GraderArgs):
 
 
 class FontSizeGrader(Grader[FontSizeArgs]):
-    """The worked example from issue #428."""
+    """A worked example of a grader."""
 
     args_model = FontSizeArgs
 

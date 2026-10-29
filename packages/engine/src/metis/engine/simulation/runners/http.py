@@ -692,7 +692,7 @@ class HttpRunner(Runner):
         opened = self.open_submission
         specification = operation_index(self.document)
         indexed = bool(specification)
-        if not indexed:  # nothing to list, so the agent gets the text, as in #481
+        if not indexed:  # nothing to list, so the agent gets the text
             specification = self._log.body_bytes(self._log.get(self.spec_entry)).decode(
                 "utf-8", errors="replace"
             )

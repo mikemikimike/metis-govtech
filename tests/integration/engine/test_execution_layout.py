@@ -207,9 +207,7 @@ def _exercise(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, source: str) -> N
     reports = moved / "outputs" / "reports"
     results_file = reports / "results.json"
     results = EvaluationResults.load_file(results_file)
-    # Grader redesign (#428): evaluate writes GraderRecords, which `metis insights report`
-    # cannot read yet (#454) — see MIGRATION.md. This checks results.json directly instead
-    # of running the report command through it.
+    # This checks results.json directly instead of running the report command through it.
     assert len(results.records) == 2
     assert "RESULTS WRITTEN" in (moved / "logs" / "evaluate.log").read_text()
     for record_path in trials.glob("*/record.json"):

@@ -440,8 +440,7 @@ def _resolve_experiment_dir(experiment_dir: Path) -> Path:
     if (resolved / "trials").is_dir() or (resolved / "reports").is_dir():
         console.print(
             "Error: this execution uses an earlier folder layout. "
-            "Migrate it to outputs/trials/ and outputs/reports/ before use. "
-            "See MIGRATION.md.",
+            "Move it to outputs/trials/ and outputs/reports/ before use.",
             style="bold red",
         )
         raise EvaluationInputError("unsupported execution layout")

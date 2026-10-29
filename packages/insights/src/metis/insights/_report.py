@@ -177,8 +177,7 @@ def _load_trial_records(run_dir: Path) -> list[dict[str, Any]]:
                 # A retried run is a run whose comparability is worth a second
                 # look: a retry is a free do-over only if the failure was
                 # independent of what the run was doing, which is not obvious
-                # for ConsecutiveFailureEscalation. Issue #346.
-                #
+                # for ConsecutiveFailureEscalation.
                 "attempt": record.attempt_number,
                 **_conversation(run_dir, session),
             }

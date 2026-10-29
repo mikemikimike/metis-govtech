@@ -10,7 +10,6 @@ evidence. It does not make release decisions or set target priorities.
 The insights [Report model](../../packages/insights/src/metis/insights/_models.py) defines `report.json`.
 The report writer validates data through this model. Saved reports contain `"schema_version": 1`.
 The model defaults a missing version to `1` and rejects other explicit values.
-The version remains `1` during the `next` pre-release phase.
 
 The Insights CLI reads `metis.core.reporting.EvaluationResults` from
 `outputs/reports/results.json`. Each `GraderRecord` in its `records` list is one grader run
